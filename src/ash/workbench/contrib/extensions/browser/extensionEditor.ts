@@ -26,7 +26,7 @@ import { IExtensionApi, type ExtensionDescriptor } from '../../../../platform/ex
 import { toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../base/common/uri.js';
-import { changeExtensionEnablement, configureMcpServer, describeConnectorState, describeMcpServerState, describePluginPermission, extensionEnablementLabel, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
+import { changeExtensionEnablement, configureMcpServer, describeConnectorState, describeMcpServerState, describePluginPermission, extensionEnablementLabel, promptConnectorApiToken, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
 import type { ParsedPromptFile } from '../../chat/common/promptSyntax/promptFileParser.js';
 import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
 import { ILanguageModelToolsService } from '../../chat/common/tools/languageModelToolsService.js';
@@ -202,7 +202,7 @@ export class ExtensionEditor extends EditorPane {
 				getProvider: () => {
 					const focused = mainWindow.document.activeElement;
 					if (!this.currentInput || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected plugin, skill, connector or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information moves below the content in a narrow editor. Open package opens the owning package for installation and permissions. Disable skill affects only that skill. Connector details offer sign-in, API token connection, disconnect or sign-out according to the service. Disconnect keeps the package installed. MCP server details show runtime status and diagnostics, with Edit, Enable or Disable, Connect, Disconnect and Remove for independent servers. Enablement is saved; connection actions control the running instance. Operations refresh the owning service state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected plugin, skill, service account or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information moves below the content in a narrow editor. Open package opens the owning package for installation and permissions. Disable skill affects only that skill. Service account details offer sign-in, API token connection, disconnect or sign-out according to the service. Associated MCP status appears in the account details; Open MCP server details shows its tools and diagnostics. Disconnect keeps the package installed. MCP server details show runtime status and diagnostics, with Edit, Enable or Disable, Connect, Disconnect and Remove for independent servers. Enablement is saved; connection actions control the running instance. Operations refresh the owning service state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 				},
 			}));
 		}
@@ -222,7 +222,7 @@ export class ExtensionEditor extends EditorPane {
 		this.metadata.textContent = input instanceof ExtensionsInput ? `${input.summary.id} · ${input.summary.version}` : '';
 		this.description.textContent = input instanceof ExtensionsInput ? input.summary.description : '';
 		this.renderOverview();
-		this.featuresLabel = input instanceof ExtensionsCapabilityInput ? input.target.kind === 'connector' ? localize({ bundle: 'ash.extensions', key: 'installedConnectors' }, 'Connectors') : input.target.kind === 'skill' ? localize({ bundle: 'ash.extensions', key: 'detailDiagnostics' }, 'Diagnostics') : localize({ bundle: 'ash.extensions', key: 'mcpToolsHeading' }, 'Tools') : input.source === ExtensionsInputSource.Local ? localize({ bundle: 'ash.extensions', key: 'pluginPermissionsHeading' }, 'Permissions') : localize({ bundle: 'ash.extensions', key: 'detailFeatures' }, 'Features');
+		this.featuresLabel = input instanceof ExtensionsCapabilityInput ? input.target.kind === 'connector' ? localize({ bundle: 'ash.extensions', key: 'connectionMcpServer' }, 'MCP server') : input.target.kind === 'skill' ? localize({ bundle: 'ash.extensions', key: 'detailDiagnostics' }, 'Diagnostics') : localize({ bundle: 'ash.extensions', key: 'mcpToolsHeading' }, 'Tools') : input.source === ExtensionsInputSource.Local ? localize({ bundle: 'ash.extensions', key: 'pluginPermissionsHeading' }, 'Permissions') : localize({ bundle: 'ash.extensions', key: 'detailFeatures' }, 'Features');
 		this.hasInstructions = input instanceof ExtensionsCapabilityInput && input.target.kind === 'skill'; this.renderTabs();
 		this.renderInfo([{
 			label: localize({ bundle: 'ash.extensions', key: 'detailInstallation' }, 'Installation'), rows: input instanceof ExtensionsInput ? [
@@ -252,24 +252,49 @@ export class ExtensionEditor extends EditorPane {
 		if (input instanceof ExtensionsCapabilityInput) {
 			const target = input.target;
 			if (target.kind === 'connector') {
-				const catalog = await this.connectors.list();
+				const [catalogResult, mcpResult] = await Promise.allSettled([
+					this.connectors.list(),
+					this.mcpStatus.isAvailable ? this.mcpStatus.read() : Promise.resolve(undefined),
+				]);
 				if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
+				if (catalogResult.status === 'rejected') { throw catalogResult.reason; }
+				const catalog = catalogResult.value;
 				const connector = catalog.connectors.find(entry => entry.id === target.connectorId);
-				if (!connector) { this.status.textContent = localize({ bundle: 'ash.extensions', key: 'connectorMissing' }, 'This connection is no longer available. Refresh Connectors.'); return; }
+				if (!connector) { this.status.textContent = localize({ bundle: 'ash.extensions', key: 'connectorMissing' }, 'This connection is no longer available. Refresh Connections.'); return; }
 				this.title.textContent = connector.displayName;
 				this.metadata.textContent = connector.id;
-				this.description.textContent = connector.description;
+				this.description.textContent = [connector.description, localize({ bundle: 'ash.extensions', key: 'connectionAccountDescription' }, 'This connection uses a service account. Account authorization and the associated MCP server have separate statuses.')].filter(Boolean).join('\n\n');
 				this.status.textContent = describeConnectorState(connector.state);
+				const mcpSnapshot = mcpResult.status === 'fulfilled' ? mcpResult.value : undefined;
+				const mcpServer = mcpSnapshot?.servers.find(server => server.id === connector.mcpServerId);
+				const mcpState = mcpServer ? describeMcpServerState(mcpServer.state) : mcpSnapshot
+					? localize({ bundle: 'ash.extensions', key: 'mcpStatusNotReported' }, 'No runtime status reported')
+					: localize({ bundle: 'ash.extensions', key: 'mcpStatusUnavailable' }, 'MCP server status is unavailable.');
+				const mcpDiagnostic = mcpResult.status === 'rejected'
+					? localize({ bundle: 'ash.extensions', key: 'mcpStatusReadFailed' }, 'Could not load MCP server status: {0}', String(mcpResult.reason))
+					: mcpServer?.state.status === 'unavailable' ? mcpServer.state.reason : '';
 				this.renderOverview();
-				this.contentHeading.textContent = localize({ bundle: 'ash.extensions', key: 'installedConnectors' }, 'Connectors');
+				this.contentHeading.textContent = localize({ bundle: 'ash.extensions', key: 'connectionMcpServer' }, 'MCP server');
 				this.capabilities.textContent = [
 					localize({ bundle: 'ash.extensions', key: 'connectorLifecycle' }, 'Connecting or disconnecting this service keeps its package installed. Skills are managed separately.'),
 					connector.state.status === 'unavailable' ? connector.state.reason : '',
+					connector.mcpServerId ?? connector.mcpDeclarationId,
+					mcpState,
+					mcpDiagnostic,
 				].filter(Boolean).join('\n\n');
+				const account = connector.state.status === 'connected' || connector.state.status === 'reauthorizationRequired' ? connector.state.account : undefined;
 				this.renderInfo([{
-					label: localize({ bundle: 'ash.extensions', key: 'installedConnectors' }, 'Connectors'), rows: [
-						{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: connector.id },
+					label: localize({ bundle: 'ash.extensions', key: 'connectionAccount' }, 'Service account'), rows: [
+						{ label: localize({ bundle: 'ash.extensions', key: 'connectorAccountId' }, 'Account ID'), value: account?.id ?? '' },
+						{ label: localize({ bundle: 'ash.extensions', key: 'connectorAccountName' }, 'Account name'), value: account?.displayName ?? '' },
 						{ label: localize({ bundle: 'ash.extensions', key: 'mcpState' }, 'Status'), value: describeConnectorState(connector.state) },
+					]
+				}, {
+					label: localize({ bundle: 'ash.extensions', key: 'connectionMcpServer' }, 'MCP server'), rows: [
+						{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: connector.mcpServerId ?? connector.mcpDeclarationId },
+						{ label: localize({ bundle: 'ash.extensions', key: 'mcpState' }, 'Status'), value: mcpState },
+						{ label: localize({ bundle: 'ash.extensions', key: 'mcpDiagnostic' }, 'Diagnostic'), value: mcpDiagnostic },
+						...(mcpServer ? [{ label: localize({ bundle: 'ash.extensions', key: 'mcpToolsHeading' }, 'Tools'), value: String(mcpServer.toolCount) }] : []),
 					]
 				}]);
 				const apply = async (operation: () => Promise<void | false>): Promise<void> => {
@@ -292,25 +317,20 @@ export class ExtensionEditor extends EditorPane {
 				}
 				if (connector.canConnectApiToken) {
 					button(localize({ bundle: 'ash.extensions', key: 'connectorConnectToken' }, 'Connect with API token'), () => apply(async () => {
-						const result = await this.dialogs.input({
-							title: connector.displayName,
-							message: localize({ bundle: 'ash.extensions', key: 'connectorTokenPrompt' }, 'Enter the account and API token for this connection.'),
-							inputs: [
-								{ placeholder: localize({ bundle: 'ash.extensions', key: 'connectorAccountId' }, 'Account ID') },
-								{ placeholder: localize({ bundle: 'ash.extensions', key: 'connectorAccountName' }, 'Account name') },
-								{ type: 'password', placeholder: localize({ bundle: 'ash.extensions', key: 'connectorApiToken' }, 'API token') },
-							],
-							primaryButton: localize({ bundle: 'ash.extensions', key: 'mcpConnect' }, 'Connect'),
-						});
-						if (!result.confirmed || signal.aborted || this.isDisposed || version !== this.loadVersion) { return false; }
-						const [accountId, accountDisplayName, token] = result.values ?? [];
-						if (!accountId?.trim() || !accountDisplayName?.trim() || !token?.trim()) { throw new Error(localize({ bundle: 'ash.extensions', key: 'connectorTokenRequired' }, 'Enter an account ID, account name and API token.')); }
-						await this.connectors.connectApiToken(connector, catalog.generation, { accountId: accountId.trim(), accountDisplayName: accountDisplayName.trim(), token });
+						const token = await promptConnectorApiToken(this.dialogs, connector.displayName);
+						if (!token || signal.aborted || this.isDisposed || version !== this.loadVersion) { return false; }
+						await this.connectors.connectApiToken(connector, catalog.generation, token);
 					}));
 				}
 				if (connector.canDisconnect) { button(localize({ bundle: 'ash.extensions', key: 'mcpDisconnect' }, 'Disconnect'), () => apply(() => this.connectors.disconnect(connector, catalog.generation))); }
 				if (connector.canRefreshOAuth) { button(localize({ bundle: 'ash.extensions', key: 'refresh' }, 'Refresh'), () => apply(() => this.connectors.refreshOAuth(connector))); }
 				if (connector.canRevokeOAuth) { button(localize({ bundle: 'ash.extensions', key: 'mcpSignOut' }, 'Sign out'), () => apply(() => this.connectors.revokeOAuth(connector, catalog.generation))); }
+				const mcpServerId = connector.mcpServerId;
+				if (mcpServerId) {
+					button(localize({ bundle: 'ash.extensions', key: 'connectionMcpDetails' }, 'Open MCP server details'), async () => {
+						await this.editors.openEditor(new ExtensionsCapabilityInput({ kind: 'mcp', serverId: mcpServerId }));
+					});
+				}
 				return;
 			}
 			if (target.kind === 'skill') {
@@ -389,7 +409,7 @@ export class ExtensionEditor extends EditorPane {
 			const tools = catalog?.filter(tool => tool.source === 'mcp' && tool.sourceDetails.includes(target.serverId)) ?? [];
 			this.title.textContent = configuredServer?.displayName || server?.displayName || capability?.id || target.serverId;
 			this.metadata.textContent = installation ? `${installation.package.id} · ${installation.package.version}` : target.serverId;
-			this.description.textContent = localize({ bundle: 'ash.extensions', key: 'detailMcpDescription' }, 'Tools provided by {0}.', this.title.textContent);
+			this.description.textContent = [localize({ bundle: 'ash.extensions', key: 'detailMcpDescription' }, 'Tools provided by {0}.', this.title.textContent), localize({ bundle: 'ash.extensions', key: 'connectionServerDescription' }, 'This connection uses an MCP server. Its status and tools are shown here; an account is optional.')].join('\n\n');
 			this.renderOverview();
 			this.renderInfo([{
 				label: localize({ bundle: 'ash.extensions', key: 'detailServer' }, 'Server'), rows: [

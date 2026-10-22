@@ -15,7 +15,49 @@ import { URI } from '../../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { FileNotFoundError, FileRevisionConflictError } from '../../common/files.js';
 import { DiskFileSystemProvider } from '../../node/diskFileSystemProvider.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
+import type { IFileChangeEvent } from '../../common/files.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+
+test('disk provider isolates native watching while retaining writes and owning subscription cleanup', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-isolated-watch-'));
+	const nativeWatch = mock.method(fs, 'watch', () => { throw new Error('Native watcher reached the host loop'); });
+	syncBuiltinESMExports();
+	try {
+		const root = URI.file(directory);
+		const file = URI.joinPath(root, 'settings.json');
+		using changes = new Emitter<IFileChangeEvent>();
+		const subscriptions: string[] = [];
+		const disposed: string[] = [];
+		using disk = new DiskFileSystemProvider([root], {
+			onDidChangeFiles: changes.event,
+			watch(resource, options) {
+				assert.deepEqual(options, { recursive: false, excludes: [] });
+				subscriptions.push(resource.toString());
+				return toDisposable(() => disposed.push(resource.toString()));
+			},
+		});
+		const delivered: string[][] = [];
+		using listener = disk.onDidChangeFiles(event => delivered.push(event.resources?.map(resource => resource.toString()) ?? []));
+		const watch = disk.watch(file, { recursive: false, excludes: [] });
+		assert.deepEqual(subscriptions, [file.toString()]);
+		changes.fire({ resources: [file] });
+		assert.deepEqual(delivered, [[file.toString()]]);
+		await disk.writeFile(file, new TextEncoder().encode('{"saved":true}'), { create: true, overwrite: true });
+		assert.equal(new TextDecoder().decode((await disk.readFile(file)).bytes), '{"saved":true}');
+		watch.dispose();
+		assert.deepEqual(disposed, [file.toString()]);
+		disk.watch(root, { recursive: false, excludes: [] });
+		disk.dispose();
+		assert.deepEqual(disposed, [file.toString(), root.toString()]);
+		assert.equal(nativeWatch.mock.calls.length, 0);
+	} finally {
+		nativeWatch.mock.restore();
+		syncBuiltinESMExports();
+		await rm(directory, { recursive: true, force: true });
+	}
+});
 
 test('disk file revisions serialize competing saves across window providers', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-file-revision-'));
@@ -60,6 +102,39 @@ test('profile files map root, content and exact changes while ignoring workspace
 
 suite('Disk provider byte publication and watch disposal', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('watch registration invalidates a read made before native notifications become active', async () => {
+		const directory = await realpath(await mkdtemp(join(tmpdir(), 'ash-watch-startup-')));
+		const path = join(directory, 'settings.json');
+		await writeFile(path, 'before');
+		const handles: Array<EventEmitter & { closed: boolean; close(): void; }> = [];
+		const patched = mock.method(fs, 'watch', ((watchedPath) => {
+			// Change the file in the unobserved registration gap; deliver no OS hint.
+			if (String(watchedPath) === path) fs.writeFileSync(path, 'during registration');
+			const handle = Object.assign(new EventEmitter(), { closed: false, close() { this.closed = true; } });
+			handles.push(handle);
+			return handle as unknown as FSWatcher;
+		}) as typeof fs.watch);
+		syncBuiltinESMExports();
+		try {
+			using files = new DiskFileSystemProvider([URI.file(directory)]);
+			const resource = URI.file(path);
+			assert.equal(new TextDecoder().decode((await files.readFile(resource)).bytes), 'before');
+			const changed = new DeferredPromise<void>();
+			using listener = files.onDidChangeFiles(event => {
+				if (event.resources?.some(item => item.toString() === resource.toString())) void changed.complete();
+			});
+			using watcher = files.watch(resource, { recursive: false, excludes: [] });
+			await changed.p;
+			assert.equal(new TextDecoder().decode((await files.readFile(resource)).bytes), 'during registration');
+			watcher.dispose();
+			assert.ok(handles.every(handle => handle.closed && handle.listenerCount('error') === 0));
+		} finally {
+			patched.mock.restore();
+			syncBuiltinESMExports();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
 
 	test('file watches bind newly created files, survive atomic replacement and preserve the granted path spelling', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-file-watch-'));
@@ -158,7 +233,7 @@ suite('Disk provider byte publication and watch disposal', () => {
 		}
 	});
 
-	test('directory-root hints rebind the native adapter after deletion and replacement without publishing siblings', async () => {
+	test('directory watches recover without a recreation hint and ignore siblings', async () => {
 		const directory = await realpath(await mkdtemp(join(tmpdir(), 'ash-root-watch-')));
 		const rootPath = join(directory, 'workspace');
 		const root = URI.file(rootPath);
@@ -198,7 +273,7 @@ suite('Disk provider byte publication and watch disposal', () => {
 			await first.closed.p;
 			nextRoot = new DeferredPromise<NativeWatch>();
 			await mkdir(rootPath);
-			parent.notify('rename', 'workspace');
+			// Recreation must recover even when the OS never delivers a parent hint.
 			const recreated = await nextRoot.p;
 			await mkdir(join(rootPath, 'nested'));
 			await writeFile(join(rootPath, 'nested', 'restored.txt'), 'restored');

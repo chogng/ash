@@ -1,16 +1,321 @@
 import { expect, test } from '@playwright/test';
+import type { ConnectorView } from '../../../src/ash/platform/connectors/common/connectorService.js';
+
+function serviceAccount(id: string, displayName: string, oauth = false): ConnectorView {
+	return {
+		id, displayName, description: `Authorize ${displayName}`, mcpDeclarationId: `fixture:${id}:mcp:tools`, mcpServerId: null,
+		connectionGeneration: 0, state: { status: 'disconnected' }, oauthMethods: oauth ? ['browser'] : [],
+		canConnectOAuth: oauth, canConnectApiToken: !oauth, canDisconnect: false, canRefreshOAuth: false, canRevokeOAuth: false,
+	};
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	const zh = locale === 'zh-CN';
+	const labels = { add: zh ? '添加连接' : 'Add connection', account: zh ? '服务账号' : 'Service account', choose: zh ? '选择服务账号' : 'Choose a service account', token: zh ? '使用 API 令牌连接' : 'Connect with API token', cancel: zh ? '取消' : 'Cancel' };
+	test(`Add connection authorizes a service account with a token even without MCP management in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?classification&locale=${locale}`);
+		const github = serviceAccount('github', 'GitHub account');
+		const docs = serviceAccount('documents', 'Cloud documents', true);
+		await page.evaluate(entries => { window.ashExtensionsIntegration.setConnectors(entries); window.ashExtensionsIntegration.setMcpSupported(false); }, [github, docs]);
+		const pane = page.locator('[data-view-id="ash.extensions.mcp"]');
+		await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
+		const add = pane.getByRole('button', { name: labels.add, exact: true });
+		const choose = async () => {
+			await add.click();
+			const root = page.getByRole('dialog', { name: labels.add, exact: true });
+			await expect(root.getByRole('option').filter({ hasText: zh ? '自定义 MCP 服务器' : 'Custom MCP server' })).toHaveCount(0);
+			await root.getByRole('option', { name: new RegExp(labels.account, 'u') }).click();
+			return page.getByRole('combobox', { name: labels.choose, exact: true });
+		};
+		const picker = await choose();
+		await expect(picker).toBeFocused();
+		await expect(page.getByRole('dialog', { name: labels.choose, exact: true }).getByRole('option')).toHaveCount(2);
+		await picker.press('Escape');
+		await expect(add).toBeFocused();
+		await choose();
+		await picker.fill('GitHub');
+		await picker.press('Enter');
+		const authorization = page.getByRole('dialog', { name: github.displayName, exact: true });
+		await expect(authorization.getByRole('button', { name: zh ? '登录' : 'Sign in', exact: true })).toHaveCount(0);
+		await authorization.getByRole('button', { name: labels.token, exact: true }).click();
+		await authorization.getByRole('button', { name: labels.cancel, exact: true }).click();
+		await expect(add).toBeFocused();
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0].startsWith('connector/')))).toEqual([]);
+		await choose();
+		await picker.fill('GitHub');
+		await picker.press('Enter');
+		await authorization.getByRole('button', { name: labels.token, exact: true }).click();
+		await authorization.getByPlaceholder(zh ? '账户标识符' : 'Account ID', { exact: true }).fill('octocat');
+		await authorization.getByPlaceholder(zh ? '账户名称' : 'Account name', { exact: true }).fill('Octocat');
+		const token = authorization.getByPlaceholder(zh ? 'API 令牌' : 'API token', { exact: true });
+		await expect(token).toHaveAttribute('type', 'password');
+		await token.fill('synthetic-token');
+		await authorization.getByRole('button', { name: zh ? '连接' : 'Connect', exact: true }).click();
+		const details = page.locator('.ash-extension-editor');
+		await expect(details.getByRole('heading', { name: github.displayName, exact: true })).toBeVisible();
+		await expect(details.getByRole('status')).toHaveText(zh ? '已连接 · Octocat' : 'Connected · Octocat');
+		await expect(pane.getByRole('option').filter({ hasText: github.displayName })).toHaveCount(1);
+		await expect(pane.getByRole('option').filter({ hasText: github.displayName })).toContainText(zh ? '已连接 · Octocat' : 'Connected · Octocat');
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0].startsWith('connector/') || entry[0] === 'mcp/server/upsert'))).toEqual([['connector/connect', 'github', 'octocat']]);
+	});
+
+	test(`Add connection signs in with current service permissions in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?classification&locale=${locale}`);
+		const account = serviceAccount('documents', 'Cloud documents');
+		await page.evaluate(entry => window.ashExtensionsIntegration.setConnectors([entry]), account);
+		const pane = page.locator('[data-view-id="ash.extensions.mcp"]');
+		await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
+		await pane.getByRole('button', { name: labels.add, exact: true }).click();
+		await page.getByRole('dialog', { name: labels.add, exact: true }).getByRole('option', { name: new RegExp(labels.account, 'u') }).click();
+		const picker = page.getByRole('combobox', { name: labels.choose, exact: true });
+		await expect(picker).toBeFocused();
+		// Permission changes while the picker is open must be read before showing authorization actions.
+		await page.evaluate(entry => window.ashExtensionsIntegration.setConnectors([entry]), serviceAccount('documents', 'Cloud documents', true));
+		await picker.press('Enter');
+		const authorization = page.getByRole('dialog', { name: account.displayName, exact: true });
+		await expect(authorization.getByRole('button', { name: labels.token, exact: true })).toHaveCount(0);
+		await page.screenshot({ path: `.build/desktop/ui-previews/add-connection-account-auth-${locale}.png` });
+		await authorization.getByRole('button', { name: zh ? '登录' : 'Sign in', exact: true }).click();
+		await expect(page.locator('.ash-extension-editor').getByRole('status')).toHaveText(zh ? '已连接 · OAuth user' : 'Connected · OAuth user');
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'connector/oauth'))).toEqual([['connector/oauth', 'documents', 3]]);
+	});
+
+	test(`Add connection explains an empty service catalog and recovers from a failed read in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?classification&locale=${locale}`);
+		const pane = page.locator('[data-view-id="ash.extensions.mcp"]');
+		await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
+		const add = pane.getByRole('button', { name: labels.add, exact: true });
+		const openAccounts = async () => {
+			await add.click();
+			await page.getByRole('dialog', { name: labels.add, exact: true }).getByRole('option', { name: new RegExp(labels.account, 'u') }).click();
+		};
+		await openAccounts();
+		const empty = page.getByRole('dialog').filter({ hasText: zh ? '暂无可用的服务账号。' : 'No service accounts are available.' });
+		await expect(empty).toContainText(zh ? '先安装提供服务账号的插件' : 'Install a plugin that provides a service account');
+		await empty.getByRole('button').click();
+		await expect(add).toBeFocused();
+		await page.evaluate(() => window.ashExtensionsIntegration.failConnectorList(true));
+		await openAccounts();
+		await expect(pane.locator('.extensions-status')).toContainText('Service catalog unavailable');
+		await expect(add).toBeEnabled();
+		await page.evaluate(entry => { window.ashExtensionsIntegration.failConnectorList(false); window.ashExtensionsIntegration.setConnectors([entry]); }, serviceAccount('documents', 'Cloud documents', true));
+		await openAccounts();
+		await page.getByRole('combobox', { name: labels.choose, exact: true }).press('Escape');
+		await expect(add).toBeFocused();
+	});
+}
+
+test('Add connection refuses stale account authorization and closes its picker on disposal', async ({ page }) => {
+	await page.goto('/extensions.html?classification');
+	await page.evaluate(entry => window.ashExtensionsIntegration.setConnectors([entry]), serviceAccount('github', 'GitHub account', true));
+	const pane = page.locator('[data-view-id="ash.extensions.mcp"]');
+	await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
+	const add = pane.getByRole('button', { name: 'Add connection', exact: true });
+	const openAccounts = async () => {
+		await add.click();
+		await page.getByRole('dialog', { name: 'Add connection', exact: true }).getByRole('option').filter({ hasText: 'Service account' }).click();
+	};
+	await openAccounts();
+	await page.getByRole('combobox', { name: 'Choose a service account', exact: true }).press('Enter');
+	await page.evaluate(() => window.ashExtensionsIntegration.notifyConnectorsChanged());
+	await page.getByRole('dialog', { name: 'GitHub account', exact: true }).getByRole('button', { name: 'Sign in', exact: true }).click();
+	await expect(pane.locator('.extensions-status')).toContainText('Connection changed. Refresh before saving.');
+	await openAccounts();
+	await expect(page.getByRole('combobox', { name: 'Choose a service account', exact: true })).toBeFocused();
+	await page.evaluate(() => window.ashExtensionsIntegration.dispose());
+	await expect(page.locator('.ash-quick-input-host')).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'connector/oauth'))).toEqual([]);
+});
+
+test('Empty Connections remains responsive after pointer and keyboard expansion', async ({ page }) => {
+	await page.goto('/extensions.html?classification');
+	await page.evaluate(async () => {
+		window.ashExtensionsIntegration.setMcpServers([]);
+		await window.ashExtensionsIntegration.refreshMcp();
+	});
+	const pane = page.locator('[data-view-id="ash.extensions.mcp"]');
+	const header = pane.locator('.ash-pane-view-header-button');
+	for (const button of await page.locator('#extensions .ash-pane-view-header-button').all()) {
+		await button.press('ArrowLeft');
+	}
+	await expect(pane.getByRole('option')).toHaveCount(0);
+	await header.click();
+	await expect(header).toHaveAttribute('aria-expanded', 'true');
+	await expect(pane.locator('.ash-pane-view-content')).toHaveAttribute('aria-busy', 'false');
+	const heights = await pane.evaluate(async element => {
+		const heights: number[] = [];
+		for (let frame = 0; frame < 30; frame++) {
+			await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+			heights.push(element.getBoundingClientRect().height);
+		}
+		return heights;
+	});
+	expect(Math.max(...heights.slice(-10)) - Math.min(...heights.slice(-10))).toBeLessThan(1);
+	await header.press('ArrowLeft');
+	await expect(header).toHaveAttribute('aria-expanded', 'false');
+	await header.press('ArrowRight');
+	await pane.getByRole('button', { name: 'Add connection', exact: true }).click();
+	await expect(page.getByRole('dialog', { name: 'Add connection', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('dialog')).toBeHidden();
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Connections coalesces change bursts and reads the latest state in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?classification&locale=${locale}`);
+		const pane = page.locator('[data-view-id="ash.extensions.mcp"]');
+		await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
+		const content = pane.locator('.ash-pane-view-content');
+		await expect(content).toHaveAttribute('aria-busy', 'false');
+		await page.evaluate(() => {
+			window.ashExtensionsIntegration.holdMcpStatus();
+			void window.ashExtensionsIntegration.refreshMcp();
+		});
+		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.mcpStatusStarted())).toBe(true);
+		const before = await page.evaluate(() => window.ashExtensionsIntegration.managementReads().connectors);
+		await page.evaluate(() => {
+			window.ashExtensionsIntegration.setMcpServers([{ id: 'latest', displayName: 'Latest server', httpOrigin: null, state: { status: 'disconnected' }, catalogGeneration: 2, connectionGeneration: null, toolCount: 0 }]);
+			for (let index = 0; index < 25; index++) { window.ashExtensionsIntegration.notifyConnectorsChanged(); }
+		});
+		try {
+			await pane.locator('.ash-pane-view-header-button').press('ArrowLeft');
+			await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
+			expect(await page.evaluate(() => window.ashExtensionsIntegration.managementReads().connectors)).toBe(before);
+			await expect(content).toHaveAttribute('aria-busy', 'true');
+		} finally {
+			await page.evaluate(() => window.ashExtensionsIntegration.completeMcpStatus());
+		}
+		await expect(content).toHaveAttribute('aria-busy', 'false');
+		await expect(pane.getByRole('option')).toHaveCount(1);
+		await expect(pane.getByRole('option')).toContainText('Latest server');
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.managementReads().connectors)).toBe(before + 1);
+	});
+
+	test(`Hiding Connections drops its queued refresh in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?classification&locale=${locale}`);
+		const pane = page.locator('[data-view-id="ash.extensions.mcp"]');
+		await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
+		await expect(pane.locator('.ash-pane-view-content')).toHaveAttribute('aria-busy', 'false');
+		await page.evaluate(() => {
+			window.ashExtensionsIntegration.holdMcpStatus();
+			void window.ashExtensionsIntegration.refreshMcp();
+		});
+		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.mcpStatusStarted())).toBe(true);
+		const before = await page.evaluate(() => window.ashExtensionsIntegration.managementReads().connectors);
+		try {
+			await page.evaluate(async () => {
+				window.ashExtensionsIntegration.notifyConnectorsChanged();
+				await window.ashExtensionsIntegration.open({ view: 'skills', mode: 'browse' });
+			});
+			await expect(pane).toHaveCount(0);
+		} finally {
+			await page.evaluate(() => window.ashExtensionsIntegration.completeMcpStatus());
+		}
+		await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.managementReads().connectors)).toBe(before);
+		await page.evaluate(() => window.ashExtensionsIntegration.open({ view: 'mcp', mode: 'installed' }));
+		await expect(pane.locator('.ash-pane-view-content')).toHaveAttribute('aria-busy', 'false');
+		await expect(pane.getByRole('option')).toHaveCount(1);
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	for (const theme of ['light', 'dark', 'hc']) {
+		test(`Connections lists all connections together and explains their details (${locale}, ${theme})`, async ({ page }) => {
+			await page.goto(`/extensions.html?classification&locale=${locale}&theme=${theme}`);
+			await page.evaluate(() => {
+				window.ashExtensionsIntegration.addMcpPackage();
+				window.ashExtensionsIntegration.addConnector({ declarationId: 'marketplace:example/web:mcp:fixture-server', serverId: 'github:connector:account:mcp:tools' });
+				window.ashExtensionsIntegration.setMcpServers([
+					{ id: 'marketplace:example/web:mcp:fixture-server', displayName: 'Declared service server', httpOrigin: null, state: { status: 'connected' }, catalogGeneration: 1, connectionGeneration: 1, toolCount: 4 },
+					{ id: 'github:connector:account:mcp:tools', displayName: 'Account runtime server', httpOrigin: null, state: { status: 'disconnected' }, catalogGeneration: 1, connectionGeneration: null, toolCount: 0 },
+					{ id: 'user:mcp:same-name', displayName: 'GitHub account', httpOrigin: null, state: { status: 'disabled' }, catalogGeneration: 1, connectionGeneration: null, toolCount: 0 },
+					{ id: 'independent', displayName: 'Independent server', httpOrigin: null, state: { status: 'connected' }, catalogGeneration: 1, connectionGeneration: 1, toolCount: 1 },
+				]);
+				window.ashExtensionsIntegration.notifyConnectorsChanged();
+			});
+			const pane = page.locator('[data-view-id="ash.extensions.mcp"]');
+			await pane.getByRole('button', { name: locale === 'en' ? 'Connections' : '连接', exact: true }).press('ArrowRight');
+			await expect(pane.locator('.ash-pane-view-content')).toHaveAttribute('aria-busy', 'false');
+			const list = pane.getByRole('listbox', { name: locale === 'en' ? 'Connections' : '连接', exact: true });
+			await expect(pane.getByRole('listbox')).toHaveCount(1);
+			await expect(list.getByRole('option')).toHaveCount(3);
+			await expect(list.getByRole('option').filter({ hasText: 'GitHub account' })).toHaveCount(2);
+			await expect(list.getByRole('option').filter({ hasText: 'Account runtime server' })).toHaveCount(0);
+			await expect(list.getByRole('option').filter({ hasText: 'Declared service server' })).toHaveCount(0);
+			await expect(pane.locator('.ash-count-badge')).toHaveText('3');
+			await expect(pane.locator('.ash-pane-view-header-actions button')).toHaveCount(1);
+			await page.screenshot({ path: `.build/desktop/ui-previews/connections-flat-${locale}-${theme}.png` });
+			const search = page.locator('#extensions').getByRole('searchbox');
+			await search.fill('@connections GitHub'); await search.press('Enter');
+			await expect(pane.locator('.ash-pane-view-header > .ash-count-badge')).toHaveText('2');
+			await search.press('Escape');
+			await expect(pane.locator('.ash-pane-view-header > .ash-count-badge')).toHaveText('3');
+			await list.focus();
+			await page.keyboard.press('Home'); await page.keyboard.press('Enter');
+			const details = page.locator('.ash-extension-editor');
+			await expect(details.getByRole('heading', { name: 'GitHub account', exact: true })).toBeVisible();
+			await expect(details.locator('.extension-detail-heading')).toContainText(locale === 'en' ? 'This connection uses a service account.' : '此连接通过服务账号授权。');
+			await expect(details.locator('.extension-detail-info')).toContainText('octocat');
+			await expect(details.getByRole('status')).toHaveText(locale === 'en' ? 'Connected · Octocat' : '已连接 · Octocat');
+			await expect(details.locator('.extension-detail-info')).toContainText('github:connector:account:mcp:tools');
+			await expect(details.locator('.extension-detail-info')).toContainText(locale === 'en' ? 'MCP server' : 'MCP 服务器');
+			await details.getByRole('tab', { name: locale === 'en' ? 'MCP server' : 'MCP 服务器', exact: true }).click();
+			await expect(details.locator('.extension-capabilities')).toContainText('github:connector:account:mcp:tools');
+			await page.screenshot({ path: `.build/desktop/ui-previews/connection-flat-details-${locale}-${theme}.png` });
+			await details.getByRole('button', { name: locale === 'en' ? 'Open MCP server details' : '打开 MCP 服务器详情', exact: true }).click();
+			await expect(details.getByRole('heading', { name: 'Account runtime server', exact: true })).toBeVisible();
+			await expect(details.locator('.extension-detail-heading > .extension-metadata')).toHaveText('github:connector:account:mcp:tools');
+			await expect(details.getByRole('status')).toHaveText(locale === 'en' ? 'Disconnected' : '已断开');
+			await list.getByRole('option').filter({ hasText: 'GitHub account' }).nth(1).click();
+			await expect(details.locator('.extension-detail-heading > .extension-metadata')).toHaveText('user:mcp:same-name');
+			await expect(details.locator('.extension-detail-heading')).toContainText(locale === 'en' ? 'This connection uses an MCP server.' : '此连接通过 MCP 服务器提供工具。');
+			await expect(details.getByRole('status')).toHaveText(locale === 'en' ? 'Disabled' : '已禁用');
+			await expect(details.getByRole('button', { name: locale === 'en' ? 'Connect with API token' : '使用 API 令牌连接', exact: true })).toHaveCount(0);
+		});
+	}
+
+	test(`Connections keeps account-bound declarations out of the list before runtime starts in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?classification&locale=${locale}`);
+		await page.evaluate(() => {
+			window.ashExtensionsIntegration.addMcpPackage();
+			window.ashExtensionsIntegration.addConnector({ declarationId: 'marketplace:example/web:mcp:fixture-server', serverId: 'github:connector:account:mcp:tools' });
+			window.ashExtensionsIntegration.setMcpServers([]);
+			window.ashExtensionsIntegration.notifyConnectorsChanged();
+		});
+		const pane = page.locator('[data-view-id="ash.extensions.mcp"]');
+		await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
+		await expect(pane.getByRole('option')).toHaveCount(1);
+		await pane.getByRole('option').click();
+		const details = page.locator('.ash-extension-editor');
+		await expect(details.locator('.extension-detail-info')).toContainText(locale === 'en' ? 'No runtime status reported' : '未报告运行状态');
+		await details.getByRole('button', { name: locale === 'en' ? 'Disconnect' : '断开', exact: true }).click();
+		await expect(details.getByRole('status')).toHaveText(locale === 'en' ? 'Disconnected' : '已断开');
+		await expect(pane.getByRole('option')).toHaveCount(1);
+	});
+}
 
 for (const labels of [
-	{ locale: 'en', add: 'Add MCP server', http: 'HTTP server', id: 'Server ID', name: 'Display name', url: 'HTTP or HTTPS server URL', credential: 'Credential reference (optional)', save: 'Save', disabled: 'Disabled', enable: 'Enable', disconnect: 'Disconnect', disconnected: 'Disconnected', connect: 'Connect', connected: 'Connected', edit: 'Edit MCP server', remove: 'Remove MCP server', confirm: 'Remove', cancel: 'Cancel' },
-	{ locale: 'zh-CN', add: '添加 MCP 服务器', http: 'HTTP 服务器', id: '服务器标识符', name: '显示名称', url: 'HTTP 或 HTTPS 服务器地址', credential: '凭据引用（可选）', save: '保存', disabled: '已禁用', enable: '启用', disconnect: '断开', disconnected: '已断开', connect: '连接', connected: '已连接', edit: '编辑 MCP 服务器', remove: '移除 MCP 服务器', confirm: '移除', cancel: '取消' },
+	{ locale: 'en', add: 'Add connection', http: 'HTTP server', id: 'Server ID', name: 'Display name', url: 'HTTP or HTTPS server URL', credential: 'Credential reference (optional)', save: 'Save', disabled: 'Disabled', enable: 'Enable', disconnect: 'Disconnect', disconnected: 'Disconnected', connect: 'Connect', connected: 'Connected', edit: 'Edit MCP server', remove: 'Remove MCP server', confirm: 'Remove', cancel: 'Cancel' },
+	{ locale: 'zh-CN', add: '添加连接', http: 'HTTP 服务器', id: '服务器标识符', name: '显示名称', url: 'HTTP 或 HTTPS 服务器地址', credential: '凭据引用（可选）', save: '保存', disabled: '已禁用', enable: '启用', disconnect: '断开', disconnected: '已断开', connect: '连接', connected: '已连接', edit: '编辑 MCP 服务器', remove: '移除 MCP 服务器', confirm: '移除', cancel: '取消' },
 ]) {
 	test(`Independent MCP configuration and lifecycle actions refresh the pane and details in ${labels.locale}`, async ({ page }) => {
 		await page.goto(`/extensions.html?locale=${labels.locale}`);
 		const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-		await mcp.getByRole('button', { name: /^(Connectors|连接器)$/u }).click();
+		await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 		await mcp.getByRole('button', { name: labels.add, exact: true }).click();
 		const add = page.getByRole('dialog', { name: labels.add, exact: true });
+		await expect(add.getByRole('combobox')).toHaveAttribute('placeholder', labels.locale === 'en' ? 'How would you like to connect?' : '你想如何建立连接？');
+		await expect(add.getByRole('option').filter({ hasText: labels.locale === 'en' ? 'Service account' : '服务账号' })).toBeVisible();
+		await page.screenshot({ path: `.build/desktop/ui-previews/add-connection-accounts-${labels.locale}.png` });
+		await add.getByRole('option').filter({ hasText: labels.locale === 'en' ? 'Custom MCP server' : '自定义 MCP 服务器' }).click();
+		await expect(add).toContainText(labels.locale === 'en' ? 'Choose a connection method.' : '选择接入方式。');
+		await expect(add).toContainText(labels.locale === 'en' ? 'for a service URL' : '有服务地址时');
+		await expect(add).toContainText(labels.locale === 'en' ? 'on this computer' : '本机运行服务');
+		await expect(add.getByRole('button', { name: labels.locale === 'en' ? 'Local process (stdio)' : '本地进程（stdio）', exact: true })).toBeVisible();
+		await page.screenshot({ path: `.build/desktop/ui-previews/add-connection-${labels.locale}.png` });
 		await add.getByRole('button', { name: labels.http, exact: true }).click();
+		await expect(add).toContainText(labels.locale === 'en' ? 'Configure HTTP server.' : '配置HTTP 服务器。');
 		await expect(add.getByPlaceholder(labels.id, { exact: true })).toBeFocused();
 		await add.getByPlaceholder(labels.id, { exact: true }).fill('standalone');
 		await add.getByPlaceholder(labels.name, { exact: true }).fill('Standalone test');
@@ -60,9 +365,10 @@ for (const labels of [
 test('MCP stdio arguments are validated without losing the draft and Escape cancels editing', async ({ page }) => {
 	await page.goto('/extensions.html');
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: /^(Connectors|连接器)$/u }).click();
-	await mcp.getByRole('button', { name: 'Add MCP server', exact: true }).click();
-	const dialog = page.getByRole('dialog', { name: 'Add MCP server', exact: true });
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
+	await mcp.getByRole('button', { name: 'Add connection', exact: true }).click();
+	const dialog = page.getByRole('dialog', { name: 'Add connection', exact: true });
+	await dialog.getByRole('option').filter({ hasText: 'Custom MCP server' }).click();
 	await dialog.getByRole('button', { name: 'Local process (stdio)', exact: true }).click();
 	await dialog.getByPlaceholder('Server ID', { exact: true }).fill('local');
 	await dialog.getByPlaceholder('Display name', { exact: true }).fill('Local test');
@@ -93,7 +399,7 @@ test('MCP failed mutations refresh actual state and stale revisions never overwr
 		credential: { type: 'unauthenticated' }, enablement: 'enabled',
 	}));
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: /^(Connectors|连接器)$/u }).click();
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await mcp.getByRole('option').filter({ hasText: 'Reviewed server' }).click();
 	const details = page.locator('.ash-extension-editor');
 	await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
@@ -150,7 +456,7 @@ for (const [locale, title, discover, sourceLabel, allSources, loadMore] of [
 for (const [locale, installedLabel, installLabel] of [['en', 'Installed', 'Install'], ['zh-CN', '已安装', '安装']]) {
 	for (const [view, paneTitle, discoveryLabel, query, name, packageId] of [
 		['skills', locale === 'zh-CN' ? '技能' : 'Skills', locale === 'zh-CN' ? '发现技能' : 'Discover skills', 'Web', 'Web tools', 'example/web'],
-		['mcp', locale === 'zh-CN' ? '连接器' : 'Connectors', locale === 'zh-CN' ? '发现连接' : 'Discover connections', 'Docs', 'Docs MCP', 'catalog/docs@ash'],
+		['mcp', locale === 'zh-CN' ? '连接' : 'Connections', locale === 'zh-CN' ? '发现连接' : 'Discover connections', 'Docs', 'Docs MCP', 'catalog/docs@ash'],
 	]) {
 		test(`Marketplace ${view} discovery opens reviewed package installation and updates its row in ${locale}`, async ({ page }) => {
 			await page.goto(`/extensions.html?marketplace&locale=${locale}`);
@@ -377,7 +683,7 @@ test('Plugins, Skills and MCP use the registered editor with their own content t
 	await expect(editor.getByRole('tabpanel', { name: 'Diagnostics', exact: true })).toContainText('Invalid metadata');
 	await page.evaluate(() => window.ashExtensionsIntegration.addMcpPackage());
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: /^(Connectors|连接器)$/u }).click();
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await mcp.getByRole('option').click();
 	await editor.getByRole('tab', { name: 'Tools', exact: true }).click();
 	await expect(editor.getByRole('tabpanel', { name: 'Tools', exact: true })).toContainText('fixture_search');
@@ -830,7 +1136,7 @@ test('MCP pane merges installed and registered servers and opens owning package 
 	await page.goto('/extensions.html');
 	await page.evaluate(() => window.ashExtensionsIntegration.addMcpPackage());
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: /^(Connectors|连接器)$/u }).click();
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await expect(mcp.getByRole('option')).toHaveCount(1);
 	await mcp.getByRole('option').click();
 	const details = page.locator('.ash-extension-editor');
@@ -855,7 +1161,7 @@ for (const [locale, states, statusLabel, diagnosticLabel, refreshLabel] of [
 			}))
 		));
 		const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-		await mcp.getByRole('button', { name: /^(Connectors|连接器)$/u }).click();
+		await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 		await expect(mcp.getByRole('option')).toHaveCount(5);
 		for (let index = 0; index < states.length; index++) {
 			await expect(mcp.getByRole('option').filter({ hasText: `Configured ${index}` })).toContainText(states[index]);
@@ -891,7 +1197,7 @@ test('MCP status failures retain installed packages and never infer connection s
 	await page.goto('/extensions.html');
 	await page.evaluate(() => { window.ashExtensionsIntegration.addMcpPackage(); window.ashExtensionsIntegration.failMcpStatus(); });
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: /^(Connectors|连接器)$/u }).click();
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await expect(mcp.getByRole('option')).toHaveCount(1);
 	await expect(mcp.getByRole('status')).toContainText('Could not load MCP server status: Error: Status connection lost');
 	await expect(mcp.getByRole('option')).not.toContainText('Connected');
@@ -910,7 +1216,7 @@ test('MCP server status remains visible when tool descriptions fail and unsuppor
 	await page.goto('/extensions.html');
 	await page.evaluate(() => window.ashExtensionsIntegration.failMcpTools());
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: /^(Connectors|连接器)$/u }).click();
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await mcp.getByRole('option').click();
 	const details = page.locator('.ash-extension-editor');
 	await expect(details.getByRole('status')).toHaveText('Connected');
@@ -929,7 +1235,7 @@ test('MCP detail changes discard a delayed status response for the previous serv
 		{ id: 'second', displayName: 'Second server', httpOrigin: null, state: { status: 'disabled' }, catalogGeneration: 1, connectionGeneration: null, toolCount: 0 },
 	]));
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: /^(Connectors|连接器)$/u }).click();
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await expect(mcp.getByRole('option')).toHaveCount(2);
 	await page.evaluate(() => window.ashExtensionsIntegration.holdMcpStatus());
 	await mcp.getByRole('option').filter({ hasText: 'First server' }).click();
@@ -969,7 +1275,7 @@ test('Changing the selected capability aborts a pending instructions read and di
 	await page.locator('.ash-extension-editor').getByRole('button', { name: 'Open instructions', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.instructionsStarted())).toBe(true);
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-	await mcp.getByRole('button', { name: /^(Connectors|连接器)$/u }).click();
+	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await mcp.getByRole('option').click();
 	await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.instructionsAborted())).toBe(true);
 	await page.evaluate(() => window.ashExtensionsIntegration.completeInstructions());
@@ -982,7 +1288,7 @@ for (const theme of ['light', 'dark', 'hc']) {
 		await page.setViewportSize({ width: 1280, height: 840 });
 		await page.goto(`/extensions.html?classification&preview&theme=${theme}`);
 		await page.evaluate(() => { window.ashExtensionsIntegration.addMcpPackage(); window.ashExtensionsIntegration.addSkillOnlyPlugin(); });
-		for (const name of ['Skills', 'Connectors', 'Recommended']) {
+		for (const name of ['Skills', 'Connections', 'Recommended']) {
 			await page.locator('#extensions').getByRole('button', { name, exact: true }).press('ArrowRight');
 		}
 		await page.locator('[data-view-id="ash.extensions.mcp"]').getByRole('option').click();
@@ -1051,7 +1357,7 @@ for (const labels of [
 			window.ashExtensionsIntegration.configureMcp({ id: 'user:mcp:oauth', displayName: 'OAuth fixture', transport: { type: 'streamableHttp', url: 'https://mcp.test/rpc' }, credential: { type: 'unauthenticated' }, enablement: 'enabled' });
 		});
 		const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-		await mcp.getByRole('button', { name: /^(Connectors|连接器)$/u }).click();
+		await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 		await mcp.getByRole('option').filter({ hasText: 'OAuth fixture' }).click();
 		const details = page.locator('.ash-extension-editor');
 		await details.getByRole('button', { name: labels.signIn, exact: true }).focus();
@@ -1200,8 +1506,9 @@ for (const locale of ['en', 'zh-CN']) {
 			await list.press('Home');
 			await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(0);
 			await root.hover();
+			const beforeWheel = await viewport.evaluate(element => element.scrollTop);
 			await page.mouse.wheel(0, 200);
-			await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+			await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(beforeWheel);
 			await expect(list.getByRole('option').first()).toHaveAttribute('aria-selected', 'true');
 			await list.press('Home');
 			await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(0);
@@ -1253,11 +1560,11 @@ for (const locale of ['en', 'zh-CN']) {
 
 			const connectors = page.locator('[data-view-id="ash.extensions.mcp"]');
 			await expect(connectors.locator('.ash-pane-view-content')).toHaveAttribute('aria-busy', 'false');
-			const connectorBadge = connectors.locator('.ash-count-badge');
+			const connectorBadge = connectors.locator('.ash-pane-view-header > .ash-count-badge');
 			const previous = Number(await connectorBadge.textContent());
 			await page.evaluate(() => window.ashExtensionsIntegration.addConnector());
 			await expect(connectorBadge).toHaveText(String(previous + 1));
-			await connectors.getByRole('button', { name: locale === 'en' ? 'Connectors' : '连接器', exact: true }).press('ArrowRight');
+			await connectors.getByRole('button', { name: locale === 'en' ? 'Connections' : '连接', exact: true }).press('ArrowRight');
 			await page.mouse.move(900, 600);
 			const before = await badge.boundingBox();
 			await skills.hover();
@@ -1298,7 +1605,7 @@ for (const locale of ['en', 'zh-CN']) {
 	test(`Extensions defaults to installed categories and returns from Marketplace in ${locale}`, async ({ page }) => {
 		await page.goto(`/extensions.html?classification&nativeEditor&locale=${locale}`);
 		const titles = page.locator('#extensions .ash-pane-view-header-title');
-		const labels = locale === 'en' ? ['Skills', 'Plugins', 'Connectors', 'Recommended'] : ['技能', '插件', '连接器', '推荐'];
+		const labels = locale === 'en' ? ['Skills', 'Plugins', 'Connections', 'Recommended'] : ['技能', '插件', '连接', '推荐'];
 		await expect(titles).toHaveText(labels);
 		await expect(page.locator('[data-view-id="ash.extensions.view"]')).toHaveCount(0);
 		await page.evaluate(() => window.ashExtensionsIntegration.openEditorExtension());
@@ -1334,7 +1641,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await details.getByRole('button', { name: locale === 'en' ? 'Disable skill' : '禁用技能', exact: true }).press('Enter');
 		await expect(details.getByRole('status')).toHaveText(locale === 'en' ? 'Disabled' : '已禁用');
 		const connectors = page.locator('[data-view-id="ash.extensions.mcp"]');
-		await connectors.getByRole('button', { name: locale === 'en' ? 'Connectors' : '连接器', exact: true }).press('ArrowRight');
+		await connectors.getByRole('button', { name: locale === 'en' ? 'Connections' : '连接', exact: true }).press('ArrowRight');
 		await connectors.getByRole('option').filter({ hasText: 'GitHub account' }).click();
 		await details.getByRole('button', { name: locale === 'en' ? 'Disconnect' : '断开', exact: true }).press('Enter');
 		await expect(connectors.getByRole('option').filter({ hasText: 'GitHub account' })).toContainText(locale === 'en' ? 'Disconnected' : '已断开');
@@ -1387,7 +1694,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const filter = page.locator('[data-action-id="ash.extensions.filterSearch"] button');
 		const clear = page.locator('[data-action-id="ash.extensions.clearSearch"] button');
 		const titles = page.locator('#extensions .ash-pane-view-header-title');
-		const names = locale === 'en' ? ['Marketplace', 'Installed', 'Skills', 'Plugins', 'Connectors', 'Built-in', 'Recommended'] : ['扩展市场', '已安装', '技能', '插件', '连接器', '内置', '推荐'];
+		const names = locale === 'en' ? ['Marketplace', 'Installed', 'Skills', 'Plugins', 'Connections', 'Built-in', 'Recommended'] : ['扩展市场', '已安装', '技能', '插件', '连接', '内置', '推荐'];
 		await expect(clear).toBeDisabled();
 		await search.fill('@installed ash.bat');
 		await search.press('Enter');
@@ -1403,7 +1710,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(menu.getByRole('menuitemcheckbox', { name: names[1], exact: true })).toHaveAttribute('aria-checked', 'true');
 		await menu.getByRole('menuitemcheckbox').first().press('Escape');
 		await expect(filter).toBeFocused();
-		for (const [token, index, title] of [['@skills', 2, names[2]], ['@plugins', 3, names[3]], ['@connectors', 4, names[4]], ['@builtin', 5, names[3]], ['@recommended', 6, names[6]], ['@installed', 1, null]]) {
+		for (const [token, index, title] of [['@skills', 2, names[2]], ['@plugins', 3, names[3]], ['@connections', 4, names[4]], ['@builtin', 5, names[3]], ['@recommended', 6, names[6]], ['@installed', 1, null]]) {
 			await filter.click();
 			await page.getByRole('menuitemcheckbox', { name: names[index as number], exact: true }).click();
 			await expect(search).toHaveValue(`${token} ash.bat`);
@@ -1411,7 +1718,11 @@ for (const locale of ['en', 'zh-CN']) {
 			if (title) { await expect(titles).toHaveText([title as string]); }
 			else { await expect(titles).toHaveCount(4); }
 		}
+		await search.fill('@connectors ash.bat');
+		await search.press('Enter');
+		await expect(titles).toHaveText([names[4]]);
 		await filter.click();
+		await expect(page.getByRole('menuitemcheckbox', { name: names[4], exact: true })).toHaveAttribute('aria-checked', 'true');
 		await page.getByRole('menuitemcheckbox', { name: names[0], exact: true }).click();
 		await expect(search).toHaveValue('ash.bat');
 		await expect(titles).toHaveText([names[0]]);
@@ -1474,8 +1785,8 @@ for (const locale of ['en', 'zh-CN']) {
 		const search = page.locator('#extensions').getByRole('searchbox');
 		const refresh = page.locator('#extensions [data-action-id="ash.extensions.refresh"] button');
 		const connectors = page.locator('[data-view-id="ash.extensions.mcp"]');
-		const add = connectors.locator('.ash-pane-view-header-actions button');
-		await connectors.getByRole('button', { name: locale === 'en' ? 'Connectors' : '连接器', exact: true }).press('ArrowRight');
+		const add = connectors.getByRole('button', { name: locale === 'en' ? 'Add connection' : '添加连接', exact: true });
+		await connectors.getByRole('button', { name: locale === 'en' ? 'Connections' : '连接', exact: true }).press('ArrowRight');
 		await page.locator('#details').click();
 		await page.mouse.move(900, 600);
 		await expect(refresh).toBeHidden();
@@ -1491,7 +1802,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const searchBox = await search.boundingBox();
 		expect(refreshBox!.y + refreshBox!.height).toBeLessThanOrEqual(searchBox!.y);
 		await expect(page.locator('.extensions-global-search button')).toHaveCount(2);
-		await connectors.getByRole('button', { name: locale === 'en' ? 'Connectors' : '连接器', exact: true }).focus();
+		await connectors.getByRole('button', { name: locale === 'en' ? 'Connections' : '连接', exact: true }).focus();
 		await expect(add).toBeVisible();
 		const selected = page.locator('[data-view-id="ash.extensions.plugins"]').getByRole('option').filter({ hasText: 'ash.bat' });
 		await selected.click();

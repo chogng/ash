@@ -106,7 +106,7 @@ import { DiskFileSystemProviderChannel } from "../../platform/files/electron-mai
 import { URI } from "../../base/common/uri.js";
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
-import { LOCAL_FILE_SYSTEM_CHANNEL_NAME } from "../../platform/files/common/diskFileSystemProviderClient.js";
+import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from "../../platform/files/common/diskFileSystemProviderClient.js";
 import { IWindowsMainService, type IOpenConfiguration } from "../../platform/windows/electron-main/windows.js";
 import { RESTORE_WINDOWS_SETTING, TitleBarSetting, parseTitleBarStyle, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntry, type IWindowSessionWindow } from "../../platform/windows/electron-main/windowsStateHandler.js";
@@ -1056,7 +1056,26 @@ export class AshApplication extends Disposable {
 		let configuration: ConfigurationService | undefined;
 		let userKeyboardLayout: UserKeyboardLayoutMainService | undefined;
 		try {
-			this.profileFileSystem = this._register(new DiskFileSystemProvider([URI.file(this.profileRoot)]));
+			// Native FSEvents registration/close can block synchronously. Keep those
+			// read-only notifications off Main, including renderer unsubscribe during shutdown.
+			const watcherProcess = this._register(new UtilityProcess({
+				name: 'Ash File Watcher',
+				entryPoint: fileURLToPath(new URL('../electron-utility/fileWatcher/fileWatcherMain.js', import.meta.url)),
+				args: [this.profileRoot],
+			}));
+			const watcherPort = watcherProcess.connect('profile');
+			const watcherClient = this._register(new MessagePortClient({
+				postMessage: data => watcherPort.postMessage(data), start: () => watcherPort.start(), close: () => watcherPort.close(),
+				addEventListener: (type, listener) => type === 'message' ? watcherPort.on('message', listener) : watcherPort.on('close', listener as () => void),
+				removeEventListener: (type, listener) => type === 'message' ? watcherPort.off('message', listener) : watcherPort.off('close', listener as () => void),
+			}, 'profile'));
+			const watcherChannel = watcherClient.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME);
+			this._register(watcherChannel.listen<unknown>('watchError')(error => {
+				if (typeof error !== 'string') throw new TypeError('Invalid file watcher error');
+				this.logService.error('files', 'Failed to watch user profile files', error);
+			}));
+			const watcher = this._register(new DiskFileSystemProviderClient(watcherChannel));
+			this.profileFileSystem = this._register(new DiskFileSystemProvider([URI.file(this.profileRoot)], watcher));
 			const files = this._register(new FileService());
 			this._register(files.registerProvider(Schemas.file, this.profileFileSystem));
 			let policies: IPolicyService;
@@ -1076,6 +1095,16 @@ export class AshApplication extends Disposable {
 			throwIfCancelled(token);
 			userKeyboardLayout = await UserKeyboardLayoutMainService.create({
 				filePath: join(this.profileRoot, "keyboard-layout.json"),
+				watchFile: (filePath, onChange) => {
+					const resource = URI.file(filePath);
+					const subscriptions = new DisposableStore();
+					subscriptions.add(files.onDidChangeFiles(event => {
+						if (!event.resources || event.resources.some(changed => extUriBiasedIgnorePathCase.isEqualOrParent(resource, changed))) onChange();
+					}));
+					try { subscriptions.add(files.watch(resource)); }
+					catch (error) { subscriptions.dispose(); throw error; }
+					return subscriptions;
+				},
 				openResource: (filePath) => shell.openPath(filePath),
 				onError: (error) => {
 					console.error("Failed to process user keyboard layout", error);

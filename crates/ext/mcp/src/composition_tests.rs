@@ -58,6 +58,89 @@ impl McpSessionFactory for FakeFactory {
 
 struct FakeSession;
 
+struct OfflineFactory;
+
+impl McpSessionFactory for OfflineFactory {
+    fn connect(&self, definition: McpServerDefinition, _: RmcpClientOptions) -> McpConnectFuture {
+        Box::pin(async move {
+            if definition.id().as_str() == "user:mcp:offline" {
+                Err(McpSessionError::Transport("offline fixture".into()))
+            } else {
+                Ok(Box::new(FakeSession) as Box<dyn McpSession>)
+            }
+        })
+    }
+}
+
+#[test]
+fn offline_servers_do_not_abort_composition_and_can_reconnect() {
+    use crate::status::McpServerRuntimeState;
+
+    for ids in [
+        vec!["user:mcp:offline"],
+        vec!["user:mcp:offline", "user:mcp:healthy"],
+    ] {
+        let definitions = || {
+            ids.iter()
+                .map(|id| {
+                    McpServerDefinition::new(
+                        McpServerId::new(*id).unwrap(),
+                        *id,
+                        McpServerTransport::Stdio(StdioServerCommand::new("unused")),
+                    )
+                    .unwrap()
+                })
+                .collect::<Vec<_>>()
+        };
+        let authorities = ids
+            .iter()
+            .map(|id| {
+                (
+                    McpServerId::new(*id).unwrap(),
+                    McpInvocationAuthority {
+                        display_name: (*id).into(),
+                        transport: McpInvocationTransport::Stdio {
+                            executable: "/test/mcp".into(),
+                        },
+                        connector_fence: None,
+                        runtime_fence: None,
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let composition = start_mcp_tools(
+            definitions(),
+            authorities.clone(),
+            7,
+            Some(Arc::new(OfflineFactory)),
+        )
+        .expect("an optional offline MCP must not abort the directory runtime");
+        let offline = composition.status.server("user:mcp:offline").unwrap();
+        assert_eq!(offline.state, McpServerRuntimeState::Unavailable);
+        assert_eq!(offline.tool_count, 0);
+        assert_eq!(offline.connection_generation, None);
+        assert_eq!(offline.diagnostic.as_deref(), Some("offline fixture"));
+        assert_eq!(composition.tools.definitions().len(), ids.len() - 1);
+        if let Some(healthy) = composition.status.server("user:mcp:healthy") {
+            assert_eq!(healthy.state, McpServerRuntimeState::Connected);
+            assert_eq!(healthy.tool_count, 1);
+        }
+        drop(composition);
+
+        let recovered = start_mcp_tools(definitions(), authorities, 8, Some(Arc::new(FakeFactory)))
+            .expect("a later reconcile can retry the same durable declarations");
+        assert_eq!(recovered.tools.definitions().len(), ids.len());
+        assert!(
+            recovered
+                .status
+                .servers
+                .iter()
+                .all(|server| server.state == McpServerRuntimeState::Connected
+                    && server.diagnostic.is_none())
+        );
+    }
+}
+
 struct AppFactory;
 struct AppSession(McpServerId);
 

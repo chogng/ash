@@ -77,7 +77,7 @@ export class ExtensionsViewPaneContainer extends PaneComposite {
 				: undefined,
 		}));
 		this.searchActions.element.classList.add('ash-toolbar', 'extensions-search-actions');
-		const help = localize({ bundle: 'ash.extensions', key: 'globalSearchHelp' }, 'Type to search the Marketplace. Use @installed to filter installed Skills, Plugins and Connectors. Use the Filter extensions menu for installed categories, built-in plugins and recommendations. Clear Search removes the query and filters. Clear the search to return to installed categories. Enter searches immediately; Down moves to results; Escape clears the search. Refresh reloads all categories and preserves the search and pane expansion. The title bar More Actions menu provides marketplace, installed, source management and installation commands. Pane actions appear on hover or keyboard focus.');
+		const help = localize({ bundle: 'ash.extensions', key: 'globalSearchHelp' }, 'Type to search the Marketplace. Use @installed to filter installed Skills, Plugins and Connections. Use the Filter extensions menu for installed categories, built-in plugins and recommendations. Clear Search removes the query and filters. Clear the search to return to installed categories. Enter searches immediately; Down moves to results; Escape clears the search. Refresh reloads all categories and preserves the search and pane expansion. The title bar More Actions menu provides marketplace, installed, source management and installation commands. Pane actions appear on hover or keyboard focus.');
 		this.search.inputElement.setAttribute('aria-description', help);
 
 		this._register(this.search.onDidChange(() => {
@@ -128,7 +128,7 @@ export class ExtensionsViewPaneContainer extends PaneComposite {
 			{ token: '@installed', label: localize({ bundle: 'ash.extensions', key: 'installedFilter' }, 'Installed') },
 			{ token: '@skills', label: localize({ bundle: 'ash.extensions', key: 'filterSkills' }, 'Skills') },
 			{ token: '@plugins', label: localize({ bundle: 'ash.extensions', key: 'installedPlugins' }, 'Plugins') },
-			{ token: '@connectors', label: localize({ bundle: 'ash.extensions', key: 'installedConnectors' }, 'Connectors') },
+			{ token: '@connections', label: localize({ bundle: 'ash.extensions', key: 'installedConnectors' }, 'Connections') },
 			{ token: '@builtin', label: localize({ bundle: 'ash.extensions', key: 'builtInFilter' }, 'Built-in') },
 			{ token: '@recommended', label: localize({ bundle: 'ash.extensions', key: 'recommendedPane' }, 'Recommended') },
 		];
@@ -136,8 +136,9 @@ export class ExtensionsViewPaneContainer extends PaneComposite {
 
 	private readSearch(): { readonly token: string; readonly query: string; } {
 		const raw = this.search.value.trim();
-		const match = /^(@installed|@skills|@plugins|@connectors|@builtin|@recommended)(?:\s+|$)/iu.exec(raw);
-		return { token: match?.[1].toLowerCase() ?? '', query: match ? raw.slice(match[0].length) : raw };
+		const match = /^(@installed|@skills|@plugins|@connections|@connectors|@builtin|@recommended)(?:\s+|$)/iu.exec(raw);
+		const token = match?.[1].toLowerCase() ?? '';
+		return { token: token === '@connectors' ? '@connections' : token, query: match ? raw.slice(match[0].length) : raw };
 	}
 
 	private createSearchActions(): readonly IAction[] {
@@ -198,7 +199,7 @@ export class ExtensionsViewPaneContainer extends PaneComposite {
 		const { token, query } = this.readSearch();
 		const installed = !!token;
 		const builtIn = token === '@builtin' || this.searchOptions.mode === 'builtIn';
-		const installedCategory = ({ '@skills': 'skills', '@plugins': 'plugins', '@connectors': 'mcp', '@builtin': 'plugins', '@recommended': 'recommended' } as Record<string, string>)[token] ?? 'all';
+		const installedCategory = ({ '@skills': 'skills', '@plugins': 'plugins', '@connections': 'mcp', '@builtin': 'plugins', '@recommended': 'recommended' } as Record<string, string>)[token] ?? 'all';
 		const marketplace = !installed && !builtIn && (raw.length > 0 || this.searchOptions.mode === 'browse' || !!this.searchOptions.capabilityKind || !!this.searchOptions.languageId);
 		const category = marketplace && (this.searchOptions.view === 'skills' || this.searchOptions.view === 'mcp') ? this.searchOptions.view : 'view';
 		this.contextKeys.bufferChangeEvents(() => {
@@ -251,7 +252,7 @@ export function registerExtensionsViewContainer(registry: WorkbenchViewRegistry,
 		{ id: 'ash.extensions.view', title: localize({ bundle: 'ash.extensions', key: 'marketplacePane' }, 'Marketplace'), when: ContextKeyExpr.and(ContextKeyExpr.has('extensionsMarketplaceVisible'), ContextKeyExpr.notEquals('extensionsSearchCategory', 'skills'), ContextKeyExpr.notEquals('extensionsSearchCategory', 'mcp')), canToggleVisibility: false, order: 0, ctorDescriptor: new SyncDescriptor(ExtensionsListView) },
 		{ id: 'ash.extensions.skills', title: localize({ bundle: 'ash.extensions', key: 'filterSkills' }, 'Skills'), collapsed: true, when: ContextKeyExpr.or(installedCategory('skills'), ContextKeyExpr.equals('extensionsSearchCategory', 'skills')), canToggleVisibility: false, order: 1, ctorDescriptor: new SyncDescriptor(SkillsViewPane) },
 		{ id: 'ash.extensions.plugins', title: localize({ bundle: 'ash.extensions', key: 'installedPlugins' }, 'Plugins'), when: installedCategory('plugins'), canToggleVisibility: false, order: 2, ctorDescriptor: new SyncDescriptor(ExtensionsListView) },
-		{ id: 'ash.extensions.mcp', title: localize({ bundle: 'ash.extensions', key: 'installedConnectors' }, 'Connectors'), collapsed: true, when: ContextKeyExpr.or(installedCategory('mcp'), ContextKeyExpr.equals('extensionsSearchCategory', 'mcp')), canToggleVisibility: false, order: 3, ctorDescriptor: new SyncDescriptor(McpServersViewPane) },
+		{ id: 'ash.extensions.mcp', title: localize({ bundle: 'ash.extensions', key: 'installedConnectors' }, 'Connections'), collapsed: true, when: ContextKeyExpr.or(installedCategory('mcp'), ContextKeyExpr.equals('extensionsSearchCategory', 'mcp')), canToggleVisibility: false, order: 3, ctorDescriptor: new SyncDescriptor(McpServersViewPane) },
 		{ id: 'ash.extensions.recommended', title: localize({ bundle: 'ash.extensions', key: 'recommendedPane' }, 'Recommended'), when: installedCategory('recommended'), canToggleVisibility: false, order: 4, collapsed: true, ctorDescriptor: new SyncDescriptor(RecommendedExtensionsView) },
 	]));
 	return registrations;

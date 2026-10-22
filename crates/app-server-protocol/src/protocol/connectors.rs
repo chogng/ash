@@ -63,7 +63,10 @@ pub struct ConnectorDto {
     pub id: String,
     pub display_name: String,
     pub description: String,
+    /// MCP declaration referenced by the Connector, not the account-bound runtime instance.
     pub runtime_server_id: String,
+    /// Exact account-bound MCP runtime identity; absent for an invalid declaration binding.
+    pub mcp_server_id: Option<String>,
     pub definition_digest: String,
     #[ts(type = "number")]
     pub connection_generation: u64,

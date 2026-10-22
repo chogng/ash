@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'mocha';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import {
 	parseUserKeyboardLayoutResource,
@@ -47,8 +48,15 @@ test('profile keyboard-layout.json is created and hot-reloaded, including invali
 		const filePath = join(directory, 'keyboard-layout.json');
 		const errors: unknown[] = [];
 		let openedResource: string | undefined;
+		let changeFile: () => void = () => { throw new Error('Host file watch was not registered'); };
+		let watchClosed = false;
 		const service = await UserKeyboardLayoutMainService.create({
 			filePath,
+			watchFile(resource, onChange) {
+				assert.equal(resource, filePath);
+				changeFile = onChange;
+				return toDisposable(() => { watchClosed = true; });
+			},
 			onError: (error) => errors.push(error),
 			openResource: async (resource) => {
 				openedResource = resource;
@@ -71,17 +79,20 @@ test('profile keyboard-layout.json is created and hot-reloaded, including invali
 				layout: { id: 'custom.test', label: 'Custom Test', source: 'user', operatingSystem: 'linux' },
 				rawMapping: { KeyT: mappingEntry('t', 'T') },
 			}, null, 2)}\n`, 'utf8');
+			changeFile();
 			await loaded;
 			assert.equal((await service.readKeyboardLayout())?.layout.id, 'custom.test');
 
 			const invalidated = nextChange(service);
 			await writeFile(filePath, '{ invalid', 'utf8');
+			changeFile();
 			await invalidated;
 			assert.equal(await service.readKeyboardLayout(), undefined);
 			assert.equal(errors.length, 1);
 			assert.deepEqual(snapshots.map(value => value === undefined ? undefined : (value as { layout: { id: string; }; }).layout.id), ['custom.test', undefined]);
 		} finally {
 			await service.close();
+			assert.equal(watchClosed, true);
 		}
 	} finally {
 		await rm(directory, { recursive: true, force: true });

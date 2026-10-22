@@ -69,6 +69,8 @@ function connectorView(connector: ConnectorDto): ConnectorView {
 		id: connector.id,
 		displayName: connector.displayName,
 		description: connector.description,
+		mcpDeclarationId: connector.runtimeServerId,
+		mcpServerId: connector.mcpServerId,
 		connectionGeneration: connector.connectionGeneration,
 		state: connectorState(connector.state),
 		oauthMethods: connector.oauthMethods,

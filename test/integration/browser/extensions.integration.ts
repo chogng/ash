@@ -327,10 +327,20 @@ services.registerInstance(IAppServerSkillApi, {
 const connectorChanges = disposables.add(new Emitter<number>());
 let connectorGeneration = 1;
 let connectorEntries: ConnectorView[] = [];
+let failConnectorList = false;
 services.registerInstance(IConnectorService, {
 	onDidChange: connectorChanges.event,
-	list: async () => (managementReads.connectors++, { generation: connectorGeneration, connectors: structuredClone(connectorEntries) }),
-	connectOAuth: async () => { throw new Error('OAuth is not configured in this fixture'); },
+	list: async () => {
+		managementReads.connectors++;
+		if (failConnectorList) { throw new Error('Service catalog unavailable'); }
+		return { generation: connectorGeneration, connectors: structuredClone(connectorEntries) };
+	},
+	connectOAuth: async (connector, generation) => {
+		if (generation !== connectorGeneration) { throw new Error('Connection changed. Refresh before saving.'); }
+		requests.push(['connector/oauth', connector.id, generation]);
+		connectorEntries = connectorEntries.map(entry => entry.id === connector.id ? { ...entry, state: { status: 'connected', account: { id: 'oauth-user', displayName: 'OAuth user' } }, canDisconnect: true } : entry);
+		connectorChanges.fire(++connectorGeneration);
+	},
 	connectApiToken: async (connector, generation, input) => {
 		if (generation !== connectorGeneration) { throw new Error('Connection changed. Refresh before saving.'); }
 		requests.push(['connector/connect', connector.id, input.accountId]);
@@ -669,8 +679,11 @@ window.ashExtensionsIntegration = {
 	requests,
 	installationSnapshot: () => structuredClone(installed),
 	managementReads: () => ({ ...managementReads }),
-	addConnector: () => {
-		connectorEntries.push({ id: 'github', displayName: 'GitHub account', description: 'Review repository changes', connectionGeneration: 1, state: { status: 'connected', account: { id: 'octocat', displayName: 'Octocat' } }, oauthMethods: [], canConnectApiToken: true, canConnectOAuth: false, canDisconnect: true, canRefreshOAuth: false, canRevokeOAuth: false });
+	notifyConnectorsChanged: () => { connectorChanges.fire(++connectorGeneration); },
+	setConnectors: (entries: readonly ConnectorView[]) => { connectorEntries = structuredClone([...entries]); connectorChanges.fire(++connectorGeneration); },
+	failConnectorList: (fail: boolean) => { failConnectorList = fail; },
+	addConnector: (binding?: { declarationId: string; serverId: string | null; }) => {
+		connectorEntries.push({ id: 'github', displayName: 'GitHub account', description: 'Review repository changes', mcpDeclarationId: binding?.declarationId ?? 'marketplace:example/github:mcp:tools', mcpServerId: binding ? binding.serverId : 'github:connector:account:mcp:tools', connectionGeneration: 1, state: { status: 'connected', account: { id: 'octocat', displayName: 'Octocat' } }, oauthMethods: [], canConnectApiToken: true, canConnectOAuth: false, canDisconnect: true, canRefreshOAuth: false, canRevokeOAuth: false });
 		connectorChanges.fire(++connectorGeneration);
 	},
 	setRecommendations: async (content: string) => { await files.writeFile({ resource: recommendationsResource, content }); recommendationChanges.fire({ resources: [recommendationsResource] }); },
@@ -715,7 +728,7 @@ window.ashExtensionsIntegration = {
 declare global {
 	interface Window {
 
-		ashExtensionsIntegration: { managementReads(): { installed: number; skills: number; connectors: number; }; installationSnapshot(): ExtensionsInstalledPackage[]; addConnector(): void; enableMcpOAuth(): void; completeMcpLogin(): void; mcpLoginWaiting(): boolean; holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
+		ashExtensionsIntegration: { managementReads(): { installed: number; skills: number; connectors: number; }; installationSnapshot(): ExtensionsInstalledPackage[]; notifyConnectorsChanged(): void; setConnectors(entries: readonly ConnectorView[]): void; failConnectorList(fail: boolean): void; addConnector(binding?: { declarationId: string; serverId: string | null; }): void; enableMcpOAuth(): void; completeMcpLogin(): void; mcpLoginWaiting(): boolean; holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
 	}
 }
 

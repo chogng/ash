@@ -375,8 +375,10 @@ fn start_mcp_tools_with_updates(
     factory: Option<Arc<dyn McpSessionFactory>>,
     updates: Option<McpCatalogUpdates>,
 ) -> Result<McpToolComposition, McpToolCompositionError> {
+    // Optional servers can be offline at cold start. Keep their diagnostics and the
+    // healthy catalog without turning one connection failure into a directory failure.
     let mut options = McpRuntimeOptions::new("ash-app-server", env!("CARGO_PKG_VERSION"))
-        .with_startup_policy(McpStartupPolicy::RequireAll)
+        .with_startup_policy(McpStartupPolicy::AllowPartial)
         .with_catalog_generation(catalog_generation)
         .with_first_connection_generation(catalog_generation)
         .with_mcp_apps()

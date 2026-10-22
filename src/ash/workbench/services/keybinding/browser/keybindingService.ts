@@ -176,6 +176,7 @@ export class WorkbenchKeybindingService
 		this._register(this.commandRegistry.onDidChangeCommands(() => this.updateKeybindingsSchema()));
 		this.updateKeybindingsSchema();
 		this._register(jsonRegistry.registerSchemaAssociation('ash://schemas/keybindings', profiles.currentProfile.keybindingsResource.toString()));
+		this._register(files.watch(profiles.currentProfile.keybindingsResource));
 		this._register(files.onDidChangeFiles(event => {
 			if (!event.resources || event.resources.some(resource => extUri.isEqual(resource, profiles.currentProfile.keybindingsResource))) {
 				void this.initialize().catch(error => notificationService.notify({ severity: Severity.Warning, message: localize({ bundle: 'ash', key: 'keybindings.invalid' }, 'Could not load keybindings.json: {0}', getErrorMessage(error)) }));

@@ -4,6 +4,7 @@ import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 export interface IUtilityProcessConfiguration {
 	readonly name: string;
 	readonly entryPoint: string;
+	readonly args?: readonly string[];
 }
 
 /** An application-owned child, started on first use; a process failure retires its connections. */
@@ -16,7 +17,7 @@ export class UtilityProcess extends Disposable {
 		this.assertNotDisposed();
 		if (this.failed) { throw new Error('Utility process unavailable'); }
 		if (!this.child) {
-			const child = utilityProcess.fork(this.configuration.entryPoint, [], { serviceName: this.configuration.name });
+			const child = utilityProcess.fork(this.configuration.entryPoint, [...(this.configuration.args ?? [])], { serviceName: this.configuration.name });
 			this.child = child;
 			const exit = (): void => {
 				this.failed = true;

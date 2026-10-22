@@ -1,9 +1,10 @@
 import { expect, test, writeEditorExtensionFixture } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
+import { Dialogs } from '../../../automation/dialogs.js';
 import { readUserSettings } from '../../../automation/settings.js';
 import { parseJsonc } from '../../../../src/ash/base/common/jsonc.js';
-import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { mkdir, readdir, stat, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 test.beforeEach(async ({ workbench }) => {
@@ -11,47 +12,243 @@ test.beforeEach(async ({ workbench }) => {
 	await expect(workbench.page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
 });
 
+const durableExtensionTest = test.extend({
+	useInMemorySecretStorage: async ({ target }, use) => { await use(target.kind === 'browser'); },
+	backendFixture: async ({ testWorkspace }, use) => {
+		const productServicesPath = join(testWorkspace.directory, 'private-services.json');
+		await writeFile(productServicesPath, JSON.stringify({ schemaVersion: 3 }));
+		await use({
+			productServicesPath,
+			async prepareProfile(profileDirectory) {
+				// Explicit private-file mode in this disposable profile avoids OS prompts.
+				// Encrypted recovery is covered separately with an injected keyring.
+				const secrets = join(profileDirectory, 'secrets');
+				await mkdir(secrets, { recursive: true, mode: 0o700 });
+				await writeFile(join(secrets, 'storage-mode'), 'file', { mode: 0o600 });
+			},
+		});
+	},
+});
+
 for (const window of ['Code', 'Agents']) {
-	test(`Independent MCP configuration persists across reload and can be removed in ${window}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
-		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
-		const quickaccess = new QuickAccess(page);
-		const command = window === 'Code' ? 'ash.extensions.open' : 'workbench.action.chat.configure.skills';
-		await quickaccess.runCommand(command);
-		let mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-		await mcp.getByRole('button', { name: 'Connections', exact: true }).click();
-		const search = mcp.getByRole('searchbox');
-		await search.focus();
-		await search.press('Alt+F1');
-		await expect(page.getByRole('dialog', { name: 'Accessibility Help', exact: true }).getByRole('textbox')).toHaveValue(/Add MCP server/u);
-		await page.keyboard.press('Escape');
-		await expect(search).toBeFocused();
-		await mcp.getByRole('button', { name: 'Add MCP server', exact: true }).click();
-		const add = page.getByRole('dialog', { name: 'Add MCP server', exact: true });
-		await add.getByRole('button', { name: 'HTTP server', exact: true }).click();
-		await add.getByPlaceholder('Server ID', { exact: true }).fill('persistent-test');
-		await add.getByPlaceholder('Display name', { exact: true }).fill('Persistent MCP test');
-		await add.getByPlaceholder('HTTP or HTTPS server URL', { exact: true }).fill('http://127.0.0.1:9/mcp');
-		await add.getByRole('button', { name: 'Save', exact: true }).click();
-		let details = page.locator('.ash-extension-editor');
-		await expect(details.getByRole('heading', { name: 'Persistent MCP test', exact: true })).toBeVisible();
-		await expect(details.getByRole('status')).toHaveText('Disabled');
-		await workbench.reloadWindow(page);
-		await quickaccess.runCommand(command);
-		mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
-		const header = mcp.getByRole('button', { name: 'Connections', exact: true });
-		if (await header.getAttribute('aria-expanded') !== 'true') { await header.click(); }
-		await mcp.getByRole('option').filter({ hasText: 'Persistent MCP test' }).click();
-		details = page.locator('.ash-extension-editor');
-		await expect(details.getByRole('status')).toHaveText('Disabled');
-		await details.getByRole('button', { name: 'Edit MCP server', exact: true }).click();
-		const edit = page.getByRole('dialog', { name: 'Edit MCP server', exact: true });
-		await edit.getByRole('button', { name: 'HTTP server', exact: true }).click();
-		await expect(edit.getByPlaceholder('HTTP or HTTPS server URL', { exact: true })).toHaveValue('http://127.0.0.1:9/mcp');
-		await page.keyboard.press('Escape');
-		await details.getByRole('button', { name: 'Remove MCP server', exact: true }).click();
-		await page.getByRole('dialog', { name: 'Remove MCP server', exact: true }).getByRole('button', { name: 'Remove', exact: true }).click();
-		await expect(mcp.getByRole('option').filter({ hasText: 'Persistent MCP test' })).toHaveCount(0);
-	});
+	for (const recovery of ['none', 'online', 'offline'] as const) {
+		const durable = recovery !== 'none';
+		const localMcp = recovery === 'online';
+		const accountTest = durable ? durableExtensionTest : test;
+		accountTest(`Add connection authorizes an installed service account in ${window}${durable ? ' and survives restart' : ''}${recovery === 'offline' ? ' with offline MCP' : ''}`, { tag: durable ? ['@electron-app-server', '@darwin'] : ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, application, workbench, runningApplication }, testInfo) => {
+			const root = join(testWorkspace.directory, 'account-extension');
+			await mkdir(join(root, '.ash-plugin'), { recursive: true });
+			await mkdir(join(root, 'mcp'), { recursive: true });
+			await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
+				schemaVersion: 1, id: 'acme/account-smoke', version: '1.0.0', displayName: 'Account smoke',
+				compatibility: { ash: '>=0.1.0' },
+				contributions: {
+					mcpServers: [{ id: 'tools', definition: 'mcp/tools.json' }],
+					connectors: [{ id: 'account', displayName: 'Smoke service account', description: 'Synthetic service account authorization', mcpServer: 'tools' }],
+				},
+				permissions: localMcp ? [{ type: 'process', executable: 'mcp/server.cjs' }] : [{ type: 'network', hosts: ['127.0.0.1'] }],
+				credentialSlots: [{ name: 'token', kind: 'secretText', requiredFor: ['connector:account', 'mcp:tools'] }],
+			}));
+			await writeFile(join(root, 'mcp', 'tools.json'), JSON.stringify({
+				transport: localMcp
+					? { type: 'stdio', executable: 'mcp/server.cjs', credentialEnv: 'ASH_ACCOUNT_SMOKE_TOKEN' }
+					: { type: 'streamableHttp', url: 'https://127.0.0.1:9/mcp' },
+			}));
+			if (localMcp) {
+				// A real local MCP process proves that restart recovers the credential, while
+				// avoiding an external service or a test-only TLS trust exception.
+				await writeFile(join(root, 'mcp', 'server.cjs'), String.raw`#!/usr/bin/env node
+if (process.env.ASH_ACCOUNT_SMOKE_TOKEN !== 'synthetic-account-token') process.exit(2);
+require('node:readline').createInterface({ input: process.stdin }).on('line', line => {
+  const message = JSON.parse(line);
+  if (message.id === undefined) return;
+  const result = message.method === 'initialize'
+    ? { protocolVersion: message.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'account-persistence-smoke', version: '1.0.0' } }
+    : message.method === 'tools/list' ? { tools: [] } : {};
+  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: message.id, result }) + '\n');
+});
+`, { mode: 0o700 });
+			}
+			const code = workbench.page;
+			await workbench.quickaccess.runCommand('ash.extensions.installLocal');
+			const installation = code.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
+			await installation.getByRole('textbox').fill('account-extension');
+			const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
+			expect(installed.message).toContain('Installed acme/account-smoke 1.0.0');
+			if (localMcp) {
+				if (!('windows' in application)) throw new Error('Durable account recovery requires Desktop');
+				const profile = await application.evaluate(() => process.env.ASH_HOME!);
+				const objects = join(profile, 'plugins', 'objects');
+				const entries = await readdir(objects);
+				expect(entries).toHaveLength(1);
+				// Installation must retain the source program's executable bit without a
+				// test-side repair. Permission grants remain a separate user action below.
+				expect((await stat(join(objects, entries[0]!, 'mcp', 'server.cjs'))).mode & 0o7777).toBe(0o700);
+			}
+			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
+			const search = code.locator('.ash-extensions-view-container').getByRole('searchbox');
+			await search.fill('@plugins acme/account-smoke');
+			await search.press('Enter');
+			await code.locator('[data-view-id="ash.extensions.plugins"]').getByRole('option').filter({ hasText: 'acme/account-smoke' }).click();
+			const packageDetails = code.locator('.ash-extension-editor:visible').filter({ hasText: 'acme/account-smoke' });
+			await packageDetails.getByRole('button', { name: 'Enable', exact: true }).click();
+			await expect(packageDetails.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
+			await workbench.dialogs.confirm(application, 'Account smoke', 'Grant permissions', () => packageDetails.getByRole('button', { name: 'Grant permissions', exact: true }).click());
+			await expect(packageDetails.getByRole('button', { name: 'Revoke permissions', exact: true })).toBeVisible();
+			let page = window === 'Code' ? code : await workbench.openAgentsWindow(target.kind);
+			await new QuickAccess(page).runCommand('ash.extensions.showInstalled');
+			let pane = page.locator('[data-view-id="ash.extensions.mcp"]');
+			await pane.getByRole('button', { name: 'Connections', exact: true }).press('ArrowRight');
+			await expect(pane.getByRole('option').filter({ hasText: 'Smoke service account' })).toBeVisible();
+			await pane.getByRole('button', { name: 'Add connection', exact: true }).click();
+			const chooserImage = testInfo.outputPath(`add-connection-${window}.png`);
+			await page.screenshot({ path: chooserImage });
+			await testInfo.attach('Add connection methods', { path: chooserImage, contentType: 'image/png' });
+			await page.getByRole('dialog', { name: 'Add connection', exact: true }).getByRole('option').filter({ hasText: 'Service account' }).click();
+			const picker = page.getByRole('combobox', { name: 'Choose a service account', exact: true });
+			await picker.fill('Smoke service account');
+			if (window === 'Code') {
+				const authorization = await workbench.dialogs.confirm(application, 'Smoke service account', 'Connect with API token', () => picker.press('Enter'));
+				expect(authorization.message).toBe('Choose how to authorize Smoke service account.');
+			} else {
+				await picker.press('Enter');
+				await page.getByRole('dialog', { name: 'Smoke service account', exact: true }).getByRole('button', { name: 'Connect with API token', exact: true }).click();
+			}
+			const token = page.getByRole('dialog', { name: 'Smoke service account', exact: true });
+			await token.getByPlaceholder('Account ID', { exact: true }).fill('smoke-user');
+			await token.getByPlaceholder('Account name', { exact: true }).fill('Smoke user');
+			await expect(token.getByPlaceholder('API token', { exact: true })).toHaveAttribute('type', 'password');
+			await token.getByPlaceholder('API token', { exact: true }).fill('synthetic-account-token');
+			await token.getByRole('button', { name: 'Connect', exact: true }).click();
+			let details = page.locator('.ash-extension-editor:visible');
+			await expect(details.getByRole('heading', { name: 'Smoke service account', exact: true })).toBeVisible();
+			await expect(details.getByRole('status')).toHaveText('Connected · Smoke user');
+			await expect(pane.getByRole('option').filter({ hasText: 'Smoke service account' })).toHaveCount(1);
+			await expect(pane.getByRole('option').filter({ hasText: 'acme/account-smoke' })).toHaveCount(0);
+			const accountImage = testInfo.outputPath(`account-connected-${window}.png`);
+			await page.screenshot({ path: accountImage });
+			await testInfo.attach('Authorized service account', { path: accountImage, contentType: 'image/png' });
+			if (durable) {
+				// Desktop restarts both application and backend; Browser reloads its page.
+				// The Desktop fixture persists synthetic secrets independently of the memory store.
+				({ workbench, application } = await runningApplication.reload('quit'));
+				page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
+				await new QuickAccess(page).runCommand('ash.extensions.showInstalled');
+				pane = page.locator('[data-view-id="ash.extensions.mcp"]');
+				const header = pane.getByRole('button', { name: 'Connections', exact: true });
+				if (await header.getAttribute('aria-expanded') !== 'true') { await header.click(); }
+				await expect(pane.getByRole('option').filter({ hasText: 'Smoke service account' })).toHaveCount(1);
+				await expect(pane.getByRole('option').filter({ hasText: 'acme/account-smoke' })).toHaveCount(0);
+				await pane.getByRole('option').filter({ hasText: 'Smoke service account' }).click();
+				details = page.locator('.ash-extension-editor:visible');
+				await expect(details.getByRole('status')).toHaveText('Connected · Smoke user');
+				const restoredImage = testInfo.outputPath(`account-restored-${window}.png`);
+				await page.screenshot({ path: restoredImage });
+				await testInfo.attach('Service account restored after restart', { path: restoredImage, contentType: 'image/png' });
+				await details.getByRole('button', { name: 'Open MCP server details', exact: true }).click();
+				await expect(page.locator('.ash-extension-editor:visible').getByRole('status')).toHaveText(recovery === 'offline' ? /^Unavailable · MCP initialize failed:/u : 'Connected');
+				if (recovery === 'offline') {
+					await expect(page.locator('.ash-extension-editor:visible')).toContainText('MCP initialize failed');
+					const offlineImage = testInfo.outputPath(`offline-mcp-${window}.png`);
+					await page.screenshot({ path: offlineImage });
+					await testInfo.attach('Unavailable MCP after cold restart', { path: offlineImage, contentType: 'image/png' });
+				}
+				await pane.getByRole('option').filter({ hasText: 'Smoke service account' }).click();
+				await expect(details.getByRole('status')).toHaveText('Connected · Smoke user');
+			}
+			await details.getByRole('button', { name: 'Disconnect', exact: true }).click();
+			await expect(details.getByRole('status')).toHaveText('Disconnected');
+		});
+	}
+
+	for (const reason of window === 'Code' ? ['windowClose', 'quit'] as const : ['windowClose'] as const) {
+		test(`Independent MCP configuration persists across reopening and can be removed in ${window}${reason === 'quit' ? ' after application quit' : ''}`, { tag: reason === 'quit' ? ['@electron-app-server'] : ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, runningApplication }) => {
+			let page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
+			let quickaccess = new QuickAccess(page);
+			const command = window === 'Code' ? 'ash.extensions.open' : 'workbench.action.chat.configure.skills';
+			await quickaccess.runCommand(command);
+			let mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
+			const connections = mcp.getByRole('button', { name: 'Connections', exact: true });
+			await connections.press('ArrowRight');
+			await connections.press('Alt+F1');
+			await expect(page.getByRole('dialog', { name: 'Accessibility Help', exact: true }).getByRole('textbox')).toHaveValue(/Add connection/u);
+			await page.keyboard.press('Escape');
+			await expect(connections).toBeFocused();
+			let dialogs = new Dialogs(page);
+			const confirm = async (title: string, button: string, open: () => Promise<unknown>) => {
+				// Agents uses in-window dialogs on both hosts; Desktop Code routes prompts through Main.
+				if (window === 'Code') { return dialogs.confirm(application, title, button, open); }
+				await open();
+				const dialog = page.getByRole('dialog', { name: title, exact: true });
+				const message = await dialog.locator('.ash-dialog-message').innerText();
+				const detail = dialog.locator('.ash-dialog-detail');
+				const result = { message, detail: await detail.count() ? await detail.innerText() : '' };
+				await dialog.getByRole('button', { name: button, exact: true }).click();
+				return result;
+			};
+			await mcp.getByRole('button', { name: 'Add connection', exact: true }).click();
+			const methods = page.getByRole('dialog', { name: 'Add connection', exact: true });
+			await expect(methods.getByRole('option').filter({ hasText: 'Service account' })).toBeVisible();
+			await expect(methods).toContainText('authorize with an API token');
+			const choice = await confirm('Add connection', 'HTTP server', () => methods.getByRole('option').filter({ hasText: 'Custom MCP server' }).click());
+			expect(choice.message).toBe('Choose a connection method.');
+			expect(choice.detail).toContain('for a service URL');
+			expect(choice.detail).toContain('on this computer');
+			const add = page.getByRole('dialog', { name: 'Add connection', exact: true });
+			await add.getByPlaceholder('Server ID', { exact: true }).fill('persistent-test');
+			await add.getByPlaceholder('Display name', { exact: true }).fill('Persistent MCP test');
+			await add.getByPlaceholder('HTTP or HTTPS server URL', { exact: true }).fill('http://127.0.0.1:9/mcp');
+			await add.getByPlaceholder('Credential reference (optional)', { exact: true }).fill('persistent-http-credential');
+			await add.getByRole('button', { name: 'Save', exact: true }).click();
+			let details = page.locator('.ash-extension-editor:visible');
+			await expect(details.getByRole('heading', { name: 'Persistent MCP test', exact: true })).toBeVisible();
+			await expect(details.getByRole('status')).toHaveText('Disabled');
+			await mcp.getByRole('button', { name: 'Add connection', exact: true }).click();
+			await confirm('Add connection', 'Local process (stdio)', () => page.getByRole('dialog', { name: 'Add connection', exact: true }).getByRole('option').filter({ hasText: 'Custom MCP server' }).click());
+			const local = page.getByRole('dialog', { name: 'Add connection', exact: true });
+			await local.getByPlaceholder('Server ID', { exact: true }).fill('persistent-local');
+			await local.getByPlaceholder('Display name', { exact: true }).fill('Persistent stdio test');
+			await local.getByPlaceholder('Executable path', { exact: true }).fill('/synthetic/mcp-server');
+			await local.getByPlaceholder('Arguments (JSON array of strings)', { exact: true }).fill('["--path","folder with spaces"]');
+			await local.getByRole('button', { name: 'Save', exact: true }).click();
+			await expect(details.getByRole('heading', { name: 'Persistent stdio test', exact: true })).toBeVisible();
+			await expect(details.getByRole('status')).toHaveText('Disabled');
+			if (window === 'Code') {
+				({ workbench, application } = await runningApplication.reload(reason));
+				page = workbench.page;
+			} else {
+				page = await workbench.reopenAgentsWindow(application, page);
+			}
+			quickaccess = new QuickAccess(page);
+			dialogs = new Dialogs(page);
+			await quickaccess.runCommand(command);
+			mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
+			const header = mcp.getByRole('button', { name: 'Connections', exact: true });
+			if (await header.getAttribute('aria-expanded') !== 'true') { await header.click(); }
+			await mcp.getByRole('option').filter({ hasText: 'Persistent MCP test' }).click();
+			details = page.locator('.ash-extension-editor:visible');
+			await expect(details.getByRole('status')).toHaveText('Disabled');
+			await confirm('Edit MCP server', 'HTTP server', () => details.getByRole('button', { name: 'Edit MCP server', exact: true }).click());
+			const edit = page.getByRole('dialog', { name: 'Edit MCP server', exact: true });
+			await expect(edit.getByPlaceholder('HTTP or HTTPS server URL', { exact: true })).toHaveValue('http://127.0.0.1:9/mcp');
+			await expect(edit.getByPlaceholder('Display name', { exact: true })).toHaveValue('Persistent MCP test');
+			await expect(edit.getByPlaceholder('Credential reference (optional)', { exact: true })).toHaveValue('persistent-http-credential');
+			await expect(edit.getByRole('checkbox', { name: 'Enable this server', exact: true })).not.toBeChecked();
+			await page.keyboard.press('Escape');
+			await confirm('Remove MCP server', 'Remove', () => details.getByRole('button', { name: 'Remove MCP server', exact: true }).click());
+			await expect(mcp.getByRole('option').filter({ hasText: 'Persistent MCP test' })).toHaveCount(0);
+			await mcp.getByRole('option').filter({ hasText: 'Persistent stdio test' }).click();
+			await expect(details.getByRole('status')).toHaveText('Disabled');
+			await confirm('Edit MCP server', 'Local process (stdio)', () => details.getByRole('button', { name: 'Edit MCP server', exact: true }).click());
+			await expect(edit.getByPlaceholder('Display name', { exact: true })).toHaveValue('Persistent stdio test');
+			await expect(edit.getByPlaceholder('Executable path', { exact: true })).toHaveValue('/synthetic/mcp-server');
+			await expect(edit.getByPlaceholder('Arguments (JSON array of strings)', { exact: true })).toHaveValue('["--path","folder with spaces"]');
+			await expect(edit.getByRole('checkbox', { name: 'Enable this server', exact: true })).not.toBeChecked();
+			await page.keyboard.press('Escape');
+			await confirm('Remove MCP server', 'Remove', () => details.getByRole('button', { name: 'Remove MCP server', exact: true }).click());
+			await expect(mcp.getByRole('option').filter({ hasText: 'Persistent stdio test' })).toHaveCount(0);
+		});
+	}
 }
 
 for (const window of ['Code', 'Agents']) {
@@ -190,23 +387,6 @@ test('Extensions view tab uses the extensions icon', async ({ workbench }) => {
 	await expect(search).toBeFocused();
 });
 
-const durableExtensionTest = test.extend({
-	useInMemorySecretStorage: false,
-	backendFixture: async ({ testWorkspace }, use) => {
-		const productServicesPath = join(testWorkspace.directory, 'private-services.json');
-		await writeFile(productServicesPath, JSON.stringify({ schemaVersion: 3 }));
-		await use({
-			productServicesPath,
-			async prepareProfile(profileDirectory) {
-				// Explicit private-file mode in this disposable profile avoids OS prompts.
-				// Encrypted recovery is covered separately with an injected keyring.
-				const secrets = join(profileDirectory, 'secrets');
-				await mkdir(secrets, { recursive: true, mode: 0o700 });
-				await writeFile(join(secrets, 'storage-mode'), 'file', { mode: 0o600 });
-			},
-		});
-	},
-});
 
 durableExtensionTest('Local standard extension shares durable state and private secrets across windows and restart, and retires on revoke', { tag: ['@electron-app-server', '@darwin'] }, async ({ target, testWorkspace, application, workbench, reloadWorkbench, runningApplication }) => {
 	test.setTimeout(120_000);

@@ -426,6 +426,9 @@ fn connector_dto(
             .runtime_binding()
             .mcp_server_id()
             .to_string(),
+        mcp_server_id: ash_mcp_extension::connector_mcp_server_id(entry.definition())
+            .ok()
+            .map(|id| id.as_str().to_string()),
         definition_digest: entry.definition().digest().as_str().to_string(),
         connection_generation: entry.connection().generation().get(),
         state,

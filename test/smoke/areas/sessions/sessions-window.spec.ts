@@ -56,7 +56,22 @@ test('Sessions desktop reads the system keyboard layout and opens the profile la
 		await page.getByRole('option', { name: /Configure Keyboard Layout File/ }).click();
 		const readOpenedPath = () => application.evaluate(() => (globalThis as unknown as { openedKeyboardLayout?: string; }).openedKeyboardLayout);
 		await expect.poll(readOpenedPath).toMatch(/keyboard-layout\.json$/);
-		expect(await readFile((await readOpenedPath())!, 'utf8')).toBe(USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT);
+		const layoutPath = (await readOpenedPath())!;
+		expect(await readFile(layoutPath, 'utf8')).toBe(USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT);
+		const readUserLayoutId = () => page.evaluate(async () =>
+			(await globalThis.ashTestMainProcess.call<IKeyboardLayoutDefinition | undefined>('userKeyboardLayout', 'readKeyboardLayout'))?.layout.id);
+		const userLayout = (id: string) => JSON.stringify({
+			layout: { id, label: 'Synthetic profile layout', operatingSystem: 'linux' },
+			rawMapping: { KeyT: { value: 't', withShift: 'T', withAltGr: '', withShiftAltGr: '' } },
+		});
+		await writeFile(layoutPath, userLayout('profile.watch'));
+		await expect.poll(readUserLayoutId).toBe('profile.watch');
+		const replacement = layoutPath + '.tmp';
+		await writeFile(replacement, userLayout('profile.atomic'));
+		await rename(replacement, layoutPath);
+		await expect.poll(readUserLayoutId).toBe('profile.atomic');
+		await rm(layoutPath);
+		await expect.poll(readUserLayoutId).toBeUndefined();
 	} finally {
 		await application.evaluate(({ shell }, original) => { shell.openPath = original; }, originalOpenPath);
 		await originalOpenPath.dispose();

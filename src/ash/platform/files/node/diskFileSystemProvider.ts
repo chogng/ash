@@ -27,6 +27,7 @@ import {
 	type IFileBytes,
 	type IFileChangeEvent,
 	type IFileEntry,
+	type IFileSystemProvider,
 	type IFileSystemProviderWithOpenReadWriteCloseCapability,
 	type IFileSystemProviderWithFileReadStreamCapability,
 	type IFileOpenOptions,
@@ -53,9 +54,14 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 	// Windows have separate provider instances; compare-and-write must share one host queue.
 	private static readonly pendingWrites = new ResourceQueue();
 
-	constructor(roots: readonly URI[]) {
+	constructor(
+		roots: readonly URI[],
+		private readonly watcher?: Pick<IFileSystemProvider, 'watch' | 'onDidChangeFiles'>,
+		private readonly nativeWatchOptions: { readonly persistent: boolean; } = { persistent: false },
+	) {
 		super();
 		this.roots = roots.map(root => resolve(root.fsPath));
+		if (watcher) this._register(watcher.onDidChangeFiles(change => this.changes.fire(change)));
 	}
 
 	public watch(resource: URI, options: IWatchOptions): IDisposable {
@@ -64,8 +70,16 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 		const id = randomUUID();
 		const resources = new DisposableStore();
 		this.watchers.set(id, resources);
+		if (this.watcher) {
+			// A desktop host can isolate native watch registration/teardown from its UI loop.
+			// File reads, writes and their serialization remain with this provider.
+			try { resources.add(this.watcher.watch(resource, options)); }
+			catch (error) { this.watchers.deleteAndDispose(id); throw error; }
+			return toDisposable(() => this.watchers.deleteAndDispose(id));
+		}
 		void this.path(resource).then(async path => {
 			const entryWatch = resources.add(new MutableDisposable<DisposableStore>());
+			const missingEntryPoll = resources.add(new MutableDisposable<IDisposable>());
 			let entryIdentity: string | undefined;
 			let revision = 0;
 			const fail = (error: unknown): void => {
@@ -85,6 +99,8 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 				if (!metadata || (!metadata.isDirectory() && !metadata.isFile())) {
 					entryWatch.clear();
 					entryIdentity = undefined;
+					if (!metadata) startMissingEntryPoll();
+					else missingEntryPoll.clear();
 					return;
 				}
 				const identity = `${metadata.dev}:${metadata.ino}`;
@@ -99,7 +115,7 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 					// /private/var). Publish changes using the caller's granted resource spelling.
 					const physicalPath = await realpath(path);
 					if (resources.isDisposed || current !== revision) { owner.dispose(); return; }
-					watcher = watch(physicalPath, { persistent: false, recursive: isDirectory && options.recursive }, (event, filename) => {
+					watcher = watch(physicalPath, { persistent: this.nativeWatchOptions.persistent, recursive: isDirectory && options.recursive }, (event, filename) => {
 						if (resources.isDisposed || entryWatch.value !== owner) return;
 						if (!isDirectory) {
 							this.changes.fire({ resources: [resource] });
@@ -129,7 +145,8 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 					owner.dispose();
 					// Deletion can win the race between stat and opening the watch. Keep
 					// the parent alive so recreation can bind this entry again.
-					if (resources.isDisposed || current !== revision || (error as NodeJS.ErrnoException).code === 'ENOENT') return;
+					if (resources.isDisposed || current !== revision) return;
+					if ((error as NodeJS.ErrnoException).code === 'ENOENT') { startMissingEntryPoll(); return; }
 					throw error;
 				}
 				owner.add(toDisposable(() => watcher.close()));
@@ -148,12 +165,35 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 						entryWatch.clear();
 						entryIdentity = undefined;
 						this.changes.fire({ resources: [resource] });
+						void bindEntry().catch(fail);
 					});
 				};
 				watcher.on('error', onError);
 				owner.add(toDisposable(() => watcher.off('error', onError)));
 				entryWatch.value = owner;
 				entryIdentity = identity;
+				missingEntryPoll.clear();
+				// Registration is asynchronous. A consumer may have read the file before
+				// this watch became active, so invalidate once to cover that unobserved gap.
+				this.changes.fire({ resources: [resource] });
+			};
+			const startMissingEntryPoll = (): void => {
+				if (missingEntryPoll.value || resources.isDisposed) return;
+				// Directory hints can be delayed or lost. Recheck only the absent entry,
+				// with one outstanding read; stop as soon as its native watch is bound.
+				let stopped = false;
+				let timer: ReturnType<typeof setTimeout>;
+				const schedule = (): void => {
+					timer = setTimeout(() => {
+						if (stopped || resources.isDisposed) return;
+						void bindEntry().then(() => {
+							if (!stopped && !resources.isDisposed) schedule();
+						}, fail);
+					}, 500);
+					if (!this.nativeWatchOptions.persistent) timer.unref();
+				};
+				missingEntryPoll.value = toDisposable(() => { stopped = true; clearTimeout(timer); });
+				schedule();
 			};
 			if (resources.isDisposed) return;
 			// A provider write can create a previously absent settings file before the
@@ -168,7 +208,7 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 			if (dirname(path) !== path) {
 				const parentPath = await realpath(dirname(path));
 				if (resources.isDisposed) return;
-				const parentWatch = watch(parentPath, { persistent: false }, (_event, filename) => {
+				const parentWatch = watch(parentPath, { persistent: this.nativeWatchOptions.persistent }, (_event, filename) => {
 					if (resources.isDisposed) return;
 					if (filename !== null) {
 						const name = filename.toString();

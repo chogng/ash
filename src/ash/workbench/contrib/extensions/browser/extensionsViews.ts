@@ -33,8 +33,9 @@ import {
 import { IMcpServerStatusService } from '../../../../platform/mcp/common/mcpServerStatusService.js';
 import { IMcpServerManagementService } from '../../../../platform/mcp/common/mcpServerManagementService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { configureMcpServer, describeConnectorState, describeMcpServerState, changeExtensionEnablement, extensionEnablementLabel } from './extensionsActions.js';
+import { addConnection, describeConnectorState, describeMcpServerState, changeExtensionEnablement, extensionEnablementLabel } from './extensionsActions.js';
 import { IConnectorService } from '../../../../platform/connectors/common/connectorService.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IExtensionManagementService, type ExtensionsOpenOptions, type ExtensionsPackageSummary, type ExtensionsInstalledPackage } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -126,7 +127,7 @@ class ExtensionsContent extends Disposable {
 			type: AccessibleViewType.Help, priority: 100, name: `extensions-help-${generateUuid()}`, when: ContextKeyExpr.has('extensionsFocused'), getProvider: () => {
 				const focused = mainWindow.document.activeElement;
 				if (!this.visible || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-				return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type: AccessibleViewType.Help }, () => localize({ bundle: 'ash.extensions', key: 'accessibilityHelp' }, 'Extensions opens your installed Skills, Plugins and Connectors, followed by Recommended. Skills contain Agent working methods, Plugins add features, and Connectors manage external services and tool servers. The search box above all panes searches the Marketplace. Use Filter extensions to choose installed categories, built-in plugins or recommendations. Clear Search removes the query and filters. Use @installed to filter installed items, or clear the search to return to these categories. One Refresh extensions action reloads all categories. The title bar More Actions menu provides marketplace, installed, source management and installation commands. Pane actions appear on hover or keyboard focus. Use Left and Right on pane headers to collapse or expand them. Use Tab to move between controls, arrow keys to select an item, and Enter to open details. Enable or Disable in Plugins controls the feature package. Skill enablement and connection actions are managed separately in their details. Execution authorization and permissions are reviewed in package details. Language packs are managed through the display language setting. Run Install extension from Git repository in the Command Palette to install a repository package. Press Escape during installation to cancel. Escape closes this help.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+				return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type: AccessibleViewType.Help }, () => localize({ bundle: 'ash.extensions', key: 'accessibilityHelp' }, 'Extensions opens your installed Skills, Plugins and Connections, followed by Recommended. Skills contain Agent working methods, Plugins add features, and Connections lists external services and tool servers together. The search box above all panes searches the Marketplace. Use Filter extensions to choose installed categories, built-in plugins or recommendations. Clear Search removes the query and filters. Use @installed to filter installed items, or clear the search to return to these categories. One Refresh extensions action reloads all categories. The title bar More Actions menu provides marketplace, installed, source management and installation commands. Pane actions appear on hover or keyboard focus. Use Left and Right on pane headers to collapse or expand them. Use Tab to move between controls, arrow keys to select an item, and Enter to open details. Enable or Disable in Plugins controls the feature package. Skill enablement and connection actions are managed separately in their details. Execution authorization and permissions are reviewed in package details. Language packs are managed through the display language setting. Run Install extension from Git repository in the Command Palette to install a repository package. Press Escape during installation to cancel. Escape closes this help.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 			}
 		}));
 	}
@@ -322,6 +323,7 @@ abstract class ExtensionsListViewPane extends ViewPane {
 	private items: readonly ExtensionsListItem[] = [];
 	private generation = 0;
 	private readonly loadLifetime = this._register(new MutableDisposable());
+	private refreshPending = false;
 	private catalogNote = '';
 	private discovery = false;
 	private sourcePicker: SelectBox | undefined;
@@ -350,7 +352,7 @@ abstract class ExtensionsListViewPane extends ViewPane {
 		this.statusHover = this._register(getHoverDelegate().setupHover({ target: this.status, content: '' }));
 		const listContainer = h(mainWindow.document, 'div'); listContainer.className = 'extensions-list'; body.append(listContainer);
 		this.trackBodyMinimum(listContainer, 64);
-		this.list = this._register(new List(listContainer, {
+		this.list = this._register(new List<ExtensionsListItem>(listContainer, {
 			styles: defaultListStyles,
 			scrolling: 'managed',
 			ariaLabel: options.title,
@@ -381,13 +383,14 @@ abstract class ExtensionsListViewPane extends ViewPane {
 		// Collapsed panes still expose a count, so their domain projection follows pane visibility.
 		this._register(this.onDidChangeVisibility(visible => {
 			if (visible) {
-				if (!this.isExpanded()) { void this.refresh(); }
+				if (!this.isExpanded()) { this.invalidate(); }
 			} else {
 				++this.generation;
+				this.refreshPending = false;
 				this.loadLifetime.clear();
 			}
 		}));
-		this._register(this.onDidChangeBodyVisibility(visible => { if (visible) { void this.refresh(); } }));
+		this._register(this.onDidChangeBodyVisibility(visible => { if (visible) { this.invalidate(); } }));
 		const scope = this._register(contextKeys.createScoped(this.element)); scope.createKey('extensionsCapabilitiesFocused', true);
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			this._register(AccessibleViewRegistry.register({
@@ -396,7 +399,7 @@ abstract class ExtensionsListViewPane extends ViewPane {
 					const focused = mainWindow.document.activeElement;
 					if (!this.isBodyVisible() || !(focused instanceof HTMLElement) || !this.element.contains(focused)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.Help
-						? localize({ bundle: 'ash.extensions', key: 'capabilityHelp' }, 'Extensions opens installed Skills, Plugins and Connectors, followed by Recommended. Use Left and Right on a pane header to collapse or expand it, and Up and Down to move between headers. Use the single search box above the panes to search the Marketplace; @installed filters current resources. Clear the search to return to installed categories. Down moves to results; arrow keys select items; Enter opens details. Refresh extensions reloads all categories. Pane actions appear on hover or keyboard focus. Marketplace source selects a registry; Load more continues the search. Skill details control only that skill. Connector details manage account sign-in, API tokens, disconnect and sign-out. Add MCP server configures a local process or HTTP server; an account is optional. Server details provide Edit, Enable or Disable, Connect, Disconnect and Remove when available. Connection actions keep packages installed. Package details manage installation, permissions and removal. Refresh reads current domain state. Run Install extension from Git repository in the Command Palette to install a repository package. Escape cancels a dialog.')
+						? localize({ bundle: 'ash.extensions', key: 'capabilityHelp' }, 'Extensions opens installed Skills, Plugins and Connections, followed by Recommended. Use Left and Right on a pane header to collapse or expand it, and Up and Down to move between headers. Use the single search box above the panes to search the Marketplace; @installed filters current resources. Clear the search to return to installed categories. Down moves to results; arrow keys select items; Enter opens details. Refresh extensions reloads all categories. Pane actions appear on hover or keyboard focus. Marketplace source selects a registry; Load more continues the search. Skill details control only that skill. Connections shows all connections in one list. Open details for account authorization, server status and available actions. A service’s associated MCP server appears only in its details. Add connection offers service account authorization or custom MCP configuration. Choose a service to sign in or connect with an API token, or configure an HTTP server or local process. Server details provide Edit, Enable or Disable, Connect, Disconnect and Remove when available. Connection actions keep packages installed. Package details manage installation, permissions and removal. Refresh reads current domain state. Run Install extension from Git repository in the Command Palette to install a repository package. Escape cancels a dialog.')
 						: [localize({ bundle: 'ash.extensions', key: 'paneResults' }, '{0} items', this.list.items.length), this.status.textContent, ...this.list.items.map(item => `${item.name}\n${item.description}\n${item.metadata}`)].filter(Boolean).join('\n\n'), () => focused.focus(), this.verbositySetting);
 				},
 			}));
@@ -469,13 +472,20 @@ abstract class ExtensionsListViewPane extends ViewPane {
 		await this.editors.openEditor(input);
 	}
 	protected abstract readItems(signal: AbortSignal): Promise<ExtensionsListSnapshot>;
-	protected invalidate(): void { if (this.isVisible()) { void this.refresh(); } }
-	public setSearch(query: string): void { this.query = query; if (this.discovery) { this.setDiscovery(false); this.invalidate(); } else { this.filter(); } }
+	protected invalidate(): void {
+		if (!this.isVisible()) { return; }
+		// Domain reads may not support physical cancellation. Keep one trailing
+		// read instead of multiplying requests for every notification in a burst.
+		if (this.loadLifetime.value && !this.discovery) { this.refreshPending = true; }
+		else { void this.refresh(); }
+	}
+	public setSearch(query: string): void { this.query = query; if (this.discovery) { this.setDiscovery(false); void this.refresh(); } else { this.filter(); } }
 
 	public async refresh(append = false): Promise<void> {
 		const restoreMoreFocus = append && mainWindow.document.activeElement === this.more?.domNode;
 		this.pageCursor = append ? this.nextCursor : undefined;
 		if (append && !this.pageCursor) { return; }
+		this.refreshPending = false;
 		this.nextCursor = undefined;
 		if (this.more) { this.more.enabled = false; }
 		const generation = ++this.generation;
@@ -486,7 +496,7 @@ abstract class ExtensionsListViewPane extends ViewPane {
 		this.contentElement.setAttribute('aria-busy', 'true');
 		try {
 			const snapshot = await this.readItems(controller.signal);
-			if (this.isDisposed || generation !== this.generation) { return; }
+			if (this.isDisposed || generation !== this.generation || this.refreshPending) { return; }
 			this.items = append ? [...this.items, ...snapshot.items] : snapshot.items;
 			this.catalogNote = snapshot.note ?? '';
 			this.nextCursor = snapshot.nextCursor;
@@ -511,19 +521,24 @@ abstract class ExtensionsListViewPane extends ViewPane {
 			}
 			this.filter();
 		} catch (error) {
-			if (!this.isDisposed && generation === this.generation) {
-				if (!append) { this.items = []; this.list.items = []; this.badge.setCount(0); }
+			if (!this.isDisposed && generation === this.generation && !this.refreshPending) {
+				if (!append) { this.items = []; this.filter(); }
 				this.status.textContent = error instanceof Error ? error.message : String(error);
 				if (this.more) { this.more.domNode.hidden = true; }
 			}
 		} finally {
-			if (!this.isDisposed && generation === this.generation) { this.contentElement.setAttribute('aria-busy', 'false'); }
+			if (!this.isDisposed && generation === this.generation) {
+				this.loadLifetime.clear();
+				if (this.refreshPending && this.isVisible()) { void this.refresh(); }
+				else { this.contentElement.setAttribute('aria-busy', 'false'); }
+			}
 		}
 	}
 
 	private filter(): void {
 		const query = this.query.trim().toLowerCase();
-		this.list.items = this.discovery ? this.items : this.items.filter(item => [item.name, item.description, item.metadata].some(text => text.toLowerCase().includes(query)));
+		const items = this.discovery ? this.items : this.items.filter(item => [item.name, item.description, item.metadata].some(text => text.toLowerCase().includes(query)));
+		this.list.items = items;
 		this.badge.setCount(this.list.items.length);
 		const count = this.discovery && this.resultTotal !== undefined
 			? localize({ bundle: 'ash.extensions', key: 'marketplaceShowingResults' }, 'Showing {0} of {1} results', this.list.items.length, this.resultTotal)
@@ -601,6 +616,7 @@ export class McpServersViewPane extends ExtensionsListViewPane {
 		@IMcpServerManagementService private readonly mcpManagement: IMcpServerManagementService, @IDialogService dialogs: IDialogService,
 		@ICustomizationMarketplaceService private readonly marketplace: ICustomizationMarketplaceService,
 		@IConnectorService private readonly connectors: IConnectorService,
+		@IQuickInputService quickInput: IQuickInputService,
 	) {
 		super(container, options, editors, contextKeys, configuration, extensions);
 		this.enableDiscovery();
@@ -610,13 +626,12 @@ export class McpServersViewPane extends ExtensionsListViewPane {
 		this._register(connectors.onDidChange(() => this.invalidate()));
 		const add = this._register(new Button(this.headerActionsElement, {
 			...defaultButtonStyles,
-			label: localize({ bundle: 'ash.extensions', key: 'mcpAddServer' }, 'Add MCP server'),
+			label: localize({ bundle: 'ash.extensions', key: 'addConnection' }, 'Add connection'),
+			icon: Lxicon.add, iconOnly: true,
 			size: 'small',
-			enabled: mcpManagement.isAvailable,
 		}));
 		let adding = false;
 		const addLifetime = this._register(new MutableDisposable());
-		this._register(mcpManagement.onDidChange(() => { add.enabled = !adding && mcpManagement.isAvailable; }));
 		this._register(add.onDidClick(() => {
 			if (adding) { return; }
 			adding = true;
@@ -625,13 +640,11 @@ export class McpServersViewPane extends ExtensionsListViewPane {
 			const controller = new AbortController();
 			addLifetime.value = toDisposable(() => controller.abort());
 			void (async () => {
-				const snapshot = await mcpManagement.readConfiguration();
-				if (controller.signal.aborted) { return; }
-				const id = await configureMcpServer(mcpManagement, dialogs, snapshot, undefined, controller.signal);
+				const target = await addConnection(connectors, mcpManagement, quickInput, dialogs, controller.signal);
 				if (controller.signal.aborted) { return; }
 				await this.refresh();
-				if (id && !this.isDisposed) {
-					await editors.openEditor(new ExtensionsCapabilityInput({ kind: 'mcp', serverId: id }));
+				if (target && !this.isDisposed) {
+					await editors.openEditor(new ExtensionsCapabilityInput(target));
 					if (!this.isDisposed) { editors.focusActiveEditor(); }
 				}
 			})().catch(async error => {
@@ -642,7 +655,7 @@ export class McpServersViewPane extends ExtensionsListViewPane {
 				addLifetime.clear();
 				adding = false;
 				if (!this.isDisposed) {
-					add.enabled = mcpManagement.isAvailable;
+					add.enabled = true;
 					if (mainWindow.document.activeElement === mainWindow.document.body) { add.focus(); }
 					this.element.classList.remove('extensions-action-running');
 				}
@@ -661,12 +674,14 @@ export class McpServersViewPane extends ExtensionsListViewPane {
 		const installed = installedResult.status === 'fulfilled' ? installedResult.value : [];
 		const configured = configurationResult.status === 'fulfilled' ? configurationResult.value : undefined;
 		const snapshot = statusResult.status === 'fulfilled' ? statusResult.value : undefined;
+		const connectors = connectorsResult.status === 'fulfilled' ? connectorsResult.value.connectors : [];
+		const linkedServers = new Set(connectors.flatMap(connector => [connector.mcpDeclarationId, ...(connector.mcpServerId ? [connector.mcpServerId] : [])]));
 		// Package identity enriches backend status; installation alone says nothing about connection state.
-		const items: ExtensionsListItem[] = installed.flatMap(installation => installation.capabilities.filter(capability => capability.kind === 'mcp').map(capability => ({
+		const items: ExtensionsListItem[] = installed.flatMap(installation => installation.capabilities.filter(capability => capability.kind === 'mcp' && !linkedServers.has(`marketplace:${installation.package.id}:mcp:${capability.id}`)).map(capability => ({
 			target: { kind: 'mcp' as const, serverId: `marketplace:${installation.package.id}:mcp:${capability.id}`, installationId: installation.installationId, capabilityId: capability.reference.id },
 			name: capability.id, description: `${installation.package.id} · ${installation.package.version}`, metadata: installation.state === 'pendingRemoval' ? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending') : localize({ bundle: 'ash.extensions', key: 'installedFilter' }, 'Installed'),
 		})));
-		for (const connector of connectorsResult.status === 'fulfilled' ? connectorsResult.value.connectors : []) {
+		for (const connector of connectors) {
 			items.push({
 				target: { kind: 'connector', connectorId: connector.id },
 				name: connector.displayName,
@@ -675,6 +690,7 @@ export class McpServersViewPane extends ExtensionsListViewPane {
 			});
 		}
 		for (const server of configured?.servers ?? []) {
+			if (linkedServers.has(server.id)) { continue; }
 			items.push({
 				target: { kind: 'mcp', serverId: server.id }, name: server.displayName,
 				description: server.id,
@@ -684,6 +700,7 @@ export class McpServersViewPane extends ExtensionsListViewPane {
 			});
 		}
 		for (const server of snapshot?.servers ?? []) {
+			if (linkedServers.has(server.id)) { continue; }
 			const index = items.findIndex(item => item.target.kind === 'mcp' && item.target.serverId === server.id);
 			const installedItem = index >= 0 ? items[index] : undefined;
 			const item: ExtensionsListItem = {
