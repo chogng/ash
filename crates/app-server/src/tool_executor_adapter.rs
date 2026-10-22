@@ -281,27 +281,52 @@ impl ToolExecutorRuntime {
                 "host-selected execution directory has no matching authorization".into(),
             ));
         }
-        let mut authority = match authorization {
-            ToolAuthorization::Sandboxed(policy) => ToolRuntimeAuthority::Sandboxed(*policy),
-            ToolAuthorization::UnsandboxedGrant { .. }
-            | ToolAuthorization::ExecPolicyGranted(_)
-            | ToolAuthorization::AutoReviewed(_)
-            | ToolAuthorization::PermissionBypassed(_)
-            | ToolAuthorization::ApprovedOnce(_) => ToolRuntimeAuthority::Unrestricted,
+        let process_policy = match (review.action().kind(), review.sandbox()) {
+            (
+                ash_protocol::ActionKind::LocalProcess(_),
+                ash_action_policy::SandboxCompatibility::Supported(policy),
+            ) => Some(*policy),
+            _ => None,
         };
-        if let Some(scope) = sandbox_scope
-            .as_ref()
-            .filter(|scope| scope.policy_ceiling().is_some())
-        {
-            let requested = match authority {
-                ToolRuntimeAuthority::Sandboxed(policy) => policy,
-                ToolRuntimeAuthority::Unrestricted => ash_sandboxing::SandboxPolicy::new(
-                    ash_sandboxing::FileSystemAccess::FullAccess,
-                    ash_sandboxing::NetworkAccess::Allowed,
-                ),
+        let mut authority = if let Some(policy) = process_policy {
+            // Shell turns and composed command sessions must apply the same directory
+            // ceilings and platform launch policy after Core grants the reviewed action.
+            match crate::local_tools::local_command_authority(
+                authorization,
+                policy,
+                sandbox_scope.as_ref(),
+            )? {
+                exec_server::execution::CommandExecutionAuthority::Sandboxed(policy) => {
+                    ToolRuntimeAuthority::Sandboxed(policy)
+                }
+                exec_server::execution::CommandExecutionAuthority::Unrestricted => {
+                    ToolRuntimeAuthority::Unrestricted
+                }
+            }
+        } else {
+            let mut authority = match authorization {
+                ToolAuthorization::Sandboxed(policy) => ToolRuntimeAuthority::Sandboxed(*policy),
+                ToolAuthorization::UnsandboxedGrant { .. }
+                | ToolAuthorization::ExecPolicyGranted(_)
+                | ToolAuthorization::AutoReviewed(_)
+                | ToolAuthorization::PermissionBypassed(_)
+                | ToolAuthorization::ApprovedOnce(_) => ToolRuntimeAuthority::Unrestricted,
             };
-            authority = ToolRuntimeAuthority::Sandboxed(scope.constrain_policy(requested));
-        }
+            if let Some(scope) = sandbox_scope
+                .as_ref()
+                .filter(|scope| scope.policy_ceiling().is_some())
+            {
+                let requested = match authority {
+                    ToolRuntimeAuthority::Sandboxed(policy) => policy,
+                    ToolRuntimeAuthority::Unrestricted => ash_sandboxing::SandboxPolicy::new(
+                        ash_sandboxing::FileSystemAccess::FullAccess,
+                        ash_sandboxing::NetworkAccess::Allowed,
+                    ),
+                };
+                authority = ToolRuntimeAuthority::Sandboxed(scope.constrain_policy(requested));
+            }
+            authority
+        };
         let managed = matches!(review.sandbox(), ash_action_policy::SandboxCompatibility::Supported(policy) if policy.network() == ash_sandboxing::NetworkAccess::Managed);
         if managed && authority == ToolRuntimeAuthority::Unrestricted {
             authority = ToolRuntimeAuthority::Sandboxed(ash_sandboxing::SandboxPolicy::new(

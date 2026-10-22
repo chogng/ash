@@ -13,8 +13,18 @@ use crate::TestState;
 use crate::TestingError;
 use crate::TestingService;
 
+#[cfg(all(windows, target_arch = "x86_64"))]
+#[path = "../../../test/fixtures/rust_toolchain.rs"]
+mod rust_toolchain;
+
 fn fixture() -> (tempfile::TempDir, Grant) {
     let temp = tempfile::tempdir().unwrap();
+    #[cfg(all(windows, target_arch = "x86_64"))]
+    rust_toolchain::configure(
+        temp.path(),
+        cc::windows_registry::find_tool("x86_64-pc-windows-msvc", "link.exe")
+            .expect("Windows Rust fixtures require the installed MSVC toolchain"),
+    );
     std::fs::create_dir(temp.path().join("src")).unwrap();
     std::fs::write(temp.path().join("Cargo.toml"), "[package]\nname = \"testing-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[workspace]\n").unwrap();
     std::fs::write(temp.path().join("src/lib.rs"), r#"
@@ -497,7 +507,9 @@ pub fn documented() {}
         assert_eq!(&launch.arguments[..2], ["--exact", test.name.as_str()]);
         assert_eq!(
             std::path::Path::new(&launch.directory),
-            temp.path().canonicalize().unwrap()
+            ash_file_access::Dir::open_local(temp.path())
+                .unwrap()
+                .canonical_path()
         );
         service.release(1, id).unwrap();
     }

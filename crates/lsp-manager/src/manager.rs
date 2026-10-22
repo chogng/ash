@@ -1054,6 +1054,24 @@ impl LspManager {
         })
     }
 
+    pub fn request_on_type_formatting(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        position: LanguageDocumentPosition,
+        character: String,
+        options: LanguageFormattingOptions,
+    ) -> Result<LanguageRequestId, LspManagerError> {
+        self.queue_request(PendingLanguageRequest::OnTypeFormatting {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            position,
+            character,
+            options,
+        })
+    }
+
     pub fn request_signature_help(
         &self,
         path: impl Into<PathBuf>,

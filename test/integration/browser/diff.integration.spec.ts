@@ -1251,6 +1251,10 @@ test('diff feature gutter menus receive hunk and selection edits and follow scro
 	await action.click();
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.lastHunkAction?.text)).toBe([...lines.slice(0, 2), 'changed', 'extra', ...lines.slice(3)].join('\n'));
 	await page.evaluate(() => window.ashDiffIntegration.scrollModified(400));
+	await expect(action).toBeFocused();
+	await page.locator('#single .modified .stanza-editor-input').focus();
+	// Input focus reveals the caret; restore the offscreen hunk before checking disposal.
+	await page.evaluate(() => window.ashDiffIntegration.scrollModified(400));
 	await expect(action).toBeHidden();
 	await page.evaluate(() => {
 		window.ashDiffIntegration.scrollModified(0);

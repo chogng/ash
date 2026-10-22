@@ -1178,6 +1178,7 @@ fn language_diagnostics_and_capabilities_are_delivered_only_to_the_owning_connec
                 ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::CodeActions,
             ],
             completion_trigger_characters: vec!["=".into()],
+            on_type_formatting_trigger_characters: Vec::new(),
             signature_help_trigger_characters: Vec::new(),
             signature_help_retrigger_characters: Vec::new(),
         },

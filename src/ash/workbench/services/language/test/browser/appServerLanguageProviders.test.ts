@@ -2,7 +2,7 @@ import { ILanguageFeaturesService } from '../../../../../editor/common/services/
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Emitter, Event } from "../../../../../base/common/event.js";
-import { CancellationToken } from "../../../../../base/common/cancellation.js";
+import { CancellationToken, CancellationTokenSource } from "../../../../../base/common/cancellation.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
@@ -26,7 +26,7 @@ function notifyFeatures(events: FakeServerEvents, features: readonly LanguageSer
 	events.fire({
 		method: 'language/serverCapabilities', params: {
 			...(dirId ? { dirId } : {}), server: 'fixture', languageIds: ['rust'], features: [...features],
-			completionTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
+			completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: features.includes('onTypeFormatting') ? [';'] : [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
 		}
 	});
 }
@@ -50,6 +50,7 @@ test('every model provider requires its own negotiated capability in the owning 
 		['implementation', languages.implementationProvider], ['typeDefinition', languages.typeDefinitionProvider], ['references', languages.referenceProvider],
 		['callHierarchy', languages.callHierarchyProvider], ['typeHierarchy', languages.typeHierarchyProvider], ['rename', languages.renameProvider],
 		['codeActions', languages.codeActionProvider], ['documentFormatting', languages.documentFormattingEditProvider], ['rangeFormatting', languages.documentRangeFormattingEditProvider],
+		['onTypeFormatting', languages.onTypeFormattingEditProvider],
 		['signatureHelp', languages.signatureHelpProvider], ['inlayHints', languages.inlayHintsProvider], ['linkedEditingRanges', languages.linkedEditingRangeProvider],
 		['semanticTokens', languages.documentSemanticTokensProvider], ['documentSymbols', languages.documentSymbolProvider], ['codeLens', languages.codeLensProvider],
 		['documentLinks', languages.linkProvider], ['documentColors', languages.colorProvider], ['foldingRanges', languages.foldingRangeProvider],
@@ -175,7 +176,7 @@ function createProviders(languages: LanguageFeaturesService, api: FakeLanguageAp
 			const languageIds = server.languageIds.filter(language => !events.capabilityNotifications.some(value => (value.dirId ?? workspace.getWorkspace().folders[0]?.id) === dirId && value.languageIds.includes(language)));
 			if (languageIds.length) events.fire({
 				method: 'language/serverCapabilities', params: {
-					...(dirId ? { dirId } : {}), server: server.id, languageIds, features: [...baselineFeatures], completionTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
+					...(dirId ? { dirId } : {}), server: server.id, languageIds, features: [...baselineFeatures], completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
 				}
 			});
 		}
@@ -340,7 +341,7 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	const events = new FakeServerEvents();
 	using providers = createProviders(languages, api, workspace, { events });
 	await tick();
-	events.fire({ method: 'language/serverCapabilities', params: { server: 'fixture', languageIds: ['rust'], features: [...baselineFeatures], completionTriggerCharacters: ['.'], signatureHelpTriggerCharacters: ['('], signatureHelpRetriggerCharacters: [','] } });
+	events.fire({ method: 'language/serverCapabilities', params: { server: 'fixture', languageIds: ['rust'], features: [...baselineFeatures], completionTriggerCharacters: ['.'], onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters: ['('], signatureHelpRetriggerCharacters: [','] } });
 	await tick();
 	const resource = URI.file("C:/project/main.rs");
 	using model = new TextModel("pri", { languageId: "rust", resource });
@@ -426,7 +427,7 @@ function notifyCodeActions(events: FakeServerEvents, language: string, codeActio
 	events.fire({
 		method: 'language/serverCapabilities', params: {
 			...(dirId ? { dirId } : {}), server: 'fixture', languageIds: [language], features: [...baselineFeatures, ...(codeActions ? ['codeActions' as const] : []), ...(codeActionResolve ? ['codeActionResolve' as const] : [])],
-			completionTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
+			completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
 		}
 	});
 }
@@ -523,6 +524,105 @@ test("App Server formatting providers preserve snapshot, options, range, and edi
 	assert.deepEqual(api.rangeFormattingRequests[0]!.options, options);
 	assert.equal(documentEdits?.[0]!.text, "formatted");
 	assert.equal(Range.lift(rangeEdits![0]!.range).getEndPosition().column, 6);
+});
+
+function notifyOnTypeFormatting(events: FakeServerEvents, characters: string[], dirId?: string): void {
+	events.fire({
+		method: 'language/serverCapabilities', params: {
+			...(dirId ? { dirId } : {}), server: 'fixture', languageIds: ['typescript'], features: characters.length ? ['onTypeFormatting'] : [],
+			completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: characters, signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
+		}
+	});
+}
+
+test('App Server on-type formatting forwards only negotiated characters, snapshot, UTF-16 position and options', async () => {
+	using languages = new LanguageFeaturesService();
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	const api = new FakeLanguageApi();
+	const events = new FakeServerEvents();
+	using providers = createProviders(languages, api, workspace, { events });
+	using model = new TextModel('🦀value;', { languageId: 'typescript', resource: URI.file('/project/main.ts') });
+	await tick();
+	assert.equal(languages.onTypeFormattingEditProvider.has(model), false);
+	notifyOnTypeFormatting(events, [';', '\n']);
+	await tick();
+	const provider = languages.onTypeFormattingEditProvider.ordered(model)[0]!;
+	assert.deepEqual(provider.autoFormatTriggerCharacters, [';', '\n']);
+	const options = { tabSize: 2, insertSpaces: true, trimTrailingWhitespace: false };
+	const result = await provider.provideOnTypeFormattingEdits(model, new Position(1, 9), ';', options, CancellationToken.None);
+	assert.equal(result?.[0]?.text, 'formatted on type');
+	assert.deepEqual(api.onTypeFormattingRequests[0], {
+		document: { path: 'main.ts', languageId: 'typescript', revision: model.getVersionId(), text: '🦀value;' },
+		position: { lineIndex: 0, columnIndex: 8 }, character: ';', options,
+	});
+	assert.deepEqual(await provider.provideOnTypeFormattingEdits(model, new Position(1, 9), '}', options, CancellationToken.None), []);
+	assert.equal(api.onTypeFormattingRequests.length, 1);
+	await provider.provideOnTypeFormattingEdits(model, new Position(1, 9), '\n', options, CancellationToken.None);
+	assert.equal(api.onTypeFormattingRequests[1]!.character, '\n');
+});
+
+for (const invalidation of ['version', 'response revision', 'cancel', 'triggers', 'revoke', 'dispose'] as const) {
+	test(`App Server on-type formatting discards late edits after ${invalidation}`, async () => {
+		using languages = new LanguageFeaturesService();
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+		const api = new FakeLanguageApi();
+		const events = new FakeServerEvents();
+		using providers = createProviders(languages, api, workspace, { events });
+		using model = new TextModel('value', { languageId: 'typescript', resource: URI.file('/project/main.ts') });
+		using cancellation = new CancellationTokenSource();
+		notifyOnTypeFormatting(events, [';']);
+		await tick();
+		const provider = languages.onTypeFormattingEditProvider.ordered(model)[0]!;
+		let release!: () => void;
+		let signal: AbortSignal | undefined;
+		const blocked = new Promise<void>(resolve => { release = resolve; });
+		api.formatOnType = async (params, options) => {
+			signal = options?.signal;
+			await blocked;
+			return { revision: params.document.revision + (invalidation === 'response revision' ? 1 : 0), edits: [{ range: DTO_RANGE, newText: 'late' }] };
+		};
+		const pending = provider.provideOnTypeFormattingEdits(model, new Position(1, 6), ';', { tabSize: 4, insertSpaces: true }, cancellation.token);
+		assert.ok(signal);
+		switch (invalidation) {
+			case 'version': model.setValue('new input'); break;
+			case 'response revision': break;
+			case 'cancel': cancellation.cancel(); break;
+			case 'triggers': notifyOnTypeFormatting(events, ['\n']); break;
+			case 'revoke': notifyOnTypeFormatting(events, []); break;
+			case 'dispose': model.dispose(); break;
+		}
+		if (['cancel', 'triggers', 'revoke'].includes(invalidation)) assert.equal(signal.aborted, true);
+		release();
+		assert.deepEqual(await pending, []);
+		if (invalidation === 'revoke') {
+			await tick();
+			assert.equal(languages.onTypeFormattingEditProvider.has(model), false);
+			assert.deepEqual(await provider.provideOnTypeFormattingEdits(model, new Position(1, 6), ';', { tabSize: 4, insertSpaces: true }, CancellationToken.None), []);
+		}
+	});
+}
+
+test('App Server on-type formatting keeps trigger characters local to each directory', async () => {
+	using languages = new LanguageFeaturesService();
+	using workspace = new TestWorkspaceService({
+		id: 'team', folders: [
+			{ id: 'one', name: 'one', uri: URI.file('/one'), index: 0 },
+			{ id: 'two', name: 'two', uri: URI.file('/two'), index: 1 },
+		]
+	});
+	const api = new FakeLanguageApi();
+	const events = new FakeServerEvents();
+	using providers = createProviders(languages, api, workspace, { events });
+	notifyOnTypeFormatting(events, [';'], 'one');
+	notifyOnTypeFormatting(events, ['\n'], 'two');
+	await tick();
+	using first = new TextModel('value', { languageId: 'typescript', resource: URI.file('/one/main.ts') });
+	using second = new TextModel('value', { languageId: 'typescript', resource: URI.file('/two/main.ts') });
+	const provider = languages.onTypeFormattingEditProvider.ordered(first)[0]!;
+	assert.deepEqual(provider.autoFormatTriggerCharacters, [';']);
+	assert.deepEqual(languages.onTypeFormattingEditProvider.ordered(second)[0]!.autoFormatTriggerCharacters, ['\n']);
+	assert.deepEqual(await provider.provideOnTypeFormattingEdits(second, new Position(1, 6), ';', { tabSize: 4, insertSpaces: true }, CancellationToken.None), []);
+	assert.equal(api.onTypeFormattingRequests.length, 0);
 });
 
 test('App Server range formatting discards a response after the model changes', async () => {
@@ -645,6 +745,7 @@ class FakeLanguageApi implements ILanguageApi {
 	readonly completionRequests: Parameters<ILanguageApi["completions"]>[0][] = [];
 	readonly executeCommandRequests: Parameters<ILanguageApi["executeCommand"]>[0][] = [];
 	readonly documentFormattingRequests: Parameters<ILanguageApi["formatDocument"]>[0][] = [];
+	readonly onTypeFormattingRequests: Parameters<ILanguageApi["formatOnType"]>[0][] = [];
 	readonly rangeFormattingRequests: Parameters<ILanguageApi["formatRange"]>[0][] = [];
 	readonly signatureHelpRequests: Parameters<ILanguageApi["signatureHelp"]>[0][] = [];
 	readonly documentColorRequests: Parameters<ILanguageApi['documentColors']>[0][] = [];
@@ -672,6 +773,11 @@ class FakeLanguageApi implements ILanguageApi {
 	async formatDocument(params: Parameters<ILanguageApi["formatDocument"]>[0]): ReturnType<ILanguageApi["formatDocument"]> {
 		this.documentFormattingRequests.push(params);
 		return { revision: params.document.revision, edits: [{ range: DTO_RANGE, newText: "formatted" }] };
+	}
+
+	async formatOnType(params: Parameters<ILanguageApi["formatOnType"]>[0], _options?: Parameters<ILanguageApi['formatOnType']>[1]): ReturnType<ILanguageApi["formatOnType"]> {
+		this.onTypeFormattingRequests.push(params);
+		return { revision: params.document.revision, edits: [{ range: DTO_RANGE, newText: "formatted on type" }] };
 	}
 
 	async formatRange(params: Parameters<ILanguageApi["formatRange"]>[0]): ReturnType<ILanguageApi["formatRange"]> {
@@ -797,7 +903,7 @@ test('negotiated triggers replace registrations and dynamic removal drops obsole
 	using providers = createProviders(languages, new FakeLanguageApi(), workspace, { events });
 	await tick();
 	const notify = (completionTriggerCharacters: string[], signatureHelpTriggerCharacters: string[], signatureHelpRetriggerCharacters: string[]) => events.fire({
-		method: 'language/serverCapabilities', params: { server: 'fixture', languageIds: ['rust'], features: [...baselineFeatures], completionTriggerCharacters, signatureHelpTriggerCharacters, signatureHelpRetriggerCharacters },
+		method: 'language/serverCapabilities', params: { server: 'fixture', languageIds: ['rust'], features: [...baselineFeatures], completionTriggerCharacters, onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters, signatureHelpRetriggerCharacters },
 	});
 	notify(['\\', '='], ['['], [']']);
 	await tick();
@@ -837,7 +943,7 @@ test('document colors require negotiated support in the exact directory and reti
 	const notify = (dirId: string, documentColors: boolean) => events.fire({
 		method: 'language/serverCapabilities', params: {
 			dirId, server: 'fixture', languageIds: ['rust'], features: documentColors ? ['documentColors'] : [],
-			completionTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
+			completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
 		}
 	});
 	await tick();
@@ -885,7 +991,7 @@ test('a negotiated color provider preserves real language request errors', async
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	using providers = createProviders(languages, api, workspace, { events });
-	events.fire({ method: 'language/serverCapabilities', params: { server: 'fixture', languageIds: ['rust'], features: ['documentColors'], completionTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [] } });
+	events.fire({ method: 'language/serverCapabilities', params: { server: 'fixture', languageIds: ['rust'], features: ['documentColors'], completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [] } });
 	await tick();
 	using model = new TextModel('paint', { languageId: 'rust', resource: URI.file('/project/main.rs') });
 	const signal = new AbortController().signal;

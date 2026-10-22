@@ -41,7 +41,7 @@ function createDiagnosticsService(api: FakeLanguageApi, events: FakeServerEvents
 			method: 'language/serverCapabilities', params: {
 				...(dirId ? { dirId } : {}), server: server.id, languageIds: server.languageIds,
 				features: api.pullSupported ? ['pullDiagnostics'] : [],
-				completionTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
+				completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
 			}
 		});
 	};
@@ -282,6 +282,7 @@ class FakeLanguageApi implements ILanguageApi {
 	async documentDiagnostics(params: Parameters<ILanguageApi["documentDiagnostics"]>[0], _options?: Parameters<ILanguageApi['documentDiagnostics']>[1]): ReturnType<ILanguageApi["documentDiagnostics"]> { this.diagnosticPulls.push(params); if (this.documentDiagnosticsError) throw this.documentDiagnosticsError; return { revision: params.document.revision, kind: "unchanged", diagnostics: [] }; }
 	async directoryDiagnostics(): ReturnType<ILanguageApi["directoryDiagnostics"]> { this.workspaceDiagnosticPulls += 1; if (this.directoryDiagnosticsError) throw this.directoryDiagnosticsError; return this.workspaceReport; }
 	formatDocument(): ReturnType<ILanguageApi["formatDocument"]> { throw new Error("unused"); }
+	formatOnType(): ReturnType<ILanguageApi["formatOnType"]> { throw new Error("unused"); }
 	formatRange(): ReturnType<ILanguageApi["formatRange"]> { throw new Error("unused"); }
 	signatureHelp(): ReturnType<ILanguageApi["signatureHelp"]> { throw new Error("unused"); }
 	inlayHints(): ReturnType<ILanguageApi["inlayHints"]> { throw new Error("unused"); }
@@ -311,7 +312,7 @@ function notifyPull(events: FakeServerEvents, supported: boolean, dirId?: string
 		method: 'language/serverCapabilities', params: {
 			...(dirId ? { dirId } : {}), server: 'rust', languageIds: ['rust'],
 			features: supported ? ['pullDiagnostics'] : [],
-			completionTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
+			completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
 		}
 	});
 }

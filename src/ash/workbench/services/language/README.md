@@ -45,7 +45,7 @@ The LSP client and server lifecycle live below the Renderer in
 service owns only the frontend adapters in `browser/appServerLanguageProviders.ts`
 and `browser/appServerLanguageDiagnosticsService.ts`. The provider adapter exposes
 hover, completion, cross-file navigation, call/type hierarchy, workspace symbols,
-rename, code actions, document/range formatting, parameter hints, inlay hints,
+rename, code actions, document/range/on-type formatting, parameter hints, inlay hints,
 and linked editing through
 editor-owned contracts. The diagnostics adapter
 reference-counts open models, debounces authoritative document synchronization,
@@ -66,6 +66,13 @@ signatures and parameters; inlay hints remain non-mutating; linked ranges extend
 editor input before commit so every synchronized change is one atomic undo step.
 Regardless of origin, revision gates, application semantics, and DOM projection
 stay editor-owned.
+
+On-type formatting registers each directory/language's negotiated first and additional
+trigger characters, including newline. Requests carry the post-input position, character,
+formatting options, and authoritative document revision through `language/formatOnType`.
+Dynamic capability changes replace the registrations and abort pending requests; cancellation
+reaches the LSP request, and stale edits never apply to a newer editor snapshot. The existing
+editor transaction groups formatting with the triggering input for undo and redo.
 
 Language-server log and show-message notifications are adapted by the Workbench
 language status service. Each server owns a channel registered through the

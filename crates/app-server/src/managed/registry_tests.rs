@@ -687,7 +687,9 @@ fn shared_directory_waiters_do_not_occupy_workers_needed_by_other_directories() 
         let waits = futures::future::join_all(waits);
         tokio::pin!(waits);
         tokio::select! { _ = &mut waits => panic!("shared initialization is pending"), _ = tokio::time::sleep(Duration::from_millis(30)) => {} }
-        let found = tokio::time::timeout(Duration::from_secs(3), registry.open_local_session(other.path(), &token)).await.unwrap().unwrap();
+        // Startup includes real profile and filesystem services. The deadline guards
+        // starvation while the first directory stays blocked, rather than cold-start latency.
+        let found = tokio::time::timeout(Duration::from_secs(30), registry.open_local_session(other.path(), &token)).await.unwrap().unwrap();
         assert_eq!(registry.ready_servers().unwrap().len(), 1);
         cancellation.cancel();
         assert!(tokio::time::timeout(Duration::from_secs(3), waits).await.unwrap().iter().all(Result::is_err));
@@ -813,7 +815,7 @@ async fn failed_directory_initialization_completes_waiters_and_allows_a_new_atte
     // The retry creates a real directory runtime. Bound I/O without treating its cold
     // startup latency under the full suite as part of the waiter/retry contract.
     let server = tokio::time::timeout(
-        Duration::from_secs(10),
+        Duration::from_secs(30),
         registry.open_local_session(root.path(), &token),
     )
     .await

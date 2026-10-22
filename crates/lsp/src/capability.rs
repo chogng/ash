@@ -155,6 +155,17 @@ fn validate_registration(registration: &Registration) -> Result<(), String> {
             registration.method
         ));
     }
+    if registration.method == "textDocument/onTypeFormatting" {
+        let options: lsp_types::DocumentOnTypeFormattingOptions =
+            serde_json::from_value(registration.register_options.clone().unwrap_or(Value::Null))
+                .map_err(|error| format!("invalid on-type formatting registration: {error}"))?;
+        if std::iter::once(&options.first_trigger_character)
+            .chain(options.more_trigger_character.iter().flatten())
+            .any(|character| character.chars().count() != 1 || character.contains('\0'))
+        {
+            return Err("on-type formatting triggers must be single non-NUL characters".into());
+        }
+    }
     Ok(())
 }
 
@@ -185,6 +196,7 @@ fn supported_dynamic_method(method: &str) -> bool {
             | "textDocument/references"
             | "textDocument/formatting"
             | "textDocument/rangeFormatting"
+            | "textDocument/onTypeFormatting"
             | "textDocument/codeAction"
             | "textDocument/rename"
             | "textDocument/linkedEditingRange"

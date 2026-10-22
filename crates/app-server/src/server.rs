@@ -4237,6 +4237,9 @@ impl AppServer {
             Some(ClientMethod::LanguageRangeFormatting) => self
                 .language_processor(connection.connection_id)
                 .language_range_formatting(&request.params, cancellation),
+            Some(ClientMethod::LanguageOnTypeFormatting) => self
+                .language_processor(connection.connection_id)
+                .language_on_type_formatting(&request.params, cancellation),
             Some(ClientMethod::LanguageSignatureHelp) => self
                 .language_processor(connection.connection_id)
                 .language_signature_help(&request.params, cancellation),
@@ -4982,3 +4985,6 @@ impl AppServer {
         self.queue_processor().deliver_queued_message(message)
     }
 }
+#[cfg(test)]
+#[path = "test_shell.rs"]
+pub(crate) mod test_shell;

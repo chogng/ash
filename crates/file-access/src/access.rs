@@ -123,8 +123,10 @@ impl Access {
             .iter()
             .find(|entry| {
                 entry.dir().env() == env
-                    && (entry.dir().requested_path() == path
-                        || entry.dir().canonical_path() == path)
+                    && entry
+                        .dir()
+                        .project_observed_path(path)
+                        .is_some_and(|relative| relative.as_os_str().is_empty())
             })
             .map(|entry| entry.dir().clone())
     }

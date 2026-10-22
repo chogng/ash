@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import shutil
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -207,6 +208,21 @@ fn input_keeps_its_bottom_rule() {
                 for command in (self.commands[0], self.commands[2]):
                     self.assertNotIn("--lib", command)
                     self.assertNotIn("--test", command)
+
+    def test_test_output_is_utf8_even_with_a_legacy_host_encoding(self):
+        diagnostic = "路径失败: café ✓\n"
+        payload = diagnostic + "test result: ok. 1 passed; 0 failed;\n"
+        command = [
+            sys.executable,
+            "-c",
+            f"import sys; sys.stdout.buffer.write({payload.encode('utf-8')!r})",
+        ]
+        with (
+            patch("locale.getencoding", return_value="cp1252"),
+            contextlib.redirect_stdout(self.output),
+        ):
+            self.assertEqual(workflow.run_test(command, self.root), 0)
+        self.assertIn(payload, self.output.getvalue())
 
     def test_verify_stops_on_each_failure_and_preserves_exit_code(self):
         for step in ("check", "test", "rust-warnings"):

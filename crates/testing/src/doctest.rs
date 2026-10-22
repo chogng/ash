@@ -50,12 +50,8 @@ pub(crate) fn discover(
                 .split_once(" - ")
                 .ok_or(TestingError::InvalidInput)?;
             // Cargo invokes rustdoc from the workspace root, including for member packages.
-            let path = read
-                .dir()
-                .canonical_path()
-                .join(file)
-                .canonicalize()
-                .map_err(|error| TestingError::Failed(error.to_string()))?;
+            let path =
+                crate::discovery::source_path(read, &read.dir().canonical_path().join(file))?;
             let path = path
                 .strip_prefix(read.dir().canonical_path())
                 .map_err(|_| TestingError::PermissionRequired)?

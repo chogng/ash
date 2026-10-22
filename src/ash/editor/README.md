@@ -103,7 +103,7 @@ standalone/{common,browser} ─→ window services + model/editor/language/theme
 - 整文与选区命令只执行选中的提供者，空结果或失败不切换到其他提供者。手动命令传递 `FormattingMode.Explicit`，保存格式化传递 `Silent`。
 - `editor.action.formatSelection`（Ctrl/Cmd+K、Ctrl/Cmd+F）把空选区扩展为当前行；多选区优先使用批量接口，否则逐范围查询。结果交叠时合并请求范围重新查询，丢弃旧结果；选区变化取消等待，所有编辑共享一次撤销。命令可用状态随提供者注册、注销和模型语言变化更新。
 - `format.ts` 拥有请求选择、交叠处理、取消和 worker 调用，`formattingEdit.ts` 提交编辑；不再构造格式化控制器。`formatActions.ts` 注册命令、当前键盘入口和保存钩子。Widget 将既有 worker 客户端注册到模型作用域，模型解绑时释放；格式化选项读取当前模型。资源级 worker-service 与完整上游格式化调度 API 仍待对齐，`formatEditor` 是当前模型绑定调用入口。
-- 输入格式化要求提供者声明触发字符。`FormatOnType` 在启用 `formatOnType` 后消费 `onDidType`，支持普通字符和 Enter，通过同一模型 Worker 提交最小编辑，并与触发字符一次撤销；设置关闭、provider 撤回、模型／语言变化、只读和组合输入开始取消等待。扩展注册协议尚未提供触发字符，因此现有扩展桥接仍只注册文档和范围格式化，不能把客户端触发链通过视为任意 LSP 的 on-type 支持。
+- 输入格式化要求提供者声明触发字符。`FormatOnType` 在启用 `formatOnType` 后消费 `onDidType`，支持普通字符和 Enter，通过同一模型 Worker 提交最小编辑，并与触发字符一次撤销；设置关闭、provider 撤回、模型／语言变化、只读和组合输入开始取消等待。App Server LSP 桥接协商 `firstTriggerCharacter`／`moreTriggerCharacter`，按目录与语言注册，并将输入后位置、字符、格式选项与快照发送至 `textDocument/onTypeFormatting`；取消传播到 LSP，旧版本或已撤回能力的结果不再应用。独立扩展宿主的 provider 注册协议仍只桥接文档和范围格式化。
 
 共享扩展宿主在恢复标签页之前接入 Academy 的实时能力注册；旧的静态文档和 Academic factory 已退出。`DocumentTypes` 保存活跃文档类型和包声明的保护路由，默认代码 pane 排除这些资源；文档 pane 使用已准入 profile 的 Widget、Schema 和 codec。Workbench 范围的 `DocumentEditorTextModelService` 管理资源引用，多视图共享模型和保存状态，最后一个引用释放时才销毁模型。
 

@@ -93,6 +93,12 @@ for (const [id, value] of [['install', true], ['uninstall', false]] as const) {
 	store.add(addDisposableListener(document.getElementById(id)!, 'click', () => {
 		installed = value;
 		changes.fire({ method: 'extensions/changed', params: { instanceId: 'browser-test', generation: ++generation } });
+		if (installed) changes.fire({
+			method: 'language/serverCapabilities', params: {
+				server: 'pyright', languageIds: ['python'], features: ['completion'],
+				completionTriggerCharacters: [], onTypeFormattingTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
+			},
+		});
 	}));
 }
 

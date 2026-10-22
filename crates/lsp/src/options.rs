@@ -214,6 +214,9 @@ fn default_client_capabilities() -> ClientCapabilities {
             range_formatting: Some(DocumentRangeFormattingClientCapabilities {
                 dynamic_registration: Some(true),
             }),
+            on_type_formatting: Some(lsp_types::DocumentOnTypeFormattingClientCapabilities {
+                dynamic_registration: Some(true),
+            }),
             declaration: Some(GotoCapability {
                 dynamic_registration: Some(true),
                 link_support: Some(true),

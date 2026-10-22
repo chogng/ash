@@ -1,5 +1,9 @@
 //! Capability-gated request execution and revision-fresh result delivery.
 
+#[cfg(test)]
+#[path = "on_type_formatting_tests.rs"]
+mod on_type_formatting_tests;
+
 use super::*;
 
 struct CancellableLanguageServerClient {
@@ -57,6 +61,9 @@ use crate::{
     LanguagePulledDiagnostics, LanguageSemanticTokens, LanguageServerCapabilities,
     LanguageServerFeature, LanguageSignatureHelpTrigger, LanguageTextRange,
 };
+use ash_lsp::lsp_types::DocumentOnTypeFormattingOptions;
+use ash_lsp::lsp_types::DocumentOnTypeFormattingParams;
+use ash_lsp::lsp_types::request::OnTypeFormatting;
 use ash_lsp::lsp_types::request::{
     CallHierarchyIncomingCalls, CallHierarchyOutgoingCalls, CallHierarchyPrepare,
     CodeActionRequest, CodeActionResolveRequest, CodeLensRequest, CodeLensResolve,
@@ -218,6 +225,14 @@ pub(super) enum PendingLanguageRequest {
         range: LanguageTextRange,
         options: LanguageFormattingOptions,
     },
+    OnTypeFormatting {
+        id: LanguageRequestId,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+        position: LanguageDocumentPosition,
+        character: String,
+        options: LanguageFormattingOptions,
+    },
     SignatureHelp {
         id: LanguageRequestId,
         path: PathBuf,
@@ -317,7 +332,8 @@ impl PendingLanguageRequest {
             | Self::CodeActions { id, .. }
             | Self::ResolveCodeAction { id, .. }
             | Self::DocumentFormatting { id, .. }
-            | Self::RangeFormatting { id, .. } => *id,
+            | Self::RangeFormatting { id, .. }
+            | Self::OnTypeFormatting { id, .. } => *id,
             Self::SignatureHelp { id, .. } => *id,
             Self::InlayHints { id, .. } => *id,
             Self::LinkedEditingRanges { id, .. } => *id,
@@ -357,6 +373,7 @@ impl PendingLanguageRequest {
             Self::ResolveCodeAction { .. } => LanguageRequestKind::ResolveCodeAction,
             Self::DocumentFormatting { .. } => LanguageRequestKind::DocumentFormatting,
             Self::RangeFormatting { .. } => LanguageRequestKind::RangeFormatting,
+            Self::OnTypeFormatting { .. } => LanguageRequestKind::OnTypeFormatting,
             Self::SignatureHelp { .. } => LanguageRequestKind::SignatureHelp,
             Self::InlayHints { .. } => LanguageRequestKind::InlayHints,
             Self::LinkedEditingRanges { .. } => LanguageRequestKind::LinkedEditingRanges,
@@ -395,7 +412,8 @@ impl PendingLanguageRequest {
             | Self::CodeActions { path, .. }
             | Self::ResolveCodeAction { path, .. }
             | Self::DocumentFormatting { path, .. }
-            | Self::RangeFormatting { path, .. } => path,
+            | Self::RangeFormatting { path, .. }
+            | Self::OnTypeFormatting { path, .. } => path,
             Self::SignatureHelp { path, .. } => path,
             Self::InlayHints { path, .. } => path,
             Self::LinkedEditingRanges { path, .. } => path,
@@ -434,7 +452,8 @@ impl PendingLanguageRequest {
             | Self::CodeActions { revision, .. }
             | Self::ResolveCodeAction { revision, .. }
             | Self::DocumentFormatting { revision, .. }
-            | Self::RangeFormatting { revision, .. } => *revision,
+            | Self::RangeFormatting { revision, .. }
+            | Self::OnTypeFormatting { revision, .. } => *revision,
             Self::SignatureHelp { revision, .. } => *revision,
             Self::InlayHints { revision, .. } => *revision,
             Self::LinkedEditingRanges { revision, .. } => *revision,
@@ -462,7 +481,9 @@ impl PendingLanguageRequest {
             | Self::References { position, .. }
             | Self::PrepareCallHierarchy { position, .. }
             | Self::PrepareTypeHierarchy { position, .. } => Some(*position),
-            Self::SignatureHelp { position, .. } => Some(*position),
+            Self::SignatureHelp { position, .. } | Self::OnTypeFormatting { position, .. } => {
+                Some(*position)
+            }
             Self::LinkedEditingRanges { position, .. } => Some(*position),
             Self::PrepareRename { position, .. } | Self::Rename { position, .. } => Some(*position),
             Self::ResolveCompletion { .. }
@@ -1459,6 +1480,28 @@ async fn execute_request(
             project_formatting_edits(id, path, revision, &text, &encoding, response)
                 .map(CompletedLanguageRequest::FormattingEdits)
         }
+        PendingLanguageRequest::OnTypeFormatting {
+            id,
+            path,
+            revision,
+            character,
+            options,
+            ..
+        } => {
+            if !on_type_formatting_trigger_characters(&client).contains(&character) {
+                return Err("on-type formatting character was not negotiated".into());
+            }
+            let response = client
+                .request::<OnTypeFormatting>(DocumentOnTypeFormattingParams {
+                    text_document_position: text_document_position(uri, position)?,
+                    ch: character,
+                    options: protocol_formatting_options(options),
+                })
+                .await
+                .map_err(|error| error.to_string())?;
+            project_formatting_edits(id, path, revision, &text, &encoding, response)
+                .map(CompletedLanguageRequest::FormattingEdits)
+        }
         PendingLanguageRequest::SignatureHelp {
             id,
             path,
@@ -2090,6 +2133,10 @@ pub(super) fn capability_snapshot(
             LanguageRequestKind::RangeFormatting,
         ),
         (
+            LanguageServerFeature::OnTypeFormatting,
+            LanguageRequestKind::OnTypeFormatting,
+        ),
+        (
             LanguageServerFeature::SignatureHelp,
             LanguageRequestKind::SignatureHelp,
         ),
@@ -2191,6 +2238,7 @@ pub(super) fn capability_snapshot(
     LanguageServerCapabilities {
         incarnation,
         dynamic_revision: dynamic.revision,
+        on_type_formatting_trigger_characters: on_type_formatting_trigger_characters(client),
         completion_trigger_characters: strings(
             "textDocument/completion",
             "triggerCharacters",
@@ -2220,6 +2268,39 @@ pub(super) fn capability_snapshot(
         ),
         features,
     }
+}
+
+fn on_type_formatting_trigger_characters(client: &LanguageServerClient) -> Vec<String> {
+    let mut options = client
+        .initialization()
+        .capabilities
+        .document_on_type_formatting_provider
+        .clone()
+        .into_iter()
+        .collect::<Vec<_>>();
+    options.extend(
+        client
+            .dynamic_capabilities()
+            .registrations
+            .into_iter()
+            .filter(|entry| entry.method == "textDocument/onTypeFormatting")
+            .filter_map(|entry| {
+                serde_json::from_value::<DocumentOnTypeFormattingOptions>(entry.register_options?)
+                    .ok()
+            }),
+    );
+    let mut characters = options
+        .into_iter()
+        .flat_map(|options| {
+            std::iter::once(options.first_trigger_character)
+                .chain(options.more_trigger_character.unwrap_or_default())
+        })
+        .filter(|character| character.chars().count() == 1 && !character.contains('\0'))
+        .collect::<Vec<_>>();
+    // Unlike completion triggers, on-type formatting commonly uses a newline or tab.
+    characters.sort();
+    characters.dedup();
+    characters
 }
 
 pub(super) fn supports_request(client: &LanguageServerClient, kind: LanguageRequestKind) -> bool {
@@ -2302,6 +2383,9 @@ pub(super) fn supports_request(client: &LanguageServerClient, kind: LanguageRequ
             capabilities.document_range_formatting_provider,
             Some(OneOf::Left(true)) | Some(OneOf::Right(_))
         ),
+        LanguageRequestKind::OnTypeFormatting => {
+            capabilities.document_on_type_formatting_provider.is_some()
+        }
         LanguageRequestKind::SignatureHelp => capabilities.signature_help_provider.is_some(),
         LanguageRequestKind::InlayHints => matches!(
             capabilities.inlay_hint_provider,
@@ -2386,6 +2470,7 @@ fn dynamically_supports_request(client: &LanguageServerClient, kind: LanguageReq
         }
         LanguageRequestKind::DocumentFormatting => "textDocument/formatting",
         LanguageRequestKind::RangeFormatting => "textDocument/rangeFormatting",
+        LanguageRequestKind::OnTypeFormatting => "textDocument/onTypeFormatting",
         LanguageRequestKind::SignatureHelp => "textDocument/signatureHelp",
         LanguageRequestKind::InlayHints => "textDocument/inlayHint",
         LanguageRequestKind::LinkedEditingRanges => "textDocument/linkedEditingRange",

@@ -1849,6 +1849,8 @@ use crate::protocol::language::LanguageLocationsParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageLocationsResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::language::LanguageOnTypeFormattingParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageOperationParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageParameterInformationDto;
@@ -5054,6 +5056,12 @@ client_methods! {
         serialization: None,
         cancellation: "operationId",
     },
+    LanguageOnTypeFormatting => "language/formatOnType" {
+        params: LanguageOperationParams<LanguageOnTypeFormattingParams>,
+        response: LanguageFormattingResult,
+        serialization: None,
+        cancellation: "operationId",
+    },
     LanguageSignatureHelp => "language/signatureHelp" {
         params: LanguageOperationParams<LanguageSignatureHelpParams>,
         response: LanguageSignatureHelpResult,
@@ -7405,6 +7413,7 @@ typescript_bindings! {
     LanguageFormattingOptionsDto,
     LanguageDocumentFormattingParams,
     LanguageRangeFormattingParams,
+    LanguageOnTypeFormattingParams,
     LanguageFormattingResult,
     LanguageSignatureHelpTriggerKindDto,
     LanguageSignatureHelpParams,

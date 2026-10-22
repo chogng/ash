@@ -990,28 +990,31 @@ test("routes bounded syntax analysis through the connected renderer host", async
 	connected.dispose();
 });
 
-test("uses a stable operation ID to cancel a language request", async () => {
+for (const operation of ['hover', 'formatOnType'] as const) test(`uses a stable operation ID to cancel language ${operation}`, async () => {
 	const hot = new FakeTransport();
 	const connected = await connectWebRendererApi(hot, connectorHostServices);
 	const cancellation = new AbortController();
-	const pending = connected.api.language.hover({
+	const request = {
 		document: { path: "src/main.rs", languageId: "rust", revision: 1, text: "fn main() {}" },
 		position: { lineIndex: 0, columnIndex: 3 },
-	}, { signal: cancellation.signal });
+	};
+	const pending = operation === 'hover'
+		? connected.api.language.hover(request, { signal: cancellation.signal })
+		: connected.api.language.formatOnType({ ...request, character: '\n', options: { tabSize: 2, insertSpaces: true, trimTrailingWhitespace: null } }, { signal: cancellation.signal });
 
-	const hoverRequest = hot.requests.at(-1);
-	assert.equal(hoverRequest?.method, "language/hover");
-	const hoverParams = hoverRequest?.params;
-	assert.ok(isRecord(hoverParams));
-	assert.equal(typeof hoverParams.operationId, "string");
-	assert.ok(isRecord(hoverParams.request));
-	assert.ok(isRecord(hoverParams.request.document));
-	assert.equal(hoverParams.request.document.path, "src/main.rs");
+	const languageRequest = hot.requests.at(-1);
+	assert.equal(languageRequest?.method, `language/${operation}`);
+	const languageParams = languageRequest?.params;
+	assert.ok(isRecord(languageParams));
+	assert.equal(typeof languageParams.operationId, "string");
+	assert.ok(isRecord(languageParams.request));
+	assert.ok(isRecord(languageParams.request.document));
+	assert.equal(languageParams.request.document.path, "src/main.rs");
 
 	cancellation.abort();
 	const cancelRequest = hot.requests.at(-1);
 	assert.equal(cancelRequest?.method, "language/cancel");
-	assert.deepEqual(cancelRequest?.params, { operationId: hoverParams.operationId });
+	assert.deepEqual(cancelRequest?.params, { operationId: languageParams.operationId });
 	hot.respondAt(-1, { status: "requested" });
 
 	await assert.rejects(pending, isCancellationError);

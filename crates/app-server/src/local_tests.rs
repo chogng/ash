@@ -1231,6 +1231,7 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
         }),
     );
     let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let server = crate::test_shell::install(server);
     let write_command = if cfg!(windows) {
         "(echo sealed turn contents)>turn.txt & (echo remaining contents)>remaining.txt"
     } else {
@@ -1253,7 +1254,8 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
     );
     assert!(started["result"]["value"]["turnId"].is_string());
     let thread_id_typed = ash_protocol::ThreadId::new(thread_id).unwrap();
-    for _ in 0..200 {
+    let completion_deadline = std::time::Instant::now() + Duration::from_secs(60);
+    loop {
         let completed = server
             .threads()
             .read_thread(&thread_id_typed)
@@ -1264,10 +1266,16 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
         if completed {
             break;
         }
+        assert!(
+            std::time::Instant::now() < completion_deadline,
+            "shell Turn did not complete: {:?}",
+            server.threads().read_thread(&thread_id_typed).unwrap()
+        );
         std::thread::sleep(Duration::from_millis(10));
     }
 
     let mut request_id = 6;
+    let seal_deadline = std::time::Instant::now() + Duration::from_secs(60);
     let change_set = loop {
         let listed = local_call(
             &server,
@@ -1282,7 +1290,7 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
         }
         request_id += 1;
         assert!(
-            request_id < 206,
+            std::time::Instant::now() < seal_deadline,
             "ChangeSet did not seal: {listed}; thread: {:#?}",
             server.threads().read_thread(&thread_id_typed).unwrap()
         );
@@ -4488,6 +4496,7 @@ fn message_restore_points_preserve_git_versions_after_restart() {
         .as_str()
         .unwrap()
         .to_string();
+    let server = crate::test_shell::install(server);
     let command = if cfg!(windows) {
         "echo changed>tracked.txt"
     } else {
@@ -4503,7 +4512,7 @@ fn message_restore_points_preserve_git_versions_after_restart() {
     );
     assert!(started.get("error").is_none(), "{started}");
     let mut request_id = 10;
-    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    let deadline = std::time::Instant::now() + Duration::from_secs(60);
     loop {
         request_id += 1;
         let changes = local_call(

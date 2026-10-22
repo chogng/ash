@@ -547,6 +547,17 @@ pub struct LanguageRangeFormattingParams {
     pub options: LanguageFormattingOptionsDto,
 }
 
+/// Formatting after one negotiated trigger character in an exact editor snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageOnTypeFormattingParams {
+    pub document: LanguageDocumentDto,
+    pub position: LanguagePositionDto,
+    #[schemars(length(min = 1, max = 1))]
+    pub character: String,
+    pub options: LanguageFormattingOptionsDto,
+}
+
 /// Validated UTF-16 formatting edits for the submitted snapshot.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -1060,6 +1071,7 @@ pub enum LanguageServerFeatureDto {
     CodeActionResolve,
     DocumentFormatting,
     RangeFormatting,
+    OnTypeFormatting,
     SignatureHelp,
     InlayHints,
     LinkedEditingRanges,
@@ -1086,6 +1098,7 @@ pub struct LanguageServerCapabilitiesNotification {
     pub language_ids: Vec<String>,
     pub features: Vec<LanguageServerFeatureDto>,
     pub completion_trigger_characters: Vec<String>,
+    pub on_type_formatting_trigger_characters: Vec<String>,
     pub signature_help_trigger_characters: Vec<String>,
     pub signature_help_retrigger_characters: Vec<String>,
 }

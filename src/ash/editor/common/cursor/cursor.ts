@@ -536,12 +536,18 @@ export class CursorsController extends Disposable {
 		this.assertNotDisposed();
 		if (edits.length === 0) return;
 		const before = this.getSelections();
+		let change: TextModelChange | undefined;
+		const capture = this.model.onDidChangeContent(event => { change = event; });
 		this.commandVersion = this.model.version;
 		try {
 			const after = this.model.pushEditOperations(before, edits, cursorStateComputer, undefined, reason);
 			if (after) this.setStates(eventsCollector, source, CursorChangeReason.NotSet, CursorState.fromModelSelections(after));
+			// Formatting may extend the typing transaction while moving its tracked cursors.
+			// Redo must restore those final positions rather than the pre-format typing result.
+			if (change) this.rememberSelectionHistory(change.transactionId, { before, after: this.getSelections() });
 		} finally {
 			this.commandVersion = undefined;
+			capture.dispose();
 		}
 	}
 

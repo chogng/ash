@@ -11,6 +11,33 @@ use super::completion_item_to_dto;
 use super::completion_trigger;
 
 #[test]
+fn on_type_formatting_processor_rejects_invalid_character_and_position_before_resolving_the_directory()
+ {
+    let server = crate::tests::server();
+    let mut connection = server.connection();
+    crate::tests::initialize(&server, &mut connection);
+    for (character, column) in [("", 0), (";;", 0), ("\0", 0), (";", 1)] {
+        let cancellation = ash_async_utils::CancellationSource::new();
+        let error = server.language_processor(connection.connection_id).language_on_type_formatting(
+            &serde_json::json!({
+                "operationId":"typing", "request":{
+                    "document":{"path":"missing.rs", "languageId":"rust", "revision":1, "text":"🦀;"},
+                    "position":{"lineIndex":0, "columnIndex":column}, "character":character,
+                    "options":{"tabSize":2, "insertSpaces":true, "trimTrailingWhitespace":null}
+                }
+            }),
+            &cancellation.token(),
+        ).unwrap_err();
+        assert_eq!(error.code, -32072);
+        assert_eq!(
+            error.message,
+            ash_app_server_protocol::protocol::error::AppServerErrorName::LanguageRequestFailed
+        );
+    }
+    server.close_connection(connection);
+}
+
+#[test]
 fn language_save_rejects_oversized_utf8_content_before_resolving_a_directory() {
     let server = crate::tests::server();
     let mut connection = server.connection();

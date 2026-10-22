@@ -19,6 +19,7 @@ pub enum LanguageServerFeature {
     CodeActionResolve,
     DocumentFormatting,
     RangeFormatting,
+    OnTypeFormatting,
     SignatureHelp,
     InlayHints,
     LinkedEditingRanges,
@@ -41,6 +42,7 @@ pub struct LanguageServerCapabilities {
     pub dynamic_revision: u64,
     pub features: Vec<LanguageServerFeature>,
     pub completion_trigger_characters: Vec<String>,
+    pub on_type_formatting_trigger_characters: Vec<String>,
     pub signature_help_trigger_characters: Vec<String>,
     pub signature_help_retrigger_characters: Vec<String>,
 }

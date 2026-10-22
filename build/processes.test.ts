@@ -5,9 +5,17 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
-import { isProcessRunning, ProcessRun } from './processes.ts';
+import { isProcessRunning, ProcessRun, withProcessRun } from './processes.ts';
 
 const repository = resolve(import.meta.dirname, '..');
+
+test('process runs propagate worker failures after cleanup', async () => {
+	const failure = new Error('worker failed after cleanup');
+	await assert.rejects(withProcessRun(repository, async run => {
+		await run.close();
+		throw failure;
+	}), error => error === failure);
+});
 
 test('Windows cleanup ignores an exited process retained by another process handle', { skip: process.platform !== 'win32', timeout: 60_000 }, async t => {
 	const child = spawn(process.execPath, ['-e', 'process.on("message", () => process.exit(0)); setInterval(() => {}, 1000);'], { windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });

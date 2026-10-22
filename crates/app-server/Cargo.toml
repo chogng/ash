@@ -172,5 +172,8 @@ ash-context-engine = { workspace = true }
 image = { workspace = true, features = ["png"] }
 ash-uds = { workspace = true }
 
+[target.'cfg(all(windows, target_arch = "x86_64"))'.dev-dependencies]
+cc = { workspace = true }
+
 [lints]
 workspace = true

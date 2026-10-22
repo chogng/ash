@@ -52,6 +52,7 @@ use ash_app_server_protocol::protocol::language::LanguageLocationDto;
 use ash_app_server_protocol::protocol::language::LanguageLocationKindDto;
 use ash_app_server_protocol::protocol::language::LanguageLocationsParams;
 use ash_app_server_protocol::protocol::language::LanguageLocationsResult;
+use ash_app_server_protocol::protocol::language::LanguageOnTypeFormattingParams;
 use ash_app_server_protocol::protocol::language::LanguageOperationParams;
 use ash_app_server_protocol::protocol::language::LanguageParameterInformationDto;
 use ash_app_server_protocol::protocol::language::LanguagePositionDto;
@@ -114,6 +115,15 @@ use super::decode;
 use super::result;
 
 const MAX_LANGUAGE_TARGET_BYTES: usize = 10 * 1024 * 1024;
+
+enum FormattingRequest {
+    Document,
+    Range(LanguageTextRange),
+    OnType {
+        position: LanguageDocumentPosition,
+        character: String,
+    },
+}
 
 pub(super) fn diagnostic_to_dto(
     text: &str,
@@ -790,7 +800,12 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageDocumentFormattingParams = decode_language_operation(params)?;
-        self.language_formatting(&params.document, None, params.options, cancellation)
+        self.language_formatting(
+            &params.document,
+            FormattingRequest::Document,
+            params.options,
+            cancellation,
+        )
     }
 
     pub(super) fn language_range_formatting(
@@ -802,13 +817,40 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let range = utf8_byte_range(&params.document.text, params.range)
             .map(LanguageTextRange::new)
             .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        self.language_formatting(&params.document, Some(range), params.options, cancellation)
+        self.language_formatting(
+            &params.document,
+            FormattingRequest::Range(range),
+            params.options,
+            cancellation,
+        )
+    }
+
+    pub(super) fn language_on_type_formatting(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        let params: LanguageOnTypeFormattingParams = decode_language_operation(params)?;
+        if params.character.chars().count() != 1 || params.character.contains('\0') {
+            return Err(language_error(AppServerErrorName::LanguageRequestFailed));
+        }
+        let position = utf8_position(&params.document.text, params.position)
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        self.language_formatting(
+            &params.document,
+            FormattingRequest::OnType {
+                position,
+                character: params.character,
+            },
+            params.options,
+            cancellation,
+        )
     }
 
     fn language_formatting(
         &self,
         document: &ash_app_server_protocol::protocol::language::LanguageDocumentDto,
-        range: Option<LanguageTextRange>,
+        request: FormattingRequest,
         options: LanguageFormattingOptionsDto,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
@@ -829,9 +871,23 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             insert_spaces: options.insert_spaces,
             trim_trailing_whitespace: options.trim_trailing_whitespace,
         };
-        let request_id = match range {
-            Some(range) => service.request_range_formatting(&source_path, revision, range, options),
-            None => service.request_document_formatting(&source_path, revision, options),
+        let request_id = match request {
+            FormattingRequest::Range(range) => {
+                service.request_range_formatting(&source_path, revision, range, options)
+            }
+            FormattingRequest::Document => {
+                service.request_document_formatting(&source_path, revision, options)
+            }
+            FormattingRequest::OnType {
+                position,
+                character,
+            } => service.request_on_type_formatting(
+                &source_path,
+                revision,
+                position,
+                character,
+                options,
+            ),
         }
         .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime

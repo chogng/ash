@@ -808,6 +808,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = paneServices(models);
+	await services.get(IConfigurationService).updateValue(CodeEditorConfiguration.colorDecoratorsLimit, 250);
 	let received: EditorPanePartOptions | undefined;
 	const pane = createPane(services, resourceStore, {
 		fontFamily: "Fira Code, monospace",
@@ -836,7 +837,6 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 		codeLens: false,
 		colorDecorators: false,
 		colorDecoratorsActivatedOn: "click",
-		colorDecoratorsLimit: 250,
 		defaultColorDecorators: "always",
 		formatOnSave: true,
 		find: {

@@ -2,6 +2,27 @@ use super::*;
 use crate::GrantSource;
 
 #[test]
+fn directory_lookup_accepts_host_namespace_aliases_without_matching_descendants() {
+    let temporary = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temporary.path()).unwrap();
+    let mut access = Access::new(GrantSubject::Environment(EnvId::local()));
+    access
+        .add(
+            grant(dir.clone(), file_permissions()),
+            DirSource::SessionRequest,
+        )
+        .unwrap();
+    for alias in [
+        temporary.path().to_path_buf(),
+        temporary.path().canonicalize().unwrap(),
+    ] {
+        assert_eq!(access.find(&EnvId::local(), &alias), Some(dir.clone()));
+        assert_eq!(access.find(&EnvId::local(), &alias.join("child")), None);
+        assert_eq!(access.find(&EnvId::local(), &alias.join("..")), None);
+    }
+}
+
+#[test]
 #[cfg(unix)]
 fn aliases_share_one_entry_with_independent_sources_and_revision() {
     let directory = tempfile::tempdir().unwrap();

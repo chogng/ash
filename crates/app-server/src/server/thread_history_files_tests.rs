@@ -129,6 +129,7 @@ fn code_mode_nested_write_is_owned_and_can_publish_a_commit_selection() {
         vec!["config", "user.name", "Nested tool test"],
         vec!["config", "user.email", "nested@example.invalid"],
         vec!["config", "commit.gpgsign", "false"],
+        vec!["config", "core.autocrlf", "false"],
         vec!["config", "core.hooksPath", "/dev/null"],
         vec!["add", "note"],
         vec!["commit", "--quiet", "-m", "baseline"],
@@ -317,7 +318,9 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
                 .without_built_in_skills()
                 .with_dir_root(source.path())
         };
-        let server = open_app_server(options(), ash_app_server_diff::compute).unwrap();
+        let server = crate::test_shell::install(
+            open_app_server(options(), ash_app_server_diff::compute).unwrap(),
+        );
         let mut connection = server.connection();
         initialize(&server, &mut connection);
         call(
@@ -359,11 +362,35 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
             "session/request",
             serde_json::json!({"commandId":"write","sessionId":session_id,"request":{"type":"startShellTurn","threadId":thread_id,"expectedSequence":read["thread"]["sequence"],"approvalMode":"bypassPermissions","command":if cfg!(windows) { "echo changed>note" } else { "printf 'changed\\n' > note" },"workingDirectory":"."}}),
         );
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
-        while history(&server, &mut connection, &session_id, &thread_id)["canUndo"] != true {
+        // Checkpoint availability precedes command execution. Read changes only after
+        // the command and its immutable Git capture have both completed.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        loop {
+            let snapshot = server
+                .threads()
+                .read_thread(&ash_protocol::ThreadId::new(&thread_id).unwrap())
+                .unwrap();
+            let completed = snapshot
+                .turns
+                .last()
+                .is_some_and(|turn| turn.status == ash_protocol::TurnStatus::Completed);
+            let sealed = !git
+                || call(
+                    &server,
+                    &mut connection,
+                    "turnChanges/list",
+                    serde_json::json!({"sessionId":session_id,"threadId":thread_id}),
+                )["changeSets"][0]["captureState"]
+                    == "sealed";
+            if completed
+                && sealed
+                && history(&server, &mut connection, &session_id, &thread_id)["canUndo"] == true
+            {
+                break;
+            }
             assert!(
                 std::time::Instant::now() < deadline,
-                "request did not acquire a history checkpoint"
+                "request did not complete its history capture: {snapshot:?}"
             );
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
@@ -464,7 +491,9 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
         assert!(changes["changeSets"].as_array().unwrap().is_empty());
         server.close_connection(connection);
         drop(server);
-        let server = open_app_server(options(), ash_app_server_diff::compute).unwrap();
+        let server = crate::test_shell::install(
+            open_app_server(options(), ash_app_server_diff::compute).unwrap(),
+        );
         let mut connection = server.connection();
         initialize(&server, &mut connection);
         assert_eq!(
@@ -612,7 +641,9 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
             assert!(runtime_lifetime.upgrade().is_none());
             assert!(directory.starts_with(dunce::canonicalize(profile.path()).unwrap()));
             std::fs::remove_dir_all(directory.parent().unwrap()).unwrap();
-            let server = open_app_server(options(), ash_app_server_diff::compute).unwrap();
+            let server = crate::test_shell::install(
+                open_app_server(options(), ash_app_server_diff::compute).unwrap(),
+            );
             let mut connection = server.connection();
             initialize(&server, &mut connection);
             let restored = call(

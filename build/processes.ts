@@ -243,7 +243,9 @@ export async function withProcessRun(cwd: string, action: (run: ProcessRun, envi
 	try {
 		await action(run, { ...process.env, ASH_SMOKE_RUN_DIRECTORY: directory });
 	} catch (error) {
-		if (!run.stopped) throw error;
+		// Worker cleanup also stops the run; only an observed signal makes
+		// a subsequent operation failure part of cancellation.
+		if (interruption === undefined) throw error;
 	} finally {
 		try { await run.close(); if (interruption) process.exitCode = interruption; }
 		finally {

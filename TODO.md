@@ -116,7 +116,8 @@
 
 本节只维护 Stanza 通用文本机制与 Code／普通文件宿主的未完成工作，完成后移除；架构与证据范围见[编辑器架构](docs/editor-architecture.md#验证范围)。扩展业务、装载组合和产品入口由所属扩展／宿主单独验收。具体契约由实现文档维护，不按上游成员数量建立补齐清单。
 
-- [ ] **验收 · 输入法与辅助技术环境**：已具备 Windows 微软拼音的 Native／textarea 真实验收。其他平台／输入法、真实屏幕阅读器的文本朗读、选区、候选和帮助焦点仍需对应环境与可复核输出；自动化 ARIA、无障碍树或 Electron 的支持开关不替代实际朗读。2026-10-22 本机仅配置微软拼音，未安装 NVDA；系统讲述人存在，实际朗读证据尚未取得。中英文帮助／焦点、高对比度、Native／textarea Windows 原生正文与选区暴露、屏幕阅读器模式的编辑／写盘／关闭重开均已有通过证据；此前记录见 `.build/stanza-local-acceptance-20261022/validation.json`，本轮 Playwright 完整浏览器／GPU 与 textarea 补验见 `.build/stanza-sdk-followup-20261022/validation.json`。实际朗读及未配置的平台／输入法继续保留，不由自动化结果消项。
+- [ ] **验收 · 其他平台与输入法**：在目标 macOS／Linux 及其他支持的物理输入法上，补齐候选提交／取消、选区方向、撤销重做与保存重开的可复核证据。Windows 微软拼音 Native／textarea 的已有证据及适用范围见[验证范围](docs/editor-architecture.md#验证范围)；CDP 组合输入不替代物理输入法验收。
+- [ ] **验收 · 真实屏幕阅读器**：使用真实屏幕阅读器验证文本朗读、选区、候选和帮助焦点，并保留可复核输出。2026-10-22 本机未安装 NVDA，系统讲述人尚无实际朗读证据；已有 ARIA、Windows 原生正文／选区读取、帮助焦点与高对比度自动化结果见[验证范围](docs/editor-architecture.md#验证范围)，不能据此消项。
 
 设计边界与功能依赖见[编辑器设计与演进](docs/design/editor-roadmap.md)；具体工作仅维护于本清单，不把整篇设计当作一个未完成任务。
 

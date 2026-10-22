@@ -1229,6 +1229,58 @@ test("Code applies and undoes App Server LSP document formatting in Stanza", asy
 	await expect(secondLine).toHaveText(/^ {4}let /);
 });
 
+test.describe('Code LSP on-type formatting', () => {
+	test.use({ electronUserSettings: { 'editor.formatOnType': true } });
+	for (const trigger of [';', 'Enter'] as const) {
+		test(`Code formats ${trigger} through App Server LSP and undoes it with the input in Stanza`, { tag: ['@electron-app-server'] }, async ({ target, workbench, testWorkspace }) => {
+			test.skip(target.appServerMode !== 'required' || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER, 'Requires the real App Server and smoke LSP peer');
+			test.setTimeout(120_000);
+			const file = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.rs' });
+			await expect(file).toHaveCount(1);
+			await file.click();
+			const group = workbench.editors.groupAt(0);
+			const lines = group.content.locator('.stanza-editor-line-text');
+			const secondLine = lines.nth(1);
+			await expect(secondLine).toHaveText(/^ {4}let /);
+			const original = await readFile(testWorkspace.rustFile, 'utf8');
+			const originalRows = original.split('\n');
+			// Parameter hints give an observable readiness point for
+			// the same server capability snapshot before testing automatic formatting.
+			const input = group.content.locator('.stanza-editor-input');
+			await input.focus();
+			await input.press(process.platform === 'darwin' ? 'Meta+Shift+Space' : 'Control+Shift+Space');
+			await expect(group.content.locator('.stanza-editor-parameter-hints')).toContainText('String::from(value: &str)', { timeout: 60_000 });
+			await input.press('Escape');
+			await input.press('ControlOrMeta+Home');
+			await input.press('ArrowDown');
+			await input.press('End');
+			if (trigger === 'Enter') await input.press('Enter');
+			else await input.type(trigger);
+			await expect(secondLine).toHaveText(/^ {2}let /, { timeout: 60_000 });
+			const expectedRows = [...originalRows];
+			expectedRows[1] = expectedRows[1]!.slice(2) + (trigger === ';' ? ';' : '');
+			await input.press('ControlOrMeta+S');
+			// Read the saved model text: viewport text also includes LSP inlay hints.
+			await expect.poll(async () => {
+				const rows = (await readFile(testWorkspace.rustFile, 'utf8')).split('\n');
+				if (trigger === 'Enter') {
+					if (rows.length !== originalRows.length + 1 || !/^[\t ]*$/.test(rows[2]!)) return false;
+					rows.splice(2, 1);
+				}
+				return rows.join('\n') === expectedRows.join('\n');
+			}).toBe(true);
+			const formatted = await readFile(testWorkspace.rustFile, 'utf8');
+			await input.press('ControlOrMeta+Z');
+			await input.press('ControlOrMeta+S');
+			await expect.poll(() => readFile(testWorkspace.rustFile, 'utf8')).toBe(original);
+			await input.press('ControlOrMeta+Shift+Z');
+			await expect(secondLine).toHaveText(/^ {2}let /);
+			await input.press('ControlOrMeta+S');
+			await expect.poll(() => readFile(testWorkspace.rustFile, 'utf8')).toBe(formatted);
+		});
+	}
+});
+
 test("Code shows App Server LSP parameter hints in Stanza", async ({ target, workbench }) => {
 	test.skip(
 		target.appServerMode !== "required" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,

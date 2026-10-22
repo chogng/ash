@@ -188,4 +188,4 @@ M2a／M2b 是同一门禁的两个切片，不要求 Code 全迁完才开始 Aca
 | Sessions editor-history、Chat／Cowork 输入、Changes、Creator                                                                                                                                         | 验证保存／恢复／并排、会话切换／草稿、Diff 和现有产品回归；不把 Creator 模型改造成 Academy 模型。                                                                                  |
 | Editor README、text-engine、document-engine、根 TODO；`docs/editor-{architecture,extensions}.md`；[旧 Work / Code 设计](work-code-workbench.md)；Sessions 说明                                       | 随实现更新当前事实与目标边界；旧 Work 产品入口不能作为 Academy 必须适配 IDE 的依据。历史行为记录保持为历史，不自动升级为新边界验收。                                               |
 
-2026-10-18 暂停实现的定向单测／浏览器失败、全量 Editor 单测服务缺口及组合测试入口失败统一见[根 TODO](../../TODO.md#stanza-编辑器--todo)。本轮仅核对文档格式、链接／锚点、清单覆盖与功能源文件未变化；没有重跑行为测试，也没有修复既有功能或测试。
+本报告仅记录 2026-10-18 的静态调查，当时未重跑行为测试。上表中的缺口与失败不作为当前待办；后续实现及验证范围见[编辑器架构](../editor-architecture.md#验证范围)，仍未完成的工作统一见[根 TODO](../../TODO.md#stanza-编辑器--todo)。

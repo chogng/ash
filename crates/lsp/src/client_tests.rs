@@ -80,6 +80,40 @@ struct RecordingHost {
     event_received: Notify,
 }
 
+#[test]
+fn on_type_formatting_registration_validates_characters_without_rejecting_newlines() {
+    let registry = crate::capability::DynamicCapabilityRegistry::default();
+    for options in [
+        Value::Null,
+        json!({}),
+        json!({"firstTriggerCharacter":""}),
+        json!({"firstTriggerCharacter":"ab"}),
+        json!({"firstTriggerCharacter":";", "moreTriggerCharacter":["\0"]}),
+    ] {
+        assert!(
+            registry
+                .register(vec![lsp_types::Registration {
+                    id: "typing".into(),
+                    method: "textDocument/onTypeFormatting".into(),
+                    register_options: Some(options),
+                }])
+                .is_err()
+        );
+        assert_eq!(registry.snapshot().revision, 0);
+    }
+    let snapshot = registry
+        .register(vec![lsp_types::Registration {
+            id: "typing".into(),
+            method: "textDocument/onTypeFormatting".into(),
+            register_options: Some(
+                json!({"firstTriggerCharacter":"\n", "moreTriggerCharacter":[";", "🦀"]}),
+            ),
+        }])
+        .unwrap();
+    assert_eq!(snapshot.revision, 1);
+    assert!(registry.supports("textDocument/onTypeFormatting"));
+}
+
 impl RecordingHost {
     async fn wait_for_diagnostics(&self) {
         loop {

@@ -150,7 +150,7 @@ impl<'ctx, C: InstructionImportRequestProcessorContext + ?Sized>
             let MigrationItemDetail::Instruction { document } = item.detail() else {
                 continue;
             };
-            let source = item.source_paths()[0]
+            let source = dunce::simplified(&item.source_paths()[0])
                 .strip_prefix(root)
                 .map_err(|_| invalid())?
                 .to_string_lossy()
@@ -186,7 +186,7 @@ impl<'ctx, C: InstructionImportRequestProcessorContext + ?Sized>
                 mappings
                     .values()
                     .filter(|path| path.starts_with(rules))
-                    .map(|path| path.to_string_lossy().into_owned()),
+                    .map(|path| path.to_string_lossy().replace('\\', "/")),
             )
             .collect::<BTreeSet<_>>();
         let link_mappings = mappings

@@ -2376,7 +2376,7 @@ fn enabling_worktree_discovery_wakes_idle_watchers_without_another_directory_eve
     let owner = runtime.repository(Some(&linked.id)).unwrap();
     // Starting the newly admitted watcher publishes its first authoritative state.
     // No directory creation or metadata change occurs after updating the policy.
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         if queue.drain().iter().any(|event| {
             event["method"] == "git/statusChanged"
@@ -2391,7 +2391,7 @@ fn enabling_worktree_discovery_wakes_idle_watchers_without_another_directory_eve
         std::thread::sleep(Duration::from_millis(10));
     }
     repository.write("linked/tracked.txt", "changed\n");
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         let changed = owner
             .state

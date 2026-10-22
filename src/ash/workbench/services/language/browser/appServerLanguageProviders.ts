@@ -33,6 +33,7 @@ interface ServerCapabilities {
 	readonly lifetime: AbortController;
 	readonly generation: number;
 	readonly completion: readonly string[];
+	readonly onType: readonly string[];
 	readonly signature: readonly string[];
 	readonly retrigger: readonly string[];
 }
@@ -64,7 +65,7 @@ export class AppServerLanguageProviders extends Disposable {
 				if (folderId) for (const languageId of event.params.languageIds) {
 					const key = `${folderId}:${languageId}`;
 					const previous = this.capabilities.get(key);
-					const next = { server: event.params.server, features: new Set(event.params.features), lifetime: new AbortController(), generation: this.nextCapabilityGeneration++, completion: event.params.completionTriggerCharacters, signature: event.params.signatureHelpTriggerCharacters, retrigger: event.params.signatureHelpRetriggerCharacters };
+					const next = { server: event.params.server, features: new Set(event.params.features), lifetime: new AbortController(), generation: this.nextCapabilityGeneration++, completion: event.params.completionTriggerCharacters, onType: event.params.onTypeFormattingTriggerCharacters, signature: event.params.signatureHelpTriggerCharacters, retrigger: event.params.signatureHelpRetriggerCharacters };
 					if (previous && sameCapabilities(previous, next)) continue;
 					previous?.lifetime.abort();
 					this.capabilities.set(key, next);
@@ -131,6 +132,16 @@ export class AppServerLanguageProviders extends Disposable {
 		register('codeActions', this.languageFeatures.codeActionProvider, adapter);
 		register('documentFormatting', this.languageFeatures.documentFormattingEditProvider, adapter);
 		register('rangeFormatting', this.languageFeatures.documentRangeFormattingEditProvider, adapter);
+		for (const folder of folders) {
+			for (const language of languageIds) {
+				const capabilities = this.capabilities.get(`${folder.id}:${language}`);
+				if (!support.supports(folder.id, language) || !capabilities?.features.has('onTypeFormatting') || !capabilities.onType.length) continue;
+				registrations.add(this.languageFeatures.onTypeFormattingEditProvider.register({ language, scheme: folder.uri.scheme, pattern: { base: folder.uri.fsPath, pattern: '**' } }, {
+					autoFormatTriggerCharacters: [...capabilities.onType],
+					provideOnTypeFormattingEdits: (model, position, character, options, token) => adapter.provideOnTypeFormattingEdits(model, position, character, options, token),
+				}));
+			}
+		}
 		register('signatureHelp', this.languageFeatures.signatureHelpProvider, adapter);
 		register('inlayHints', this.languageFeatures.inlayHintsProvider, adapter);
 		register('linkedEditingRanges', this.languageFeatures.linkedEditingRangeProvider, adapter);
@@ -316,6 +327,12 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 		const document = this.documentForModel(model);
 		if (!document) return [];
 		const result = await withAbortSignal(token, signal => this.requestFeature('rangeFormatting', document, signal, signal => this.api.formatRange({ document, range: dtoRange(range), options: { tabSize: options.tabSize, insertSpaces: options.insertSpaces, trimTrailingWhitespace: options.trimTrailingWhitespace ?? null } }, { signal })));
+		return !model.isDisposed() && result?.revision === document.revision && model.getVersionId() === document.revision ? [...formattingEdits(result.edits)] : [];
+	}
+	async provideOnTypeFormattingEdits(model: ITextModel, position: Position, character: string, options: languages.LanguageFormattingOptions, token: CancellationToken): Promise<languages.TextEdit[]> {
+		const document = this.documentForModel(model);
+		if (!document || !this.capabilities.get(`${document.dirId ?? this.workspace.getWorkspace().folders[0]?.id}:${document.languageId}`)?.onType.includes(character)) return [];
+		const result = await withAbortSignal(token, signal => this.requestFeature('onTypeFormatting', document, signal, signal => this.api.formatOnType({ document, position: dtoPosition(position), character, options: { tabSize: options.tabSize, insertSpaces: options.insertSpaces, trimTrailingWhitespace: options.trimTrailingWhitespace ?? null } }, { signal })));
 		return !model.isDisposed() && result?.revision === document.revision && model.getVersionId() === document.revision ? [...formattingEdits(result.edits)] : [];
 	}
 	async provideParameterHints(request: languages.LanguageParameterHintsRequest, signal: AbortSignal) {
@@ -549,7 +566,7 @@ class AppServerWorkspaceSymbolProvider implements languages.LanguageWorkspaceSym
 
 function sameCapabilities(left: ServerCapabilities, right: ServerCapabilities): boolean {
 	const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((value, index) => value === b[index]);
-	return left.server === right.server && left.features.size === right.features.size && [...left.features].every(feature => right.features.has(feature)) && same(left.completion, right.completion) && same(left.signature, right.signature) && same(left.retrigger, right.retrigger);
+	return left.server === right.server && left.features.size === right.features.size && [...left.features].every(feature => right.features.has(feature)) && same(left.completion, right.completion) && same(left.onType, right.onType) && same(left.signature, right.signature) && same(left.retrigger, right.retrigger);
 }
 
 async function requestWithCapability<T>(capabilities: ReadonlyMap<string, ServerCapabilities>, workspace: IWorkspaceContextService, feature: LanguageServerFeatureDto, document: { readonly dirId?: string; readonly languageId: string; }, signal: AbortSignal | undefined, invoke: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
