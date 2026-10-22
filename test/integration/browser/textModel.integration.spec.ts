@@ -2452,3 +2452,92 @@ test('formatter choice cancels on cursor changes and readonly formatting does no
 	});
 	await expect(page.locator('.ash-quick-pick')).not.toBeVisible();
 });
+
+test('minimap auto hide responds to pointer intent and scrolling without shifting content', async ({ page }) => {
+	await openEditor(page);
+	await page.evaluate(() => {
+		const editor = window.ashTextModelIntegration.getControl();
+		editor.getModel()!.setLanguage('plaintext');
+		editor.setValue(Array.from({ length: 300 }, (_, index) => `line ${index}`).join('\n'));
+		editor.updateOptions({ smoothScrolling: false, minimap: { enabled: true, autohide: 'mouseover' } });
+	});
+	const minimap = page.locator('.stanza-editor .minimap');
+	await page.mouse.move(0, 0);
+	await expect(minimap).toHaveCSS('opacity', '0');
+	const width = (await minimap.boundingBox())!.width;
+	await minimap.hover();
+	await expect(minimap).toHaveCSS('opacity', '1');
+	await page.mouse.move(0, 0);
+	await expect(minimap).toHaveCSS('opacity', '0');
+	expect((await minimap.boundingBox())!.width).toBe(width);
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ minimap: { autohide: 'scroll' } }));
+	await expect(minimap).toHaveCSS('opacity', '0');
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().setScrollTop(100));
+	await expect(minimap).toHaveCSS('opacity', '1');
+	await expect(minimap).toHaveCSS('opacity', '0');
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await expect(minimap).toHaveCSS('transition-duration', '0s');
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ minimap: { autohide: 'none' } }));
+	await expect(minimap).toHaveCSS('opacity', '1');
+});
+
+test('minimap section headers use comment tokens and live MARK, region, pattern and font settings', async ({ page }) => {
+	await openEditor(page);
+	await page.evaluate(() => {
+		const editor = window.ashTextModelIntegration.getControl();
+		editor.updateOptions({ minimap: { enabled: true, size: 'fit', maxColumn: 160 } });
+		editor.setValue(['// MARK: First', 'fn first() {}', '// #region Region', 'fn second() {}', '// #endregion', 'let fake = "MARK: Fake";', '// PART Third', ...Array.from({ length: 100 }, () => 'fn more() {}')].join('\n'));
+	});
+	const labels = () => page.evaluate(() => window.ashTextModelIntegration.getControl().getModel()!.getAllDecorations()
+		.map(decoration => decoration.options.minimap?.sectionHeaderText).filter(Boolean).sort());
+	await expect.poll(labels).toEqual(['First', 'Region']);
+	const pixels = () => page.locator('.minimap canvas').evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+	const original = await pixels();
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ minimap: { sectionHeaderFontSize: 20, sectionHeaderLetterSpacing: 3 } }));
+	await expect.poll(pixels).not.toBe(original);
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ minimap: { showRegionSectionHeaders: false, showMarkSectionHeaders: false } }));
+	await expect.poll(labels).toEqual([]);
+	const withoutHeaders = await pixels();
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ minimap: { showMarkSectionHeaders: true, markSectionHeaderRegex: 'PART (?<label>.*)' } }));
+	await expect.poll(labels).toEqual(['Third']);
+	await expect.poll(pixels).not.toBe(withoutHeaders);
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().setValue('// PART Renamed\nfn next() {}'));
+	await expect.poll(labels).toEqual(['Renamed']);
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ minimap: { enabled: false } }));
+	await expect.poll(labels).toEqual([]);
+});
+
+test('minimap inline diagnostics and gutter changes keep distinct positions through wrapping, folding and themes', async ({ page }) => {
+	await openEditor(page);
+	for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
+		await page.evaluate(theme => window.ashTextModelIntegration.setTheme(theme), theme);
+		for (const wrap of ['off', 'on'] as const) {
+			for (const folded of [false, true]) {
+				await page.evaluate(({ wrap, folded }) => {
+					const editor = window.ashTextModelIntegration.getControl();
+					editor.getModel()!.setLanguage('plaintext');
+					editor.updateOptions({ wordWrap: wrap, lineHeight: 20, smoothScrolling: false, padding: { top: 0, bottom: 0 }, minimap: { enabled: true, size: 'fit', scale: 1 } });
+					editor.setValue(Array.from({ length: 20 }, () => 'a'.repeat(180)).join('\n'));
+					editor.setHiddenAreas(folded ? [editor.getModel()!.validateRange({ startLineNumber: 2, startColumn: 1, endLineNumber: 4, endColumn: 181 })] : []);
+					editor.getModel()!.deltaDecorations([], [
+						{ range: { startLineNumber: 8, startColumn: 10, endLineNumber: 8, endColumn: 160 }, options: { description: 'audit diagnostic', minimap: { color: '#ff00ff', position: 1 } } },
+						{ range: { startLineNumber: 8, startColumn: 1, endLineNumber: 8, endColumn: 2 }, options: { description: 'audit change', minimap: { color: '#00ffff', position: 2 } } },
+					]);
+				}, { wrap, folded });
+				await expect.poll(() => page.locator('.minimap canvas').evaluate((canvas: HTMLCanvasElement) => {
+					const editor = window.ashTextModelIntegration.getControl();
+					const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+					const inline: number[] = [];
+					const gutter = new Set<number>();
+					for (let offset = 0; offset < data.length; offset += 4) {
+						if (data[offset + 3] !== 255 || data[offset + 2] !== 255) continue;
+						if (data[offset] === 255 && data[offset + 1] === 0) inline.push(offset / 4);
+						if (data[offset] === 0 && data[offset + 1] === 255) gutter.add(offset / 4 % canvas.width);
+					}
+					const expectedTop = Math.floor(editor.getTopForLineNumber(8) / 20 * editor.getLayoutInfo().minimap.minimapLineHeight);
+					return { inline: inline.some(pixel => pixel % canvas.width > 5), gutter: [...gutter].sort((a, b) => a - b), top: inline.length ? Math.floor(inline[0]! / canvas.width) - expectedTop : null };
+				}), { message: `${theme}, wrap=${wrap}, folded=${folded}` }).toEqual({ inline: true, gutter: [2, 3, 4], top: 0 });
+			}
+		}
+	}
+});

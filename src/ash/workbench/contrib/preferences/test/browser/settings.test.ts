@@ -37,6 +37,7 @@ import { KeybindingTestServices } from '../../../../services/keybinding/test/bro
 import { createTestLocaleService } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import '../../../chat/common/languageModelsConfiguration.js';
 import '../../../terminal/common/terminalConfiguration.js';
+import '../../../debug/browser/debug.contribution.js';
 import '../../../chat/browser/chat.shared.contribution.js';
 import { ILanguageModelsService } from '../../../../contrib/chat/common/languageModels.js';
 import type { SettingsSectionReference } from '../../browser/settingsTreeModels.js';
@@ -1139,6 +1140,7 @@ test('settingsLayout is the single projection from registered settings to catego
 		'screenshot',
 		'appearance',
 		'layout',
+		'debugging',
 		'settings-editor',
 		'startup',
 		'browser',
@@ -1965,7 +1967,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'github', 'network', 'screenshot', 'appearance', 'layout', 'settings-editor', 'startup', 'browser'],
+		['general', 'github', 'network', 'screenshot', 'appearance', 'layout', 'debugging', 'settings-editor', 'startup', 'browser'],
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="general"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);

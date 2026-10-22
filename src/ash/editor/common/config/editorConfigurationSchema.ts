@@ -83,6 +83,131 @@ export const EditorMinimapConfiguration = Object.freeze({
 			],
 		},
 	}),
+	autohide: configurationRegistry.registerConfiguration<'none' | 'mouseover' | 'scroll'>({
+		key: 'editor.minimap.autohide',
+		defaultValue: 'none',
+		parse(value) {
+			if (value === 'none' || value === 'mouseover' || value === 'scroll') return value;
+			throw new TypeError(localize('context.minimap.autohide.invalid', 'Minimap auto hide must be none, mouseover, or scroll.'));
+		},
+		setting: {
+			title: localize('context.minimap.autohide', 'Auto Hide'),
+			description: localize('context.minimap.autohide.description', 'Choose when the minimap is visible.'),
+			valueType: 'select',
+			options: [
+				{ value: 'none', label: localize('context.minimap.autohide.none', 'Always') },
+				{ value: 'mouseover', label: localize('context.minimap.autohide.mouseover', 'Mouse Over') },
+				{ value: 'scroll', label: localize('context.minimap.autohide.scroll', 'While Scrolling') },
+			],
+		},
+	}),
+	maxColumn: configurationRegistry.registerConfiguration<number>({
+		key: 'editor.minimap.maxColumn',
+		defaultValue: 120,
+		parse(value) {
+			if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1 || value > 10000) {
+				throw new RangeError(localize('context.minimap.integer.invalid', '{0} must be an integer between {1} and {2}.', 'editor.minimap.maxColumn', 1, 10000));
+			}
+			return value;
+		},
+		setting: {
+			title: localize('context.minimap.maxColumn', 'Maximum Columns'),
+			description: localize('context.minimap.maxColumn.description', 'Limit the number of columns drawn in the minimap.'),
+			valueType: 'number',
+			minimum: 1,
+			maximum: 10000,
+		},
+	}),
+	scale: configurationRegistry.registerConfiguration<number>({
+		key: 'editor.minimap.scale',
+		defaultValue: 1,
+		parse(value) {
+			if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1 || value > 3) {
+				throw new RangeError(localize('context.minimap.integer.invalid', '{0} must be an integer between {1} and {2}.', 'editor.minimap.scale', 1, 3));
+			}
+			return value;
+		},
+		setting: {
+			title: localize('context.minimap.scale', 'Scale'),
+			description: localize('context.minimap.scale.description', 'Choose the scale of content drawn in the minimap, from 1 to 3.'),
+			valueType: 'number',
+			minimum: 1,
+			maximum: 3,
+		},
+	}),
+	sectionHeaderFontSize: configurationRegistry.registerConfiguration<number>({
+		key: 'editor.minimap.sectionHeaderFontSize',
+		defaultValue: 9,
+		parse(value) {
+			if (typeof value !== 'number' || !Number.isFinite(value) || value < 4 || value > 32) {
+				throw new RangeError(localize('context.minimap.number.invalid', '{0} must be a number between {1} and {2}.', 'editor.minimap.sectionHeaderFontSize', 4, 32));
+			}
+			return value;
+		},
+		setting: {
+			title: localize('context.minimap.sectionHeaderFontSize', 'Section Header Font Size'),
+			description: localize('context.minimap.sectionHeaderFontSize.description', 'Set the font size of section headers in the minimap.'),
+			valueType: 'number',
+			minimum: 4,
+			maximum: 32,
+		},
+	}),
+	sectionHeaderLetterSpacing: configurationRegistry.registerConfiguration<number>({
+		key: 'editor.minimap.sectionHeaderLetterSpacing',
+		defaultValue: 1,
+		parse(value) {
+			if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 5) {
+				throw new RangeError(localize('context.minimap.number.invalid', '{0} must be a number between {1} and {2}.', 'editor.minimap.sectionHeaderLetterSpacing', 0, 5));
+			}
+			return value;
+		},
+		setting: {
+			title: localize('context.minimap.sectionHeaderLetterSpacing', 'Section Header Letter Spacing'),
+			description: localize('context.minimap.sectionHeaderLetterSpacing.description', 'Set the spacing between section header characters in the minimap.'),
+			valueType: 'number',
+			minimum: 0,
+			maximum: 5,
+		},
+	}),
+	showRegionSectionHeaders: configurationRegistry.registerConfiguration<boolean>({
+		key: 'editor.minimap.showRegionSectionHeaders',
+		defaultValue: true,
+		parse: value => modelBoolean(value, 'editor.minimap.showRegionSectionHeaders'),
+		setting: {
+			title: localize('context.minimap.showRegionSectionHeaders', 'Region Section Headers'),
+			description: localize('context.minimap.showRegionSectionHeaders.description', 'Show named regions as section headers in the minimap.'),
+			valueType: 'boolean',
+		},
+	}),
+	showMarkSectionHeaders: configurationRegistry.registerConfiguration<boolean>({
+		key: 'editor.minimap.showMarkSectionHeaders',
+		defaultValue: true,
+		parse: value => modelBoolean(value, 'editor.minimap.showMarkSectionHeaders'),
+		setting: {
+			title: localize('context.minimap.showMarkSectionHeaders', 'MARK Section Headers'),
+			description: localize('context.minimap.showMarkSectionHeaders.description', 'Show MARK comments as section headers in the minimap.'),
+			valueType: 'boolean',
+		},
+	}),
+	markSectionHeaderRegex: configurationRegistry.registerConfiguration<string>({
+		key: 'editor.minimap.markSectionHeaderRegex',
+		defaultValue: '\\bMARK:\\s*(?<separator>\\-?)\\s*(?<label>.*)$',
+		parse(value) {
+			if (typeof value !== 'string') throw new TypeError(localize('context.minimap.pattern.invalid', 'The MARK section header pattern must be a valid regular expression.'));
+			try {
+				new RegExp(value);
+			} catch {
+				throw new TypeError(localize('context.minimap.pattern.invalid', 'The MARK section header pattern must be a valid regular expression.'));
+			}
+			return value;
+		},
+		setting: {
+			title: localize('context.minimap.markSectionHeaderRegex', 'MARK Section Header Pattern'),
+			description: localize('context.minimap.markSectionHeaderRegex.description', 'Match MARK section headers with a regular expression containing a named label group.'),
+			valueType: 'text',
+			placeholder: '',
+		},
+	}),
 });
 
 /** The common configuration node shape used by VS Code settings tooling. */
@@ -306,7 +431,14 @@ const properties: Record<string, JsonSchema> = {
 	'editor.minimap.size': { type: 'string', enum: ['proportional', 'fill', 'fit'], default: 'proportional' },
 	'editor.minimap.renderCharacters': { type: 'boolean', default: true },
 	'editor.minimap.showSlider': { type: 'string', enum: ['always', 'mouseover'], default: 'mouseover' },
-	'editor.minimap.maxColumn': { type: 'number', default: 120, minimum: 1 },
+	'editor.minimap.maxColumn': { type: 'integer', default: 120, minimum: 1, maximum: 10_000 },
+	'editor.minimap.scale': { type: 'integer', default: 1, minimum: 1, maximum: 3 },
+	'editor.minimap.autohide': { type: 'string', enum: ['none', 'mouseover', 'scroll'], default: 'none' },
+	'editor.minimap.showRegionSectionHeaders': { type: 'boolean', default: true },
+	'editor.minimap.showMarkSectionHeaders': { type: 'boolean', default: true },
+	'editor.minimap.markSectionHeaderRegex': { type: 'string', default: '\\bMARK:\\s*(?<separator>\\-?)\\s*(?<label>.*)$' },
+	'editor.minimap.sectionHeaderFontSize': { type: 'number', default: 9, minimum: 4, maximum: 32 },
+	'editor.minimap.sectionHeaderLetterSpacing': { type: 'number', default: 1, minimum: 0, maximum: 5 },
 	'editor.scrollbar.vertical': { type: 'string', enum: ['auto', 'visible', 'hidden'], default: 'auto' },
 	'editor.scrollbar.horizontal': { type: 'string', enum: ['auto', 'visible', 'hidden'], default: 'auto' },
 	'editor.scrollbar.verticalScrollbarSize': { type: 'number', default: 14, minimum: 0 },

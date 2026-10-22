@@ -5,6 +5,7 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { clamp } from '../../../../base/common/numbers.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { ScrollbarVisibility } from '../../../../base/common/scrollable.js';
 import { isFullWidthCharacter } from '../../../../base/common/strings.js';
 import { Color } from '../../../../base/common/color.js';
@@ -23,6 +24,8 @@ import { type RestrictedRenderingContext } from '../../view/renderingContext.js'
 import { ViewPart, PartFingerprint, PartFingerprints } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { Range } from '../../../common/core/range.js';
+import { CursorColumns } from '../../../common/core/cursorColumns.js';
+import { MinimapPosition, MinimapSectionHeaderStyle } from '../../../common/model.js';
 import { type EditorScrollPosition } from '../../../common/viewModel.js';
 import type * as viewEvents from '../../../common/viewEvents.js';
 
@@ -50,6 +53,9 @@ export class Minimap extends ViewPart {
 	private sliderTop = 0;
 	private rasterKey: string | undefined;
 	private rasterDirty = true;
+	private readonly scrolling = this._register(new RunOnceScheduler(() => {
+		this.domNode.classList.remove('stanza-editor-minimap-scrolling');
+	}, 500));
 
 	constructor(context: ViewContext, private readonly source: MinimapOptions) {
 		super(context);
@@ -108,6 +114,10 @@ export class Minimap extends ViewPart {
 
 	public override onFlushed(): boolean { return this.invalidateRaster(); }
 	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
+		if (event.scrollTopChanged && this._context.configuration.options.get(EditorOption.minimap).autohide === 'scroll') {
+			this.domNode.classList.add('stanza-editor-minimap-scrolling');
+			this.scrolling.schedule();
+		}
 		return event.scrollTopChanged || event.scrollLeftChanged || event.scrollHeightChanged || event.scrollWidthChanged;
 	}
 	public override onLineMappingChanged(): boolean { return this.invalidateRaster(); }
@@ -121,6 +131,8 @@ export class Minimap extends ViewPart {
 	render(context: RestrictedRenderingContext): void {
 		const geometry = this._context.configuration.options.get(EditorOption.layoutInfo).minimap;
 		const minimap = this._context.configuration.options.get(EditorOption.minimap);
+		this.domNode.classList.toggle('stanza-editor-minimap-autohide', minimap.autohide !== 'none');
+		this.domNode.classList.toggle('stanza-editor-minimap-show-on-hover', minimap.autohide === 'mouseover');
 		const padding = this._context.configuration.options.get(EditorOption.padding);
 		const scrollbar = this._context.configuration.options.get(EditorOption.scrollbar);
 		const visible = minimap.enabled && geometry.renderMinimap !== RenderMinimap.None && geometry.minimapWidth > 0 && context.viewportHeight > 0;
@@ -271,17 +283,58 @@ export class Minimap extends ViewPart {
 		painter.putImageData(image, 0, 0);
 
 		const fullRange = new Range(1, 1, this._context.viewModel.getLineCount(), this._context.viewModel.getLineMaxColumn(this._context.viewModel.getLineCount()));
-		for (const decoration of this._context.viewModel.getMinimapDecorationsInRange(fullRange)) {
-			const minimap = decoration.options.minimap;
-			if (!minimap?.color) continue;
-			const color = typeof minimap.color === 'string' ? minimap.color : this._context.theme.getColor(minimap.color.id)?.toString();
-			if (!color) continue;
-			painter.fillStyle = color;
-			const top = Math.floor((decoration.range.startLineNumber - 1 + paddingRows) * scaleY - rasterOffset);
-			const markerHeight = Math.max(2, Math.ceil((decoration.range.endLineNumber - decoration.range.startLineNumber + 1) * scaleY));
-			painter.fillRect(Math.max(0, width - 3), top, 3, markerHeight);
+		const decorations = this._context.viewModel.getMinimapDecorationsInRange(fullRange);
+		// Ranges are already in visual coordinates, including wrapping and folding.
+		// Paint gutter markers last so an inline diagnostic cannot cover a Git marker.
+		for (const position of [MinimapPosition.Inline, MinimapPosition.Gutter]) {
+			for (const decoration of decorations) {
+				const minimap = decoration.options.minimap;
+				if (!minimap || minimap.sectionHeaderStyle || minimap.position !== position || !minimap.color) continue;
+				const color = typeof minimap.color === 'string' ? minimap.color : this._context.theme.getColor(minimap.color.id)?.toString();
+				if (!color) continue;
+				painter.fillStyle = color;
+				const first = Math.max(decoration.range.startLineNumber, startLine + 1);
+				const last = Math.min(decoration.range.endLineNumber, endLine);
+				for (let line = first; line <= last; line++) {
+					const top = Math.floor((line - 1 + paddingRows) * scaleY - rasterOffset);
+					const markerHeight = Math.max(2, Math.ceil(scaleY));
+					if (position === MinimapPosition.Gutter) {
+						painter.fillRect(2, top, 3, markerHeight);
+						continue;
+					}
+					const text = this._context.viewModel.getLineContent(line);
+					const startColumn = line === decoration.range.startLineNumber ? decoration.range.startColumn : 1;
+					const endColumn = line === decoration.range.endLineNumber ? decoration.range.endColumn : text.length + 1;
+					if (endColumn === 1 && line !== decoration.range.startLineNumber) continue;
+					const left = CursorColumns.visibleColumnFromColumn(text, startColumn, tabSize) * charWidth;
+					const right = CursorColumns.visibleColumnFromColumn(text, endColumn, tabSize) * charWidth;
+					painter.fillRect(left, top, Math.max(2, right - left), markerHeight);
+				}
+			}
 		}
-
+		const minimap = this._context.configuration.options.get(EditorOption.minimap);
+		const pixelRatio = geometry.minimapCanvasInnerHeight / Math.max(1, geometry.minimapCanvasOuterHeight);
+		const headerFontSize = minimap.sectionHeaderFontSize * pixelRatio;
+		painter.font = `600 ${headerFontSize}px ${fontInfo.fontFamily}`;
+		painter.textBaseline = 'top';
+		for (const decoration of decorations) {
+			const header = decoration.options.minimap;
+			if (!header?.sectionHeaderStyle || !header.sectionHeaderText) continue;
+			const top = Math.floor((decoration.range.startLineNumber - 1 + paddingRows) * scaleY - rasterOffset);
+			if (top < 0 || top >= height) continue;
+			painter.fillStyle = this._context.theme.getColor(editorBackground)!.toString();
+			painter.fillRect(0, top, width, Math.ceil(headerFontSize * 1.3));
+			painter.fillStyle = this._context.theme.getColor(editorForeground)!.toString();
+			let left = 2 * pixelRatio;
+			for (const character of header.sectionHeaderText) {
+				painter.fillText(character, left, top);
+				left += painter.measureText(character).width + minimap.sectionHeaderLetterSpacing * pixelRatio;
+				if (left >= width) break;
+			}
+			if (header.sectionHeaderStyle === MinimapSectionHeaderStyle.Underlined) {
+				painter.fillRect(0, top + Math.ceil(headerFontSize * 1.2), width, Math.max(1, pixelRatio));
+			}
+		}
 	}
 
 	private moveTo(clientY: number): void {

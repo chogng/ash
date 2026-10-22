@@ -1,4 +1,5 @@
 import { registerEditorContribution } from "../../../browser/editorFeatureRegistration.js";
+import { EditorOption } from "../../../common/config/editorOptions.js";
 import { SectionHeadersController } from "./sectionHeadersController.js";
 
 registerEditorContribution({
@@ -8,12 +9,15 @@ registerEditorContribution({
 		return new SectionHeadersController(
 			context.view,
 			context.model,
-			context.model.getLanguageId(),
+			context.editor,
 			context.configurations,
-			{
-				findRegionSectionHeaders: options.showRegionSectionHeaders ?? true,
-				findMarkSectionHeaders: options.showMarkSectionHeaders ?? true,
-				markSectionHeaderRegex: options.markSectionHeaderRegex ?? "\\bMARK:\\s*(?<separator>-?)\\s*(?<label>.*)$",
+			() => {
+				const minimap = context.editor.getOption(EditorOption.minimap);
+				return {
+					findRegionSectionHeaders: options.showRegionSectionHeaders ?? minimap.showRegionSectionHeaders,
+					findMarkSectionHeaders: options.showMarkSectionHeaders ?? minimap.showMarkSectionHeaders,
+					markSectionHeaderRegex: options.markSectionHeaderRegex ?? minimap.markSectionHeaderRegex,
+				};
 			},
 		);
 	}
