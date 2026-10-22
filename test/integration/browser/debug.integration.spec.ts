@@ -1,6 +1,258 @@
 import { expect, test, type Page, type Locator } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 
+async function glyphPoint(page: Page, lineNumber: number) {
+	return page.evaluate(lineNumber => {
+		const editor = window.ashDebugIntegration.getControl();
+		const root = editor.getDomNode()!.getBoundingClientRect();
+		const layout = editor.getLayoutInfo();
+		const position = editor.getScrolledVisiblePosition({ lineNumber, column: 1 })!;
+		return { x: root.left + layout.glyphMarginLeft + 4, y: root.top + position.top + position.height / 2 };
+	}, lineNumber);
+}
+
+for (const locale of ['en', 'zh-cn']) test(`glyph margin adds, disables, enables and removes breakpoints without moving the selection (${locale})`, async ({ page }, testInfo) => {
+	await page.goto(`/debug.html?locale=${locale}`);
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	await page.evaluate(() => {
+		const editor = window.ashDebugIntegration.getControl();
+		editor.updateOptions({ hover: { delay: 20 } });
+		editor.setSelection({ startLineNumber: 2, startColumn: 2, endLineNumber: 2, endColumn: 8 });
+	});
+	const selection = await page.evaluate(() => window.ashDebugIntegration.getControl().getSelection());
+	const point = await glyphPoint(page, 1);
+	await page.mouse.move(point.x, point.y);
+	await expect(page.locator('.ash-debug-breakpoint-gutter.hint')).toBeVisible();
+	await expect(page.getByRole('tooltip')).toContainText(locale === 'en' ? 'Click to add a breakpoint' : '单击以添加断点');
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
+		const hint = page.locator('.ash-debug-breakpoint-gutter.hint');
+		await expect(hint).toBeVisible();
+		expect(await hint.evaluate(node => getComputedStyle(node, '::before').backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+		await expect(hint).toHaveCSS('opacity', theme.startsWith('hc') ? '1' : '0.4');
+	}
+	await page.screenshot({ path: testInfo.outputPath(`glyph-margin-${locale}.png`), fullPage: true });
+	await page.mouse.click(point.x, point.y);
+	await expect(page.locator('.ash-debug-breakpoint-gutter:not(.hint)')).toHaveCount(1);
+	expect(await page.evaluate(() => window.ashDebugIntegration.getControl().getSelection())).toEqual(selection);
+	await page.keyboard.down('Shift');
+	await page.mouse.click(point.x, point.y);
+	await page.keyboard.up('Shift');
+	await expect(page.locator('.ash-debug-breakpoint-gutter.disabled')).toHaveCount(1);
+	await page.mouse.click(point.x, point.y);
+	await expect(page.locator('.ash-debug-breakpoint-gutter.disabled')).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toMatchObject([{ lineNumber: 1, enabled: true }]);
+	await page.mouse.click(point.x, point.y, { button: 'right' });
+	await page.keyboard.press('Escape');
+	await page.mouse.click(point.x, point.y, { button: 'middle' });
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toHaveLength(1);
+	await page.mouse.click(point.x, point.y);
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpoints())).toEqual([]);
+	await page.mouse.move(1, 1);
+	await expect(page.locator('.ash-debug-breakpoint-gutter.hint')).toHaveCount(0);
+	await expect(page.getByRole('tooltip')).toHaveCount(0);
+});
+
+test('glyph margin ignores document padding and foreign markers', async ({ page }) => {
+	await page.goto('/debug.html');
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	await page.evaluate(() => {
+		const editor = window.ashDebugIntegration.getControl();
+		editor.updateOptions({ wordWrap: 'off', smoothScrolling: false });
+		editor.createDecorationsCollection([{ range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 }, options: { description: 'foreign marker', glyphMarginClassName: 'ash-foreign-glyph' } }]);
+	});
+	const point = await glyphPoint(page, 1);
+	await page.mouse.click(point.x, point.y);
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toEqual([]);
+	await expect(page.locator('.ash-debug-breakpoint-gutter.hint')).toHaveCount(0);
+	const padding = await page.locator('#editor').boundingBox();
+	await page.mouse.click(point.x, padding!.y + padding!.height - 30);
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toEqual([]);
+});
+
+test('glyph margin maps wrapped, scrolled rows to source lines', async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 1000 });
+	await page.goto('/debug.html');
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	await page.evaluate(() => {
+		const editor = window.ashDebugIntegration.getControl();
+		editor.getModel()!.setValue(Array.from({ length: 60 }, (_, index) => `const value${index} = "${'wrapped content '.repeat(9)}";`).join('\n'));
+		editor.updateOptions({ wordWrap: 'wordWrapColumn', wordWrapColumn: 35, smoothScrolling: false });
+		editor.revealLineInCenter(25);
+	});
+	await expect(page.locator('#editor .line-numbers').filter({ hasText: /^25$/ })).toBeVisible();
+	const point = await glyphPoint(page, 25);
+	await page.mouse.click(point.x, point.y);
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpoints())).toMatchObject([{ lineNumber: 25 }]);
+	await page.mouse.click(point.x, point.y);
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpoints())).toEqual([]);
+});
+
+for (const locale of ['en', 'zh-cn']) test(`breakpoint widget preserves mode drafts, cancels safely and saves by keyboard (${locale})`, async ({ page }, testInfo) => {
+	await page.setViewportSize({ width: 1280, height: 1100 });
+	await page.goto(`/debug.html?locale=${locale}`);
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	const zh = locale === 'zh-cn';
+	const point = await glyphPoint(page, 1);
+	await page.keyboard.down('Alt'); await page.mouse.click(point.x, point.y); await page.keyboard.up('Alt');
+	const form = page.getByRole('form', { name: zh ? '断点编辑器' : 'Breakpoint editor', exact: true });
+	const field = form.getByRole('textbox');
+	await expect(field).toBeFocused();
+	await field.fill('answer > 0');
+	await form.getByRole('combobox').click();
+	await page.getByRole('option', { name: zh ? '命中次数条件' : 'Hit count condition', exact: true }).click();
+	await field.fill('>= 3');
+	await form.getByRole('combobox').click();
+	await page.getByRole('option', { name: zh ? '日志消息' : 'Log message', exact: true }).click();
+	await field.fill('answer={answer}');
+	await form.getByRole('combobox').click();
+	await page.getByRole('option', { name: zh ? '表达式条件' : 'Expression condition', exact: true }).click();
+	await expect(field).toHaveValue('answer > 0');
+	await field.dispatchEvent('compositionstart');
+	await field.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toEqual([]);
+	await field.dispatchEvent('compositionend');
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
+		await expect(field).toBeFocused();
+		const focusColor = await field.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-focusBorder').trim());
+		const color = await field.evaluate((element, color) => {
+			const probe = document.createElement('span');
+			probe.style.color = color;
+			element.parentElement!.append(probe);
+			const resolved = getComputedStyle(probe).color;
+			probe.remove();
+			return resolved;
+		}, focusColor);
+		await expect(form.locator('.ash-input-box-field')).toHaveCSS('border-top-color', color);
+	}
+	expect(await page.evaluate(() => window.ashDebugIntegration.showDebugHelp())).toBe(true);
+	const help = page.getByRole('textbox', { name: zh ? '无障碍帮助' : 'Accessibility Help', exact: true });
+	await expect(help).toHaveValue(zh ? /保留各自的草稿/ : /Each mode keeps its draft/);
+	await help.press('Escape');
+	await expect(field).toBeFocused();
+	await expect(field).toHaveValue('answer > 0');
+	await page.screenshot({ path: testInfo.outputPath(`breakpoint-widget-${locale}.png`), fullPage: true });
+	await field.press('Enter');
+	await expect(form).toHaveCount(0);
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpoints())).toMatchObject([
+		{ lineNumber: 1, condition: 'answer > 0', hitCondition: '>= 3', logMessage: 'answer={answer}' },
+	]);
+	await expect(page.locator('#editor .stanza-editor-input')).toBeFocused();
+	await page.keyboard.down('Alt'); await page.mouse.click(point.x, point.y); await page.keyboard.up('Alt');
+	await expect(field).toHaveValue('answer={answer}');
+	await field.fill('discarded');
+	await field.press('Escape');
+	await expect(form).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toMatchObject([{ logMessage: 'answer={answer}' }]);
+});
+
+for (const locale of ['en', 'zh-cn']) test(`debug gutter context menu creates, edits, disables and removes a logpoint (${locale})`, async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 1100 });
+	await page.goto(`/debug.html?locale=${locale}`);
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	const zh = locale === 'zh-cn';
+	const point = await glyphPoint(page, 1);
+	const menu = async () => { await page.mouse.click(point.x, point.y, { button: 'right' }); };
+	await menu();
+	await page.getByRole('menuitem', { name: zh ? '添加日志点...' : 'Add Logpoint...', exact: true }).click();
+	const field = page.locator('.ash-breakpoint-widget').getByRole('textbox');
+	await expect(field).toBeFocused();
+	await field.fill('value={answer}');
+	await field.press('Enter');
+	await expect(page.locator('.ash-debug-breakpoint-gutter.logpoint')).toHaveCount(1);
+	await menu();
+	await page.getByRole('menuitem', { name: zh ? '禁用断点' : 'Disable Breakpoint', exact: true }).click();
+	await expect(page.locator('.ash-debug-breakpoint-gutter.disabled')).toHaveCount(1);
+	await menu();
+	await page.getByRole('menuitem', { name: zh ? '启用断点' : 'Enable Breakpoint', exact: true }).click();
+	await expect(page.locator('.ash-debug-breakpoint-gutter.disabled')).toHaveCount(0);
+	await menu();
+	await page.getByRole('menuitem', { name: zh ? '编辑断点...' : 'Edit Breakpoint...', exact: true }).click();
+	await expect(field).toHaveValue('value={answer}');
+	await field.fill('edited={answer}'); await field.press('Enter');
+	await menu();
+	await page.getByRole('menuitem', { name: zh ? '移除断点' : 'Remove breakpoint', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpoints())).toEqual([]);
+});
+
+test('breakpoint dragging preserves identity and conditions, rejects occupied drops and cancels on Escape', async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 1100 });
+	await page.goto('/debug.html');
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	await page.evaluate(() => { const editor = window.ashDebugIntegration.getControl(); editor.setPosition({ lineNumber: 2, column: 1 }); editor.focus(); });
+	await page.evaluate(() => window.ashDebugIntegration.command('editor.debug.action.conditionalBreakpoint'));
+	const field = page.locator('.ash-breakpoint-widget').getByRole('textbox');
+	await field.fill('answer > 0'); await field.press('Enter');
+	const before = await page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions());
+	const start = await glyphPoint(page, 2);
+	const end = await glyphPoint(page, 3);
+	await page.mouse.move(start.x, start.y); await page.mouse.down(); await page.mouse.move(end.x, end.y, { steps: 8 }); await page.mouse.up();
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toMatchObject([{ id: before[0].id, lineNumber: 3, condition: 'answer > 0' }]);
+	await page.mouse.click(start.x, start.y);
+	const definitions = await page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions());
+	await page.mouse.move(end.x, end.y); await page.mouse.down(); await page.mouse.move(start.x, start.y, { steps: 8 }); await page.mouse.up();
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toEqual(definitions);
+	const first = await glyphPoint(page, 1);
+	await page.mouse.move(end.x, end.y); await page.mouse.down(); await page.mouse.move(first.x, first.y, { steps: 8 }); await page.keyboard.press('Escape'); await page.mouse.up();
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toEqual(definitions);
+	await page.evaluate(() => { const editor = window.ashDebugIntegration.getControl(); editor.setPosition({ lineNumber: 3, column: 1 }); editor.focus(); void window.ashDebugIntegration.command('editor.debug.action.moveBreakpoint'); });
+	const line = page.getByPlaceholder('Enter a source line number');
+	await line.fill('0'); await line.press('Enter');
+	await expect(page.getByText('Enter a valid line number in this file.', { exact: true })).toBeVisible();
+	await line.fill('1'); await line.press('Enter');
+	await expect.poll(() => page.evaluate(id => window.ashDebugIntegration.breakpointDefinitions().find(point => point.id === id)?.lineNumber, before[0].id)).toBe(1);
+});
+
+test('tracked breakpoint positions update once across split editors and survive undo and redo', async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 1100 });
+	await page.goto('/debug.html?breakpoints');
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	const before = await page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions());
+	await page.evaluate(() => {
+		window.ashDebugIntegration.createSplitEditor();
+		window.ashDebugIntegration.getControl().executeEdits('breakpoint-test', [{ range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 }, text: 'const prepended = 1;\n' }]);
+	});
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions().map(point => ({ id: point.id, line: point.lineNumber })))).toEqual(before.map(point => ({ id: point.id, line: point.lineNumber + 1 })));
+	await page.evaluate(() => window.ashDebugIntegration.getControl().getModel()!.undo());
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions().map(point => point.lineNumber))).toEqual([2, 3]);
+	await page.evaluate(() => window.ashDebugIntegration.getControl().getModel()!.redo());
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions().map(point => point.lineNumber))).toEqual([3, 4]);
+	await expect(page.locator('#editor-copy .ash-debug-breakpoint-gutter:not(.hint)')).toHaveCount(2);
+});
+
+test('tracked inline breakpoint columns follow same-line edits and retain their condition across split editors', async ({ page }) => {
+	await page.goto('/debug.html?inline-breakpoint');
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	await page.evaluate(() => {
+		window.ashDebugIntegration.createSplitEditor();
+		window.ashDebugIntegration.getControl().executeEdits('inline-breakpoint-test', [{
+			range: { startLineNumber: 2, startColumn: 1, endLineNumber: 2, endColumn: 1 }, text: '/* */',
+		}]);
+	});
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toMatchObject([
+		{ id: 'inline', lineNumber: 2, columnNumber: 12, condition: 'answer > 0' },
+	]);
+	await page.evaluate(() => window.ashDebugIntegration.getControl().getModel()!.undo());
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toMatchObject([
+		{ id: 'inline', lineNumber: 2, columnNumber: 7, condition: 'answer > 0' },
+	]);
+	await page.evaluate(() => {
+		const editor = window.ashDebugIntegration.getControl();
+		editor.setPosition({ lineNumber: 2, column: 7 });
+		editor.focus();
+	});
+	await page.evaluate(() => window.ashDebugIntegration.command('editor.debug.action.editBreakpoint'));
+	const field = page.locator('.ash-breakpoint-widget').getByRole('textbox');
+	await expect(field).toHaveValue('answer > 0');
+	await field.fill('answer > 1');
+	await field.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toMatchObject([
+		{ id: 'inline', lineNumber: 2, columnNumber: 7, condition: 'answer > 1' },
+	]);
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions().length)).toBe(1);
+});
+
 test('Debug Console follows a URL assembled from output chunks by keyboard and modifier click', async ({ page }) => {
 	await page.goto('/debug.html?console');
 	await page.waitForFunction(() => !!window.ashDebugIntegration);

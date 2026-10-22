@@ -16,6 +16,8 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { Debugger } from '../common/debugger.js';
 import { localize } from '../../../../nls.js';
+import { ITextFileService } from '../../../services/textfile/common/textfiles.js';
+import type { IBreakpointUpdateData } from '../common/debug.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { CONTEXT_DEBUG_STATE, IAdapterManager, type IResolvedDebugConfiguration, type IDebugStackFrame, type IDebugThread, type IViewModel, type DebugBreakpoint, type IBaseBreakpoint, type IDebugBreakpoint, type IDebugBreakpointUpdate, type IDebugCompound, type IDebugConfiguration, type IDataBreakpoint, type IDataBreakpointOptions, type IFunctionBreakpoint, type IFunctionBreakpointOptions, type IInstructionBreakpoint, type IInstructionBreakpointOptions, IDebugService, DebugConsoleMode, type IDebugSessionOptions, type IDebugSession, DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTracker, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../common/debug.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -72,6 +74,7 @@ export class DebugService extends Disposable implements IDebugService {
 	private readonly debugStorage: DebugStorage;
 	private readonly sessionRecords = new Map<string, DebugSessionRecord>();
 	private currentBreakpoints: readonly IDebugBreakpoint[] = Object.freeze([]);
+	private readonly breakpointsToSendOnResourceSaved = new Set<string>();
 	private currentFunctionBreakpoints: readonly IFunctionBreakpoint[] = Object.freeze([]);
 	private currentDataBreakpoints: readonly IDataBreakpoint[] = Object.freeze([]);
 	private currentInstructionBreakpoints: readonly IInstructionBreakpoint[] = Object.freeze([]);
@@ -118,6 +121,7 @@ export class DebugService extends Disposable implements IDebugService {
 		@IEditorService private readonly editors: IEditorService,
 		@ITextModelService private readonly textModels: ITextModelService,
 		@INotificationService private readonly notifications: INotificationService,
+		@ITextFileService textFiles: ITextFileService,
 	) {
 		super();
 		this.debugger = instantiationService.createInstance(Debugger);
@@ -132,6 +136,10 @@ export class DebugService extends Disposable implements IDebugService {
 		this._register(toDisposable(() => debugState.reset()));
 		try { this.debugStorage = this._register(instantiationService.createInstance(DebugStorage)); } catch (error) { this.dispose(); throw error; }
 		this.restoreState(this.debugStorage.state);
+		this._register(textFiles.onDidSave(event => {
+			if (this.breakpointsToSendOnResourceSaved.delete(event.resource.toString())) this.syncSessionBreakpoints();
+		}));
+		this._register(workspace.onDidChangeWorkspace(() => this.breakpointsToSendOnResourceSaved.clear()));
 		this._register(this.debugStorage.onDidChangeState(state => this.restoreState(state)));
 		this._register(files.onDidChangeFiles(event => { if (event.resources === undefined || event.resources.some(resource => /\/\.vscode\/launch\.json$/i.test(resource.path))) void this.refresh().catch(error => this.reportError(error)); }));
 		let previousFactories = adapters.factories;
@@ -525,6 +533,7 @@ export class DebugService extends Disposable implements IDebugService {
 			processService: this.processes,
 			resolvedConfiguration: factory?.createDebugAdapterDescriptor ? { ...resolvedConfiguration, adapter: undefined } : resolvedConfiguration,
 			workspace: root, breakpoints: () => this.currentBreakpoints,
+			deferredBreakpointIds: () => new Set(this.currentBreakpoints.filter(point => this.breakpointsToSendOnResourceSaved.has(point.resource.toString())).map(point => point.id)),
 			additionalBreakpoints: () => [...this.currentFunctionBreakpoints, ...this.currentDataBreakpoints, ...this.currentInstructionBreakpoints],
 			runInTerminal: value => {
 				const terminalGeneration = this.terminalGeneration;
@@ -867,10 +876,30 @@ export class DebugService extends Disposable implements IDebugService {
 		}
 		if (update.logMessage !== undefined && !("resource" in breakpoint)) throw new TypeError("Log messages require a source breakpoint");
 		const change = <T extends IBaseBreakpoint>(points: readonly T[]): readonly T[] => Object.freeze(points.map(point => point.id === id ? Object.freeze({ ...point, ...patch, verified: false, message: undefined }) : point));
-		this.currentBreakpoints = change(this.currentBreakpoints);
+		this.currentBreakpoints = Object.freeze(this.currentBreakpoints.map(point => point.id === id
+			? Object.freeze({ ...updateSourceBreakpoint(point, patch), ...(patch.enabled === undefined ? {} : { enabled: patch.enabled }), verified: false, message: undefined })
+			: point));
 		this.currentFunctionBreakpoints = change(this.currentFunctionBreakpoints);
 		this.currentDataBreakpoints = change(this.currentDataBreakpoints);
 		this.currentInstructionBreakpoints = change(this.currentInstructionBreakpoints);
+		this.breakpointStateChanged();
+	}
+
+	async updateBreakpoints(originalUri: URI, data: Map<string, IBreakpointUpdateData>, sendOnResourceSaved: boolean): Promise<void> {
+		this.assertNotDisposed();
+		const resource = originalUri.toString();
+		// Prepare the complete transaction before publishing: a bad position must
+		// not leave the remaining breakpoints at their pre-edit locations.
+		const points = this.currentBreakpoints.map(point => {
+			const update = data.get(point.id);
+			if (!update) return point;
+			if (point.resource.toString() !== resource) throw new TypeError('Breakpoint belongs to another source');
+			return updateSourceBreakpoint(point, update);
+		});
+		if (points.every((point, index) => point === this.currentBreakpoints[index])) return;
+		if (sendOnResourceSaved) this.breakpointsToSendOnResourceSaved.add(resource);
+		else if ([...data.values()].some(update => 'lineNumber' in update || 'column' in update)) this.breakpointsToSendOnResourceSaved.delete(resource);
+		this.currentBreakpoints = Object.freeze(points.sort(compareBreakpoints));
 		this.breakpointStateChanged();
 	}
 
@@ -1100,7 +1129,22 @@ export class DebugService extends Disposable implements IDebugService {
 }
 
 function childResource(root: URI, relativePath: string): URI { return URI.joinPath(root, ...relativePath.split("/")); }
-function createBreakpoint(resource: URI, lineNumber: number, enabled: boolean): IDebugBreakpoint { return Object.freeze({ id: `${resource.toString()}:${lineNumber}`, resource, lineNumber, enabled, verified: false }); }
+function createBreakpoint(resource: URI, lineNumber: number, enabled: boolean): IDebugBreakpoint { return Object.freeze({ id: generateUuid(), resource, lineNumber, enabled, verified: false }); }
+
+function updateSourceBreakpoint(point: IDebugBreakpoint, update: IBreakpointUpdateData): IDebugBreakpoint {
+	const lineNumber = update.lineNumber ?? point.lineNumber;
+	const columnNumber = 'column' in update ? update.column : point.columnNumber;
+	if (!Number.isSafeInteger(lineNumber) || lineNumber < 1 || columnNumber !== undefined && (!Number.isSafeInteger(columnNumber) || columnNumber < 1)) {
+		throw new TypeError('Breakpoint position must be positive integers');
+	}
+	const expressions = { condition: point.condition, hitCondition: point.hitCondition, logMessage: point.logMessage };
+	for (const field of ['condition', 'hitCondition', 'logMessage'] as const) {
+		if (field in update) expressions[field] = update[field] === undefined ? undefined : normalizeBreakpointExpression(update[field], field);
+	}
+	if (lineNumber === point.lineNumber && columnNumber === point.columnNumber
+		&& expressions.condition === point.condition && expressions.hitCondition === point.hitCondition && expressions.logMessage === point.logMessage) return point;
+	return Object.freeze({ ...point, lineNumber, columnNumber, ...expressions, verified: false, message: undefined });
+}
 function compareBreakpoints(left: IDebugBreakpoint, right: IDebugBreakpoint): number { return left.resource.toString().localeCompare(right.resource.toString()) || left.lineNumber - right.lineNumber; }
 function normalizeBreakpointExpression(value: string, field: string): string | undefined {
 	if (value.length > 32_768 || value.includes("\0")) throw new TypeError(`${field} must contain at most 32768 characters and no null characters`);

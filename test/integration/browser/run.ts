@@ -40,7 +40,13 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 	}
 	let backendPackageRoot: string | undefined;
 	if (files.length === 0 || files.some(file => /(?:treeSitter|tokenization|themes|textModel|markdownEditor|chatgptweb)\.integration\.spec\.[jt]s$/u.test(file))) {
-		const prepared = await run.command('pnpm', ['run', 'prepare:backend'], testEnv);
+		// Reuse the invoking package manager. A Windows command shim cannot be
+		// launched directly through spawn, and its script may live outside PATH.
+		const packageManager = environment.npm_execpath;
+		if (!packageManager) throw new Error('Run browser integration tests through the owning package script.');
+		const isScript = /\.[cm]?js$/.test(packageManager);
+		const prepared = await run.command(isScript ? process.execPath : packageManager,
+			[...(isScript ? [packageManager] : []), 'run', 'prepare:backend'], testEnv);
 		if (prepared.code !== 0) { process.exitCode = prepared.code; return; }
 		const target = `${process.arch === 'arm64' ? 'aarch64' : 'x86_64'}-${process.platform === 'darwin' ? 'apple-darwin' : process.platform === 'win32' ? 'pc-windows-msvc' : 'unknown-linux-gnu'}`;
 		const metadata = JSON.parse(readFileSync(resolve(desktopDirectory, '.build/runtime/dev/store-v1', target, 'host-provided-node/dev-small/prepare-inputs.json'), 'utf8')) as { packageRoot: string; };

@@ -6,6 +6,8 @@ import { IAccessibleViewService } from '../../../../../platform/accessibility/br
 import { getUriFromSource } from '../../common/debugSource.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { Position } from '../../../../../editor/common/core/position.js';
+import { generateUuid } from '../../../../../base/common/uuid.js';
+import type { IBreakpointUpdateData } from '../../common/debug.js';
 import { DISASSEMBLY_VIEW_ID } from '../../common/debug.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { localize } from '../../../../../nls.js';
@@ -137,13 +139,27 @@ export class MockDebugService extends Disposable implements IDebugService {
 	public async restart(session = this.session): Promise<IDebugSession> { return session!; }
 	public async stop(): Promise<void> { this.operations.push('stop'); }
 	public async stopAll(): Promise<void> { }
-	public addBreakpoints(): void { throw new Error('Bulk breakpoints are unsupported in this fixture'); }
+	public addBreakpoints(points: readonly IDebugBreakpoint[]): void {
+		this.breakpoints = Object.freeze([...this.breakpoints, ...points.map(point => ({ ...point }))]);
+		this.breakpointEmitter.fire(this.breakpoints);
+	}
+	public async updateBreakpoints(resource: URI, data: Map<string, IBreakpointUpdateData>, _sendOnResourceSaved: boolean): Promise<void> {
+		this.breakpoints = Object.freeze(this.breakpoints.map(point => {
+			const update = data.get(point.id);
+			if (!update || point.resource.toString() !== resource.toString()) return point;
+			return {
+				...point, ...('lineNumber' in update ? { lineNumber: update.lineNumber! } : {}), ...('column' in update ? { columnNumber: update.column } : {}),
+				...Object.fromEntries((['condition', 'hitCondition', 'logMessage'] as const).filter(key => update[key] !== undefined).map(key => [key, update[key] || undefined]))
+			};
+		}));
+		this.breakpointEmitter.fire(this.breakpoints);
+	}
 	public removeBreakpoints(ids: readonly string[]): void { for (const id of ids) { this.removeBreakpoint(id); } }
 	public toggleBreakpoint(resource: URI, lineNumber: number): void {
-		const id = `${resource.toString()}:${lineNumber}`;
-		if (this.breakpoints.some(point => point.id === id)) this.removeBreakpoint(id);
+		const existing = this.breakpoints.find(point => point.resource.toString() === resource.toString() && point.lineNumber === lineNumber);
+		if (existing) this.removeBreakpoint(existing.id);
 		else {
-			this.breakpoints = Object.freeze([...this.breakpoints, { id, resource, lineNumber, enabled: true, verified: false }]);
+			this.breakpoints = Object.freeze([...this.breakpoints, { id: generateUuid(), resource, lineNumber, enabled: true, verified: false }]);
 			this.breakpointEmitter.fire(this.breakpoints);
 		}
 	}

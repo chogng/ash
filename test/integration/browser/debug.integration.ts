@@ -5,6 +5,8 @@ import { StatusBarColorProvider } from '../../../src/ash/workbench/contrib/debug
 import { ChatContextPickService } from '../../../src/ash/workbench/services/chat/browser/chatContextPickService.js';
 import { DebugChatContextContribution } from '../../../src/ash/workbench/contrib/debug/browser/debugChatIntegration.js';
 import { ContentHoverController } from '../../../src/ash/editor/contrib/hover/browser/contentHoverController.js';
+import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
+import type { IDebugBreakpoint } from '../../../src/ash/workbench/contrib/debug/common/debug.js';
 import { Position } from '../../../src/ash/editor/common/core/position.js';
 import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/descriptors.js';
 import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
@@ -59,7 +61,7 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-cn') {
 }
 
 const store = new DisposableStore();
-store.add(registerTestCodeEditorFeatures(['editor.contrib.placeholderText', 'editor.contrib.hover']));
+store.add(registerTestCodeEditorFeatures(['editor.contrib.placeholderText', 'editor.contrib.hover', 'editor.contrib.marginHover']));
 const themes = { light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };
 const theme = store.add(new TestThemeService(themes.light));
 store.add(bindTestColorTheme(theme, document.body));
@@ -128,6 +130,9 @@ if (new URLSearchParams(location.search).has('breakpoints')) {
 	debug.toggleBreakpoint(resource, 2);
 	debug.toggleBreakpoint(resource, 3);
 }
+if (new URLSearchParams(location.search).has('inline-breakpoint')) {
+	debug.addBreakpoints([{ id: 'inline', resource, lineNumber: 2, columnNumber: 7, condition: 'answer > 0', enabled: true, verified: false }]);
+}
 let activeInput: IResourceEditorInput | undefined;
 const openedSources: unknown[] = [];
 const editors: IEditorService = {
@@ -165,10 +170,11 @@ const services = store.add(new InstantiationService(support.register(new Service
 	[IDebugService, debug], [IEditorService, editors], [IThemeService, theme],
 	[IAccessibleViewService, new SyncDescriptor(AccessibleViewService)],
 	[IQuickInputService, new SyncDescriptor(QuickInputService)],
+	[ICodeEditorService, StandaloneServices.get(ICodeEditorService)],
 	[IConfigurationService, StandaloneServices.get(IConfigurationService)],
 	[IContextKeyService, StandaloneServices.get(IContextKeyService)],
 	[IKeybindingService, StandaloneServices.get(IKeybindingService)],
-	[IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } }],
+	[IContextMenuService, StandaloneServices.get(IContextMenuService)],
 ))));
 registerCodeEditorServices(services);
 services.registerInstance(ILayoutService, store.add(new BrowserLayoutService({ root: document.body })));
@@ -222,6 +228,14 @@ let pendingAssignment: DeferredPromise<IDebugVariable> | undefined;
 let pendingDataInfo: DeferredPromise<IDataBreakpointInfoResponse> | undefined;
 
 window.ashDebugIntegration = {
+	getControl: () => editor,
+	breakpointDefinitions: () => debug.breakpoints,
+	createSplitEditor: () => {
+		const node = document.createElement('div');
+		node.id = 'editor-copy'; node.style.width = '600px'; node.style.height = '200px';
+		document.body.append(node);
+		store.add(create(node, { model, automaticLayout: true }));
+	},
 	endSessions: () => { for (const candidate of debug.sessions) (candidate as MockDebugSession).state = 'terminated'; debug.activate(undefined); },
 	loadedSourcesView: async () => { await services.get(IViewsService).openView('workbench.debug.loadedScriptsView', true); },
 	chatContext: async () => (await chatContexts.items[0].providePicks('parent'))[0]?.attachment.resolve(),
@@ -330,6 +344,9 @@ window.addEventListener('pagehide', () => store.dispose(), { once: true });
 declare global {
 	interface Window {
 		ashDebugIntegration: {
+			getControl(): typeof editor;
+			breakpointDefinitions(): readonly IDebugBreakpoint[];
+			createSplitEditor(): void;
 			endSessions(): void;
 			loadedSourcesView(): Promise<void>;
 			chatContext(): Promise<{ name: string; content: string; } | undefined>;

@@ -33,6 +33,8 @@ export interface DebugSessionStartOptions {
 	readonly resolvedConfiguration: Pick<IDebugConfiguration, 'adapter' | 'arguments'>;
 	readonly processService: IDebugAdapterProcessService;
 	readonly breakpoints: () => readonly IDebugBreakpoint[];
+	/** Dirty editor positions stay local until their source is saved. */
+	readonly deferredBreakpointIds?: () => ReadonlySet<string>;
 	readonly additionalBreakpoints?: () => readonly Exclude<DebugBreakpoint, IDebugBreakpoint>[];
 	readonly workspace?: URI;
 	readonly runInTerminal?: (argumentsValue: unknown) => Promise<Readonly<Record<string, unknown>>>;
@@ -143,6 +145,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 	private sessionName: string;
 	private breakpointVersion = 0;
 	private breakpointSnapshot: DebugBreakpointsSnapshot | undefined;
+	private deferredBreakpointIds: DebugSessionStartOptions['deferredBreakpointIds'];
 	private _capabilities: IDebugSessionCapabilities = Object.freeze({ supportsRestart: false, supportsTerminate: false, supportsSetVariable: false, supportsConditionalBreakpoints: false, supportsHitConditionalBreakpoints: false, supportsLogPoints: false, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsSteppingGranularity: false, supportsCompletionsRequest: false, supportsCancelRequest: false, completionTriggerCharacters: Object.freeze([]), exceptionBreakpointFilters: Object.freeze([]) });
 
 	readonly onDidChangeState: Event<DebugSessionState> = this.stateEmitter.event;
@@ -219,6 +222,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 			options.exceptionBreakpoints, options.additionalBreakpoints, options.resolvedConfiguration, Object.freeze({ ...options.sessionOptions }),
 		);
 		session.processService = options.processService;
+		session.deferredBreakpointIds = options.deferredBreakpointIds;
 		try {
 			const relation = options.admitted ? await options.processService.manageSession(session.id, 'read') : await options.processService.reserveSession({
 				id: session.id, workspaceId: options.workspace?.toString() ?? 'debug', parentId: options.sessionOptions?.parentSession?.id ?? null,
@@ -471,8 +475,12 @@ export class DebugSession extends Disposable implements IDebugSession {
 	async syncBreakpoints(): Promise<void> {
 		const version = ++this.breakpointVersion;
 		const points = [...this.breakpoints(), ...this.additionalBreakpoints?.() ?? []];
+		const deferred = this.deferredBreakpointIds?.();
 		const intents = points.flatMap(point => {
-			const location = this.breakpointLocation(point);
+			// Reuse only the adapter's last location while text is dirty. Enablement
+			// and expressions still come from the catalog, so Disable applies at once.
+			const binding = deferred?.has(point.id) ? this.breakpointSnapshot?.bindings.find(binding => binding.intent.id === point.id && !binding.removed) : undefined;
+			const location = deferred?.has(point.id) ? binding?.intent.location : this.breakpointLocation(point);
 			return location ? [{
 				id: point.id, enabled: point.enabled, location,
 				...(point.condition === undefined ? {} : { condition: point.condition }),
@@ -519,6 +527,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 		this.breakpointSnapshot = snapshot;
 		const updates = [];
 		for (const binding of snapshot.bindings) {
+			if (this.deferredBreakpointIds?.().has(binding.intent.id)) continue;
 			if (!binding.applicable || binding.pending) continue;
 			const before = previous?.version === snapshot.version ? previous.bindings.find(point => point.intent.id === binding.intent.id) : undefined;
 			if (binding.removed) { if (!before?.removed) this.removeBreakpoint?.(binding.intent.id); continue; }

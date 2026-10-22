@@ -121,6 +121,28 @@ test('editor browser prepares a selected Rust Git fixture before building or lau
 	}
 });
 
+test('editor browser prepares its backend through the invoking package-manager script with literal arguments', { timeout: 20_000 }, async t => {
+	const directory = await mkdtemp(join(repository, 'test/.integration-runner-'));
+	t.after(() => rm(directory, { recursive: true, force: true }));
+	const config = join(directory, 'playwright.config.ts');
+	await writeFile(config, `export default { testDir: '.', projects: [{ name: 'chromium' }], reporter: 'list' };`);
+	await writeFile(join(directory, 'textModel.integration.spec.ts'), `import { test } from '@playwright/test'; test('requires backend', () => { throw Error('must not run before backend preparation'); });`);
+	const invocation = join(directory, 'invocation.json');
+	const manager = join(directory, 'manager with spaces.cjs');
+	await writeFile(manager, `require('node:fs').writeFileSync(${JSON.stringify(invocation)}, JSON.stringify(process.argv.slice(2))); process.exit(43);`);
+	await assert.rejects(execute(process.execPath, ['test/integration/browser/run.ts', '--editor', '--config', config, 'textModel.integration.spec.ts'], {
+		cwd: repository, env: { ...process.env, npm_execpath: manager }, timeout: 15_000,
+	}), error => {
+		assert.ok(error instanceof Error);
+		const failure = error as Error & { stdout: string; code: number; };
+		assert.equal(failure.code, 43);
+		assert.match(failure.stdout, /Test selection: 1 tests/);
+		assert.doesNotMatch(failure.stdout, /Browser integration server|Running 1 test/);
+		return true;
+	});
+	assert.deepEqual(JSON.parse(await readFile(invocation, 'utf8')), ['run', 'prepare:backend']);
+});
+
 test('CI rejects exclusive tests during collection before browser or smoke launches', { timeout: 20_000 }, async t => {
 	const directory = await mkdtemp(join(repository, 'test/.exclusive-runner-'));
 	t.after(() => rm(directory, { recursive: true, force: true }));

@@ -17,6 +17,15 @@
 	opacity: 0.55;
 }
 
+.ash-debug-breakpoint-gutter.hint {
+	opacity: 0.4;
+}
+
+.hc-black .ash-debug-breakpoint-gutter.hint,
+.hc-light .ash-debug-breakpoint-gutter.hint {
+	opacity: 1;
+}
+
 .ash-debug-breakpoint-gutter.logpoint::before {
 	border-radius: 0;
 	transform: rotate(45deg);

@@ -196,6 +196,21 @@ export interface IDebugBreakpointUpdate {
 	readonly offset?: number;
 }
 
+/** Source breakpoint changes are committed together after tracked ranges move. */
+export interface IBreakpointUpdateData {
+	readonly condition?: string;
+	readonly hitCondition?: string;
+	readonly logMessage?: string;
+	readonly lineNumber?: number;
+	readonly column?: number;
+}
+
+export const enum BreakpointWidgetContext {
+	CONDITION = 0,
+	HIT_COUNT = 1,
+	LOG_MESSAGE = 2,
+}
+
 export interface IDebugSource {
 	readonly name?: string;
 	readonly path?: string;
@@ -513,6 +528,7 @@ export interface IDebugService extends IDisposable {
 	toggleBreakpoint(resource: URI, lineNumber: number): void;
 	removeBreakpoint(id: string): void;
 	updateBreakpoint(id: string, update: IDebugBreakpointUpdate): void;
+	updateBreakpoints(originalUri: URI, data: Map<string, IBreakpointUpdateData>, sendOnResourceSaved: boolean): Promise<void>;
 	setBreakpointsEnabled(enabled: boolean): void;
 	removeAllBreakpoints(): void;
 	addFunctionBreakpoint(options: IFunctionBreakpointOptions): void;

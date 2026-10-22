@@ -228,6 +228,21 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 });
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) AccessibleViewRegistry.register({
+	type, priority: 160, name: `debug.breakpoint.${type}`,
+	getProvider: accessor => {
+		const focused = document.activeElement as HTMLElement | null;
+		const widget = focused?.closest<HTMLElement>('.ash-breakpoint-widget');
+		if (!widget) return undefined;
+		const editors = accessor.get(IEditorService);
+		return new AccessibleContentProvider(AccessibleViewProviderId.RunAndDebug, { type },
+			() => type === AccessibleViewType.View
+				? [widget.innerText, ...[...widget.querySelectorAll('input, textarea')].map(input => `${input.getAttribute('aria-label')}: ${(input as HTMLInputElement | HTMLTextAreaElement).value}`)].join('\n')
+				: localize('debug.breakpointWidgetHelp', 'Breakpoint editor\nChoose Expression condition, Hit count condition, or Log message. Each mode keeps its draft when you switch. Put expressions in braces in a log message. Enter or Save breakpoint applies the draft. Escape or Cancel breakpoint edit closes without changing the breakpoint and returns focus to the editor.\nUse Debug: Add Conditional Breakpoint, Debug: Add Logpoint, or Debug: Edit Breakpoint from the Command Palette to open this editor with the keyboard. Debug: Move Breakpoint moves the current line breakpoint by entering a line number. The glyph margin context menu offers add, edit, enable, disable, remove, and move actions. Dragging a breakpoint to another gutter line preserves its conditions; Escape cancels a drag.'),
+			() => { if (focused?.isConnected) focused.focus(); else editors.focusActiveEditor(); }, AccessibilityVerbositySettingId.Debug);
+	},
+});
+
+for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) AccessibleViewRegistry.register({
 	type, priority: 150, name: `debug.exception.${type}`,
 	getProvider: accessor => {
 		const focused = document.activeElement as HTMLElement | null;

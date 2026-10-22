@@ -7606,6 +7606,13 @@ test('line numbers stay aligned while scrolling and gutter clicks edit the visib
 	// position through its hit-test controller rather than a number element handler.
 	const numberBounds = (await editor.element.locator(`.margin-view-overlays > .view-overlay-line[data-line-index="${lineIndex}"] .line-numbers`).boundingBox())!;
 	await page.mouse.click(numberBounds.x + numberBounds.width / 2, numberBounds.y + numberBounds.height / 2);
+	// Line-number clicks select the complete source line. Collapse that selection
+	// to its start before editing, and verify the selected row independently.
+	const clickedLine = Number(lineIndex) + 1;
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toMatchObject({
+		selection: `[${clickedLine},1 -> ${clickedLine + 1},1]`, focused: true,
+	});
+	await page.keyboard.press('ArrowLeft');
 	await page.keyboard.press('Home');
 	await page.keyboard.insertText('!');
 	await expect(editor.element.locator(`.view-lines > .view-line[data-line-index="${lineIndex}"] .stanza-editor-line-text`))

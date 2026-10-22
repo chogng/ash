@@ -1,5 +1,6 @@
 {
   "ash": {
+    "accessibility.editorBreakpoints": "<keybinding:editor.debug.action.toggleBreakpoint> 切换当前行的断点。行号前的标记列显示断点和调试暂停位置。单击空白单元格添加断点；按住 Shift 单击断点可启用或禁用。使用断点视图中的复选框可通过键盘执行相同操作。“调试: 添加条件断点”“调试: 添加日志点”和“调试: 编辑断点”打开编辑器；按 Enter 保存，按 Escape 取消。按住 Alt 单击标记列可打开同一编辑器。将断点拖到另一行标记列，或使用“调试: 移动断点”输入行号。标记列右键菜单提供相同操作。",
     "settings.debugging.label": "调试",
     "settings.debugging.description": "配置断点、行内变量值以及关闭调试会话时的确认。",
     "notifications.toastLifetimeHelp": "普通通知弹出提示会自动收起，并保留在历史中。将鼠标悬停或焦点移到提示上可使其保持显示。正在运行的进度、固定通知和带主要操作的错误会保持显示，直到待处理状态结束或被手动收起。",

@@ -56,6 +56,8 @@ import { DebugService } from '../../browser/debugService.js';
 import { AdapterManager } from '../../browser/debugAdapterManager.js';
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
+import { createTestTextFileService } from '../../../../test/common/testEditorServices.js';
+import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 
 test('DAP runInTerminal creates an integrated PowerShell terminal with quoted arguments', async () => {
 	const writes: string[] = [];
@@ -331,6 +333,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	services.registerInstance(IEnvironmentVariableService, { collections: new Map(), mergedCollection: new MergedEnvironmentVariableCollection(new Map()), onDidChangeCollections: Event.None, refreshCollections: async () => { }, set: () => { }, delete: () => { }, registerCollectionProvider: () => Disposable.None });
 	services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
 	services.registerSingleton(ILifecycleService, () => services.createInstance(DebugTerminalLifecycle, undefined));
+	services.registerSingleton(ITextFileService, () => createTestTextFileService(services.get(IFileService), services.get(IConfigurationService)));
 	using service = services.createInstance(DebugService);
 	const session = await service.startDebugging({ id: 'debug-terminal', name: 'Terminal request', type: 'example', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: { cwd: URI.file('/workspace').fsPath } });
 	try {
