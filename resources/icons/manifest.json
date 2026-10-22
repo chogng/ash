@@ -72,6 +72,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "arrow-swap",
+      "file": "arrow-swap.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "arrow-up",
       "file": "arrow-up.svg",
       "rendering": "symbolic"
@@ -95,6 +100,11 @@
       "id": "bell-slash",
       "file": "bell-slash.svg",
       "rendering": "symbolic"
+    },
+    {
+      "id": "bell-slash-dot",
+      "file": "bell-slash-dot.svg",
+      "rendering": "multicolor"
     },
     {
       "id": "bold",
