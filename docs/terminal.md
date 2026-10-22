@@ -36,7 +36,7 @@ Agent 执行、审批与终端呈现的详细边界以 [Platform Terminal 的前
 
 `TerminalProfileService` 合并执行端发现、自定义与扩展 Profile；`TerminalProfileResolverService` 解析执行端变量、Shell 参数、cwd、环境和图标，实际可执行文件由后端确认。多根工作区新建终端使用活动文件所属目录，无法确定时由用户选择；Split 继承原实例的目录与启动配置。
 
-Windows 执行端从当前用户的 WSL 注册读取发行版，并以独立的 `wsl:<发行版>` 配置保留 `wsl.exe --distribution <发行版>` 的启动参数；同一可执行文件的不同参数不会互相去重。发现期间不启动 WSL，注册信息在该执行服务启动时读取。下拉菜单将 Copilot／Claude 配置独立分组；扩展配置仍由原提供者创建。`TerminalMainContribution` 在执行连接就绪时注册“智能体主机”配置，使用 `terminal.integrated.agentHostProfile`，未配置时回到交互 Shell。断线撤销配置，工作区变更使在途创建失效并回收迟到的实例；重连重新注册，不终止已存在的终端。
+Windows 执行端从当前用户的 WSL 注册读取发行版，并以独立的 `wsl:<发行版>` 配置保留 `wsl.exe --distribution <发行版>` 的启动参数；同一可执行文件的不同参数不会互相去重。发现期间不启动 WSL，注册信息在该执行服务启动时读取。下拉菜单按终端配置列表的顺序统一展示，不按品牌或扩展 ID 优先排序、单独分组；扩展配置仍由原提供者创建。`TerminalMainContribution` 在执行连接就绪时注册“智能体主机”配置，使用 `terminal.integrated.agentHostProfile`，未配置时回到交互 Shell。断线撤销配置，工作区变更使在途创建失效并回收迟到的实例；重连重新注册，不终止已存在的终端。
 
 扩展 Profile 使用标准 `contributes.terminal.profiles` 声明。旧 `contributes.terminalProfiles` 仅在读取边界转换为同一声明；同时提供两种 Profile 声明会被拒绝。静态菜单声明与动态工厂注册分别管理，撤销工厂后不能再调用它，但不会关闭已创建的自供 PTY。
 

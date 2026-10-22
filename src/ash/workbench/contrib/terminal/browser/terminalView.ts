@@ -470,17 +470,13 @@ export class TerminalTitleActions extends Disposable {
 		const command = (id: string, label: string, enabled: boolean, ...args: unknown[]): IAction => ({
 			id, label, tooltip: label, enabled, run: () => this.commandService.executeCommand(id, ...args),
 		});
-		const aiProfiles = this.profiles.filter(profile => /copilot|claude/i.test(profile.title)
-			|| /^extension:(?:github\.copilot-chat|anthropic\.claude-code)\//i.test(profile.profileId));
-		const shellProfiles = this.profiles.filter(profile => !aiProfiles.includes(profile));
 		return Separator.join(
 			[
 				command(TerminalCommandId.New, action.label, action.enabled),
 				command(TerminalCommandId.NewInNewWindow, localize('terminal.newInNewWindow', 'New Terminal Window'), action.enabled),
 				command(TerminalCommandId.Split, localize('terminal.group.splitMenu', 'Split Terminal'), action.enabled && !!canSplit, instance && new InstanceContext(instance)),
 			],
-			aiProfiles.map(profile => terminalProfileMenuAction(profile, profileId => this.createTerminalWithProfile(profileId))),
-			shellProfiles.map(profile => terminalProfileMenuAction(profile, profileId => this.createTerminalWithProfile(profileId))),
+			this.profiles.map(profile => terminalProfileMenuAction(profile, profileId => this.createTerminalWithProfile(profileId))),
 			canSplit ? [new SubmenuAction('split.profile', localize('terminal.title.splitWithProfile', 'Split Terminal with Profile'),
 				this.profiles.map(profile => terminalProfileMenuAction(profile,
 					profileId => this.commandService.executeCommand(TerminalCommandId.Split, new InstanceContext(instance), profileId), TerminalCommandId.Split)))] : [],

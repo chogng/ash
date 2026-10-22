@@ -289,16 +289,19 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	await powerShell.run();
 	await Promise.resolve();
 	assert.deepEqual(createdProfiles, [undefined, "pwsh"]);
-	const copilot = { profileId: 'extension:github.copilot-chat/cli', title: 'Assistant CLI', isDefault: false };
-	titleActions.setProfiles([commandPromptProfile, copilot, powerShellProfile]);
+	const extensionProfiles = [
+		{ profileId: 'extension:github.copilot-chat/cli', title: 'Assistant CLI', isDefault: false },
+		{ profileId: 'extension:anthropic.claude-code/cli', title: 'Claude CLI', isDefault: false },
+	];
+	const profiles = [commandPromptProfile, ...extensionProfiles, powerShellProfile];
+	titleActions.setProfiles(profiles);
 	toolbar.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-dropdown > .ash-button')!.click();
-	const aiIndex = shownProfileActions.findIndex(action => action.id.endsWith(copilot.profileId));
-	const shellIndex = shownProfileActions.findIndex(action => action.id.endsWith('.cmd'));
-	assert.equal(aiIndex, 4);
-	assert.equal(shownProfileActions[aiIndex + 1]?.id, 'ash.actions.separator');
-	assert.ok(shellIndex > aiIndex);
-	await shownProfileActions[aiIndex]!.run();
-	assert.deepEqual(createdProfiles, [undefined, 'pwsh', copilot.profileId]);
+	assert.deepEqual(shownProfileActions.slice(4, 4 + profiles.length).map(action => action.id),
+		profiles.map(profile => `${TerminalCommandId.NewWithProfile}.${profile.profileId}`));
+	for (const profile of extensionProfiles) {
+		await shownProfileActions.find(action => action.id === `${TerminalCommandId.NewWithProfile}.${profile.profileId}`)!.run();
+	}
+	assert.deepEqual(createdProfiles, [undefined, 'pwsh', ...extensionProfiles.map(profile => profile.profileId)]);
 	titleActions.setActiveInstance(undefined, 'title');
 	assert.equal(contextKeyService.getValue(TerminalHasActiveInstanceContext.key), true);
 	titleActions.dispose();

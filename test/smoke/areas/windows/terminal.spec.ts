@@ -25,22 +25,27 @@ const windowsPowerShellSettings = process.platform === 'win32' ? {
 test.use({ electronUserSettings: windowsPowerShellSettings });
 
 for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal profile dropdown (${locale})`, () => {
-	const shell = {
+	const platform = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'osx' : 'linux';
+	const shell = process.platform === 'win32' ? {
 		path: join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
 		args: ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'RemoteSigned'],
+	} : {
+		path: '/bin/bash',
+		// Skip user startup files while allowing Ash's injected shell integration.
+		args: ['--login', '--noprofile'],
 	};
 	test.use({
 		electronUserSettings: {
 			...windowsPowerShellSettings,
 			'workbench.locale': locale,
 			'window.menuStyle': 'custom',
-			'terminal.integrated.profiles.windows': { 'Smoke PowerShell': shell, 'Copilot Test CLI': shell },
-			'terminal.integrated.agentHostProfile.windows': { ...shell, env: { ASH_AGENT_PROFILE: 'agent-shell' } },
+			[`terminal.integrated.profiles.${platform}`]: { 'Smoke Shell': shell, 'Copilot Test CLI': shell, 'Claude Test CLI': shell },
+			[`terminal.integrated.defaultProfile.${platform}`]: 'Smoke Shell',
+			[`terminal.integrated.agentHostProfile.${platform}`]: { ...shell, env: { ASH_AGENT_PROFILE: 'agent-shell' } },
 		}
 	});
 
-	test('groups AI profiles and launches the agent host shell from the keyboard menu', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace, driver }, testInfo) => {
-		test.skip(process.platform !== 'win32', 'Windows shell discovery and launch');
+	test('keeps configured profiles together and launches the agent host shell from the keyboard menu', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace, driver }, testInfo) => {
 		const page = workbench.page;
 		const zh = locale === 'zh-CN';
 		await workbench.quickaccess.runCommand('workbench.action.terminal.focus');
@@ -49,13 +54,16 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal profile d
 		await trigger.focus();
 		await trigger.press('ArrowDown');
 		const menu = page.getByRole('menu');
-		const ai = menu.getByRole('menuitem', { name: 'Copilot Test CLI', exact: true });
-		await expect(ai).toBeVisible();
+		await expect(menu.getByRole('menuitem', { name: 'Copilot Test CLI', exact: true })).toBeVisible();
 		const entries = await menu.locator('[role="menuitem"], [role="separator"]').evaluateAll(rows => rows.map(row => ({
 			role: row.getAttribute('role'), label: row.getAttribute('aria-label') ?? row.textContent?.trim(),
 		})));
-		const aiIndex = entries.findIndex(entry => entry.label === 'Copilot Test CLI');
-		expect(entries[aiIndex + 1]?.role).toBe('separator');
+		const shellIndex = entries.findIndex(entry => entry.label?.startsWith('Smoke Shell'));
+		expect(shellIndex).toBeGreaterThanOrEqual(0);
+		expect(entries.slice(shellIndex + 1, shellIndex + 3)).toEqual([
+			{ role: 'menuitem', label: 'Copilot Test CLI' },
+			{ role: 'menuitem', label: 'Claude Test CLI' },
+		]);
 		await page.keyboard.press('Escape');
 		await expect(trigger).toBeFocused();
 		await trigger.press('ArrowDown');
