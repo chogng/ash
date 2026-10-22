@@ -685,3 +685,57 @@ async fn publication_sets_upstream_and_rejects_stale_heads_and_same_oid_branch_s
         head
     );
 }
+
+#[tokio::test]
+async fn reference_state_shares_one_remote_capture_with_its_catalog() {
+    #[derive(Debug, Default)]
+    struct Processes(std::sync::Mutex<Vec<crate::GitProcessTiming>>);
+    impl crate::GitProcessObserver for Processes {
+        fn observe(&self, timing: crate::GitProcessTiming) {
+            self.0.lock().unwrap().push(timing);
+        }
+    }
+    let source = TestRepository::init();
+    source.write("tracked.txt", "initial\n");
+    source.commit_all("initial");
+    source.git(&["tag", "v1"]);
+    source.git(&[
+        "remote",
+        "add",
+        "team/backup",
+        "https://example.invalid/repo.git",
+    ]);
+    source.git(&["config", "remote.team/backup.pushurl", "no_push"]);
+    source.git(&["config", "branch.main.remote", "team/backup"]);
+    source.git(&["config", "branch.main.merge", "refs/heads/main"]);
+    source.git(&["update-ref", "refs/remotes/team/backup/main", "HEAD"]);
+    source.git(&[
+        "symbolic-ref",
+        "refs/remotes/team/backup/HEAD",
+        "refs/remotes/team/backup/main",
+    ]);
+    let client = GitClient::system();
+    let repository = client.open_repository(source.root()).await.unwrap();
+    let expected_catalog = client.catalog(&repository).await.unwrap();
+    let processes = std::sync::Arc::new(Processes::default());
+    let state = client
+        .with_process_observer(processes.clone())
+        .reference_state(&repository)
+        .await
+        .unwrap();
+    assert_eq!(state.catalog, expected_catalog);
+    assert!(state.catalog.upstream_read_only);
+    assert_eq!(state.base_reference.unwrap().name(), "team/backup/main");
+    assert_eq!(state.remotes[0].push_urls(), ["no_push"]);
+    assert_eq!(
+        processes
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|p| matches!(p.kind, crate::GitProcessKind::Remote))
+            .count(),
+        3,
+        "one remote-name query and its fetch/push URLs must serve both consumers"
+    );
+}

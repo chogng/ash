@@ -74,9 +74,15 @@ export interface TextModelWorkingCopyReference extends TextModelReference {
 	restoreBackup(content: string): void;
 }
 
+/** Per-acquisition presentation policy; model lifetime and syntax preparation remain service-owned. */
+export interface TextModelAcquireOptions {
+	/** A hidden pane may build in parallel with syntax setup, then await tokenization.whenReady before publication. */
+	readonly waitForSyntax?: boolean;
+}
+
 /** Resolves resource identities to reference-counted text models and their persisted baseline. */
 export interface ITextModelResourceService<TInput extends TextModelInput = TextModelInput, TReference extends TextModelReference = TextModelReference> extends IDisposable {
-	acquire(input: TInput, signal: AbortSignal): Promise<TReference>;
+	acquire(input: TInput, signal: AbortSignal, options?: TextModelAcquireOptions): Promise<TReference>;
 }
 
 /** Shared open file models and their resource and language lifecycle. */

@@ -13,6 +13,7 @@ import { IConfigurationService } from '../../../platform/configuration/common/co
 import { IEditorPart } from '../../browser/parts/editor/editorPart.js';
 import { ICodeEditorService } from '../../../editor/browser/services/codeEditorService.js';
 import type { ICodeEditor } from '../../../editor/browser/editorBrowser.js';
+import { dirname } from '../../../base/common/resources.js';
 
 /** Routes package-declared capabilities without exposing the client's backend connection. */
 export class MainThreadExtensionBackend extends Disposable {
@@ -21,6 +22,7 @@ export class MainThreadExtensionBackend extends Disposable {
 	private sequence = 0;
 	private resetAfter = 0;
 	private editorChangedAfter = 0;
+	private editorFoldersChangedAfter = 0;
 	private discardedThrough = 0;
 	private readonly editorListeners = this._register(new DisposableMap<ICodeEditor, DisposableStore>());
 	private readonly events: {
@@ -60,15 +62,28 @@ export class MainThreadExtensionBackend extends Disposable {
 		this._register(toDisposable(() => connectionChanged.dispose()));
 		this._register(workspace.onDidChangeWorkspace(invalidateDiscovery));
 		this._register(configuration.onDidChangeConfiguration(invalidateDiscovery));
-		this._register(editors.onDidChangeEditors(event => {
-			if (event.kind !== 'groupChanged' || event.event.kind !== 'editorStateChanged') invalidateDiscovery();
-		}));
 		// Cursor and text changes wake blame without invalidating repository discovery.
 		// Coalesce typing/selection bursts; never serialize a document merely to signal it.
 		const editorChanged = this._register(new RunOnceScheduler(() => {
 			this.editorChangedAfter = ++this.sequence;
 			this.changed.fire(undefined);
 		}, 75));
+		const editorFolders = () => new Set(editors.groups.flatMap(group => group.inputs.map(input =>
+			dirname(input.resource).with({ query: '', fragment: '' }).toString())));
+		let previousFolders = editorFolders();
+		this._register(editors.onDidChangeEditors(event => {
+			if (event.kind === 'groupChanged' && event.event.kind === 'editorStateChanged') return;
+			const folders = editorFolders();
+			// Separate editor discovery inputs from workspace/configuration resets.
+			// Providers can skip discovery for files inside repositories they already own.
+			if (folders.size !== previousFolders.size || [...folders].some(folder => !previousFolders.has(folder))) {
+				previousFolders = folders;
+				this.editorFoldersChangedAfter = ++this.sequence;
+				this.changed.fire(undefined);
+			} else {
+				editorChanged.schedule();
+			}
+		}));
 		const trackEditor = (editor: ICodeEditor) => {
 			const listeners = new DisposableStore();
 			this.editorListeners.set(editor, listeners);
@@ -104,6 +119,7 @@ export class MainThreadExtensionBackend extends Disposable {
 			return normalizeExtensionHostPayload({
 				sequence: this.sequence, connection: state, generation: this.connection.connectionGeneration,
 				reset: after < this.resetAfter || after < this.discardedThrough,
+				editorFoldersChanged: after < this.editorFoldersChangedAfter,
 				events: this.events.filter(entry => entry.sequence > after && grant.notifications?.includes(entry.method)).map(entry => entry.event),
 				folders: this.workspace.getWorkspace().folders.map(folder => ({ id: folder.id, name: folder.name, uri: folder.uri.toString() })),
 			});
@@ -168,7 +184,7 @@ export class MainThreadExtensionBackend extends Disposable {
 		try {
 			// Subscribe before checking the retained history so no notification can
 			// fall between the caller's last sequence and the start of its wait.
-			if (after < this.resetAfter || after < this.editorChangedAfter || after < this.discardedThrough
+			if (after < this.resetAfter || after < this.editorChangedAfter || after < this.editorFoldersChangedAfter || after < this.discardedThrough
 				|| this.events.some(entry => entry.sequence > after && notifications.includes(entry.method))) return;
 			await raceCancellationError(waiting, AbortSignal.any([signal, this.stopped.signal]));
 		} finally {

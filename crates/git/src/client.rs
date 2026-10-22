@@ -8,6 +8,8 @@ use std::process::ExitStatus;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
+use std::time::SystemTime;
 
 use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncRead;
@@ -24,6 +26,12 @@ use tokio::time::timeout;
 
 use crate::GitError;
 use crate::GitResult;
+
+// Bound retained children across repository owners. Saturation uses the normal
+// one-shot Git path rather than queuing UI reads behind inactive repositories.
+const MAX_INDEX_BATCH_PROCESSES: usize = 8;
+static INDEX_BATCH_PROCESSES: std::sync::LazyLock<Arc<tokio::sync::Semaphore>> =
+    std::sync::LazyLock::new(|| Arc::new(tokio::sync::Semaphore::new(MAX_INDEX_BATCH_PROCESSES)));
 
 const DEFAULT_QUERY_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_MUTATION_TIMEOUT: Duration = Duration::from_secs(30);
@@ -118,6 +126,120 @@ pub struct GitClient {
     similarity_threshold: u8,
     askpass: Option<GitAskPass>,
     version: Arc<OnceCell<GitVersion>>,
+    process_observer: Option<Arc<dyn GitProcessObserver>>,
+    index_batch: Arc<tokio::sync::Mutex<Option<IndexBatchReader>>>,
+    pub(crate) content_cache: Arc<std::sync::Mutex<crate::working_copy::ContentCache>>,
+}
+
+/// Content-free categories; command arguments and repository paths never reach observers.
+#[derive(Clone, Copy, Debug)]
+pub enum GitProcessKind {
+    Version,
+    Show,
+    Status,
+    RevParse,
+    CatFile,
+    Diff,
+    ForEachRef,
+    Config,
+    Remote,
+    Stash,
+    SymbolicRef,
+    Other,
+}
+
+impl GitProcessKind {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Version => "version",
+            Self::Show => "show",
+            Self::Status => "status",
+            Self::RevParse => "rev-parse",
+            Self::CatFile => "cat-file",
+            Self::Diff => "diff",
+            Self::ForEachRef => "for-each-ref",
+            Self::Config => "config",
+            Self::Remote => "remote",
+            Self::Stash => "stash",
+            Self::SymbolicRef => "symbolic-ref",
+            Self::Other => "other",
+        }
+    }
+}
+
+/// Lifetime of an owned process handle, including spawn and pipe capture.
+/// For a cancelled stream this ends when the handle is dropped; OS reaping may finish later.
+#[derive(Clone, Debug)]
+pub struct GitProcessTiming {
+    pub kind: GitProcessKind,
+    pub started: SystemTime,
+    pub spawn_elapsed: Duration,
+    pub elapsed: Duration,
+}
+
+/// Optional host diagnostics; the Git domain remains independent of a telemetry implementation.
+pub trait GitProcessObserver: std::fmt::Debug + Send + Sync {
+    fn observe(&self, timing: GitProcessTiming);
+}
+
+struct IndexBatchReader {
+    git_dir: PathBuf,
+    version: crate::working_copy::IndexVersion,
+    stream: GitQueryStream,
+    // Release capacity after dropping the child/group that occupies it.
+    _permit: tokio::sync::OwnedSemaphorePermit,
+}
+
+impl std::fmt::Debug for IndexBatchReader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IndexBatchReader").finish_non_exhaustive()
+    }
+}
+
+struct GitProcessMeasurement {
+    observer: Arc<dyn GitProcessObserver>,
+    kind: GitProcessKind,
+    started: SystemTime,
+    clock: Instant,
+    spawned: Option<Duration>,
+}
+
+impl GitProcessMeasurement {
+    fn new(observer: Arc<dyn GitProcessObserver>, invocation: &GitInvocation) -> Self {
+        let kind = match invocation.args.first().and_then(|arg| arg.to_str()) {
+            Some("--version") => GitProcessKind::Version,
+            Some("show") => GitProcessKind::Show,
+            Some("status") => GitProcessKind::Status,
+            Some("rev-parse") => GitProcessKind::RevParse,
+            Some("cat-file") => GitProcessKind::CatFile,
+            Some("diff") => GitProcessKind::Diff,
+            Some("for-each-ref") => GitProcessKind::ForEachRef,
+            Some("config") => GitProcessKind::Config,
+            Some("remote") => GitProcessKind::Remote,
+            Some("stash") => GitProcessKind::Stash,
+            Some("symbolic-ref") => GitProcessKind::SymbolicRef,
+            _ => GitProcessKind::Other,
+        };
+        Self {
+            observer,
+            kind,
+            started: SystemTime::now(),
+            clock: Instant::now(),
+            spawned: None,
+        }
+    }
+}
+
+impl Drop for GitProcessMeasurement {
+    fn drop(&mut self) {
+        let elapsed = self.clock.elapsed();
+        self.observer.observe(GitProcessTiming {
+            kind: self.kind,
+            started: self.started,
+            spawn_elapsed: self.spawned.unwrap_or(elapsed),
+            elapsed,
+        });
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -177,12 +299,18 @@ impl GitClient {
             similarity_threshold: 50,
             askpass: None,
             version: Arc::new(OnceCell::new()),
+            process_observer: None,
+            content_cache: Arc::default(),
+            index_batch: Arc::default(),
         }
     }
 
     /// Changes validated execution limits without resolving the executable. Optional Git
     /// workflows should report a missing installation when invoked, rather than at host startup.
     pub fn with_limits(mut self, limits: GitExecutionLimits) -> Self {
+        if self.limits != limits {
+            self.index_batch = Arc::default();
+        }
         self.limits = limits;
         self
     }
@@ -201,6 +329,9 @@ impl GitClient {
             similarity_threshold: 50,
             askpass: None,
             version: Arc::new(OnceCell::new()),
+            process_observer: None,
+            content_cache: Arc::default(),
+            index_batch: Arc::default(),
         })
     }
 
@@ -212,6 +343,24 @@ impl GitClient {
                 .map_err(|source| GitError::io("locate system Git", source)),
             ExecutableSource::Explicit(path) => Ok(path.clone()),
         }
+    }
+
+    pub(crate) fn uses_system_executable(&self) -> bool {
+        matches!(&self.executable, ExecutableSource::System(_))
+    }
+
+    /// Reuses a repository owner's derived reads for the same system Git policy.
+    /// Explicit executables remain isolated; invocation credentials are never copied.
+    pub fn with_shared_reads(mut self, owner: &Self) -> Self {
+        if self.uses_system_executable() && owner.uses_system_executable() {
+            self.content_cache = Arc::clone(&owner.content_cache);
+            self.version = Arc::clone(&owner.version);
+            // A request-bound broker must not be retained by a reusable child.
+            if self.askpass.is_none() && owner.askpass.is_none() && self.limits == owner.limits {
+                self.index_batch = Arc::clone(&owner.index_batch);
+            }
+        }
+        self
     }
 
     /// Installs interaction only for this invocation's client, without modifying Git config.
@@ -250,6 +399,162 @@ impl GitClient {
 
     pub fn limits(&self) -> GitExecutionLimits {
         self.limits
+    }
+
+    /// Shares a host observer with cloned clients without changing process execution policy.
+    pub fn with_process_observer(mut self, observer: Arc<dyn GitProcessObserver>) -> Self {
+        self.process_observer = Some(observer);
+        self
+    }
+
+    pub(crate) async fn read_index_batch(
+        &self,
+        repository: &crate::GitRepository,
+        path: &Path,
+        version: crate::working_copy::IndexVersion,
+        maximum_bytes: usize,
+    ) -> GitResult<Option<Vec<u8>>> {
+        let timeout_duration = self.limits.query_timeout;
+        timeout(timeout_duration, async {
+            let mut pool = self.index_batch.lock().await;
+            // Taking ownership before await makes cancellation poison the partial
+            // stream by dropping it, rather than handing unread bytes to a waiter.
+            let existing = pool
+                .take()
+                .filter(|batch| batch.git_dir == repository.git_dir() && batch.version == version);
+            let mut batch = match existing {
+                Some(batch) => batch,
+                None => {
+                    let Ok(permit) = Arc::clone(&INDEX_BATCH_PROCESSES).try_acquire_owned() else {
+                        let contents = self
+                            .read_content_object(
+                                repository,
+                                path,
+                                OsString::from(":"),
+                                maximum_bytes,
+                            )
+                            .await?;
+                        if crate::working_copy::index_version(repository).as_ref() != Some(&version)
+                        {
+                            return Err(GitError::IndexChanged);
+                        }
+                        return Ok(contents);
+                    };
+                    let mut invocation = GitInvocation::query(
+                        repository.worktree_root(),
+                        ["cat-file", "--batch"],
+                        FsmonitorOverride::Disabled,
+                    );
+                    invocation.stdin = Some(Vec::new());
+                    let mut client = self.clone();
+                    // A persistent process lifetime is not one RPC's Git wall time.
+                    client.process_observer = None;
+                    IndexBatchReader {
+                        _permit: permit,
+                        git_dir: repository.git_dir().to_owned(),
+                        version: version.clone(),
+                        stream: client.start_stream(invocation).await?,
+                    }
+                }
+            };
+            let stream = &mut batch.stream;
+            #[cfg(not(windows))]
+            let path_bytes = path.as_os_str().as_encoded_bytes();
+            #[cfg(windows)]
+            let normalized = path
+                .to_str()
+                .ok_or_else(|| GitError::invalid_output(&stream.command, "non-UTF-8 batch path"))?
+                .replace('\\', "/");
+            #[cfg(windows)]
+            let path_bytes = normalized.as_bytes();
+            let mut request = Vec::with_capacity(path.as_os_str().len() + 2);
+            request.push(b':');
+            request.extend_from_slice(path_bytes);
+            request.push(b'\n');
+            let stdin = stream.stdin.as_mut().expect("batch stdin is captured");
+            stdin
+                .write_all(&request)
+                .await
+                .map_err(|e| GitError::io("write Git batch request", e))?;
+            stdin
+                .flush()
+                .await
+                .map_err(|e| GitError::io("flush Git batch request", e))?;
+            // Framing has its own bounded budget. A tiny content limit must not
+            // reject a valid small blob merely because its OID header is longer.
+            stream.max_output_bytes = request.len().saturating_add(8).max(128);
+            stream.bytes_read = 0;
+            let header = stream.next_delimited(b'\n').await?.ok_or_else(|| {
+                GitError::invalid_output(&stream.command, "batch header was missing")
+            })?;
+            let result = if header.ends_with(b" missing") {
+                let expected = [&request[..request.len() - 1], b" missing"].concat();
+                if header != expected {
+                    return Err(GitError::invalid_output(
+                        &stream.command,
+                        "batch missing result does not match the requested path",
+                    ));
+                }
+                None
+            } else {
+                let fields = header.split(|b| *b == b' ').collect::<Vec<_>>();
+                if fields.len() != 3
+                    || fields[1] != b"blob"
+                    || !matches!(fields[0].len(), 40 | 64)
+                    || !fields[0].iter().all(u8::is_ascii_hexdigit)
+                {
+                    return Err(GitError::invalid_output(
+                        &stream.command,
+                        "batch result is not a blob",
+                    ));
+                }
+                let size = std::str::from_utf8(fields[2])
+                    .ok()
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .ok_or_else(|| {
+                        GitError::invalid_output(&stream.command, "batch object size is invalid")
+                    })?;
+                let limit = maximum_bytes.min(self.limits.max_output_bytes);
+                if size > limit {
+                    return Err(GitError::OutputLimitExceeded {
+                        command: stream.command.clone(),
+                        stream: "stdout",
+                        limit_bytes: limit,
+                    });
+                }
+                let mut contents = vec![0; size];
+                stream
+                    .stdout
+                    .read_exact(&mut contents)
+                    .await
+                    .map_err(|e| GitError::io("read Git batch content", e))?;
+                if stream
+                    .stdout
+                    .read_u8()
+                    .await
+                    .map_err(|e| GitError::io("read Git batch terminator", e))?
+                    != b'\n'
+                {
+                    return Err(GitError::invalid_output(
+                        &stream.command,
+                        "batch content terminator is invalid",
+                    ));
+                }
+                Some(contents)
+            };
+            // A process caches its index. It may be reused only for the verified
+            // generation it actually read, including checks around the first query.
+            if crate::working_copy::index_version(repository).as_ref() != Some(&version) {
+                return Err(GitError::IndexChanged);
+            }
+            *pool = Some(batch);
+            Ok(result)
+        })
+        .await
+        .map_err(|_| GitError::TimedOut {
+            command: "git cat-file --batch".into(),
+            timeout: timeout_duration,
+        })?
     }
 
     /// Clones into a new child of an existing destination directory. Concurrent callers reserve
@@ -623,10 +928,17 @@ impl GitClient {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
+        self.start_stream(GitInvocation::query(cwd, args, FsmonitorOverride::Disabled))
+            .await
+    }
+
+    async fn start_stream(&self, invocation: GitInvocation) -> GitResult<GitQueryStream> {
         self.check_supported().await?;
-        let invocation = GitInvocation::query(cwd, args, FsmonitorOverride::Disabled);
         let (mut command, command_for_log) = self.configure_command(&invocation)?;
-        command.stdin(Stdio::null());
+        let mut measurement = self
+            .process_observer
+            .as_ref()
+            .map(|observer| GitProcessMeasurement::new(observer.clone(), &invocation));
         #[cfg(windows)]
         let job = pty::JobObject::create()
             .map_err(|source| GitError::io("create Git process job", source))?;
@@ -638,8 +950,12 @@ impl GitClient {
         let mut child = command
             .spawn()
             .map_err(|source| GitError::io("spawn Git process", source))?;
+        if let Some(measurement) = &mut measurement {
+            measurement.spawned = Some(measurement.clock.elapsed());
+        }
         #[cfg(unix)]
         let group = GitProcessGroup(Some(child.id().expect("new Git process has an ID")));
+        let stdin = child.stdin.take();
         let stdout = child
             .stdout
             .take()
@@ -651,6 +967,7 @@ impl GitClient {
         let stderr_task = tokio::spawn(read_bounded(stderr, self.limits.max_output_bytes));
         Ok(GitQueryStream {
             child,
+            stdin,
             #[cfg(unix)]
             group,
             #[cfg(windows)]
@@ -661,6 +978,7 @@ impl GitClient {
             timeout: invocation.profile.timeout(self.limits),
             max_output_bytes: self.limits.max_output_bytes,
             bytes_read: 0,
+            _measurement: measurement,
         })
     }
 
@@ -738,6 +1056,10 @@ impl GitClient {
         let timeout_duration = invocation.profile.timeout(self.limits);
         let (mut command, command_for_log) = self.configure_command(&invocation)?;
 
+        let mut measurement = self
+            .process_observer
+            .as_ref()
+            .map(|observer| GitProcessMeasurement::new(observer.clone(), &invocation));
         #[cfg(windows)]
         let job = pty::JobObject::create()
             .map_err(|source| GitError::io("create Git process job", source))?;
@@ -749,6 +1071,9 @@ impl GitClient {
         let mut child = command
             .spawn()
             .map_err(|source| GitError::io("spawn Git process", source))?;
+        if let Some(measurement) = &mut measurement {
+            measurement.spawned = Some(measurement.clock.elapsed());
+        }
         #[cfg(unix)]
         let mut group = GitProcessGroup(Some(child.id().expect("new Git process has an ID")));
         let stdout = child
@@ -967,6 +1292,7 @@ pub(crate) struct GitCommandOutput {
 
 pub(crate) struct GitQueryStream {
     child: Child,
+    stdin: Option<ChildStdin>,
     #[cfg(unix)]
     group: GitProcessGroup,
     #[cfg(windows)]
@@ -977,6 +1303,7 @@ pub(crate) struct GitQueryStream {
     timeout: Duration,
     max_output_bytes: usize,
     bytes_read: usize,
+    _measurement: Option<GitProcessMeasurement>,
 }
 
 impl GitQueryStream {
@@ -985,6 +1312,10 @@ impl GitQueryStream {
     }
 
     pub(crate) async fn next_field(&mut self) -> GitResult<Option<Vec<u8>>> {
+        self.next_delimited(0).await
+    }
+
+    async fn next_delimited(&mut self, delimiter: u8) -> GitResult<Option<Vec<u8>>> {
         let mut field = Vec::new();
         loop {
             let chunk = timeout(self.timeout, self.stdout.fill_buf())
@@ -1000,10 +1331,10 @@ impl GitQueryStream {
                 }
                 return Err(GitError::invalid_output(
                     &self.command,
-                    "stream ended inside a NUL-delimited field",
+                    "stream ended inside a delimited field",
                 ));
             }
-            let terminator = chunk.iter().position(|byte| *byte == 0);
+            let terminator = chunk.iter().position(|byte| *byte == delimiter);
             let data_len = terminator.unwrap_or(chunk.len());
             let consumed = data_len + usize::from(terminator.is_some());
             let next_size =

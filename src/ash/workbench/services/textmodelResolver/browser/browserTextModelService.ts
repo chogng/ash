@@ -6,8 +6,8 @@ import { Disposable, toDisposable, type IDisposable } from "../../../../base/com
 import { type URI } from "../../../../base/common/uri.js";
 import { Schemas } from '../../../../base/common/network.js';
 import { runWhenWindowIdle } from "../../../../base/browser/dom.js";
-import { TextModelConflictError, TextModelSaveCompletionError, type TextModelInput, type TextModelReference, type IFileTextModelService, type ITextModelSaveCompletionParticipant, type TextModelSaveCompletion } from "../common/textModelResourceService.js";
-import { TextResourceConflictError, type TextResourceChangeEvent, type TextResourceContent, type ITextResourceStore } from "../common/textResourceStore.js";
+import { TextModelConflictError, TextModelSaveCompletionError, type TextModelInput, type TextModelReference, type TextModelAcquireOptions, type IFileTextModelService, type ITextModelSaveCompletionParticipant, type TextModelSaveCompletion } from "../common/textModelResourceService.js";
+import { TextResourceConflictError, type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type ITextResourceStore } from "../common/textResourceStore.js";
 import { ModelService } from "../../../../editor/common/services/modelService.js";
 import { createPieceTreeTextBuffer } from "../../../../editor/common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js";
 import { EndOfLineSequence, EndOfLinePreference } from "../../../../editor/common/model.js";
@@ -57,6 +57,14 @@ interface TextModelRefresh {
 	promise: Promise<void>;
 }
 
+interface TextModelResolution {
+	readonly request: TextResourceResolveRequest;
+	readonly controller: AbortController;
+	readonly promise: Promise<TextResourceContent>;
+	waiters: number;
+	settled: boolean;
+}
+
 interface SaveRecoveryState {
 	readonly identityLifetime: IDisposable;
 	readonly resource: URI;
@@ -82,6 +90,7 @@ export interface BrowserTextModelServiceOptions {
 /** Shares text models by provider-aware resource identity while references are open. */
 export class BrowserTextModelService extends Disposable implements IFileTextModelService {
 	private readonly entries = new Map<string, TextModelEntry>();
+	private readonly resolutions = new Map<string, Set<TextModelResolution>>();
 	// Failed recovery outlives forced pane disposal; retrying the same URI owns its resolution.
 	private readonly saveRecovery = new Map<string, SaveRecoveryState>();
 	private readonly saveParticipants = new Set<ITextModelSaveParticipant>();
@@ -184,7 +193,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		}
 	}
 
-	async acquire(input: TextModelInput, signal: AbortSignal): Promise<TextModelReference> {
+	async acquire(input: TextModelInput, signal: AbortSignal, options?: TextModelAcquireOptions): Promise<TextModelReference> {
 		this.ensureAlive();
 		validateInput(input);
 		throwIfCancelled(signal, "Text model acquisition was cancelled");
@@ -196,9 +205,9 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		this.ensureAlive();
 		const key = resource.toString();
 		const current = this.findEntry(resource);
-		if (current) return this.acquireReference(current[0], current[1], signal);
+		if (current) return this.acquireReference(current[0], current[1], signal, options);
 
-		const content = await this.resourceStore.resolve({
+		const content = await this.resolveContent({
 			resource,
 			languageId: input.languageId ?? this.options.languageService?.guessLanguageIdByFilepathOrFirstLine(resource) ?? undefined,
 			...(input.initialText === undefined ? {} : { bootstrapText: input.initialText }),
@@ -212,7 +221,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			// A concurrent editor load may have used a broader authority. Do not replace
 			// this operation's checked content with that newly published model.
 			if (input.readFile) throw new TextModelConflictError(resource);
-			return this.acquireReference(concurrent[0], concurrent[1], signal);
+			return this.acquireReference(concurrent[0], concurrent[1], signal, options);
 		}
 		const languageSelection = this.options.languageService
 			? input.languageId !== undefined
@@ -275,10 +284,14 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		};
 		this.entries.set(key, entry);
 		this.modelAdded.fire(model);
-		return this.acquireReference(key, entry, signal);
+		return this.acquireReference(key, entry, signal, options);
 	}
 
 	protected override disposeCore(): void {
+		for (const operations of this.resolutions.values()) {
+			for (const operation of operations) operation.controller.abort();
+		}
+		this.resolutions.clear();
 		this.saveParticipants.clear();
 		this.saveCompletionParticipants.clear();
 		for (const recovery of this.saveRecovery.values()) recovery.identityLifetime.dispose();
@@ -291,11 +304,12 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		super.disposeCore();
 	}
 
-	private async acquireReference(key: string, entry: TextModelEntry, signal: AbortSignal): Promise<TextModelReference> {
+	private async acquireReference(key: string, entry: TextModelEntry, signal: AbortSignal, options?: TextModelAcquireOptions): Promise<TextModelReference> {
 		const reference = this.reference(key, entry);
 		try {
-			// Prepare lexical support before handing the model to its viewport; full-document analysis is not a file-loading gate.
-			await entry.model.tokenization.whenReady(signal);
+			// Ordinary callers receive lexical support before the viewport. Hidden
+			// panes can overlap their construction and retain this gate at publication.
+			if (options?.waitForSyntax !== false) await entry.model.tokenization.whenReady(signal);
 			throwIfCancelled(signal, "Text model acquisition was cancelled");
 			return reference;
 		} catch (error) {
@@ -630,6 +644,40 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		// identity, while the model can still answer version/text requests.
 		this.modelRemoved.fire(entry.model);
 		entry.model.dispose();
+	}
+
+	private async resolveContent(request: TextResourceResolveRequest, signal: AbortSignal): Promise<TextResourceContent> {
+		// A caller-specific read can carry a narrower authorization scope. It must
+		// perform its own check and cannot join another caller's file operation.
+		if (request.readFile) return this.resourceStore.resolve(request, signal);
+		const key = request.resource.toString();
+		const operations = this.resolutions.get(key) ?? new Set<TextModelResolution>();
+		let operation = [...operations].find(value => !value.controller.signal.aborted
+			&& value.request.bootstrapText === request.bootstrapText
+			&& value.request.languageId === request.languageId && value.request.encoding === request.encoding);
+		if (!operation) {
+			const controller = new AbortController();
+			operation = {
+				request, controller, waiters: 0, settled: false,
+				promise: Promise.resolve().then(() => this.resourceStore.resolve(request, controller.signal)),
+			};
+			operations.add(operation);
+			this.resolutions.set(key, operations);
+			const current = operation;
+			const settle = () => {
+				current.settled = true;
+				operations.delete(current);
+				if (operations.size === 0 && this.resolutions.get(key) === operations) this.resolutions.delete(key);
+			};
+			void current.promise.then(settle, settle);
+		}
+		operation.waiters++;
+		try {
+			return await raceCancellationError(operation.promise, signal);
+		} finally {
+			operation.waiters--;
+			if (operation.waiters === 0 && !operation.settled) operation.controller.abort();
+		}
 	}
 
 	private ensureEntryAlive(entry: TextModelEntry): void {

@@ -70,6 +70,46 @@ fn rpc_span_includes_admission_time_and_exports_wait_durations() {
 }
 
 #[test]
+fn rpc_correlation_and_nested_intervals_keep_the_request_context() {
+    let captured = Captured::default();
+    let telemetry = Telemetry::with_exporter(Diagnostics::default(), captured.clone());
+    let span = telemetry.start(Activity::Rpc);
+    span.record_rpc("git/changeFile", u64::MAX, 42);
+    super::measure_current("git.repository_lock", || {
+        super::measure_current("git.runtime_lock", || {});
+    });
+    let started = SystemTime::now();
+    span.record_interval("show", started, Duration::from_micros(350));
+    span.finish(Outcome::Succeeded);
+    telemetry.flush().unwrap();
+    let spans = captured.0.lock().unwrap();
+    let rpc = &spans[0];
+    assert!(
+        rpc.attributes
+            .contains(&KeyValue::new("rpc.method", "git/changeFile"))
+    );
+    assert!(
+        rpc.attributes
+            .contains(&KeyValue::new("rpc.connection_id", u64::MAX.to_string()))
+    );
+    assert!(
+        rpc.attributes
+            .contains(&KeyValue::new("rpc.request_id", "42"))
+    );
+    for name in ["git.repository_lock", "git.runtime_lock", "show"] {
+        assert!(rpc.events.iter().any(|event| event.name == name));
+    }
+    let process = rpc
+        .events
+        .iter()
+        .find(|event| event.name == "show")
+        .unwrap();
+    assert_eq!(process.timestamp, started);
+    assert_eq!(process.attributes, [KeyValue::new("duration_us", 350_i64)]);
+    assert!(!Context::current().span().span_context().is_valid());
+}
+
+#[test]
 fn outbound_trace_preserves_the_request_parent_on_the_writer_thread() {
     let captured = Captured::default();
     let telemetry = Telemetry::with_exporter(Diagnostics::default(), captured.clone());

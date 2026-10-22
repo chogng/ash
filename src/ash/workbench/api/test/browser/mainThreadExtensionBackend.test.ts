@@ -22,10 +22,11 @@ import type { IAppServerApi, IServerEventApi } from '../../../../platform/agentH
 import type { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ConfigurationTarget, type IConfigurationChangeEvent, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { MainThreadExtensionBackend } from '../../browser/mainThreadExtensionBackend.js';
+import type { EditorPartChangeEvent } from '../../../services/editor/common/editorState.js';
 
 const source = { extensionId: 'ash.git', activationGeneration: 1, incarnation: 1 };
 const manifest = { ashFrontend: { capabilities: { 'git.repository': { methods: { read: { route: 'config/read', fields: [], resultFields: ['revision', 'git', 'gitConfigured'] }, write: { route: 'config/update', fields: ['commandId', 'expectedRevision', 'git'] }, transport: { route: 'git/transport', cancellationRoute: 'git/transport/cancel', fields: ['operationId'] } }, notifications: ['config/changed'] } } } };
-function fixture(sourceKind = 'builtIn', request?: IExtensionBackendApi['request'], progress?: IProgressService, editor?: ICodeEditor) {
+function fixture(sourceKind = 'builtIn', request?: IExtensionBackendApi['request'], progress?: IProgressService, editor?: ICodeEditor, editorPart?: IEditorPart) {
 	const calls: { method: string; params: unknown; }[] = [];
 	const extensions = { list: async () => ({ extensions: [{ id: 'ash.git', sourceKind, manifestJson: JSON.stringify(manifest) }] }) } as unknown as IExtensionApi;
 	const backend = { request: async (method, params, signal) => { calls.push({ method, params }); if (request) return request(method, params, signal); return { revision: 1, git: { autofetch: 'off', autofetchPeriod: 180 }, gitConfigured: true, providers: { token: 'private' } }; } } satisfies IExtensionBackendApi;
@@ -35,7 +36,7 @@ function fixture(sourceKind = 'builtIn', request?: IExtensionBackendApi['request
 	const workspace = { getWorkspace: () => ({ folders: [] }), onDidChangeWorkspace: Event.None } as unknown as IWorkspaceContextService;
 	const configurationChanges = new Emitter<IConfigurationChangeEvent>();
 	const configuration = { onDidChangeConfiguration: configurationChanges.event } as unknown as IConfigurationService;
-	const editors = { activeGroup: { activeInput: { resource: URI.file('/file.ts') } }, onDidChangeEditors: Event.None } as unknown as IEditorPart;
+	const editors = editorPart ?? { activeGroup: { activeInput: { resource: URI.file('/file.ts') } }, groups: [{ inputs: [{ resource: URI.file('/file.ts') }] }], onDidChangeEditors: Event.None } as unknown as IEditorPart;
 	const codeEditors = { listCodeEditors: () => editor ? [editor] : [], onCodeEditorAdd: Event.None, onCodeEditorRemove: Event.None } as unknown as ICodeEditorService;
 	return { bridge: new MainThreadExtensionBackend(extensions, backend, connection, events, workspace, configuration, progress ?? { withProgress: async (_options, task) => task({ report() { } }) }, editors, codeEditors), calls, notifications, configurationChanges };
 }
@@ -52,6 +53,40 @@ test('client settings invalidate backend state without fabricating a server conf
 	assert.deepEqual(result.events, []);
 	const current = await bridge.handle(source, 'git.repository', undefined, {}, result.sequence, signal) as { reset: boolean; };
 	assert.equal(current.reset, false);
+});
+
+test('editor folder changes are retained separately from resets and same-folder blame wakeups', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		using events = new Emitter<EditorPartChangeEvent>();
+		const inputs = [{ resource: URI.file('/repo/first.ts') }];
+		const editors = { activeGroup: { activeInput: inputs[0] }, groups: [{ inputs }], onDidChangeEditors: events.event } as unknown as IEditorPart;
+		const value = fixture('builtIn', undefined, undefined, undefined, editors);
+		using bridge = value.bridge; using notifications = value.notifications; using changes = value.configurationChanges;
+		let sequence = 0;
+		const cases = [
+			{ change: () => { }, foldersChanged: false },
+			{ change: () => { inputs[0] = { resource: URI.file('/repo/second.ts') }; }, foldersChanged: false },
+			{ change: () => { inputs.push({ resource: URI.parse('ash-diff:/compare?revision=1') }); }, foldersChanged: true },
+			{ change: () => { inputs[1] = { resource: URI.parse('ash-diff:/compare?revision=2') }; }, foldersChanged: false },
+			{ change: () => { inputs.push({ resource: URI.file('/repo/nested/third.ts') }); }, foldersChanged: true },
+			{ change: () => { inputs.push({ resource: URI.file('/repo/nested/fourth.ts') }); }, foldersChanged: false },
+			{ change: () => { inputs.pop(); }, foldersChanged: false },
+			{ change: () => { inputs.pop(); }, foldersChanged: true },
+		];
+		for (const { change, foldersChanged } of cases) {
+			const waiting = bridge.handle(source, 'git.repository', undefined, {}, sequence, new AbortController().signal, undefined, true);
+			await Promise.resolve(); await Promise.resolve();
+			change();
+			events.fire({ kind: 'groupChanged', groupId: 1, event: { kind: 'activeEditorChanged', editor: undefined } });
+			mock.timers.tick(75);
+			const result = await waiting as { reset: boolean; editorFoldersChanged: boolean; sequence: number; events: JsonValue[]; };
+			assert.equal(result.reset, false);
+			assert.equal(result.editorFoldersChanged, foldersChanged);
+			assert.deepEqual(result.events, []);
+			assert.equal(result.sequence, ++sequence);
+		}
+	} finally { mock.timers.reset(); }
 });
 
 test('backend state subscriptions wake on admitted changes and replay notifications that precede the wait', async () => {

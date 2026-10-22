@@ -1339,6 +1339,10 @@ use crate::protocol::git::GitSubmoduleStateDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitTextDiffDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitTextDiffParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitTextDiffProjectionDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitTextDiffResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitTransportOperationDto;
@@ -5267,7 +5271,7 @@ client_methods! {
         serialization: None,
     },
     GitTextDiff => "git/textDiff" {
-        params: GitRepositoryParams,
+        params: GitTextDiffParams,
         response: GitTextDiffResult,
         serialization: RepositoryExclusive,
     },
@@ -7543,6 +7547,8 @@ typescript_bindings! {
     GitCompleteConflictParams,
     GitBranchSwitchParams,
     GitTextDiffDto,
+    GitTextDiffParams,
+    GitTextDiffProjectionDto,
     GitDiffStatisticsDto,
     GitTextDiffResult,
     GitAIEditorEvidenceDto,

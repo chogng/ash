@@ -320,6 +320,57 @@ fn polling_process_helper() {
     run_polling_watcher().unwrap();
 }
 
+#[tokio::test]
+async fn unchanged_polling_registrations_do_not_trigger_another_consumer_rescan() {
+    let scratch = tempfile::tempdir().unwrap();
+    let root = scratch.path().canonicalize().unwrap();
+    let file = root.join("tracked.txt");
+    std::fs::write(&file, "before").unwrap();
+    let (events, mut receiver) = crate::ingress::event_channel();
+    let mut command = Command::new(std::env::current_exe().unwrap());
+    command.args([
+        "--exact",
+        "native::tests::polling_process_helper",
+        "--ignored",
+        "--nocapture",
+    ]);
+    let mut watcher = NativeWatcher::spawn(command, events, REGISTER_TIMEOUT).unwrap();
+    let roots = BTreeMap::from([(root, (RecursiveMode::Recursive, true))]);
+    watcher
+        .apply_polling(&roots, &BTreeSet::new(), Duration::from_millis(20))
+        .unwrap();
+    let baseline = tokio::time::timeout(Duration::from_secs(2), receiver.recv())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(baseline.need_rescan());
+    for _ in 0..20 {
+        watcher
+            .apply_polling(&roots, &BTreeSet::new(), Duration::from_millis(20))
+            .unwrap();
+    }
+    // Ingress rate-limits rescans to one second. Wait beyond that deadline to
+    // distinguish a suppressed duplicate from a merely delayed recovery marker.
+    assert!(
+        tokio::time::timeout(Duration::from_millis(1200), receiver.recv())
+            .await
+            .is_err()
+    );
+    std::fs::write(&file, "after").unwrap();
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let event = receiver.recv().await.unwrap().unwrap();
+            if event.paths.contains(&file) {
+                break;
+            }
+        }
+    })
+    .await
+    .unwrap();
+    watcher.stop();
+}
+
 #[test]
 #[ignore = "polling helper with a blocked baseline scan"]
 fn polling_blocked_process_helper() {

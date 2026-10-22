@@ -169,6 +169,25 @@ impl Extension for GitExtension {
     }
 }
 
+fn editor_resources_need_discovery(state: &State, resources: &[Value]) -> bool {
+    resources
+        .iter()
+        .filter_map(|resource| {
+            resource
+                .as_str()
+                .and_then(|resource| paths::ResourceUri::parse(resource).ok())
+        })
+        .any(|resource| {
+            state
+                .folders
+                .iter()
+                .any(|folder| paths::RepoPath::from_resource(&folder.uri, &resource).is_some())
+                && !state.repositories.values().any(|repository| {
+                    paths::RepoPath::from_resource(&repository.root_uri, &resource).is_some()
+                })
+        })
+}
+
 pub(crate) struct GitRuntime {
     api: Api,
     state: Mutex<State>,
@@ -320,11 +339,28 @@ impl GitRuntime {
         {
             return Ok(());
         }
+        // Folder changes are only discovery inputs. Like visible editors in VS Code,
+        // files within a known repository need no scan, status or catalog refresh.
+        let discover_editors = if facts["editorFoldersChanged"] == true
+            && facts["reset"] != true
+            && matches!(facts["connection"].as_str(), Some("ready" | "connected"))
+        {
+            let resources = self
+                .api
+                .editor(json!({"method":"openEditorResources"}), token)?;
+            editor_resources_need_discovery(
+                &self.lock(),
+                resources.as_array().map(Vec::as_slice).unwrap_or_default(),
+            )
+        } else {
+            false
+        };
         // Editor-only changes and long-poll renewals do not invalidate discovery or settings.
         // The monitor still updates blame after this returns, using lightweight editor metadata.
         {
             let mut state = self.lock();
-            if facts["reset"] != true
+            if !discover_editors
+                && facts["reset"] != true
                 && matches!(facts["connection"].as_str(), Some("ready" | "connected"))
                 && facts["events"].as_array().is_some_and(Vec::is_empty)
                 && state.discovery_signature.as_ref().is_some_and(|signature| {
@@ -349,6 +385,7 @@ impl GitRuntime {
                 .as_array()
                 .filter(|events| {
                     same_workspace
+                        && !discover_editors
                         && facts["reset"] != true
                         && !events.is_empty()
                         && events

@@ -60,6 +60,8 @@ use ash_app_server_protocol::protocol::git::GitPullParams;
 use ash_app_server_protocol::protocol::git::GitRepositoryParams;
 use ash_app_server_protocol::protocol::git::GitStashDto;
 use ash_app_server_protocol::protocol::git::GitStashModeDto;
+use ash_app_server_protocol::protocol::git::GitTextDiffParams;
+use ash_app_server_protocol::protocol::git::GitTextDiffProjectionDto;
 use ash_app_server_protocol::protocol::git::GitWorktreeCreateParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeCreateResult;
 use ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode;
@@ -789,13 +791,18 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
     }
 
     pub(super) fn git_text_diff(&self, value: &Value) -> Result<Value, RpcError> {
-        let params: GitRepositoryParams = decode(value)?;
+        let params: GitTextDiffParams = decode(value)?;
+        let runtime = self.context.git_runtime_service()?;
         result(
-            &self
-                .context
-                .git_runtime_service()?
-                .text_diff_for(params.repository_id.as_deref())
-                .map_err(git_error)?,
+            &match params.projection {
+                Some(GitTextDiffProjectionDto::Statistics) => {
+                    runtime.text_diff_summary_for(params.repository_id.as_deref())
+                }
+                None | Some(GitTextDiffProjectionDto::Contents) => {
+                    runtime.text_diff_for(params.repository_id.as_deref())
+                }
+            }
+            .map_err(git_error)?,
         )
     }
 

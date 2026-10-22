@@ -1,5 +1,21 @@
 use std::ops::Range;
 
+/// Exact line additions and deletions without presentation rows or inline ranges.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct DiffStatistics {
+    pub(crate) additions: usize,
+    pub(crate) deletions: usize,
+}
+
+impl DiffStatistics {
+    pub const fn additions(self) -> usize {
+        self.additions
+    }
+    pub const fn deletions(self) -> usize {
+        self.deletions
+    }
+}
+
 /// The exact terminator that followed a logical source line.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum LineEnding {

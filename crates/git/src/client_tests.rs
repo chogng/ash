@@ -11,6 +11,44 @@ use super::REPOSITORY_SELECTOR_ENVIRONMENT;
 use crate::GitError;
 use crate::test_support::TestRepository;
 
+#[tokio::test]
+async fn process_observer_follows_cloned_clients_and_stream_lifetimes() {
+    #[derive(Debug, Default)]
+    struct Observer(std::sync::Mutex<Vec<super::GitProcessTiming>>);
+    impl super::GitProcessObserver for Observer {
+        fn observe(&self, timing: super::GitProcessTiming) {
+            self.0.lock().unwrap().push(timing);
+        }
+    }
+    let repository = TestRepository::init();
+    let observer = std::sync::Arc::new(Observer::default());
+    let client = GitClient::system().with_process_observer(observer.clone());
+    let cloned = client.clone();
+    cloned
+        .run_query(repository.root(), ["status", "--porcelain"])
+        .await
+        .unwrap();
+    let before_stream = observer.0.lock().unwrap().len();
+    let stream = client
+        .start_query_stream(repository.root(), ["status", "--porcelain"])
+        .await
+        .unwrap();
+    assert_eq!(observer.0.lock().unwrap().len(), before_stream);
+    drop(stream);
+    let timings = observer.0.lock().unwrap();
+    assert_eq!(timings.len(), before_stream + 1);
+    assert!(
+        timings
+            .iter()
+            .any(|timing| matches!(timing.kind, super::GitProcessKind::Status))
+    );
+    assert!(
+        timings
+            .iter()
+            .all(|timing| timing.elapsed >= timing.spawn_elapsed)
+    );
+}
+
 #[test]
 fn version_policy_accepts_the_minimum_and_vendor_versions_and_rejects_older_git() {
     for (version, supported) in [

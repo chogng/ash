@@ -33,6 +33,8 @@ struct Client {
     editor_requests: Mutex<Vec<Value>>,
     editor_document: Mutex<Option<String>>,
     revision: AtomicU64,
+    editor_sequence: AtomicU64,
+    editor_resources: Mutex<Vec<Value>>,
     binary_comparison: AtomicBool,
     conflict_comparison: AtomicBool,
     cancel_protected_commit: AtomicBool,
@@ -69,14 +71,16 @@ impl Client {
     fn request(&self, operation: Operation) -> Result<ResultValue, host::HostFailure> {
         let result = match operation {
             Operation::BackendState {
-                wait_for_change, ..
+                after,
+                wait_for_change,
+                ..
             } => {
                 if wait_for_change == Some(true) {
                     // This fixture has no notification producer; model the bounded idle tick.
                     std::thread::sleep(Duration::from_millis(500));
                 }
                 ResultValue::Value {
-                    value: json!({"connection":"ready","sequence":0,"generation":1,"reset":false,"events":[],"folders":[{"id":"workspace","name":"test","uri":url::Url::from_directory_path(&self.root).unwrap().to_string().trim_end_matches('/')} ]}),
+                    value: json!({"connection":"ready","sequence":self.editor_sequence.load(Ordering::Acquire),"generation":1,"reset":false,"editorFoldersChanged":after < self.editor_sequence.load(Ordering::Acquire),"events":[],"folders":[{"id":"workspace","name":"test","uri":url::Url::from_directory_path(&self.root).unwrap().to_string().trim_end_matches('/')} ]}),
                 }
             }
             Operation::InspectConfiguration { section, .. } => ResultValue::Configuration {
@@ -98,7 +102,9 @@ impl Client {
                 self.editor_requests.lock().unwrap().push(payload.clone());
                 ResultValue::Value {
                     value: match payload["method"].as_str() {
-                        Some("openEditorResources") => json!([]),
+                        Some("openEditorResources") => {
+                            json!(*self.editor_resources.lock().unwrap())
+                        }
                         Some("activeEditor") => {
                             json!({"input":self.editor_document.lock().unwrap().as_ref().map(|uri|json!({"resource":uri})),"selection":null,"version":null,"contents":null})
                         }
@@ -396,6 +402,8 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
             editor_requests: Mutex::new(Vec::new()),
             editor_document: Mutex::new(None),
             revision: AtomicU64::new(1),
+            editor_sequence: AtomicU64::new(0),
+            editor_resources: Mutex::new(Vec::new()),
             binary_comparison: AtomicBool::new(false),
             conflict_comparison: AtomicBool::new(false),
             cancel_protected_commit: AtomicBool::new(true),
@@ -442,6 +450,46 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
             ),
         );
         assert_eq!(cold_contexts[0]["id"], "root");
+        // An editor in another subdirectory is still inside the known repository.
+        // The command crosses the host cursor without rescanning or rereading its catalog.
+        *client.editor_resources.lock().unwrap() = vec![json!(
+            url::Url::from_file_path(client.root.join("src/another/file.ts"))
+                .unwrap()
+                .to_string()
+        )];
+        client.editor_sequence.store(1, Ordering::Release);
+        client.editor_requests.lock().unwrap().clear();
+        client.requests.lock().unwrap().clear();
+        let contexts = execute(
+            &supervisor,
+            &client,
+            invocation(
+                "git.getRepositoryContexts",
+                "execute",
+                json!({"arguments":[]}),
+            ),
+        );
+        assert_eq!(contexts[0]["id"], "root");
+        assert_eq!(
+            client
+                .editor_requests
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|request| request["method"] == "openEditorResources")
+                .count(),
+            1
+        );
+
+        assert!(
+            !client
+                .requests
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(method, _)| matches!(method.as_str(), "repositories" | "catalog"))
+        );
+
         execute(
             &supervisor,
             &client,
@@ -957,6 +1005,19 @@ fn verify_binary_comparisons(supervisor: &host::ExtensionHostSupervisor, client:
         summary,
         json!({"files":1,"additions":0,"deletions":0,"partial":true})
     );
+    assert_eq!(
+        client
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|(method, _)| method == "textDiff")
+            .unwrap()
+            .1["projection"],
+        "statistics"
+    );
+
     execute(
         supervisor,
         client,

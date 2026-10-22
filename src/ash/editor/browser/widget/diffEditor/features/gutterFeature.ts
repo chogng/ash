@@ -68,6 +68,9 @@ export class DiffEditorGutter extends Disposable {
 		for (const id of [MenuId.DiffEditorHunkToolbar, MenuId.DiffEditorSelectionToolbar]) {
 			const menu = this._register(menus.createMenu(id, this.scope));
 			this._register(menu.onDidChange(() => {
+				// Each live toolbar updates its own menu. Rebuild mappings only when
+				// action availability changes the gutter, not for unrelated editor contexts.
+				if (this.available === this.hasActions()) return;
 				const width = this.width;
 				this.update(this.enabled, { renderRevert: this.renderRevert });
 				if (this.width !== width) this.onDidChangeWidth();
@@ -96,8 +99,7 @@ export class DiffEditorGutter extends Disposable {
 		const previousHeight = this.getContentHeight();
 		this.enabled = enabled;
 		this.renderRevert = options.renderRevert;
-		this.available = this.canRevert || [MenuId.DiffEditorHunkToolbar, MenuId.DiffEditorSelectionToolbar].some(id =>
-			this.menus.getMenuActions(id, undefined, this.scope).some(([, actions]) => actions.length > 0));
+		this.available = this.hasActions();
 		this.domNode.hidden = this.width === 0;
 		const hadFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);
 		this.renderedItems.set([]);
@@ -126,6 +128,11 @@ export class DiffEditorGutter extends Disposable {
 
 	private get canRevert(): boolean {
 		return this.renderRevert && !this.editor.getOption(EditorOption.readOnly);
+	}
+
+	private hasActions(): boolean {
+		return this.canRevert || [MenuId.DiffEditorHunkToolbar, MenuId.DiffEditorSelectionToolbar].some(id =>
+			this.menus.getMenuActions(id, undefined, this.scope).some(([, actions]) => actions.length > 0));
 	}
 
 	public computeStagedValue(mapping: DetailedLineRangeMapping): string {

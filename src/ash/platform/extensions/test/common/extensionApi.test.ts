@@ -1,4 +1,4 @@
-import type { IExtensionManagementService } from '../../../extensionManagement/common/extensionManagementService.js';
+import type { IExtensionManagementService, ExtensionsBuiltInProviders } from '../../../extensionManagement/common/extensionManagementService.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import type { IResourceApi } from '../../../agentHost/common/appServerApi.js';
@@ -108,16 +108,16 @@ test('an idle catalog request starts immediately, concurrent reads share failure
 	const api = createAppServerExtensionApi(connection, { connectionGeneration: 1 } as IResourceApi);
 	const refresh = api.list('refresh');
 	const failed = assert.rejects(refresh, /source scan failed/);
-	assert.deepEqual(requests, [{ reload: 'refresh' }], 'Backend work starts before the caller yields to Workbench construction');
+	assert.deepEqual(requests, [{ reload: 'refresh', knownGeneration: null }], 'Backend work starts before the caller yields to Workbench construction');
 	const concurrent = api.list('cached');
 	assert.strictEqual(concurrent, refresh, 'Concurrent consumers share the same catalog operation');
 	const concurrentFailed = assert.rejects(concurrent, /source scan failed/);
 	assert.equal(requests.length, 1, 'Catalog publication remains serialized');
 	await first.error(new Error('source scan failed'));
 	await Promise.all([failed, concurrentFailed]);
-	assert.deepEqual(requests, [{ reload: 'refresh' }], 'A shared failure does not silently retry discovery');
+	assert.deepEqual(requests, [{ reload: 'refresh', knownGeneration: null }], 'A shared failure does not silently retry discovery');
 	const retry = api.list('cached');
-	assert.deepEqual(requests, [{ reload: 'refresh' }, { reload: 'cached' }]);
+	assert.deepEqual(requests, [{ reload: 'refresh', knownGeneration: null }, { reload: 'cached', knownGeneration: null }]);
 	await second.complete({ generation: 2, extensions: [], diagnostics: [] });
 	assert.equal((await retry).generation, 1);
 	const idle = api.list('cached');
@@ -226,6 +226,46 @@ test('language extension syntax follows backend enablement, including revocation
 	assert.equal((await api.list('cached', { includeDisabled: true })).extensions.length, 1);
 	enabled = true; offline = true;
 	assert.equal((await api.list('cached')).extensions.length, 0);
+});
+
+test('warm language catalog reads overlap provider IO and share only its pending result', async () => {
+	const base = packageSnapshot(1, 'ash.language', 'builtIn');
+	const catalog = { ...base, extensions: [{ ...base.extensions[0]!, manifestJson: JSON.stringify({ ashLanguageServers: { version: 1, servers: [] } }) }] };
+	let catalogRead: DeferredPromise<ExtensionCatalog> | undefined;
+	let providerRead: DeferredPromise<ExtensionsBuiltInProviders> | undefined;
+	const providerStarted = new DeferredPromise<void>();
+	let reads = 0;
+	const management = {
+		onDidChangeInstalled: Event.None,
+		listBuiltInProviders: async () => {
+			reads++;
+			if (reads === 2) void providerStarted.complete();
+			return providerRead?.p ?? { revision: reads, canChangeEnablement: false, providers: [{ id: 'ash.language', enabled: true, running: false }] };
+		},
+	} as unknown as IExtensionManagementService;
+	const api = withEnabledBuiltInExtensions({
+		list: () => catalogRead?.p ?? Promise.resolve(catalog),
+		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
+	}, {
+		onDidChangeEnablement: Event.None, getDisabledExtensions: () => [],
+		enableExtension: async () => false, disableExtension: async () => false,
+	}, management);
+	assert.equal((await api.list('cached')).extensions.length, 1);
+	catalogRead = new DeferredPromise<ExtensionCatalog>();
+	providerRead = new DeferredPromise<ExtensionsBuiltInProviders>();
+	const first = api.list('cached');
+	const second = api.list('cached');
+	await providerStarted.p;
+	assert.equal(reads, 2, 'provider IO starts before the catalog reply and overlapping callers share it');
+	await providerRead.complete({ revision: 2, canChangeEnablement: false, providers: [{ id: 'ash.language', enabled: false, running: false }] });
+	await catalogRead.complete(catalog);
+	assert.deepEqual((await Promise.all([first, second])).map(value => value.extensions), [[], []]);
+	catalogRead = undefined;
+	providerRead = undefined;
+	assert.equal((await api.list('cached')).extensions.length, 1, 'the next read observes re-enablement instead of retaining the previous result');
+	assert.equal(reads, 3);
+	await api.list('cached', { includeDisabled: true });
+	assert.equal(reads, 3, 'management inspection does not issue enablement reads');
 });
 
 test('renderer admission preserves exact backend identity and rejects unsafe resources or unsupported APIs', () => {

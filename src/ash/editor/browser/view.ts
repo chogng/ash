@@ -1151,6 +1151,10 @@ export class View extends ViewEventHandler {
 	}
 
 	private syncScrollPosition(layout: EditorViewportLayout): void {
+		// Reading native scroll offsets can flush pending layout after Parts paint.
+		// The ViewLayout and native scroll listener already invalidate this position;
+		// unchanged renders need no round trip through browser layout.
+		if (this.syncedScrollLeft === layout.scrollPosition.left && this.syncedScrollTop === layout.scrollPosition.top) return;
 		// Only the scrollbar wrapper scrolls physically. Viewport Parts are its
 		// siblings and consume the same ViewLayout state without browser scrolling.
 		const scrollDomNode = this.scrollbar.getDomNode().domNode;

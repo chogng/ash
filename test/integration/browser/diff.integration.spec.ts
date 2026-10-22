@@ -426,7 +426,7 @@ for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light'] as const) {
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
-	test(`diff center gutter aligns deleted blocks and retains other hunks during selection (${locale})`, async ({ page }) => {
+	test(`diff center gutter aligns deleted blocks and reveals selected hunks on scroll (${locale})`, async ({ page }) => {
 		await openDiffPage(page, locale);
 		await page.evaluate(() => {
 			const shared = 'shared\n'.repeat(20);
@@ -434,14 +434,20 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		});
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
 		const items = page.locator('#single .ash-diff-gutter-item');
-		await expect(items).toHaveCount(2);
+		await expect(items).toHaveCount(1);
 		const positions = await page.evaluate(() => window.ashDiffIntegration.linePositions(2, 2));
 		const top = await items.first().evaluate(node => Number.parseFloat((node as HTMLElement).style.top));
 		expect(top).toBe(positions.originalTop);
 		expect(top).toBeLessThan(positions.modifiedTop);
-		await page.evaluate(() => window.ashDiffIntegration.selectModified([22, 1, 22, 6]));
-		await expect(items).toHaveCount(2);
+		await page.evaluate(() => {
+			window.ashDiffIntegration.selectModified([22, 1, 22, 6]);
+			window.ashDiffIntegration.scrollModified(window.ashDiffIntegration.linePositions(23, 22).modifiedTop);
+		});
+		await expect(items).toHaveCount(1);
 		await expect(page.locator('#single .ash-diff-gutter').getByRole('button', { name: localized(locale, 'Revert selected changes', '还原选中的更改'), exact: true, includeHidden: true })).toHaveCount(1);
+		await page.evaluate(() => window.ashDiffIntegration.scrollModified(0));
+		await expect(items).toHaveCount(1);
+		await expect(page.locator('#single .ash-diff-gutter').getByRole('button', { name: localized(locale, 'Revert change', '还原更改'), exact: true })).toBeVisible();
 	});
 
 	test(`multi diff updates configuration and uses scoped file menus (${locale})`, async ({ page }) => {
@@ -1295,6 +1301,48 @@ for (const [originalLength, modifiedLength] of [[6, 2], [2, 6]]) {
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
+	test(`diff gutter bounds toolbar creation and preserves focused actions while scrolling (${locale})`, async ({ page }) => {
+		await openDiffPage(page, locale);
+		const original = Array.from({ length: 100 }, (_, index) => `shared ${index}\nold ${index} 😀\ncontext ${index}`).join('\n');
+		const modified = original.replaceAll('old ', 'new ');
+		await page.evaluate(({ original, modified }) => {
+			window.ashDiffIntegration.setViewMode(true, false, 900);
+			window.ashDiffIntegration.setComparisonText(original, modified);
+			window.ashDiffIntegration.registerHunkAction();
+		}, { original, modified });
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		const gutter = page.locator('#single .ash-diff-gutter');
+		const items = gutter.locator('.ash-diff-gutter-item');
+		await expect.poll(() => items.count()).toBeGreaterThan(0);
+		await expect.poll(() => items.count()).toBeLessThan(12);
+		const apply = gutter.getByRole('button', { name: 'Apply change', exact: true }).first();
+		await apply.focus();
+		const focused = await apply.elementHandle();
+		// Selection-menu changes must not recreate unrelated hunk views or lose focus.
+		await page.evaluate(() => window.ashDiffIntegration.registerHunkAction(true));
+		expect(await focused!.evaluate(node => node.isConnected && node === node.ownerDocument.activeElement)).toBe(true);
+		await page.evaluate(() => {
+			const position = window.ashDiffIntegration.linePositions(281, 281);
+			window.ashDiffIntegration.scrollModified(position.modifiedTop);
+		});
+		await expect.poll(() => items.count()).toBeLessThan(12);
+		expect(await focused!.evaluate(node => node.isConnected && node === node.ownerDocument.activeElement)).toBe(true);
+		await gutter.getByRole('button', { name: 'Apply change', exact: true }).last().click();
+		const action = await page.evaluate(() => window.ashDiffIntegration.lastHunkAction);
+		expect(action!.modifiedStart).toBeGreaterThan(270);
+		const staged = original.split('\n');
+		staged[action!.originalStart - 1] = staged[action!.originalStart - 1]!.replace('old ', 'new ');
+		expect(action!.text).toBe(staged.join('\n'));
+		await page.locator('#single .modified .stanza-editor-input').focus();
+		await expect.poll(() => focused!.evaluate(node => node.isConnected)).toBe(false);
+		const revert = gutter.getByRole('button', { name: localized(locale, 'Revert change', '还原更改'), exact: true }).last();
+		await revert.focus();
+		await revert.press('Space');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).not.toBe(modified);
+		await page.evaluate(() => window.ashDiffIntegration.undo());
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toBe(modified);
+	});
+
 	for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light']) {
 		test(`diff gutter centers controls in the visible hunk and reveals on intent (${locale}, ${theme})`, async ({ page }, testInfo) => {
 			await openDiffPage(page, locale);

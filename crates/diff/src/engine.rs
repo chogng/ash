@@ -1,5 +1,9 @@
+use std::borrow::Cow;
+
 use crate::inline;
-use crate::model::{DiffDocument, DiffHunk, DiffLine, DiffRow, DiffRowKind, LineEnding};
+use crate::model::{
+    DiffDocument, DiffHunk, DiffLine, DiffRow, DiffRowKind, DiffStatistics, LineEnding,
+};
 use crate::myers::{self, Edit};
 use crate::{
     CaseSensitivity, DiffError, DiffOptions, DiffSide, InlineDiffMode, LineEndingPolicy,
@@ -43,6 +47,22 @@ impl DiffEngine {
         self.compute_cancellable(original, modified, &NeverCancel)
     }
 
+    /// Applies the same bounded line matching as `compute`, without building display data.
+    pub fn statistics(&self, original: &str, modified: &str) -> Result<DiffStatistics, DiffError> {
+        validate_text(original, DiffSide::Original, self.options)?;
+        validate_text(modified, DiffSide::Modified, self.options)?;
+        let (_, _, edits) = match_lines(original, modified, self.options, &NeverCancel)?;
+        let mut statistics = DiffStatistics::default();
+        for edit in edits {
+            match edit {
+                Edit::Insert { .. } => statistics.additions += 1,
+                Edit::Delete { .. } => statistics.deletions += 1,
+                Edit::Equal { .. } => {}
+            }
+        }
+        Ok(statistics)
+    }
+
     pub fn compute_cancellable(
         &self,
         original: &str,
@@ -81,14 +101,14 @@ impl DiffEngine {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct SourceLine {
-    text: String,
+struct SourceLine<'a> {
+    text: &'a str,
     ending: LineEnding,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct ComparisonKey {
-    text: String,
+struct ComparisonKey<'a> {
+    text: Cow<'a, str>,
     ending: Option<LineEnding>,
 }
 
@@ -98,6 +118,23 @@ fn compute_valid_text(
     options: DiffOptions,
     cancellation: &dyn DiffCancellation,
 ) -> Result<DiffDocument, DiffError> {
+    let (old_lines, new_lines, edits) = match_lines(original, modified, options, cancellation)?;
+    let rows = map_rows(edits, &old_lines, &new_lines, options, cancellation)?;
+    let hunks = group_hunks(&rows, options.context_lines());
+    Ok(DiffDocument::new(
+        rows,
+        hunks,
+        old_lines.len(),
+        new_lines.len(),
+    ))
+}
+
+fn match_lines<'a>(
+    original: &'a str,
+    modified: &'a str,
+    options: DiffOptions,
+    cancellation: &dyn DiffCancellation,
+) -> Result<(Vec<SourceLine<'a>>, Vec<SourceLine<'a>>, Vec<Edit>), DiffError> {
     if cancellation.is_cancelled() {
         return Err(DiffError::Cancelled);
     }
@@ -109,14 +146,7 @@ fn compute_valid_text(
     let old_keys = comparison_keys(&old_lines, options, cancellation)?;
     let new_keys = comparison_keys(&new_lines, options, cancellation)?;
     let edits = myers::edits(&old_keys, &new_keys, options.limits(), cancellation)?;
-    let rows = map_rows(edits, &old_lines, &new_lines, options, cancellation)?;
-    let hunks = group_hunks(&rows, options.context_lines());
-    Ok(DiffDocument::new(
-        rows,
-        hunks,
-        old_lines.len(),
-        new_lines.len(),
-    ))
+    Ok((old_lines, new_lines, edits))
 }
 
 fn validate_text(text: &str, side: DiffSide, options: DiffOptions) -> Result<(), DiffError> {
@@ -154,10 +184,10 @@ fn validate_line_count(
     Ok(())
 }
 
-fn split_lines(
-    text: &str,
+fn split_lines<'a>(
+    text: &'a str,
     cancellation: &dyn DiffCancellation,
-) -> Result<Vec<SourceLine>, DiffError> {
+) -> Result<Vec<SourceLine<'a>>, DiffError> {
     let bytes = text.as_bytes();
     let mut lines = Vec::new();
     let mut start = 0;
@@ -174,14 +204,14 @@ fn split_lines(
                     (index, LineEnding::Lf)
                 };
                 lines.push(SourceLine {
-                    text: text[start..text_end].to_owned(),
+                    text: &text[start..text_end],
                     ending,
                 });
                 start = index + 1;
             }
             b'\r' if bytes.get(index + 1) != Some(&b'\n') => {
                 lines.push(SourceLine {
-                    text: text[start..index].to_owned(),
+                    text: &text[start..index],
                     ending: LineEnding::Cr,
                 });
                 start = index + 1;
@@ -192,18 +222,18 @@ fn split_lines(
     }
     if start < text.len() {
         lines.push(SourceLine {
-            text: text[start..].to_owned(),
+            text: &text[start..],
             ending: LineEnding::None,
         });
     }
     Ok(lines)
 }
 
-fn comparison_keys(
-    lines: &[SourceLine],
+fn comparison_keys<'a>(
+    lines: &[SourceLine<'a>],
     options: DiffOptions,
     cancellation: &dyn DiffCancellation,
-) -> Result<Vec<ComparisonKey>, DiffError> {
+) -> Result<Vec<ComparisonKey<'a>>, DiffError> {
     lines
         .iter()
         .enumerate()
@@ -212,15 +242,15 @@ fn comparison_keys(
                 return Err(DiffError::Cancelled);
             }
             let text = match options.whitespace() {
-                WhitespacePolicy::Exact => line.text.clone(),
-                WhitespacePolicy::TrimEdges => line.text.trim().to_owned(),
+                WhitespacePolicy::Exact => Cow::Borrowed(line.text),
+                WhitespacePolicy::TrimEdges => Cow::Borrowed(line.text.trim()),
                 WhitespacePolicy::CollapseRuns => {
-                    line.text.split_whitespace().collect::<Vec<_>>().join(" ")
+                    Cow::Owned(line.text.split_whitespace().collect::<Vec<_>>().join(" "))
                 }
             };
             let text = match options.case_sensitivity() {
                 CaseSensitivity::Sensitive => text,
-                CaseSensitivity::Insensitive => text.to_lowercase(),
+                CaseSensitivity::Insensitive => Cow::Owned(text.to_lowercase()),
             };
             Ok(ComparisonKey {
                 text,
@@ -235,8 +265,8 @@ fn comparison_keys(
 
 fn map_rows(
     edits: Vec<Edit>,
-    old: &[SourceLine],
-    new: &[SourceLine],
+    old: &[SourceLine<'_>],
+    new: &[SourceLine<'_>],
     options: DiffOptions,
     cancellation: &dyn DiffCancellation,
 ) -> Result<Vec<DiffRow>, DiffError> {
@@ -319,8 +349,8 @@ fn map_rows(
     Ok(rows)
 }
 
-fn diff_line(index: usize, source: &SourceLine) -> DiffLine {
-    DiffLine::new(index + 1, source.text.clone(), source.ending)
+fn diff_line(index: usize, source: &SourceLine<'_>) -> DiffLine {
+    DiffLine::new(index + 1, source.text.to_owned(), source.ending)
 }
 
 fn group_hunks(rows: &[DiffRow], context_lines: usize) -> Vec<DiffHunk> {

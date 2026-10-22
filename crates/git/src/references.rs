@@ -150,9 +150,11 @@ impl GitClient {
         &self,
         repository: &GitRepository,
     ) -> GitResult<GitReferenceState> {
-        let references = self.references(repository).await?;
-        let remotes = self.remotes(repository).await?;
-        let catalog = self.catalog(repository).await?;
+        // Capture remotes once for both consumers. These independent reads stay under
+        // the caller's repository operation, without a second remote URL round trip.
+        let (references, remotes) =
+            tokio::try_join!(self.references(repository), self.remotes(repository),)?;
+        let catalog = self.catalog_with_remotes(repository, &remotes).await?;
         // Use Git's symbolic default; branch names such as main/master are not reliable defaults.
         let remote = catalog.upstream_remote.as_deref().or_else(|| {
             if catalog.remotes.len() == 1 {
@@ -203,8 +205,19 @@ impl GitClient {
     }
 
     pub async fn catalog(&self, repository: &GitRepository) -> GitResult<GitCatalog> {
-        let tags = self
-            .run_query(
+        let remote_details = self.remotes(repository).await?;
+        self.catalog_with_remotes(repository, &remote_details).await
+    }
+
+    async fn catalog_with_remotes(
+        &self,
+        repository: &GitRepository,
+        remote_details: &[crate::GitRemote],
+    ) -> GitResult<GitCatalog> {
+        // Three bounded queries can make progress together on the same runtime.
+        // Keep parsing and publication after all have completed successfully.
+        let (tags, stashes, upstream) = tokio::try_join!(
+            self.run_query(
                 repository.worktree_root(),
                 [
                     "for-each-ref",
@@ -212,9 +225,18 @@ impl GitClient {
                     "--format=%(refname:strip=2)%00%(objectname)",
                     "refs/tags",
                 ],
-            )
-            .await?
-            .require_success()?;
+            ),
+            self.stashes(repository),
+            self.run_query(
+                repository.worktree_root(),
+                [
+                    "for-each-ref",
+                    "--format=%(HEAD)%00%(upstream:remotename)",
+                    "refs/heads"
+                ],
+            ),
+        )?;
+        let tags = tags.require_success()?;
         let tags = std::str::from_utf8(&tags.stdout)
             .map_err(|_| invalid("invalid ref encoding"))?
             .lines()
@@ -225,24 +247,12 @@ impl GitClient {
                 Ok((name.to_owned(), object_id.to_owned()))
             })
             .collect::<GitResult<Vec<_>>>()?;
-        let stashes = self.stashes(repository).await?;
-        let remote_details = self.remotes(repository).await?;
         let remotes: Vec<_> = remote_details
             .iter()
             .map(|remote| remote.name().to_owned())
             .collect();
         // Remote names can contain slashes; the display upstream ref cannot identify its owner.
-        let upstream = self
-            .run_query(
-                repository.worktree_root(),
-                [
-                    "for-each-ref",
-                    "--format=%(HEAD)%00%(upstream:remotename)",
-                    "refs/heads",
-                ],
-            )
-            .await?
-            .require_success()?;
+        let upstream = upstream.require_success()?;
         let upstream_remote = std::str::from_utf8(&upstream.stdout)
             .map_err(|_| invalid("invalid upstream encoding"))?
             .lines()

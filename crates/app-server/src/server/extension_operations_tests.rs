@@ -143,7 +143,34 @@ fn extension_catalog_exposes_its_authorized_package_location_and_execution_platf
     );
     let wire: ash_app_server_protocol::protocol::extensions::ExtensionListResult =
         serde_json::from_value(catalog).unwrap();
-    assert_eq!(wire.extensions[0].id, "test.debugger");
+    let ash_app_server_protocol::protocol::extensions::ExtensionListResult::Updated {
+        generation,
+        extensions,
+        ..
+    } = wire
+    else {
+        panic!("first catalog read must return its contents");
+    };
+    assert_eq!(extensions[0].id, "test.debugger");
+    let unchanged = server
+        .extension_processor()
+        .extension_list(&serde_json::json!({"knownGeneration":generation}))
+        .unwrap();
+    assert_eq!(
+        unchanged,
+        serde_json::json!({"status":"unchanged", "generation":generation})
+    );
+    let refreshed = server
+        .extension_processor()
+        .extension_list(&serde_json::json!({"reload":"refresh", "knownGeneration":generation}))
+        .unwrap();
+    assert_eq!(refreshed["status"], "updated");
+    assert_eq!(refreshed["extensions"][0]["id"], "test.debugger");
+    let stale = server
+        .extension_processor()
+        .extension_list(&serde_json::json!({"knownGeneration":generation + 100}))
+        .unwrap();
+    assert_eq!(stale["status"], "updated");
 }
 
 #[test]

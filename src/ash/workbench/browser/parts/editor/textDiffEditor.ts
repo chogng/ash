@@ -134,24 +134,43 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 		}
 		const container = this.requireContainer();
 		throwIfCancelled(signal, "Diff editor input loading was cancelled");
-		const original = await this.modelService.acquire(input.original, signal);
+		using references = new DisposableStore();
+		const acquisition = new AbortController();
+		const acquisitionSignal = AbortSignal.any([signal, acquisition.signal]);
+		const acquire = async (side: IResourceEditorInput): Promise<TextModelReference> => {
+			const reference = await this.modelService.acquire(side, acquisitionSignal, { waitForSyntax: false });
+			// A sibling can fail before this acquisition settles. A late reference
+			// still needs releasing even when its resolver did not honor cancellation.
+			if (references.isDisposed) reference.dispose();
+			else references.add(reference);
+			return reference;
+		};
+		let original: TextModelReference | undefined;
 		let modified: TextModelReference | undefined;
 		let next: DiffEditorPaneSession | undefined;
 		try {
-			throwIfCancelled(signal, "Diff editor input loading was cancelled");
-			modified = await this.modelService.acquire(input.modified, signal);
+			[original, modified] = await Promise.all([acquire(input.original), acquire(input.modified)]);
+			references.delete(original);
+			references.delete(modified);
 			throwIfCancelled(signal, "Diff editor input loading was cancelled");
 			next = this.instantiationService.createInstance(
 				DiffEditorPaneSession, container, original, modified,
 				input.original.label, input.modified, this.options,
 			);
-			await next.waitForDiff(signal);
+			// The host keeps this candidate hidden. Build its controls while syntax
+			// initializes, then publish only when both lexical sides and the diff are ready.
+			await Promise.all([
+				next.waitForDiff(acquisitionSignal),
+				original.model.tokenization.whenReady(acquisitionSignal),
+				modified.model.tokenization.whenReady(acquisitionSignal),
+			]);
 			throwIfCancelled(signal, "Diff editor input loading was cancelled");
 		} catch (error) {
+			acquisition.abort();
 			next?.dispose();
 			if (!next) {
 				modified?.dispose();
-				original.dispose();
+				original?.dispose();
 			}
 			throw error;
 		}

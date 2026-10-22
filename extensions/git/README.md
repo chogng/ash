@@ -119,10 +119,18 @@ The background subscription waits for admitted backend notifications and refresh
 as they arrive. It consumes status snapshots rather than ignore invalidation hints, which
 arrive before status is ready and would start redundant configuration/discovery work.
 Cursor and unsaved-text changes emit coalesced editor revisions without invalidating discovery.
+The private backend-state facts retain `editorFoldersChanged` separately from a full reset.
+Git checks changed editor resources against its known repository roots; switching among
+subdirectories only updates blame, while an unknown workspace path still enters discovery.
 Blame reads metadata first and requests full text only after the active signature changes.
 Idle waits renew after 20 seconds, below the SDK deadline; renewals skip configuration and
 discovery when the workspace is unchanged. State waits run outside the discovery lock and
 are cancelled before shutdown joins the monitor.
+
+Workspace line totals request the `statistics` projection of `git/textDiff`; the backend
+returns fresh status and readable-file counts without original/modified text or inline ranges.
+Content consumers retain the default full projection. HEAD objects are resolved in bounded
+batches per operation, without caching mutable index or worktree contents between requests.
 
 Use **Manage built-in editor extensions** to disable `ash.git` for the current profile.
 Other SCM providers, editors, undo and saving retain their lifetimes. Shared Rust Git and

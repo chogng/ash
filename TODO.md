@@ -8,6 +8,11 @@
 
 - [ ] **历史现场复核** · 2026-10-21 用户随后确认点击已正常；实际开发窗口的只读检查也显示主线程响应、无活动动画、Connectors 读取已结束。隔离 Desktop 中全折叠后展开／键盘切换通过，尚未建立原先整窗无响应的故障链。潜在的状态通知请求放大已单独复现并修复：25 次通知在读取进行中不再追加 25 组读取，只在结束后补读一次；保留最新状态、隐藏时撤销待补读，显式导航及可物理取消的市场查询仍可抢占。原始故障仅在再次出现时采集实际 Renderer／Main 栈继续归因，不把这一防护称为历史根因修复；证据与运行限制见 `.build/ash-playwright-mcp/connectors-validation.json`。
 
+## SCM 普通文件点击 · 残余极端往返
+
+- [ ] **测量** · 最终独立窗口中最慢暖点击 375.6 ms：extensionHost/invoke/read（connection 1，request 2907）客户端往返 274.3 ms，同 ID 服务端处理 0.088 ms、出站 0.040 ms，Git 请求在之后才开始且仅 3.4 ms。尚未拆清 Renderer→Main→daemon 送达与返程 decode/dispatch，不能归因扩展执行或渲染。下一步补这些边界的 method/request ID 标记，保留极值复现；本轮全部原始数据和已完成实现见[报告](.build/scm-tail-v2/report.md)。
+- [ ] **RPC 调度** · git/changeFile、git/status、git/textDiff 仍是 RepositoryExclusive，最终 Git RPC p99 86.9→51.5 ms 的配对区间 [−70.0,+0.5] 跨零，资源排队 p99 仍 47 ms。评估前台观察与后台快照的调度隔离时须保留写操作、暂存和 rename/copy 发布排序，不能仅删除序列化策略。已通过的暖端到端 p95/p99 稳定规则不等于此项解决。
+
 ## macOS 系统内存耗尽 · 历史现场复核
 
 - [ ] **复核** · 2026-10-21 截图中的 203.48 GB 尚无故障进程 footprint／分配栈，应用已经退出，不能确认分配 owner。文件监听的无界入口、路径积压和重复重扫防护已完成，并通过有界突发、慢消费者及真实 Ash 验证；实现契约见 [file-watcher](crates/file-watcher/README.md#事件风暴的预算与恢复)，原始现场及验证证据见 [.build/investigations/macos-memory-20261021](.build/investigations/macos-memory-20261021)。后续若再次发生，需采集当时 PID、footprint、监听丢事件日志及触发操作；不能用已修复的风险反推历史根因。

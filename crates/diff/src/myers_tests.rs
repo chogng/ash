@@ -117,3 +117,35 @@ fn reference_edit_distance(old: &[u8], new: &[u8]) -> usize {
     }
     previous[new.len()]
 }
+
+#[test]
+fn sparse_changes_keep_only_reachable_trace_diagonals() {
+    let old = (0..2_000)
+        .map(|index| (index % 251) as u8)
+        .collect::<Vec<_>>();
+    let mut new = old.clone();
+    for index in (0..2_000).step_by(80) {
+        new[index] = 255;
+    }
+    // The input frontier needs 8,001 cells and the 51 compact traces 2,601.
+    // Full-width trace copies exceed this budget after only two iterations.
+    let limits = DiffLimits::default().with_max_trace_cells(20_000);
+    let script = edits(&old, &new, limits, &NeverCancel).unwrap();
+    assert_script_reconstructs(&old, &new, &script);
+    assert_eq!(
+        script
+            .iter()
+            .filter(|edit| !matches!(edit, Edit::Equal { .. }))
+            .count(),
+        50
+    );
+    assert_eq!(
+        edits(
+            &[1, 2],
+            &[3, 4],
+            DiffLimits::default().with_max_trace_cells(9),
+            &NeverCancel
+        ),
+        Err(DiffError::TraceLimit { limit: 9 })
+    );
+}
