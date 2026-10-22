@@ -1,3 +1,4 @@
+import { IProjectService } from '../../platform/projects/common/projectService.js';
 import { readDefaultLogLevels, DefaultLogLevelsService, IDefaultLogLevelsService } from '../services/log/common/defaultLogLevels.js';
 import '../services/configuration/common/jsonEditingService.js';
 import { IWorkspaceEditingService, WorkspaceTransitionCommittedError } from '../services/workspaces/common/workspaceEditing.js';
@@ -670,6 +671,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ISyntaxApi, api.syntax);
 		services.registerInstance(IDebugAdapterProcessService, api.debugAdapter);
 		services.registerInstance(IAssetService, api.assets);
+		services.registerInstance(IProjectService, api.projects);
 		services.registerInstance(ITestExecutionService, api.testing);
 		if (api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, api.approvalEnvironment); }
 		if (api.memories) { services.registerInstance(IMemoriesService, api.memories); }

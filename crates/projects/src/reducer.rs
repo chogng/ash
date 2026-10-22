@@ -13,7 +13,14 @@ pub(crate) fn apply(
     request: &ProjectCommandRequest,
 ) -> Result<Project, ProjectError> {
     let project = match (&current, &request.command) {
-        (None, ProjectCommand::Create { name, description }) => {
+        (
+            None,
+            ProjectCommand::Create {
+                name,
+                description,
+                materials,
+            },
+        ) => {
             if request.expected_revision != 0 {
                 return Err(ProjectError::RevisionConflict {
                     expected: request.expected_revision,
@@ -30,6 +37,7 @@ pub(crate) fn apply(
                 description: description.clone(),
                 roots: BTreeMap::new(),
                 session_ids: BTreeSet::new(),
+                materials: materials.clone(),
             }
         }
         (None, _) => return Err(ProjectError::NotFound(request.project_id.to_string())),
@@ -78,10 +86,17 @@ fn apply_existing(project: &mut Project, command: &ProjectCommand) -> Result<(),
                 "an archived Project is read-only until restored".into(),
             ));
         }
-        ProjectCommand::UpdateDetails { name, description } => {
+        ProjectCommand::UpdateDetails {
+            name,
+            description,
+            materials,
+        } => {
             validate_text("Project name", name)?;
             project.name = name.clone();
             project.description = description.clone();
+            if let Some(materials) = materials {
+                project.materials = materials.clone();
+            }
         }
         ProjectCommand::AddRoot { root } => {
             root.validate()?;

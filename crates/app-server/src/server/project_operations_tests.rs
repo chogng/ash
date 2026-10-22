@@ -262,3 +262,66 @@ fn call(
     )
     .unwrap()
 }
+
+#[test]
+fn project_materials_round_trip_without_granting_file_access() {
+    let fixture = Fixture::new();
+    let mut host = fixture.server.product_host_connection();
+    initialize(&fixture.server, &mut host);
+    let source = tempfile::tempdir().unwrap();
+    let path = ash_utils_path_uri::PathUri::from_absolute_path(
+        &ash_utils_absolute_path::AbsolutePathBuf::from_absolute(source.path().join("paper.pdf"))
+            .unwrap(),
+    );
+    let material = serde_json::json!({"path": path, "name": "paper.pdf", "kind": "file"});
+    let created = call(
+        &fixture.server,
+        &mut host,
+        2,
+        "project/create",
+        serde_json::json!({
+            "commandId": "create-material-project", "projectId": "material-project", "name": "Research", "description": "Read the evidence", "materials": [material]
+        }),
+    );
+    assert_eq!(
+        created["result"]["project"]["materials"],
+        serde_json::json!([material])
+    );
+    let updated = call(
+        &fixture.server,
+        &mut host,
+        3,
+        "project/details/update",
+        serde_json::json!({
+            "commandId": "rename-material-project", "projectId": "material-project", "expectedRevision": 1, "name": "Research notes", "description": "Updated goal"
+        }),
+    );
+    assert_eq!(
+        updated["result"]["project"]["materials"],
+        serde_json::json!([material])
+    );
+    let read = call(
+        &fixture.server,
+        &mut host,
+        4,
+        "project/read",
+        serde_json::json!({"projectId": "material-project"}),
+    );
+    assert_eq!(
+        read["result"]["project"]["materials"],
+        serde_json::json!([material])
+    );
+    let removed = call(
+        &fixture.server,
+        &mut host,
+        5,
+        "project/details/update",
+        serde_json::json!({
+            "commandId": "remove-material-project", "projectId": "material-project", "expectedRevision": 2, "name": "Research notes", "description": "Updated goal", "materials": []
+        }),
+    );
+    assert_eq!(
+        removed["result"]["project"]["materials"],
+        serde_json::json!([])
+    );
+}

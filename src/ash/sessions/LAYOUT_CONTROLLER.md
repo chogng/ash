@@ -4,11 +4,11 @@
 
 This document specifies the intended controller boundaries and session-switch behavior.
 
-BaseLayoutController owns per-session document working sets and panel view selection. DesktopLayoutController coordinates session document restoration and the desktop Editor/Details states. Feature contributions own entry commands; the Sessions layout service applies their container IDs and central content without branching on product names. Creator aggregates contributed creation tools, while Library remains one classified file and asset repository. Chat, Code and Collaboration keep the same selection, conversation views and input drafts.
+BaseLayoutController owns per-session document working sets and panel view selection. DesktopLayoutController coordinates session document restoration and the desktop Editor/Details states. Feature contributions own entry commands; the Sessions layout service applies their container IDs and central content without branching on product names. Creator aggregates contributed creation tools, while Projects presents the durable project catalog with materials inside each project. Chat, Code and Collaboration keep the same selection, conversation views and input drafts.
 
-SessionsPart permanently owns Agent conversation content and its grid. Library and Creator use retained EditorPanes in the Sessions EditorPart product-page group. Applying a session working set excludes and preserves that group, including its live panes, workspaces and documents. The Code document groups retain the normal editor split capabilities.
+SessionsPart permanently owns Agent conversation content and its grid. Projects and Creator use retained EditorPanes in the Sessions EditorPart product-page group. Applying a session working set excludes and preserves that group, including its live panes, workspaces and documents. The Code document groups retain the normal editor split capabilities.
 
-The last entry's owning command is stored at `sessions.layout.activeEntry` in workspace storage; entry visibility preferences use `sessions.layout.entryVisibility` in profile storage. Creator workspace selection remains at `sessions.creator.activeMode` and is interpreted by Creator. Library categories and browsing state remain with `ILibraryService` and never become layout entries. Existing activeMode, modeState and older page keys migrate once to the entry state.
+The last entry's owning command is stored at `sessions.layout.activeEntry` in workspace storage; entry visibility preferences use `sessions.layout.entryVisibility` in profile storage. Creator workspace selection remains at `sessions.creator.activeMode` and is interpreted by Creator. Project selection and browsing state remain with the feature's window-local service and never become layout entries. Existing activeMode, modeState and older page keys migrate once to the entry state.
 
 Code has a bottom Panel and Details docked below the editor tabs. Hiding Editor content, closing the side pane and switching modes retain ordinary tabs and dirty documents. Actual editor close and window shutdown still use save/discard/cancel. The previous open Code side-pane composition survives reload at sessions.layout.sidePane.lastOpen. An empty Code document group is seeded with managed Files/Changes tabs after session restoration; Details-only protects those managed tabs.
 
@@ -67,7 +67,7 @@ The Auxiliary Bar is visible only with active container content. Unsupported doc
 
 The desktop layout stores bottom-panel visibility with workbench part visibility. It remembers only the active panel view per session in `sessions.singlePane.layoutState`.
 
-Panel tools are available in Code. Chat, Collaboration, Library and Creator make Panel unavailable; returning to Code restores its remembered visibility. Its retained views and height survive these changes, and explicit panel commands reveal them again.
+Panel tools are available in Code. Chat, Collaboration, Projects and Creator make Panel unavailable; returning to Code restores its remembered visibility. Its retained views and height survive these changes, and explicit panel commands reveal them again.
 
 The active panel view is captured from `IPaneCompositePartService.onDidPaneCompositeOpen`. A session switch restores that view only while the panel is already visible, so restoring content never forces the panel open. Sessions without a remembered view fall back to the Terminal.
 

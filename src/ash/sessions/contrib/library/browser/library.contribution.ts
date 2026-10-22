@@ -14,12 +14,8 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Menus } from '../../../browser/menus.js';
 import { LibraryEditorPane } from './libraryEditor.js';
-import { ILibraryService, LibraryService, LIBRARY_NAVIGATION_CONTAINER_ID, LIBRARY_DETAILS_CONTAINER_ID } from './libraryService.js';
-import { LibraryNavigationView, LibraryDetailsView } from './libraryViews.js';
+import { ILibraryService, LibraryService } from './libraryService.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
-import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import { ViewContainerLocation } from '../../../../workbench/common/views.js';
-import { SessionsViewRegistry } from '../../../common/views.js';
 import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -28,29 +24,20 @@ registerSingleton(ILibraryService, LibraryService, InstantiationType.Delayed);
 
 CommandsRegistry.register('sessions.show.library', (accessor, source) => accessor.get(ISessionsLayoutService).openEntry({
 	id: 'library', activityContext: 'sessions.activity.librarySelected', content: 'editor',
-	sidebarContainerId: LIBRARY_NAVIGATION_CONTAINER_ID, detailsContainerId: LIBRARY_DETAILS_CONTAINER_ID,
+	showEditorTabs: false,
 	restoreCommand: 'sessions.show.library', focus: 'editor',
 	editorInput: {
-		resource: URI.from({ scheme: 'ash-library', path: '/page' }), label: localize('library.title', 'Library'),
+		resource: URI.from({ scheme: 'ash-library', path: '/page' }), label: localize('projects.title', 'Projects'),
 		showBreadcrumbs: false, readOnly: true, capabilities: EditorInputCapabilities.CannotClose,
 	},
 }, undefined, source === 'restore' ? { source } : undefined));
 
-registerEditorPane({ id: 'sessions.editor.library', name: 'Library', canOpen: input => input.resource.scheme === 'ash-library' ? EditorPaneMatch.Default : EditorPaneMatch.None, create: options => options.instantiationService!.createInstance(LibraryEditorPane) });
-
-// Containers are discoverable before an editor opens. Their Views own their DOM and borrow only browsing state.
-for (const [id, title, key, location, ctorDescriptor] of [
-	[LIBRARY_NAVIGATION_CONTAINER_ID, 'Library', 'library.title', ViewContainerLocation.Sidebar, new SyncDescriptor(LibraryNavigationView)],
-	[LIBRARY_DETAILS_CONTAINER_ID, 'Asset details', 'library.details', ViewContainerLocation.AuxiliaryBar, new SyncDescriptor(LibraryDetailsView)],
-] as const) {
-	SessionsViewRegistry.registerViewContainer({ id, title, localizationKey: { bundle: 'ash', key }, location, order: 3 });
-	SessionsViewRegistry.registerViews(id, [{ id: id + '.view', title, localizationKey: { bundle: 'ash', key }, ctorDescriptor, canToggleVisibility: false }]);
-}
+registerEditorPane({ id: 'sessions.editor.library', name: localize('projects.title', 'Projects'), canOpen: input => input.resource.scheme === 'ash-library' ? EditorPaneMatch.Default : EditorPaneMatch.None, create: options => options.instantiationService!.createInstance(LibraryEditorPane) });
 
 registerAction2(class OpenLibrary extends Action2 {
 	constructor() {
 		super({
-			id: 'sessions.open.library', title: localize2({ bundle: 'ash', key: 'sessions.activity.library' }, 'Library'), icon: Lxicon.projects,
+			id: 'sessions.open.library', title: localize2({ bundle: 'ash', key: 'sessions.activity.library' }, 'Projects'), icon: Lxicon.projects,
 			toggled: { condition: ContextKeyExpr.has('sessions.activity.librarySelected'), icon: Lxicon.projectsFilled },
 			menu: { id: Menus.ActivityBar, group: 'navigation', order: 30 },
 		});
@@ -64,10 +51,10 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	key: AccessibilityVerbositySettingId.Library,
 	defaultValue: true,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean') { throw new TypeError('Library accessibility verbosity must be boolean'); }
+		if (typeof value !== 'boolean') { throw new TypeError(localize('projects.verbosityInvalid', 'Projects accessibility verbosity must be boolean')); }
 		return value;
 	},
-	setting: { valueType: 'boolean', title: localize('library.verbosityTitle', 'Library accessibility help'), description: localize('library.verbosityDescription', 'Announce how to open accessibility help when Library receives focus.') },
+	setting: { valueType: 'boolean', title: localize('projects.verbosityTitle', 'Projects accessibility help'), description: localize('projects.verbosityDescription', 'Announce how to open accessibility help when Projects receives focus.') },
 });
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
@@ -82,7 +69,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			return new AccessibleContentProvider(
 				AccessibleViewProviderId.Library,
 				{ type },
-				() => type === AccessibleViewType.Help ? localize('library.help', 'Library stores reusable images independently of conversations. Use Tab to move between categories, search, Import, sorting, view controls and items. Use arrow keys within categories and the item grid; Home and End move to the first or last item. Enter or Space opens asset details. Details shows the source and exact version, lets you add or remove favorites, and choose collection membership. Add to conversation attaches the image to your current Chat draft without sending it. Use in Design places that exact image version on the canvas. Escape closes details and returns to the item. Import accepts PNG, JPEG and WebP images. New collection asks for a name. Search matches names and sources in the selected category. Grid and list views remember your choice. Refresh reads the latest catalog. <keybinding:editor.action.accessibleView> opens a text description of the current items.') : library.getAccessibleContent(),
+				() => type === AccessibleViewType.Help ? localize('projects.help', 'Projects organizes your work into named spaces. Use Tab to reach Search, Sort and New project. Use arrow keys, Home and End within the project cards. Enter opens a project. Create a project asks for a name and goals, with an optional folder. In a project, Edit details changes its name and goals. Add files accepts images, PDFs, documents and other file types. Use a folder adds a folder reference. Files stay in their original location; Remove only removes the project reference. Open a file to use its editor, or open a folder to choose a file inside it. Escape closes the creation dialog and returns focus. Projects in the breadcrumb returns to the project list. <keybinding:editor.action.accessibleView> reads the current project and material names.') : library.getAccessibleContent(),
 				() => focused.focus(),
 				AccessibilityVerbositySettingId.Library,
 			);

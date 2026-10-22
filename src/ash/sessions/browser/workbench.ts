@@ -1,3 +1,4 @@
+import { IProjectService } from '../../platform/projects/common/projectService.js';
 import { SessionsAgentSessionService } from './agentHost/sessionsAgentSessionService.js';
 import { BannerPart } from '../../workbench/browser/parts/banner/bannerPart.js';
 import { IBannerService } from '../../workbench/services/banner/browser/bannerService.js';
@@ -83,7 +84,7 @@ import { ITextModelService } from '../../editor/common/services/resolverService.
 import { TextModelResolverService } from '../../workbench/services/textmodelResolver/common/textModelResolverService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { getSingletonServiceDescriptors, InstantiationType } from '../../platform/instantiation/common/extensions.js';
-import { IAssetService, type AssetVersion } from '../../platform/assets/common/assetService.js';
+import { IAssetService } from '../../platform/assets/common/assetService.js';
 import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../platform/agentHost/common/agentModels.js';
@@ -314,7 +315,6 @@ import type { PaneCompositePart } from '../../workbench/browser/parts/paneCompos
 import { PaneCompositePartService } from '../../workbench/browser/parts/paneCompositePartService.js';
 import { IPaneCompositePartService } from '../../workbench/services/panecomposite/browser/panecomposite.js';
 import { SessionsPart, type SessionsPartOptions } from "./parts/sessionsPart.js";
-import { CreatorMode } from '../contrib/creator/common/creator.js';
 import { SidebarPart, registerSessionsNavigation } from "./parts/sidebar/sidebarPart.js";
 import type { TitlebarPart } from "./parts/titlebar/titlebarPart.js";
 
@@ -400,6 +400,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ICommandService, commandService);
 		const serviceContributionReady: Promise<void>[] = [];
 		services.registerInstance(IAssetService, options.api.assets);
+		services.registerInstance(IProjectService, options.api.projects);
 		services.registerInstance(INetworkDiagnosticsService, options.api.networkDiagnostics);
 		services.registerInstance(IContentSearchConfigurationService, options.api.contentSearchConfiguration);
 		services.registerInstance(ILanguageServerService, options.api.languageServers);
@@ -728,12 +729,6 @@ export abstract class Workbench extends Disposable {
 		}));
 		const sidebar = this._register(services.createInstance(SidebarPart, this.domNode));
 		const recoveredDrafts = migrateNewChatDraftState(storage, error => notificationService.error(localize('sessions.chat.draftRestoreFailed', 'Could not restore the Chat draft: {0}', String(error))));
-		this._register(CommandsRegistry.register('sessions.library.useInDesign', async (_accessor, value) => {
-			const version = value as AssetVersion;
-			const design = services.get(IDesignEditorService);
-			await commandService.executeCommand('sessions.creator.openMode', CreatorMode.Design);
-			await design.activeEditor.get()!.adoptAssetVersion(version);
-		}));
 		this._register(CommandsRegistry.register('sessions.creator.buildWithAgent', async (_accessor, value) => {
 			const request = value as { readonly prompt: string; readonly content: string; };
 			view.openNewSession(localize('sessions.creator.make.session', 'Make development'));
@@ -746,16 +741,6 @@ export abstract class Workbench extends Disposable {
 			const context = value as { readonly id: string; readonly name: string; readonly content: string; };
 			await services.get(ISessionsLayoutService).setConversationVisible(true);
 			sessionsPart!.addContext({ id: context.id, name: context.name, kind: 'file', resolve: async () => ({ name: context.name, content: context.content }) });
-			sessionsPart!.focus();
-		}));
-		this._register(CommandsRegistry.register('sessions.library.addToChat', async (_accessor, value) => {
-			const version = value as AssetVersion;
-			const bytes = await options.api.assets.readVersion(version);
-			let binary = '';
-			for (let offset = 0; offset < bytes.length; offset += 8192) { binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192)); }
-			const content = `data:${version.mediaType};base64,${btoa(binary)}`;
-			await this.showChat();
-			sessionsPart!.addContext({ id: version.versionId, name: version.name, kind: 'image', resolve: async () => ({ name: version.name, content, kind: 'image' }) });
 			sessionsPart!.focus();
 		}));
 		this.showChat = () => commandService.executeCommand<void>('sessions.open.chat');
@@ -784,7 +769,7 @@ export abstract class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.chatgpt.activityHelp', 'On Desktop, ChatGPT opens conversations in the window sidebar and a shared chat editor. Selection and unsent drafts are retained when switching product entries or Agent sessions. Press Alt+F1 in the sidebar or editor for accessibility help. Right-click the ChatGPT icon, or press Shift+F10 on it, then choose Reload to refresh the current chat. Use ChatGPT: Toggle Scrolling Optimization in the Command Palette to change offscreen rendering.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. Chat focuses the sessions list. Sessions from connected Agent hosts are grouped by host. New Session opens a host picker when more than one host is available; use arrow keys and Enter to choose, or Escape to cancel. Each draft keeps its chosen host when switching conversations. Custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Chat and Code share the selected session, navigation history, unsent text and attachments; switching changes the layout. Each session restores its editor tabs. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration opens the channel preview and Calls in the sidebar. Agent Teams opens the separate Agent teams list. Library and Creator are product pages selected from the Activity Bar. Library retains its search, categories and view choice. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens the account menu, which includes Return to Workbench.') + ' ' + localize('automations.activityHelp', 'Automations opens schedules and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('agentTrace.activityHelp', 'View Execution Trace opens saved execution from the conversation menu or Command Palette. Show Agent Output opens a bounded live summary in Output; its channel identifies the reviewed Session. Switching conversations keeps that reader on its selected Session until Show Agent Output is invoked again. Output links open the exact execution event. Clear Output only clears the text view, and Auto Scroll only controls following new output.') + (options.api.agentHosts ? ' ' + localize({ bundle: 'ash.workbench', key: 'agentHosts.help' }, 'Use Agents: Manage Connected Hosts in the Command Palette or Sessions header menu to connect a saved SSH host or disconnect a selected host. In the picker, use arrow keys to move, Enter to select, and Escape to cancel.') : ''),
+					() => localize('sessions.chatgpt.activityHelp', 'On Desktop, ChatGPT opens conversations in the window sidebar and a shared chat editor. Selection and unsent drafts are retained when switching product entries or Agent sessions. Press Alt+F1 in the sidebar or editor for accessibility help. Right-click the ChatGPT icon, or press Shift+F10 on it, then choose Reload to refresh the current chat. Use ChatGPT: Toggle Scrolling Optimization in the Command Palette to change offscreen rendering.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. Chat focuses the sessions list. Sessions from connected Agent hosts are grouped by host. New Session opens a host picker when more than one host is available; use arrow keys and Enter to choose, or Escape to cancel. Each draft keeps its chosen host when switching conversations. Custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Chat and Code share the selected session, navigation history, unsent text and attachments; switching changes the layout. Each session restores its editor tabs. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration opens the channel preview and Calls in the sidebar. Agent Teams opens the separate Agent teams list. Projects and Creator are product pages selected from the Activity Bar. Projects retains its search and selected project. Materials are organized inside each project. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens the account menu, which includes Return to Workbench.') + ' ' + localize('automations.activityHelp', 'Automations opens schedules and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('agentTrace.activityHelp', 'View Execution Trace opens saved execution from the conversation menu or Command Palette. Show Agent Output opens a bounded live summary in Output; its channel identifies the reviewed Session. Switching conversations keeps that reader on its selected Session until Show Agent Output is invoked again. Output links open the exact execution event. Clear Output only clears the text view, and Auto Scroll only controls following new output.') + (options.api.agentHosts ? ' ' + localize({ bundle: 'ash.workbench', key: 'agentHosts.help' }, 'Use Agents: Manage Connected Hosts in the Command Palette or Sessions header menu to connect a saved SSH host or disconnect a selected host. In the picker, use arrow keys to move, Enter to select, and Escape to cancel.') : ''),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);

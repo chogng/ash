@@ -3533,6 +3533,7 @@ fn project_folder_picker_switches_only_to_a_non_current_root_without_a_draft() {
             .unwrap()
     };
     let project = ProjectDto {
+        materials: Vec::new(),
         project_id: ash_protocol::ProjectId::new("project").unwrap(),
         revision: 1,
         status: ProjectStatusDto::Active,
@@ -3606,6 +3607,7 @@ fn project_folder_picker_opens_add_root_when_add_item_is_selected() {
             .unwrap()
     };
     let project = ProjectDto {
+        materials: Vec::new(),
         project_id: ash_protocol::ProjectId::new("project").unwrap(),
         revision: 1,
         status: ProjectStatusDto::Active,

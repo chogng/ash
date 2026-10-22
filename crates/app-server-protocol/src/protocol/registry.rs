@@ -2038,6 +2038,10 @@ use crate::protocol::projects::ProjectListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectListResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::projects::ProjectMaterialDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::projects::ProjectMaterialKindDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectMutationResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectReadParams;
@@ -7195,6 +7199,8 @@ typescript_bindings! {
     AutomationStopParams,
     PathUri,
     ProjectRootDto,
+    ProjectMaterialDto,
+    ProjectMaterialKindDto,
     ProjectDto,
     ProjectSummaryDto,
     ProjectListParams,

@@ -1,8 +1,11 @@
 use ash_app_server_protocol::protocol::projects::ProjectDto;
+use ash_app_server_protocol::protocol::projects::ProjectMaterialDto;
+use ash_app_server_protocol::protocol::projects::ProjectMaterialKindDto;
 use ash_app_server_protocol::protocol::projects::ProjectRootDto;
 use ash_app_server_protocol::protocol::projects::ProjectStatusDto;
 use ash_app_server_protocol::protocol::projects::ProjectSummaryDto;
 use ash_projects::Project;
+use ash_projects::ProjectMaterialKind;
 use ash_projects::ProjectStatus;
 use ash_utils_absolute_path::AbsolutePathBuf;
 use ash_utils_path_uri::PathUri;
@@ -29,6 +32,21 @@ pub(super) fn project(project: &Project) -> ProjectDto {
             })
             .collect(),
         session_ids: project.session_ids.iter().cloned().collect(),
+        materials: project
+            .materials
+            .iter()
+            .map(|material| ProjectMaterialDto {
+                path: PathUri::from_absolute_path(
+                    &AbsolutePathBuf::from_absolute(&material.path)
+                        .expect("validated Project material has an absolute path"),
+                ),
+                name: material.name.clone(),
+                kind: match material.kind {
+                    ProjectMaterialKind::File => ProjectMaterialKindDto::File,
+                    ProjectMaterialKind::Folder => ProjectMaterialKindDto::Folder,
+                },
+            })
+            .collect(),
     }
 }
 

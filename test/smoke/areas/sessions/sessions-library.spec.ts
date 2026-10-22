@@ -1,169 +1,139 @@
+import { readFile, realpath, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
-const image = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 1, 8, 6, 0, 0, 0, 244, 34, 127, 138, 0, 0, 0, 14, 73, 68, 65, 84, 120, 156, 99, 248, 207, 192, 240, 31, 4, 1, 16, 248, 3, 253, 78, 149, 193, 111, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130]);
-const longName = 'library-secondary-product-photography-for-the-autumn-brand-campaign-and-design-reference.png';
-
-test('Sessions Library coordinates independent container Views and a retained browsing editor', async ({ application, target, workbench }) => {
+test('Sessions Projects replaces material categories and supports keyboard creation', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
-	const library = page.locator('.ash-library');
-	await expect(library).toBeVisible();
-	await expect(page.locator('[data-part="editor"]')).toBeVisible();
-	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
-	await expect(page.locator('[data-part="sidebar"] [data-view-id="sessions.library.navigation.view"]')).toBeVisible();
-	await expect(page.locator('[data-part="auxiliarybar"] [data-view-id="sessions.library.details.view"]')).toBeVisible();
-	await expect(library.locator('.ash-library-sidebar, .ash-library-details')).toHaveCount(0);
-	await expect(page.getByRole('tab', { name: 'Library', exact: true })).toHaveCount(1);
-	await expect(page.locator('[data-part="library"], [data-part="creator"]')).toHaveCount(0);
-	await expect(library.getByRole('heading', { name: 'All', exact: true })).toBeVisible();
-	await expect(library.getByRole('searchbox')).toBeFocused();
-	await expect(library.getByRole('list', { name: 'Library items', exact: true })).toHaveAttribute('aria-busy', 'false');
-	const categories = page.locator('[data-part="sidebar"]').getByRole('navigation', { name: 'Library categories' });
-	await categories.getByRole('button', { name: 'All', exact: true }).focus();
-	await page.keyboard.press('ArrowDown');
-	await expect(categories.getByRole('button', { name: 'Favorites', exact: true })).toBeFocused();
-	await page.keyboard.press('Enter');
-	await expect(categories.getByRole('button', { name: 'Favorites', exact: true })).toHaveAttribute('aria-current', 'page');
-	await library.getByRole('searchbox').fill('Retained search');
-	await library.getByRole('button', { name: 'List view', exact: true }).click();
-	await expect(library).toHaveClass(/list-view/);
-	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
-	await expect(library).toBeHidden();
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
-	await expect(library.getByRole('searchbox')).toHaveValue('Retained search');
-	await expect(library).toHaveClass(/list-view/);
-	await library.getByRole('searchbox').focus();
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
+	const projects = page.locator('.ash-projects');
+	await expect(projects).toBeVisible();
+	await expect(projects.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeHidden();
+	await expect(page.getByRole('button', { name: 'Library', exact: true })).toHaveCount(0);
+	await expect(projects.getByRole('button', { name: 'Import', exact: true })).toHaveCount(0);
+	await projects.getByRole('button', { name: 'New project', exact: true }).first().click();
+	const dialog = page.getByRole('dialog', { name: 'Create a project' });
+	await expect(dialog.getByRole('textbox', { name: 'What are you working on?' })).toBeFocused();
+	await expect(dialog.getByRole('button', { name: 'Create project', exact: true })).toBeDisabled();
+	await dialog.getByRole('textbox', { name: 'What are you working on?' }).fill('Design research');
+	await expect(dialog.getByRole('button', { name: 'Create project', exact: true })).toBeEnabled();
+	await page.keyboard.press('Escape');
+	await expect(dialog).toHaveCount(0);
+	await expect(projects.getByRole('button', { name: 'New project', exact: true }).first()).toBeFocused();
 	await page.keyboard.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
-	await expect(help.getByRole('textbox')).toHaveValue(/Library stores reusable images/);
+	await expect(help.getByRole('textbox')).toHaveValue(/Projects organizes your work/);
 	await page.keyboard.press('Escape');
-	await expect(library.getByRole('searchbox')).toBeFocused();
 	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
-	await expect(page.locator('[data-part="sessions"]')).toBeVisible();
-	await expect(library).toBeHidden();
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
-	await expect(library).toBeVisible();
-	if (target.kind === 'browser') { await page.setViewportSize({ width: 640, height: 780 }); }
-	else {
-		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-		await application.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('sessions/electron-browser/sessions.html'))!.setSize(640, 780); });
-	}
-	await expect(library).toHaveClass(/narrow/);
-	await expect.poll(() => library.evaluate(element => [...element.querySelectorAll<HTMLElement>('*')].filter(child => child.scrollWidth > child.clientWidth && getComputedStyle(child).overflowX === 'visible').map(child => ({ className: child.className, width: child.clientWidth, contentWidth: child.scrollWidth })))).toEqual([]);
-	if (target.appServerMode === 'disabled') {
-		await expect(library.getByRole('status')).toContainText('Could not load the library');
-		await library.getByRole('button', { name: 'Refresh', exact: true }).click();
-		await expect(library.getByRole('status')).toContainText('Could not load the library');
-	}
+	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeVisible();
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
+	await expect(projects).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeHidden();
 });
 
-test('Sessions Library imports real images and preserves favorites and collections after reload', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
+test('Sessions Projects persists creation and goals through a real backend and reopened window', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
 	let page = await workbench.openAgentsWindow(target.kind);
-	let navigation = page.locator('.ash-sessions-activity-content');
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
-	let library = page.locator('.ash-library');
-	await expect(library.getByRole('searchbox')).toBeFocused();
-	await expect(library.getByRole('list', { name: 'Library items', exact: true })).toHaveAttribute('aria-busy', 'false');
-	await library.locator('input[type=file]').setInputFiles([{ name: 'library-product.png', mimeType: 'image/png', buffer: image }, { name: longName, mimeType: 'image/png', buffer: image }]);
-	let item = library.getByRole('button', { name: 'library-product.png', exact: true });
-	await expect(item).toBeVisible();
-	const longItem = library.getByRole('button', { name: longName, exact: true });
-	await expect(longItem).toBeVisible();
-	await expect(longItem.locator('.ash-library-item-name')).toHaveCSS('text-overflow', 'ellipsis');
-	await expect.poll(() => library.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-	await expect.poll(() => item.locator('img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(2);
-	await item.click();
-	let details = page.locator('[data-part="auxiliarybar"]').getByRole('complementary', { name: 'Asset details' });
-	await expect(details).toContainText('file-upload:/library-product.png');
-	await details.getByRole('button', { name: 'Add to favorites', exact: true }).click();
-	await expect(details.getByRole('button', { name: 'Remove from favorites', exact: true })).toBeEnabled();
-	await details.getByRole('button', { name: 'New collection', exact: true }).click();
-	const input = page.locator('.ash-quick-pick').getByRole('textbox');
-	await input.fill('Brand assets');
-	await input.press('Enter');
-	const membership = details.getByRole('checkbox', { name: 'Brand assets' });
-	await expect(membership).toBeEnabled();
-	await membership.check();
-	await expect(membership).toBeChecked();
-	await expect(membership).toBeEnabled();
-	await page.locator('[data-part="sidebar"]').getByRole('navigation').getByRole('button', { name: 'Brand assets', exact: true }).click();
-	await expect(library.getByRole('listitem')).toHaveCount(1);
-	await library.getByRole('searchbox').fill('no match');
-	await expect(library.getByRole('listitem')).toHaveCount(0);
-	await library.getByRole('searchbox').fill('product');
-	await expect(item).toBeVisible();
-	await library.getByRole('button', { name: 'List view', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
+	let projects = page.locator('.ash-projects');
+	await expect(projects.getByText('Looking to start a project?', { exact: true })).toBeVisible();
+	await page.screenshot({ path: testInfo.outputPath('projects-empty.png') });
+	await projects.getByRole('button', { name: 'New project', exact: true }).first().click();
+	const dialog = page.getByRole('dialog', { name: 'Create a project' });
+	await dialog.getByRole('textbox', { name: 'What are you working on?' }).fill('Research workspace');
+	await dialog.getByRole('textbox', { name: 'What are you trying to achieve?' }).fill('Collect images, papers and working documents.');
+	await page.screenshot({ path: testInfo.outputPath('projects-create.png') });
+	await dialog.getByRole('button', { name: 'Create project', exact: true }).click();
+	await expect(dialog).toHaveCount(0);
+	await expect(projects.getByRole('heading', { name: 'Research workspace', exact: true })).toBeVisible();
+	await expect(projects.getByRole('region', { name: 'Materials' })).toBeVisible();
+	await page.screenshot({ path: testInfo.outputPath('projects-detail.png') });
+	await expect(projects.getByText('Collect images, papers and working documents.', { exact: true })).toBeVisible();
+	await projects.getByRole('button', { name: 'Projects', exact: true }).click();
+	await expect(projects.getByRole('button', { name: 'Research workspace', exact: true })).toBeVisible();
+	await projects.getByRole('button', { name: 'Search projects', exact: true }).click();
+	await projects.getByRole('searchbox').fill('no matching project');
+	await expect(projects.getByText('No matching projects', { exact: true })).toBeVisible();
+	await projects.getByRole('button', { name: 'Clear search' }).click();
+	await projects.getByRole('button', { name: 'Research workspace', exact: true }).click();
+	await projects.getByRole('button', { name: 'Edit details' }).click();
+	const edit = page.getByRole('dialog', { name: 'Edit details' });
+	await edit.getByRole('textbox', { name: 'What are you trying to achieve?' }).fill('Organize the final evidence.');
+	await edit.getByRole('button', { name: 'Save changes' }).click();
+	await expect(edit).toHaveCount(0);
 	page = await workbench.reopenAgentsWindow(application, page);
-	navigation = page.locator('.ash-sessions-activity-content');
-	library = page.locator('.ash-library');
-	item = library.getByRole('button', { name: 'library-product.png', exact: true });
-	details = page.locator('[data-part="auxiliarybar"]').getByRole('complementary', { name: 'Asset details' });
-	await expect(navigation.getByRole('button', { name: 'Library', exact: true })).toHaveAttribute('aria-current', 'page');
-	await expect(library.getByRole('searchbox')).toBeFocused();
-	await expect(library.getByRole('list', { name: 'Library items', exact: true })).toHaveAttribute('aria-busy', 'false');
-	await expect(library).toHaveClass(/list-view/);
-	await page.locator('[data-part="sidebar"]').getByRole('navigation').getByRole('button', { name: 'Brand assets', exact: true }).click();
-	await expect(item).toBeVisible();
-	await item.focus();
-	await page.keyboard.press('Enter');
-	await expect(item).toBeFocused();
-	await expect(details.getByRole('button', { name: 'Remove from favorites', exact: true })).toBeEnabled();
-	await page.keyboard.press('Alt+F2');
-	const accessible = page.getByRole('dialog', { name: 'Accessible View', exact: true });
-	await expect(accessible.getByRole('textbox')).toHaveValue(/library-product.png.*Favorite/);
-	await page.keyboard.press('Escape');
-	await page.keyboard.press('Escape');
-	await expect(item).toBeFocused();
-	await library.getByRole('button', { name: 'Delete collection', exact: true }).click();
-	await expect(page.locator('[data-part="sidebar"]').getByRole('navigation').getByRole('button', { name: 'Brand assets', exact: true })).toHaveCount(0);
-	await expect(item).toBeVisible();
-	await item.click();
-	await details.getByRole('button', { name: 'Add to conversation', exact: true }).click();
-	await expect(page.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input):visible').getByRole('button', { name: 'Remove library-product.png', exact: true })).toBeVisible();
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
-	await expect(details.getByRole('button', { name: 'Use in Design', exact: true })).toBeEnabled();
-	await details.getByRole('button', { name: 'Use in Design', exact: true }).click();
-	const canvas = page.getByRole('region', { name: 'Design canvas' });
-	await expect(canvas.locator('svg image')).toHaveCount(1);
-	await expect(canvas.locator('svg image')).toHaveAttribute('href', /^blob:/);
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
-	await expect(details.getByRole('button', { name: 'Use in Design', exact: true })).toBeEnabled();
-	await details.getByRole('button', { name: 'Use in Design', exact: true }).click();
-	await expect(canvas.locator('svg image')).toHaveCount(2);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
+	projects = page.locator('.ash-projects');
+	await projects.getByRole('button', { name: 'Research workspace', exact: true }).click();
+	await expect(projects.getByText('Organize the final evidence.', { exact: true })).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeHidden();
+	if (target.kind === 'browser') { await page.setViewportSize({ width: 720, height: 780 }); }
+	else {
+		if (!('windows' in application)) { throw new Error('Expected Electron application'); }
+		const window = await application.browserWindow(page);
+		await window.evaluate(value => value.setSize(720, 780));
+	}
+	await expect(projects).toHaveClass(/narrow/);
+	await expect.poll(() => projects.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+	const overview = await projects.locator('.ash-projects-overview').boundingBox();
+	const materials = await projects.locator('.ash-projects-materials').boundingBox();
+	expect(materials!.y).toBeGreaterThan(overview!.y);
+	await page.screenshot({ path: testInfo.outputPath('projects-narrow.png') });
 });
 
-test('Sessions Library uses Chinese labels and localized keyboard help', async ({ application, target, workbench, restartWorkbench }) => {
-	let page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+,');
-	let settings = page.locator('.ash-settings-editor');
-	await settings.locator('[data-settings-category-id="general"]').click();
-	const language = settings.locator('[data-settings-item-id="workbench.locale"]').getByRole('combobox');
-	await language.click();
-	await page.keyboard.press('End');
-	await page.keyboard.press('Enter');
-	await expect(language).toHaveText('简体中文');
-	({ workbench, application } = await restartWorkbench());
-	page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+,');
-	await page.locator('.ash-modal-editor-close').click();
-	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
-	else {
-		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
-	await page.waitForFunction(() => document.querySelector('.ash-sessions-activity-content') || document.querySelector('#app > section > textarea[readonly]'));
-	if (await page.locator('#app > section > textarea[readonly]').count()) throw new Error(await page.locator('#app > section > textarea[readonly]').inputValue());
 
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '资料库', exact: true }).click();
-	const library = page.locator('.ash-library');
-	await expect(library.getByRole('heading', { name: '全部', exact: true })).toBeVisible();
-	await expect(library.getByRole('button', { name: '导入', exact: true })).toBeVisible();
-	await library.getByRole('searchbox', { name: '搜索素材库' }).focus();
-	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/素材库独立于对话保存可复用的图片/);
+test('Sessions Projects keeps PDFs and arbitrary file references inside a project', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+	if (!('windows' in application)) { throw new Error('Expected Electron application'); }
+	const directory = await realpath(testWorkspace.directory);
+	const paths = ['paper.pdf', 'notes.txt', 'data.csv'].map(name => join(directory, name));
+	await Promise.all(paths.map(path => writeFile(path, 'Project source material')));
+	const original = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
+	try {
+		await application.evaluate(({ dialog }, directory) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] }); }, directory);
+		let page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
+		let projects = page.locator('.ash-projects');
+		await projects.getByRole('button', { name: 'New project', exact: true }).first().click();
+		const dialog = page.getByRole('dialog', { name: 'Create a project' });
+		await dialog.getByRole('textbox', { name: 'What are you working on?' }).fill('Mixed materials');
+		await dialog.getByRole('button', { name: 'Use a folder', exact: true }).click();
+		await dialog.getByRole('button', { name: 'Create project', exact: true }).click();
+		await expect(dialog).toHaveCount(0);
+		await expect(projects.locator('.ash-projects-material')).toHaveCount(1);
+		await application.evaluate(({ dialog }, paths) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: paths }); }, paths);
+		await projects.getByRole('button', { name: 'Add files', exact: true }).click();
+		await expect(projects.locator('.ash-projects-material')).toHaveCount(4);
+		page = await workbench.reopenAgentsWindow(application, page);
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
+		projects = page.locator('.ash-projects');
+		await projects.getByRole('button', { name: 'Mixed materials', exact: true }).click();
+		await expect(projects.locator('.ash-projects-material')).toHaveCount(4);
+		await projects.getByRole('button', { name: 'notes.txt', exact: true }).click();
+		await expect(page.getByRole('tabpanel', { name: 'notes.txt', exact: true })).toContainText('Project source material');
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
+		await expect(projects).toBeVisible();
+		await expect(projects.getByRole('heading', { name: 'Mixed materials', exact: true })).toBeVisible();
+		await projects.getByRole('button', { name: 'Remove paper.pdf from project', exact: true }).click();
+		await expect(projects.locator('.ash-projects-material')).toHaveCount(3);
+		expect(await readFile(paths[0], 'utf8')).toBe('Project source material');
+	} finally {
+		await application.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original; }, original);
+		await original.dispose();
+	}
+});
+
+test('Sessions Projects creation is localized in Chinese', { tag: ['@electron-app-server'] }, async ({ target, workbench, restartWorkbench }, testInfo) => {
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+	await language.fill('简体中文');
+	await language.press('Enter');
+	({ workbench } = await restartWorkbench());
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click();
+	await page.locator('.ash-projects').getByRole('button', { name: '新建项目', exact: true }).first().click();
+	const dialog = page.getByRole('dialog', { name: '创建项目' });
+	await expect(dialog.getByRole('textbox', { name: '你正在做什么？' })).toBeFocused();
+	await expect(dialog.getByRole('textbox', { name: '你希望达成什么目标？' })).toBeVisible();
+	await page.screenshot({ path: testInfo.outputPath('projects-chinese.png') });
 	await page.keyboard.press('Escape');
-	await expect(library.getByRole('searchbox', { name: '搜索素材库' })).toBeFocused();
 });

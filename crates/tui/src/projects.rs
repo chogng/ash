@@ -247,6 +247,7 @@ where
     } else {
         client
             .create_project(ProjectCreateParams {
+                materials: Vec::new(),
                 command_id: new_command_id("project-create"),
                 project_id,
                 name: path_name(workspace),

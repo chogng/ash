@@ -1,3 +1,4 @@
+use crate::ProjectMaterial;
 use crate::ProjectRoot;
 use ash_file_access::DirId;
 use ash_protocol::CommandId;
@@ -12,10 +13,14 @@ pub enum ProjectCommand {
     Create {
         name: String,
         description: String,
+        #[serde(default)]
+        materials: Vec<ProjectMaterial>,
     },
     UpdateDetails {
         name: String,
         description: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        materials: Option<Vec<ProjectMaterial>>,
     },
     AddRoot {
         root: ProjectRoot,

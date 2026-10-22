@@ -14,6 +14,8 @@ pub use coordinator::ProjectCommandResult;
 pub use coordinator::ProjectCoordinator;
 pub use error::ProjectError;
 pub use project::Project;
+pub use project::ProjectMaterial;
+pub use project::ProjectMaterialKind;
 pub use project::ProjectRoot;
 pub use project::ProjectStatus;
 pub use store::ProjectCommit;

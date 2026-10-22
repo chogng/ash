@@ -80,6 +80,7 @@ fn project_commands_are_revision_checked_and_retry_safe() {
         ProjectCommand::Create {
             name: "Ash".into(),
             description: "multi-root work".into(),
+            materials: Vec::new(),
         },
     );
     let created = coordinator.apply(create.clone()).unwrap();
@@ -96,6 +97,7 @@ fn project_commands_are_revision_checked_and_retry_safe() {
             ProjectCommand::UpdateDetails {
                 name: "stale".into(),
                 description: String::new(),
+                materials: None,
             },
         )),
         Err(ProjectError::RevisionConflict {
@@ -115,6 +117,7 @@ fn project_roots_and_associations_remain_organizational_facts() {
             ProjectCommand::Create {
                 name: "Ash".into(),
                 description: String::new(),
+                materials: Vec::new(),
             },
         ))
         .unwrap()
@@ -167,4 +170,64 @@ fn root() -> ProjectRoot {
         name: "source".into(),
         purpose: "primary source root".into(),
     }
+}
+
+#[test]
+fn materials_are_versioned_references_and_invalid_updates_are_atomic() {
+    let coordinator = coordinator();
+    let material = super::ProjectMaterial {
+        path: std::env::temp_dir().join("project-paper.pdf"),
+        name: "paper.pdf".into(),
+        kind: super::ProjectMaterialKind::File,
+    };
+    let created = coordinator
+        .apply(request(
+            "create-material-project",
+            0,
+            ProjectCommand::Create {
+                name: "Research".into(),
+                description: "Read the evidence".into(),
+                materials: vec![material.clone()],
+            },
+        ))
+        .unwrap()
+        .project;
+    assert_eq!(created.materials, vec![material.clone()]);
+    let duplicated = coordinator.apply(request(
+        "duplicate-material",
+        1,
+        ProjectCommand::UpdateDetails {
+            name: created.name.clone(),
+            description: created.description.clone(),
+            materials: Some(vec![material.clone(), material]),
+        },
+    ));
+    assert!(matches!(duplicated, Err(ProjectError::InvalidInput(_))));
+    assert_eq!(coordinator.read(&created.project_id).unwrap(), created);
+    let renamed = coordinator
+        .apply(request(
+            "rename-material-project",
+            1,
+            ProjectCommand::UpdateDetails {
+                name: "Research notes".into(),
+                description: created.description,
+                materials: None,
+            },
+        ))
+        .unwrap()
+        .project;
+    assert_eq!(renamed.materials.len(), 1);
+    let removed = coordinator
+        .apply(request(
+            "remove-material",
+            2,
+            ProjectCommand::UpdateDetails {
+                name: renamed.name,
+                description: renamed.description,
+                materials: Some(Vec::new()),
+            },
+        ))
+        .unwrap()
+        .project;
+    assert!(removed.materials.is_empty());
 }
