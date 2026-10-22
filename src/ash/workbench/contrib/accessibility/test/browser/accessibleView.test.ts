@@ -112,6 +112,7 @@ test('opening help publishes its state, disables only the active hint and releas
 	await fixture.commands.executeCommand(AccessibilityCommandId.OpenAccessibilityHelp);
 	const text = fixture.browser.window.document.querySelector('textarea')!;
 	assert.equal(text.value, 'Alt+F1');
+	assert.match(text.getAttribute('aria-description') ?? '', /Alt\+F1/);
 	assert.equal(fixture.contextKeys.getValue('accessibilityHelpIsShown'), true);
 	fixture.helpKeybinding = fixture.keybindings.resolveKeybinding(Keybinding.single(logicalKey('F1', { ctrlKey: true })));
 	fixture.keybindingChanges.fire();
@@ -122,6 +123,7 @@ test('opening help publishes its state, disables only the active hint and releas
 	assert.equal(fixture.configuration.getValue(AccessibilityVerbositySettingId.Explorer), false);
 	assert.equal(fixture.configuration.getValue(AccessibilityVerbositySettingId.OpenEditors), true);
 	assert.equal(fixture.contextKeys.getValue('accessibleViewVerbosityEnabled'), false);
+	assert.equal(text.hasAttribute('aria-description'), false);
 	assert.equal(fixture.accessibleView.show(AccessibleViewType.Help), false);
 	fixture.browser.window.document.querySelector('dialog')!.close();
 	await Promise.resolve();

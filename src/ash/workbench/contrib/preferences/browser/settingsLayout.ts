@@ -265,7 +265,7 @@ export const SettingsNavigation = [
 						id: 'performance',
 						label: localize('settings.editor.performance.label', 'Rendering'),
 						description: localize('settings.editor.performance.description', 'Configure editor rendering performance.'),
-						settings: ['editor.experimentalGpuAcceleration'],
+						settings: ['editor.experimentalGpuAcceleration', 'editor.foldingMaximumRegions'],
 					},
 				],
 			},

@@ -7,6 +7,20 @@ import { RawContextKey } from '../../../../platform/contextkey/common/contextkey
 import { AccessibilitySignal } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.InlayHints,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('inlayHints.verbosityInvalid', 'Inlay hints accessibility verbosity must be boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('inlayHints.verbosityTitle', 'Inlay hints accessibility help'); },
+		get description() { return localize('inlayHints.verbosityDescription', 'Announce how to open accessibility help while reading inlay hints.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.WorkspaceTrust, defaultValue: true,
 	parse(value: unknown): boolean {
 		if (typeof value !== 'boolean') throw new TypeError(localize('workspaceTrust.verbosityInvalid', 'Workspace Trust accessibility verbosity must be boolean.'));

@@ -162,6 +162,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
 			} : undefined,
 			contributionIds: [
+				'workbench.contrib.limitIndicator',
+				'workbench.contrib.opener',
 				'chatResponseResourceWorkbenchContribution',
 				'terminalAutoReplies',
 				'terminalTelemetry',

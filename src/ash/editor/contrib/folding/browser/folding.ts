@@ -115,6 +115,7 @@ class FoldingRangeSource extends Disposable {
 		private readonly editor: ICodeEditor,
 		private readonly folding: EditorFoldingModel,
 		private readonly service: FoldingRangeService,
+		private readonly limitReporter: RangesLimitReporter,
 		private readonly options: {
 			readonly configuration?: IConfigurationService;
 			readonly configurations: ILanguageConfigurationService;
@@ -143,6 +144,7 @@ class FoldingRangeSource extends Disposable {
 
 	private refresh(): void {
 		this.request?.abort();
+		this.limitReporter.update(0, false);
 		if (!this.editor.getOption(EditorOption.folding)) {
 			this.folding.setRanges([]);
 			return;
@@ -171,6 +173,7 @@ class FoldingRangeSource extends Disposable {
 	private applyRanges(...ranges: readonly (readonly EditorFoldingRange[])[]): void {
 		const ordered = mergeEditorFoldingRanges(...ranges);
 		const limit = this.editor.getOption(EditorOption.foldingMaximumRegions);
+		this.limitReporter.update(ordered.length, ordered.length > limit ? limit : false);
 		if (ordered.length <= limit) {
 			this.folding.setProviderRanges(ordered);
 			return;
@@ -220,6 +223,7 @@ export class FoldingController extends Disposable {
 		editor: ICodeEditor,
 		viewport: View,
 		folding: EditorFoldingModel,
+		public readonly limitReporter: RangesLimitReporter,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IAccessibilitySignalService signals: IAccessibilitySignalService,
 	) {
@@ -383,7 +387,8 @@ registerEditorContribution({
 		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
 		const folding = context.getService(TextEditorCapability.folding);
 		const service = context.register(new FoldingRangeService(context.model, context.languageFeaturesService.foldingRangeProvider, context.model.uri));
-		context.register(new FoldingRangeSource(context.editor, folding, service, {
+		const reporter = context.register(new RangesLimitReporter(context.editor));
+		context.register(new FoldingRangeSource(context.editor, folding, service, reporter, {
 			configuration: context.getOptionalService(IConfigurationService),
 			configurations: context.configurations,
 			languageFeaturesService: context.languageFeaturesService,
@@ -391,9 +396,25 @@ registerEditorContribution({
 			onError: context.onLanguageError,
 		}));
 		context.register(new FoldingDecorationPresenter(context.editor, folding, new FoldingDecorationProvider(context.editor)));
-		return context.instantiationService.createInstance(FoldingController, context.editor, context.view, folding);
+		return context.instantiationService.createInstance(FoldingController, context.editor, context.view, folding, reporter);
 	},
 });
+
+/** Exposes the range source's result before its existing priority-based truncation. */
+export class RangesLimitReporter extends Disposable {
+	private readonly changed = this._register(new Emitter<void>());
+	public readonly onDidChange = this.changed.event;
+	private value: { computed: number; limited: number | false; } = { computed: 0, limited: false };
+	constructor(private readonly editor: ICodeEditor) { super(); }
+	public get limit(): number { return this.editor.getOption(EditorOption.foldingMaximumRegions); }
+	public get computed(): number { return this.value.computed; }
+	public get limited(): number | false { return this.value.limited; }
+	public update(computed: number, limited: number | false): void {
+		if (computed === this.value.computed && limited === this.value.limited) return;
+		this.value = { computed, limited };
+		this.changed.fire();
+	}
+}
 
 interface FoldingArguments {
 	levels?: number;

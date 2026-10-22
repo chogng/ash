@@ -109,6 +109,10 @@ Worker 文档镜像使用快照与版本化增量同步。增量结果的基线�
 
 格式化的提供者选择归 Workbench，语言级 `editor.defaultFormatter` 由配置服务解析；编辑器的格式化贡献拥有输入触发、取消与编辑应用。Inlay 通过 decoration 的 injected text 进入行几何，不写入正文或历史。Snippet 插入、嵌套合并与撤销由 Snippet contribution 和同一文本事务链负责。
 
+Workbench 的内联提示无障碍贡献通过 `InlayHintsController` 读取当前版本的提示，在共享只读无障碍视图中组合当前行文本；不重复请求语言 Provider，也不修改正文。颜色检测器与折叠范围源分别报告实际计算数量和截断上限，`limitIndicator` 只投影活动编辑器的这些报告。上限设置沿现有 `settings.json`、语言覆盖与编辑器配置事件生效；没有截断机制的诊断装饰不生成限制提示。
+
+文件夹链接通过 Workbench `opener` 贡献查询现有文件 Provider；工作区内的目录交给 Explorer 定位，普通文件继续走编辑器打开链。原生 Sessions 对工作区外本地目录复用宿主的系统文件定位能力，浏览器不注册此宿主回调。Provider 的权限错误继续向调用方传播；窗口释放后的异步查询结果不触发导航。
+
 ### 语法会话与主题样式
 
 基础高亮、预览、大纲、折叠、结构选择与假设编辑共用模型的 Tree-sitter 会话。Desktop 使用 Rust／Rope；Web 在连接可用时使用 Rust，断线时使用本地 Tree-sitter Worker。grammar 与 query 随语言资源提供，模型 tokenization 与结构请求共享会话，Semantic Tokens 独立叠加。

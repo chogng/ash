@@ -1269,6 +1269,21 @@ test("Code shows App Server LSP inlay hints in Stanza", async ({ target, workben
 	await expect(hint).toBeVisible({ timeout: 60_000 });
 	await hint.hover();
 	await expect(hint).toHaveAttribute("title", "inferred type");
+
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await workbench.page.keyboard.press('ControlOrMeta+Home');
+	await workbench.page.keyboard.press('ArrowDown');
+	await workbench.quickaccess.runCommand('inlayHints.startReadingLineWithHint');
+	const reading = workbench.page.getByRole('dialog', { name: 'Accessible View', exact: true });
+	await expect(reading.getByRole('textbox')).toBeFocused();
+	await expect(reading.getByRole('textbox')).toHaveValue(/Line 2 with inlay hints:[\s\S]*: String/);
+	await workbench.page.keyboard.press('Escape');
+	await expect(editor.input).toBeFocused();
+	await workbench.page.keyboard.press('Alt+F2');
+	await expect(reading.getByRole('textbox')).toHaveValue(/: String/);
+	await workbench.page.keyboard.press('Escape');
+	await expect(editor.input).toBeFocused();
 });
 
 test("Code keeps App Server LSP linked edits in one undo step", async ({ target, workbench }) => {

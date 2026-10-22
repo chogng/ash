@@ -586,6 +586,21 @@ for (const key of ['editor.experimental.treeSitterTelemetry']) {
 }
 
 // The schema owner also registers the model settings consumed by editor services.
+configurationRegistry.registerConfiguration<number>({
+	key: 'editor.foldingMaximumRegions',
+	defaultValue: 5000,
+	scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
+	parse(value: unknown): number {
+		if (!Number.isSafeInteger(value) || (value as number) < 1) throw new RangeError(localize('limitIndicator.foldingInvalid', 'The folding region limit must be a positive integer.'));
+		return value as number;
+	},
+	setting: {
+		valueType: 'number', minimum: 1, maximum: Number.MAX_SAFE_INTEGER,
+		get title() { return localize('limitIndicator.foldingTitle', 'Maximum folding regions'); },
+		get description() { return localize('limitIndicator.foldingDescription', 'Limit the number of folding regions available in each editor.'); },
+	},
+});
+
 configurationRegistry.registerConfiguration<boolean>({
 	key: 'editor.formatOnType',
 	defaultValue: false,

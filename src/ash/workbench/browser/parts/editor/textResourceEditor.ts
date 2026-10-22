@@ -202,7 +202,17 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				selectionClipboard?: IEditorOptions['selectionClipboard'];
 				find?: IEditorOptions['find'];
 				formatOnType?: boolean;
+				colorDecorators?: boolean;
+				colorDecoratorsLimit?: number;
+				folding?: boolean;
+				foldingMaximumRegions?: number;
+				foldingStrategy?: IEditorOptions['foldingStrategy'];
 			} = {};
+			if (event.affectsConfiguration('editor.colorDecorators', fontOverrides)) update.colorDecorators = this.configurationService.getValue('editor.colorDecorators', fontOverrides);
+			if (event.affectsConfiguration('editor.colorDecoratorsLimit', fontOverrides)) update.colorDecoratorsLimit = this.configurationService.getValue('editor.colorDecoratorsLimit', fontOverrides);
+			if (event.affectsConfiguration('editor.folding', fontOverrides)) update.folding = this.configurationService.getValue('editor.folding', fontOverrides);
+			if (event.affectsConfiguration('editor.foldingMaximumRegions', fontOverrides)) update.foldingMaximumRegions = this.configurationService.getValue('editor.foldingMaximumRegions', fontOverrides);
+			if (event.affectsConfiguration('editor.foldingStrategy', fontOverrides)) update.foldingStrategy = this.configurationService.getValue('editor.foldingStrategy', fontOverrides);
 			if (event.affectsConfiguration('editor.formatOnType', fontOverrides)) {
 				update.formatOnType = this.configurationService.getValue<boolean>('editor.formatOnType', fontOverrides);
 			}
@@ -348,7 +358,10 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				codeLens: this.options.codeLens,
 				colorDecorators: this.options.colorDecorators,
 				colorDecoratorsActivatedOn: this.options.colorDecoratorsActivatedOn,
-				colorDecoratorsLimit: this.options.colorDecoratorsLimit,
+				colorDecoratorsLimit: this.configurationService.getValue('editor.colorDecoratorsLimit', fontOverrides),
+				folding: this.configurationService.getValue('editor.folding', fontOverrides),
+				foldingMaximumRegions: this.configurationService.getValue('editor.foldingMaximumRegions', fontOverrides),
+				foldingStrategy: this.configurationService.getValue('editor.foldingStrategy', fontOverrides),
 				defaultColorDecorators: this.options.defaultColorDecorators,
 				formatOnSave: this.options.formatOnSave,
 				find: this.readFindOptions(),
@@ -398,6 +411,8 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			const fontOverrides = { resource: resolvedModel.uri, overrideIdentifier: this.languageId };
 			part.updateOptions({
 				minimap: this.options.minimap ?? this.readMinimapOptions(fontOverrides),
+				colorDecoratorsLimit: this.configurationService.getValue('editor.colorDecoratorsLimit', fontOverrides),
+				foldingMaximumRegions: this.configurationService.getValue('editor.foldingMaximumRegions', fontOverrides),
 				fontFamily: this.options.fontFamily ?? (this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined),
 				fontSize: this.options.fontSize ?? this.configurationService.getValue<number>('editor.fontSize', fontOverrides),
 				wordWrap: this.options.lineWrapping ?? this.configurationService.getValue(wordWrapConfiguration, fontOverrides),

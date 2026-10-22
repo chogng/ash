@@ -14,9 +14,17 @@ import { StopWatch } from '../../../../base/common/stopwatch.js';
 import { Range } from '../../../common/core/range.js';
 import { InjectedTextCursorStops } from '../../../common/model.js';
 import type { IEditorDecorationsCollection } from '../../../common/editorCommon.js';
+import { Emitter } from '../../../../base/common/event.js';
 
 /** Owns versioned hints; the editor's line projection owns their inline geometry. */
 export class InlayHintsController extends Disposable {
+	public static readonly ID = 'editor.contrib.inlayHints';
+	public static get(editor: ICodeEditor): InlayHintsController | null {
+		return editor.getContribution<InlayHintsController>(InlayHintsController.ID);
+	}
+
+	private readonly changed = this._register(new Emitter<void>());
+	public readonly onDidChangeHints = this.changed.event;
 	private hints: readonly LanguageInlayHint[] = [];
 	private readonly decorations: IEditorDecorationsCollection;
 	private rendered: readonly LanguageInlayHint[] | undefined;
@@ -69,6 +77,11 @@ export class InlayHintsController extends Disposable {
 		}
 	}
 
+	/** Returns only the current model revision's hints, including hints hidden by a modifier. */
+	public getInlayHintsForLine(line: number): readonly LanguageInlayHint[] {
+		return this.hints.filter(hint => hint.position.lineNumber === line).sort((left, right) => left.position.column - right.position.column);
+	}
+
 	private async refresh(): Promise<void> {
 		const model = this.viewport.textModel;
 		if (this.isDisposed || model.isDisposed()) return;
@@ -96,6 +109,7 @@ export class InlayHintsController extends Disposable {
 			this.debounce.update(model, duration.elapsed());
 			this.hints = hints;
 			this.render();
+			this.changed.fire();
 		} catch (error) {
 			if (isLanguageFeatureRequestCurrent(request)) {
 				this.clear();
@@ -133,6 +147,7 @@ export class InlayHintsController extends Disposable {
 		this.hints = [];
 		this.rendered = undefined;
 		this.decorations.clear();
+		this.changed.fire();
 	}
 }
 
@@ -155,7 +170,7 @@ function normalizeLanguageInlayHint(hint: LanguageInlayHint): LanguageInlayHint 
 }
 
 registerEditorContribution({
-	id: "editor.contrib.inlayHints", install: context => {
+	id: InlayHintsController.ID, install: context => {
 		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
 		return context.instantiationService.createInstance(InlayHintsController, context.view, context.editor, context.onLanguageError);
 	}
