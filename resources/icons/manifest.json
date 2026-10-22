@@ -392,6 +392,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "debug-start",
+      "file": "debug-start.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "design",
       "file": "design.svg",
       "rendering": "symbolic"
@@ -1012,6 +1017,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "play",
+      "file": "play.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "plug",
       "file": "plug.svg",
       "rendering": "symbolic"
@@ -1189,11 +1199,6 @@
     {
       "id": "star-filled",
       "file": "star-filled.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "start",
-      "file": "start.svg",
       "rendering": "symbolic"
     },
     {
