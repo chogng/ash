@@ -1209,6 +1209,7 @@
     "color.charts.green": "图表中绿色数据系列的颜色。",
     "color.charts.purple": "图表中紫色数据系列的颜色。",
     "color.input.foreground": "输入框文字的前景色。",
+    "color.debugIcon.startForeground": "启动调试图标的前景色。",
     "color.input.background": "输入框背景色。",
     "color.input.border": "输入框边框的颜色。",
     "color.input.placeholderForeground": "输入框占位文字的前景色。",

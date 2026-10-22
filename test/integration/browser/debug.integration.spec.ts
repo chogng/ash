@@ -531,6 +531,7 @@ test('debug launch dropdown uses Chinese labels and stays inside a narrow sideba
 		expect(geometry).toEqual({ fits: true, overflow: false, ellipsis: 'ellipsis' });
 		await dropdown.click();
 		await expect(page.getByPlaceholder('搜索配置', { exact: true })).toBeFocused();
+		expect(await page.getByRole('menuitemradio').evaluateAll(rows => rows.map(row => row.getBoundingClientRect().height))).toEqual([22, 22, 22]);
 		await expect(page.getByRole('menuitemradio', { name: 'All（复合配置）', exact: true })).toBeVisible();
 		await page.getByPlaceholder('搜索配置', { exact: true }).press('Escape');
 		await expect(dropdown).toBeFocused();
@@ -538,6 +539,100 @@ test('debug launch dropdown uses Chinese labels and stays inside a narrow sideba
 	await page.evaluate(() => window.ashDebugIntegration.theme('light'));
 	await dropdown.click();
 	await page.screenshot({ path: testInfo.outputPath('debug-launch-dropdown.png'), clip: { x: 0, y: 0, width: 300, height: 200 } });
+});
+
+for (const locale of ['en', 'zh-cn']) test(`debug launch title contains long configurations and preserves icon hit areas (${locale})`, async ({ page }, testInfo) => {
+	await page.goto(`/debug.html?launch-controls&long-launch-name&locale=${locale}`);
+	const title = page.locator('.ash-workbench-part-title');
+	const dropdown = title.locator('.ash-debug-configuration');
+	await expect(dropdown).toHaveText('Run configuration with a very long name');
+	for (const width of [180, 225, 280, 400]) {
+		await page.evaluate(width => window.ashDebugIntegration.resize(width), width);
+		for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+			await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
+			const geometry = await title.evaluate(element => {
+				const bounds = element.getBoundingClientRect();
+				const buttons = [...element.querySelectorAll('button')];
+				const label = element.querySelector<HTMLElement>('.ash-debug-configuration-label')!;
+				const actionSize = parseFloat(getComputedStyle(element).getPropertyValue('--ash-toolbar-actionSize'));
+				return {
+					contained: buttons.every(button => {
+						const box = button.getBoundingClientRect();
+						return box.left >= bounds.left && box.right <= bounds.right && box.top >= bounds.top && box.bottom <= bounds.bottom;
+					}),
+					iconHitAreas: buttons
+						.filter(button => !button.classList.contains('ash-debug-configuration'))
+						.every(button => button.getBoundingClientRect().width === actionSize),
+					overflow: element.scrollWidth > element.clientWidth,
+					ellipsis: getComputedStyle(label).textOverflow,
+					truncated: label.scrollWidth > label.clientWidth,
+				};
+			});
+			expect(geometry).toMatchObject({ contained: true, iconHitAreas: true, overflow: false, ellipsis: 'ellipsis' });
+			if (width === 180) expect(geometry.truncated).toBe(true);
+		}
+	}
+	await page.evaluate(() => window.ashDebugIntegration.resize(225));
+	await dropdown.focus();
+	await dropdown.press('ArrowDown');
+	await expect(page.getByRole('menuitemradio', { name: 'Run configuration with a very long name', exact: true })).toBeVisible();
+	await page.getByRole('searchbox').press('Escape');
+	await expect(dropdown).toBeFocused();
+	await title.screenshot({ path: testInfo.outputPath(`debug-launch-long-${locale}.png`) });
+});
+
+for (const locale of ['en', 'zh-cn']) test(`debug launch split action keeps its divider and compact arrow when its caption collapses (${locale})`, async ({ page }, testInfo) => {
+	await page.goto(`/debug.html?launch-controls&long-launch-name&locale=${locale}`);
+	const launcher = page.locator('.ash-debug-launch-start');
+	const dropdown = launcher.locator('.ash-debug-configuration');
+	await expect(dropdown).toHaveText('Run configuration with a very long name');
+	// The isolated host has no sidebar title label. Constrain it enough to reach
+	// the same caption-free state as the full sidebar at its minimum width.
+	await page.evaluate(() => window.ashDebugIntegration.resize(80));
+	await expect(launcher.locator('.ash-debug-configuration-label')).toHaveCSS('visibility', 'hidden');
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
+		const geometry = await launcher.evaluate(element => {
+			const start = element.querySelector<HTMLElement>(':scope > button')!;
+			const dropdown = element.querySelector<HTMLElement>('.ash-debug-configuration')!;
+			const arrow = dropdown.querySelector<SVGElement>('.ash-icon')!;
+			const label = dropdown.querySelector<HTMLElement>('.ash-debug-configuration-label')!;
+			const outer = getComputedStyle(element);
+			const startStyle = getComputedStyle(start);
+			const dropdownStyle = getComputedStyle(dropdown);
+			const arrowBox = arrow.getBoundingClientRect();
+			const dropdownBox = dropdown.getBoundingClientRect();
+			return {
+				divider: dropdownStyle.borderLeftStyle === 'solid' && dropdownStyle.borderLeftWidth === outer.borderLeftWidth && dropdownStyle.borderLeftColor === outer.borderLeftColor,
+				arrowWidth: arrowBox.width,
+				arrowContained: arrowBox.left >= dropdownBox.left && arrowBox.right <= dropdownBox.right,
+				startSize: start.getBoundingClientRect().width,
+				dropdownSize: dropdownBox.width,
+				captionWidth: label.clientWidth,
+				captionVisibility: getComputedStyle(label).visibility,
+				startColor: startStyle.color,
+				innerCorners: [startStyle.borderTopRightRadius, startStyle.borderBottomRightRadius, dropdownStyle.borderTopLeftRadius, dropdownStyle.borderBottomLeftRadius],
+			};
+		});
+		expect(geometry).toMatchObject({ divider: true, arrowWidth: 12, arrowContained: true, startSize: 22, captionVisibility: 'hidden', innerCorners: ['0px', '0px', '0px', '0px'] });
+		expect(geometry.dropdownSize).toBeGreaterThanOrEqual(22);
+		expect(geometry.startColor).toBe(theme === 'dark' || theme === 'hcDark' ? 'rgb(137, 209, 133)' : 'rgb(56, 138, 52)');
+		await launcher.screenshot({ path: testInfo.outputPath(`debug-split-${locale}-${theme}.png`) });
+	}
+	await page.evaluate(() => window.ashDebugIntegration.resize(400));
+	await expect(launcher.locator('.ash-debug-configuration-label')).toHaveCSS('visibility', 'visible');
+	await page.evaluate(() => window.ashDebugIntegration.resize(80));
+	await expect(launcher.locator('.ash-debug-configuration-label')).toHaveCSS('visibility', 'hidden');
+	await dropdown.focus();
+	await dropdown.press('Enter');
+	await expect(page.getByRole('menuitemradio', { name: 'Run configuration with a very long name', exact: true })).toHaveAttribute('aria-checked', 'true');
+	await page.getByRole('searchbox').press('Escape');
+	await expect(dropdown).toBeFocused();
+	await dropdown.press('ArrowLeft');
+	const start = launcher.locator(':scope > button').first();
+	await expect(start).toBeFocused();
+	await start.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.launches())).toEqual(['first']);
 });
 
 test('debug console coalesces an output flood and preserves keyboard evaluation and clearing', async ({ page }, testInfo) => {

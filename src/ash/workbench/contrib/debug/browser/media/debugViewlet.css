@@ -1,7 +1,16 @@
+/* Pass the title's width constraint through to the flexible launcher. */
+.ash-workbench-part[data-active-composite="ash.debug"]
+	.ash-pane-composite-title-view-actions
+	> .ash-toolbar {
+	min-width: 0;
+}
+
 .ash-debug-launch-start {
 	display: flex;
 	flex: 1 1 auto;
-	min-width: 0;
+	min-width: calc(
+		2 * var(--ash-toolbar-actionSize) + 2 * var(--ash-strokeThickness)
+	);
 	max-width: 100%;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
@@ -9,8 +18,15 @@
 	border-radius: var(--ash-cornerRadius-small);
 }
 
+.ash-debug-launch-start ~ .ash-action-view-item {
+	flex-shrink: 0;
+}
+
 .ash-debug-launch-start > .ash-button:first-child {
 	flex: 0 0 var(--ash-toolbar-actionSize);
+	padding: 0;
+	border-radius: var(--ash-cornerRadius-small) 0 0
+		var(--ash-cornerRadius-small);
 }
 
 .ash-debug-launch-start > .ash-button {
@@ -23,18 +39,30 @@
 
 .ash-debug-launch-start > .ash-debug-configuration {
 	flex: 1;
+	min-width: var(--ash-toolbar-actionSize);
+	gap: 0;
 	justify-content: space-between;
+	border-left: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: 0 var(--ash-cornerRadius-small) var(--ash-cornerRadius-small)
+		0;
 }
 
 .ash-debug-configuration-label {
 	min-width: 0;
+	font-size: var(--ash-fontSize-label1);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
+.ash-debug-configuration-label.collapsed {
+	visibility: hidden;
+}
+
 .ash-debug-configuration > .ash-icon {
 	flex: 0 0 auto;
+	width: var(--ash-lxiconFontSize-compact);
+	height: var(--ash-lxiconFontSize-compact);
 }
 
 .ash-debug {

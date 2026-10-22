@@ -44,6 +44,7 @@
 		"--ash-compositeBar-foreground",
 		"--ash-compositeBar-inactiveForeground",
 		"--ash-contrastBorder",
+		"--ash-debugIcon-startForeground",
 		"--ash-description-foreground",
 		"--ash-dialog-backdropBackground",
 		"--ash-dialog-background",

@@ -34,7 +34,6 @@
     "debug.configuration": "调试配置",
     "debug.configurationSelected": "调试配置：{0}",
     "debug.searchConfigurations": "搜索配置",
-    "debug.iconStart": "启动调试操作的图标。",
     "debug.iconConfigure": "打开调试配置操作的图标。",
     "debug.session": "活动调试会话",
     "debug.controls": "调试操作",

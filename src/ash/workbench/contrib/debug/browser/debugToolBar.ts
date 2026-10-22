@@ -99,7 +99,7 @@ export class DebugToolBar extends Disposable {
 		this.toolbar.element.classList.toggle('empty', !active);
 		this.toolbar.element.setAttribute('aria-label', localize('debug.controls', 'Debug controls'));
 		this.toolbar.setActions(active ? [
-			stopped ? this.debugAction('continue', localize('debug.continue', 'Continue'), Lxicon.start) : this.debugAction('pause', localize('debug.pause', 'Pause'), Lxicon.pause, session.state === 'running'),
+			stopped ? this.debugAction('continue', localize('debug.continue', 'Continue'), Lxicon.play) : this.debugAction('pause', localize('debug.pause', 'Pause'), Lxicon.pause, session.state === 'running'),
 			this.debugAction('stepOver', localize('debug.stepOver', 'Step Over'), Lxicon.arrowRight, stopped),
 			this.debugAction('stepInto', localize('debug.stepInto', 'Step Into'), Lxicon.arrowDown, stopped),
 			this.debugAction('stepOut', localize('debug.stepOut', 'Step Out'), Lxicon.arrowUp, stopped),

@@ -108,8 +108,9 @@ if (new URLSearchParams(location.search).has('console-tools')) {
 const launches: string[] = [];
 if (launchControls) {
 	const configuration = debug.configurations[0]!;
+	const name = new URLSearchParams(location.search).has('long-launch-name') ? 'Run configuration with a very long name' : 'Run';
 	debug.configurations = [
-		{ ...configuration, id: 'first', name: 'Run', dirId: 'first', workspaceFolderName: 'First' },
+		{ ...configuration, id: 'first', name, dirId: 'first', workspaceFolderName: 'First' },
 		{ ...configuration, id: 'second', name: 'Run', dirId: 'second', workspaceFolderName: 'Second' },
 	];
 	debug.start = async (configuration?: IDebugConfiguration) => { launches.push(configuration!.id); return session; };

@@ -26,10 +26,12 @@
 	display: block;
 }
 .ash-menu .ash-button {
+	display: flex;
 	color: inherit;
 	width: 100%;
-	min-height: var(--ash-spacing-size280);
-	padding: 4px 8px;
+	height: var(--ash-list-rowHeight);
+	min-height: var(--ash-list-rowHeight);
+	padding: 0 var(--ash-spacing-size80);
 	border: 0;
 	border-radius: var(--ash-cornerRadius-small);
 	background: transparent;
