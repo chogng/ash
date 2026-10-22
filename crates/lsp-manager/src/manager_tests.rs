@@ -736,3 +736,77 @@ async fn retiring_and_readding_a_name_rejects_old_launches_without_losing_the_ne
     );
     supervisor.disable().await;
 }
+
+#[test]
+fn user_stop_cancels_backoff_and_explicit_restart_reuses_the_definition() {
+    let workspace = tempfile::tempdir().unwrap();
+    let definition = LanguageServerDefinition::new(
+        "missing-rust",
+        ["rust"],
+        LanguageServerCommand::new("ash-language-server-that-does-not-exist"),
+    )
+    .unwrap();
+    let sink = Arc::new(RecordingSink::default());
+    let service = LspManager::start(
+        LspManagerConfiguration::enabled(workspace.path(), vec![definition]).with_restart_policy(
+            LanguageServerRestartPolicy::bounded_exponential(
+                NonZeroU32::new(3).unwrap(),
+                Duration::from_millis(80),
+                Duration::from_millis(80),
+                Duration::from_secs(60),
+            ),
+        ),
+        sink.clone(),
+    )
+    .unwrap();
+    sink.wait_for(|event| {
+        matches!(
+            event,
+            LanguageServiceEvent::ServerStateChanged {
+                state: LanguageServerState::BackingOff { attempt: 1, .. },
+                ..
+            }
+        )
+    });
+    let name = LanguageServerName::new("missing-rust").unwrap();
+    service
+        .control_servers(LanguageServerControl::Stop, vec![name.clone()])
+        .unwrap();
+    sink.wait_for(|event| {
+        matches!(
+            event,
+            LanguageServiceEvent::ServerStateChanged {
+                state: LanguageServerState::UserStopped,
+                ..
+            }
+        )
+    });
+    std::thread::sleep(Duration::from_millis(160));
+    let starts = || {
+        sink.snapshot()
+            .iter()
+            .filter(|event| {
+                matches!(
+                    event,
+                    LanguageServiceEvent::ServerStateChanged {
+                        state: LanguageServerState::Starting,
+                        ..
+                    }
+                )
+            })
+            .count()
+    };
+    assert_eq!(starts(), 1, "the cancelled retry never launches");
+    service
+        .control_servers(LanguageServerControl::Restart, vec![name.clone()])
+        .unwrap();
+    assert_eq!(
+        starts(),
+        2,
+        "the retained definition starts on explicit intent"
+    );
+    service
+        .control_servers(LanguageServerControl::Stop, vec![name])
+        .unwrap();
+    service.shutdown().unwrap();
+}

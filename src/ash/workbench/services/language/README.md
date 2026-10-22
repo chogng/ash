@@ -70,11 +70,28 @@ stay editor-owned.
 Language-server log and show-message notifications are adapted by the Workbench
 language status service. Each server owns a channel registered through the
 canonical [`OutputService`](../output/README.md); the generic Output panel owns
-channel selection and clearing. User-visible messages use the shared dialog
-service. It adapts each work-done token to a Promise passed to
+channel selection and clearing. The persistent Language Services status entry opens
+one shared menu, grouped by workspace folder. Each server offers View Logs,
+Restart, and Stop; folder and window batch actions affect already-started servers.
+The backend owns process state and controls; stopping retains configuration and
+blocks automatic resumption by background language requests. Restart replays open
+documents. Discovery reads never install or launch unused servers.
+
+Warnings and complete error details stay in Output. Explicit server errors and
+terminal lifecycle failures offer concise, deduplicated notifications with View
+Logs and Restart actions. Routine progress and automatic retry never notify. The
+menu supports keyboard submenus, accessibility help and an accessible status view,
+using `accessibility.verbosity.languageServers` for its hint.
+
+The service adapts each work-done token to a Promise passed to
 `IProgressService.withProgress`, reports `IProgressStep` messages, and completes
 that Promise on the server's end notification or adapter disposal. Server names
-are task titles, while the operation and reported percentage form the message.
+are task titles. Progress messages show the operation and optional percentage
+first, followed by server-reported details such as scanned counts or the current
+directory.
+Reports that omit a detail retain its previous value; an empty detail clears it.
+Reaching 100% does not complete an operation. End, stop, terminal failure, or
+adapter disposal completes it; concurrent tasks include the remaining task count.
 Each running operation registers a temporary Output command consumed through
 `IProgressWindowOptions.command`; the registration ends with the task.
 

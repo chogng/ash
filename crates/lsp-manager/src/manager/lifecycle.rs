@@ -47,6 +47,19 @@ impl Supervisor {
         if !self.servers.contains_key(name) {
             return;
         }
+        if let Some((client, definition)) = self.detach_server(name) {
+            self.close_retired_client(client, definition);
+        }
+        self.emit_server_state(name, LanguageServerState::Stopped);
+    }
+
+    fn detach_server(
+        &mut self,
+        name: &LanguageServerName,
+    ) -> Option<(LanguageServerClient, LanguageServerDefinition)> {
+        if !self.servers.contains_key(name) {
+            return None;
+        }
         if let Some(launch) = self.launches.remove(name) {
             launch.abort();
         }
@@ -77,12 +90,63 @@ impl Supervisor {
         self.configuration
             .servers
             .retain(|definition| definition.name() != name);
-        if let (Ok(client), Some(retired)) = (self.router.remove_server(name), retired) {
-            self.close_retired_client(client, retired.definition);
-        }
         self.observed_request_kinds
             .retain(|(server, _, _)| server != name);
-        self.emit_server_state(name, LanguageServerState::Stopped);
+        match (self.router.remove_server(name), retired) {
+            (Ok(client), Some(retired)) => Some((client, retired.definition)),
+            _ => None,
+        }
+    }
+
+    pub(super) async fn control_servers(
+        &mut self,
+        action: LanguageServerControl,
+        names: Vec<LanguageServerName>,
+    ) {
+        let mut stopped = Vec::new();
+        let mut shutdowns = tokio::task::JoinSet::new();
+        for name in names {
+            let Some(definition) = self
+                .servers
+                .get(&name)
+                .map(|server| server.definition.clone())
+            else {
+                continue;
+            };
+            if let Some((client, retired_definition)) = self.detach_server(&name) {
+                shutdowns.spawn(async move {
+                    // Keep every source lease until its process is reaped. Batch shutdowns run
+                    // together so one unresponsive server cannot multiply the timeout.
+                    let _definition = retired_definition;
+                    let _ = client.shutdown().await;
+                });
+            }
+            self.configuration.servers.push(definition.clone());
+            self.servers.insert(
+                name.clone(),
+                ManagedServer {
+                    definition,
+                    epoch: 0,
+                    phase: ManagedServerPhase::Stopped,
+                    restart: ServerRestartTracker::default(),
+                },
+            );
+            self.emit_server_state(
+                &name,
+                if action == LanguageServerControl::Stop {
+                    LanguageServerState::UserStopped
+                } else {
+                    LanguageServerState::Stopped
+                },
+            );
+            stopped.push(name);
+        }
+        while shutdowns.join_next().await.is_some() {}
+        if action == LanguageServerControl::Restart {
+            for name in stopped {
+                self.start_server(&name);
+            }
+        }
     }
 
     fn close_retired_client(

@@ -4,6 +4,8 @@ import '../workbench/contrib/accessibility/browser/accessibility.contribution.js
 import '../workbench/contrib/debug/browser/debug.service.contribution.js';
 import '../workbench/services/testing/browser/testingServiceRegistration.js';
 import '../workbench/api/browser/extensionHost.contribution.js';
+// The shared extension host's SCM bridge requires the Timeline registry in this renderer.
+import '../workbench/contrib/timeline/browser/timeline.service.contribution.js';
 import '../workbench/contrib/logs/common/logs.contribution.js';
 import '../workbench/contrib/debug/browser/debugAdapterManager.js';
 import '../workbench/contrib/terminal/terminal.all.js';
@@ -20,6 +22,7 @@ import '../workbench/contrib/commands/common/commands.contribution.js';
 import '../workbench/contrib/extensions/browser/extensions.contribution.js';
 import '../workbench/contrib/chat/browser/aiCustomization/customizationMarketplace.contribution.js';
 import '../workbench/contrib/preferences/browser/preferences.contribution.js';
+import '../workbench/contrib/language/browser/languageServers.contribution.js';
 import '../workbench/contrib/format/browser/format.contribution.js';
 import '../workbench/contrib/inlayHints/browser/inlayHintsAccessibilty.js';
 import '../workbench/contrib/limitIndicator/browser/limitIndicator.contribution.js';

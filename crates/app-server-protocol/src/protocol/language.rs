@@ -77,12 +77,40 @@ pub struct LanguageServersParams {
 pub struct LanguageServerDescriptorDto {
     pub id: String,
     pub language_ids: Vec<String>,
+    /// Absent until this connection has started the server in this directory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub state: Option<LanguageServerStateDto>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LanguageServersResult {
     pub servers: Vec<LanguageServerDescriptorDto>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageServerControlActionDto {
+    Restart,
+    Stop,
+}
+
+/// Controls only this connection's server in an authorized workspace directory. Omitting
+/// serverId applies to servers already started there; listing never installs or starts one.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LanguageServerControlParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<SessionDirSelector>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub server_id: Option<String>,
+    pub action: LanguageServerControlActionDto,
 }
 
 /// Updates the language server with one authoritative editor document snapshot.

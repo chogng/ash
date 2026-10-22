@@ -4198,6 +4198,9 @@ impl AppServer {
             Some(ClientMethod::LanguageServers) => self
                 .language_processor(connection.connection_id)
                 .language_servers(&request.params),
+            Some(ClientMethod::LanguageServerControl) => self
+                .language_processor(connection.connection_id)
+                .language_server_control(&request.params),
             Some(ClientMethod::LanguageSynchronize) => self
                 .language_processor(connection.connection_id)
                 .language_synchronize(&request.params, cancellation),

@@ -66,6 +66,8 @@ use ash_app_server_protocol::protocol::language::LanguageResolveCompletionParams
 use ash_app_server_protocol::protocol::language::LanguageSemanticTokenDto;
 use ash_app_server_protocol::protocol::language::LanguageSemanticTokensParams;
 use ash_app_server_protocol::protocol::language::LanguageSemanticTokensResult;
+use ash_app_server_protocol::protocol::language::LanguageServerControlActionDto;
+use ash_app_server_protocol::protocol::language::LanguageServerControlParams;
 use ash_app_server_protocol::protocol::language::LanguageServerDescriptorDto;
 use ash_app_server_protocol::protocol::language::LanguageServersParams;
 use ash_app_server_protocol::protocol::language::LanguageServersResult;
@@ -266,11 +268,15 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let definitions = runtime
             .definitions(dir.canonical_path(), &snapshot.values.language_servers)
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let states = runtime.server_states(dir.canonical_path());
         let mut servers: Vec<_> = definitions
             .iter()
             .map(|definition| LanguageServerDescriptorDto {
                 id: definition.name().as_str().to_owned(),
                 language_ids: definition.language_ids().map(str::to_owned).collect(),
+                state: states
+                    .get(definition.name().as_str())
+                    .map(super::language_runtime::language_server_state_to_dto),
             })
             .collect();
         servers.extend(
@@ -279,9 +285,86 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
                 .map(|server| LanguageServerDescriptorDto {
                     id: server.id.clone(),
                     language_ids: server.languages.clone(),
+                    state: states
+                        .get(&server.id)
+                        .map(super::language_runtime::language_server_state_to_dto),
                 }),
         );
+        servers.sort_by(|left, right| left.id.cmp(&right.id));
+        servers.dedup_by(|left, right| left.id == right.id);
         result(&LanguageServersResult { servers })
+    }
+
+    pub(super) fn language_server_control(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageServerControlParams = decode(params)?;
+        if params
+            .server_id
+            .as_ref()
+            .is_some_and(|id| id.is_empty() || id.len() > 128)
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let dir = self
+            .context
+            .language_dir_root_for(params.dir_id.as_deref(), params.session_directory.as_ref())?;
+        let snapshot = self
+            .config
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
+            .read_snapshot()
+            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let mut runtime = self.runtime()?;
+        let definitions = runtime
+            .definitions(dir.canonical_path(), &snapshot.values.language_servers)
+            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let languages: std::collections::BTreeMap<_, _> = definitions
+            .iter()
+            .map(|definition| {
+                (
+                    definition.name().as_str().to_owned(),
+                    definition
+                        .language_ids()
+                        .next()
+                        .unwrap_or_default()
+                        .to_owned(),
+                )
+            })
+            .chain(
+                runtime
+                    .acquisitions(&snapshot.values.language_servers)
+                    .map(|server| (server.id.clone(), server.languages[0].clone())),
+            )
+            .collect();
+        let target = params
+            .server_id
+            .as_ref()
+            .map(|id| {
+                languages
+                    .get(id)
+                    .map(|language| (id.as_str(), language.as_str()))
+                    .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))
+            })
+            .transpose()?;
+        let action = match params.action {
+            LanguageServerControlActionDto::Restart => {
+                ash_lsp_manager::LanguageServerControl::Restart
+            }
+            LanguageServerControlActionDto::Stop => ash_lsp_manager::LanguageServerControl::Stop,
+        };
+        runtime
+            .control_servers(
+                dir.canonical_path(),
+                params.dir_id.as_deref(),
+                snapshot.generation.get(),
+                &snapshot.values.language_servers,
+                target,
+                action,
+            )
+            .map_err(|error| {
+                log::error!("language server control failed: {error}");
+                language_error(AppServerErrorName::LanguageRequestFailed)
+            })?;
+        result(&())
     }
 
     pub(super) fn language_synchronize(

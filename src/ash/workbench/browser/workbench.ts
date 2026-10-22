@@ -1,3 +1,4 @@
+import { ILanguageServerStatusService } from '../services/language/common/languageServerStatusService.js';
 import { IProjectService } from '../../platform/projects/common/projectService.js';
 import { readDefaultLogLevels, DefaultLogLevelsService, IDefaultLogLevelsService } from '../services/log/common/defaultLogLevels.js';
 import '../services/configuration/common/jsonEditingService.js';
@@ -954,7 +955,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
 		services.registerInstance(IResourceIconRenderer, themeService);
 		services.registerInstance(IResourceLabelService, services.createInstance(ResourceLabelService));
-		this._register(services.createInstance(AppServerLanguageServerStatusService, api.events));
 		services.registerInstance(
 			IWorkbenchDialogHandler,
 			dialogHandler ?? new BrowserDialogHandler(workbenchRoot),
@@ -1015,6 +1015,8 @@ export class Workbench extends Disposable {
 				configurationService: configuration,
 			}));
 		services.registerInstance(IAccessibilityService, accessibilityService);
+		services.registerSingleton(ILanguageServerStatusService, () => services.createInstance(AppServerLanguageServerStatusService));
+		services.get(ILanguageServerStatusService);
 		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, workbenchRoot, notificationService.model, feedbackHost, notificationActionRunner, statusbarService, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));

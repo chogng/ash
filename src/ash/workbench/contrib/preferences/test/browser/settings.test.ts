@@ -1822,7 +1822,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		setEnabled: async (...args) => { skillMutations.push(args); skillEnabled = args[1]; },
 	});
 	services.registerInstance(IExtensionManagementService, { onDidChangeInstalled: Event.None } as IExtensionManagementService);
-	services.registerInstance(ILanguageServerService, { read: async () => ({ revision: 0, configurations: {}, servers: [] }), configure: async () => { }, removeConfiguration: async () => { } });
+	services.registerInstance(ILanguageServerService, { control: async () => { }, read: async () => ({ revision: 0, configurations: {}, servers: [] }), configure: async () => { }, removeConfiguration: async () => { } });
 	services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => null } as ICodeEditorService);
 	services.registerInstance(IDialogService, disposables.add(new DialogService()));
 	services.registerInstance(ClipboardServiceId, clipboardService);

@@ -1884,6 +1884,10 @@ use crate::protocol::language::LanguageSemanticTokensParams;
 use crate::protocol::language::LanguageSemanticTokensResult;
 use crate::protocol::language::LanguageServerCapabilitiesNotification;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::language::LanguageServerControlActionDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::language::LanguageServerControlParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageServerDescriptorDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageServerFeatureDto;
@@ -4935,6 +4939,11 @@ client_methods! {
         response: LanguageServersResult,
         serialization: None,
     },
+    LanguageServerControl => "language/serverControl" {
+        params: LanguageServerControlParams,
+        response: (),
+        serialization: None,
+    },
     LanguageSynchronize => "language/synchronize" {
         params: LanguageSynchronizeParams,
         response: (),
@@ -7365,6 +7374,8 @@ typescript_bindings! {
     LanguageServersParams,
     LanguageServersResult,
     LanguageServerDescriptorDto,
+    LanguageServerControlParams,
+    LanguageServerControlActionDto,
     LanguageSynchronizeParams,
     LanguageCloseParams,
     LanguageSaveParams,

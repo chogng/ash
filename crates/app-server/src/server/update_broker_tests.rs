@@ -235,6 +235,65 @@ fn profile_extension_packages_broker_deduplicates_one_manager_commit_seen_by_mul
 }
 
 #[test]
+fn language_download_progress_notifications_precede_background_ready_during_a_request() {
+    let broker = UpdateBroker::default();
+    let queue = NotificationQueue::default();
+    broker.register(1, false, &queue);
+    let request = queue.defer_causal_notifications(None);
+    let causal = serde_json::json!({"method":"config/changed", "params":{"revision":1}});
+    queue.push(causal.clone());
+
+    let download = |done| LanguageServerProgressNotification {
+        dir_id: None,
+        server: "rust-analyzer".into(),
+        token: "ash.language-server.download".into(),
+        title: None,
+        message: None,
+        percentage: None,
+        done,
+    };
+    broker.publish_language_server_progress(Some(1), download(false));
+    let downloading = queue.drain();
+    assert_eq!(
+        downloading.len(),
+        1,
+        "download must be visible before the request returns"
+    );
+    assert_eq!(downloading[0]["method"], "language/serverProgress");
+    assert_eq!(downloading[0]["params"]["done"], false);
+
+    broker.publish_language_server_progress(Some(1), download(true));
+    std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                for state in [
+                    LanguageServerStateDto::Starting,
+                    LanguageServerStateDto::Ready,
+                ] {
+                    broker.publish_language_server_state(
+                        Some(1),
+                        LanguageServerStateNotification {
+                            dir_id: None,
+                            server: "rust-analyzer".into(),
+                            state,
+                        },
+                    );
+                }
+            })
+            .join()
+            .unwrap();
+    });
+    let notifications = queue.drain();
+    assert_eq!(notifications.len(), 3);
+    assert_eq!(notifications[0]["method"], "language/serverProgress");
+    assert_eq!(notifications[0]["params"]["done"], true);
+    assert_eq!(notifications[1]["params"]["state"]["type"], "starting");
+    assert_eq!(notifications[2]["params"]["state"]["type"], "ready");
+    drop(request);
+    assert_eq!(queue.drain(), [causal]);
+}
+
+#[test]
 fn broker_fans_out_language_server_lifecycle_without_a_subscription() {
     let broker = UpdateBroker::default();
     let queue = NotificationQueue::default();

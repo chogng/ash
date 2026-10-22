@@ -48,6 +48,7 @@ export const enum AccessibleViewProviderId {
 	GitHubSettings = 'githubSettings',
 	ContentSearchSettings = 'contentSearchSettings',
 	LanguageServers = 'languageServers',
+	LanguageServerStatus = 'languageServerStatus',
 	Dictation = 'dictation',
 	DictationModels = 'dictationModels',
 	DictationOnboarding = 'dictationOnboarding',

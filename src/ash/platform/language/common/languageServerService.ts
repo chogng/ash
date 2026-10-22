@@ -11,14 +11,29 @@ export interface LanguageServerConfiguration {
 	readonly settings?: Readonly<Record<string, JsonValue>>;
 }
 
+/** Connection-local process state; discovery alone never starts a server. */
+export type LanguageServerState =
+	| { readonly type: 'starting' | 'ready' | 'stopped'; }
+	| { readonly type: 'backingOff'; readonly attempt: number; readonly retryAfterMillis: number; }
+	| { readonly type: 'crashLoop'; readonly restartAttempts: number; readonly message: string; }
+	| { readonly type: 'failed'; readonly message: string; };
+
+export interface LanguageServerControl {
+	readonly action: 'restart' | 'stop';
+	readonly dirId?: string;
+	/** Omit to control only the servers already started in this directory. */
+	readonly serverId?: string;
+}
+
 export interface LanguageServerSnapshot {
 	readonly revision: number;
 	readonly configurations: Readonly<Record<string, LanguageServerConfiguration>>;
-	readonly servers: readonly { readonly id: string; readonly languageIds: readonly string[]; }[];
+	readonly servers: readonly { readonly id: string; readonly languageIds: readonly string[]; readonly state?: LanguageServerState; }[];
 }
 
 export interface ILanguageServerService {
 	read(dirId?: string): Promise<LanguageServerSnapshot>;
+	control(request: LanguageServerControl): Promise<void>;
 	configure(serverId: string, configuration: LanguageServerConfiguration, expectedRevision: number): Promise<void>;
 	removeConfiguration(serverId: string, expectedRevision: number): Promise<void>;
 }

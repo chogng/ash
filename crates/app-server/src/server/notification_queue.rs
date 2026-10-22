@@ -293,6 +293,12 @@ impl NotificationQueue {
         self.extend([value]);
     }
 
+    /// Keep operation progress visible while its request is running, before background
+    /// completion events. Queue budgets, initialization and Session ordering still apply.
+    pub(super) fn push_progress(&self, value: Value) {
+        self.extend_immediate([value]);
+    }
+
     pub(crate) fn extend(&self, values: impl IntoIterator<Item = Value>) {
         let immediate = DEFERRED.with(|pending| {
             let mut pending = pending.borrow_mut();
@@ -313,9 +319,13 @@ impl NotificationQueue {
             }
             immediate
         });
+        self.extend_immediate(immediate);
+    }
+
+    fn extend_immediate(&self, values: impl IntoIterator<Item = Value>) {
         if let Ok(mut state) = self.inner.state.lock() {
             let was_empty = state.values.is_empty();
-            for value in immediate {
+            for value in values {
                 state.push_value(value);
             }
             if (was_empty && !state.values.is_empty()) || state.closed {

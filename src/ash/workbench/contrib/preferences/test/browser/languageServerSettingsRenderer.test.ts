@@ -51,6 +51,7 @@ class SettingsFixture extends DisposableStore {
 		this.add(toDisposable(() => this.root.remove()));
 		this.services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => ({ getModel: () => ({ getLanguageId: () => 'rust' }) }) } as unknown as ICodeEditorService);
 		this.services.registerInstance(ILanguageServerService, {
+			control: async () => { throw new Error('Process control is outside the settings fixture'); },
 			read: async () => { const pending = this.pending; this.pending = undefined; return pending ?? this.snapshot; },
 			configure: async (id, configuration, revision) => {
 				this.writes.push(['save', id, configuration, revision]);

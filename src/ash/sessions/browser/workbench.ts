@@ -1,3 +1,4 @@
+import { ILanguageServerStatusService } from '../../workbench/services/language/common/languageServerStatusService.js';
 import { IProjectService } from '../../platform/projects/common/projectService.js';
 import { SessionsAgentSessionService } from './agentHost/sessionsAgentSessionService.js';
 import { BannerPart } from '../../workbench/browser/parts/banner/bannerPart.js';
@@ -633,7 +634,6 @@ export abstract class Workbench extends Disposable {
 		const feedbackHost = h(ownerDocument, "div");
 		feedbackHost.className = "ash-feedback-host";
 		services.registerInstance(IProgressService, this._register(services.createInstance(ProgressService)));
-		this._register(services.createInstance(AppServerLanguageServerStatusService, options.api.events));
 		this.domNode.append(feedbackHost);
 		this._register(toDisposable(() => feedbackHost.remove()));
 		const openerService = this._register(services.createInstance(OpenerService));
@@ -699,6 +699,8 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IHoverService, hoverService);
 		this._register(setHoverDelegate(hoverService));
 		const accessibleViewService = services.get(IAccessibleViewService);
+		services.registerSingleton(ILanguageServerStatusService, () => services.createInstance(AppServerLanguageServerStatusService));
+		services.get(ILanguageServerStatusService);
 		this._register(registerExtensionManagementActions());
 		const preferences = this._register(services.createInstance(SessionsPreferences, this.domNode, async () => {
 			await commandService.executeCommand('sessions.open.code');

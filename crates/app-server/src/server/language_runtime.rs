@@ -313,7 +313,7 @@ impl LspManagerEventSink for AppServerLanguageEventSink {
     }
 }
 
-fn language_server_state_to_dto(state: &LanguageServerState) -> LanguageServerStateDto {
+pub(super) fn language_server_state_to_dto(state: &LanguageServerState) -> LanguageServerStateDto {
     match state {
         LanguageServerState::Starting => LanguageServerStateDto::Starting,
         LanguageServerState::Ready => LanguageServerStateDto::Ready,
@@ -334,7 +334,9 @@ fn language_server_state_to_dto(state: &LanguageServerState) -> LanguageServerSt
         LanguageServerState::Failed(message) => LanguageServerStateDto::Failed {
             message: message.clone(),
         },
-        LanguageServerState::Stopped => LanguageServerStateDto::Stopped,
+        LanguageServerState::Stopped | LanguageServerState::UserStopped => {
+            LanguageServerStateDto::Stopped
+        }
     }
 }
 
@@ -915,6 +917,84 @@ impl AppServerLanguageRuntime {
         })
     }
 
+    /// Drains the supervisor's existing lifecycle projection without starting a process.
+    pub(super) fn server_states(&mut self, root: &Path) -> BTreeMap<String, LanguageServerState> {
+        if self
+            .dir_state
+            .root
+            .as_deref()
+            .is_some_and(|current| current != root)
+        {
+            return self
+                .env_runtimes
+                .get_mut(root)
+                .map_or_else(BTreeMap::new, |runtime| runtime.server_states(root));
+        }
+        let events = self
+            .receiver
+            .as_ref()
+            .map(|receiver| receiver.try_iter().collect::<Vec<_>>())
+            .unwrap_or_default();
+        for event in events {
+            self.accept_state(&event);
+        }
+        self.dir_state.server_states.clone()
+    }
+
+    pub(super) fn control_servers(
+        &mut self,
+        root: &Path,
+        dir_id: Option<&str>,
+        generation: u64,
+        configuration: &LanguageServersConfig,
+        target: Option<(&str, &str)>,
+        action: ash_lsp_manager::LanguageServerControl,
+    ) -> Result<(), String> {
+        if self.env_runtimes.contains_key(root)
+            || self
+                .dir_state
+                .root
+                .as_deref()
+                .is_some_and(|current| current != root)
+        {
+            if !self.env_runtimes.contains_key(root) {
+                if action == ash_lsp_manager::LanguageServerControl::Stop {
+                    return Ok(());
+                }
+                let child = self.child_runtime();
+                self.env_runtimes
+                    .insert(root.to_path_buf(), Box::new(child));
+            }
+            return self
+                .env_runtimes
+                .get_mut(root)
+                .expect("directory runtime")
+                .control_servers(root, dir_id, generation, configuration, target, action);
+        }
+        let states = self.server_states(root);
+        self.dir_state.dir_id = dir_id.map(str::to_owned);
+        if let Some((id, language)) = target
+            && !states.contains_key(id)
+            && action == ash_lsp_manager::LanguageServerControl::Restart
+        {
+            // Starting an idle declaration is explicit intent. Batch controls never acquire
+            // unused tools merely because they appear in discovery.
+            return self.restart_selected(root, generation, configuration, language, Some(id));
+        }
+        let Some(manager) = &self.manager else {
+            return Ok(());
+        };
+        let names = states
+            .keys()
+            .filter(|id| target.is_none_or(|(target, _)| target == id.as_str()))
+            .map(|id| ash_lsp_manager::LanguageServerName::new(id.clone()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())?;
+        manager
+            .control_servers(action, names)
+            .map_err(|error| error.to_string())
+    }
+
     /// Background pulls may activate a declared workspace kind, but not install servers in
     /// unrelated folders merely because the client enumerates every available language.
     pub(super) fn allows_workspace_diagnostics(
@@ -1095,6 +1175,7 @@ impl AppServerLanguageRuntime {
         if self.manager.is_none()
             || self.dir_state.root.as_deref() != Some(dir_root)
             || self.definitions_dirty
+            || !self.dir_state.language_servers.contains_key(language_id)
             || self.acquisitions(configuration).any(|server| {
                 server.languages.iter().any(|id| id == language_id)
                     && !self
@@ -1295,6 +1376,23 @@ impl AppServerLanguageRuntime {
         configuration: &LanguageServersConfig,
         language_id: &str,
     ) -> Result<(), String> {
+        self.restart_selected(
+            dir_root,
+            config_generation,
+            configuration,
+            language_id,
+            None,
+        )
+    }
+
+    fn restart_selected(
+        &mut self,
+        dir_root: &Path,
+        config_generation: u64,
+        configuration: &LanguageServersConfig,
+        language_id: &str,
+        selected: Option<&str>,
+    ) -> Result<(), String> {
         let needed = self
             .acquisitions(configuration)
             .filter(|server| {
@@ -1327,6 +1425,18 @@ impl AppServerLanguageRuntime {
                 configuration,
                 &self.dir_state.settings,
             )?);
+        }
+        if let Some(selected) = selected {
+            // An explicit single-server start must not activate other idle declarations.
+            // Keep every existing route, including user-stopped definitions.
+            definitions.retain(|definition| {
+                definition.name().as_str() == selected
+                    || self
+                        .dir_state
+                        .language_servers
+                        .values()
+                        .any(|id| id == definition.name().as_str())
+            });
         }
         // Selection can perform process/network I/O. Recheck its source while registering the
         // manager, so a concurrent disable or uninstall cannot launch a retired recipe.
@@ -1560,6 +1670,9 @@ impl AppServerLanguageRuntime {
                 Some(LanguageServerState::Ready) => return Ok(()),
                 Some(LanguageServerState::Failed(message)) => return Err(message.clone()),
                 Some(LanguageServerState::CrashLoop { message, .. }) => return Err(message.clone()),
+                Some(LanguageServerState::UserStopped) => {
+                    return Err("language server was stopped by the user".into());
+                }
                 _ => {}
             }
             if let Some(event) = self.recv_until(deadline)? {
