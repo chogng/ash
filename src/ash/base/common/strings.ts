@@ -1,5 +1,10 @@
 import { CharCode } from './charCode.js';
 
+/** Removes complete terminal control sequences without interpreting their commands. */
+export function removeAnsiEscapeCodes(value: string): string {
+	return value.replace(/\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))/g, '');
+}
+
 /** Encodes a literal value for use in an HTML attribute. */
 export function htmlAttributeEncodeValue(value: string): string {
 	return value.replace(/[<>"'&]/g, ch => {

@@ -40,7 +40,7 @@ import { ILifecycleService } from '../../../lifecycle/common/lifecycle.js';
 import { AbstractLifecycleService } from '../../../lifecycle/common/lifecycleService.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../notification/common/notificationService.js';
+import { TestNotificationService } from '../../../notification/test/common/testNotificationService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
@@ -191,7 +191,7 @@ async function fixture(options: { contents?: ReadonlyMap<string, string>; backen
 	services.registerInstance(ILogService, { trace() { }, debug() { }, info() { }, warn() { }, error() { } });
 	const lifecycle = lifetime.add(services.createInstance(TestLifecycleService, undefined));
 	services.registerInstance(ILifecycleService, lifecycle);
-	const notifications = lifetime.add(new NotificationService());
+	const notifications = lifetime.add(new TestNotificationService());
 	services.registerInstance(INotificationService, notifications);
 	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 	const cues: string[] = [];
@@ -401,6 +401,9 @@ test('shutdown recaptures reviews when the user edits while a storage commit is 
 		if (reason === undefined && pause) { pause = false; void started.complete(); await gate.p; }
 		await flush(reason);
 	};
+	// applyEdits already persisted the Agent result. Change the review so shutdown
+	// actually has a new snapshot to commit before pausing that commit.
+	reference.model.applyOperations([{ range: new Range(2, 1, 2, 1), text: 'before ' }]);
 	const shutdown = host.lifecycle.shutdown('reload');
 	await started.p;
 	reference.model.applyOperations([{ range: new Range(2, 1, 2, 1), text: 'user ' }]);
@@ -413,12 +416,17 @@ test('shutdown recaptures reviews when the user edits while a storage commit is 
 	using reopened = await fixture({ backend, contents });
 	await flushReviews(reopened);
 	await reviewSession(reopened).reject();
-	assert.equal(reopened.files.contents.get(resource.toString()), 'first\nuser separator\nlast');
+	assert.equal(reopened.files.contents.get(resource.toString()), 'first\nuser before separator\nlast');
 });
 
 test('failed review persistence prevents shutdown and can be retried without losing the review', async () => {
 	using host = await fixture();
-	await createReview(host, 'shutdown-retry.txt');
+	const resource = URI.file('c:/workspace/shutdown-retry.txt');
+	host.files.contents.set(resource.toString(), 'original');
+	using reference = await host.models.acquire({ resource }, new AbortController().signal);
+	const id = await snapshot(host.transport, resource);
+	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'turn', changes: [{ kind: 'update', snapshot: id, text: 'agent' }] });
+	reference.model.applyOperations([{ range: new Range(1, 6, 1, 6), text: ' user' }]);
 	const flush = host.storage.flush.bind(host.storage);
 	host.storage.flush = async () => { throw new Error('Injected review storage failure'); };
 	await assert.rejects(host.lifecycle.shutdown('reload'), /shutdown participants failed/);
@@ -814,7 +822,7 @@ test('stale documents reject the entire transaction and consume its snapshots', 
 	assert.equal(host.models.getModel(first), null);
 });
 
-test('repeated reads replace leases and connection close releases them', async () => {
+test('repeated reads retain independent leases and connection close releases them', async () => {
 	using host = await fixture();
 	const resource = URI.file('c:/workspace/one.txt');
 	host.files.contents.set(resource.toString(), 'original');
@@ -825,6 +833,41 @@ test('repeated reads replace leases and connection close releases them', async (
 	assert.notEqual(host.models.getModel(resource), null);
 	host.client.disconnect();
 	assert.equal(host.models.getModel(resource), null);
+});
+
+test('concurrent agents reject stale writes and can reread to preserve both edits', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/shared.txt');
+	host.files.contents.set(resource.toString(), 'original');
+	const first = await snapshot(host.transport, resource);
+	const second = await snapshot(host.transport, resource);
+	const apply = (threadId: string, id: string, text: string) => host.transport.call('textDocument/apply', {
+		threadId, turnId: 'turn', changes: [{ kind: 'update', snapshot: id, text }],
+	});
+	assert.deepEqual(await apply('first', first, 'original\nfirst'), { kind: 'applied' });
+	assert.deepEqual(await apply('second', second, 'original\nsecond'), { kind: 'conflict' });
+	assert.equal(host.files.contents.get(resource.toString()), 'original\nfirst');
+	const reread = await host.transport.call('textDocument/read', { path: resource.fsPath, readAccess: 'test-read-access' });
+	assert.equal(reread.kind, 'document');
+	if (reread.kind !== 'document') throw new Error('Expected document');
+	assert.deepEqual(await apply('second', reread.snapshot, reread.text + '\nsecond'), { kind: 'applied' });
+	assert.equal(host.files.contents.get(resource.toString()), 'original\nfirst\nsecond');
+});
+
+test('reads cannot starve a writer and snapshot capacity never evicts its baseline', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/shared.txt');
+	host.files.contents.set(resource.toString(), 'original');
+	const writer = await snapshot(host.transport, resource);
+	const readers = await Promise.all(Array.from({ length: 127 }, () => snapshot(host.transport, resource)));
+	assert.equal((await host.transport.call('textDocument/read', { path: resource.fsPath, readAccess: 'test-read-access' })).kind, 'failed');
+	assert.deepEqual(await host.transport.call('textDocument/apply', {
+		threadId: 'writer', turnId: 'turn', changes: [{ kind: 'update', snapshot: writer, text: 'written' }],
+	}), { kind: 'applied' });
+	assert.equal(host.files.contents.get(resource.toString()), 'written');
+	await host.transport.call('textDocument/release', { snapshots: readers });
+	const fresh = await snapshot(host.transport, resource);
+	await host.transport.call('textDocument/release', { snapshots: [fresh] });
 });
 
 test('new file contents retain exact LF and BOM and roll back on a later move failure', async () => {

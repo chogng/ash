@@ -4,6 +4,13 @@ import type { IDebugSession, IDebugStackFrame, IDebugThread, IViewModel } from '
 
 /** Window-owned inspection selection. Runtime state and inspected values stay in Rust. */
 export class ViewModel extends Disposable implements IViewModel {
+	private readonly updates = this._register(new Emitter<void>());
+	readonly onWillUpdateViews = this.updates.event;
+
+	updateViews(): void {
+		if (!this.isDisposed) this.updates.fire();
+	}
+
 	private session: IDebugSession | undefined;
 	private thread: IDebugThread | undefined;
 	private stackFrame: IDebugStackFrame | undefined;

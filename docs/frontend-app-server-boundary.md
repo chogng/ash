@@ -15,7 +15,7 @@ Workbench / 编辑器调用方
 
 前端 Service 是调用方的稳定契约。它决定 UI 看见什么状态和错误、如何订阅变化，以及何时释放资源；如果一个能力只是简单的领域 API，并无需要管理的前端状态，也不必为了目录整齐新建 Service。领域适配层负责类型与协议的转换，不保存另一份后端持久状态。多个领域 API 复用一个窗口的协议客户端，不能各自启动进程或建立连接。
 
-例如 [Workbench 装配](../src/ash/workbench/browser/workbench.ts)把 `api.git` 交给 Git Service；[Git API](../src/ash/platform/git/browser/gitApi.ts)将 `status()` 映射为 `git/status` 请求；[Renderer API 装配](../src/ash/workbench/browser/webRendererApi.ts)让 Git、账户、会话等领域 API 共用协议客户端。普通 UI 不需要知道请求 ID、JSON-RPC 消息或连接端口。
+例如 [Workbench 装配](../src/ash/workbench/browser/workbench.ts)将 `api.localGit` 注册为 `ILocalGitService`；[Git adapter](../src/ash/platform/git/browser/appServerLocalGitService.ts)将 `readRepositoryContexts()` 映射为 `git/repositoryContexts` 请求；[Renderer API 装配](../src/ash/workbench/browser/webRendererApi.ts)让 Git、账户、会话等领域契约共用协议客户端。普通 UI 不需要知道请求 ID、JSON-RPC 消息或连接端口。
 
 Workbench 拥有跨领域的 Renderer 服务装配：`browser/webRendererApi.ts` 组合连接后的领域 adapter 并管理 Web 接入，`browser/rendererApi.ts` 组合断连能力集合，`electron-browser/rendererApi.ts` 装配桌面宿主并持有窗口连接服务的生命周期。三处装配由 Workbench 和 Sessions 的启动入口使用；领域 adapter 与 Electron 平台能力仍留在各自的 `platform` owner，不能反向导入 Workbench。`platform/agentHost` 不再拥有整套 Renderer 服务的装配入口，已有 Agent 领域 adapter 与协议实现保持各自职责。
 

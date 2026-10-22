@@ -158,6 +158,7 @@ impl ExtensionHostProcess for TestProcess {
                         context,
                         revision: 1,
                         terminal_providers: vec![],
+                        tree_providers: vec![],
                         speech_providers: vec![RegistrationDescriptor {
                             registration_id: "starting.speech".into(),
                             kind: RegistrationKind::SpeechProvider {
@@ -172,6 +173,7 @@ impl ExtensionHostProcess for TestProcess {
                             context,
                             revision: 2,
                             terminal_providers: vec![],
+                            tree_providers: vec![],
                             speech_providers: vec![],
                         })
                         .unwrap();
@@ -697,6 +699,7 @@ fn dynamic_speech_registry_is_admitted_ordered_and_fenced_to_its_activation() {
         revision,
         speech_providers,
         terminal_providers: vec![],
+        tree_providers: vec![],
     };
     handler(event(HostEventContext::new(1, 9), 2, vec![speech.clone()])).unwrap();
     assert_eq!(host.snapshot().registrations.len(), 2);
@@ -783,6 +786,7 @@ fn starting_speech_updates_keep_the_observed_generation_after_the_activate_recei
             context: HostEventContext::new(1, 9),
             revision: 3,
             terminal_providers: vec![],
+            tree_providers: vec![],
             speech_providers: vec![RegistrationDescriptor {
                 registration_id: "replacement".into(),
                 kind: RegistrationKind::SpeechProvider {
@@ -832,6 +836,7 @@ fn process_registration_callback_does_not_retain_its_supervisor() {
         context: HostEventContext::new(1, 9),
         revision: 99,
         terminal_providers: vec![],
+        tree_providers: vec![],
         speech_providers: vec![],
     })
     .unwrap();
@@ -893,6 +898,7 @@ fn dynamic_terminal_providers_revoke_pending_calls_and_keep_activation_authority
         revision,
         speech_providers: vec![],
         terminal_providers,
+        tree_providers: vec![],
     };
     handler(event(HostEventContext::new(1, 9), 1, providers.clone())).unwrap();
     assert_eq!(host.snapshot().registrations.len(), 6);

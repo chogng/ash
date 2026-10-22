@@ -27,7 +27,7 @@ import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/
 import { QuickInputService } from '../../../src/ash/platform/quickinput/browser/quickInputService.js';
 import { ILayoutService, BrowserLayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { AccessibleViewRegistry } from '../../../src/ash/platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleViewType } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
@@ -54,7 +54,7 @@ services.registerInstance(IConfigurationService, resources.add(new InMemoryConfi
 services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root })));
 services.registerInstance(IQuickInputService, resources.add(services.createInstance(QuickInputService)));
 services.registerInstance(IAuxiliaryWindowService, resources.add(services.createInstance(BrowserAuxiliaryWindowService, window, root)));
-const notifications = resources.add(new NotificationService());
+const notifications = resources.add(new TestNotificationService());
 services.registerInstance(INotificationService, notifications);
 const changed = resources.add(new Emitter<void>());
 const updates = resources.add(new Emitter<ThreadTranscriptUpdateEnvelope>());

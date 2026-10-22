@@ -42,6 +42,8 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 		supportsFunctionBreakpoints: value.supportsFunctionBreakpoints === true, supportsDataBreakpoints: value.supportsDataBreakpoints === true,
 		supportsInstructionBreakpoints: value.supportsInstructionBreakpoints === true, supportsDisassembleRequest: value.supportsDisassembleRequest === true,
 		supportsSteppingGranularity: value.supportsSteppingGranularity === true,
+		supportsReadMemoryRequest: value.supportsReadMemoryRequest === true, supportsWriteMemoryRequest: value.supportsWriteMemoryRequest === true,
+		supportsLoadedSourcesRequest: value.supportsLoadedSourcesRequest === true, supportsExceptionInfoRequest: value.supportsExceptionInfoRequest === true,
 		supportsCompletionsRequest: value.supportsCompletionsRequest === true, supportsCancelRequest: value.supportsCancelRequest === true,
 		completionTriggerCharacters: (value.completionTriggerCharacters as string[] | undefined) ?? ['.'],
 		exceptionBreakpointFilters: (value.exceptionBreakpointFilters as { filter: string; label: string; default?: boolean; }[] | undefined)?.map(value => ({ ...value, default: value.default === true })) ?? [],

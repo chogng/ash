@@ -54,14 +54,13 @@ pub enum OperationKind {
     Debug,
 }
 
-/// Prepared launch consumed by the existing DAP owner; it never starts a second debugger host.
+/// Built test target. Adapter selection belongs to the Debug configuration provider.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DebugLaunch {
     pub test_id: String,
     pub program: String,
     pub arguments: Vec<String>,
     pub directory: String,
-    pub adapter_program: String,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

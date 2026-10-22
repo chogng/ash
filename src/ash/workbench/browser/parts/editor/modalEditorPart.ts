@@ -171,7 +171,7 @@ export class ModalEditorPart extends Disposable {
 			this.currentEntry = { input, instance };
 			this.contentDomNode.replaceChildren(instance.domNode);
 			this.updateTitle(input);
-			this.show(openOptions.preserveFocus === true);
+			this.show(openOptions);
 			await this.options.onOpenError?.(displayError, input, openOptions);
 			const current = this.activePane;
 			if (!current) throw new CancellationError('The failed editor was closed');
@@ -187,7 +187,7 @@ export class ModalEditorPart extends Disposable {
 		if (this.currentEntry && this.isSameEditor(this.currentEntry.input, input) && this.currentEntry.instance.pane.id === descriptor.id) {
 			this.currentEntry = { input, instance: this.currentEntry.instance };
 			this.updateTitle(input);
-			this.show(openOptions.preserveFocus === true);
+			this.show(openOptions);
 			this.currentEntry.instance.pane.setOptions?.(openOptions);
 			return this.currentEntry.instance.pane;
 		}
@@ -221,7 +221,7 @@ export class ModalEditorPart extends Disposable {
 		this.currentEntry = { input, instance: committed };
 		this.contentDomNode.replaceChildren(committed.domNode);
 		this.updateTitle(input);
-		this.show(openOptions.preserveFocus === true);
+		this.show(openOptions);
 		pane.setOptions?.(openOptions);
 		return pane;
 	}
@@ -281,7 +281,17 @@ export class ModalEditorPart extends Disposable {
 		if (input) this.requestCloseEmitter.fire(input);
 	}
 
-	private show(preserveFocus: boolean): void {
+	private show(openOptions: EditorOpenOptions): void {
+		const size = openOptions.modal?.size;
+		this.domNode.classList.toggle('custom-size', size !== undefined);
+		if (size) {
+			this.domNode.style.setProperty('--ash-modalEditor-width', `${size.width}px`);
+			this.domNode.style.setProperty('--ash-modalEditor-height', `${size.height}px`);
+		} else {
+			// An editor's requested size must not become the default for the next modal editor.
+			this.domNode.style.removeProperty('--ash-modalEditor-width');
+			this.domNode.style.removeProperty('--ash-modalEditor-height');
+		}
 		if (!this.visible) {
 			const activeElement = this.domNode.ownerDocument.activeElement;
 			this.focusToRestore = isHTMLElement(activeElement) ? activeElement : undefined;
@@ -291,7 +301,7 @@ export class ModalEditorPart extends Disposable {
 			this.active.value?.setVisible(true);
 			this.activePane?.layout(this.dimension);
 		}
-		if (!preserveFocus) this.focusEditorContent();
+		if (!openOptions.preserveFocus) this.focusEditorContent();
 	}
 
 	private updateTitle(input: IResourceEditorInput): void {

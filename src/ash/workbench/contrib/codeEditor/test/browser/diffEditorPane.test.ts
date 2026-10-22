@@ -9,6 +9,7 @@ import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.j
 import { type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Event } from '../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { URI } from "../../../../../base/common/uri.js";
 import { Range } from '../../../../../editor/common/core/range.js';
 import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
@@ -30,6 +31,11 @@ import { IEditorService } from '../../../../services/editor/common/editorService
 import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../../../editor/common/diff/documentDiffProvider.js";
 import { DefaultLinesDiffComputer } from "../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js";
 import { type ITextModel } from '../../../../../editor/common/model.js';
+import { LanguageService } from '../../../../../editor/common/services/languageService.js';
+import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
+import type { LanguageTokenResult } from '../../../../../editor/common/tokens/languageTokens.js';
+import { createTextModelFeatures } from '../../../../../editor/common/model/modelFeatures.js';
+import { registerTextModelFeatures } from '../../../../../editor/common/model/textModelFeatures.js';
 
 import { EditorPaneSelectionChangeReason, type IResourceEditorInput } from '../../../../common/editor.js';
 import { TextFileContentSource, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
@@ -316,6 +322,57 @@ test('Diff pane honors a readonly modified resource and preserves shared text wh
 	}
 });
 
+for (const failedSide of ['original', 'modified'] as const) {
+	test(`Diff pane starts both acquisitions and releases a late reference when ${failedSide} fails`, async () => {
+		const dom = createTestDom();
+		try {
+			const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+			using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
+			using services = new DisposableStore();
+			const container = createDiffServices(services);
+			const failureGate = new DeferredPromise<void>();
+			const lateGate = new DeferredPromise<void>();
+			const failure = new Error('One side failed to load');
+			const started: string[] = [];
+			let siblingSignal: AbortSignal | undefined;
+			let sibling: ReturnType<typeof models.acquire> | undefined;
+			using pane = container.createInstance(DiffEditorPane, resourceStore, {
+				modelService: {
+					acquire: (input: IResourceEditorInput, signal: AbortSignal) => {
+						const side = input.resource.path.includes('original') ? 'original' : 'modified';
+						started.push(side);
+						if (side === failedSide) return failureGate.p.then(() => { throw failure; });
+						siblingSignal = signal;
+						// Model providers may settle a successful acquisition after cancellation.
+						return sibling = models.acquire(input, new AbortController().signal).then(async reference => {
+							await lateGate.p;
+							return reference;
+						});
+					},
+					dispose() { },
+					[Symbol.dispose]() { },
+				},
+				createComputationService: () => new PaneTestDiffComputationService(),
+			});
+			pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
+			const loading = pane.setInput(createDiffEditorInput(
+				{ resource: URI.file('/parallel-original.ts'), initialText: 'before' },
+				{ resource: URI.file('/parallel-modified.ts'), initialText: 'after' },
+			), new AbortController().signal);
+			const rejected = assert.rejects(loading, error => error === failure);
+			assert.deepEqual(started, ['original', 'modified']);
+			await failureGate.complete();
+			await rejected;
+			assert.equal(siblingSignal?.aborted, true);
+			await lateGate.complete();
+			const reference = await sibling!;
+			await Promise.resolve();
+			assert.equal(reference.model.isDisposed(), true);
+			assert.equal(pane.getControl(), undefined);
+		} finally { dom.window.close(); }
+	});
+}
+
 for (const phase of ['acquisition', 'computation']) {
 	test(`Diff pane releases both references when loading is cancelled during ${phase}`, async () => {
 		const dom = createTestDom();
@@ -360,6 +417,58 @@ for (const phase of ['acquisition', 'computation']) {
 		}
 	});
 }
+
+for (const cancelled of [false, true]) test(`Diff pane overlaps control creation with lexical setup and ${cancelled ? 'releases a cancelled candidate' : 'waits for syntax before publication'}`, async () => {
+	const dom = createTestDom();
+	try {
+		using modelFeatures = registerTextModelFeatures(createTextModelFeatures);
+		using languageService = new LanguageService();
+		using language = languageService.registerLanguage({ id: 'demo' });
+		using languageFeaturesService = new LanguageFeaturesService();
+		const tokens = new DeferredPromise<LanguageTokenResult>();
+		let tokenCalls = 0;
+		using provider = languageFeaturesService.syntaxProvider.register({
+			id: 'test.diff-syntax-overlap', languageIds: ['demo'], provideTokens: () => { tokenCalls++; return tokens.p; },
+		});
+		const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, { languageService, languageFeaturesService });
+		using services = new DisposableStore();
+		const container = createDiffServices(services);
+		const editors = container.get(ICodeEditorService);
+		const created = new DeferredPromise<void>();
+		services.add(editors.onDiffEditorAdd(() => { void created.complete(); }));
+		using pane = container.createInstance(DiffEditorPane, resourceStore, {
+			modelService: models, createComputationService: () => new PaneTestDiffComputationService(),
+		});
+		const host = requiredElement<HTMLElement>(dom.window.document, 'main');
+		host.hidden = true;
+		pane.create(host);
+		const controller = new AbortController();
+		const opening = pane.setInput(createDiffEditorInput(
+			{ resource: URI.file('/syntax-before.demo'), initialText: 'const before = 1;', languageId: 'demo' },
+			{ resource: URI.file('/syntax-after.demo'), initialText: 'const after = 2;', languageId: 'demo' },
+		), controller.signal);
+		await Promise.race([created.p, opening.then(() => { throw new Error('Input published before syntax readiness'); })]);
+		assert.equal(pane.getControl(), undefined, 'pending controls do not publish the input before lexical setup');
+		assert.equal(editors.listDiffEditors().length, 1, 'the control is already constructed while syntax is blocked');
+		if (cancelled) {
+			controller.abort();
+			await assert.rejects(opening, { name: 'CancellationError' });
+			assert.deepEqual([editors.listDiffEditors().length, models.getModels().length], [0, 0]);
+			await tokens.complete({ tokens: [] });
+		} else {
+			await tokens.complete({ tokens: [{ range: new Range(1, 1, 1, 6), tokenType: 'keyword', modifiers: [] }] });
+			await opening;
+			assert.equal(tokenCalls, 2);
+			const model = pane.getControl()?.modifiedEditor.getModel();
+			assert.equal(model?.tokenization.getLanguageTokens(0)[0]?.tokenType, 'keyword');
+			pane.clearInput();
+			assert.deepEqual([editors.listDiffEditors().length, models.getModels().length], [0, 0]);
+		}
+	} finally {
+		dom.window.close();
+	}
+});
 
 test('Diff pane recomputes an open comparison when ignore-trim-whitespace changes', async () => {
 	const dom = createTestDom();

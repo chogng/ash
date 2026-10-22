@@ -1,7 +1,7 @@
 # 无界面 Agent 执行
 
 > 目标物理位置：`crates/exec/`
-> 当前状态：阶段 1–2 已实现；远程进程/文件执行平面已实现；可靠自动化与远程 Agent worker 仍在计划中
+> 当前状态：本地 headless runner 已实现；远程进程/文件执行平面已实现；可靠自动化与远程 Agent worker 仍在计划中
 > 当前 crate 实现契约：[`crates/exec/README.md`](../crates/exec/README.md)
 > App Server Client：[`app-server-client.md`](app-server-client.md)
 > App Server contract：[`app-server-api.md`](app-server-api.md)
@@ -79,19 +79,9 @@ Ash 不照搬：
 Ash 已有 durable aggregate sequence、snapshot + gap subscribe 和 typed command replay，应利用
 这些契约实现 resync，而不是依赖“所有实时 event 永不丢失”。
 
-## 3. 当前仓库偏差与迁移
+## 3. 当前执行边界
 
-命名迁移已经完成：
-
-```text
-former crates/exec
-  → crates/tool-executor
-  → crate ash-tool-executor
-
-current crates/exec
-  → crate/binary ash-exec
-  → headless Agent runner
-```
+`crates/exec` 的 crate/binary 为 `ash-exec`，提供 headless Agent runner；本地 process 执行边界位于 `crates/tool-executor`，crate 为 `ash-tool-executor`。
 
 `ash-tool-executor` 拥有 approval start gate 和工具身份适配；`ash-exec-server` 拥有进程准备、capture、timeout 和会话资源。
 `ash-exec` 当前拥有 new/resume/fork、Turn start/interrupt、事件输出与终态映射。Sandbox 的
@@ -262,7 +252,7 @@ pub enum ExecOrigin {
 ```
 
 当前 schema version 是 1。Item-specific event、warning 与
-`Scheduled { job_id, attempt_id }` origin 属于阶段 3/4 的扩展点；当前先机械传递 canonical
+`Scheduled { job_id, attempt_id }` origin 属于可靠自动化与远程调度的扩展点；当前先机械传递 canonical
 `ThreadUpdateEnvelope`，避免过早复制一套 item lifecycle。
 
 `ExecEvent` 是外部展示/automation envelope，不是新的 authoritative domain model：
@@ -508,54 +498,17 @@ ash-scheduler-protocol
 `ash-exec` 可依赖 app-server-client、app-server-protocol、protocol 和窄 CLI/output utility。
 它不依赖 Core、store、rollout、model provider、sandboxing 或 tool executor。
 
-## 15. 实施阶段
+## 15. 当前边界与后续能力
 
-阶段编号用于区分能力轨道，不表示严格的先后依赖；远程进程执行可以先于远程 Agent worker 独立落地。
+本地 headless runner 已通过共享 App Server Client 提供 new/resume/fork、Turn start/interrupt、human/JSONL output、canonical terminal status 与退出码及显式 shutdown。底层 process executor 使用 `ash-tool-executor`，`ash-exec` 名称属于 headless runner。
 
-### 阶段 1：消除命名冲突（当前状态）
+远程进程／文件执行已由独立协议与处理器提供，鉴权 TCP 和本地进程内调用共用执行语义；连接恢复窗口内只继续观察原操作，不重发进程启动或文件写入。服务重启后的进程恢复、远端 App Server 部署及远程 Agent 执行不属于该能力，见 [`ash-exec-server`](../crates/exec-server/README.md) 和[协议](../crates/exec-server-protocol/README.md)。
 
-- 已将原 process `ash-exec` 迁移为 `ash-tool-executor`；
-- 已更新直接依赖与 tools、skills、plugins、MCP 文档中的 ownership；
-- `ash-exec` crate 名称现由 headless runner 使用。
-
-### 阶段 2：本地无界面纵向切片（当前状态）
-
-- 复用 owned App Server Client request/event session；
-- 实现 new/resume/fork、Turn start/interrupt；
-- human/JSONL output；
-- terminal status 与退出码；
-- 显式 shutdown。
-
-### 阶段 3：可靠自动化（计划）
-
-- 稳定 ExecEvent schema；
-- output schema、last-message file、stdin 与 workspace input；
-- approval delegation；
-- reconnect/read/subscribe resync；
-- integration fixtures。
-
-### 阶段 4：远程进程执行环境（已实现）
-
-- 独立 `ash-exec-server-protocol` 与进程、PTY、文件处理器；
-- 本地进程内调用和鉴权 TCP 服务共用执行处理器；
-- App Server 在工具审批后可把进程或文件操作路由到配置的远程执行环境；
-- 连接恢复窗口内可继续观察原操作，不重发进程启动或文件写入。
-
-服务重启后的进程恢复、远端 App Server 部署以及远程 Agent 执行不属于当前已实现能力；具体边界见
-[`ash-exec-server`](../crates/exec-server/README.md) 和
-[`ash-exec-server-protocol`](../crates/exec-server-protocol/README.md)。
-
-### 阶段 5：远程 Agent 工作进程（计划）
-
-- scheduler protocol；
-- Job/Attempt/lease/fencing；
-- worker registration、heartbeat 和 draining；
-- event cursor/ack 与 reconnect；
-- tenant/workspace isolation。
+可靠自动化仍需稳定 ExecEvent schema、output schema、last-message file、stdin/workspace input、approval delegation、reconnect/read/subscribe resync 及 integration fixtures。远程 Agent worker 仍需独立 scheduler protocol、Job/Attempt/lease/fencing、注册／heartbeat／draining、event cursor/ack 与 tenant/workspace isolation；它与远程进程执行是不同能力。
 
 ## 16. 验证要求
 
-阶段 1–2 已由 crate/CLI tests 覆盖：
+本地 headless runner 已由 crate/CLI tests 覆盖：
 
 - exec 与 TUI 使用同一个 App Server Client startup/connection contract；
 - exec 不直接依赖 Core、store、provider、sandbox 或 tool executor；
@@ -568,7 +521,7 @@ ash-scheduler-protocol
 - headless approval 不会永久等待不存在的 UI；
 
 远程进程执行环境的验证由 [`ash-exec-server`](../crates/exec-server/README.md) 的 crate 检查与测试覆盖。
-阶段 3 可靠自动化和阶段 5 远程 Agent worker 尚需满足：
+可靠自动化和远程 Agent worker 尚需满足：
 
 - durable gap 可在断线后通过 reconnect/read/subscribe 恢复；
 - remote cancel 同样发送 typed `session/request` `InterruptTurn`；

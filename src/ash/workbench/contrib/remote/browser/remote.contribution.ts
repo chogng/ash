@@ -1,7 +1,8 @@
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IAppServerApi } from '../../../../platform/agentHost/common/appServerApi.js';
-import { Severity, INotificationService, type INotificationHandle } from '../../../../platform/notification/common/notification.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { IBannerService } from '../../../services/banner/browser/bannerService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { AppServerRecoveryAvailableContext, ReconnectAppServerCommandId } from './remoteActions.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
@@ -57,38 +58,34 @@ registerWorkbenchContribution(RemoteExtensionRecoveryContribution.ID, WorkbenchP
 	remoteAgentService: accessor.get(IAppServerRemoteAgentService),
 }));
 
-/** Presents recovery owned by this window's active connection, using ordinary notifications. */
+/** Projects this window's connection-owned recovery into one persistent notice. */
 class AppServerRecoveryContribution extends Disposable {
-	private notification: INotificationHandle | undefined;
-
 	constructor(
 		@IAppServerApi api: IAppServerApi,
-		@INotificationService notifications: INotificationService,
+		@IBannerService banners: IBannerService,
 		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
+		const id = 'workbench.banner.appServerRecovery';
 		const available = AppServerRecoveryAvailableContext.bindTo(contextKeys);
-		this._register(toDisposable(() => { this.notification?.close(); available.reset(); }));
+		this._register(toDisposable(() => { banners.hide(id); available.reset(); }));
 		const recovery = api.recovery;
 		if (!recovery) return;
 		const update = (): void => {
 			available.set(recovery.status === 'failed' || recovery.status === 'recovering');
-			this.notification?.close();
-			this.notification = undefined;
 			if (recovery.status === 'failed') {
-				this.notification = notifications.notify({
-					severity: Severity.Error, message: localize('appServer.recoveryFailed', 'Could not reconnect to the Agent Host. Check the connection and try again.'), actions: {
-						primary: [{
-							tooltip: '',
-							enabled: true,
-							id: ReconnectAppServerCommandId,
-							label: localize('appServer.reconnect', 'Reconnect'),
-							run: () => recovery.reconnect().catch(() => { }),
-						}]
-					}
+				banners.show({
+					id, icon: Lxicon.warning, priority: 100,
+					message: localize('appServer.recoveryFailed', 'Could not restore the Agent Host connection or workspace. Try again.'),
+					actions: [{ label: localize('appServer.reconnect', 'Reconnect'), href: `command:${ReconnectAppServerCommandId}` }],
 				});
+			} else if (recovery.status === 'recovering') {
+				banners.show({ id, icon: Lxicon.info, priority: 100, message: localize('appServer.recovering', 'Reconnecting to the Agent Host…') });
 			} else if (recovery.status === 'unavailable') {
-				this.notification = notifications.notify({ severity: Severity.Error, message: localize('appServer.recoveryUnavailable', 'The Agent Host connection cannot be restored. {0}', recovery.error ?? '') });
+				banners.show({ id, icon: Lxicon.warning, priority: 100, message: localize('appServer.recoveryUnavailable', 'The Agent Host connection cannot be restored. {0}', recovery.error ?? '') });
+			} else {
+				// Intentional suspension and a healthy connection both clear this producer only.
+				banners.hide(id);
 			}
 		};
 		this._register(recovery.onDidChange(update));

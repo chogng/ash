@@ -17,6 +17,70 @@ use std::process::Command;
 use std::time::Duration;
 use std::time::Instant;
 
+#[test]
+fn terminal_host_starts_in_restrictive_job_and_survives_its_client() {
+    use ash_file_access::Dir;
+    use ash_file_access::Grant;
+    use ash_file_access::GrantSource;
+    use ash_file_access::Permission;
+    use ash_file_access::Permissions;
+    use ash_utils_pty::JobObject;
+    use exec_server::terminal::TerminalService;
+    use std::path::Path;
+
+    const PROFILE: &str = "STANZA_TEST_TERMINAL_JOB_PROFILE";
+    const MARKER: &str = "STANZA_TEST_TERMINAL_JOB_MARKER";
+    fn hosted(profile: &Path) -> TerminalService {
+        let grant = Grant::for_environment(
+            Dir::open_local(profile).unwrap(),
+            GrantSource::HostConfiguration,
+            Permissions::new([Permission::ExecuteCommands]),
+        );
+        TerminalService::hosted(
+            grant.authorize(Permission::ExecuteCommands).unwrap(),
+            profile,
+            Path::new(env!("CARGO_BIN_EXE_ash-exec-server")),
+        )
+        .expect("start or reconnect to the independent terminal host")
+    }
+
+    if let Some(profile) = std::env::var_os(PROFILE) {
+        let service = hosted(Path::new(&profile));
+        assert_eq!(
+            service.environment(&[MARKER.into()]).unwrap()[MARKER],
+            std::env::var(MARKER).unwrap()
+        );
+        return;
+    }
+
+    let profile = tempfile::tempdir().unwrap();
+    // Keep the outer job alive after the client exits. This models a backend
+    // which has escaped an inner controller job but cannot escape its ancestor.
+    let job = JobObject::create().unwrap();
+    let marker = format!("client-{}", std::process::id());
+    let mut command = Command::new(std::env::current_exe().unwrap());
+    command
+        .args([
+            "--exact",
+            "windows::terminal_host_starts_in_restrictive_job_and_survives_its_client",
+            "--nocapture",
+        ])
+        .env(PROFILE, profile.path())
+        .env(MARKER, &marker);
+    let mut client = job.spawn_contained_std(&mut command).unwrap();
+    assert!(client.wait().unwrap().success());
+
+    // A newly spawned host would inherit this test process's environment and
+    // lose the marker. Reconnect after client exit to prove ownership survived.
+    let service = hosted(profile.path());
+    assert_eq!(
+        service.environment(&[MARKER.into()]).unwrap()[MARKER],
+        marker
+    );
+    drop(service);
+    job.terminate().unwrap();
+}
+
 fn powershell() -> PathBuf {
     PathBuf::from(std::env::var_os("SystemRoot").unwrap())
         .join("System32/WindowsPowerShell/v1.0/powershell.exe")

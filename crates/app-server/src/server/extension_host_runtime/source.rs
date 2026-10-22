@@ -131,6 +131,42 @@ pub(super) fn built_in_deployments(
     {
         deployments.push(product_lldb_deployment(directory)?);
     }
+    for (name, manifest, sources) in [
+        (
+            "debug-javascript",
+            include_str!("../../../../../extensions/debug-javascript/package.json"),
+            concat!(
+                include_str!("../../../../../extensions/debug-javascript/src/lib.rs"),
+                include_str!("../../../../../extensions/debug-javascript/runtime.json"),
+                include_str!("../../../../../extensions/debug-javascript/src/auto_attach.rs"),
+                include_str!(
+                    "../../../../../extensions/debug-javascript/src/auto_attach_controls.rs"
+                ),
+                include_str!("../../../../../extensions/debug-javascript/src/auto-attach.cjs"),
+                include_str!("../../../../../extensions/debug-javascript/src/adapter-runtime.cjs"),
+                include_str!("../../../../../extensions/debug-javascript/package.nls.json"),
+                include_str!("../../../../../extensions/debug-javascript/package.nls.zh-CN.json"),
+            ),
+        ),
+        (
+            "debug-server-ready",
+            include_str!("../../../../../extensions/debug-server-ready/package.json"),
+            concat!(
+                include_str!("../../../../../extensions/debug-server-ready/src/lib.rs"),
+                include_str!("../../../../../extensions/debug-server-ready/package.nls.json"),
+                include_str!("../../../../../extensions/debug-server-ready/package.nls.zh-CN.json"),
+            ),
+        ),
+    ] {
+        if directory
+            .join(format!("ash-{name}{}", std::env::consts::EXE_SUFFIX))
+            .is_file()
+        {
+            deployments.push(product_debug_workflow_deployment(
+                directory, name, manifest, sources,
+            )?);
+        }
+    }
     let git_manifest: serde_json::Value =
         serde_json::from_str(include_str!("../../../../../extensions/git/package.json"))
             .map_err(|_| ExtensionHostRuntimeError::Internal)?;
@@ -144,6 +180,119 @@ pub(super) fn built_in_deployments(
         });
     }
     Ok(deployments)
+}
+
+fn product_debug_workflow_deployment(
+    directory: &Path,
+    name: &str,
+    manifest_source: &str,
+    sources: &str,
+) -> Result<EditorExtensionDeployment, ExtensionHostRuntimeError> {
+    let manifest: serde_json::Value =
+        serde_json::from_str(manifest_source).map_err(|_| ExtensionHostRuntimeError::Internal)?;
+    let digest = format!(
+        "sha256:{:x}",
+        Sha256::digest(format!(
+            "{manifest_source}\0{sources}\0{}\0{}\0{}",
+            include_str!("../../../../../sdk/rust/src/debug.rs"),
+            include_str!("../../../../../sdk/rust/src/client.rs"),
+            include_str!("../../../../../sdk/rust/src/terminal.rs")
+        ))
+    );
+    let events: Vec<String> = serde_json::from_value(manifest["activationEvents"].clone())
+        .map_err(|_| ExtensionHostRuntimeError::Internal)?;
+    let id = format!("ash.{name}");
+    let executable = format!("ash-{name}{}", std::env::consts::EXE_SUFFIX);
+    let mut environment = BTreeMap::new();
+    if name == "debug-javascript" {
+        environment.extend(
+            exec_server::terminal::safe_process_environment()
+                .into_iter()
+                .filter(|(key, _)| {
+                    // The adapter needs OS helpers to terminate launched targets.
+                    // Do not transfer the whole host environment to the provider.
+                    matches!(
+                        key.to_ascii_uppercase().as_str(),
+                        "PATH"
+                            | "HOME"
+                            | "USERPROFILE"
+                            | "SYSTEMROOT"
+                            | "WINDIR"
+                            | "COMSPEC"
+                            | "PATHEXT"
+                            | "TEMP"
+                            | "TMP"
+                            | "TMPDIR"
+                    )
+                })
+                .map(|(key, value)| (key.into(), value.into())),
+        );
+        if let Some(node) = std::env::var_os("ASH_ELECTRON_RUN_AS_NODE_PATH") {
+            environment.insert("ASH_DEBUG_NODE_PATH".into(), node);
+            environment.insert("ASH_DEBUG_ELECTRON".into(), "1".into());
+        } else if let Some(root) = directory.parent() {
+            environment.insert(
+                "ASH_DEBUG_NODE_PATH".into(),
+                root.join("ash-resources/node/bin")
+                    .join(format!("node{}", std::env::consts::EXE_SUFFIX))
+                    .into_os_string(),
+            );
+        }
+    }
+    Ok(EditorExtensionDeployment {
+        scope: EditorExtensionScope::Product,
+        id: id.clone(),
+        version: "1.0.0".into(),
+        package_digest: digest.clone(),
+        command: ExtensionLaunchCommand::new(
+            directory.join(&executable),
+            std::iter::empty::<String>(),
+            directory,
+            environment,
+        )
+        .map_err(ExtensionHostRuntimeError::Host)?,
+        workspace_read: WorkspaceReadAccess::Denied,
+        credential_providers: Vec::new(),
+        backend_channels: BTreeMap::new(),
+        protocol_limits: None,
+        params: ActivateParams {
+            initialization: None,
+            extension_id: id.clone(),
+            package: PackageBinding {
+                package_id: format!("{id}@1.0.0"),
+                package_digest: digest,
+                entrypoint: executable,
+            },
+            runtime_api_version: 1,
+            activation_events: events.clone(),
+            capabilities: if name == "debug-javascript" {
+                vec![
+                    ExtensionCapability::DebugAdapter,
+                    ExtensionCapability::TerminalProfileProvider,
+                    ExtensionCapability::Command,
+                    ExtensionCapability::StatusBar,
+                ]
+            } else {
+                vec![ExtensionCapability::DebugAdapter]
+            },
+        },
+        authority: Arc::new(ProductAuthority),
+        activation: Some(ActivationPlan {
+            events,
+            commands: manifest["contributes"]["commands"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|command| {
+                    command["command"]
+                        .as_str()
+                        .zip(command["title"].as_str())
+                        .map(|(id, title)| (id.to_owned(), title.to_owned()))
+                })
+                .collect(),
+        }),
+        activation_failure: None,
+    })
 }
 
 pub(super) fn product_lldb_deployment(
@@ -863,6 +1012,7 @@ fn extension_capability(capability: EditorExtensionCapability) -> ExtensionCapab
         EditorExtensionCapability::TestProfileProvider => ExtensionCapability::TestProfileProvider,
         EditorExtensionCapability::DataChannel => ExtensionCapability::DataChannel,
         EditorExtensionCapability::SpeechProvider => ExtensionCapability::SpeechProvider,
+        EditorExtensionCapability::TreeView => ExtensionCapability::TreeView,
         EditorExtensionCapability::LinkPresentationProvider => {
             ExtensionCapability::LinkPresentationProvider
         }
@@ -887,6 +1037,7 @@ fn capability_name(capability: EditorExtensionCapability) -> &'static str {
         EditorExtensionCapability::TestProfileProvider => "testProfileProvider",
         EditorExtensionCapability::DataChannel => "dataChannel",
         EditorExtensionCapability::SpeechProvider => "speechProvider",
+        EditorExtensionCapability::TreeView => "treeView",
         EditorExtensionCapability::LinkPresentationProvider => "linkPresentationProvider",
         EditorExtensionCapability::ExternalUriOpener => "externalUriOpener",
     }

@@ -4,6 +4,10 @@
 	min-height: 0;
 }
 
+.ash-debug-console-title-actions {
+	gap: var(--ash-spacing-size40);
+}
+
 .ash-debug-console-session {
 	flex: 0 0 auto;
 	margin: 4px 8px;
@@ -131,6 +135,21 @@
 	overflow-wrap: anywhere;
 }
 
+.ash-debug-link {
+	color: var(--ash-accent-foreground);
+	cursor: pointer;
+	text-decoration: underline;
+}
+
+.ash-debug-link:hover {
+	color: var(--ash-textLink-activeForeground);
+}
+
+.ash-debug-link:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-strokeThickness);
+}
+
 .ash-repl-entry[data-category="stderr"] {
 	color: var(--ash-error-foreground);
 }
@@ -153,4 +172,15 @@
 .ash-repl-entry summary:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
+}
+.ash-debug-ansi.bold {
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-debug-ansi.italic {
+	font-style: italic;
+}
+
+.ash-debug-ansi.underline {
+	text-decoration: underline;
 }

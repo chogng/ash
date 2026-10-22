@@ -47,7 +47,7 @@ import { BrowserContextMenuService } from '../../../src/ash/platform/contextview
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
@@ -133,7 +133,7 @@ const commands = resources.add(new CommandService(services));
 services.registerInstance(IContextMenuService, resources.add(new BrowserContextMenuService(
 	new MenuService(commands, services.get(IContextKeyService)), services.get(IContextKeyService),
 	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService,
-	services.get(IContextViewService), resources.add(new NotificationService()),
+	services.get(IContextViewService), resources.add(new TestNotificationService()),
 )));
 services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ container: document.body, instantiationService: services, contextKeyService: services.get(IContextKeyService) })));
 const dialogs = resources.add(new DialogService());

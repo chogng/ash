@@ -1,3 +1,4 @@
+import type { IProjectService } from '../../projects/common/projectService.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { RemoteConnectionDefinition } from '../../remote/common/remoteConnectionService.js';
 import type { ISecretStorageStatusService } from '../../secrets/common/secrets.js';
@@ -118,6 +119,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	/** Available when the host supplies profile-backed recovery storage. */
 	readonly backup?: IBackupService;
 	readonly assets: IAssetService;
+	readonly projects: IProjectService;
 	readonly testing: ITestExecutionService;
 	readonly calls?: ICallService;
 	readonly channels?: IChannelService;

@@ -7,6 +7,7 @@ use ash_app_server_protocol::protocol::git::GitBranchDto;
 use ash_app_server_protocol::protocol::git::GitChangeFileComparisonDto;
 use ash_app_server_protocol::protocol::git::GitChangeFileResult;
 use ash_app_server_protocol::protocol::git::GitChangeStatusDto;
+use ash_app_server_protocol::protocol::git::GitChangesSummaryResult;
 use ash_app_server_protocol::protocol::git::GitCommitChangeDto;
 use ash_app_server_protocol::protocol::git::GitCommitChangesResult;
 use ash_app_server_protocol::protocol::git::GitCommitFileContentDto;
@@ -144,10 +145,47 @@ struct GitRepositoryRuntime {
     ignore_watch_paths: Mutex<Vec<PathBuf>>,
     ignore_cache: Mutex<IgnoreCache>,
     status_watchers: Mutex<Vec<(CancellationToken, Authorization)>>,
+    watcher_refresh: Mutex<WatcherRefresh>,
+    watcher_scan: Mutex<()>,
     state: Mutex<GitRuntimeState>,
     graph_sessions: Mutex<HashMap<u64, GraphSession>>,
     next_graph_token: AtomicU64,
     updates: Arc<UpdateBroker>,
+}
+
+#[derive(Default)]
+struct WatcherRefresh {
+    requested: u64,
+    completed: u64,
+    pending: Option<FileWatcherEvent>,
+}
+
+impl WatcherRefresh {
+    fn merge(&mut self, event: FileWatcherEvent) {
+        self.pending = Some(match (self.pending.take(), event) {
+            (None, event) => event,
+            (
+                Some(FileWatcherEvent::PathsChanged { mut paths }),
+                FileWatcherEvent::PathsChanged { paths: next },
+            ) => {
+                paths.extend(next);
+                paths.sort();
+                paths.dedup();
+                if paths.len() <= 256 {
+                    FileWatcherEvent::PathsChanged { paths }
+                } else {
+                    FileWatcherEvent::RescanRequired {
+                        watched_paths: Vec::new(),
+                    }
+                }
+            }
+            // This accumulator belongs to status scanning, after ignore-watch handling.
+            // A full scan subsumes every path; it does not need the watch registrations.
+            _ => FileWatcherEvent::RescanRequired {
+                watched_paths: Vec::new(),
+            },
+        });
+    }
 }
 
 #[derive(Default)]
@@ -678,10 +716,12 @@ impl GitRuntime {
         &self,
         repository_id: Option<&str>,
         path: &Path,
-    ) -> Result<Vec<ash_git::GitFileHistoryItem>, GitRuntimeError> {
+        limit: std::num::NonZeroUsize,
+        cursor: Option<ash_git::GitFileHistoryCursor>,
+    ) -> Result<ash_git::GitFileHistoryPage, GitRuntimeError> {
         self.repository(repository_id)?
             .service
-            .file_history(path)
+            .file_history(path, limit, cursor)
             .map_err(GitRuntimeError::Service)
     }
 
@@ -844,6 +884,64 @@ impl GitRuntime {
         cursor: Option<&str>,
     ) -> Result<GitGraphResult, GitRuntimeError> {
         self.graph_for(None, connection_id, limit, cursor, None)
+    }
+
+    /// Observes fresh counts without replacing the status owner's published snapshot.
+    pub(super) fn changes_summary_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<GitChangesSummaryResult, GitRuntimeError> {
+        let repository = self.repository(repository_id)?;
+        // Summary computation never publishes status/rename mappings. Like an ordinary
+        // index/worktree read, it can overlap watcher observation but must exclude writes.
+        let _operation = lock_repository_read(
+            &repository.operation,
+            crate::git_service::invocation_cancellation().as_ref(),
+        )
+        .map_err(GitRuntimeError::Service)?;
+        let (identity, snapshot, statistics) = repository
+            .service
+            .text_diff_summary()
+            .map_err(GitRuntimeError::Service)?;
+        let prefix = repository
+            .service
+            .dir_root()
+            .strip_prefix(identity.worktree_root())
+            .map_err(|_| GitRuntimeError::Boundary)?;
+        Ok(GitChangesSummaryResult {
+            files: snapshot
+                .changes()
+                .iter()
+                .filter(|change| change.path().starts_with(prefix))
+                .count(),
+            statistics: GitDiffStatisticsDto {
+                files: statistics.files(),
+                additions: statistics.additions(),
+                deletions: statistics.deletions(),
+            },
+        })
+    }
+
+    pub(super) fn text_diff_summary_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<GitTextDiffResult, GitRuntimeError> {
+        let repository = self.repository(repository_id)?;
+        let _operation = lock_current_operation(&repository.operation)
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let (identity, snapshot, statistics) = repository
+            .service
+            .text_diff_summary()
+            .map_err(GitRuntimeError::Service)?;
+        Ok(GitTextDiffResult {
+            status: repository.accept(identity, snapshot)?,
+            diffs: Vec::new(),
+            statistics: GitDiffStatisticsDto {
+                files: statistics.files(),
+                additions: statistics.additions(),
+                deletions: statistics.deletions(),
+            },
+        })
     }
 
     pub(super) fn text_diff_for(
@@ -1372,6 +1470,8 @@ impl GitRepositoryRuntime {
             ignore_watch_paths: Mutex::new(ignore_watch_paths),
             ignore_cache: Mutex::new(IgnoreCache::default()),
             status_watchers: Mutex::new(Vec::new()),
+            watcher_refresh: Mutex::new(WatcherRefresh::default()),
+            watcher_scan: Mutex::new(()),
             service,
             descriptor,
             stream_instance_id: new_stream_instance_id()?,
@@ -1714,8 +1814,50 @@ impl GitRepositoryRuntime {
         path: &Path,
         comparison: GitChangeFileComparisonDto,
     ) -> Result<GitChangeFileResult, GitRuntimeError> {
-        let _operation = lock_current_operation(&self.operation)
-            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        // A staged comparison can depend on a rename mapping that a watcher is
+        // about to replace. Wait for that publication before using HEAD paths.
+        if comparison == GitChangeFileComparisonDto::Staged {
+            let _operation = lock_current_operation(&self.operation)
+                .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+            return self.change_file_using_published_status(path, comparison);
+        }
+        let operation = lock_repository_read(
+            &self.operation,
+            crate::git_service::invocation_cancellation().as_ref(),
+        )
+        .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let renamed = {
+            let state = self
+                .state
+                .lock()
+                .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+            let wire_path = wire_path(path)?;
+            state.status.as_ref().is_some_and(|status| {
+                status.changes.iter().any(|change| {
+                    change.path == wire_path
+                        && matches!(
+                            change.worktree_status,
+                            GitChangeStatusDto::Renamed | GitChangeStatusDto::Copied
+                        )
+                })
+            })
+        };
+        if renamed {
+            // Drop before acquiring the writer lease, then reread the published
+            // paths. Ordinary index/worktree reads can overlap metadata refreshes.
+            drop(operation);
+            let _operation = lock_current_operation(&self.operation)
+                .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+            return self.change_file_using_published_status(path, comparison);
+        }
+        self.change_file_using_published_status(path, comparison)
+    }
+
+    fn change_file_using_published_status(
+        &self,
+        path: &Path,
+        comparison: GitChangeFileComparisonDto,
+    ) -> Result<GitChangeFileResult, GitRuntimeError> {
         let original_path = {
             let state = self
                 .state
@@ -1762,7 +1904,7 @@ impl GitRepositoryRuntime {
         let file = match original_path {
             Some(original_path) => {
                 self.service
-                    .change_file_at_paths(&original_path, path, comparison)
+                    .change_file_at_paths(&self.identity, &original_path, path, comparison)
             }
             None => self.service.change_file(path, comparison),
         }
@@ -2219,7 +2361,65 @@ impl GitRepositoryRuntime {
         event: &FileWatcherEvent,
         cancellation: &CancellationToken,
     ) -> Result<(), GitRuntimeError> {
-        let _operation = lock_operation_for_request(&self.operation, cancellation)
+        let generation = {
+            let mut refresh = self
+                .watcher_refresh
+                .lock()
+                .map_err(|_| GitRuntimeError::Boundary)?;
+            refresh.requested = refresh
+                .requested
+                .checked_add(1)
+                .ok_or(GitRuntimeError::Boundary)?;
+            refresh.merge(event.clone());
+            refresh.requested
+        };
+        // Multiple client watchers share this repository owner. Keep one running scan
+        // and one union of pending paths, rather than queuing a scan per subscriber.
+        let _scan = loop {
+            cancellation
+                .check()
+                .map_err(|_| GitRuntimeError::Service(GitServiceError::Cancelled))?;
+            match self.watcher_scan.try_lock() {
+                Ok(scan) => break scan,
+                Err(std::sync::TryLockError::WouldBlock) => {
+                    std::thread::sleep(Duration::from_millis(10))
+                }
+                Err(std::sync::TryLockError::Poisoned(_)) => return Err(GitRuntimeError::Boundary),
+            }
+        };
+        let (through, event) = {
+            let mut refresh = self
+                .watcher_refresh
+                .lock()
+                .map_err(|_| GitRuntimeError::Boundary)?;
+            if refresh.completed >= generation {
+                return Ok(());
+            }
+            (
+                refresh.requested,
+                refresh.pending.take().ok_or(GitRuntimeError::Boundary)?,
+            )
+        };
+        let result = self.refresh_watcher_status(&event, cancellation);
+        let mut refresh = self
+            .watcher_refresh
+            .lock()
+            .map_err(|_| GitRuntimeError::Boundary)?;
+        if result.is_ok() {
+            refresh.completed = through;
+        } else {
+            // Cancellation or failure cannot acknowledge another watcher's hints.
+            refresh.merge(event);
+        }
+        result
+    }
+
+    fn refresh_watcher_status(
+        &self,
+        event: &FileWatcherEvent,
+        cancellation: &CancellationToken,
+    ) -> Result<(), GitRuntimeError> {
+        let _operation = lock_repository_read(&self.operation, Some(cancellation))
             .map_err(GitRuntimeError::Service)?;
         let mut refresh = self.status_refresh_for_event(event);
         let result = match &refresh {
@@ -3409,39 +3609,68 @@ fn wire_path(path: &Path) -> Result<String, GitRuntimeError> {
 #[path = "git_runtime_tests.rs"]
 mod tests;
 
+// Only watcher publication and file-content observations use this lease. Both disable
+// optional index writes; all explicit refreshes and mutations retain the exclusive lease,
+// so two independently captured status snapshots cannot publish out of order.
+fn lock_repository_read<'a>(
+    lock: &'a ash_git::RepositoryOperationLock,
+    cancellation: Option<&CancellationToken>,
+) -> Result<ash_git::RepositoryReadGuard<'a>, GitServiceError> {
+    ash_otel::measure_current("git.repository_lock", || {
+        loop {
+            if let Some(token) = cancellation {
+                token.check().map_err(|_| GitServiceError::Cancelled)?;
+            }
+            match lock.try_read() {
+                Ok(guard) => return Ok(guard),
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(_) => return Err(GitServiceError::Runtime),
+            }
+        }
+    })
+}
+
 fn lock_operation_for_request<'a>(
     lock: &'a ash_git::RepositoryOperationLock,
     cancellation: &CancellationToken,
 ) -> Result<ash_git::RepositoryOperationGuard<'a>, GitServiceError> {
-    loop {
-        cancellation
-            .check()
-            .map_err(|_| GitServiceError::Cancelled)?;
-        match lock.try_lock() {
-            Ok(guard) => return Ok(guard),
-            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                std::thread::sleep(Duration::from_millis(10));
+    ash_otel::measure_current("git.repository_lock", || {
+        let waiter = lock.queue_write().map_err(|_| GitServiceError::Runtime)?;
+        loop {
+            cancellation
+                .check()
+                .map_err(|_| GitServiceError::Cancelled)?;
+            match waiter.try_lock() {
+                Ok(guard) => return Ok(guard),
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(_) => return Err(GitServiceError::Runtime),
             }
-            Err(_) => return Err(GitServiceError::Runtime),
         }
-    }
+    })
 }
 
 fn lock_current_operation(
     lock: &ash_git::RepositoryOperationLock,
 ) -> Result<ash_git::RepositoryOperationGuard<'_>, GitServiceError> {
-    if let Some(token) = crate::git_service::invocation_cancellation() {
-        loop {
-            token.check().map_err(|_| GitServiceError::Cancelled)?;
-            let result = lock.try_lock();
-            match result {
-                Ok(guard) => return Ok(guard),
-                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    std::thread::sleep(Duration::from_millis(10))
+    ash_otel::measure_current("git.repository_lock", || {
+        if let Some(token) = crate::git_service::invocation_cancellation() {
+            let waiter = lock.queue_write().map_err(|_| GitServiceError::Runtime)?;
+            loop {
+                token.check().map_err(|_| GitServiceError::Cancelled)?;
+                let result = waiter.try_lock();
+                match result {
+                    Ok(guard) => return Ok(guard),
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(Duration::from_millis(10))
+                    }
+                    Err(_) => return Err(GitServiceError::Runtime),
                 }
-                Err(_) => return Err(GitServiceError::Runtime),
             }
         }
-    }
-    lock.lock().map_err(|_| GitServiceError::Runtime)
+        lock.lock().map_err(|_| GitServiceError::Runtime)
+    })
 }

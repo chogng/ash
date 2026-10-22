@@ -37,7 +37,7 @@ import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/r
 import { Event as AshEvent, Emitter } from '../../../../../base/common/event.js';
 import { ILocalTranscriptionModelService, ILocalTranscriptionService, DictationModelState, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { Severity } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -69,7 +69,7 @@ for (const [name, value] of Object.entries({
 const inputResources = new DisposableStore();
 inputResources.add(installTestDictationAudio(window));
 suiteTeardown(() => inputResources.dispose());
-const sharedNotifications = new NotificationService();
+const sharedNotifications = new TestNotificationService();
 setARIAContainer(document.body);
 suiteTeardown(() => sharedNotifications.dispose());
 
@@ -77,7 +77,7 @@ class ObservableInputPart extends ChatInputPart {
 	readonly onDidChangeInputForTest = this.onDidChangeInput;
 }
 
-function inputPart(notifications: NotificationService, dictation?: TestDictationCapture, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}, sharedServices?: InstantiationService, localTranscription?: ILocalTranscriptionModelService & ILocalTranscriptionService, telemetry?: ITelemetryService): ObservableInputPart {
+function inputPart(notifications: TestNotificationService, dictation?: TestDictationCapture, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}, sharedServices?: InstantiationService, localTranscription?: ILocalTranscriptionModelService & ILocalTranscriptionService, telemetry?: ITelemetryService): ObservableInputPart {
 	const container = document.createElement('div');
 	document.body.append(container);
 	let state: ChatInputState = { mode, queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
@@ -418,7 +418,7 @@ test('Sending a selected code reference forwards its snapshot and restores it af
 });
 
 test('Chat dictation startup failure appears in notifications and leaves input status clear', async () => {
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	using part = inputPart(notifications, { start: async () => { throw new Error('HTTP 403'); } });
 	const failure = new DeferredPromise<void>();
 	using notification = notifications.model.onDidAdd(() => { void failure.complete(); });
@@ -483,7 +483,7 @@ test('Chat keeps model preparation in settings and reads it only when dictation 
 });
 
 test('Chat dictation session failure appears in notifications and releases the microphone', async () => {
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	let endSession: ((error?: string) => void) | undefined;
 	using part = inputPart(notifications, {
 		start: async (_options, _onTranscript, onEnded) => {
@@ -589,8 +589,8 @@ test('Shared dictation only changes its owning input and returns the complete tr
 	await services.get(IConfigurationService).updateValue('dictation.backend', 'cloud');
 	if (!services.has(INotificationService)) services.registerInstance(INotificationService, sharedNotifications);
 	const speech = services.get(IChatSpeechToTextService);
-	using firstNotifications = new NotificationService();
-	using secondNotifications = new NotificationService();
+	using firstNotifications = new TestNotificationService();
+	using secondNotifications = new TestNotificationService();
 	using first = inputPart(firstNotifications, undefined, 'agent', {}, services);
 	using second = inputPart(secondNotifications, undefined, 'agent', {}, services);
 	const started = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
@@ -655,7 +655,7 @@ test('Hiding the recording input discards stop-time text and permits another inp
 
 test('A failed shared session notifies its window once without notifying unrelated inputs', async () => {
 	using services = new InstantiationService();
-	using windowNotifications = new NotificationService();
+	using windowNotifications = new TestNotificationService();
 	services.registerInstance(INotificationService, windowNotifications);
 	let ended!: (error?: string) => void;
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, createTestDictationBackend(inputResources, {
@@ -667,8 +667,8 @@ test('A failed shared session notifies its window once without notifying unrelat
 	await services.get(IConfigurationService).updateValue('dictation.backend', 'cloud');
 	if (!services.has(INotificationService)) services.registerInstance(INotificationService, sharedNotifications);
 	const speech = services.get(IChatSpeechToTextService);
-	using firstNotifications = new NotificationService();
-	using secondNotifications = new NotificationService();
+	using firstNotifications = new TestNotificationService();
+	using secondNotifications = new TestNotificationService();
 	using first = inputPart(firstNotifications, undefined, 'agent', {}, services);
 	using second = inputPart(secondNotifications, undefined, 'agent', {}, services);
 	const started = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
@@ -786,7 +786,7 @@ test('Chat input waits for file preparation before sending its inline reference 
 
 test('Failed file preparation blocks the waiting send and notifies once while preserving the draft', async () => {
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	const messages: string[] = [];
 	using listener = notifications.model.onDidAdd(message => messages.push(message.message));
 	let sends = 0;
@@ -803,7 +803,7 @@ test('Failed file preparation blocks the waiting send and notifies once while pr
 
 test('Hiding an input cancels pending file preparation without sending or notifying', async () => {
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	let errors = 0;
 	using listener = notifications.model.onDidAdd(() => { errors++; });
 	let sends = 0;
@@ -846,7 +846,7 @@ test('Editing a draft during file preparation cancels the waiting send and keeps
 
 test('Disposing an input during preparation cancels sending without creating new UI', async () => {
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	let sends = 0;
 	const part = inputPart(notifications, undefined, 'agent', { send: async () => { sends++; } });
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });

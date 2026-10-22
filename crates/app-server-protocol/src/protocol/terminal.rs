@@ -208,6 +208,18 @@ pub struct TerminalProcessReady {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub shell_type: Option<TerminalShellType>,
+    /// Actual process argv and injection attempt, including after reconnect.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub launch: Option<TerminalProcessLaunch>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalProcessLaunch {
+    pub executable: String,
+    pub args: TerminalArguments,
+    pub used_shell_integration_injection: bool,
 }
 
 /// Backend-owned properties. Shell-reported cwd survives exit; cwd is absent when unavailable.
@@ -645,6 +657,25 @@ mod tests {
             serde_json::json!({"raw": "echo"}),
         ] {
             assert!(serde_json::from_value::<TerminalArguments>(invalid).is_err());
+        }
+    }
+
+    #[test]
+    fn terminal_ready_retains_launch_metadata_and_accepts_older_backends() {
+        let legacy: TerminalProcessReady =
+            serde_json::from_value(serde_json::json!({"pid": 42, "cwd": "/workspace"})).unwrap();
+        assert!(legacy.launch.is_none());
+        for args in [
+            serde_json::json!(["-NoExit", ". fixture.ps1"]),
+            serde_json::json!("-l -c \"echo raw\""),
+        ] {
+            let value = serde_json::json!({"pid": 42, "cwd": "/workspace", "launch": {
+                "executable": "C:\\Program Files\\PowerShell\\pwsh.exe",
+                "args": args,
+                "usedShellIntegrationInjection": true
+            }});
+            let decoded: TerminalProcessReady = serde_json::from_value(value.clone()).unwrap();
+            assert_eq!(serde_json::to_value(decoded).unwrap(), value);
         }
     }
 

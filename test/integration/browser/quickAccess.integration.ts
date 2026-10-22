@@ -18,7 +18,7 @@ import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/com
 import { IAccountService } from '../../../src/ash/platform/accounts/common/accountService.js';
 import { GitHubError, GitHubErrorCode, IGitHubService } from '../../../src/ash/platform/github/common/githubService.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { GitHubReviewModel, IGitHubReviewModel } from '../../../src/ash/workbench/contrib/github/browser/githubReviewModel.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
@@ -112,7 +112,7 @@ services.registerInstance(IKeybindingService, {
 const contexts = resources.add(new ContextKeyService());
 const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);
-services.registerInstance(INotificationService, resources.add(new NotificationService()));
+services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 if (!parameters.has('shortcuts')) {
 	services.registerInstance(IEditorService, {
 		openEditor: async input => { document.querySelector('output')!.textContent = input.resource.toString(); },

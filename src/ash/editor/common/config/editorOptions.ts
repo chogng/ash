@@ -1945,7 +1945,7 @@ const objectCompatibilityDefaults: Readonly<Record<string, unknown>> = {
 	inlineSuggest: Object.freeze({ enabled: true, mode: 'prefix', showToolbar: 'onHover', suppressSuggestions: false, keepOnBlur: false, syntaxHighlightingEnabled: true }),
 	inlayHints: Object.freeze({ enabled: 'on', fontSize: 0, fontFamily: '', padding: false, maximumLength: 43 }),
 	parameterHints: Object.freeze({ enabled: true, cycle: true }),
-	minimap: Object.freeze({ enabled: true, autohide: 'none', side: 'right', size: 'proportional', renderCharacters: true, showSlider: 'mouseover', maxColumn: 120, scale: 1, showRegionSectionHeaders: true, showMarkSectionHeaders: true, markSectionHeaderRegex: '', sectionHeaderFontSize: 9, sectionHeaderLetterSpacing: 1 }),
+	minimap: Object.freeze({ enabled: true, autohide: 'none', side: 'right', size: 'proportional', renderCharacters: true, showSlider: 'mouseover', maxColumn: 120, scale: 1, showRegionSectionHeaders: true, showMarkSectionHeaders: true, markSectionHeaderRegex: '\\bMARK:\\s*(?<separator>\\-?)\\s*(?<label>.*)$', sectionHeaderFontSize: 9, sectionHeaderLetterSpacing: 1 }),
 	scrollbar: Object.freeze({ arrowSize: 11, vertical: ScrollbarVisibility.Auto, horizontal: ScrollbarVisibility.Auto, useShadows: true, verticalHasArrows: false, horizontalHasArrows: false, handleMouseWheel: true, alwaysConsumeMouseWheel: true, horizontalScrollbarSize: 12, horizontalSliderSize: 12, verticalScrollbarSize: 14, verticalSliderSize: 14, scrollByPage: false, ignoreHorizontalScrollbarInContentHeight: false }),
 	stickyScroll: Object.freeze({ enabled: true, maxLineCount: 5, defaultModel: 'outlineModel', scrollWithEditor: true }),
 	dropIntoEditor: Object.freeze({ enabled: true, showDropSelector: 'afterDrop' }),

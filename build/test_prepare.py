@@ -352,6 +352,8 @@ class PrepareTests(unittest.TestCase):
                 "ash-remote-ssh-extension",
                 "ash-dev-container-provider",
                 "ash-debug-lldb",
+                "ash-debug-javascript",
+                "ash-debug-server-ready",
                 "ash-voice-host",
                 "ash-livekit-client",
                 "ash-realtime-voice",

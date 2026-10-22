@@ -1,10 +1,9 @@
-import { watch, type FSWatcher } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { basename, dirname } from 'node:path';
+import { dirname } from 'node:path';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { parseJsonc } from '../../../base/common/jsonc.js';
-import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { keyboardMappingsEqual, type IKeyboardLayoutDefinition } from '../common/keyboardLayout.js';
 import {
 	parseUserKeyboardLayoutResource,
@@ -15,6 +14,7 @@ import {
 
 export interface UserKeyboardLayoutMainServiceOptions {
 	readonly filePath: string;
+	readonly watchFile: (filePath: string, onChange: () => void) => IDisposable;
 	readonly onError?: (error: unknown) => void;
 	readonly openResource?: (filePath: string) => Promise<string>;
 }
@@ -25,7 +25,7 @@ export class UserKeyboardLayoutMainService extends Disposable {
 	private readonly filePath: string;
 	private readonly onError: (error: unknown) => void;
 	private readonly openResourceInHost: ((filePath: string) => Promise<string>) | undefined;
-	private watcher: FSWatcher | undefined;
+	private readonly watchFile: UserKeyboardLayoutMainServiceOptions['watchFile'];
 	private reloadTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
 	private reloadQueue: Promise<void> = Promise.resolve();
 	private layout: IKeyboardLayoutDefinition | undefined;
@@ -36,6 +36,7 @@ export class UserKeyboardLayoutMainService extends Disposable {
 	private constructor(options: UserKeyboardLayoutMainServiceOptions) {
 		super();
 		this.filePath = options.filePath;
+		this.watchFile = options.watchFile;
 		this.onError = options.onError ?? ((error) => console.error('Failed to process user keyboard layout', error));
 		this.openResourceInHost = options.openResource;
 		this._register(toDisposable(() => {
@@ -43,16 +44,17 @@ export class UserKeyboardLayoutMainService extends Disposable {
 			if (this.reloadTimer !== undefined) {
 				globalThis.clearTimeout(this.reloadTimer);
 			}
-			this.watcher?.close();
 		}));
 	}
 
 	public static async create(options: UserKeyboardLayoutMainServiceOptions): Promise<UserKeyboardLayoutMainService> {
 		const service = new UserKeyboardLayoutMainService(options);
-		await mkdir(dirname(options.filePath), { recursive: true });
-		await service.reload(false);
-		service.startWatching();
-		return service;
+		try {
+			await mkdir(dirname(options.filePath), { recursive: true });
+			await service.reload(false);
+			service.startWatching();
+			return service;
+		} catch (error) { service.dispose(); throw error; }
 	}
 
 	public get currentKeyboardLayout(): IKeyboardLayoutDefinition | undefined {
@@ -91,11 +93,9 @@ export class UserKeyboardLayoutMainService extends Disposable {
 	}
 
 	private startWatching(): void {
-		const fileName = basename(this.filePath);
-		this.watcher = watch(dirname(this.filePath), { persistent: false }, (_eventType, changedName) => {
-			if (changedName !== null && changedName.toString() !== fileName) {
-				return;
-			}
+		// Main supplies its isolated file watcher; native registration and close must
+		// not block Desktop while this model retains layout state and reload ordering.
+		this._register(this.watchFile(this.filePath, () => {
 			if (this.reloadTimer !== undefined) {
 				globalThis.clearTimeout(this.reloadTimer);
 			}
@@ -103,8 +103,7 @@ export class UserKeyboardLayoutMainService extends Disposable {
 				this.reloadTimer = undefined;
 				this.reloadQueue = this.reloadQueue.then(() => this.reload(true));
 			}, 75);
-		});
-		this.watcher.on('error', this.onError);
+		}));
 	}
 
 	private async reload(notify: boolean): Promise<void> {

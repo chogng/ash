@@ -36,6 +36,61 @@ suite('Frontend line diff', () => {
 		]);
 	});
 
+	test('keeps inserted and deleted configuration blocks whole beside identical opening lines', async () => {
+		const added = ['', 'registerConfiguration({', '\tkey: "WorkspaceTrust",', '\tsetting: {', '\t\tvalueType: "boolean",', '\t},', '});'];
+		const original = ['imports;', '', 'registerConfiguration({', '\tkey: "SandboxSettings",', '\tsetting: {', '\t\tvalueType: "boolean",', '\t},', '});', 'tail();'];
+		const modified = ['imports;', ...added, ...original.slice(1)];
+		const computer = new DefaultLinesDiffComputer();
+		for (const ignoreTrimWhitespace of [false, true]) {
+			for (const reversed of [false, true]) {
+				const before = reversed ? modified : original;
+				const after = reversed ? original : modified;
+				const options = { ignoreTrimWhitespace, maxComputationTimeMs: 0, computeMoves: false };
+				const result = computer.computeDiff(before, after, options);
+				assert.deepEqual(result.changes.map(change => [
+					change.original.startLineNumber, change.original.endLineNumberExclusive,
+					change.modified.startLineNumber, change.modified.endLineNumberExclusive,
+				]), [[2, reversed ? 9 : 2, 2, reversed ? 2 : 9]]);
+				assert.deepEqual(await computer.computeDiffAsync(before, after, options, new AbortController().signal), result);
+				const diff = toLineDiff(result, before.length, after.length);
+				assert.deepEqual(diff.rows.filter(row => row.kind !== LineDiffKind.Unchanged).map(row => reversed
+					? before[row.originalLineIndex!] : after[row.modifiedLineIndex!]), added);
+			}
+		}
+	});
+
+	test('keeps separate inserted blocks aligned with their unchanged neighbors', async () => {
+		const block = (key: string): string[] => ['', 'register({', `\tkey: "${key}",`, '});'];
+		const original = ['head();', ...block('sandbox'), 'separator();', ...block('notifications'), 'tail();'];
+		const modified = ['head();', ...block('workspace'), ...block('sandbox'), 'separator();', ...block('banner'), ...block('notifications'), 'tail();'];
+		const diff = await compute(original.join('\n'), modified.join('\n'));
+		assert.deepEqual(diff.hunks, [
+			{ rowStart: 1, rowEnd: 5, originalStartLineIndex: 1, originalLineCount: 0, modifiedStartLineIndex: 1, modifiedLineCount: 4 },
+			{ rowStart: 10, rowEnd: 14, originalStartLineIndex: 6, originalLineCount: 0, modifiedStartLineIndex: 10, modifiedLineCount: 4 },
+		]);
+	});
+
+	test('preserves unchanged context separating a repeated block insertion from replacements', async () => {
+		const original = ['oldHead();', '', 'register({', '\tkey: "sandbox",', '});', '', 'oldTail();'];
+		const modified = ['newHead();', '', 'register({', '\tkey: "workspace",', '});', '', 'register({', '\tkey: "sandbox",', '});', '', 'newTail();'];
+		const diff = await compute(original.join('\n'), modified.join('\n'));
+		assert.deepEqual(diff.hunks, [
+			{ rowStart: 0, rowEnd: 1, originalStartLineIndex: 0, originalLineCount: 1, modifiedStartLineIndex: 0, modifiedLineCount: 1 },
+			{ rowStart: 2, rowEnd: 6, originalStartLineIndex: 2, originalLineCount: 0, modifiedStartLineIndex: 2, modifiedLineCount: 4 },
+			{ rowStart: 10, rowEnd: 11, originalStartLineIndex: 6, originalLineCount: 1, modifiedStartLineIndex: 10, modifiedLineCount: 1 },
+		]);
+	});
+
+	test('does not rotate a block across lines that only match after trimming whitespace', () => {
+		const result = new DefaultLinesDiffComputer().computeDiff(['head', '  repeat', 'tail'], ['head', ' repeat', 'added', '  repeat', 'tail'], {
+			ignoreTrimWhitespace: true, maxComputationTimeMs: 0, computeMoves: false,
+		});
+		assert.deepEqual(result.changes.map(change => [
+			change.original.startLineNumber, change.original.endLineNumberExclusive,
+			change.modified.startLineNumber, change.modified.endLineNumberExclusive,
+		]), [[3, 3, 3, 5]]);
+	});
+
 	test('pairs an edited declaration with its source line after inserted setup code', async () => {
 		const original = ['head', 'const source = new ExplorerDataSource(files, config);', 'tail'];
 		const modified = ['head', 'using workspace = new WorkspaceContextService(project);', 'const getValue = config.getValue.bind(config);', 'config.getValue = section => getValue(section);', 'using source = new ExplorerDataSource(config);', 'tail'];
@@ -253,9 +308,11 @@ suite('Frontend line diff', () => {
 	test('finds an optimal alignment with repeated and reordered lines', async () => {
 		let seed = 31;
 		const random = (): number => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0);
-		for (let attempt = 0; attempt < 300; attempt++) {
-			const original = Array.from({ length: random() % 16 + 1 }, () => String(random() % 5));
-			const modified = Array.from({ length: random() % 16 + 1 }, () => String(random() % 5));
+		const values = ['0', '1', '2', '3', '4', '', '\tkey: "value",', '  return value;', 'register({', '});'];
+		for (let attempt = 0; attempt < 600; attempt++) {
+			const vocabulary = attempt < 300 ? values.slice(0, 5) : values;
+			const original = Array.from({ length: random() % 16 + 1 }, () => vocabulary[random() % vocabulary.length]!);
+			const modified = Array.from({ length: random() % 16 + 1 }, () => vocabulary[random() % vocabulary.length]!);
 			const diff = await compute(original.join('\n'), modified.join('\n'));
 			const unchanged = diff.rows.filter(row => row.kind === LineDiffKind.Unchanged);
 			assert.equal(unchanged.length, longestCommonSubsequence(original, modified), JSON.stringify({ original, modified }));

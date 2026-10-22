@@ -20,7 +20,7 @@ Ash 提供两条独立的 ChatGPT 订阅连接。同一模型厂商仍为 `opena
 | `ash-model-provider`      | 比较可用连接并选择请求路径；固定模型的连接与账号，检查请求前后的身份，禁止失败后跨连接切换；按连接与账号划分目录范围 | [`provider.rs`](../../crates/model-provider/src/provider.rs) 的 `ModelProviderRuntime::preferred_connections` 和账号校验；[`catalog`](../../crates/model-provider/src/catalog.rs) |
 | `ash-chatgpt`             | 只读复用 Codex 凭据，或维护 Ash 独立授权的注册、token、刷新锁和回调生命周期；两套凭据互不读写                        | 本机复用的 [`oauth.rs`](../../crates/chatgpt/src/oauth.rs)；独立授权的 [`plan.rs`](../../crates/chatgpt/src/plan.rs)                                                              |
 | `ash-login`               | 统一登录、取消、登出、账户状态与通知，按连接分发给对应登录驱动                                                       | [`service.rs`](../../crates/login/src/service.rs)                                                                                                                                 |
-| `ash-app-server`          | 组装两个登录驱动及模型运行时，暴露账户与连接 RPC；连接列表使用同一优先级定义                                         | [`local.rs`](../../crates/app-server/src/local.rs)；[`provider_operations.rs`](../../crates/app-server/src/server/provider_operations.rs)                                         |
+| `ash-app-server`          | 组装两个登录驱动及模型运行时，暴露账户与连接 RPC；连接列表使用同一优先级定义                                         | [`local.rs`](../../crates/app-server/src/local.rs)；[`request_processors/providers.rs`](../../crates/app-server/src/server/request_processors/providers.rs)                       |
 
 调整默认顺序时修改 `ash-model-provider-info`，调整可用性判断或绑定行为时修改 `ash-model-provider`，调整认证存储、刷新或登出隔离时修改 `ash-chatgpt`。
 

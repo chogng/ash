@@ -83,3 +83,30 @@ operations provide read/stat/directory listing, with `ctime` currently reported 
 `workspace.applyEdit` applies text edits through the client model owner and rejects file
 operations. Registry Remote resolvers currently use workspace scope; profile-scoped local
 Plugin resolvers remain a separate admitted deployment path.
+
+Debug visualizers may declare `contributes.debugVisualizers` entries with `id`,
+`title`, `command`, and optional exact variable `type`. Register that command through
+`ash.commands.registerCommand`. Its argument contains `sessionId`, optional `threadId`
+and `frameId`, and a variable snapshot (`name`, `value`, `type`, `variablesReference`).
+Return `{ content: string, languageId?: string }` (at most 1 MiB). Debug's Visualize
+Variable command presents the result in a read-only editor. The existing command
+activation, execution authorization and extension lifetime apply; results from a
+resumed session or replaced extension catalog are discarded. This contract renders
+text; extension HTML and scripts are not executed in the editor.
+
+Extensions admitted with the `treeView` capability can call
+`views.registerTreeDataProvider(provider, { id, title, containerId? })`. Registration
+contributes a view to the current window; omitting `containerId` selects its default
+primary sidebar container. The provider owns elements and implements `getChildren`
+and `getTreeItem`. Stable `TreeItem.id` values retain identity across refreshes;
+otherwise identity follows the element object. Labels, descriptions, string tooltips,
+collapse state and commands are supported. Set `checkboxState` with a
+`setCheckboxState` callback to enable checkboxes, or `editable: true` with `rename`
+to enable F2 editing. Enter commits the name and Escape cancels it.
+
+Fire `onDidChangeTreeData` to refresh the tree. Refreshes wait for active inline edits
+to finish, preserving typed text and selection. The renderer uses the existing view,
+selection, theme and accessibility owners; it keeps only a projection of provider data.
+Disposing the registration or retiring the extension removes the view and cancels
+in-flight requests. Nodes are bounded to 10,000 per provider, item text to 4,096
+characters, IDs to 1,024 characters and rename input to 32,768 characters.

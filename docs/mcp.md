@@ -620,6 +620,8 @@ OAuth coordinator；complete/refresh 强制 reconcile 为 connect，revoke 先�
 继续使用 `CommandId` 和 exact typed payload replay；connect/disconnect 是 runtime intent，不占用
 Session/Thread sequence。
 
+运行意图优先于持久 enablement：显式 Connect 可以临时启动保存为 Disabled 的声明，显式 Disconnect 可以停止保存为 Enabled 的声明；配置保持不变。停止当前运行连接应使用 Disconnect，不能把保存 Disable 当成撤销已有 Connect 意图。进程回收验收按实际调用的 Server PID 及其启动器／后代关联当前实例；同一配置在其他仍使用的运行上下文中可以有独立连接。
+
 ## 14. 错误与可观测性
 
 错误至少分为：
@@ -678,58 +680,17 @@ crates/ash-mcp/src/
 security 和 identity。resources/prompts/auth/reconnect 落地时按独立 ownership 新增模块，不扩充
 现有 runtime 大文件；测试使用显式 sibling `#[path = "..._tests.rs"]`。
 
-## 16. 分阶段实施
+## 16. 当前限制与能力开放条件
 
-### 阶段 M0：低层契约与样例（工具范围完成）
+工具调用、stdio/HTTP 传输、OAuth 与基础 form elicitation 的已实现行为见前文。以下范围仍未闭合：
 
-- ✅ RMCP SDK 固定 protocol lifecycle 与 capability negotiation；
-- ✅ 使用 fake/in-process transport 覆盖 initialize、tools 与 cancellation；
-- ✅ 验证 catalog page/tool/byte 和 output byte limits；
-- revision mismatch、oversized frame/schema bomb 与 late response fixture 尚待补充。
+- version/revision mismatch、oversized frame/schema bomb 与 late response 的 fixtures 仍需补充。
+- stdio 的 sandboxed launcher/process supervisor 尚未接入；不能把 direct-local connector 视为已提供系统隔离。
+- resource/prompt list/read/get、根目录投影及客户端 catalog/显式选择仍属设计；未选择的内容不能自动进入模型 context。
+- HTTP session resume/reconnect 和第三方额外 OAuth 扩展尚未具备；token 不得进入 config/log/event，断线不能被误判为取消或成功。
+- URL、数组/多选 elicitation、sampling 和 tasks 分别按实际需求评审，具备各自的 capability gate、budget、approval 与 recovery tests 后才可声明支持。
 
-完成条件：fake server 可覆盖正常、错误、late response、cancel 和 version mismatch。
-
-### 阶段 M1：stdio +工具纵向切片（窄启动时接线完成）
-
-- ✅ direct stdio connector 与 graceful shutdown；
-- ✅ tools/list pagination、catalog snapshot 和 list-changed stale 标记；
-- ✅ frozen tool binding、argument shape/output size validation 与 protocol cancellation；
-- ✅ 接入 Core Turn tool loop、逐次 approval、durable Tool Call/Result 和 UnknownOutcome；
-- Config/Connector hot rebuild、model-safe-point binding 与 old-generation drain 已接入；
-- ✅ `tools/list_changed` 进入 host reconcile，并在模型安全点替换 catalog；
-- ✅ 基础 form elicitation 进入 durable Core interaction，并恢复同一次 live Tool execution；
-- sandbox/process supervisor 仍未接入。
-
-完成条件：server crash、取消和 Thread recovery 不会静默重放有副作用调用。
-
-### 阶段 M2：资源、提示词与根目录
-
-- resource/prompt list/read/get；
-- context provenance、size/token budget 和 Resource store；
-- `Dir` root projection 与 list-changed；
-- Desktop/CLI/TUI 的只读 catalog 与显式选择入口。
-
-完成条件：任何 MCP 内容都不会在未选择时自动进入模型 context。
-
-### 阶段 M3：Streamable HTTP + OAuth（基础传输部分具备）
-
-- ✅ RMCP reqwest Streamable HTTP connector 支持 unauthenticated/bearer session；
-- ✅ Connector OAuth 通用 state/PKCE/exact redirect/one-shot exchange、App Server RPC 与 Desktop callback 编排；
-- ✅ 直接 Config HTTPS bearer credential 的 host SecretStore materialization；
-- ✅ 独立 Config MCP 的 provider-injected PKCE/start/complete/refresh/revoke、target revalidation 与
-  runtime/lifecycle secret isolation；
-- ✅ 标准 metadata discovery、DCR/public client ID/显式 CIMD、请求前自动刷新和单次 401 恢复；
-- ✅ Desktop 与 CLI 登录/退出，以及跨 runtime 的 refresh/logout/callback 事务与失效保护；
-- session resume/reconnect 与第三方额外 OAuth 扩展仍未具备。
-
-完成条件：token 不进入 config/log/event，断线不被误判为取消或成功。
-
-### 阶段 M4：可选客户端功能
-
-- ✅ App Server owner-directed interaction 与基础 MCP form elicitation；
-- URL、数组/多选 elicitation、sampling 和 tasks 仍需分别评审；
-- 每项独立 capability gate、budget、approval 和 recovery tests；
-- 未完成的 capability 不在 initialize 中声明。
+server crash、取消和 Thread recovery 不能静默重放有副作用调用；新能力不绕过同一 Tool binding、approval、durable Tool Call/Result 与 unknown outcome 契约。
 
 ## 17. 验证门
 
@@ -749,3 +710,20 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 
 实现必须使用 deterministic fake clock/transport/server；单元测试不能依赖公网 MCP server 或真实
 OAuth provider。
+
+### 2026-10-22 Windows 搜索与 stdio MCP 生命周期验收
+
+以下证据产物保存在验收用 Windows 主机的 `.build/`，不随源码检出分发；报告路径用于定位原始产物。
+
+本轮按用户确认的共享后台生命周期验收：窗口关闭释放 UI 连接，仍存活的 managed App Server 可以保留目录及 MCP runtime；同目录重开应复用缓存，显式 Disconnect 应回收所断连接的启动器与后代。最后客户端退出且无后台工作时，由后台默认闲置退出负责最终回收。当前[空闲目录缓存容量为 4](../crates/app-server/src/managed/registry.rs)，[后台默认闲置超时为 5 分钟](../crates/app-server/src/managed.rs)；本轮没有改变这些策略，也不将“Main 退出 10 秒后所有进程清零”作为通过条件。
+
+验证使用本检出 `f274d7a8f70850f0961e024d8893b8bc5df9ad4a` 加工作区修复的正常 Windows x64 Desktop，Ash 0.1.0、Electron 44.4.5。实际后端 package 为 `0392ab781a866b7f02d5ef5d07a1c617bc481050ed6e6c637944e95fac45e3fb`，发布 module 为 `ef55514f901da1fa147844ebf8f3cd8b6a473075c443b51d437f3af72ef78476`。`just verify ash-tgrep` 为 42 passed／2 ignored（手动性能测量），`just verify ash-rmcp-client` 为 14 passed，均通过 check 与全目标 warnings；另有运行意图优先级回归 1 项通过。tgrep 本轮修复及负向验证见 [tgrep 验证](../crates/tgrep/README.md#验证)。
+
+| 场景                  | 实际结果与证据                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 搜索与目录重开        | 20 轮 Current UI 搜索及 20 轮真实 indexed 请求，包含替换、取消与结果上限；断言 indexed freshness，空闲 tgrep 数量稳定为 2，停止 10 秒后不增长；关闭并重开同一仓库后搜索可用。[搜索报告](../.build/ash-playwright-mcp/evidence/windows-search-recovery-acceptance-2026-10-21T16-31-45-145Z/report.html)。                                                                                                       |
+| stdio 连接循环        | 10 轮 Connect → 真实 Core 工具调用 → Disconnect。每轮同时核对 durable 工具结果及 fixture 实际 tools/call token；按被调用 Server PID 找到当前 npm／cmd／Node 进程树，断开后该树全部退出；其他上下文的独立连接继续存活。[MCP 报告](../.build/ash-playwright-mcp/evidence/windows-mcp-recovery-preflight-2026-10-21T15-55-58-128Z/report.html)。                                                                  |
+| 窗口缓存复用          | 关闭第二工作区窗口 10 秒后，保留进程均能追溯到活着的 managed backend；另一窗口仍能搜索并调用 MCP。重开第二工作区复用原 tgrep 身份，总数维持 tgrep 2／MCP 启动器及后代 15；再次关闭后另一窗口真实调用仍通过。[窗口报告](../.build/ash-playwright-mcp/evidence/windows-workspace-cache-lifetime-2026-10-21T16-29-32-534Z/report.html)。                                                                          |
+| 正常退出与 owner 回收 | 独立 profile 的 Main 正常退出，exit code 0；10 秒时保留的 2 个 tgrep 与 10 个 MCP 启动器／后代仍属后台所有。在 289.847 秒快照仍存活，305.454 秒快照中所属 managed owner 及全部 12 个目标均消失，且未出现替代进程；该观察发生在 fixture 清理之前。另一 profile 随后真实 MCP 调用通过。[退出报告](../.build/ash-playwright-mcp/evidence/windows-managed-owner-retirement-2026-10-21T16-19-21-337Z/report.html)。 |
+
+测试只使用合成 Git 仓库、离线本地 npm 包与本地模型 fixture，经真实 Desktop、Core 和 MCP stdio 链路执行；原生传输类型选择和文件夹选择器返回值受控，不覆盖公网 MCP、外部账号或真实模型服务。普通权限桌面启动避免了验证命令本身的限制性 Job 干扰独立宿主生命周期。每份进程快照保留时间、PID、父 PID、CreationDate、实际 executable 和完整命令行，用 PID 加创建时间区分实例，未按进程名称终止其他应用。汇总与来源补丁见 [acceptance.json](../.build/process-recovery-windows-20261021/acceptance.json) 及同目录日志；早期失败报告保留，不计作通过。报告附原始 WebM、PNG 与 Playwright trace；本机缺 ffmpeg／ffprobe，未生成字幕视频。

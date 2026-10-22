@@ -8,7 +8,7 @@ import { ContextKeyService } from "../../../../../../platform/contextkey/browser
 import type { INativeMenubarData, INativeMenubarSelection } from '../../../../../../platform/menubar/common/nativeMenubar.js';
 import type { IMenubarService } from '../../../../../../platform/menubar/electron-browser/menubar.js';
 import { NativeMenubarControl } from '../../../../../../workbench/electron-browser/parts/titlebar/menubarControl.js';
-import { NotificationService } from '../../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../../services/notification/test/common/testNotificationService.js';
 import { CancellationError } from '../../../../../../base/common/errors.js';
 
 test('failed menubar updates retain the last installed revision', async () => {
@@ -59,7 +59,7 @@ test('failed menubar updates retain the last installed revision', async () => {
 		},
 		onDidSelect: selections.event,
 	};
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	using control = new NativeMenubarControl(MenuId.MenubarMainMenu, api, menuService, notifications);
 	await waitFor(() => updates.length === 1);
 	const firstItem = updates[0]!.menus[0]!.items[0];

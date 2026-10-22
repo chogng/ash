@@ -318,6 +318,14 @@ pub struct DebugSessionCapabilitiesDto {
     pub supports_data_breakpoints: bool,
     pub supports_instruction_breakpoints: bool,
     pub supports_disassemble_request: bool,
+    #[serde(default)]
+    pub supports_read_memory_request: bool,
+    #[serde(default)]
+    pub supports_write_memory_request: bool,
+    #[serde(default)]
+    pub supports_loaded_sources_request: bool,
+    #[serde(default)]
+    pub supports_exception_info_request: bool,
     pub supports_stepping_granularity: bool,
     pub supports_completions_request: bool,
     pub supports_cancel_request: bool,

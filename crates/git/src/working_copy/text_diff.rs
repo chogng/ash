@@ -2,11 +2,11 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use ash_diff::DiffDocument;
+use ash_diff::DiffEngine;
 use ash_diff::DiffRowKind;
 
 use crate::GitClient;
 use crate::GitError;
-use crate::GitFileRevision;
 use crate::GitRepository;
 use crate::GitRepositorySnapshot;
 use crate::GitResult;
@@ -147,61 +147,106 @@ impl GitClient {
         path_prefix: &Path,
         limits: GitTextDiffLimits,
     ) -> GitResult<GitTextDiffSnapshot> {
-        let snapshot = self.snapshot(repository).await?;
         let mut diffs = Vec::new();
         let mut statistics = GitDiffStatistics::default();
-        for change in snapshot
-            .changes()
-            .iter()
-            .filter(|change| change.path().starts_with(path_prefix))
-        {
-            let original_path = change.original_path().unwrap_or_else(|| change.path());
-            let original = match self
-                .read_file_at_revision(
-                    repository,
-                    original_path,
-                    GitFileRevision::Head,
-                    limits.maximum_file_bytes,
-                )
-                .await
-            {
-                Ok(Some(content)) => content,
-                Ok(None) => Vec::new(),
-                Err(_) => continue,
-            };
-            let Some(modified) = read_worktree_file(
-                repository.worktree_root().join(change.path()),
-                limits.maximum_file_bytes,
-            ) else {
-                continue;
-            };
-            if is_binary(&original) || is_binary(&modified) {
-                continue;
-            }
-            let (Ok(original), Ok(modified)) = (
-                std::str::from_utf8(&original),
-                std::str::from_utf8(&modified),
-            ) else {
-                continue;
-            };
-            let Ok(document) = DiffDocument::from_text(original, modified) else {
-                continue;
-            };
-            let file_statistics = statistics_for_document(&document);
-            statistics.include(file_statistics);
-            diffs.push(GitTextDiff {
-                path: change.path().to_path_buf(),
-                original: original.to_owned(),
-                modified: modified.to_owned(),
-                document,
-                statistics: file_statistics,
-            });
-        }
+        let snapshot = self
+            .project_text_changes(
+                repository,
+                path_prefix,
+                limits,
+                |change, original, modified| {
+                    if let Ok(document) = DiffDocument::from_text(original, modified) {
+                        let file_statistics = statistics_for_document(&document);
+                        statistics.include(file_statistics);
+                        diffs.push(GitTextDiff {
+                            path: change.path().to_path_buf(),
+                            original: original.to_owned(),
+                            modified: modified.to_owned(),
+                            document,
+                            statistics: file_statistics,
+                        });
+                    }
+                },
+            )
+            .await?;
         Ok(GitTextDiffSnapshot {
             repository: snapshot,
             diffs,
             statistics,
         })
+    }
+
+    /// Reads fresh HEAD/worktree text and counts lines without retaining presentation data.
+    pub async fn text_diff_summary_under(
+        &self,
+        repository: &GitRepository,
+        path_prefix: &Path,
+        limits: GitTextDiffLimits,
+    ) -> GitResult<(GitRepositorySnapshot, GitDiffStatistics)> {
+        validate_path_prefix(path_prefix)?;
+        let mut statistics = GitDiffStatistics::default();
+        let engine = DiffEngine::default();
+        let snapshot = self
+            .project_text_changes(repository, path_prefix, limits, |_, original, modified| {
+                if let Ok(lines) = engine.statistics(original, modified) {
+                    statistics.include(GitDiffStatistics {
+                        files: 1,
+                        additions: lines.additions(),
+                        deletions: lines.deletions(),
+                    });
+                }
+            })
+            .await?;
+        Ok((snapshot, statistics))
+    }
+
+    async fn project_text_changes(
+        &self,
+        repository: &GitRepository,
+        path_prefix: &Path,
+        limits: GitTextDiffLimits,
+        mut project: impl FnMut(&crate::GitRepositoryChange, &str, &str),
+    ) -> GitResult<GitRepositorySnapshot> {
+        let snapshot = self.snapshot(repository).await?;
+        let changes = snapshot
+            .changes()
+            .iter()
+            .filter(|change| change.path().starts_with(path_prefix))
+            .collect::<Vec<_>>();
+        // Bound metadata requests; content batches use actual blob sizes.
+        for changes in changes.chunks(64) {
+            let paths = changes
+                .iter()
+                .map(|change| change.original_path().unwrap_or_else(|| change.path()))
+                .collect::<Vec<_>>();
+            let originals = self
+                .read_text_diff_bases(repository, &paths, limits.maximum_file_bytes)
+                .await;
+            for (change, original) in changes.iter().zip(originals) {
+                let original = match original {
+                    Ok(Some(content)) => content,
+                    Ok(None) => Vec::new(),
+                    Err(_) => continue,
+                };
+                let Some(modified) = read_worktree_file(
+                    repository.worktree_root().join(change.path()),
+                    limits.maximum_file_bytes,
+                ) else {
+                    continue;
+                };
+                if is_binary(&original) || is_binary(&modified) {
+                    continue;
+                }
+                let (Ok(original), Ok(modified)) = (
+                    std::str::from_utf8(&original),
+                    std::str::from_utf8(&modified),
+                ) else {
+                    continue;
+                };
+                project(change, original, modified);
+            }
+        }
+        Ok(snapshot)
     }
 }
 

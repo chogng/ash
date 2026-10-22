@@ -5,6 +5,11 @@ import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.j
 import type { DebugConsoleEntry } from '../../../../platform/debug/common/debugAdapterProcessService.js';
 import { localize } from '../../../../nls.js';
 import { IDebugService, type IReplModel } from '../common/debug.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import type { IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
+import { DebugLinkHoverBehavior, LinkDetector } from './linkDetector.js';
+import { handleANSIOutput } from './debugANSIHandling.js';
+import { removeAnsiEscapeCodes } from '../../../../base/common/strings.js';
 
 interface ReplTreeElement {
 	readonly id: string;
@@ -43,7 +48,7 @@ export class ReplDataSource implements AsyncTreeDataSource<IReplModel, ReplTreeE
 			for (const entry of entries.filter(entry => entry.parentId === parentId)) {
 				const previous = lines.at(-1)?.at(-1);
 				const plain = (value: DebugConsoleEntry) => value.kind === 'output' && !value.source && !value.variablesReference && value.data === null;
-				if (previous && plain(previous) && plain(entry) && previous.category === entry.category && !previous.output.endsWith('\n')) lines.at(-1)!.push(entry);
+				if (previous && plain(previous) && plain(entry) && previous.sessionId === entry.sessionId && previous.category === entry.category && !previous.output.endsWith('\n')) lines.at(-1)!.push(entry);
 				else lines.push([entry]);
 			}
 			return lines.map(entries => {
@@ -93,7 +98,7 @@ export class ReplDataSource implements AsyncTreeDataSource<IReplModel, ReplTreeE
 export class ReplAccessibilityProvider {
 	getWidgetAriaLabel(): string { return localize('debug.repl.output', 'Debug Console output'); }
 	getAriaLabel(element: ReplTreeElement): string {
-		return element.text + (element.kind === 'entry' && element.entry.source ? sourceLabel(element.entry) : '');
+		return removeAnsiEscapeCodes(element.text) + (element.kind === 'entry' && element.entry.source ? sourceLabel(element.entry) : '');
 	}
 }
 
@@ -102,7 +107,14 @@ export class ReplOutputElementRenderer extends Disposable implements IListRender
 	readonly templateId = 'replOutput';
 	private readonly accessibility = new ReplAccessibilityProvider();
 	private readonly templates = new Map<HTMLElement, { element: HTMLElement; disposables: DisposableStore; }>();
-	constructor(private readonly source: (entry: DebugConsoleEntry) => Promise<void>) { super(); }
+	private readonly links: LinkDetector;
+	constructor(private readonly source: (entry: DebugConsoleEntry) => Promise<void>,
+		private readonly folder: (entry: DebugConsoleEntry) => IWorkspaceFolder | undefined,
+		@IInstantiationService instantiation: IInstantiationService,
+	) {
+		super();
+		this.links = instantiation.createInstance(LinkDetector);
+	}
 
 	renderTemplate(container: HTMLElement) {
 		const element = h(container.ownerDocument, 'div');
@@ -115,19 +127,19 @@ export class ReplOutputElementRenderer extends Disposable implements IListRender
 
 	renderElement(node: ReplTreeElement, _index: number, template: ReturnType<ReplOutputElementRenderer['renderTemplate']>): void {
 		const row = template.element;
+		template.disposables.clear();
+		row.replaceChildren();
 		row.dataset.category = node.entry.category;
 		row.setAttribute('aria-label', this.accessibility.getAriaLabel(node));
 		if (node.kind === 'entry') {
-			for (const [index, entry] of node.entries.entries()) {
-				const chunk = h(row.ownerDocument, 'span');
-				chunk.className = 'ash-repl-entry';
-				chunk.dataset.entryId = String(entry.id);
-				chunk.dataset.category = entry.category;
-				chunk.hidden = !node.visible[index];
-				chunk.textContent = entry.output || (node.entries.length === 1 ? node.text : '');
-				row.append(chunk);
-			}
-		} else row.append(row.ownerDocument.createTextNode(node.text));
+			const chunk = h(row.ownerDocument, 'span');
+			chunk.className = 'ash-repl-entry';
+			chunk.dataset.entryId = String(node.entry.id);
+			chunk.dataset.category = node.entry.category;
+			// Linkify the displayed line once, including URLs split across DAP output chunks.
+			chunk.append(handleANSIOutput(node.text, this.links, this.folder(node.entry), undefined, { type: DebugLinkHoverBehavior.Rich, store: template.disposables }));
+			row.append(chunk);
+		} else row.append(this.links.linkify(node.text, { type: DebugLinkHoverBehavior.Rich, store: template.disposables }, true, this.folder(node.entry)));
 		if (node.kind !== 'entry' || !node.entry.source) return;
 		const link = h(row.ownerDocument, 'button');
 		link.type = 'button';

@@ -16,7 +16,7 @@ import { OutlinePane } from './outlinePane.js';
 export function registerOutlineView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
 	registry.registerStaticViews(WorkbenchViewContainerId.Sidebar, [{
 		id: IOutlinePane.Id, title: 'Outline', localizationKey: { bundle: 'ash.views', key: 'outline' },
-		order: 3, collapsed: true, canToggleVisibility: true,
+		order: 3, collapsed: true, canToggleVisibility: true, canMoveView: true,
 		ctorDescriptor: new SyncDescriptor(OutlinePane),
 	}]);
 }
@@ -47,7 +47,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			if (!(view instanceof OutlinePane)) return undefined;
 			const focused = view.element.ownerDocument.activeElement;
 			return new AccessibleContentProvider(AccessibleViewProviderId.Outline, { type },
-				() => type === AccessibleViewType.Help ? localize('outline.help', 'Outline\nUse the arrow keys to move through symbols. Press Right Arrow to expand and Left Arrow to collapse. Press Enter to go to a symbol. Press Ctrl+F to find symbols. Use the view actions to sort, follow the cursor, or collapse symbols. Press Alt+F2 to read the symbols.') : view.getAccessibleContent(),
+				() => type === AccessibleViewType.Help ? localize('outline.help', 'Outline\nUse the arrow keys to move through symbols. Press Right Arrow to expand and Left Arrow to collapse. Press Enter to go to a symbol. Press Ctrl+F to find symbols. Use the view actions to sort, follow the cursor, or collapse symbols. Press Alt+F2 to read the symbols. Use Move View in the Command Palette to move this view, and Reset View Locations to restore the default layout.') : view.getAccessibleContent(),
 				() => { if (focused instanceof HTMLElement && focused.isConnected) focused.focus(); else view.focus(); },
 				AccessibilityVerbositySettingId.Outline);
 		},

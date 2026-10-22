@@ -25,6 +25,13 @@ export interface IEditorOptions {
 	/** The caller owns reporting the failure; the editor must not display it. */
 	readonly ignoreError?: boolean;
 	readonly source?: EditorOpenSource;
+	/** Presentation options used only when opening in the modal editor group. */
+	readonly modal?: IModalEditorPartOptions;
+}
+
+export interface IModalEditorPartOptions {
+	/** Preferred outer size; the modal host constrains it to the available viewport. */
+	readonly size?: { readonly width: number; readonly height: number; };
 }
 
 export const enum EditorOpenSource {

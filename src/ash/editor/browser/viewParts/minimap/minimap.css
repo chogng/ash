@@ -8,6 +8,17 @@
 	opacity: 0.9;
 }
 
+.stanza-editor .minimap.stanza-editor-minimap-autohide {
+	opacity: 0;
+	transition: opacity 100ms linear;
+}
+
+.stanza-editor .minimap.stanza-editor-minimap-show-on-hover:hover,
+.stanza-editor .minimap.stanza-editor-minimap-scrolling,
+.stanza-editor .minimap.stanza-editor-minimap-dragging {
+	opacity: 1;
+}
+
 .stanza-editor .minimap.has-right-overflow::after {
 	/* Clip the shadow source outside the map so only its soft edge covers the raster. */
 	content: "";
@@ -56,6 +67,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+	.stanza-editor .minimap.stanza-editor-minimap-autohide,
 	.stanza-editor
 		.stanza-editor-minimap-hover-slider
 		.stanza-editor-minimap-slider {

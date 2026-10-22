@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { Severity } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import type { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { ScreenshotShortcutContribution } from '../../browser/screenshot.contribution.js';
@@ -11,7 +11,7 @@ import { ScreenshotCommandId, type IScreenshotService, type ScreenshotShortcutSt
 
 test('global screenshot conflicts notify once, retain the previous binding, and link directly to its editor', async () => {
 	using changes = new Emitter<void>();
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	let status: ScreenshotShortcutStatus = { availability: 'unavailable', global: false, activeLabel: '' };
 	let checks = 0;
 	const screenshot: IScreenshotService = {
@@ -72,7 +72,7 @@ test('global screenshot registration failures and their edit action use the Chin
 	initializeTestLocalization('zh-CN');
 	try {
 		using changes = new Emitter<void>();
-		using notifications = new NotificationService();
+		using notifications = new TestNotificationService();
 		let status: ScreenshotShortcutStatus = { availability: 'unchecked', global: true, activeLabel: '' };
 		const screenshot: IScreenshotService = {
 			onDidChangeShortcut: changes.event,

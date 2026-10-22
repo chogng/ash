@@ -6,6 +6,7 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { ILink, ILinkProvider } from '@xterm/xterm';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
+import { CancellationError } from '../../../../../../base/common/errors.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../../base/common/uri.js';
@@ -731,4 +732,22 @@ test('Terminal lazy link activation failures are logged and disposal cancels pen
 	await pending.error(new Error('Canceled provider startup'));
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.deepEqual(canceled.activationErrors, []);
+});
+
+test('Terminal lazy link activation treats host cancellation as completion and permits retry', async () => {
+	using lifetime = new DisposableStore();
+	let attempts = 0;
+	const f = fixture(lifetime, undefined, undefined, undefined, undefined, async () => {
+		if (++attempts === 1) throw new CancellationError();
+	});
+	await f.write('README');
+	assert.equal(f.activations[0]?.signal?.aborted, false);
+	assert.deepEqual(f.activationErrors, []);
+	const picker = f.contribution.showLinkQuickpick();
+	await f.waitForPicker();
+	await f.waitForIdle();
+	assert.equal(attempts, 2);
+	f.cancel();
+	await picker;
+	assert.deepEqual(f.activationErrors, []);
 });

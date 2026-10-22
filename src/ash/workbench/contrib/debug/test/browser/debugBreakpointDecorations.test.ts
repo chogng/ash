@@ -1,12 +1,20 @@
+import { TestExtensionService } from '../../../../test/common/testExtensionServices.js';
+import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
+import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { StandardMouseEvent } from '../../../../../base/browser/mouseEvent.js';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 
-import { MouseTargetType, type IEditorMouseEvent } from '../../../../../editor/browser/editorBrowser.js';
+import { MouseTargetType, type ICodeEditor, type IEditorMouseEvent } from '../../../../../editor/browser/editorBrowser.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
+import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import type { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { type IDebugBreakpoint, type IDebugService } from '../../common/debug.js';
 import { BreakpointEditorContribution } from '../../browser/breakpointEditorContribution.js';
@@ -22,7 +30,12 @@ test('Breakpoint editor contribution projects semantic glyph-margin decorations'
 	using model = new TextModel('first\nsecond\nthird', { resource });
 	using debug = new BreakpointDebugService(resource);
 	using mouseDown = new Emitter<IEditorMouseEvent>();
-	using contribution = new BreakpointEditorContribution({ getDomNode: () => editorNode, onMouseDown: mouseDown.event }, model, debug as unknown as IDebugService);
+	using extensions = new TestExtensionService();
+	using configuration = new TestConfigurationService();
+	using context = new ContextKeyService();
+	using instantiation = new InstantiationService(new ServiceCollection());
+	using contribution = new BreakpointEditorContribution({ focus: () => editorNode.focus(), getDomNode: () => editorNode, onMouseDown: mouseDown.event, onMouseMove: Event.None, onMouseLeave: Event.None, onDidScrollChange: Event.None, onContextMenu: Event.None } as unknown as ICodeEditor,
+		model, debug as unknown as IDebugService, extensions, configuration, context, instantiation, {} as IContextMenuService, {} as INotificationService, {} as IQuickInputService);
 
 	assert.deepEqual(decorationState(model), [{ lineNumber: 2, lane: GlyphMarginLane.Left, persistLane: true, className: 'ash-debug-breakpoint-gutter enabled verified' }]);
 
@@ -47,7 +60,13 @@ test('Debug breakpoint controller consumes the public glyph-margin mouse target'
 	using model = new TextModel('first\nsecond', { resource });
 	using debug = new BreakpointDebugService(resource);
 	using mouseDown = new Emitter<IEditorMouseEvent>();
-	using contribution = new BreakpointEditorContribution({ getDomNode: () => editorNode, onMouseDown: mouseDown.event }, model, debug as unknown as IDebugService);
+	using extensions = new TestExtensionService();
+	using configuration = new TestConfigurationService();
+	using context = new ContextKeyService();
+	using instantiation = new InstantiationService(new ServiceCollection());
+	editorNode.getBoundingClientRect = () => ({ left: 0, top: 0, right: 100, bottom: 100, width: 100, height: 100, x: 0, y: 0, toJSON() { return {}; } });
+	using contribution = new BreakpointEditorContribution({ focus: () => editorNode.focus(), getDomNode: () => editorNode, onMouseDown: mouseDown.event, onMouseMove: Event.None, onMouseLeave: Event.None, onDidScrollChange: Event.None, onContextMenu: Event.None } as unknown as ICodeEditor,
+		model, debug as unknown as IDebugService, extensions, configuration, context, instantiation, {} as IContextMenuService, {} as INotificationService, {} as IQuickInputService);
 	const browserEvent = new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, buttons: 1 });
 	mouseDown.fire({
 		event: new StandardMouseEvent(browserEvent as unknown as MouseEvent),
@@ -60,6 +79,7 @@ test('Debug breakpoint controller consumes the public glyph-margin mouse target'
 			detail: { isAfterLines: false, glyphMarginLeft: 0, glyphMarginWidth: 20, glyphMarginLane: GlyphMarginLane.Left, lineNumbersWidth: 0, offsetX: 4 },
 		},
 	});
+	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { button: 0, clientX: 4, clientY: 10 }));
 	assert.deepEqual(debug.toggled, [{ resource: resource.toString(), lineNumber: 2 }]);
 	dom.window.close();
 });

@@ -1,7 +1,7 @@
 import { createTestDictationBackend, installTestDictationAudio, type TestDictationSession, type TestDictationCapture } from '../../../../test/common/testDictationServices.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../browser/speechToText/voiceCodeTranscriptionClient.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../../../platform/telemetry/common/telemetryUtils.js';
 import { readDictationPreparation, readDictationOptions } from '../../browser/speechToText/dictationInput.js';
@@ -95,7 +95,7 @@ suite('Builtin dictation ownership', () => {
 		services.registerSingleton(ILocalTranscriptionModelService, () => options.local ?? new NullLocalTranscriptionService());
 		services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 		const audio = owner.add(installTestDictationAudio(options.window ?? captureWindow));
-		const notifications = owner.add(new NotificationService());
+		const notifications = owner.add(new TestNotificationService());
 		services.registerInstance(INotificationService, notifications);
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		services.registerInstance(IVoiceCodeTranscriptionBackendService, createTestDictationBackend(owner, { start: options.start ?? ((_options, onTranscript, onEnded) => start(onTranscript, onEnded)) }));

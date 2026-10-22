@@ -350,6 +350,8 @@ def development_binary_inputs(spec: TargetSpec) -> dict[str, None]:
             "ash-remote-ssh-extension",
             "ash-dev-container-provider",
             "ash-debug-lldb",
+            "ash-debug-javascript",
+            "ash-debug-server-ready",
             "ash-voice-host",
             "ash-livekit-client",
             "ash-realtime-voice",
@@ -565,6 +567,8 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
             remote_ssh_extension_binary=binaries["ash-remote-ssh-extension"],
             dev_container_provider_binary=binaries["ash-dev-container-provider"],
             lldb_extension_binary=binaries["ash-debug-lldb"],
+            javascript_debug_extension_binary=binaries["ash-debug-javascript"],
+            server_ready_extension_binary=binaries["ash-debug-server-ready"],
             remote_host_binary=binaries["ash-remote-host"],
             voice_host_binary=binaries["ash-voice-host"]
             if args.javascript_runtime == "host-provided-node"

@@ -15,6 +15,45 @@ import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../platform/
 import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { getVisibleViewContextKey } from './contextkeys.js';
 import { IViewsService } from '../services/views/common/viewsService.js';
+import type Severity from '../../base/common/severity.js';
+
+export enum TreeItemCollapsibleState {
+	None = 0,
+	Collapsed = 1,
+	Expanded = 2,
+}
+
+export interface ITreeItemCheckboxState {
+	isChecked: boolean;
+	tooltip?: string;
+	accessibilityInformation?: { readonly label: string; };
+}
+
+export interface ITreeItem {
+	handle: string;
+	parentHandle?: string;
+	parent?: ITreeItem;
+	collapsibleState: TreeItemCollapsibleState;
+	label?: { readonly label: string; };
+	description?: string;
+	tooltip?: string;
+	checkbox?: ITreeItemCheckboxState;
+	editable?: boolean;
+	command?: { readonly id: string; readonly arguments?: readonly unknown[]; };
+}
+
+/** The consumer owns the edit operation; disposing its input never submits it. */
+export interface IEditableData {
+	validationMessage(value: string): { readonly content: string; readonly severity: Severity; } | null;
+	placeholder?: string | null;
+	startingValue?: string | null;
+	onFinish(value: string, success: boolean): Promise<void>;
+}
+
+export interface ITreeViewDataProvider {
+	getChildren(element?: ITreeItem, signal?: AbortSignal): Promise<readonly ITreeItem[] | undefined>;
+	getEditableData?(element: ITreeItem): IEditableData;
+}
 
 MenusRegistry.appendMenuItem(MenuId.ViewContainerTitle, {
 	title: localize2('views', 'Views'),
@@ -43,6 +82,10 @@ export interface IViewContainerDescriptor {
 	readonly icon?: Icon;
 	readonly order?: number;
 	readonly isDefault?: boolean;
+	/** Omit the container from navigation while none of its views are active. */
+	readonly hideIfEmpty?: boolean;
+	/** Specialized containers may reject views contributed elsewhere. */
+	readonly rejectAddedViews?: boolean;
 }
 
 /** Static declaration of one view contributed to a container. */
@@ -62,6 +105,8 @@ export interface IViewDescriptor {
 	readonly collapsed?: boolean;
 	readonly hideByDefault?: boolean;
 	readonly canToggleVisibility?: boolean;
+	readonly canMoveView?: boolean;
+	readonly containerIcon?: Icon;
 }
 
 /** Text and command links contributed to a view's welcome state. */
@@ -121,6 +166,8 @@ export interface IViewPaneContainer {
  * Browser containers consume `visibleViewDescriptors` to create actual panes.
  */
 export interface IViewContainerModel {
+	/** A temporary presentation filter; it never changes persisted visibility preferences. */
+	setFilter(filter: ((view: IViewDescriptor) => boolean) | undefined): void;
 	readonly viewContainer: IViewContainerDescriptor;
 	readonly allViewDescriptors: readonly IViewDescriptor[];
 	readonly activeViewDescriptors: readonly IViewDescriptor[];
@@ -377,15 +424,16 @@ export class WorkbenchViewRegistry extends Disposable {
 						title: view.localizationKey ? localize2(view.localizationKey, view.title) : view.title,
 						toggled: visible,
 						precondition: view.canToggleVisibility === false ? ContextKeyExpr.false() : ContextKeyExpr.and(view.when, ContextKeyExpr.or(
-							ContextKeyExpr.not(getVisibleViewContextKey(view.id)), ...views.filter(other => other.id !== view.id).map(other => ContextKeyExpr.has(getVisibleViewContextKey(other.id))),
+							ContextKeyExpr.not(getVisibleViewContextKey(view.id)), ContextKeyExpr.greater('viewContainer.visibleViewCount', 1),
 						)),
-						menu: [MenuId.for('ViewsSubMenu'), MenuId.ViewContainerTitleContext].map(id => ({ id, group: '1_views', order: view.order, when: ContextKeyExpr.and(ContextKeyExpr.equals('viewContainer', container.id), view.when) })),
+						menu: [MenuId.for('ViewsSubMenu'), MenuId.ViewContainerTitleContext].map(id => ({ id, group: '1_views', order: view.order, when: ContextKeyExpr.and(ContextKeyExpr.has(`viewContainer.${view.id}`), view.when) })),
 					});
 				}
 				override run(accessor: ServicesAccessor): void {
 					const service = accessor.get(IViewDescriptorService);
-					if (service.getViewContainerForView(view.id)?.id !== container.id || view.canToggleVisibility === false) return;
-					const model = service.getViewContainerModel(container.id);
+					const current = service.getViewContainerForView(view.id);
+					if (!current || view.canToggleVisibility === false) return;
+					const model = service.getViewContainerModel(current.id);
 					if (!model.activeViewDescriptors.some(active => active.id === view.id)) return;
 					const isVisible = model.isVisible(view.id);
 					if (isVisible && model.visibleViewDescriptors.length <= 1) return;
@@ -506,6 +554,7 @@ export interface IViewContainersChangeEvent {
  * per-window visibility state.
  */
 export interface IViewDescriptorService {
+	registerViews(containerId: string, views: readonly IViewDescriptor[]): IDisposable;
 	readonly viewContainers: readonly IViewContainerDescriptor[];
 	readonly onDidChangeViewContainers: Event<IViewContainersChangeEvent>;
 	readonly onDidChangeViewContainerOrder: Event<ViewContainerLocation>;
@@ -513,6 +562,10 @@ export interface IViewDescriptorService {
 	getDefaultViewContainerLocation(container: IViewContainerDescriptor): ViewContainerLocation | null;
 	getViewContainerLocation(container: IViewContainerDescriptor): ViewContainerLocation | null;
 	moveViewContainerToLocation(container: IViewContainerDescriptor, location: ViewContainerLocation, requestedIndex?: number, reason?: string): void;
+	moveViewsToContainer(views: readonly IViewDescriptor[], container: IViewContainerDescriptor): void;
+	moveViewToLocation(view: IViewDescriptor, location: ViewContainerLocation, reason?: string): void;
+	getDefaultContainerById(viewId: string): IViewContainerDescriptor | null;
+	reset(): void;
 
 	getViewContainers(
 		location: ViewContainerLocation,

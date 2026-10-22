@@ -1,0 +1,16 @@
+[package]
+name = "ash-debug-server-ready"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[dependencies]
+external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../sdk/rust" }
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true
+regex.workspace = true
+
+[lints]
+workspace = true

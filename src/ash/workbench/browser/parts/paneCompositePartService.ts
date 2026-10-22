@@ -1,14 +1,13 @@
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
-import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { ViewContainerLocation } from '../../common/views.js';
 import { IWorkbenchLayoutService, type WorkbenchPartId } from '../../services/layout/browser/layoutService.js';
 import { ILocalizationService } from '../../services/localization/common/localizationService.js';
 import { IViewDescriptorService } from '../../common/views.js';
 import { type IPaneCompositePartService, type PaneCompositeEvent } from '../../services/panecomposite/browser/panecomposite.js';
 import type { PaneCompositePart } from './paneCompositePart.js';
-import { PaneComposite } from './views/paneComposite.js';
+import { PaneComposite } from '../panecomposite.js';
 
 /** Parts own instances and selection; this service owns opening, focus and location routing. */
 export class PaneCompositePartService extends Disposable implements IPaneCompositePartService {
@@ -22,7 +21,6 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 		@IWorkbenchLayoutService private readonly layout: IWorkbenchLayoutService,
 		@IViewDescriptorService private readonly descriptors: IViewDescriptorService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
-		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@ILocalizationService private readonly localization: ILocalizationService,
 	) {
 		super();
@@ -38,13 +36,12 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 		const containerId = id ?? part.getCompositeIdToRestore();
 		const container = this.descriptors.getViewContainers(location).find(candidate => candidate.id === containerId);
 		if (!container) { return undefined; }
+		if (container.hideIfEmpty && this.descriptors.getViewContainerModel(container.id).activeViewDescriptors.length === 0) { return undefined; }
 		let composite = part.getComposite(container.id);
 		if (!composite) {
 			const options = {
 				viewContainer: container,
 				model: this.descriptors.getViewContainerModel(container.id),
-				instantiationService: this.instantiation,
-				contextKeyService: this.contextKeys,
 				localizationService: this.localization,
 				onDidFailCreateView: (error: unknown) => { throw error; },
 				...part.getPaneCompositeOptions(),

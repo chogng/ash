@@ -63,13 +63,14 @@ export class AhpTerminalCommandSource extends Disposable {
 			if (integration.promptType !== undefined && integration.promptType !== this.promptTypeDetection.promptType) {
 				this.promptTypeDetection.setPromptType(integration.promptType);
 			}
-			const promptType = this.promptTypeDetection;
 			this.currentShellIntegration = {
 				commandDetection: integration.commandDetection,
 				cwdDetection: integration.cwdDetection,
 				hasRichCommandDetection: integration.hasRichCommandDetection,
 				commandStorageDisabled: integration.commandStorageDisabled,
-				get promptType() { return promptType.promptType; },
+				// A full snapshot can withdraw prompt detection. The capability may
+				// retain its last value, but it cannot override the execution owner.
+				promptType: integration.promptType,
 				commands: integration.commands.map(commandStatusEvent),
 			};
 			this.pendingShellIntegration = undefined;

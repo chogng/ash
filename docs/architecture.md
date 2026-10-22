@@ -183,8 +183,8 @@ flowchart TD
 ## 6. 当前实现基础
 
 当前已经具备用于继续审计和演进的基础，但“存在实现”不等于“边界已经验证清楚”。Agent 执行
-面的逐组件状态总账（已实现 / 部分 / 仅设计 / 推迟）与分阶段实施计划由
-[`agent-runtime.md`](agent-runtime.md#2-组件状态总账)
+面的组件边界、已实现行为与未完成设计由
+[`agent-runtime.md`](agent-runtime.md#2-组件边界)
 权威维护：
 
 - **对话与持久化**：Session/Thread 归约器、Store、逻辑序列、写入租约、恢复事务和 rollout；

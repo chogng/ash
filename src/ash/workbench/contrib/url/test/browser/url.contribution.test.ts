@@ -34,7 +34,7 @@ import { NativeWindow } from '../../../../electron-browser/window.js';
 import { INativeHostService } from '../../../../common/services.js';
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
@@ -46,7 +46,7 @@ class URLFixture extends Disposable {
 	readonly dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	readonly services = this._register(new InstantiationService());
 	readonly storage = this._register(new BrowserStorageService({ ownerWindow: this.dom.window as unknown as Window, workspaceId: 'url-test', flushInterval: 0 }));
-	readonly notifications = this._register(new NotificationService());
+	readonly notifications = this._register(new TestNotificationService());
 	readonly dialogs = this._register(new DialogService());
 	readonly files = this._register(new FileService());
 	readonly opened: string[] = [];

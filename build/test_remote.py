@@ -114,6 +114,13 @@ class RemotePackageTests(unittest.TestCase):
         self.verify_package(remote_only=False)
 
     def verify_package(self, *, remote_only: bool) -> None:
+        from build.lib.package_test_support import copy_debug_runtime_fixture
+
+        boundary = patch(
+            "build.lib.js_debug.copy_runtime", side_effect=copy_debug_runtime_fixture
+        )
+        boundary.start()
+        self.addCleanup(boundary.stop)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             sources = create_package_sources(root / "sources")
@@ -151,6 +158,8 @@ class RemotePackageTests(unittest.TestCase):
                     "ash-remote-ssh-extension",
                     "ash-dev-container-provider",
                     "ash-debug-lldb",
+                    "ash-debug-javascript",
+                    "ash-debug-server-ready",
                     "ash-voice-host",
                     "ash-livekit-client",
                     "ash-realtime-voice",

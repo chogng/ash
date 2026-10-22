@@ -447,6 +447,13 @@ impl TerminalService {
                 .ok_or(TerminalError::InvalidInput)?
                 .to_owned(),
             shell_type,
+            launch: Some(exec_server_protocol::terminal::TerminalProcessLaunch {
+                executable: program,
+                args,
+                used_shell_integration_injection: integration
+                    .as_ref()
+                    .is_some_and(|integration| integration.nonce.is_some()),
+            }),
         };
         let terminal_id = format!(
             "terminal-{}-{:x}",

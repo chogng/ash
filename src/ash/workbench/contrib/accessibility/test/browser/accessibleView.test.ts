@@ -29,7 +29,7 @@ import { AccessibilityService } from '../../../../../platform/accessibility/brow
 import { IAccessibilityService, AccessibilitySupport } from '../../../../../platform/accessibility/common/accessibility.js';
 import { IStatusbarService, StatusbarService, StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { AccessibilityStatus } from '../../browser/accessibilityStatus.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
@@ -112,6 +112,7 @@ test('opening help publishes its state, disables only the active hint and releas
 	await fixture.commands.executeCommand(AccessibilityCommandId.OpenAccessibilityHelp);
 	const text = fixture.browser.window.document.querySelector('textarea')!;
 	assert.equal(text.value, 'Alt+F1');
+	assert.match(text.getAttribute('aria-description') ?? '', /Alt\+F1/);
 	assert.equal(fixture.contextKeys.getValue('accessibilityHelpIsShown'), true);
 	fixture.helpKeybinding = fixture.keybindings.resolveKeybinding(Keybinding.single(logicalKey('F1', { ctrlKey: true })));
 	fixture.keybindingChanges.fire();
@@ -122,6 +123,7 @@ test('opening help publishes its state, disables only the active hint and releas
 	assert.equal(fixture.configuration.getValue(AccessibilityVerbositySettingId.Explorer), false);
 	assert.equal(fixture.configuration.getValue(AccessibilityVerbositySettingId.OpenEditors), true);
 	assert.equal(fixture.contextKeys.getValue('accessibleViewVerbosityEnabled'), false);
+	assert.equal(text.hasAttribute('aria-description'), false);
 	assert.equal(fixture.accessibleView.show(AccessibleViewType.Help), false);
 	fixture.browser.window.document.querySelector('dialog')!.close();
 	await Promise.resolve();
@@ -303,7 +305,7 @@ class AccessibleViewFixture extends Disposable {
 	public readonly keybindingChanges = this._register(new Emitter<void>());
 	public readonly codeEditors = this._register(new StandaloneCodeEditorService());
 	public readonly statusbar = this._register(new StatusbarService());
-	public readonly notifications = this._register(new NotificationService());
+	public readonly notifications = this._register(new TestNotificationService());
 	public readonly accessibility: AccessibilityService;
 	private readonly mapper = new FallbackKeyboardMapper({ dispatch: KeyboardDispatchMode.Code, mapAltGrToCtrlAlt: false }, OperatingSystem.Windows);
 	public helpKeybinding: ResolvedKeybinding | undefined = this.mapper.resolveKeybinding(Keybinding.single(logicalKey('F1', { altKey: true })))[0];

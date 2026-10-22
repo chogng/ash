@@ -32,7 +32,7 @@ import { IRendererHostService, type IRendererAgentHost, type IRendererAgentHostC
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
 import { CommandService } from '../../../../../../workbench/services/commands/common/commandService.js';
 import { productLanguagePackCatalogs } from '../../../../../../workbench/services/localization/common/localizationCatalogs.js';
-import { NotificationService } from '../../../../../../workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../../../workbench/services/notification/test/common/testNotificationService.js';
 import { ISessionsProvidersService, SessionsProvidersService } from '../../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ProviderAutomationService } from '../../../../automations/browser/providerAutomationService.js';
 import { SSHAgentHostContribution } from '../../browser/sshAgentHost.contribution.js';
@@ -54,7 +54,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	const contexts = lifetime.add(new ContextKeyService());
 	const quickInput = lifetime.add(new TestQuickInputService({ container, instantiationService: services, contextKeyService: contexts }));
 	services.registerInstance(IQuickInputService, quickInput);
-	const notifications = lifetime.add(new NotificationService());
+	const notifications = lifetime.add(new TestNotificationService());
 	services.registerInstance(INotificationService, notifications);
 	const errors: string[] = [];
 	lifetime.add(notifications.model.onDidAdd(item => errors.push(String(item.message))));

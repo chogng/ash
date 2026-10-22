@@ -106,7 +106,7 @@ environment、host override 和 duplicate provider gate。
 
 语言列表无进程或网络副作用。文档请求，或匹配扩展 `workspaceFiles` 的目录诊断请求，才执行通用 `LanguageServerAcquisition`。显式路径不可运行时报错，不回退；自动模式依次探测冻结 PATH，在工作区目录执行声明中的参数，保留工具链代理调用名。所有候选失败后，按扩展固定的 URL、大小和 SHA-256，通过 `ash-package-store` 安装。安装锁、原子选择、完整文件校验和运行期 lease 沿用包管理机制。
 
-Extensions 的整包停用与 LSP 设置的 server Disabled 都阻止探测和下载；扩展移除或停用没有核心 Rust fallback。LSP manager 继续拥有协议和进程监管。Rust 工具链（cargo/rustc）由用户管理。此声明路径不建立另一套可执行扩展 RPC；需要任意运行逻辑的扩展继续使用已有 Host RPC/SDK。
+Extensions 的整包停用与 LSP 设置的 server Disabled 都阻止探测和下载；扩展移除或停用没有核心 Rust fallback。LSP manager 继续拥有协议和进程监管。已有系统服务器或已验证的托管缓存会直接复用；package-store 仅在缓存检查与跨进程锁之后确实发起 HTTP 获取时通知下载进度，等待锁、校验与复用缓存不会显示下载。Rust 工具链（cargo/rustc）由用户管理。此声明路径不建立另一套可执行扩展 RPC；需要任意运行逻辑的扩展继续使用已有 Host RPC/SDK。
 
 通用显式服务器由 `resolve_executable` 复用 canonical executable 校验，并绑定配置中的语言映射。
 `LanguageServerDefinition` 可携带标准化的启动参数、settings 和运行期资源 lease；配置覆盖保留

@@ -55,7 +55,7 @@ members = [
     "extensions/github-authentication",
     "extensions/github",
     "extensions/remote-ssh",
-    "extensions/academic",
+    "extensions/academy",
     "extensions/pdf-viewer",
     "extensions/reference-manager",
     "crates/utils/editor-client-build",
@@ -64,6 +64,8 @@ members = [
     "extensions/git",
     "extensions/dev-containers",
     "extensions/debug-lldb",
+    "extensions/debug-javascript",
+    "extensions/debug-server-ready",
     "crates/external-agent-migration",
     "crates/agent-roles",
     "crates/ash-home",
@@ -343,6 +345,7 @@ http-body-util = "0.1"
 hyper = "1"
 hyper-util = "0.1"
 ash-memory-diagnostics = { path = "crates/memory-diagnostics" }
+allocation-counter = "=0.8.1"
 anyhow = "1"
 ansi-to-tui = "7.0.0"
 arboard = { version = "3", features = ["wayland-data-control"] }

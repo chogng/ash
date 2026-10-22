@@ -12,7 +12,7 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IOpenerService, type OpenOptions } from '../../../../../platform/opener/common/opener.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
-import { NotificationService } from '../../../notification/common/notificationService.js';
+import { TestNotificationService } from '../../../notification/test/common/testNotificationService.js';
 import { BrowserClipboardService } from '../../browser/clipboardService.js';
 
 suite('Workbench browser clipboard', () => {
@@ -132,7 +132,7 @@ suite('Workbench browser clipboard', () => {
 });
 
 class ClipboardFixture extends Disposable {
-	public readonly notifications = this._register(new NotificationService());
+	public readonly notifications = this._register(new TestNotificationService());
 	public readonly services = this._register(new InstantiationService());
 	public readonly opened: [string, OpenOptions | undefined][] = [];
 	public readonly clipboard: IClipboardService;

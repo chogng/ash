@@ -1,4 +1,5 @@
 import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
+import { observeElementSize } from '../../../../base/browser/observer.js';
 import { ActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -8,8 +9,10 @@ import { ActionWidgetDropdown } from '../../../../platform/actionWidget/browser/
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { localize } from '../../../../nls.js';
+import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import { IDebugService, type IDebugConfiguration, type IDebugCompound } from '../common/debug.js';
 import { debugStart } from './debugIcons.js';
+import { debugIconStartForeground } from './debugColors.js';
 
 /** Title action presentation; the configuration manager owns catalog and selection. */
 export class StartDebugActionViewItem extends ActionViewItem {
@@ -48,6 +51,7 @@ export class StartDebugActionViewItem extends ActionViewItem {
 			},
 		});
 		this.startButton = start.domNode;
+		start.domNode.style.color = `var(${colorCssVariable(debugIconStartForeground)})`;
 		const label = this.label = h(container.ownerDocument, 'span');
 		label.className = 'ash-debug-configuration-label';
 		const dropdown = this.dropdown = this._register(this.instantiationService.createInstance(ActionWidgetDropdown, container, {
@@ -67,6 +71,11 @@ export class StartDebugActionViewItem extends ActionViewItem {
 			},
 		}));
 		dropdown.element.classList.add('ash-debug-configuration');
+		this._register(observeElementSize(label, ({ width }) => {
+			// Below one text em, even an ellipsis can leave a clipped glyph beside the arrow.
+			const fontSize = parseFloat(container.ownerDocument.defaultView!.getComputedStyle(label).fontSize);
+			label.classList.toggle('collapsed', width < fontSize);
+		}));
 		this._register(addDisposableListener(container, 'keydown', event => {
 			if (event.isComposing) return;
 			if (event.key === 'ArrowRight' && event.target === this.startButton) {

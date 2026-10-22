@@ -27,9 +27,10 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { getUriFromSource } from '../common/debugSource.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { localize } from '../../../../nls.js';
+import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { DEBUG_CONSOLE_VIEW_ID, type IDebugSource } from '../common/debug.js';
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultFindWidgetStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
@@ -47,9 +48,7 @@ export class Repl extends FilterViewPane {
 	private readonly sessionSelect: HTMLSelectElement;
 	private readonly output: HTMLDivElement;
 	private readonly accessibility = new ReplAccessibilityProvider();
-	private readonly renderer = this._register(new ReplOutputElementRenderer(
-		entry => this.openSource(entry, entry.source as IDebugSource).catch(error => this.setStatus(message(error))),
-	));
+	private readonly renderer: ReplOutputElementRenderer;
 	private readonly tree;
 	private treeRendering = false;
 	private treeRenderPending = false;
@@ -100,6 +99,7 @@ export class Repl extends FilterViewPane {
 		@IStorageService private readonly storage: IStorageService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) {
 		const filterHistoryChanged = new Emitter<string[]>();
 		const filterHistory = Object.assign(new Set(readHistory(storage, logService, FILTER_HISTORY_KEY)), { onDidChange: filterHistoryChanged.event });
@@ -114,7 +114,12 @@ export class Repl extends FilterViewPane {
 		this.filterHistoryChanged = this._register(filterHistoryChanged);
 		this.debugService = debugService;
 		this.consoleService = debugService.replModel;
+		this.renderer = this._register(instantiation.createInstance(ReplOutputElementRenderer,
+			(entry: DebugConsoleEntry) => this.openSource(entry, entry.source as IDebugSource).catch(error => this.setStatus(message(error))),
+			(entry: DebugConsoleEntry) => this.consoleFolder(entry),
+		));
 		this.contentElement.classList.add("ash-debug-console");
+		this.headerActionsElement.classList.add('ash-debug-console-title-actions');
 		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { actionViewItemOptions: { buttonStyles: defaultButtonStyles }, ariaLabel: localize('debug.repl.actions', 'Debug Console actions') }));
 		this.titleActions.element.classList.add("ash-toolbar");
 		this.sessionSelect = h(container.ownerDocument, "select");
@@ -129,6 +134,8 @@ export class Repl extends FilterViewPane {
 			ariaLabel: this.accessibility.getWidgetAriaLabel(), scrolling: 'external', reuseRows: true,
 			identityProvider: { getId: element => element.id },
 			filter: { filter: element => element.entries.some(entry => this.visibleEntryIds.has(entry.id)) },
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: element => this.accessibility.getAriaLabel(element) },
+			findWidgetStyles: defaultFindWidgetStyles,
 			collapseByDefault: element => element.kind !== 'entry' || element.entry.kind !== 'group' || element.entry.collapsed,
 			renderElement: element => {
 				const template = this.renderer.renderTemplate(h(this.output.ownerDocument, 'div'));
@@ -223,8 +230,10 @@ export class Repl extends FilterViewPane {
 		this._register(addDisposableListener(this.input, 'keydown', event => this.onInputKeyDown(event), true));
 		this._register(addDisposableListener(this.output, 'toggle', () => this.contentEmitter.fire(), true));
 		this._register(addDisposableListener(this.element, 'keydown', event => {
-			if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'f') {
-				event.preventDefault(); event.stopPropagation(); this.focusFilter();
+			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
+				event.preventDefault(); event.stopPropagation();
+				if (event.altKey) this.openFind();
+				else this.focusFilter();
 			}
 		}));
 		this._register(debugService.onDidChangeSession(() => this.hideSuggestions()));
@@ -351,6 +360,7 @@ export class Repl extends FilterViewPane {
 		if (!filter.hasFocus()) filter.focus();
 	}
 	focusTree(): void { this.tree.domFocus(); }
+	openFind(): void { this.tree.openFind(); }
 	getFilterStats(): { total: number; filtered: number; } { return { ...this.filterStats }; }
 
 	protected override layoutBodyContent(height: number, _width: number): void {
@@ -546,8 +556,16 @@ export class Repl extends FilterViewPane {
 		void this.renderOutput();
 		this.replInput.updateOptions({ readOnly: !active?.canEvaluate, placeholder: active?.canEvaluate ? localize('debug.repl.evaluate', 'Evaluate expression') : localize('debug.repl.startToEvaluate', 'Start a debug session to evaluate expressions') });
 		if (!active?.canEvaluate) this.hideSuggestions();
-		const clearAction: IAction = { id: CLEAR_DEBUG_CONSOLE_COMMAND_ID, label: localize('debug.repl.clear', 'Clear Console'), tooltip: localize('debug.repl.clear', 'Clear Console'), icon: Lxicon.eraser, enabled: Boolean(active?.elements.length), checked: undefined, run: () => this.consoleService.clear() };
-		this.titleActions.updateActions([clearAction]);
+		const clearAction: IAction = { id: CLEAR_DEBUG_CONSOLE_COMMAND_ID, label: localize('debug.repl.clear', 'Clear Console'), tooltip: localize('debug.repl.clear', 'Clear Console'), icon: Lxicon.clearAll, enabled: Boolean(active?.elements.length), checked: undefined, run: () => this.consoleService.clear() };
+		const findAction: IAction = {
+			id: 'repl.action.find',
+			label: localize('debug.repl.find', 'Find in Debug Console'),
+			tooltip: localize('debug.repl.find', 'Find in Debug Console'),
+			icon: Lxicon.search,
+			enabled: true,
+			run: () => this.openFind(),
+		};
+		this.titleActions.updateActions([findAction, clearAction]);
 		if (atEnd) this.output.scrollTop = this.output.scrollHeight;
 		this.contentEmitter.fire();
 	}
@@ -634,6 +652,14 @@ export class Repl extends FilterViewPane {
 		await this.editors.openEditor({ resource, label: source.name, readOnly: Boolean(source.sourceReference) }, {
 			selection: new Range(entry.line ?? 1, entry.column ?? 1, entry.line ?? 1, entry.column ?? 1),
 		});
+	}
+
+	private consoleFolder(entry: DebugConsoleEntry): IWorkspaceFolder | undefined {
+		const session = this.debugService.getSession(entry.sessionId);
+		if (!session || session.configuration.dirId === null) return undefined;
+		const folders = this.workspace.getWorkspace().folders;
+		return session.configuration.dirId === undefined ? folders.length === 1 ? folders[0] : undefined
+			: folders.find(folder => folder.id === session.configuration.dirId);
 	}
 
 	private setStatus(value: string): void {

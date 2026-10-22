@@ -457,6 +457,10 @@ impl AppServer {
         let request_span = self
             .telemetry
             .start_at(diagnostics::Activity::Rpc, received_time);
+        let method = client_method_definition(&request.method)
+            .map(|definition| definition.method)
+            .unwrap_or("unknown");
+        request_span.record_rpc(method, connection.connection_id, request_id);
         request_span.record_duration(
             "rpc.resource_wait_ms",
             admission.ready_at.duration_since(received_at),
@@ -491,7 +495,20 @@ impl AppServer {
         let notifications = connection
             .outbound_notifications
             .defer_causal_notifications(session_id);
-        let dispatch_result = dispatch(&mut request, &cancellation);
+        let (dispatch_result, processes) = if method.starts_with("git/") {
+            crate::git_service::with_process_timings(|| dispatch(&mut request, &cancellation))
+        } else {
+            (dispatch(&mut request, &cancellation), Default::default())
+        };
+        request_span.record_count(
+            "git.process.count",
+            processes.records.len() + processes.omitted,
+        );
+        request_span.record_count("git.process.omitted_count", processes.omitted);
+        for process in processes.records {
+            request_span.record_interval(process.kind.name(), process.started, process.elapsed);
+            request_span.record_interval("git.spawn", process.started, process.spawn_elapsed);
+        }
         // A started remote write owns its outcome. Cancellation cannot erase an
         // acknowledged effect or turn an uncertain submission into a safe retry.
         let preserves_outcome = client_method_definition(&request.method).is_some_and(|definition| {

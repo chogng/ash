@@ -1,6 +1,69 @@
 use super::*;
 use std::process::Command;
 
+#[cfg(target_os = "linux")]
+#[test]
+fn inherited_descriptors_do_not_escape_to_descendants() {
+    use std::os::fd::AsRawFd;
+    use std::os::fd::FromRawFd;
+    use std::os::fd::OwnedFd;
+    use std::os::unix::process::CommandExt;
+
+    const ROLE: &str = "ASH_HARDENING_DESCRIPTOR_ROLE";
+    const DESCRIPTOR: &str = "ASH_HARDENING_DESCRIPTOR";
+    const TEST: &str = "tests::inherited_descriptors_do_not_escape_to_descendants";
+    if let Ok(role) = std::env::var(ROLE) {
+        let fd: i32 = std::env::var(DESCRIPTOR).unwrap().parse().unwrap();
+        match role.as_str() {
+            "descendant" => {
+                // SAFETY: F_GETFD inspects the descriptor without taking ownership.
+                assert_eq!(unsafe { libc::fcntl(fd, libc::F_GETFD) }, -1);
+                assert_eq!(io::Error::last_os_error().raw_os_error(), Some(libc::EBADF));
+            }
+            "carrier" => {
+                // Initialization must retain the carrier's inherited connection.
+                // SAFETY: F_GETFD does not close or mutate the descriptor.
+                assert_ne!(unsafe { libc::fcntl(fd, libc::F_GETFD) }, -1);
+                initialize().unwrap();
+                // SAFETY: the same descriptor remains owned by this isolated child.
+                assert_ne!(unsafe { libc::fcntl(fd, libc::F_GETFD) }, -1);
+                let status = Command::new(std::env::current_exe().unwrap())
+                    .args(["--exact", TEST, "--nocapture"])
+                    .env(ROLE, "descendant")
+                    .status()
+                    .unwrap();
+                assert!(status.success());
+            }
+            _ => panic!("unknown descriptor test role"),
+        }
+        return;
+    }
+
+    let file = std::fs::File::open(std::env::current_exe().unwrap()).unwrap();
+    // Use a high descriptor so the descendant's test harness cannot reuse its
+    // number during startup. Only the isolated carrier makes it inheritable.
+    // SAFETY: duplicate a borrowed live file; ownership transfers below on success.
+    let fd = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 256) };
+    assert!(fd >= 256);
+    // SAFETY: fcntl returned a new descriptor with no other Rust owner.
+    let _descriptor = unsafe { OwnedFd::from_raw_fd(fd) };
+    let mut command = Command::new(std::env::current_exe().unwrap());
+    command
+        .args(["--exact", TEST, "--nocapture"])
+        .env(ROLE, "carrier")
+        .env(DESCRIPTOR, fd.to_string());
+    // SAFETY: the callback uses one async-signal-safe syscall in the forked child.
+    unsafe {
+        command.pre_exec(move || {
+            if libc::fcntl(fd, libc::F_SETFD, 0) == -1 {
+                return Err(io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    assert!(command.status().unwrap().success());
+}
+
 #[test]
 fn loader_keys_preserve_unrelated_environment() {
     for key in ["LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES"] {

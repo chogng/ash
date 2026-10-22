@@ -1,5 +1,6 @@
 /** Workspace-local terminal presentation state consumed by the panel layout. */
 export const enum TerminalStorageKeys {
+	TabsShowDetailed = 'tabs.showDetailed',
 	TabsListWidthHorizontal = 'tabs-list-width-horizontal',
 	Reload = 'terminal.reload',
 	Revive = 'terminal.revive',

@@ -47,6 +47,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const output = panel.getByRole('tab', { name: locale === 'en' ? 'Output' : '输出', exact: true });
 		await runningApplication.driver.setWindowSize({ width: 1440, height: 900 });
 		await workbench.quickaccess.runCommand('workbench.action.output.show');
+		await expect(panel.getByRole('tab', { name: locale === 'en' ? 'Refactor Preview' : '重构预览', exact: true })).toHaveCount(0);
 		for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
 			await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 			const picker = page.locator('.ash-quick-pick');
@@ -91,10 +92,11 @@ for (const locale of ['en', 'zh-CN']) {
 		const overflow = panel.locator('.ash-composite-bar-overflow');
 		await expect(overflow).toBeVisible();
 		await expect(output).toBeVisible();
-		await workbench.menus.select(application, () => overflow.click(), [locale === 'en' ? 'Ports' : '端口']);
-		const ports = panel.getByRole('tab', { name: locale === 'en' ? 'Ports' : '端口', exact: true });
-		await expect(ports).toBeVisible();
-		await expect(ports).toHaveAttribute('aria-selected', 'true');
+		// The transient preview no longer takes tab space; Ports can fit in Chinese.
+		await workbench.menus.select(application, () => overflow.click(), ['Memories']);
+		const memories = panel.getByRole('tab', { name: 'Memories', exact: true });
+		await expect(memories).toBeVisible();
+		await expect(memories).toHaveAttribute('aria-selected', 'true');
 		await runningApplication.driver.setWindowSize({ width: 1440, height: 900 });
 		await expect(overflow).toHaveCount(0);
 		await output.focus();

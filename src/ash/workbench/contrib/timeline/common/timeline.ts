@@ -4,6 +4,8 @@ import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { Command } from '../../../../editor/common/languages.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
+import type { Icon } from '../../../../base/common/icon.js';
+import type { ISCMHistoryItem } from '../../scm/common/history.js';
 
 export const TimelinePaneId = 'timeline';
 
@@ -14,9 +16,12 @@ export interface TimelineItem {
 	readonly label: string;
 	readonly description?: string;
 	readonly tooltip?: string;
+	readonly icon?: Icon;
 	readonly timestamp: number;
 	readonly command?: Command;
 	readonly contextValue?: string;
+	/** Prepared SCM items carry the same complete tooltip used by the history graph. */
+	readonly sourceControl?: { readonly repositoryId: string; readonly historyItem: ISCMHistoryItem; };
 }
 
 export interface TimelineChangeEvent {

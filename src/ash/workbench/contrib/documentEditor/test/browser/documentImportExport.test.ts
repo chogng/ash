@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../base/common/uri.js';
-import { createDefaultDocumentSchema } from '../../../../../../../extensions/academic/common/model/documentSchema.js';
-import type { DocumentNode } from '../../../../../../../extensions/academic/common/model/document.js';
-import { documentToPlainText } from '../../../../../../../extensions/academic/common/model/documentSerialization.js';
-import { DocumentConversionError, exportDocumentText, importDocumentText } from '../../../../../../../extensions/academic/browser/documentImportExport.js';
+import { createDefaultDocumentSchema } from '../../../../../../../extensions/academy/common/model/documentSchema.js';
+import type { DocumentNode } from '../../../../../../../extensions/academy/common/model/document.js';
+import { documentToPlainText } from '../../../../../../../extensions/academy/common/model/documentSerialization.js';
+import { DocumentConversionError, exportDocumentText, importDocumentText } from '../../../../../../../extensions/academy/browser/documentImportExport.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import messages from '../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 

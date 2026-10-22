@@ -668,6 +668,8 @@ Main 已替换工作区而 Renderer 尚未收到事件时，旧配置读取返�
 
 2026-10-19 在 Linux ARM64 Dev Container 的正常 Web／Desktop 产物（协议 major10）完成认证 Web 八步验收：真实 No／Yes 授权、多根读写、脏文件拒绝移除、移除配置根后保存、重载、只读草稿、显式撤权和关闭；取消保存恢复后不再重复报错。GTK 原生选择器另完成取消、打开双根工作区和中文／空格路径另存为四步，通过真实原生返回、窗口身份和独立磁盘读取共同验证。Web 证据及源码／媒体 SHA256 见 `.build/todo-finish/linux-web-workspace-save-cancel-final/results.json`，GTK 报告见 `.build/ash-playwright-mcp/evidence/linux-native-picker-2026-10-19T10-55-49-898Z/report.html`。该结果不覆盖 Windows 原生选择器、跨机器 SSH 多根或 macOS 完整 Web 流程；macOS 仅另行实测了原生目录批准与脏文件拒绝。
 
+Windows 11 x64 已在本检出正常构建的 Desktop／App Server 上完成真实系统选择器的五步验收：取消打开、打开双根工作区、取消另存、保存中文及空格文件名、重新打开。通过工作区身份、两个根 URI 和独立磁盘读取核对结果；未替换 Electron dialog 返回值。构建与证据索引见 `.build/windows-native-picker-20261022/validation.json`，原始截图、WebM、trace 和报告见其中的实际场景目录；本机缺 ffmpeg／ffprobe，未生成字幕视频。早期夹具与驱动失败保留但不计入通过结果；此项不覆盖 Windows／Linux 远端多根。
+
 Remote 与独立 Browser 的扩展沿上述 owner 实现，没有新增平行 workspace 状态：
 
 - `platform/workspaces/common/workspaces.ts` 的 `toWorkspaceFolders` 与 `getStoredWorkspaceFolder` 负责 URI／相对路径转换；Browser Host 在取得每个句柄权限并检查目录后发布已解析状态。
@@ -917,6 +919,18 @@ Workbench Mode session profile defaults
   → onWillSaveState
   → scoped Storage Service
 ```
+
+视图声明的默认容器由静态 `ViewsRegistry` 拥有；每个窗口的 `ViewDescriptorService` 在其上
+投影视图实际归属，不修改其他窗口的声明。标记 `canMoveView` 的 pane 可通过标题拖动或
+“移动视图”命令进入其他容器，也可在 Primary Side Bar、Secondary Side Bar 或 Panel
+生成独立入口。`browser/dnd.ts` 只路由本窗口的原生拖放，容器内入口排序仍由 `CompositeBar`
+负责。迁移先移除源 model 的成员，再加入目标 model；宿主销毁旧 pane 并通过同一领域服务
+重新创建，避免同一视图的可见性上下文存在多个写入者。
+
+单视图归属和自动生成入口的位置保存在 Profile/User 的 `views.customizations`；整组容器位置、
+入口顺序以及 pane 尺寸和折叠状态沿用各自的布局存储 owner。恢复时先校验完整记录，尚未注册的
+视图保留其归属以等待 contribution 加载。空的自动入口会移除。“恢复视图位置”还原默认归属、
+容器位置与入口顺序，并清除这份自定义记录；标题菜单还可单独恢复一个 pane 的位置。
 
 `platform/storage/common/storage.ts` 定义 Renderer 通用存储契约，包括 Application、
 Profile、Workspace scope，User/Machine target，值变更事件和 will-save lifecycle。

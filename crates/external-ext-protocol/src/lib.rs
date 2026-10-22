@@ -276,6 +276,7 @@ pub enum ExtensionCapability {
     ProductRemoteAuthorityResolver,
     StatusBar,
     SourceControl,
+    TreeView,
     Command,
     LanguageProvider,
     CustomTextEditor,
@@ -376,6 +377,13 @@ pub struct ExtensionCommandMenu {
     deny_unknown_fields
 )]
 pub enum RegistrationKind {
+    /// The extension owns nodes and callbacks; the client owns the tree presentation.
+    TreeDataProvider {
+        view_id: String,
+        title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container_id: Option<String>,
+    },
     /// Client-rendered SCM snapshots; callbacks and repository policy belong to the provider.
     SourceControl {
         revision: u64,
@@ -516,6 +524,8 @@ pub struct ExtensionHostRegistrationEvent {
     pub speech_providers: Vec<RegistrationDescriptor>,
     #[serde(default)]
     pub terminal_providers: Vec<RegistrationDescriptor>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tree_providers: Vec<RegistrationDescriptor>,
 }
 
 impl ExtensionHostRegistrationEvent {
@@ -544,6 +554,18 @@ impl ExtensionHostRegistrationEvent {
                 "invalid dynamic terminal registrations",
             ));
         }
+        if self.tree_providers.iter().any(|registration| {
+            !matches!(registration.kind, RegistrationKind::TreeDataProvider { .. })
+        }) {
+            return Err(validation::protocol_error(
+                "invalid dynamic tree registrations",
+            ));
+        }
+        validate_registrations(
+            &self.tree_providers,
+            limits.maximum_registrations,
+            &[ExtensionCapability::TreeView],
+        )?;
         validate_registrations(
             &self.terminal_providers,
             limits.maximum_registrations,

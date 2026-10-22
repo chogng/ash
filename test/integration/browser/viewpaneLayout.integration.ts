@@ -1,4 +1,14 @@
-import type { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { ISCMService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
+import { SCMService } from '../../../src/ash/workbench/contrib/scm/common/scmService.js';
+import { IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
+import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
+import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/descriptors.js';
+import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
+import { IUriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentity.js';
+import { UriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentityService.js';
+import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
@@ -12,10 +22,11 @@ import type { ISessionChangesService } from '../../../src/ash/sessions/contrib/c
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
 import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
-import { Event } from '../../../src/ash/base/common/event.js';
+import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { observableValue } from '../../../src/ash/base/common/observable.js';
-import { setNlsMessages } from '../../../src/ash/nls.js';
+import { localize, setNlsMessages } from '../../../src/ash/nls.js';
+import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { type IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
@@ -24,8 +35,8 @@ import { lightColorTheme, darkColorTheme, highContrastLightColorTheme, highContr
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { SymphonyTasksView } from '../../../src/ash/sessions/contrib/symphony/browser/symphonyViews.js';
 import { type ISymphonyService, type SymphonyViewState } from '../../../src/ash/sessions/contrib/symphony/browser/symphonyService.js';
-import { type IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
@@ -33,12 +44,12 @@ import { ChangesViewPane } from '../../../src/ash/sessions/contrib/changes/brows
 import { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
 import { IChatService, type TurnChangeDetails } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
-import { type IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { Repl } from '../../../src/ash/workbench/contrib/debug/browser/repl.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { IDebugService } from '../../../src/ash/workbench/contrib/debug/common/debug.js';
 import { ViewModel } from '../../../src/ash/workbench/contrib/debug/common/debugViewModel.js';
-import '../../../src/ash/workbench/contrib/debug/browser/media/debug.css';
+import '../../../src/ash/workbench/contrib/debug/browser/media/debugViewlet.css';
 import { ProblemsViewPane } from '../../../src/ash/workbench/contrib/problems/browser/problemsViewPane.js';
 import { BulkEditPane } from '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEditPane.js';
 import { TunnelPanel } from '../../../src/ash/workbench/contrib/remote/browser/tunnelView.js';
@@ -59,6 +70,16 @@ import { IAccountService } from '../../../src/ash/platform/accounts/common/accou
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { DeferredPromise } from '../../../src/ash/base/common/async.js';
+import { HoverService, IHoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
+import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
+import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
+import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
+import { ITimelineService, type TimelineChangeEvent } from '../../../src/ash/workbench/contrib/timeline/common/timeline.js';
+import { TimelineService } from '../../../src/ash/workbench/contrib/timeline/common/timelineService.js';
+import { TimelinePane } from '../../../src/ash/workbench/contrib/timeline/browser/timelinePane.js';
+import '../../../src/ash/workbench/contrib/timeline/browser/timeline.contribution.js';
 
 const params = new URLSearchParams(location.search);
 if (params.get('locale') === 'zh-CN') {
@@ -71,7 +92,7 @@ resources.add(bindTestColorTheme(resources.add(new TestThemeService(params.has('
 const contextKeys = resources.add(new ContextKeyService());
 contextKeys.setContext('openFolderWorkspaceSupport', true);
 const configuration = resources.add(new InMemoryConfigurationService());
-const notifications = resources.add(new NotificationService());
+const notifications = resources.add(new TestNotificationService());
 const changesServices = resources.add(new InstantiationService());
 changesServices.registerInstance(IContextKeyService, contextKeys);
 changesServices.registerInstance(ISessionGitHubService, { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as ISessionGitHubService);
@@ -136,14 +157,70 @@ const markers = resources.add(new MarkerService());
 markers.changeAll('fixture', [{ resource: URI.file('/fixture/file.ts'), marker: { severity: MarkerSeverity.Error, message: 'Fixture problem', startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2 } }]);
 if (params.has('noProblems')) markers.changeAll('fixture', []);
 const replDebug = {
-	onDidChangeSession: Event.None, getViewModel: () => debugViewModel,
+	onDidChangeSession: Event.None, getSession: () => undefined, getViewModel: () => debugViewModel,
 	replModel: {
 		...Disposable.None, sessions: [], activeSession: { id: 'fixture', label: 'Fixture', state: 'stopped', elements: [{ id: 1, sessionId: 'fixture', kind: 'output', output: 'Fixture output', category: 'console', parentId: null, collapsed: false, variablesReference: null, source: null, line: null, column: null, data: null }], output: 'Fixture output', canEvaluate: true },
 		onDidChange: Event.None, selectSession: () => { }, clear: () => { }, evaluate: async () => { throw new Error('Evaluation failed. '.repeat(12)); },
 	}
 } as unknown as IDebugService;
-replServices.registerInstance(IDebugService, replDebug);
-const pane = resources.add(view === 'empty'
+const replScope = resources.add(replServices.createChild(new ServiceCollection(
+	[IDebugService, replDebug], [IWorkspaceContextService, workspace], [IEditorService, editors],
+	[IFileService, resources.add(new FileService())], [IUriIdentityService, new SyncDescriptor(UriIdentityService)],
+	[IStorageService, storage], [IAccessibleViewService, { ...Disposable.None, getOpenAriaHint: () => undefined, show: () => false, disableHint: async () => { }, showAccessibleViewHelp() { } }],
+)));
+const timelineRequests: { cursor: number; uri: string; }[] = [];
+const heldTimelineRequests: DeferredPromise<void>[] = [];
+const timelineChanges = resources.add(new Emitter<TimelineChangeEvent>());
+let timelineMode: 'normal' | 'hold' | 'fail' | 'stall' = 'normal';
+let timelineService: TimelineService | undefined;
+function createTimelinePane(): TimelinePane {
+	void configuration.updateValue('timeline.pageSize', params.has('shortPages') ? 1 : 8);
+	const log = resources.add(new NullLoggerService());
+	const contextViews = resources.add(new BrowserContextViewService(root));
+	const scope = resources.add(changesServices.createChild(new ServiceCollection(
+		[IConfigurationService, configuration], [IEditorService, editors],
+		[ISCMService, resources.add(new SCMService())], [IContextViewService, contextViews], [IClipboardService, clipboard],
+		[IFileService, resources.add(new FileService())], [IContextMenuService, contextMenus],
+		[IHoverService, resources.add(new HoverService(configuration, contextViews, contextMenus))],
+		[IAccessibleViewService, replScope.get(IAccessibleViewService)], [ILogService, log],
+		[ICommandService, { executeCommand: async (id: string) => { commands.push(id); } } as ICommandService],
+		[IViewsService, { openView: async () => pane } as unknown as IViewsService],
+	)));
+	timelineService = resources.add(scope.createInstance(TimelineService));
+	scope.registerInstance(ITimelineService, timelineService);
+	resources.add(timelineService.registerTimelineProvider({
+		...Disposable.None, id: 'fixture', label: 'Fixture History', scheme: 'file',
+		onDidChange: timelineChanges.event,
+		async provideTimeline(uri, options) {
+			const offset = Number(options.cursor ?? 0);
+			const mode = timelineMode;
+			timelineMode = 'normal';
+			timelineRequests.push({ cursor: offset, uri: uri.path });
+			if (params.has('emptyTimeline')) return undefined;
+			if (mode === 'hold') {
+				const pending = new DeferredPromise<void>();
+				heldTimelineRequests.push(pending);
+				await pending.p;
+			}
+			if (mode === 'fail') throw new Error('Fixture continuation failed');
+			if (mode === 'stall') return { source: 'fixture', items: [], paging: { cursor: options.cursor } };
+			const count = Math.min(typeof options.limit === 'number' ? options.limit : 8, 25 - offset);
+			return {
+				source: 'fixture',
+				items: Array.from({ length: count }, (_, index) => ({
+					handle: String(offset + index), source: 'fixture', label: `${uri.path} Entry ${offset + index}`,
+					timestamp: 1000 - offset - index, icon: Lxicon.gitCommit, command: { id: 'fixture.open', title: 'Open Entry' },
+				})),
+				paging: { cursor: offset + count < 25 ? String(offset + count) : undefined },
+			};
+		},
+	}));
+	resources.add(toDisposable(() => {
+		for (const pending of heldTimelineRequests.splice(0)) pending.complete();
+	}));
+	return scope.createInstance(TimelinePane, root, { id: 'fixture.timeline', title: localize('timeline.title', 'Timeline') });
+}
+const pane = resources.add(view === 'timeline' ? createTimelinePane() : view === 'empty'
 	? new EmptyView(root, { id: 'fixture.empty', title: 'Files' }, {
 		pickFolderAndOpen: async () => { throw new Error('Folder opening failed. '.repeat(12)); },
 	} as unknown as import('../../../src/ash/platform/dialogs/common/dialogs.js').IFileDialogService, contextKeys)
@@ -167,7 +244,7 @@ const pane = resources.add(view === 'empty'
 							{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, changesServices, changesViewState,
 							{ openChangesEditor: async () => { throw new Error('Opening review editors is outside this layout fixture'); } } as unknown as ISessionChangesService, storage)
 						: view === 'console'
-							? new Repl(root, { id: 'fixture.console', title: 'Console' }, replDebug, undefined!, undefined!, undefined!, { getOpenAriaHint: () => undefined } as never, storage, replServices, contextKeys)
+							? replScope.createInstance(Repl, root, { id: 'fixture.console', title: 'Console' })
 							: new SymphonyTasksView(root, { id: 'fixture.symphony', title: 'Symphony' }, symphony, configuration, contextKeys,
 								{ showOpenDialog: async () => { throw new Error('File picking is outside this fixture'); } } as unknown as IFileDialogService));
 const panes = resources.add(new PaneView(root));
@@ -177,7 +254,18 @@ if (view !== 'symphony') {
 }
 panes.layout(180, 280);
 pane.setVisible(true);
-window.viewpaneLayoutIntegration = { commands, submissions, copiedProblems, watchers: () => watchers, dispose: () => resources.dispose() };
+timelineService?.setUri(URI.file('/fixture/file.txt'));
+window.viewpaneLayoutIntegration = {
+	commands, submissions, copiedProblems, watchers: () => watchers, dispose: () => resources.dispose(),
+	timeline: {
+		requests: timelineRequests,
+		setMode: mode => { timelineMode = mode; },
+		release: () => { for (const pending of heldTimelineRequests.splice(0)) pending.complete(); },
+		setFile: path => timelineService!.setUri(URI.file(path)),
+		invalidate: path => timelineChanges.fire({ id: 'fixture', uri: URI.file(path), reset: true }),
+		content: () => (pane as TimelinePane).getAccessibleContent(),
+	},
+};
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 document.body.dataset.ready = 'true';
 
@@ -189,6 +277,14 @@ declare global {
 			readonly submissions: readonly { title: string; prompt: string; }[];
 			watchers(): number;
 			dispose(): void;
+			readonly timeline: {
+				readonly requests: readonly { cursor: number; uri: string; }[];
+				setMode(mode: 'normal' | 'hold' | 'fail' | 'stall'): void;
+				release(): void;
+				setFile(path: string): void;
+				invalidate(path: string): void;
+				content(): string;
+			};
 		};
 	}
 }

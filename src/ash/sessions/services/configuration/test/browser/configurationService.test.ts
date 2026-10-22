@@ -401,8 +401,20 @@ test('Late contributions apply current Sessions defaults and read-only rules acr
 	await sessions.updateValue('editor.dynamic', 'changed', { overrideIdentifier: 'typescript' });
 	assert.equal(sessions.getValue('editor.dynamic', { overrideIdentifier: 'typescript' }), 'changed');
 	registry.updateConfigurations({ add: [], remove: [editable] });
-	assert.equal(sessions.getValue('editor.dynamic'), undefined);
-	assert.deepEqual(changes, [ConfigurationTarget.DEFAULT, ConfigurationTarget.DEFAULT, ConfigurationTarget.USER_LOCAL, ConfigurationTarget.DEFAULT]);
+	// Unregistration removes the schema and window rules, not the user's stored values.
+	assert.deepEqual([
+		sessions.getValue('editor.dynamic'), sessions.getValue('editor.dynamic', { overrideIdentifier: 'typescript' }),
+		workbench.getValue('editor.dynamic'), workbench.getValue('editor.dynamic', { overrideIdentifier: 'typescript' }),
+	], ['user', 'changed', 'user', 'language']);
+	assert.deepEqual(sessions.getConfigurationData().defaults.contents, {});
+	await assert.rejects(sessions.updateValue('editor.dynamic', 'unregistered'), /Unknown configuration key/);
+	registry.updateConfigurations({ add: [fixed], remove: [] });
+	assert.deepEqual([
+		sessions.getValue('editor.dynamic'), sessions.getValue('editor.dynamic', { overrideIdentifier: 'typescript' }),
+	], ['sessions', 'sessions']);
+	await assert.rejects(sessions.updateValue('editor.dynamic', 'read-only again'), /read-only/);
+	assert.deepEqual(JSON.parse((await sessions.read()).source), { 'editor.dynamic': 'user', '[typescript]': { 'editor.dynamic': 'changed' } });
+	assert.deepEqual(changes, [ConfigurationTarget.DEFAULT, ConfigurationTarget.DEFAULT, ConfigurationTarget.USER_LOCAL, ConfigurationTarget.DEFAULT, ConfigurationTarget.DEFAULT]);
 });
 
 test('Late typed registrations use Sessions defaults while invalid contribution defaults leave the registry unchanged', () => {
@@ -500,7 +512,7 @@ test('Two windows share the profile file while ignored settings still notify fil
 });
 
 test('Production window settings keep Workbench values and report a localized Sessions write error', async () => {
-	const source = JSON.stringify({ [WorkbenchConfiguration.windowTitle]: 'Custom', [WorkbenchConfiguration.sideBarLocation]: 'right', [WorkbenchConfiguration.activityBarLocation]: 'top', [WorkbenchConfiguration.activityBarCompact]: true });
+	const source = JSON.stringify({ [WorkbenchConfiguration.windowTitle]: 'Custom', [WorkbenchConfiguration.sideBarLocation]: 'right', [WorkbenchConfiguration.activityBarLocation]: 'top', [WorkbenchConfiguration.activityBarCompact]: true, [WorkbenchConfiguration.activityBarAutoHide]: true });
 	const initialSnapshot = { revision: 1, document: { version: 1 as const, source } };
 	using sessions = new ConfigurationService({ source });
 	using workbench = new WorkspaceService({ source });
@@ -508,10 +520,12 @@ test('Production window settings keep Workbench values and report a localized Se
 		sessions.getValue(WorkbenchConfiguration.windowTitle), sessions.getValue(WorkbenchConfiguration.sideBarLocation), sessions.getValue(WorkbenchConfiguration.activityBarLocation), sessions.getValue(WorkbenchConfiguration.activityBarCompact),
 		workbench.getValue(WorkbenchConfiguration.windowTitle), workbench.getValue(WorkbenchConfiguration.sideBarLocation), workbench.getValue(WorkbenchConfiguration.activityBarLocation), workbench.getValue(WorkbenchConfiguration.activityBarCompact),
 	], ['${appName}', 'left', ActivityBarPosition.DEFAULT, false, 'Custom', 'right', ActivityBarPosition.TOP, true]);
+	assert.deepEqual([sessions.getValue(WorkbenchConfiguration.activityBarAutoHide), workbench.getValue(WorkbenchConfiguration.activityBarAutoHide)], [false, true]);
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages('zh-CN', chinese.bundles);
 	try {
 		await assert.rejects(sessions.updateValue(WorkbenchConfiguration.sideBarLocation, 'right'), { message: '设置 workbench.sideBar.location 在此窗口中为只读。' });
+		await assert.rejects(sessions.updateValue(WorkbenchConfiguration.activityBarAutoHide, true), { message: '设置 workbench.activityBar.autoHide 在此窗口中为只读。' });
 	} finally {
 		resetNlsResolver();
 	}

@@ -34,7 +34,7 @@ import type { AgentHostTerminalService } from './agentHostTerminalService.js';
 import { XtermTerminal } from './xterm/xtermTerminal.js';
 import { localize } from '../../../../nls.js';
 import Severity from '../../../../base/common/severity.js';
-import { TerminalStatusList } from './terminalStatusList.js';
+import { TerminalStatus, TerminalStatusList } from './terminalStatusList.js';
 import { TerminalCapability } from '../../../../platform/terminal/common/capabilities/capabilities.js';
 import { TerminalCapabilityStore, TerminalCapabilityStoreMultiplexer } from '../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import { TerminalRecorder } from '../../../../platform/terminal/common/terminalRecorder.js';
@@ -137,7 +137,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		onClosed: () => void,
 		private readonly onTitleChanged: () => void,
 		private custom: CustomTerminalProcessOptions | undefined,
-		private launch: (Pick<ITerminalProcessCreateOptions, 'env' | 'strictEnv' | 'cwd' | 'execution' | 'profile'> & Pick<IShellLaunchConfig, 'environmentVariableCollections' | 'environmentVariableCollectionsPersistable'>) | undefined,
+		private launch: (Pick<ITerminalProcessCreateOptions, 'env' | 'strictEnv' | 'cwd' | 'execution' | 'profile'> & Pick<IShellLaunchConfig, 'executable' | 'args' | 'environmentVariableCollections' | 'environmentVariableCollectionsPersistable'>) | undefined,
 		private initialText: IShellLaunchConfig['initialText'],
 		private waitOnExit: IShellLaunchConfig['waitOnExit'],
 		private dimensions: ITerminalDimensions,
@@ -239,8 +239,8 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			name: this.title,
 			environmentVariableCollections: this.environmentVariableCollection && serializeEnvironmentVariableCollections(this.environmentVariableCollection.collections),
 			environmentVariableCollectionsPersistable: this.environmentVariableCollectionsPersistable,
-			executable: profile?.type === 'custom' ? profile.path : undefined,
-			args: profile?.type === 'custom' ? profile.args : undefined,
+			executable: this.processReady.launch?.executable ?? this.launch?.executable ?? (profile?.type === 'custom' ? profile.path : undefined),
+			args: this.launch?.args ?? (profile?.type === 'custom' ? profile.args : undefined),
 			env: this.launch?.env,
 			strictEnv: this.launch?.strictEnv,
 			cwd: this.launch?.cwd,
@@ -255,6 +255,8 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	public get cwd(): string | undefined { return this.shellProcessManager?.cwd; }
 	public get shellIntegration() { return this.shellProcessManager?.shellIntegration; }
 	public get shellType() { return this.processReady.shellType; }
+	/** Actual argv is display-only; split/relaunch must use the original profile arguments. */
+	public get injectedArgs() { return this.processReady.launch?.args; }
 
 	public get initialCwd(): string {
 		return this.processReady.cwd;
@@ -402,6 +404,16 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			} catch (error) { onUnexpectedError(error); }
 		}));
 		this._register(this.capabilities.add(screen.capabilities));
+		this._register(screen.shellIntegration.onDidChangeSeenSequences(() => this.refreshCapabilities()));
+		const promptInputListener = this._register(new MutableDisposable());
+		this._register(this.capabilities.onDidAddCommandDetectionCapability(capability => {
+			promptInputListener.value = capability.promptInputModel.onDidChangeInput(() => this.refreshCapabilities());
+			this.refreshCapabilities();
+		}));
+		this._register(this.capabilities.onDidRemoveCommandDetectionCapability(() => {
+			promptInputListener.clear();
+			this.refreshCapabilities();
+		}));
 		const recorder = this.screenRecorder!;
 		const replay = recorder.generateReplayEventSync();
 		const truncated = recorder.isTruncated;
@@ -828,7 +840,11 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			const child = await this.backend.createProcess({
 				...(autoReplies.length ? { autoReplies } : {}),
 				...processWorkspaceFolder(this.processWorkspaceFolderId),
-				...this.launch,
+				// Launch presentation metadata must never become process request fields.
+				...(this.launch?.env === undefined ? {} : { env: this.launch.env }),
+				...(this.launch?.strictEnv === undefined ? {} : { strictEnv: this.launch.strictEnv }),
+				...(this.launch?.cwd === undefined ? {} : { cwd: this.launch.cwd }),
+				...(this.launch?.execution === undefined ? {} : { execution: this.launch.execution }),
 				rows: dimensions.rows,
 				cols: dimensions.cols,
 				profile: this.launch?.profile ?? { type: 'profile', profileId: this._profile.profileId },
@@ -868,14 +884,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}));
 		// The backend owns the child. This instance holds a release lease, not a second disposable owner.
 		lifetime.add(toDisposable(() => { void manager.close().catch(() => { }); }));
-		lifetime.add(manager.onProcessReady(ready => { this.processReady = ready; }));
-		lifetime.add(manager.onProcessError(error => {
-			this.statusList.add({
-				id: 'process-error', severity: Severity.Error,
-				tooltip: localize('terminal.status.processError', 'Terminal process failed: {0}', error instanceof Error ? error.message : String(error)),
-			});
-			this.setState('error');
-		}));
+		lifetime.add(manager.onProcessReady(ready => { this.processReady = ready; this.refreshCapabilities(); }));
+		lifetime.add(toDisposable(() => this.statusList.remove(TerminalStatus.ShellIntegrationInfo)));
+		lifetime.add(manager.onProcessError(error => this.handleProcessError(error)));
 		lifetime.add(manager.onProcessData(event => this.handleProcessData(event)));
 		lifetime.add(manager.onDidChangeCommandStatus(event => this._onDidChangeCommandStatus.fire(event)));
 		lifetime.add(manager.onDidChangeMetadata(() => this.refreshCapabilities()));
@@ -888,6 +899,14 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}));
 		lifetime.add(manager.onProcessExit(code => this.handleProcessExit(code)));
 		this.refreshCapabilities();
+	}
+
+	private handleProcessError(error: unknown): void {
+		this.statusList.add({
+			id: 'process-error', severity: Severity.Error,
+			tooltip: localize('terminal.status.processError', 'Terminal process failed: {0}', error instanceof Error ? error.message : String(error)),
+		});
+		this.setState('error');
 	}
 
 	private refreshCapabilities(): void {
@@ -908,6 +927,41 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			this.processCapabilities.add(TerminalCapability.CwdDetection, cwd);
 		}
 
+		let level = localize('terminal.tooltip.none', 'None');
+		if (integration?.hasRichCommandDetection) {
+			level = localize('terminal.tooltip.rich', 'Rich');
+		} else if (integration?.commandDetection) {
+			level = localize('terminal.tooltip.basic', 'Basic');
+		} else if (this.processReady.launch?.usedShellIntegrationInjection) {
+			level = localize('terminal.tooltip.injectionFailed', 'Injection failed to activate');
+		}
+		const tooltip = localize('terminal.tooltip.shellIntegration', 'Shell integration: {0}', level);
+		const details = [tooltip];
+		if (this.shellType) {
+			details.push(localize('terminal.tooltip.shellType', 'Shell type: {0}', this.shellType));
+		}
+		const directory = this.cwd ?? this.initialCwd;
+		if (directory) {
+			details.push(localize('terminal.tooltip.cwd', 'Working directory: {0}', directory));
+		}
+		if (integration?.promptType) {
+			details.push(localize('terminal.tooltip.promptType', 'Prompt type: {0}', integration.promptType));
+		}
+		const sequences = this.screen?.shellIntegration.seenSequences;
+		if (sequences?.size) {
+			details.push(localize('terminal.tooltip.seenSequences', 'Seen sequences: {0}', [...sequences].join(', ')));
+		}
+		const promptInput = this.capabilities.get(TerminalCapability.CommandDetection)?.promptInputModel.getCombinedString();
+		if (promptInput !== undefined) {
+			details.push(localize('terminal.tooltip.promptInput', 'Prompt input: {0}', promptInput));
+		}
+		const detailedTooltip = details.join('\n');
+		const previous = this.statusList.statuses.find(status => status.id === TerminalStatus.ShellIntegrationInfo);
+		// Reads can repeat the same metadata snapshot. Publish only display changes,
+		// so unchanged command history never rebuilds an open information card.
+		if (previous?.tooltip !== tooltip || previous.detailedTooltip !== detailedTooltip) {
+			this.statusList.add({ id: TerminalStatus.ShellIntegrationInfo, severity: Severity.Info, tooltip, detailedTooltip });
+		}
 	}
 
 	private async poll(generation: number, initialState: "running" | "reconnecting" = "running", resumeDimensions?: ITerminalDimensions): Promise<void> {
@@ -922,7 +976,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 				if (this._state === "reconnecting") {
 					this.handleProcessData({ data: `\r\n${localize('terminal.recoveryFailed', '[terminal recovery failed; relaunch required]')}\r\n`, trackCommit: false });
 				}
-				this.setState("error");
+				this.handleProcessError(error);
 			}
 		}
 	}

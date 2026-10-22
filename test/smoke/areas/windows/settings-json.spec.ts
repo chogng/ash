@@ -1,6 +1,6 @@
 import { parseJsonc } from '../../../../src/ash/base/common/jsonc.js';
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
@@ -630,6 +630,28 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(settings.getByRole('searchbox')).toHaveValue('');
 	});
 }
+
+test.describe('Desktop profile file watching', () => {
+	test.use({ electronUserSettings: { 'workbench.activityBar.location': 'top' } });
+
+	test('External settings edits and atomic replacement reach the Desktop configuration', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ workbench }) => {
+		const page = workbench.page;
+		const sidebar = page.locator('[data-part="sidebar"]');
+		const top = sidebar.locator('.ash-sidebar-composite-bar-top .ash-composite-bar');
+		const bottom = sidebar.locator('.ash-sidebar-composite-bar-bottom .ash-composite-bar');
+		await expect(top).toBeVisible();
+		const current = await readUserSettings(page);
+		const resource = new URL(current.resource);
+		await writeFile(resource, '{ "workbench.activityBar.location": "bottom" }');
+		await expect(bottom).toBeVisible();
+		const replacement = new URL('settings.json.tmp', resource);
+		await writeFile(replacement, '{ "workbench.activityBar.location": "top" }');
+		await rename(replacement, resource);
+		await expect(top).toBeVisible();
+		await writeFile(resource, '{ "workbench.activityBar.location": "bottom" }');
+		await expect(bottom).toBeVisible();
+	});
+});
 
 test('Configured markers and modified filtering update after external persisted writes', async ({ application, workbench, runningApplication }, testInfo) => {
 	const page = workbench.page;

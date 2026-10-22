@@ -3,7 +3,8 @@ import { after as afterCodeFeatures } from 'mocha';
 import './testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { Emitter } from '../../../base/common/event.js';
+import { Event, Emitter } from '../../../base/common/event.js';
+import type { ICodeEditor } from '../../browser/editorBrowser.js';
 import type { View } from '../../browser/view.js';
 import { Range } from '../../common/core/range.js';
 import { TextModel } from '../../common/model/textModel.js';
@@ -14,6 +15,7 @@ test('section headers scan only visible chunks and reuse text candidates on toke
 	const lines = Array.from({ length: 100_000 }, () => 'const value = 1;');
 	lines[95_004] = '// #region -- Visible --';
 	using model = new TextModel(lines.join('\n'));
+	model.setLanguage('javascript');
 	using configurations = createTestLanguageConfigurationService();
 	using layout = new Emitter<void>();
 	const root = document.createElement('div');
@@ -24,11 +26,12 @@ test('section headers scan only visible chunks and reuse text candidates on toke
 		root.append(line);
 	}
 	const view = { textModel: model, domNode: { domNode: root }, onDidChangeLayout: layout.event } as unknown as View;
+	const editor = { getOption: () => ({ enabled: false }), onDidChangeConfiguration: Event.None, createDecorationsCollection: () => ({ clear() { }, set() { } }) } as unknown as ICodeEditor;
 	const getLineContent = model.getLineContent;
 	let reads = 0;
 	model.getLineContent = line => { reads++; return getLineContent.call(model, line); };
 	try {
-		using controller = new SectionHeadersController(view, model, 'javascript', configurations, { findRegionSectionHeaders: true, findMarkSectionHeaders: false, markSectionHeaderRegex: '' });
+		using controller = new SectionHeadersController(view, model, editor, configurations, () => ({ findRegionSectionHeaders: true, findMarkSectionHeaders: false, markSectionHeaderRegex: '' }));
 		const header = root.children[4]!;
 		assert.equal(header.getAttribute('data-section-header'), 'true');
 		assert.ok(reads < 400, `${reads} line reads for a ten-line viewport`);

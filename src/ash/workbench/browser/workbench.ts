@@ -1,3 +1,5 @@
+import { ILanguageServerStatusService } from '../services/language/common/languageServerStatusService.js';
+import { IProjectService } from '../../platform/projects/common/projectService.js';
 import { readDefaultLogLevels, DefaultLogLevelsService, IDefaultLogLevelsService } from '../services/log/common/defaultLogLevels.js';
 import '../services/configuration/common/jsonEditingService.js';
 import { IWorkspaceEditingService, WorkspaceTransitionCommittedError } from '../services/workspaces/common/workspaceEditing.js';
@@ -185,6 +187,7 @@ import { BrowserHostService } from '../services/host/browser/browserHostService.
 import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
 import { IViewDescriptorService } from "../common/views.js";
 import { ViewDescriptorService } from "../services/views/browser/viewDescriptorService.js";
+import { ViewDragAndDropController } from './dnd.js';
 import { IViewsService } from "../services/views/common/viewsService.js";
 import { ViewsService } from "../services/views/browser/viewsService.js";
 import {
@@ -217,6 +220,8 @@ import { SidebarPart } from "./parts/sidebar/sidebarPart.js";
 import { ActivitybarPart } from "./parts/activitybar/activitybarPart.js";
 import { GlobalCompositeBar } from './parts/globalCompositeBar.js';
 import { StatusbarPart } from "./parts/statusbar/statusbarPart.js";
+import { BannerPart } from './parts/banner/bannerPart.js';
+import { IBannerService } from '../services/banner/browser/bannerService.js';
 import {
 	type BrowserTitleService,
 } from "./parts/titlebar/titlebarPart.js";
@@ -667,6 +672,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ISyntaxApi, api.syntax);
 		services.registerInstance(IDebugAdapterProcessService, api.debugAdapter);
 		services.registerInstance(IAssetService, api.assets);
+		services.registerInstance(IProjectService, api.projects);
 		services.registerInstance(ITestExecutionService, api.testing);
 		if (api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, api.approvalEnvironment); }
 		if (api.memories) { services.registerInstance(IMemoriesService, api.memories); }
@@ -842,7 +848,7 @@ export class Workbench extends Disposable {
 		feedbackHost.style.setProperty('--ash-feedback-statusbar-height', `${StatusbarHeight}px`);
 		workbenchRoot.append(feedbackHost);
 		this._register(toDisposable(() => feedbackHost.remove()));
-		const notificationService = this._register(new NotificationService());
+		const notificationService = this._register(services.createInstance(NotificationService));
 		services.registerInstance(INotificationService, notificationService);
 		const statusbarService = this._register(new StatusbarService());
 		services.registerInstance(IStatusbarService, statusbarService);
@@ -949,7 +955,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
 		services.registerInstance(IResourceIconRenderer, themeService);
 		services.registerInstance(IResourceLabelService, services.createInstance(ResourceLabelService));
-		this._register(services.createInstance(AppServerLanguageServerStatusService, api.events));
 		services.registerInstance(
 			IWorkbenchDialogHandler,
 			dialogHandler ?? new BrowserDialogHandler(workbenchRoot),
@@ -1010,6 +1015,8 @@ export class Workbench extends Disposable {
 				configurationService: configuration,
 			}));
 		services.registerInstance(IAccessibilityService, accessibilityService);
+		services.registerSingleton(ILanguageServerStatusService, () => services.createInstance(AppServerLanguageServerStatusService));
+		services.get(ILanguageServerStatusService);
 		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, workbenchRoot, notificationService.model, feedbackHost, notificationActionRunner, statusbarService, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
@@ -1207,8 +1214,14 @@ export class Workbench extends Disposable {
 		this.editor = editorParts;
 		const auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, workbenchRoot));
 		const statusbar = this._register(services.createInstance(StatusbarPart, workbenchRoot, statusbarService));
+		const banner = this._register(services.createInstance(BannerPart, workbenchRoot, (visible: boolean) => {
+			if (visible) layoutService.showPart('banner');
+			else layoutService.hidePart('banner');
+		}));
+		services.registerInstance(IBannerService, banner);
 		const parts = new Map<WorkbenchPartId, Part>([
 			["titlebar", titlebar],
+			['banner', banner],
 			["statusbar", statusbar],
 			["activitybar", activitybar],
 			["sidebar", sidebar],
@@ -1257,6 +1270,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(instantiationService.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
+		this._register(services.createInstance(ViewDragAndDropController, workbenchRoot));
 		// Extension adapters require the completed editor and view service graph.
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		performance.mark('ash.workbench.services-ready');

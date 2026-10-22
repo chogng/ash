@@ -1042,7 +1042,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			? localize('chat.agentPicker.mode', 'Agent: {0}', modeLabel)
 			: localize('chat.modePicker.mode', 'Mode: {0}', modeLabel);
 		const modeAction = this.options.modePicker === 'hidden' ? undefined : this.toolbarState.inputKind === "command"
-			? new ChatInputAction("ash.chat.input.command", "Command", "Slash command", Lxicon.start, false, "mode", () => { })
+			? new ChatInputAction("ash.chat.input.command", "Command", "Slash command", Lxicon.play, false, "mode", () => { })
 			: new SelectorAction(
 				"ash.chat.input.mode",
 				modeLabel,

@@ -887,6 +887,31 @@ pub struct GitWorktreeResolveResult {
     pub path: String,
 }
 
+/// Selects content or line totals for the same fresh repository comparison.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitTextDiffProjectionDto {
+    Contents,
+    Statistics,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitTextDiffParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub transport: Option<GitTransportOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub projection: Option<GitTextDiffProjectionDto>,
+}
+
 /// One bounded UTF-8 text change from `HEAD` to the directory working tree.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -906,7 +931,16 @@ pub struct GitDiffStatisticsDto {
     pub deletions: usize,
 }
 
-/// One authoritative status snapshot plus its bounded directory text-diff projection.
+/// Fresh directory-scoped counts without publishing a repository status or history revision.
+/// `files` includes non-text changes; `statistics.files` counts only readable text comparisons.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitChangesSummaryResult {
+    pub files: usize,
+    pub statistics: GitDiffStatisticsDto,
+}
+
+/// One authoritative status and line totals; `diffs` is empty for statistics projection.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitTextDiffResult {
@@ -1330,6 +1364,12 @@ pub struct GitFileHistoryParams {
     pub client: Option<GitClientOptionsDto>,
     pub repository_id: Option<String>,
     pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub limit: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cursor: Option<String>,
 }
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -1347,6 +1387,7 @@ pub struct GitFileHistoryItemDto {
 #[serde(rename_all = "camelCase")]
 pub struct GitFileHistoryResult {
     pub items: Vec<GitFileHistoryItemDto>,
+    pub next_cursor: Option<String>,
 }
 
 /// Directory-scoped discovery preferences, leased for the requesting connection.

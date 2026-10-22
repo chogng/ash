@@ -79,6 +79,8 @@ export class TerminalInstanceService extends Disposable {
 			: { ...options.execution });
 		const profile = options.profile.type === 'custom' ? Object.freeze({ ...options.profile, path: Object.freeze([...options.profile.path]), args: (typeof options.profile.args === 'string' ? options.profile.args : Object.freeze([...options.profile.args])) }) : Object.freeze({ ...options.profile });
 		const launch = Object.freeze({
+			executable: Array.isArray(options.resolvedShellLaunchConfig?.executable) ? Object.freeze([...options.resolvedShellLaunchConfig.executable]) : options.resolvedShellLaunchConfig?.executable,
+			args: Array.isArray(options.resolvedShellLaunchConfig?.args) ? Object.freeze([...options.resolvedShellLaunchConfig.args]) : options.resolvedShellLaunchConfig?.args,
 			environmentVariableCollections: options.environmentVariableCollections ?? options.attachPersistentProcess?.state.environmentVariableCollections,
 			environmentVariableCollectionsPersistable: options.environmentVariableCollectionsPersistable ?? (options.attachPersistentProcess?.state.environmentVariableCollections !== undefined),
 			...(environment === undefined ? {} : { env: environment }),

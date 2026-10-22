@@ -28,10 +28,13 @@ fn dangerous_key(key: &std::ffi::OsStr) -> bool {
 }
 
 /// Release builds disable dumps and debugger attachment; development builds preserve them.
-/// Windows DLL search protection and standard-handle inheritance isolation apply in both modes.
+/// Windows DLL search protection and standard-handle isolation, and Linux descriptor
+/// inheritance isolation, apply in both modes.
 /// Call as the first operation in each executable, before loading secrets or starting threads.
 /// Failure must stop startup. Clearing loader variables cannot undo libraries loaded at exec.
 pub fn initialize() -> io::Result<()> {
+    #[cfg(target_os = "linux")]
+    isolate_inherited_descriptors()?;
     #[cfg(all(unix, not(debug_assertions)))]
     {
         let limit = libc::rlimit {
@@ -89,6 +92,59 @@ pub fn initialize() -> io::Result<()> {
         }
         // Command explicitly duplicates selected stdio handles. Clearing implicit inheritance
         // prevents an unrelated daemon from keeping the caller's redirected pipes open.
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn isolate_inherited_descriptors() -> io::Result<()> {
+    // Electron can pass inheritable inspector sockets and Chromium files to a
+    // controller. Keep them usable here, but prevent a detached backend or PTY
+    // host from retaining the caller's connections after its process exits.
+    // SAFETY: initialization runs before threads; CLOEXEC marks descriptors
+    // above stderr without closing them or changing the standard streams.
+    if unsafe {
+        libc::syscall(
+            libc::SYS_close_range,
+            3_u32,
+            u32::MAX,
+            libc::CLOSE_RANGE_CLOEXEC,
+        )
+    } == 0
+    {
+        return Ok(());
+    }
+    let error = io::Error::last_os_error();
+    if !matches!(error.raw_os_error(), Some(libc::ENOSYS | libc::EINVAL)) {
+        return Err(error);
+    }
+    // Older kernels lack close_range or its CLOEXEC flag. This is the startup
+    // boundary, not a post-fork callback, so directory iteration may allocate.
+    for entry in std::fs::read_dir("/proc/self/fd")? {
+        let entry = entry?;
+        let Some(fd) = entry
+            .file_name()
+            .to_str()
+            .and_then(|name| name.parse::<i32>().ok())
+        else {
+            continue;
+        };
+        if fd <= libc::STDERR_FILENO {
+            continue;
+        }
+        // SAFETY: inspect and mark only descriptors already owned by this process.
+        let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+        if flags == -1 {
+            let error = io::Error::last_os_error();
+            if error.raw_os_error() == Some(libc::EBADF) {
+                continue;
+            }
+            return Err(error);
+        }
+        // SAFETY: preserve all existing flags and leave the descriptor open here.
+        if unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) } == -1 {
+            return Err(io::Error::last_os_error());
+        }
     }
     Ok(())
 }

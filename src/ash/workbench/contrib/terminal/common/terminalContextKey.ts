@@ -7,6 +7,7 @@ export const TerminalActiveInstanceStateContext = new RawContextKey<string>("ter
 export const TerminalViewInlineActionsContext = new RawContextKey<boolean>('terminalViewInlineActions', false);
 
 export namespace TerminalContextKeys {
+	export const tabsFocus = new RawContextKey<boolean>('terminalTabsFocus', false);
 	export const tabsNarrow = new RawContextKey<boolean>('terminalTabsNarrow', false);
 	export const textSelectedInFocused = new RawContextKey<boolean>('terminalTextSelectedInFocused', false);
 	export const focus = new RawContextKey<boolean>('terminalFocus', false);

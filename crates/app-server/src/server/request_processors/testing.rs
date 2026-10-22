@@ -228,7 +228,6 @@ fn debug_launch(value: testing::DebugLaunch) -> TestingDebugLaunch {
         program: value.program,
         arguments: value.arguments,
         directory: value.directory,
-        adapter_program: value.adapter_program,
     }
 }
 

@@ -1,15 +1,386 @@
 import { expect, test, type Page, type Locator } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 
+async function glyphPoint(page: Page, lineNumber: number) {
+	return page.evaluate(lineNumber => {
+		const editor = window.ashDebugIntegration.getControl();
+		const root = editor.getDomNode()!.getBoundingClientRect();
+		const layout = editor.getLayoutInfo();
+		const position = editor.getScrolledVisiblePosition({ lineNumber, column: 1 })!;
+		return { x: root.left + layout.glyphMarginLeft + 4, y: root.top + position.top + position.height / 2 };
+	}, lineNumber);
+}
+
+for (const locale of ['en', 'zh-cn']) test(`glyph margin adds, disables, enables and removes breakpoints without moving the selection (${locale})`, async ({ page }, testInfo) => {
+	await page.goto(`/debug.html?locale=${locale}`);
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	await page.evaluate(() => {
+		const editor = window.ashDebugIntegration.getControl();
+		editor.updateOptions({ hover: { delay: 20 } });
+		editor.setSelection({ startLineNumber: 2, startColumn: 2, endLineNumber: 2, endColumn: 8 });
+	});
+	const selection = await page.evaluate(() => window.ashDebugIntegration.getControl().getSelection());
+	const point = await glyphPoint(page, 1);
+	await page.mouse.move(point.x, point.y);
+	await expect(page.locator('.ash-debug-breakpoint-gutter.hint')).toBeVisible();
+	await expect(page.getByRole('tooltip')).toContainText(locale === 'en' ? 'Click to add a breakpoint' : '单击以添加断点');
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
+		const hint = page.locator('.ash-debug-breakpoint-gutter.hint');
+		await expect(hint).toBeVisible();
+		expect(await hint.evaluate(node => getComputedStyle(node, '::before').backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+		await expect(hint).toHaveCSS('opacity', theme.startsWith('hc') ? '1' : '0.4');
+	}
+	await page.screenshot({ path: testInfo.outputPath(`glyph-margin-${locale}.png`), fullPage: true });
+	await page.mouse.click(point.x, point.y);
+	await expect(page.locator('.ash-debug-breakpoint-gutter:not(.hint)')).toHaveCount(1);
+	expect(await page.evaluate(() => window.ashDebugIntegration.getControl().getSelection())).toEqual(selection);
+	await page.keyboard.down('Shift');
+	await page.mouse.click(point.x, point.y);
+	await page.keyboard.up('Shift');
+	await expect(page.locator('.ash-debug-breakpoint-gutter.disabled')).toHaveCount(1);
+	await page.mouse.click(point.x, point.y);
+	await expect(page.locator('.ash-debug-breakpoint-gutter.disabled')).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toMatchObject([{ lineNumber: 1, enabled: true }]);
+	await page.mouse.click(point.x, point.y, { button: 'right' });
+	await page.keyboard.press('Escape');
+	await page.mouse.click(point.x, point.y, { button: 'middle' });
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toHaveLength(1);
+	await page.mouse.click(point.x, point.y);
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpoints())).toEqual([]);
+	await page.mouse.move(1, 1);
+	await expect(page.locator('.ash-debug-breakpoint-gutter.hint')).toHaveCount(0);
+	await expect(page.getByRole('tooltip')).toHaveCount(0);
+});
+
+test('glyph margin ignores document padding and foreign markers', async ({ page }) => {
+	await page.goto('/debug.html');
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	await page.evaluate(() => {
+		const editor = window.ashDebugIntegration.getControl();
+		editor.updateOptions({ wordWrap: 'off', smoothScrolling: false });
+		editor.createDecorationsCollection([{ range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 }, options: { description: 'foreign marker', glyphMarginClassName: 'ash-foreign-glyph' } }]);
+	});
+	const point = await glyphPoint(page, 1);
+	await page.mouse.click(point.x, point.y);
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toEqual([]);
+	await expect(page.locator('.ash-debug-breakpoint-gutter.hint')).toHaveCount(0);
+	const padding = await page.locator('#editor').boundingBox();
+	await page.mouse.click(point.x, padding!.y + padding!.height - 30);
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toEqual([]);
+});
+
+test('glyph margin maps wrapped, scrolled rows to source lines', async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 1000 });
+	await page.goto('/debug.html');
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	await page.evaluate(() => {
+		const editor = window.ashDebugIntegration.getControl();
+		editor.getModel()!.setValue(Array.from({ length: 60 }, (_, index) => `const value${index} = "${'wrapped content '.repeat(9)}";`).join('\n'));
+		editor.updateOptions({ wordWrap: 'wordWrapColumn', wordWrapColumn: 35, smoothScrolling: false });
+		editor.revealLineInCenter(25);
+	});
+	await expect(page.locator('#editor .line-numbers').filter({ hasText: /^25$/ })).toBeVisible();
+	const point = await glyphPoint(page, 25);
+	await page.mouse.click(point.x, point.y);
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpoints())).toMatchObject([{ lineNumber: 25 }]);
+	await page.mouse.click(point.x, point.y);
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpoints())).toEqual([]);
+});
+
+for (const locale of ['en', 'zh-cn']) test(`breakpoint widget preserves mode drafts, cancels safely and saves by keyboard (${locale})`, async ({ page }, testInfo) => {
+	await page.setViewportSize({ width: 1280, height: 1100 });
+	await page.goto(`/debug.html?locale=${locale}`);
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	const zh = locale === 'zh-cn';
+	const point = await glyphPoint(page, 1);
+	await page.keyboard.down('Alt'); await page.mouse.click(point.x, point.y); await page.keyboard.up('Alt');
+	const form = page.getByRole('form', { name: zh ? '断点编辑器' : 'Breakpoint editor', exact: true });
+	const field = form.getByRole('textbox');
+	await expect(field).toBeFocused();
+	await field.fill('answer > 0');
+	await form.getByRole('combobox').click();
+	await page.getByRole('option', { name: zh ? '命中次数条件' : 'Hit count condition', exact: true }).click();
+	await field.fill('>= 3');
+	await form.getByRole('combobox').click();
+	await page.getByRole('option', { name: zh ? '日志消息' : 'Log message', exact: true }).click();
+	await field.fill('answer={answer}');
+	await form.getByRole('combobox').click();
+	await page.getByRole('option', { name: zh ? '表达式条件' : 'Expression condition', exact: true }).click();
+	await expect(field).toHaveValue('answer > 0');
+	await field.dispatchEvent('compositionstart');
+	await field.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toEqual([]);
+	await field.dispatchEvent('compositionend');
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
+		await expect(field).toBeFocused();
+		const focusColor = await field.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-focusBorder').trim());
+		const color = await field.evaluate((element, color) => {
+			const probe = document.createElement('span');
+			probe.style.color = color;
+			element.parentElement!.append(probe);
+			const resolved = getComputedStyle(probe).color;
+			probe.remove();
+			return resolved;
+		}, focusColor);
+		await expect(form.locator('.ash-input-box-field')).toHaveCSS('border-top-color', color);
+	}
+	expect(await page.evaluate(() => window.ashDebugIntegration.showDebugHelp())).toBe(true);
+	const help = page.getByRole('textbox', { name: zh ? '无障碍帮助' : 'Accessibility Help', exact: true });
+	await expect(help).toHaveValue(zh ? /保留各自的草稿/ : /Each mode keeps its draft/);
+	await help.press('Escape');
+	await expect(field).toBeFocused();
+	await expect(field).toHaveValue('answer > 0');
+	await page.screenshot({ path: testInfo.outputPath(`breakpoint-widget-${locale}.png`), fullPage: true });
+	await field.press('Enter');
+	await expect(form).toHaveCount(0);
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpoints())).toMatchObject([
+		{ lineNumber: 1, condition: 'answer > 0', hitCondition: '>= 3', logMessage: 'answer={answer}' },
+	]);
+	await expect(page.locator('#editor .stanza-editor-input')).toBeFocused();
+	await page.keyboard.down('Alt'); await page.mouse.click(point.x, point.y); await page.keyboard.up('Alt');
+	await expect(field).toHaveValue('answer={answer}');
+	await field.fill('discarded');
+	await field.press('Escape');
+	await expect(form).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpoints())).toMatchObject([{ logMessage: 'answer={answer}' }]);
+});
+
+for (const locale of ['en', 'zh-cn']) test(`debug gutter context menu creates, edits, disables and removes a logpoint (${locale})`, async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 1100 });
+	await page.goto(`/debug.html?locale=${locale}`);
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	const zh = locale === 'zh-cn';
+	const point = await glyphPoint(page, 1);
+	const menu = async () => { await page.mouse.click(point.x, point.y, { button: 'right' }); };
+	await menu();
+	await page.getByRole('menuitem', { name: zh ? '添加日志点...' : 'Add Logpoint...', exact: true }).click();
+	const field = page.locator('.ash-breakpoint-widget').getByRole('textbox');
+	await expect(field).toBeFocused();
+	await field.fill('value={answer}');
+	await field.press('Enter');
+	await expect(page.locator('.ash-debug-breakpoint-gutter.logpoint')).toHaveCount(1);
+	await menu();
+	await page.getByRole('menuitem', { name: zh ? '禁用断点' : 'Disable Breakpoint', exact: true }).click();
+	await expect(page.locator('.ash-debug-breakpoint-gutter.disabled')).toHaveCount(1);
+	await menu();
+	await page.getByRole('menuitem', { name: zh ? '启用断点' : 'Enable Breakpoint', exact: true }).click();
+	await expect(page.locator('.ash-debug-breakpoint-gutter.disabled')).toHaveCount(0);
+	await menu();
+	await page.getByRole('menuitem', { name: zh ? '编辑断点...' : 'Edit Breakpoint...', exact: true }).click();
+	await expect(field).toHaveValue('value={answer}');
+	await field.fill('edited={answer}'); await field.press('Enter');
+	await menu();
+	await page.getByRole('menuitem', { name: zh ? '移除断点' : 'Remove breakpoint', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpoints())).toEqual([]);
+});
+
+test('breakpoint dragging preserves identity and conditions, rejects occupied drops and cancels on Escape', async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 1100 });
+	await page.goto('/debug.html');
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	await page.evaluate(() => { const editor = window.ashDebugIntegration.getControl(); editor.setPosition({ lineNumber: 2, column: 1 }); editor.focus(); });
+	await page.evaluate(() => window.ashDebugIntegration.command('editor.debug.action.conditionalBreakpoint'));
+	const field = page.locator('.ash-breakpoint-widget').getByRole('textbox');
+	await field.fill('answer > 0'); await field.press('Enter');
+	const before = await page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions());
+	const start = await glyphPoint(page, 2);
+	const end = await glyphPoint(page, 3);
+	await page.mouse.move(start.x, start.y); await page.mouse.down(); await page.mouse.move(end.x, end.y, { steps: 8 }); await page.mouse.up();
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toMatchObject([{ id: before[0].id, lineNumber: 3, condition: 'answer > 0' }]);
+	await page.mouse.click(start.x, start.y);
+	const definitions = await page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions());
+	await page.mouse.move(end.x, end.y); await page.mouse.down(); await page.mouse.move(start.x, start.y, { steps: 8 }); await page.mouse.up();
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toEqual(definitions);
+	const first = await glyphPoint(page, 1);
+	await page.mouse.move(end.x, end.y); await page.mouse.down(); await page.mouse.move(first.x, first.y, { steps: 8 }); await page.keyboard.press('Escape'); await page.mouse.up();
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toEqual(definitions);
+	await page.evaluate(() => { const editor = window.ashDebugIntegration.getControl(); editor.setPosition({ lineNumber: 3, column: 1 }); editor.focus(); void window.ashDebugIntegration.command('editor.debug.action.moveBreakpoint'); });
+	const line = page.getByPlaceholder('Enter a source line number');
+	await line.fill('0'); await line.press('Enter');
+	await expect(page.getByText('Enter a valid line number in this file.', { exact: true })).toBeVisible();
+	await line.fill('1'); await line.press('Enter');
+	await expect.poll(() => page.evaluate(id => window.ashDebugIntegration.breakpointDefinitions().find(point => point.id === id)?.lineNumber, before[0].id)).toBe(1);
+});
+
+test('tracked breakpoint positions update once across split editors and survive undo and redo', async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 1100 });
+	await page.goto('/debug.html?breakpoints');
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	const before = await page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions());
+	await page.evaluate(() => {
+		window.ashDebugIntegration.createSplitEditor();
+		window.ashDebugIntegration.getControl().executeEdits('breakpoint-test', [{ range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 }, text: 'const prepended = 1;\n' }]);
+	});
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions().map(point => ({ id: point.id, line: point.lineNumber })))).toEqual(before.map(point => ({ id: point.id, line: point.lineNumber + 1 })));
+	await page.evaluate(() => window.ashDebugIntegration.getControl().getModel()!.undo());
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions().map(point => point.lineNumber))).toEqual([2, 3]);
+	await page.evaluate(() => window.ashDebugIntegration.getControl().getModel()!.redo());
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions().map(point => point.lineNumber))).toEqual([3, 4]);
+	await expect(page.locator('#editor-copy .ash-debug-breakpoint-gutter:not(.hint)')).toHaveCount(2);
+});
+
+test('tracked inline breakpoint columns follow same-line edits and retain their condition across split editors', async ({ page }) => {
+	await page.goto('/debug.html?inline-breakpoint');
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	await page.evaluate(() => {
+		window.ashDebugIntegration.createSplitEditor();
+		window.ashDebugIntegration.getControl().executeEdits('inline-breakpoint-test', [{
+			range: { startLineNumber: 2, startColumn: 1, endLineNumber: 2, endColumn: 1 }, text: '/* */',
+		}]);
+	});
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toMatchObject([
+		{ id: 'inline', lineNumber: 2, columnNumber: 12, condition: 'answer > 0' },
+	]);
+	await page.evaluate(() => window.ashDebugIntegration.getControl().getModel()!.undo());
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toMatchObject([
+		{ id: 'inline', lineNumber: 2, columnNumber: 7, condition: 'answer > 0' },
+	]);
+	await page.evaluate(() => {
+		const editor = window.ashDebugIntegration.getControl();
+		editor.setPosition({ lineNumber: 2, column: 7 });
+		editor.focus();
+	});
+	await page.evaluate(() => window.ashDebugIntegration.command('editor.debug.action.editBreakpoint'));
+	const field = page.locator('.ash-breakpoint-widget').getByRole('textbox');
+	await expect(field).toHaveValue('answer > 0');
+	await field.fill('answer > 1');
+	await field.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions())).toMatchObject([
+		{ id: 'inline', lineNumber: 2, columnNumber: 7, condition: 'answer > 1' },
+	]);
+	expect(await page.evaluate(() => window.ashDebugIntegration.breakpointDefinitions().length)).toBe(1);
+});
+
+test('Debug Console follows a URL assembled from output chunks by keyboard and modifier click', async ({ page }) => {
+	await page.goto('/debug.html?console');
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	await page.evaluate(() => window.ashDebugIntegration.consoleLinks());
+	const link = page.getByRole('link', { name: 'https://example.test/path?q=one#two', exact: true });
+	await expect(link).toBeVisible();
+	await link.click();
+	expect(await page.evaluate(() => window.ashDebugIntegration.openedLinks())).toEqual([]);
+	await link.focus();
+	await link.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedLinks())).toEqual(['https://example.test/path?q=one#two']);
+	await link.click({ modifiers: ['ControlOrMeta'] });
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedLinks().length)).toBe(2);
+	await link.focus();
+	await link.press('Tab');
+	await expect(page.getByRole('link', { name: '/workspace/main.ts:2:1', exact: true })).toBeFocused();
+});
+
+for (const locale of ['en', 'zh-cn']) test(`Debug Console file links keep selection, accessible text and focus across themes (${locale})`, async ({ page }) => {
+	await page.goto(`/debug.html?console&locale=${locale}`);
+	await page.waitForFunction(() => !!window.ashDebugIntegration);
+	await page.evaluate(() => window.ashDebugIntegration.consoleLinks());
+	const link = page.getByRole('link', { name: '/workspace/main.ts:2:1', exact: true });
+	await expect(link).toBeVisible();
+	await expect(page.getByRole('link', { name: '/workspace/missing.ts:9', exact: true })).toHaveCount(0);
+	await expect(link).toHaveAttribute('aria-description', locale === 'en' ? 'Ctrl/Cmd+click or Enter to follow link' : '按 Ctrl/Cmd 并单击，或按 Enter 跟随链接');
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
+		await link.focus();
+		await expect(link).toBeFocused();
+		await expect(link).toHaveCSS('outline-style', 'solid');
+		await expect(link).toHaveCSS('text-decoration-line', 'underline');
+		const colors = await link.evaluate(element => {
+			const probe = document.createElement('span');
+			probe.style.color = 'var(--ash-accent-foreground)';
+			element.append(probe);
+			const expected = getComputedStyle(probe).color;
+			probe.remove();
+			return { actual: getComputedStyle(element).color, expected };
+		});
+		expect(colors.actual).toBe(colors.expected);
+	}
+	await link.press('Shift+Enter');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedSources().at(-1))).toMatchObject({ resource: 'file:///workspace/main.ts', line: 2, column: 1, target: 'sideGroup' });
+	const content = await page.evaluate(() => window.ashDebugIntegration.consoleAccessibility());
+	expect(content.view).toContain('See https://example.test/path?q=one#two.');
+	expect(content.view).toContain('/workspace/main.ts:2:1');
+	expect(content.help).toContain(locale === 'en' ? 'focus a text link' : '聚焦链接后按 Enter');
+});
+
+
+for (const locale of ['en', 'zh-cn']) test(`Debug sidebar help describes the registered panes and restores focus (${locale})`, async ({ page }) => {
+	await page.goto(`/debug.html?locale=${locale}`);
+	const heading = page.getByRole('button', { name: locale === 'en' ? 'Variables' : '变量', exact: true });
+	await heading.focus();
+	expect(await page.evaluate(() => window.ashDebugIntegration.showDebugHelp())).toBe(true);
+	const help = page.getByRole('textbox', { name: locale === 'en' ? 'Accessibility Help' : '无障碍帮助', exact: true });
+	await expect(help).toHaveValue(locale === 'en' ? /Call Stack: select a thread/ : /调用堆栈：选择线程/);
+	await help.press('Escape');
+	await expect(heading).toBeFocused();
+});
+
+test('Debug ANSI output preserves a URL across color changes and projects readable accessible/filter text', async ({ page }) => {
+	await page.goto('/debug.html?console');
+	await page.evaluate(() => window.ashDebugIntegration.consoleANSI());
+	const link = page.getByRole('link', { name: 'https://example.test/path', exact: true });
+	await expect(link).toBeVisible();
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
+		const error = page.locator('.ash-debug-ansi.bold').filter({ hasText: 'error' });
+		await expect(error).toHaveCSS('font-weight', '600');
+		const expected = await error.evaluate(element => {
+			const probe = document.createElement('span');
+			probe.style.color = 'var(--ash-terminal-ansiRed)';
+			element.append(probe);
+			const color = getComputedStyle(probe).color;
+			probe.remove();
+			return color;
+		});
+		await expect(error).toHaveCSS('color', expected);
+	}
+	await link.focus();
+	await link.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedLinks())).toEqual(['https://example.test/path']);
+	const content = await page.evaluate(() => window.ashDebugIntegration.consoleAccessibility());
+	expect(content.view).toContain('error https://example.test/path');
+	expect(content.view).not.toContain('\x1b');
+});
+
+test('Debug paused frame decoration follows selection in the real editor and disappears on continue', async ({ page }) => {
+	await page.goto('/debug.html');
+	const marker = page.locator('#editor .ash-debug-stack-frame');
+	await expect(marker).toHaveCount(1);
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
+		await expect(marker).toBeVisible();
+		await expect(marker).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	}
+	await page.evaluate(() => window.ashDebugIntegration.resume());
+	await expect(marker).toHaveCount(0);
+});
+
+test('Debug Quick Access distinguishes launch folders and switches to the longest Console prefix', async ({ page }) => {
+	await page.goto('/debug.html?launch-controls&console');
+	await page.evaluate(() => window.ashDebugIntegration.quickAccess());
+	const picker = page.getByRole('dialog');
+	const input = picker.getByRole('combobox');
+	await input.fill('debug Run');
+	const choices = picker.getByRole('option');
+	await expect(choices).toHaveCount(3);
+	await choices.filter({ hasText: 'Second' }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.launches())).toEqual(['second']);
+	await page.evaluate(() => window.ashDebugIntegration.command('workbench.action.debug.selectDebugConsole'));
+	await input.fill('debug consoles Two');
+	await expect(choices).toHaveCount(1);
+	await choices.first().click();
+	await expect(page.locator('.ash-debug-console-session')).toHaveValue('session-two');
+});
+
 async function clickDebugHeaderAction(page: Page, section: 'stack' | 'breakpoints', name: string): Promise<void> {
-	const header = page.locator(`[data-pane-view-id="ash-debug-${section}"] > .ash-pane-view-header`);
+	const header = page.locator(`[data-pane-view-id="${section === 'stack' ? 'workbench.debug.callStackView' : 'workbench.debug.breakPointsView'}"] > .ash-pane-view-header`);
 	await header.hover();
 	await header.getByRole('button', { name, exact: true }).click();
 }
 
 test('disassembly launch waits for header intent and opens through keyboard focus and pointer hover', async ({ page }) => {
 	await page.goto('/debug.html');
-	const stack = page.locator('[data-pane-view-id="ash-debug-stack"]');
+	const stack = page.locator('[data-pane-view-id="workbench.debug.callStackView"]');
 	const open = stack.locator('[data-action-id="debug.action.openDisassemblyView"] button');
 	await expect(open).toBeAttached();
 	await expect(open).toBeEnabled();
@@ -29,7 +400,7 @@ test('disassembly launch waits for header intent and opens through keyboard focu
 
 test('debug breakpoints pane follows content and fills space only when its peers are collapsed', async ({ page }, testInfo) => {
 	await page.goto('/debug.html?launch-controls');
-	const section = page.locator('[data-pane-view-id="ash-debug-breakpoints"]');
+	const section = page.locator('[data-pane-view-id="workbench.debug.breakPointsView"]');
 	const body = section.locator(':scope > .ash-pane-view-content');
 	const header = section.getByRole('button', { name: 'Breakpoints', exact: true });
 	const contentHeight = () => body.evaluate(element => Math.ceil([...element.children].reduce((height, child) => height + child.getBoundingClientRect().height, 0)));
@@ -160,6 +531,7 @@ test('debug launch dropdown uses Chinese labels and stays inside a narrow sideba
 		expect(geometry).toEqual({ fits: true, overflow: false, ellipsis: 'ellipsis' });
 		await dropdown.click();
 		await expect(page.getByPlaceholder('搜索配置', { exact: true })).toBeFocused();
+		expect(await page.getByRole('menuitemradio').evaluateAll(rows => rows.map(row => row.getBoundingClientRect().height))).toEqual([22, 22, 22]);
 		await expect(page.getByRole('menuitemradio', { name: 'All（复合配置）', exact: true })).toBeVisible();
 		await page.getByPlaceholder('搜索配置', { exact: true }).press('Escape');
 		await expect(dropdown).toBeFocused();
@@ -167,6 +539,100 @@ test('debug launch dropdown uses Chinese labels and stays inside a narrow sideba
 	await page.evaluate(() => window.ashDebugIntegration.theme('light'));
 	await dropdown.click();
 	await page.screenshot({ path: testInfo.outputPath('debug-launch-dropdown.png'), clip: { x: 0, y: 0, width: 300, height: 200 } });
+});
+
+for (const locale of ['en', 'zh-cn']) test(`debug launch title contains long configurations and preserves icon hit areas (${locale})`, async ({ page }, testInfo) => {
+	await page.goto(`/debug.html?launch-controls&long-launch-name&locale=${locale}`);
+	const title = page.locator('.ash-workbench-part-title');
+	const dropdown = title.locator('.ash-debug-configuration');
+	await expect(dropdown).toHaveText('Run configuration with a very long name');
+	for (const width of [180, 225, 280, 400]) {
+		await page.evaluate(width => window.ashDebugIntegration.resize(width), width);
+		for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+			await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
+			const geometry = await title.evaluate(element => {
+				const bounds = element.getBoundingClientRect();
+				const buttons = [...element.querySelectorAll('button')];
+				const label = element.querySelector<HTMLElement>('.ash-debug-configuration-label')!;
+				const actionSize = parseFloat(getComputedStyle(element).getPropertyValue('--ash-toolbar-actionSize'));
+				return {
+					contained: buttons.every(button => {
+						const box = button.getBoundingClientRect();
+						return box.left >= bounds.left && box.right <= bounds.right && box.top >= bounds.top && box.bottom <= bounds.bottom;
+					}),
+					iconHitAreas: buttons
+						.filter(button => !button.classList.contains('ash-debug-configuration'))
+						.every(button => button.getBoundingClientRect().width === actionSize),
+					overflow: element.scrollWidth > element.clientWidth,
+					ellipsis: getComputedStyle(label).textOverflow,
+					truncated: label.scrollWidth > label.clientWidth,
+				};
+			});
+			expect(geometry).toMatchObject({ contained: true, iconHitAreas: true, overflow: false, ellipsis: 'ellipsis' });
+			if (width === 180) expect(geometry.truncated).toBe(true);
+		}
+	}
+	await page.evaluate(() => window.ashDebugIntegration.resize(225));
+	await dropdown.focus();
+	await dropdown.press('ArrowDown');
+	await expect(page.getByRole('menuitemradio', { name: 'Run configuration with a very long name', exact: true })).toBeVisible();
+	await page.getByRole('searchbox').press('Escape');
+	await expect(dropdown).toBeFocused();
+	await title.screenshot({ path: testInfo.outputPath(`debug-launch-long-${locale}.png`) });
+});
+
+for (const locale of ['en', 'zh-cn']) test(`debug launch split action keeps its divider and compact arrow when its caption collapses (${locale})`, async ({ page }, testInfo) => {
+	await page.goto(`/debug.html?launch-controls&long-launch-name&locale=${locale}`);
+	const launcher = page.locator('.ash-debug-launch-start');
+	const dropdown = launcher.locator('.ash-debug-configuration');
+	await expect(dropdown).toHaveText('Run configuration with a very long name');
+	// The isolated host has no sidebar title label. Constrain it enough to reach
+	// the same caption-free state as the full sidebar at its minimum width.
+	await page.evaluate(() => window.ashDebugIntegration.resize(80));
+	await expect(launcher.locator('.ash-debug-configuration-label')).toHaveCSS('visibility', 'hidden');
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
+		const geometry = await launcher.evaluate(element => {
+			const start = element.querySelector<HTMLElement>(':scope > button')!;
+			const dropdown = element.querySelector<HTMLElement>('.ash-debug-configuration')!;
+			const arrow = dropdown.querySelector<SVGElement>('.ash-icon')!;
+			const label = dropdown.querySelector<HTMLElement>('.ash-debug-configuration-label')!;
+			const outer = getComputedStyle(element);
+			const startStyle = getComputedStyle(start);
+			const dropdownStyle = getComputedStyle(dropdown);
+			const arrowBox = arrow.getBoundingClientRect();
+			const dropdownBox = dropdown.getBoundingClientRect();
+			return {
+				divider: dropdownStyle.borderLeftStyle === 'solid' && dropdownStyle.borderLeftWidth === outer.borderLeftWidth && dropdownStyle.borderLeftColor === outer.borderLeftColor,
+				arrowWidth: arrowBox.width,
+				arrowContained: arrowBox.left >= dropdownBox.left && arrowBox.right <= dropdownBox.right,
+				startSize: start.getBoundingClientRect().width,
+				dropdownSize: dropdownBox.width,
+				captionWidth: label.clientWidth,
+				captionVisibility: getComputedStyle(label).visibility,
+				startColor: startStyle.color,
+				innerCorners: [startStyle.borderTopRightRadius, startStyle.borderBottomRightRadius, dropdownStyle.borderTopLeftRadius, dropdownStyle.borderBottomLeftRadius],
+			};
+		});
+		expect(geometry).toMatchObject({ divider: true, arrowWidth: 12, arrowContained: true, startSize: 22, captionVisibility: 'hidden', innerCorners: ['0px', '0px', '0px', '0px'] });
+		expect(geometry.dropdownSize).toBeGreaterThanOrEqual(22);
+		expect(geometry.startColor).toBe(theme === 'dark' || theme === 'hcDark' ? 'rgb(137, 209, 133)' : 'rgb(56, 138, 52)');
+		await launcher.screenshot({ path: testInfo.outputPath(`debug-split-${locale}-${theme}.png`) });
+	}
+	await page.evaluate(() => window.ashDebugIntegration.resize(400));
+	await expect(launcher.locator('.ash-debug-configuration-label')).toHaveCSS('visibility', 'visible');
+	await page.evaluate(() => window.ashDebugIntegration.resize(80));
+	await expect(launcher.locator('.ash-debug-configuration-label')).toHaveCSS('visibility', 'hidden');
+	await dropdown.focus();
+	await dropdown.press('Enter');
+	await expect(page.getByRole('menuitemradio', { name: 'Run configuration with a very long name', exact: true })).toHaveAttribute('aria-checked', 'true');
+	await page.getByRole('searchbox').press('Escape');
+	await expect(dropdown).toBeFocused();
+	await dropdown.press('ArrowLeft');
+	const start = launcher.locator(':scope > button').first();
+	await expect(start).toBeFocused();
+	await start.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.launches())).toEqual(['first']);
 });
 
 test('debug console coalesces an output flood and preserves keyboard evaluation and clearing', async ({ page }, testInfo) => {
@@ -388,7 +854,7 @@ test('data breakpoints query the variable container, offer supported access and 
 	await expect(row).toContainText('Data: parent (Read)');
 	await page.evaluate(() => window.ashDebugIntegration.denyDataBreakpoint());
 	await page.getByRole('button', { name: 'Break on data access for parent', exact: true }).click();
-	await expect(page.getByRole('status')).toContainText('The variable has no stable memory location.');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.notifications())).toContain('The variable has no stable memory location.');
 	await expect(page.getByRole('form', { name: 'Edit breakpoint', exact: true })).toHaveCount(0);
 });
 
@@ -474,6 +940,41 @@ test('breakpoints edit expressions by keyboard, update gutter state and support 
 	await page.getByRole('button', { name: 'Remove All Breakpoints', exact: true }).click();
 	await expect(page.locator('.ash-debug-breakpoints > li')).toHaveCount(0);
 	await expect(page.locator('.ash-debug-breakpoint-gutter')).toHaveCount(0);
+});
+
+test('inline debug toolbar keeps session selection, keyboard actions and themed layout coherent', async ({ page }) => {
+	await page.goto('/debug.html');
+	const controls = page.locator('.ash-debug-controls');
+	const toolbar = controls.getByRole('toolbar', { name: 'Debug controls', exact: true });
+	const sessions = controls.getByRole('combobox', { name: 'Active debug session', exact: true });
+	await sessions.selectOption('session-two');
+	await expect(page.locator('.ash-debug-status')).toContainText('Two: stopped');
+	await expect(sessions).toHaveValue('session-two');
+	await sessions.selectOption('session-one');
+	const resume = toolbar.getByRole('button', { name: 'Continue', exact: true });
+	await resume.focus();
+	await resume.press('ArrowRight');
+	await expect(toolbar.getByRole('button', { name: 'Step Over', exact: true })).toBeFocused();
+	await page.evaluate(() => window.ashDebugIntegration.resize(220));
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(name => window.ashDebugIntegration.theme(name), theme);
+		await expect(controls).toHaveCSS('display', 'flex');
+		await expect(controls).toHaveCSS('flex-direction', 'column');
+		await expect.poll(() => toolbar.evaluate(element => {
+			const box = element.getBoundingClientRect();
+			const container = element.parentElement!.getBoundingClientRect();
+			return box.width > 0 && box.left >= container.left && box.right <= container.right;
+		})).toBe(true);
+	}
+	await page.evaluate(() => window.ashDebugIntegration.resume());
+	await expect(toolbar.getByRole('button', { name: 'Pause', exact: true })).toBeEnabled();
+	await expect(toolbar.getByRole('button', { name: 'Step Over', exact: true })).toBeDisabled();
+	await page.evaluate(() => window.ashDebugIntegration.starting());
+	await expect(toolbar.getByRole('button', { name: 'Pause', exact: true })).toBeDisabled();
+	await expect(toolbar.getByRole('button', { name: 'Restart', exact: true })).toBeDisabled();
+	await expect(toolbar.getByRole('button', { name: 'Stop', exact: true })).toBeEnabled();
+	await page.evaluate(() => window.ashDebugIntegration.stop());
+	await expect(toolbar).toBeHidden();
 });
 
 test('unconfigured debugging shows a localized welcome and retains inspection after a session ends', async ({ page }) => {
@@ -910,4 +1411,146 @@ test('debug console editor supports multiline editing, undo, UTF-16 completion c
 	await input.press('Enter');
 	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('');
 	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height)).toBe(initial.height);
+});
+
+test('independent Debug views retain a Watch draft, restore focus commands and persist collapse', async ({ page }) => {
+	await page.goto('/debug.html?console-workspace=debug-independent-views');
+	await expect(page.locator('.ash-debug-viewlet > .ash-pane-view-container')).toHaveCount(1);
+	const watch = page.locator('[data-view-id="workbench.debug.watchExpressionsView"]');
+	await watch.getByRole('button', { name: 'Watch', exact: true }).hover();
+	await watch.getByRole('button', { name: 'Add watch expression', exact: true }).click();
+	const input = watch.getByRole('textbox', { name: 'Add watch expression', exact: true });
+	await input.fill('pending draft');
+	await page.evaluate(() => window.ashDebugIntegration.command('workbench.debug.watchExpressionsView.toggleVisibility'));
+	await expect(watch).toHaveCount(0);
+	await page.evaluate(() => window.ashDebugIntegration.command('workbench.debug.action.focusWatchView'));
+	await expect(input).toHaveValue('pending draft');
+	await expect(watch).toBeFocused();
+	await expect(watch.getByRole('button', { name: 'Watch', exact: true })).toHaveAttribute('aria-expanded', 'true');
+
+	const variables = page.getByRole('button', { name: 'Variables', exact: true });
+	await variables.focus();
+	await variables.press('ArrowLeft');
+	await page.evaluate(() => window.ashDebugIntegration.command('workbench.debug.callStackView.toggleVisibility'));
+	await page.reload();
+	await expect(page.locator('[data-view-id="workbench.debug.callStackView"]')).toHaveCount(0);
+	await expect(variables).toHaveAttribute('aria-expanded', 'false');
+	await expect(page.locator('.ash-debug-watch-value')).toHaveText('answer = 42');
+	await variables.press('ArrowRight');
+	await expect(page.getByRole('button', { name: 'parent = Object', exact: false })).toBeVisible();
+	await page.evaluate(() => window.ashDebugIntegration.command('workbench.debug.action.focusCallStackView'));
+	await expect(page.locator('[data-view-id="workbench.debug.callStackView"]')).toBeFocused();
+	await expect(page.locator('.ash-debug-frame')).toHaveCount(1);
+});
+
+test('cross-view breakpoint commands reveal hidden editors and restore keyboard access', async ({ page }) => {
+	await page.goto('/debug.html');
+	const breakpoints = page.locator('[data-view-id="workbench.debug.breakPointsView"]');
+	await page.evaluate(() => window.ashDebugIntegration.command('workbench.debug.breakPointsView.toggleVisibility'));
+	await expect(breakpoints).toHaveCount(0);
+	await page.getByRole('button', { name: 'Break on data access for parent', exact: true }).click();
+	await expect(breakpoints).toBeVisible();
+	const access = breakpoints.getByRole('combobox', { name: 'Break on access', exact: true });
+	await expect(access).toBeFocused();
+	await access.press('Escape');
+	await expect(breakpoints.getByRole('form', { name: 'Edit breakpoint', exact: true })).toHaveCount(0);
+	await page.evaluate(() => window.ashDebugIntegration.command('workbench.debug.breakPointsView.toggleVisibility'));
+	await clickDebugHeaderAction(page, 'stack', 'Add Instruction Breakpoint');
+	await expect(breakpoints.getByRole('textbox', { name: 'Instruction address', exact: true })).toBeFocused();
+	await expect(breakpoints.getByRole('textbox', { name: 'Instruction address', exact: true })).toHaveValue('0x1000');
+	await page.evaluate(() => window.ashDebugIntegration.resume());
+	await expect(breakpoints.getByRole('form', { name: 'Edit breakpoint', exact: true })).toHaveCount(0);
+});
+
+
+test('paused editor reads a Debug hover and inline values, then removes them when execution continues', async ({ page }) => {
+	await page.goto('/debug.html?editor-inspection');
+	const inline = page.locator('#editor .ash-debug-inline-value');
+	await expect(inline.first()).toContainText('answer = 42');
+	await page.evaluate(() => window.ashDebugIntegration.debugHover());
+	const hover = page.locator('.stanza-editor-hover');
+	await expect(hover).toBeVisible();
+	await expect(hover).toContainText('answer = 42');
+	await page.evaluate(() => window.ashDebugIntegration.resume());
+	await expect(hover).toBeHidden();
+	await expect(inline).toHaveCount(0);
+});
+
+
+test('Debug exception widget renders paused details and closes with Escape to the editor', async ({ page }) => {
+	await page.goto('/debug.html?exception-details');
+	const details = page.getByRole('region', { name: 'Debug exception details' });
+	await expect(details).toBeVisible();
+	await expect(details).toContainText('TypeError');
+	await expect(details).toContainText('at main');
+	await details.getByRole('button', { name: 'Close exception details' }).focus();
+	await page.keyboard.press('Escape');
+	await expect(details).toBeHidden();
+	expect(await page.locator('#editor').evaluate(element => element.contains(document.activeElement))).toBe(true);
+	await page.reload();
+	await expect(details).toBeVisible();
+	await page.evaluate(() => window.ashDebugIntegration.resume());
+	await expect(details).toBeHidden();
+});
+
+test('Debug loaded source picker opens source-reference scripts through the existing source owner', async ({ page }) => {
+	await page.goto('/debug.html?loaded-sources');
+	await page.evaluate(() => { void window.ashDebugIntegration.command('workbench.action.debug.showLoadedScripts'); });
+	await page.getByRole('option').filter({ hasText: 'generated.ts' }).click();
+	await expect.poll(() => page.evaluate(() => (window.ashDebugIntegration.openedSources().at(-1) as { resource?: string; } | undefined)?.resource)).toContain('ref=25');
+});
+
+
+test('Debug visualization command selects an inspected variable and opens a read-only tree snapshot', async ({ page }) => {
+	await page.goto('/debug.html');
+	await page.evaluate(() => { void window.ashDebugIntegration.command('workbench.action.debug.visualizeVariable'); });
+	await page.getByRole('option').filter({ hasText: 'parent' }).click();
+	await page.getByRole('option').filter({ hasText: 'Variable tree' }).click();
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedSources().at(-1))).toMatchObject({ readOnly: true, initialText: expect.stringContaining('child') });
+	const chat = await page.evaluate(() => window.ashDebugIntegration.chatContext());
+	expect(chat?.content).toContain('parent = Object');
+});
+
+test('Debug status color follows session lifetime with themed and high-contrast colors', async ({ page }) => {
+	await page.goto('/debug.html?status-color');
+	const status = page.locator('#debug-statusbar > [data-part="statusbar"]');
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
+		const colors = await status.evaluate(element => {
+			const probe = document.createElement('span');
+			probe.style.backgroundColor = 'var(--ash-statusBar-debuggingBackground)';
+			element.append(probe);
+			const result = { actual: getComputedStyle(element).backgroundColor, expected: getComputedStyle(probe).backgroundColor };
+			probe.remove();
+			return result;
+		});
+		expect(colors.actual).toBe(colors.expected);
+	}
+	await page.evaluate(() => window.ashDebugIntegration.endSessions());
+	await expect(status).not.toHaveAttribute('style', /debuggingBackground/);
+});
+
+test('Loaded Scripts view filters and opens an adapter script by keyboard', async ({ page }) => {
+	await page.goto('/debug.html?loaded-sources');
+	await page.evaluate(() => window.ashDebugIntegration.loadedSourcesView());
+	const pane = page.locator('[data-pane-view-id="workbench.debug.loadedScriptsView"]');
+	await pane.getByRole('textbox', { name: 'Filter loaded sources' }).fill('generated');
+	const source = pane.getByRole('button', { name: /generated.ts/ });
+	await source.focus();
+	await source.press('Enter');
+	await expect.poll(() => page.evaluate(() => (window.ashDebugIntegration.openedSources().at(-1) as { resource?: string; } | undefined)?.resource)).toContain('ref=25');
+});
+
+
+test('Debug exception accessibility help is localized and restores widget focus', async ({ page }) => {
+	await page.goto('/debug.html?exception-details&locale=zh-cn');
+	const close = page.getByRole('button', { name: '关闭异常详情', exact: true });
+	await close.focus();
+	expect(await page.evaluate(() => window.ashDebugIntegration.showDebugHelp())).toBe(true);
+	const help = page.getByRole('textbox', { name: '无障碍帮助', exact: true });
+	await expect(help).toHaveValue(/调试异常详情/);
+	await help.press('Escape');
+	await expect(close).toBeFocused();
+	await close.press('Escape');
+	await expect(page.getByRole('region', { name: '调试异常详情' })).toBeHidden();
 });

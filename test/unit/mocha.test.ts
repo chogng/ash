@@ -1,16 +1,42 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
-import { join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { readFile } from 'node:fs/promises';
 import { after, test } from 'node:test';
+import ts from 'typescript';
 
 const desktopDirectory = resolve(import.meta.dirname, '../..');
-// Runner fixtures belong to this self-test, outside the shared compiler cleanup.
+// Keep synthetic fixtures independent of compiler output size and cleanup.
 const outputDirectory = mkdtempSync(join(desktopDirectory, '.build/desktop/runner-fixtures-'));
-cpSync(resolve(desktopDirectory, '.build/desktop/test'), outputDirectory, { recursive: true });
+const compiledDirectory = resolve(desktopDirectory, '.build/desktop/test');
+const copiedModules = new Set<string>();
+// The real theme preload still needs its emitted module closure in each snapshot.
+for (const module of [
+	'src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js',
+	'src/ash/platform/extensions/common/extensionApi.js',
+	'src/ash/base/common/buffer.js',
+	'src/ash/workbench/services/extensions/browser/extensionColorThemeService.js',
+]) copyBootstrapModule(resolve(compiledDirectory, module));
+
+function copyBootstrapModule(source: string): void {
+	if (copiedModules.has(source)) return;
+	copiedModules.add(source);
+	const target = resolve(outputDirectory, relative(compiledDirectory, source));
+	mkdirSync(dirname(target), { recursive: true });
+	copyFileSync(source, target);
+	const module = ts.createSourceFile(source, readFileSync(source, 'utf8'), ts.ScriptTarget.Latest, false, ts.ScriptKind.JS);
+	for (const statement of module.statements) {
+		if (!ts.isImportDeclaration(statement) && !ts.isExportDeclaration(statement)) continue;
+		const specifier = statement.moduleSpecifier;
+		if (specifier && ts.isStringLiteral(specifier) && specifier.text.startsWith('.')) {
+			copyBootstrapModule(resolve(dirname(source), specifier.text));
+		}
+	}
+}
+
 const runnerEnvironment = { ...process.env, ASH_UNIT_TEST_OUTPUT_DIRECTORY: outputDirectory };
 const parent = join(outputDirectory, 'test/unit');
 mkdirSync(parent, { recursive: true });

@@ -165,7 +165,14 @@ def run(command: list[str], root: Path, **kwargs) -> subprocess.CompletedProcess
 def run_test(
     command: list[str], root: Path, environment: dict[str, str] | None = None
 ) -> int:
-    result = run(command, root, env=environment, stdout=subprocess.PIPE, text=True)
+    result = run(
+        command,
+        root,
+        env=environment,
+        stdout=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+    )
     print(result.stdout, end="", flush=True)
     if result.returncode:
         return result.returncode

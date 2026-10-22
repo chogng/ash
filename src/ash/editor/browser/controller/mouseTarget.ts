@@ -145,7 +145,20 @@ export class MouseTargetFactory {
 		}
 		const layout = this.context.configuration.options.get(EditorOption.layoutInfo);
 		if (relativePos.x < layout.contentLeft) {
-			return MouseTarget.createMargin(MouseTargetType.GUTTER_LINE_DECORATIONS, target, mouseColumn, position, Range.fromPositions(position), this.marginData(relativePos));
+			// Empty margin cells have no decoration DOM. Resolve them from the same
+			// layout and semantic lanes used to paint glyphs, including point queries.
+			let type = MouseTargetType.GUTTER_LINE_DECORATIONS;
+			let lane: GlyphMarginLane | undefined;
+			if (relativePos.x >= layout.glyphMarginLeft && relativePos.x < layout.glyphMarginLeft + layout.glyphMarginWidth) {
+				type = MouseTargetType.GUTTER_GLYPH_MARGIN;
+				const modelPosition = this.context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(position);
+				const lanes = this.context.viewModel.glyphLanes.getLanesAtLine(modelPosition.lineNumber);
+				const laneIndex = Math.floor((relativePos.x - layout.glyphMarginLeft) / this.context.configuration.options.get(EditorOption.lineHeight));
+				lane = lanes[laneIndex];
+			} else if (relativePos.x >= layout.lineNumbersLeft && relativePos.x < layout.lineNumbersLeft + layout.lineNumbersWidth) {
+				type = MouseTargetType.GUTTER_LINE_NUMBERS;
+			}
+			return MouseTarget.createMargin(type, target, mouseColumn, position, Range.fromPositions(position), this.marginData(relativePos, lane));
 		}
 		const injectedText = this.context.viewModel.getInjectedTextAt(position);
 		const lineWidth = this.viewHelper.getLineWidth(position.lineNumber);

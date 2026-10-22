@@ -1164,14 +1164,14 @@ use crate::protocol::git::GitBranchListResult;
 use crate::protocol::git::GitBranchSwitchParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCatalogResult;
-#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeFileComparisonDto;
-#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeFileParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeFileResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeStatusDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitChangesSummaryResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCheckIgnoreCancelParams;
 #[cfg(any(test, feature = "export"))]
@@ -1338,6 +1338,10 @@ use crate::protocol::git::GitStatusResult;
 use crate::protocol::git::GitSubmoduleStateDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitTextDiffDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitTextDiffParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitTextDiffProjectionDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitTextDiffResult;
 #[cfg(any(test, feature = "export"))]
@@ -1845,6 +1849,8 @@ use crate::protocol::language::LanguageLocationsParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageLocationsResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::language::LanguageOnTypeFormattingParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageOperationParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageParameterInformationDto;
@@ -1880,7 +1886,13 @@ use crate::protocol::language::LanguageSemanticTokensParams;
 use crate::protocol::language::LanguageSemanticTokensResult;
 use crate::protocol::language::LanguageServerCapabilitiesNotification;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::language::LanguageServerControlActionDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::language::LanguageServerControlParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageServerDescriptorDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::language::LanguageServerFeatureDto;
 use crate::protocol::language::LanguageServerMessageNotification;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageServerMessageSeverityDto;
@@ -2033,6 +2045,10 @@ use crate::protocol::projects::ProjectLifecycleParams;
 use crate::protocol::projects::ProjectListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::projects::ProjectMaterialDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::projects::ProjectMaterialKindDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectMutationResult;
 #[cfg(any(test, feature = "export"))]
@@ -2369,6 +2385,8 @@ use crate::protocol::terminal::TerminalOutputChunk;
 use crate::protocol::terminal::TerminalProcessInfo;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalProcessInfoParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalProcessLaunch;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalProcessReady;
 #[cfg(any(test, feature = "export"))]
@@ -3138,6 +3156,8 @@ pub enum SerializationScopeDefinition {
     GlobalExclusive,
     GlobalSharedRead,
     RepositoryExclusive,
+    RepositorySharedRead,
+    RepositoryChangeFile,
     HostedAccountExclusive,
     HostedAccountSharedRead,
     HostedRepositoryExclusive,
@@ -3239,7 +3259,24 @@ impl ClientMethodDefinition {
                     }
                 })
             }
-            SerializationScopeDefinition::RepositoryExclusive => {
+            SerializationScopeDefinition::RepositoryChangeFile => {
+                let params: GitChangeFileParams = serde_json::from_value(params.clone())
+                    .map_err(|_| SerializationScopeResolutionError)?;
+                if params.repository_id.as_ref().is_some_and(String::is_empty) {
+                    return Err(SerializationScopeResolutionError);
+                }
+                Some(ClientRequestSerializationScope::Repository {
+                    repository_id: params.repository_id,
+                    // Staged reads retain ordering against earlier publication and later reads.
+                    // Unstaged rename/copy dependencies are additionally guarded by the owner.
+                    access: match params.comparison {
+                        GitChangeFileComparisonDto::Staged => SerializationAccess::Exclusive,
+                        GitChangeFileComparisonDto::Unstaged => SerializationAccess::SharedRead,
+                    },
+                })
+            }
+            SerializationScopeDefinition::RepositoryExclusive
+            | SerializationScopeDefinition::RepositorySharedRead => {
                 let params = params
                     .as_object()
                     .ok_or(SerializationScopeResolutionError)?;
@@ -3250,7 +3287,13 @@ impl ClientMethodDefinition {
                 };
                 Some(ClientRequestSerializationScope::Repository {
                     repository_id,
-                    access: SerializationAccess::Exclusive,
+                    access: if self.serialization
+                        == SerializationScopeDefinition::RepositoryExclusive
+                    {
+                        SerializationAccess::Exclusive
+                    } else {
+                        SerializationAccess::SharedRead
+                    },
                 })
             }
 
@@ -4898,6 +4941,11 @@ client_methods! {
         response: LanguageServersResult,
         serialization: None,
     },
+    LanguageServerControl => "language/serverControl" {
+        params: LanguageServerControlParams,
+        response: (),
+        serialization: None,
+    },
     LanguageSynchronize => "language/synchronize" {
         params: LanguageSynchronizeParams,
         response: (),
@@ -5004,6 +5052,12 @@ client_methods! {
     },
     LanguageRangeFormatting => "language/formatRange" {
         params: LanguageOperationParams<LanguageRangeFormattingParams>,
+        response: LanguageFormattingResult,
+        serialization: None,
+        cancellation: "operationId",
+    },
+    LanguageOnTypeFormatting => "language/formatOnType" {
+        params: LanguageOperationParams<LanguageOnTypeFormattingParams>,
         response: LanguageFormattingResult,
         serialization: None,
         cancellation: "operationId",
@@ -5264,8 +5318,13 @@ client_methods! {
         response: GitCheckIgnoreCancelResult,
         serialization: None,
     },
-    GitTextDiff => "git/textDiff" {
+    GitChangesSummary => "git/changesSummary" {
         params: GitRepositoryParams,
+        response: GitChangesSummaryResult,
+        serialization: RepositorySharedRead,
+    },
+    GitTextDiff => "git/textDiff" {
+        params: GitTextDiffParams,
         response: GitTextDiffResult,
         serialization: RepositoryExclusive,
     },
@@ -5317,7 +5376,7 @@ client_methods! {
     GitChangeFile => "git/changeFile" {
         params: GitChangeFileParams,
         response: GitChangeFileResult,
-        serialization: RepositoryExclusive,
+        serialization: RepositoryChangeFile,
     },
     GitConflictFile => "git/conflictFile" {
         params: GitConflictFileParams,
@@ -7189,6 +7248,8 @@ typescript_bindings! {
     AutomationStopParams,
     PathUri,
     ProjectRootDto,
+    ProjectMaterialDto,
+    ProjectMaterialKindDto,
     ProjectDto,
     ProjectSummaryDto,
     ProjectListParams,
@@ -7321,10 +7382,13 @@ typescript_bindings! {
     LanguageServersParams,
     LanguageServersResult,
     LanguageServerDescriptorDto,
+    LanguageServerControlParams,
+    LanguageServerControlActionDto,
     LanguageSynchronizeParams,
     LanguageCloseParams,
     LanguageSaveParams,
     LanguageServerCapabilitiesNotification,
+    LanguageServerFeatureDto,
     LanguageOperationParams<()>,
     LanguageCancelParams,
     LanguageCancelStatusDto,
@@ -7349,6 +7413,7 @@ typescript_bindings! {
     LanguageFormattingOptionsDto,
     LanguageDocumentFormattingParams,
     LanguageRangeFormattingParams,
+    LanguageOnTypeFormattingParams,
     LanguageFormattingResult,
     LanguageSignatureHelpTriggerKindDto,
     LanguageSignatureHelpParams,
@@ -7541,8 +7606,11 @@ typescript_bindings! {
     GitCompleteConflictParams,
     GitBranchSwitchParams,
     GitTextDiffDto,
+    GitTextDiffParams,
+    GitTextDiffProjectionDto,
     GitDiffStatisticsDto,
     GitTextDiffResult,
+    GitChangesSummaryResult,
     GitAIEditorEvidenceDto,
     GitAIContributionParams,
     GitAIContributionResult,
@@ -7627,6 +7695,7 @@ typescript_bindings! {
     TerminalWriteParams,
     TerminalWriteBinaryParams,
     TerminalProcessReady,
+    TerminalProcessLaunch,
     TerminalProcessInfo,
     TerminalProcessInfoParams,
     TerminalSignal,

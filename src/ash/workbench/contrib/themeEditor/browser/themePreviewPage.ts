@@ -15,16 +15,18 @@ import { ICodeEditorService } from '../../../../editor/browser/services/codeEdit
 import { startWorkbench } from '../../../browser/workbench.js';
 import { BrowserTitleService, createBrowserTitlebarPart } from '../../../browser/parts/titlebar/titlebarPart.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { createDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import { IWorkbenchThemeService } from '../../../services/themes/common/workbenchThemeService.js';
 import { InMemoryWorkingCopyBackupService } from '../../../services/workingCopy/common/workingCopyBackupService.js';
 import { BrowserURLService } from '../../../services/url/browser/urlService.js';
-import { ITerminalService, ITerminalGroupService } from '../../terminal/browser/terminal.js';
+import { ITerminalService, ITerminalGroupService, type ITerminalInstance } from '../../terminal/browser/terminal.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createThemePreviewHost, connectThemePreview } from './themePreviewHost.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 
 const host = await createThemePreviewHost();
 const { resources, root, workspaceFiles, workspaceRoot, samples, storage, api, clipboard, serviceCollection } = host;
+const diffPreview = new URLSearchParams(location.search).get('sample') === 'diff';
 // Code preview owns no conversations or media. Shared Chat contributions can
 // observe that empty scope without borrowing the enclosing product's history.
 const chatUnavailable = () => new Error(localize('themeEditor.previewChatUnavailable', 'Chat is unavailable in this preview.'));
@@ -44,7 +46,7 @@ const workbench = resources.add(await startWorkbench({
 	extensionHost: api.extensionHost,
 	workspace: { id: 'theme-preview', folders: [{ id: 'theme-preview', name: 'theme-preview', uri: workspaceRoot, index: 0 }] },
 	workspaceFileSystemProvider: workspaceFiles,
-	defaultLayout: { parts: { sidebar: true, panel: false, auxiliarybar: false, agentSidebar: false } },
+	defaultLayout: { parts: { sidebar: !diffPreview, panel: false, auxiliarybar: false, agentSidebar: false } },
 	// Keep the production Parts and editor/terminal behavior without starting
 	// backend observers, history, account, update or extension contributions.
 	contributionIds: [
@@ -85,8 +87,51 @@ const workbench = resources.add(await startWorkbench({
 }));
 await workbench.whenRestored;
 const editorService = services.get(IEditorService);
-for (const sample of [...samples].reverse()) {
-	await editorService.openEditor({ resource: URI.joinPath(workspaceRoot, sample.name) }, { pinned: true, preserveFocus: true });
+if (diffPreview) {
+	// Use the production comparison over memory files so every diff token is
+	// rendered by its real owner, including line and word-level decorations.
+	const original = URI.joinPath(workspaceRoot, 'palette.before.ts');
+	const modified = URI.joinPath(workspaceRoot, 'palette.after.ts');
+	const before = `export const palette = {
+  name: "Ocean",
+  accent: "#0078d4",
+  opacity: 0.85,
+};
+
+export function formatColor(value: string): string {
+  return value.toUpperCase();
+}
+
+export function legacyColor(): string {
+  return "gray";
+}
+
+export const spacing = [4, 8, 12, 16];
+`;
+	const after = `export const palette = {
+  name: "Forest",
+  accent: "#107c10",
+  opacity: 0.95,
+};
+
+export function formatColor(value: string): string {
+  return value.toLowerCase();
+}
+
+export const spacing = [4, 8, 12, 16];
+
+export function withOpacity(color: string): string {
+  return color + "cc";
+}
+`;
+	for (const [resource, text] of [[original, before], [modified, after]] as const) {
+		await workspaceFiles.writeFile(resource, new TextEncoder().encode(text), { create: true, overwrite: false });
+	}
+	await editorService.openEditor(createDiffEditorInput({ resource: original }, { resource: modified }, localize('themeEditor.diffSample', 'Color changes')), { pinned: true, preserveFocus: true });
+} else {
+	for (const sample of [...samples].reverse()) {
+		await editorService.openEditor({ resource: URI.joinPath(workspaceRoot, sample.name) }, { pinned: true, preserveFocus: true });
+	}
 }
 
 // The real Terminal UI consumes a renderer-owned process. Its input can only
@@ -120,21 +165,23 @@ class PreviewTerminalProcess extends Disposable implements ITerminalChildProcess
 	}
 	shutdown(): void { this.dispose(); }
 }
-const terminal = await services.get(ITerminalService).createTerminal({
+const terminal = diffPreview ? undefined : await services.get(ITerminalService).createTerminal({
 	dimensions: { cols: 90, rows: 8 },
 	config: { name: localize('themeEditor.previewOnly', 'Preview only'), customPtyImplementation: id => new PreviewTerminalProcess(id) },
 });
-services.get(ITerminalGroupService).createGroup(terminal);
-await services.get(ITerminalGroupService).showPanel(false);
+if (terminal) {
+	services.get(ITerminalGroupService).createGroup(terminal);
+	await services.get(ITerminalGroupService).showPanel(false);
+}
 
-let terminalScreen: typeof terminal.xterm;
+let terminalScreen: ITerminalInstance['xterm'];
 const publishContent = connectThemePreview(resources, services.get(IWorkbenchThemeService), services.get(IConfigurationService), () => {
 	const editors = services.get(ICodeEditorService).listCodeEditors();
 	const buffer = terminalScreen?.raw.buffer.active;
 	const output = buffer ? Array.from({ length: buffer.length }, (_, index) => buffer.getLine(index)?.translateToString(true) ?? '').join('\n') : '';
 	return editors.map(editor => `${editor.getModel()?.uri.path ?? ''}\n${editor.getModel()?.getValue() ?? ''}`).join('\n') + '\n' + output;
 });
-void terminal.xtermReadyPromise.then(xterm => {
+void terminal?.xtermReadyPromise.then(xterm => {
 	if (xterm && !resources.isDisposed) {
 		terminalScreen = xterm;
 		const listener = xterm.raw.onWriteParsed(publishContent);

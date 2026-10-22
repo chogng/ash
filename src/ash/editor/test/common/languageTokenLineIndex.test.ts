@@ -3,13 +3,47 @@ import { test } from "mocha";
 import { SYNTAX_TOKEN_LANE, type SyntaxResult } from '../../common/languages.js';
 import { testTokens } from './testSyntaxProvider.js';
 import { LanguageResultAcceptance, LanguageResultStoreChangeReason } from '../../common/model/languageResultStore.js';
-import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
+import { LanguageTokenLineIndex, StyledTokenSource } from "../../common/tokens/languageTokenLineIndex.js";
+import { Emitter } from '../../../base/common/event.js';
 import { syntaxWireCodec, attachLanguageTokenResultDelta } from '../../common/services/semanticTokensDto.js';
-import { createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, type LanguageToken } from '../../common/tokens/languageTokens.js';
+import { createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, type LanguageToken, type SemanticTokenModelSource } from '../../common/tokens/languageTokens.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { type WorkerTextModelResult } from '../../common/services/textModelSync/textModelSync.protocol.js';
+
+for (const kind of ['syntax', 'semantic'] as const) {
+	test(`Styled ${kind} tokens follow edits and undo before the next provider notification`, () => {
+		using model = new TextModel('0123456789');
+		using changed = new Emitter<void>();
+		let tokenType = 'number';
+		const source: SemanticTokenModelSource = {
+			textModel: model,
+			onDidChange: changed.event,
+			get lines() { return [{ lineIndex: 0, tokens: this.getLineTokens(0) }]; },
+			getLineTokens: lineIndex => [token(lineIndex, 0, model.getLineLength(lineIndex + 1), tokenType)],
+		};
+		using styled = new StyledTokenSource(source, kind);
+		const original = styled.getLineTokens(0);
+		assert.equal(original[0]!.endColumn, 10);
+		assert.equal(styled.getLineTokens(0), original);
+
+		// A backend may retain its captures until an asynchronous parse completes,
+		// while its read API already bounds those captures to the current text.
+		model.applyOperations([{ range: new Range(1, 3, 1, 9), text: '!' }]);
+		const shortened = styled.getLineTokens(0);
+		assert.equal(shortened[0]!.endColumn, 5);
+		assert.equal(styled.lines[0]!.tokens, shortened);
+		assert.equal(original[0]!.endColumn, 10);
+
+		model.undo();
+		assert.equal(styled.getLineTokens(0)[0]!.endColumn, 10);
+		const beforeProviderChange = styled.getLineTokens(0);
+		tokenType = 'string';
+		changed.fire();
+		assert.notDeepEqual(styled.getLineTokens(0), beforeProviderChange);
+	});
+}
 
 for (const retainedAtStart of [true, false]) {
 	test(`Token line index rebuilds surrounding lines with the retained line at the ${retainedAtStart ? 'start' : 'end'}`, () => {

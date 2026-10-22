@@ -1,3 +1,4 @@
+import { Event } from '../../../../../base/common/event.js';
 import assert from 'node:assert/strict';
 import { crc32 } from 'node:zlib';
 import { suite, test } from 'mocha';
@@ -13,7 +14,7 @@ import { IAgentSessionService } from '../../../../../platform/agentHost/common/a
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { ILoggerService, NullLoggerService, type ILogFile, type ILogFileReadResult, type ILogFileService } from '../../../../../platform/log/common/log.js';
-import { INotificationService, type NotificationMessage } from '../../../../../platform/notification/common/notification.js';
+import { INotificationService, NotificationsFilter, type NotificationMessage } from '../../../../../platform/notification/common/notification.js';
 import { IProgressService } from '../../../../../platform/progress/common/progress.js';
 import { IChatSessionNavigationService, type IChatSessionConnection } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -104,6 +105,7 @@ class ExportFixture extends Disposable {
 			}
 		};
 		this.services.registerInstance(INotificationService, {
+			onDidChangeFilter: Event.None, setFilter: () => { throw new Error('Unexpected filter change'); }, getFilter: () => NotificationsFilter.OFF, getFilters: () => [], removeFilter: () => { }, status: () => ({ close() { } }),
 			notify: () => { throw new Error('Unexpected notification'); },
 			info: message => recordNotification('info', message),
 			warn: message => recordNotification('warning', message),

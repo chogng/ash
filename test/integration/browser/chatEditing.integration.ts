@@ -38,7 +38,7 @@ import { CodeEditorService } from '../../../src/ash/workbench/services/editor/br
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { AccessibleViewService } from '../../../src/ash/workbench/contrib/accessibility/browser/accessibleView.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 import { ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
@@ -103,7 +103,7 @@ services.registerInstance(ILogService, { trace() { }, debug() { }, info() { }, w
 const lifecycle = resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: window, onError: (error: unknown) => console.error(error) }));
 services.registerInstance(ILifecycleService, lifecycle);
 services.registerInstance(IAccessibilitySignalService, { playSignal: async () => { }, playSignalLoop: () => Disposable.None });
-const notifications = resources.add(new NotificationService());
+const notifications = resources.add(new TestNotificationService());
 services.registerInstance(INotificationService, notifications);
 resources.add(notifications.model.onDidAdd(item => { document.querySelector('#error')!.textContent = item.message; }));
 services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);

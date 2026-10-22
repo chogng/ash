@@ -72,6 +72,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "arrow-swap",
+      "file": "arrow-swap.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "arrow-up",
       "file": "arrow-up.svg",
       "rendering": "symbolic"
@@ -89,11 +94,16 @@
     {
       "id": "bell-dot",
       "file": "bell-dot.svg",
-      "rendering": "multicolor"
+      "rendering": "symbolic"
     },
     {
       "id": "bell-slash",
       "file": "bell-slash.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "bell-slash-dot",
+      "file": "bell-slash-dot.svg",
       "rendering": "symbolic"
     },
     {
@@ -129,6 +139,11 @@
     {
       "id": "browser-web",
       "file": "browser-web.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "bug",
+      "file": "bug.svg",
       "rendering": "symbolic"
     },
     {
@@ -374,6 +389,16 @@
     {
       "id": "debug-alt",
       "file": "debug-alt.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "debug-pause",
+      "file": "debug-pause.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "debug-start",
+      "file": "debug-start.svg",
       "rendering": "symbolic"
     },
     {
@@ -997,6 +1022,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "play",
+      "file": "play.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "plug",
+      "file": "plug.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "preview",
       "file": "preview.svg",
       "rendering": "symbolic"
@@ -1172,11 +1207,6 @@
       "rendering": "symbolic"
     },
     {
-      "id": "start",
-      "file": "start.svg",
-      "rendering": "symbolic"
-    },
-    {
       "id": "stop-circle",
       "file": "stop-circle.svg",
       "rendering": "symbolic"
@@ -1199,6 +1229,16 @@
     {
       "id": "symbol-color-filled",
       "file": "symbol-color-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "symbol-method",
+      "file": "symbol-method.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "symbol-property",
+      "file": "symbol-property.svg",
       "rendering": "symbolic"
     },
     {

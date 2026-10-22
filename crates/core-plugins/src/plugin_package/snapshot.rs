@@ -154,7 +154,12 @@ fn copy_file(source: &Path, target: &Path, inspected: &FileInformation) -> Resul
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
+        use std::os::unix::fs::PermissionsExt;
+
+        // Match archive extraction: retain executability from the opened file, but
+        // never import setuid/setgid, shared access or the source's write permissions.
+        let executable = opened.permissions().mode() & 0o111 != 0;
+        options.mode(if executable { 0o700 } else { 0o600 });
     }
     let mut output = options.open(target).map_err(snapshot_io)?;
     std::io::copy(&mut input, &mut output).map_err(snapshot_io)?;

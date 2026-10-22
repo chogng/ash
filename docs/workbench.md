@@ -1,6 +1,6 @@
 # Workbench 装配与文档贡献
 
-> 本文描述当前实现。未来 Work / Code 设计见 [目标设计](design/work-code-workbench.md)，公开产品线见 [产品线说明](product-lines.md)。
+> 本文描述当前实现。Agent Window 的文档工作区与 Code IDE 边界见 [目标设计](design/work-code-workbench.md)，公开产品线见 [产品线说明](product-lines.md)。
 
 Ash Desktop 当前只有 Code 工作台。Academic 是可在同一窗口打开的论文文档类型；用户不需要切换工作台或重载窗口。代码、差异、论文、Tasks、Testing、Debug、Chat 和 Agents 窗口使用同一安装包与后端。
 

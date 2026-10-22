@@ -16,6 +16,15 @@
 .ash-notifications-center[hidden] {
 	display: none;
 }
+.ash-notifications-center[data-position="bottom-left"] {
+	inset-inline-start: 12px;
+	inset-inline-end: auto;
+}
+.ash-notifications-center[data-position="top-right"] {
+	inset-block-start: var(--ash-notifications-top);
+	inset-block-end: auto;
+	max-height: min(70vh, calc(100% - var(--ash-notifications-top) - 8px));
+}
 .ash-notifications-center-header {
 	display: flex;
 	align-items: center;

@@ -26,7 +26,7 @@ fn main() {
             continue;
         };
         let result = if message.contains("\"method\":\"initialize\"") {
-            r#"{"capabilities":{"positionEncoding":"utf-16","textDocumentSync":{"openClose":true,"change":1},"hoverProvider":true,"completionProvider":{"triggerCharacters":["."]},"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"signatureHelpProvider":{"triggerCharacters":["(",","],"retriggerCharacters":[","]},"inlayHintProvider":true,"linkedEditingRangeProvider":true}}"#
+            r#"{"capabilities":{"positionEncoding":"utf-16","textDocumentSync":{"openClose":true,"change":1},"hoverProvider":true,"completionProvider":{"triggerCharacters":["."]},"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"documentOnTypeFormattingProvider":{"firstTriggerCharacter":";","moreTriggerCharacter":["\n"]},"signatureHelpProvider":{"triggerCharacters":["(",","],"retriggerCharacters":[","]},"inlayHintProvider":true,"linkedEditingRangeProvider":true}}"#
         } else if message.contains("\"method\":\"textDocument/completion\"") {
             r#"{"isIncomplete":false,"items":[{"label":"len","kind":2,"detail":"LSP fixture method","documentation":"Returns the string length","insertText":"len()","insertTextFormat":1}]}"#
         } else if message.contains("\"method\":\"textDocument/hover\"") {
@@ -35,6 +35,8 @@ fn main() {
             r#"[{"range":{"start":{"line":1,"character":0},"end":{"line":1,"character":4}},"newText":"  "}]"#
         } else if message.contains("\"method\":\"textDocument/rangeFormatting\"") {
             r#"[{"range":{"start":{"line":1,"character":0},"end":{"line":1,"character":4}},"newText":"\t"}]"#
+        } else if message.contains("\"method\":\"textDocument/onTypeFormatting\"") {
+            r#"[{"range":{"start":{"line":1,"character":0},"end":{"line":1,"character":4}},"newText":"  "}]"#
         } else if message.contains("\"method\":\"textDocument/signatureHelp\"") {
             r#"{"signatures":[{"label":"String::from(value: &str)","documentation":"Creates a string","parameters":[{"label":"value: &str","documentation":"Source text"}],"activeParameter":0}],"activeSignature":0,"activeParameter":0}"#
         } else if message.contains("\"method\":\"textDocument/inlayHint\"") {

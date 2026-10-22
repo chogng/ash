@@ -37,6 +37,7 @@ import { KeybindingTestServices } from '../../../../services/keybinding/test/bro
 import { createTestLocaleService } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import '../../../chat/common/languageModelsConfiguration.js';
 import '../../../terminal/common/terminalConfiguration.js';
+import '../../../debug/browser/debug.contribution.js';
 import '../../../chat/browser/chat.shared.contribution.js';
 import { ILanguageModelsService } from '../../../../contrib/chat/common/languageModels.js';
 import type { SettingsSectionReference } from '../../browser/settingsTreeModels.js';
@@ -47,7 +48,7 @@ import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/r
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { SpeechService } from '../../../speech/browser/speechService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -944,6 +945,20 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	assert.equal(search.value, 'font @stable');
 });
 
+test('Workspace permission banner registration participates in the complete Settings layout', () => {
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({
+		key: 'security.workspace.trust.banner',
+		defaultValue: 'untilDismissed',
+		parse: value => String(value),
+		setting: { valueType: 'select', title: 'Workspace permissions banner', description: 'Controls the workspace permissions banner.', options: [{ value: 'untilDismissed', label: 'Until dismissed' }] },
+	});
+	const defaults = new DefaultSettings(registry);
+	const setting = defaults.get('security.workspace.trust.banner');
+	assert.equal(setting.valueType, 'select');
+	assert.equal(findSettingCategory(createSettingsLayout(defaults.all), setting.id), 'layout');
+});
+
 test('Activity Bar badges expose a translated profile setting with strict boolean validation', () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
@@ -961,6 +976,28 @@ test('Activity Bar badges expose a translated profile setting with strict boolea
 		assert.equal(definition.parse(false), false);
 		assert.equal(definition.serialize(false), false);
 		assert.throws(() => definition.parse('false'), /活动栏徽章必须为 true 或 false/);
+	} finally {
+		resetNlsResolver();
+	}
+});
+
+test('view header action visibility exposes a window setting with translated metadata', () => {
+	const key = 'workbench.view.alwaysShowHeaderActions';
+	const definition = configurationRegistry.getConfiguration(key)!;
+	assert.equal(definition.defaultValue, false);
+	assert.equal(definition.scope, ConfigurationScope.WINDOW);
+	assert.equal(definition.parse(true), true);
+	assert.equal(definition.serialize(false), false);
+	assert.throws(() => definition.parse('true'), /true or false/);
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	try {
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		const setting = new DefaultSettings().get(key);
+		assert.equal(setting.valueType, 'boolean');
+		assert.equal(setting.title, '视图：始终显示标题操作');
+		assert.match(setting.description, /视图展开时始终显示标题操作/);
+		assert.equal(findSettingCategory(createSettingsLayout(new DefaultSettings().all), key), 'layout');
+		assert.throws(() => definition.parse('false'), /视图标题操作可见性必须为 true 或 false/);
 	} finally {
 		resetNlsResolver();
 	}
@@ -1103,6 +1140,7 @@ test('settingsLayout is the single projection from registered settings to catego
 		'screenshot',
 		'appearance',
 		'layout',
+		'debugging',
 		'settings-editor',
 		'startup',
 		'browser',
@@ -1484,7 +1522,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	services.registerInstance(ILocalTranscriptionService, localTranscription);
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(ChatServiceId, chat);
-	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
+	services.registerInstance(INotificationService, disposables.add(new TestNotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
 	services.registerInstance(IDialogService, {} as IDialogService);
 	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
@@ -1558,7 +1596,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkspaceService()));
-	services.registerInstance(INotificationService, resources.add(new NotificationService()));
+	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 	const content = resources.add(services.createInstance(ModelSettingsRenderer, root));
 	const loaded = new DeferredPromise<void>();
@@ -1762,7 +1800,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, hooksBackend);
-	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
+	services.registerInstance(INotificationService, disposables.add(new TestNotificationService()));
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IContextKeyService, disposables.add(new ContextKeyService()));
@@ -1784,7 +1822,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		setEnabled: async (...args) => { skillMutations.push(args); skillEnabled = args[1]; },
 	});
 	services.registerInstance(IExtensionManagementService, { onDidChangeInstalled: Event.None } as IExtensionManagementService);
-	services.registerInstance(ILanguageServerService, { read: async () => ({ revision: 0, configurations: {}, servers: [] }), configure: async () => { }, removeConfiguration: async () => { } });
+	services.registerInstance(ILanguageServerService, { control: async () => { }, read: async () => ({ revision: 0, configurations: {}, servers: [] }), configure: async () => { }, removeConfiguration: async () => { } });
 	services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => null } as ICodeEditorService);
 	services.registerInstance(IDialogService, disposables.add(new DialogService()));
 	services.registerInstance(ClipboardServiceId, clipboardService);
@@ -1929,7 +1967,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'github', 'network', 'screenshot', 'appearance', 'layout', 'settings-editor', 'startup', 'browser'],
+		['general', 'github', 'network', 'screenshot', 'appearance', 'layout', 'debugging', 'settings-editor', 'startup', 'browser'],
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="general"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
@@ -2697,7 +2735,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(ChatServiceId, chat);
-	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
+	services.registerInstance(INotificationService, disposables.add(new TestNotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
 	services.registerInstance(IDialogService, {} as IDialogService);
 	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
@@ -2850,7 +2888,7 @@ test('Models Settings keeps checks silent and requires explicit authorization an
 	resources.add(toDisposable(() => root.remove()));
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkspaceService()));
-	services.registerInstance(INotificationService, resources.add(new NotificationService()));
+	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 	services.registerInstance(ILanguageModelsService, {
 		onDidChangeModels: Event.None,

@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 const packages = [
 	{ name: 'reference-manager', binary: 'ash-reference-manager', channel: 'editor.resource.v1', id: 'ash.reference-manager' },
-	{ name: 'academic', binary: 'ash-academy', channel: 'editor.client.v1', id: 'ash.academic' },
+	{ name: 'academy', binary: 'ash-academy', channel: 'editor.client.v1', id: 'ash.academy' },
 	{ name: 'pdf-viewer', binary: 'ash-pdf-viewer', channel: 'editor.resource.v1', id: 'ash.pdf-viewer' },
 ];
 const clients = new Map<string, Awaited<ReturnType<typeof compileEditorClient>>>();
@@ -63,7 +63,7 @@ for (const locale of ['en', 'zh-CN']) test(`Reference Manager imports, manages, 
 	await library.getByRole('searchbox').fill('second'); await expect(library.getByRole('listbox').getByRole('option')).toHaveCount(1); await expect(library.locator('article h2')).toHaveText('A second book');
 	await library.getByRole('searchbox').fill('no matching record'); await expect(library.getByRole('listbox').getByRole('option')).toHaveCount(0); await expect(library.locator('[data-action="edit"]')).toBeDisabled(); await library.getByRole('searchbox').fill('');
 	await library.getByRole('listbox').getByRole('option').first().focus(); await library.getByRole('listbox').getByRole('option').first().press('End'); await expect(library.getByRole('listbox').getByRole('option').last()).toBeFocused(); await library.getByRole('listbox').getByRole('option').last().press('Home');
-	await page.evaluate(async () => { await window.referenceManagerTest.enable('academic', true); await window.referenceManagerTest.open('/fixture/paper.ash-academic'); });
+	await page.evaluate(async () => { await window.referenceManagerTest.enable('academy', true); await window.referenceManagerTest.open('/fixture/paper.ash-academic'); });
 	await page.locator('#document textarea.stanza-document-text-input').last().click();
 	await expect(library.locator('[data-action="insert"]')).toBeEnabled(); await library.locator('[data-action="insert"]').click();
 	await expect(page.locator('.ash-citation')).toHaveCount(1);

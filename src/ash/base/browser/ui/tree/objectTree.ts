@@ -417,6 +417,7 @@ export class CompressibleObjectTree<T> extends Disposable {
 	collapse(element: T): boolean { return this.model.collapse(element); }
 	expand(element: T): boolean { return this.model.expand(element); }
 	expandTo(element: T): boolean { return this.model.expandTo(element); }
+	openFind(): void { this.tree.openFind(); }
 	setFindPattern(pattern: string): void { this.tree.setFindPattern(pattern); }
 	findNext(): T | undefined { return this.tree.findNext()?.element.elements.at(-1); }
 	findPrevious(): T | undefined { return this.tree.findPrevious()?.element.elements.at(-1); }

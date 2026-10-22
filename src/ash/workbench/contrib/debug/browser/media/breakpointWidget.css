@@ -1,0 +1,39 @@
+.ash-breakpoint-widget {
+	background: var(--ash-editor-background);
+	color: var(--ash-editor-foreground);
+	font-family: var(--ash-font-family);
+	font-size: var(--ash-fontSize-body1);
+}
+
+.ash-breakpoint-widget-form {
+	box-sizing: border-box;
+	padding: var(--ash-spacing-size80);
+}
+
+.ash-breakpoint-widget-controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-breakpoint-widget-controls > .ash-select-box {
+	flex: 0 1 230px;
+	max-width: 100%;
+	min-width: 0;
+}
+
+.ash-breakpoint-widget-controls > .ash-input-box {
+	flex: 1 1 160px;
+	min-width: 0;
+}
+
+.ash-breakpoint-widget-help {
+	margin: var(--ash-spacing-size40) 0;
+	font-size: var(--ash-fontSize-body2);
+	color: var(--ash-description-foreground);
+}
+
+.ash-breakpoint-widget-actions {
+	display: flex;
+	gap: var(--ash-spacing-size80);
+}

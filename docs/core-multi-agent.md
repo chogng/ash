@@ -8,10 +8,8 @@
 > 冻结 generation、digest、reason、自身 Tool、下放 Tool 与 Skill 上限；每一代委托只能从祖先下放
 > 上限继续收窄。Desktop 只消费 canonical tree 并可精确
 > 中断单个节点。S6 的 child failure、parent cancel、join timeout、any/quorum、恢复、预算耗尽与
-> mailbox isolation 矩阵已覆盖；late-result/UnknownOutcome 等更广故障注入仍按后续需求演进。原落地顺序分为契约冻结
-> （[阶段 D](agent-runtime.md#阶段-d多-agent-契约冻结已完成)）与运行时
-> （[阶段 E](agent-runtime.md#阶段-emultiagentcoordinator核心纵向切片已完成)）；理由见
-> [`agent-runtime.md` R4](agent-runtime.md#44-r4多-agent-契约冻结先行)。
+> mailbox isolation 矩阵已覆盖；late-result/UnknownOutcome 等更广故障注入仍按后续需求演进。
+> 契约与运行时分层的理由见 [`agent-runtime.md` R4](agent-runtime.md#44-r4多-agent-契约冻结先行)。
 >
 > 跨任务的持久 Team：[`crates/docs/agent-teams.md`](../crates/docs/agent-teams.md)
 > Core 总体边界：[`core.md`](core.md)
@@ -596,42 +594,13 @@ MultiAgentCoordinator
 模块默认 private。若 App Server 需要操作多 Agent，只公开 typed command/result 和 read-only
 projection，不公开 coordinator 内部状态机。
 
-## 16. 落地顺序
+## 16. 能力边界与变更约束
 
-落地分两段执行；跨层阶段定义与完成条件由
-[`agent-runtime.md` §7](agent-runtime.md#7-分阶段实施计划)
-权威维护。
+委托身份、ContextSeed、message/result facts 与运行时 saga 的当前实现由前文维护。跨层变更遵循 [`agent-runtime.md` 的约束](agent-runtime.md#7-演进与变更约束)，同批同步 Rust types、JSON Schema、generated TS 和 fixtures。
 
-**阶段 D｜契约冻结（已完成当前切片）：**
+更完整的 late-result/unknown-outcome 故障注入仍需按实际行为补充；spawn、join、cancellation、预算、delivery 与 isolation 的回归范围见下一节。状态树仍从一致的 Session/Thread read set 生成，客户端只消费 canonical projection，不因 UI 更新维护第二份协调状态。
 
-1. 冻结 `DelegationId`、Agent spawn 与 message/result 语义；
-2. 区分 `ThreadOrigin::Fork` 与 Agent spawn；
-3. 定义 ContextSeed 及 `Fresh/Selected/ForkedPrefix`；
-4. delegation requested/started/terminal facts、`DelegationResult` Item 进入 canonical
-   protocol，同步 Rust types / JSON Schema / generated TS / fixtures。
-
-**阶段 E｜运行时（核心纵向切片已完成）：**
-
-5. ✅ parent delegation durable facts 的 Core 接线；
-6. ✅ 用可恢复 saga 创建 Fresh/Selected/ForkedPrefix child Thread；
-7. ✅ child execution、durable All/Any/Quorum join 与显式 `wait_agent` result；
-8. ✅ outbox/inbox exact-once delivery 与 steering；
-9. ✅ 结构性 Agent tree budget 与 parent-to-descendant cancellation tree；
-10. ✅ Core 从一致的 Session/Thread read set 生成 canonical nested Agent tree；App Server 随
-    `session/subscribe` 返回，Desktop 在 Thread durable update 后重新读取该投影，直接显示
-    status/wait/budget/usage/role/join/result 并精确中断；
-11. ✅ S6 fault matrix：terminal reconciliation、spawn/join/cancellation recovery、join timeout、
-    Any/Quorum、Turn/结构预算、duplicate/cross-delegation delivery、digest corruption 与 context/tool
-    isolation 已测试；更完整的 late-result/unknown-outcome 故障注入继续补充。
-
-第一阶段不需要：
-
-- 独立 `ash-agent` crate；
-- 与 Thread 一一对应的 Agent aggregate；
-- 任意 Agent graph workflow engine；
-- 跨机器 Agent transport；
-- 自动共享长期 memory；
-- parent/child provider cache 共享。
+当前能力不要求独立 `ash-agent` crate、与 Thread 一一对应的 Agent aggregate、任意 Agent graph workflow engine、跨机器 Agent transport、自动共享长期 memory 或 parent/child provider cache 共享；这些必须由独立需求与契约支持。
 
 ## 17. 验证
 

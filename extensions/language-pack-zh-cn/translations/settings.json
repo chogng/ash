@@ -87,7 +87,7 @@
     "lsp.saveFailed": "无法保存语言服务器配置：{0}。再次保存前请刷新。",
     "lsp.missingLanguage": "请先打开代码文件或输入语言 ID。",
     "lsp.findFailed": "无法打开 Extensions：{0}",
-    "lsp.helpText": "语言服务器\n使用 Tab 和 Shift+Tab 在工作区目录、语言、Extensions、服务器列表、启用开关、可执行程序路径、保存、使用默认配置、刷新和帮助之间移动。在服务器与目录列表中使用方向键。配置作用于 App Server 用户配置；目录只决定可用性检查范围。程序路径留空时使用已安装的包或 PATH。Rust 支持默认启用，本机没有可用服务器时会按需下载托管的 rust-analyzer。显式路径优先；停用服务器后不会安装。高级配置使用 JSON 填写 languageIds、args、environment、initializationOptions 和 settings。自定义服务器需要程序路径和 languageIds。参数直接追加到服务器启动命令，不执行 shell 展开。settings 通过 workspace/configuration 返回给服务器。使用默认配置会移除覆盖值。发生配置冲突或安装变化后，请先刷新再保存。查找操作会按精确语言 ID 与可执行能力打开 Extensions。日志与启动故障在“输出”中；点击语言服务器状态栏条目可打开日志。",
+    "lsp.helpText": "语言服务器\n使用 Tab 和 Shift+Tab 在工作区目录、语言、Extensions、服务器列表、启用开关、可执行程序路径、保存、使用默认配置、刷新和帮助之间移动。在服务器与目录列表中使用方向键。配置作用于 App Server 用户配置；目录只决定可用性检查范围。程序路径留空时使用已安装的包或 PATH。Rust 支持默认启用，本机没有可用服务器时会按需下载托管的 rust-analyzer。显式路径优先；停用服务器后不会安装。高级配置使用 JSON 填写 languageIds、args、environment、initializationOptions 和 settings。自定义服务器需要程序路径和 languageIds。参数直接追加到服务器启动命令，不执行 shell 展开。settings 通过 workspace/configuration 返回给服务器。使用默认配置会移除覆盖值。发生配置冲突或安装变化后，请先刷新再保存。查找操作会按精确语言 ID 与可执行能力打开 Extensions。日志与启动故障在“输出”中；打开状态栏的“语言服务”，再为服务器选择“查看日志”。",
     "chrome.search": "搜索设置",
     "actions.more": "{0} 的更多操作",
     "actions.reset": "重置设置",

@@ -1,5 +1,40 @@
 import { expect, test } from '@playwright/test';
 
+test('status bar progress keeps its animation through its own and other entry updates', async ({ page }) => {
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
+	await page.goto('/language.html');
+	try {
+		await page.evaluate(() => { window.languageIntegration.progress(10); window.languageIntegration.updatePeer(10); });
+		const progress = page.locator('[data-statusbar-item-id="status.progress"]');
+		const peer = page.locator('[data-statusbar-item-id="test.sync"]');
+		const icon = progress.locator('.ash-statusbar-progress');
+		const peerIcon = peer.locator('.ash-statusbar-progress');
+		const animation = await icon.evaluateHandle(element => element.getAnimations()[0]!);
+		const peerAnimation = await peerIcon.evaluateHandle(element => element.getAnimations()[0]!);
+		await animation.evaluate(async animation => { await animation.ready; animation.currentTime = 650; });
+		await peerAnimation.evaluate(async animation => { await animation.ready; animation.currentTime = 650; });
+		await progress.getByRole('button').focus();
+		for (const percentage of [20, 40, 60]) {
+			await page.evaluate(percentage => window.languageIntegration.progress(percentage), percentage);
+			await expect(progress).toHaveText(`rust-analyzer: Indexing ${percentage}%`);
+			await page.evaluate(percentage => window.languageIntegration.updatePeer(percentage), percentage);
+			await expect(peer).toHaveText(`Sync ${percentage}%`);
+			expect(await icon.evaluate((element, animation) => element.getAnimations()[0] === animation, animation)).toBe(true);
+			expect(await peerIcon.evaluate((element, animation) => element.getAnimations()[0] === animation, peerAnimation)).toBe(true);
+			expect(await animation.evaluate(animation => animation.currentTime as number)).toBeGreaterThanOrEqual(650);
+			expect(await peerAnimation.evaluate(animation => animation.currentTime as number)).toBeGreaterThanOrEqual(650);
+			await expect(progress.getByRole('button')).toBeFocused();
+		}
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		await expect.poll(() => icon.evaluate(element => element.getAnimations().length)).toBe(0);
+		await expect.poll(() => peerIcon.evaluate(element => element.getAnimations().length)).toBe(0);
+		await animation.dispose();
+		await peerAnimation.dispose();
+	} finally {
+		await page.evaluate(() => window.languageIntegration.dispose());
+	}
+});
+
 test('language-server window progress names its server and retains keyboard activation through updates', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

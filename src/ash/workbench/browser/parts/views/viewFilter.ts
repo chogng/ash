@@ -1,4 +1,4 @@
-import './media/views.css';
+import './media/paneviewlet.css';
 import { addDisposableListener, getActiveDocument, h } from '../../../../base/browser/dom.js';
 import { HistoryInputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { Emitter } from '../../../../base/common/event.js';

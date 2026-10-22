@@ -809,69 +809,16 @@ crates/core-plugins/src/
 └── extension_packages_activation.rs
 ```
 
-## 18. 分阶段实施
+## 18. 能力边界与开放条件
 
-### 阶段 PL0：清单+ local validation（已完成）
+包安装、授权、激活和来源职责由前文维护，不再按完成阶段重复列出。当前仍有以下限制：
 
-- 固定 v1 schema、identity、path 和 digest；
-- local development package discovery；
-- filesystem path/schema 安全 fixtures；Archive source 尚未启用，因此 archive ingestion
-  fixtures 随对应 source 一起加入；
-- App Server `plugin/list` 与 lifecycle mutation 已接入；任意 host path install 有意不开放给 Renderer。
+- Archive source 尚未启用，archive ingestion fixtures 随对应来源接入。
+- 未引用 object 的全局配额与垃圾回收尚未完成。
+- 统一 UI 中跨 capability 的 permission/contribution diff 尚未完成。
+- 可执行编辑器扩展只接纳严格声明、精确 process permission 和 capability ceiling；运行、隔离、RPC 与恢复由 `ash-external-ext` 拥有，支持范围见[扩展架构](editor-extensions.md)。不提供通用 Node/WASM loader 或 `workspaceContains` scanner。
 
-当前完成条件：任何 contribution path 都不能逃出已验证 local snapshot root；安装时必须复制到 staging、验证 staging digest 与复制后的 source observation 一致，再原子 promote 为 content-addressed object。mutable local root 不会被发布给 runtime。
-
-### 阶段 PL1：权威+激活（已完成）
-
-- ✅ local content-addressed store：stable snapshot retry、copy-time identity validation、owned-object digest revalidation、concurrent idempotence 与 atomic promote；
-- ✅ install/enable/disable/grant/revoke/uninstall typed authority commands；
-- ✅ exact installed package resolution 与 activation snapshot generation；
-- ✅ durable install/enable/disable/uninstall authority record 与 typed command replay；
-- ✅ live revision/activation subscription、App Server lifecycle RPC/reconcile 与 exact invocation drain；
-- ✅ Plugin Skill contribution 的 exact immutable source projection 与 live catalog refresh；
-- ✅ declarative Extension contribution 的 exact immutable source projection、precedence 与 live refresh；
-- ✅ Connector contribution 的 normalized projection；
-- ✅ legacy user-profile exact package reconcile；Directory request 保持只读、不能自动 grant；
-- ✅ startup transient staging recovery；未引用 object 的全局配额与垃圾回收仍未完成。
-
-完成条件：失败激活不改变上一 generation，重启可恢复唯一 active package set。
-
-### 阶段 PL2：MCP 贡献
-
-- ✅ package-rooted strict MCP definition 与 standalone/Connector projection；
-- ✅ manifest process/network/credential ceiling 校验；
-- ✅ 与 `ash-mcp` 的 prepare/publish 和 safe-point old-generation drain；
-- ✅ Plugin disable/update authority 触发 live activation、safe-point replacement 与 dispatch drain。
-
-完成条件：安装不启动进程，enable 无 grant 不启动，update 不劫持 in-flight tool binding。
-
-### 阶段 PL3：远端分发迁移（已完成）
-
-- ✅ `ash-core-plugins::registry` 隔离远端 catalog/TUF/download；
-- ✅ `ash-core-plugins` 统一拥有 local/Extensions artifact、install/update/uninstall、authority 与 lease；
-- ✅ `ash-plugin` 只拥有共享 Plugin 定义与 package observation；
-- ✅ Plugin bundle 经统一 installed/activation state 后按 capability 交给领域 consumer；
-- 尚未完成：统一 UI 中跨 capability 的 permission/contribution diff。
-
-完成条件：相同 ID/version 不可换内容，grant expansion 必须重新 consent。
-
-### 阶段 PL4：生态扩展评审
-
-当前已完成的窄边界：
-
-- ✅ Plugin manifest/immutable package 对可执行 Editor Extension program 的 strict declaration；
-- ✅ exact process permission、Host RPC API v1、activation/capability ceiling 与 regular-file 校验；
-- 委托 `ash-external-ext`：进程隔离、RPC、crash supervisor、provider lifecycle；
-- ❌ generic Node/WASM loader 与 `workspaceContains` scanner；VS Code Extension API compatibility 已退出目标。
-
-其余能力只有在具体需求有独立 threat model 和 stable port 后，才分别评审：
-
-- declarative hooks；
-- WASM capability component；
-- provider adapter；
-- 静态 UI contribution。
-
-禁止直接加入 dynamic library 或任意 Renderer JavaScript。
+声明式 hooks、WASM capability component、provider adapter 和静态 UI contribution 只有在具体需求具备独立 threat model 和 stable port 后才分别评审。禁止直接加入 dynamic library 或任意 Renderer JavaScript。
 
 ## 19. 验证门
 

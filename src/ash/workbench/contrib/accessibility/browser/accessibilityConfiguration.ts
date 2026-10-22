@@ -7,6 +7,33 @@ import { RawContextKey } from '../../../../platform/contextkey/common/contextkey
 import { AccessibilitySignal } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.InlayHints,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('inlayHints.verbosityInvalid', 'Inlay hints accessibility verbosity must be boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('inlayHints.verbosityTitle', 'Inlay hints accessibility help'); },
+		get description() { return localize('inlayHints.verbosityDescription', 'Announce how to open accessibility help while reading inlay hints.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.WorkspaceTrust, defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('workspaceTrust.verbosityInvalid', 'Workspace Trust accessibility verbosity must be boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('workspaceTrust.verbosityTitle', 'Workspace Trust accessibility help'); },
+		get description() { return localize('workspaceTrust.verbosityDescription', 'Announce how to open accessibility help for workspace directory permissions.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.SandboxSettings, defaultValue: true,
 	parse(value: unknown): boolean {
 		if (typeof value !== 'boolean') throw new TypeError(localize({ bundle: 'ash.settings', key: 'sandbox.verbosityInvalid' }, 'Sandbox accessibility verbosity must be boolean.'));
@@ -352,6 +379,20 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 });
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Banner,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('accessibility.bannerVerbosityInvalid', 'Banner accessibility verbosity must be boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize('accessibility.bannerVerbosityTitle', 'Banner accessibility help'),
+		description: localize('accessibility.bannerVerbosityDescription', 'Announce how to open accessibility help when a window banner receives focus.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Notifications,
 	defaultValue: true,
 	parse(value: unknown): boolean {
@@ -482,5 +523,32 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		valueType: 'boolean',
 		get title() { return localize('debug.repl.verbosityTitle', 'Debug Console accessibility help'); },
 		get description() { return localize('debug.repl.verbosityDescription', 'Announce how to open accessibility help when the Debug Console receives focus.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Debug, defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('debug.sidebarVerbosityInvalid', 'Run and Debug accessibility verbosity must be a boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('debug.sidebarVerbosityTitle', 'Run and Debug accessibility help'); },
+		get description() { return localize('debug.sidebarVerbosityDescription', 'Announce how to open accessibility help when Run and Debug receives focus.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.TreeView,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError('Tree view accessibility verbosity must be boolean');
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize('treeView.verbosityTitle', 'Extension tree accessibility help'),
+		description: localize('treeView.verbosityDescription', 'Announce how to open accessibility help when an extension tree receives focus.'),
 	},
 });

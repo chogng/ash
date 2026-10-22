@@ -3,6 +3,10 @@ import { EnvironmentVariableService } from '../../common/environmentVariableServ
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
+import { IHoverService, HoverService } from '../../../../../platform/hover/browser/hoverService.js';
+import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
@@ -191,6 +195,11 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 		onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { },
 	});
 	registerTestComponentServices(services, dom.window.document);
+	using hoverConfiguration = new TestConfigurationService();
+	services.registerInstance(IConfigurationService, hoverConfiguration);
+	using hoverContext = new BrowserContextViewService(dom.window.document.body);
+	using hoverService = new HoverService(hoverConfiguration, hoverContext, services.get(IContextMenuService));
+	services.registerInstance(IHoverService, hoverService);
 	services.registerInstance(IViewsService, { openView: async () => null } as unknown as IViewsService);
 	using positionChanged = new Emitter<string>();
 	let panelPosition = Position.BOTTOM;

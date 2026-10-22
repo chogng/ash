@@ -1,3 +1,4 @@
+import { TestViewDescriptorService } from '../../../../test/browser/workbenchTestServices.js';
 import { ActivityService } from '../../../../services/activity/browser/activityService.js';
 import { IActivityService } from '../../../../services/activity/common/activity.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
@@ -36,9 +37,13 @@ import { IContextMenuService } from "../../../../../platform/contextview/browser
 import type { ITerminalInstance } from "../../browser/terminal.js";
 import { AppServerAvailableContext } from '../../../../common/contextkeys.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
+import { TestConfigurationService, TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../../common/terminalContextKey.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
+import { IHoverService, HoverService } from '../../../../../platform/hover/browser/hoverService.js';
+import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
+import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
@@ -133,6 +138,13 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	registryOwner.registerInstance(IContextKeyService, contextKeyService);
 	using configuration = new TestConfigurationService();
 	registryOwner.registerInstance(IConfigurationService, configuration);
+	registerTestComponentServices(registryOwner, ownerDocument);
+	using workspace = new TestWorkspaceService({ id: 'terminal-title-test', folders: [] });
+	registryOwner.registerInstance(IWorkspaceContextService, workspace);
+	using hoverContext = new BrowserContextViewService(ownerDocument.body);
+	using hoverService = new HoverService(configuration, hoverContext, contextMenuService);
+	registryOwner.registerInstance(IHoverService, hoverService);
+	registryOwner.registerSingleton(IEnvironmentVariableService, () => registryOwner.createInstance(EnvironmentVariableService));
 	registryOwner.registerInstance(IKeybindingService, { onDidUpdateKeybindings: Event.None, lookupKeybinding: () => undefined } as unknown as IKeybindingService);
 	using titleActions = registryOwner.createInstance(TerminalTitleActions, ownerDocument.body);
 	assert.equal(contextKeyService.getValue(TerminalHasActiveInstanceContext.key), true, 'An empty toolbar cannot clear the window-active editor terminal');
@@ -179,6 +191,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 		title: "Backend shell",
 		profile: commandPromptProfile,
 		state: "running",
+		onDidChangeState: Event.None,
 	} as ITerminalInstance;
 	titleActions.setActiveInstance(activeInstance, "title");
 	const activeTerminal = toolbar.querySelector<HTMLButtonElement>(".ash-terminal-active-action .ash-action-label");
@@ -240,6 +253,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 		title: "Backend shell",
 		profile: commandPromptProfile,
 		state: "exited",
+		onDidChangeState: Event.None,
 	} as ITerminalInstance, "list");
 	assert.equal(toolbar.textContent?.includes("Relaunch Terminal"), false, 'Relaunch is available in the overflow menu');
 	titleActions.setActiveInstance(activeInstance, "title");
@@ -275,16 +289,19 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	await powerShell.run();
 	await Promise.resolve();
 	assert.deepEqual(createdProfiles, [undefined, "pwsh"]);
-	const copilot = { profileId: 'extension:github.copilot-chat/cli', title: 'Assistant CLI', isDefault: false };
-	titleActions.setProfiles([commandPromptProfile, copilot, powerShellProfile]);
+	const extensionProfiles = [
+		{ profileId: 'extension:github.copilot-chat/cli', title: 'Assistant CLI', isDefault: false },
+		{ profileId: 'extension:anthropic.claude-code/cli', title: 'Claude CLI', isDefault: false },
+	];
+	const profiles = [commandPromptProfile, ...extensionProfiles, powerShellProfile];
+	titleActions.setProfiles(profiles);
 	toolbar.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-dropdown > .ash-button')!.click();
-	const aiIndex = shownProfileActions.findIndex(action => action.id.endsWith(copilot.profileId));
-	const shellIndex = shownProfileActions.findIndex(action => action.id.endsWith('.cmd'));
-	assert.equal(aiIndex, 4);
-	assert.equal(shownProfileActions[aiIndex + 1]?.id, 'ash.actions.separator');
-	assert.ok(shellIndex > aiIndex);
-	await shownProfileActions[aiIndex]!.run();
-	assert.deepEqual(createdProfiles, [undefined, 'pwsh', copilot.profileId]);
+	assert.deepEqual(shownProfileActions.slice(4, 4 + profiles.length).map(action => action.id),
+		profiles.map(profile => `${TerminalCommandId.NewWithProfile}.${profile.profileId}`));
+	for (const profile of extensionProfiles) {
+		await shownProfileActions.find(action => action.id === `${TerminalCommandId.NewWithProfile}.${profile.profileId}`)!.run();
+	}
+	assert.deepEqual(createdProfiles, [undefined, 'pwsh', ...extensionProfiles.map(profile => profile.profileId)]);
 	titleActions.setActiveInstance(undefined, 'title');
 	assert.equal(contextKeyService.getValue(TerminalHasActiveInstanceContext.key), true);
 	titleActions.dispose();
@@ -302,7 +319,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	const { IWorkspaceContextService } = await import('../../../../../platform/workspace/common/workspace.js');
 	const { IPreferencesService } = await import('../../../../services/preferences/common/preferences.js');
 	const { INotificationService } = await import('../../../../../platform/notification/common/notification.js');
-	const { NotificationService } = await import('../../../../services/notification/common/notificationService.js');
+	const { TestNotificationService } = await import('../../../../services/notification/test/common/testNotificationService.js');
 	const { WorkbenchLayout } = await import('../../../../browser/layout.js');
 	const { Dimension } = await import('../../../../../base/browser/dom.js');
 	const { TestConfigurationService: WorkbenchConfigurationService } = await import("../../../../services/configuration/test/common/testServices.js");
@@ -315,7 +332,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	const { WorkbenchViewRegistry, IViewDescriptorService, ViewContainerLocation } = await import('../../../../common/views.js');
 	const { ViewDescriptorService } = await import('../../../../services/views/browser/viewDescriptorService.js');
 	const { SyncDescriptor } = await import('../../../../../platform/instantiation/common/descriptors.js');
-	const { PaneComposite } = await import('../../../../browser/parts/views/paneComposite.js');
+	const { PaneComposite } = await import('../../../../browser/panecomposite.js');
 	const { PanelPart } = await import('../../../../browser/parts/panel/panelPart.js');
 	const { ILocalizationService } = await import('../../../../services/localization/common/localizationService.js');
 	using resources = new DisposableStore();
@@ -353,7 +370,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	services.registerInstance(ITerminalProfileResolverService, { resolveShellLaunchConfig: async () => { throw new Error('Unexpected shell resolution'); } } as unknown as ITerminalProfileResolverService);
 	services.registerInstance(IWorkbenchLayoutService, resources.add(services.createInstance(WorkbenchLayout, browserEnvironment.window.document.body, { initialDimension: new Dimension(800, 600) })));
 	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as import('../../../../services/preferences/common/preferences.js').IPreferencesService);
-	services.registerInstance(INotificationService, resources.add(new NotificationService()));
+	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 	services.registerInstance(IAccessibleViewService, { ...toDisposable(() => { }), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { } });
 	services.registerInstance(ISpeechService, resources.add(new SpeechService(undefined)));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
@@ -377,13 +394,12 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	resources.add(registry.registerViewContainer(terminal));
 	resources.add(registry.registerViewContainer(empty));
 	resources.add(registry.registerViews(terminal.id, [{ id: 'test.terminalView', title: 'Terminal', canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(TerminalViewPane) }]));
-	const descriptors = resources.add(new ViewDescriptorService({ registry }, context));
+	const descriptors = resources.add(new TestViewDescriptorService({ registry }, context));
 	services.registerInstance(IViewDescriptorService, descriptors);
 	if (!services.has(IActivityService)) services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 	const panel = resources.add(services.createInstance(PanelPart, browserEnvironment.window.document.body));
 	const create = (descriptor: typeof terminal) => services.createInstance(PaneComposite, panel.domNode, {
-		viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id), instantiationService: services,
-		contextKeyService: context, paneHeaders: 'hidden', paneLayout: 'fill',
+		viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id), paneHeaders: 'hidden', paneLayout: 'fill',
 	});
 	const composite = create(terminal);
 	panel.addComposite(composite);

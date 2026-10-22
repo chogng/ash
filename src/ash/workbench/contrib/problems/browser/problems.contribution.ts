@@ -25,6 +25,7 @@ export function registerProblemsView(registry: WorkbenchViewRegistry = ViewsRegi
 		localizationKey: { bundle: "ash.views", key: "problems" },
 		order: 1,
 		canToggleVisibility: false,
+		canMoveView: true,
 		ctorDescriptor: new SyncDescriptor(ProblemsViewPane),
 	}]);
 }

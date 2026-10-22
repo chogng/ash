@@ -11,6 +11,8 @@ use ash_app_server_protocol::protocol::projects::ProjectDetailsUpdateParams;
 use ash_app_server_protocol::protocol::projects::ProjectLifecycleParams;
 use ash_app_server_protocol::protocol::projects::ProjectListParams;
 use ash_app_server_protocol::protocol::projects::ProjectListResult;
+use ash_app_server_protocol::protocol::projects::ProjectMaterialDto;
+use ash_app_server_protocol::protocol::projects::ProjectMaterialKindDto;
 use ash_app_server_protocol::protocol::projects::ProjectMutationResult;
 use ash_app_server_protocol::protocol::projects::ProjectReadParams;
 use ash_app_server_protocol::protocol::projects::ProjectReadResult;
@@ -24,6 +26,8 @@ use ash_projects::ProjectCommandRequest;
 use ash_projects::ProjectCommandResult;
 use ash_projects::ProjectCoordinator;
 use ash_projects::ProjectError;
+use ash_projects::ProjectMaterial;
+use ash_projects::ProjectMaterialKind;
 use ash_projects::ProjectRoot;
 use serde_json::Value;
 
@@ -99,6 +103,11 @@ impl<'a> ProjectRequestProcessor<'a> {
                 command: ProjectCommand::Create {
                     name: params.name,
                     description: params.description,
+                    materials: params
+                        .materials
+                        .into_iter()
+                        .map(material_from_dto)
+                        .collect::<Result<_, _>>()?,
                 },
             },
         )
@@ -119,6 +128,15 @@ impl<'a> ProjectRequestProcessor<'a> {
                 command: ProjectCommand::UpdateDetails {
                     name: params.name,
                     description: params.description,
+                    materials: params
+                        .materials
+                        .map(|materials| {
+                            materials
+                                .into_iter()
+                                .map(material_from_dto)
+                                .collect::<Result<_, _>>()
+                        })
+                        .transpose()?,
                 },
             },
         )
@@ -343,4 +361,20 @@ fn project_error(error: ProjectError) -> RpcError {
             RpcError::new(-32097, AppServerErrorName::ProjectOperationFailed)
         }
     }
+}
+
+fn material_from_dto(material: ProjectMaterialDto) -> Result<ProjectMaterial, RpcError> {
+    Ok(ProjectMaterial {
+        path: material
+            .path
+            .to_host_path()
+            .map_err(|_| invalid_project_reference())?
+            .as_path()
+            .to_path_buf(),
+        name: material.name,
+        kind: match material.kind {
+            ProjectMaterialKindDto::File => ProjectMaterialKind::File,
+            ProjectMaterialKindDto::Folder => ProjectMaterialKind::Folder,
+        },
+    })
 }

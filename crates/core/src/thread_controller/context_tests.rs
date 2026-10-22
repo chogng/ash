@@ -94,7 +94,7 @@ impl Fixture {
                     harness_context: &crate::HarnessContext::default(),
                     extension_fragments: Vec::new(),
                     evidence: Vec::new(),
-                    tools: Vec::new(),
+                    tools: Vec::new().into(),
                     budget: ContextBudget::provider_managed(),
                 },
             )

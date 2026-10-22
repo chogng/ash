@@ -262,6 +262,10 @@ fn app_server_connects_lists_notifies_and_disconnects_without_projecting_secrets
     );
     assert_eq!(listed["result"]["generation"], 1);
     assert_eq!(
+        listed["result"]["connectors"][0]["mcpServerId"],
+        "acme/github:connector:account:mcp:github"
+    );
+    assert_eq!(
         listed["result"]["connectors"][0]["state"]["status"],
         "disconnected"
     );

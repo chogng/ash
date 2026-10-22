@@ -98,7 +98,7 @@ import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser
 import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { extUri } from '../../../src/ash/base/common/resources.js';
@@ -372,7 +372,7 @@ if (new URLSearchParams(location.search).has('shortcuts')) {
 	const commands = store.add(new CommandService(shortcutServices, registry));
 	shortcutServices.registerInstance(ICommandService, commands);
 	shortcutServices.registerInstance(ILogService, new NullLoggerService());
-	const notifications = store.add(new NotificationService());
+	const notifications = store.add(new TestNotificationService());
 	shortcutServices.registerInstance(INotificationService, notifications);
 	const profiles = new UserDataProfileService();
 	shortcutServices.registerInstance(IUserDataProfileService, profiles);
@@ -459,6 +459,11 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		let release: (() => void) | undefined;
 		let pending: Promise<void> = Promise.resolve();
 		let instances: readonly ITerminalInstance[] = new URLSearchParams(location.search).has('existing') ? [paneInstance] : [];
+		let integration = new URLSearchParams(location.search).get('shellIntegration');
+		let metadataSequence = 0;
+		let metadataCwd = '/backend/workspace';
+		let metadataPrompt: string | undefined;
+		const hoverOutput: { sequence: number; data: Uint8Array; shellIntegration?: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent; }[] = [];
 		let activeInstance = instances.at(-1);
 		const workspace = { id: 'workspace', folders: [{ id: 'workspace', uri: URI.file('/workspace'), name: 'Workspace', index: 0 }] };
 		const setPanel = (value: boolean): void => {
@@ -512,7 +517,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } } as unknown as IViewsService);
 		services.registerInstance(IPreferencesService, { openSettings: async (options: import('../../../src/ash/workbench/services/preferences/common/preferences.js').IOpenSettingsOptions) => { menuEffects.settings.push(options); } } as unknown as IPreferencesService);
-		services.registerInstance(INotificationService, lifetime.add(new NotificationService()));
+		services.registerInstance(INotificationService, lifetime.add(new TestNotificationService()));
 		services.registerInstance(IWorkspaceContextService, {
 			onDidChangeWorkspace: workspaceChanged.event,
 			onDidChangeWorkspaceFolders: Event.None,
@@ -535,13 +540,26 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 				createdProfiles.push(profile.profileId);
 				launches.push({ profile: selection, env: options.env, cwd: options.cwd });
 				const terminalId = `pane-${creates}`;
-				return { terminalId, ready: { pid: 1234 + creates, cwd: '/backend/workspace' }, profile, connectionPersistence: 'connectionOwned' };
+				const hoverLaunch = new URLSearchParams(location.search).get('hoverLaunch');
+				const launch = hoverLaunch ? {
+					executable: hoverLaunch === 'windows' ? 'C:\\Program Files\\Fixture Shell\\bin\\pwsh.exe' : '/opt/fixture/a/long/path/to/a/shell/bin/bash',
+					args: hoverLaunch === 'windows' ? '-NoExit -Command ". fixture.ps1"' : ['--rcfile', '/private/fixture bashrc', ''],
+					usedShellIntegrationInjection: true,
+				} : undefined;
+				return { terminalId, ready: { pid: 1234 + creates, cwd: '/backend/workspace', shellType: integration ? PosixShellType.Bash : undefined, launch }, profile, connectionPersistence: 'connectionOwned' };
 			},
 			read: async options => {
 				await new Promise(resolve => setTimeout(resolve, 10));
-				return { terminalId: options.terminalId, chunks: [], nextSequence: 0, outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: new URLSearchParams(location.search).has('exited'), exitCode: undefined };
+				return {
+					terminalId: options.terminalId, chunks: hoverOutput.filter(chunk => chunk.sequence > options.afterSequence), nextSequence: metadataSequence, outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: new URLSearchParams(location.search).has('exited'), exitCode: undefined,
+					cwd: integration ? { value: metadataCwd, isTrusted: true, afterOutputSequence: metadataSequence } : undefined,
+					shellIntegration: integration ? { commandDetection: integration !== 'none', cwdDetection: true, hasRichCommandDetection: integration === 'rich', commandStorageDisabled: false, commands: [], promptType: metadataPrompt, afterOutputSequence: metadataSequence } : undefined
+				};
 			},
-			write: async options => { if (typeof options.data === 'string' && !options.data.startsWith('\x1b[?')) writes.push(options.data); },
+			write: async options => {
+				if (new URLSearchParams(location.search).has('rejectInput') && options.data === 'hover-input') throw new Error('Synthetic input failure');
+				if (typeof options.data === 'string' && !options.data.startsWith('\x1b[?')) writes.push(options.data);
+			},
 			resize: async () => { }, setAutoReplies: async () => { }, sendSignal: async () => { },
 			close: async options => { closed.push(Number(options.terminalId.slice(5))); },
 		});
@@ -648,6 +666,8 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		return {
 			configure: (key, value) => services.get(IConfigurationService).updateValue(key, value),
 			theme: setTerminalTestTheme,
+			metadata: (level, cwd, prompt) => { integration = level; metadataCwd = cwd; metadataPrompt = prompt; hoverOutput.push({ sequence: ++metadataSequence, data: new Uint8Array() }); },
+			sequence: (event, text = '') => { hoverOutput.push({ sequence: ++metadataSequence, data: new TextEncoder().encode(text), shellIntegration: event }); },
 			environment: enabled => enabled ? services.get(IEnvironmentVariableService).set('acme.environment', { persistent: false, map: new Map([['MODE', { variable: 'MODE', type: 1, value: 'extension' }]]) }) : services.get(IEnvironmentVariableService).delete('acme.environment'),
 			newWindowState: () => ({ parts: editorParts?.parts.length, editors: editorParts?.editorsMru.map(editor => editor.input.resource.toString()), input: writes.join('') }),
 			menuEffects: async () => ({ ...menuEffects, configuration: menuEffects.editors.length ? (await services.get(IFileService).readFile(URI.parse(menuEffects.editors.at(-1)!))).content : undefined }),
@@ -705,6 +725,8 @@ declare global {
 		}[];
 		ashTerminalPaneIntegration: {
 			configure(key: string, value: unknown): Promise<void>;
+			metadata(level: 'none' | 'basic' | 'rich', cwd: string, prompt?: string): void;
+			sequence(event: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent, text?: string): void;
 			theme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight', overrides?: Readonly<Record<string, string>>): void;
 			environment(enabled: boolean): void;
 			newWindowState(): { parts?: number; editors?: readonly string[]; input: string; };
@@ -1183,7 +1205,7 @@ if (new URLSearchParams(location.search).has('input')) {
 	let currentDirectory: string | undefined;
 	const workspace = store.add(new TestWorkspaceService({ id: 'input', uri: URI.file('/workspace') }));
 	const services = store.add(widgetServices.createChild(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
-	const notifications = store.add(new NotificationService());
+	const notifications = store.add(new TestNotificationService());
 	services.registerInstance(INotificationService, notifications);
 	let groupPane: import('../../../src/ash/workbench/contrib/terminal/browser/terminalView.js').TerminalViewPane | undefined;
 	if (groupFixture) {

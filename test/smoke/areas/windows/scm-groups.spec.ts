@@ -3,7 +3,7 @@ import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { parseJsonc } from '../../../../src/ash/base/common/jsonc.js';
-import { readUserSettings } from '../../../automation/settings.js';
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 import type { Workbench } from '../../../automation/workbench.js';
 
@@ -625,6 +625,7 @@ test.describe('SCM editor groups', () => {
 			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
 			await expect.poll(() => diff.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			await group.title.getByRole('button', { name: locale === 'zh-CN' ? '打开文件' : 'Open File', exact: true }).click();
+			await expect(diff).toBeHidden();
 			await group.editor.waitForEditorContents(content => content.includes('const line2 = 200;'));
 			await tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 更改 的main.ts' : 'Open main.ts for Changes', exact: true }).click();
 			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
@@ -645,6 +646,7 @@ test.describe('SCM editor groups', () => {
 			await openFile.hover();
 			await expect(page.locator('.ash-hover')).toContainText(locale === 'zh-CN' ? '打开文件' : 'Open File');
 			await openFile.click();
+			await expect(diff).toBeHidden();
 			await group.editor.waitForEditorContents(content => content.includes('const line2 = 200;') && content.includes('const line20 = 2000;'));
 			await expect(group.tabs).toHaveCount(tabCount);
 			await expect(next).toHaveCount(0);
@@ -661,7 +663,7 @@ test.describe('SCM editor groups', () => {
 			await group.editor.waitForEditorFocus();
 			await group.editor.input.press('ControlOrMeta+End');
 			await page.keyboard.insertText('// unsaved edit');
-			await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-label', locale === 'zh-CN' ? /未保存的更改/u : /unsaved changes/u);
+			await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-label', locale === 'zh-CN' ? /已修改/u : /unsaved changes/u);
 			await openWorkingFile('other.ts');
 			await expect(group.tabs).toHaveCount(tabCount + 1);
 			await openWorkingFile('main.ts');
@@ -833,7 +835,7 @@ test.describe('SCM editor groups', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
-		test(`SCM Multi Diff shares diff title actions and unchanged-region settings in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, restartWorkbench, reloadWorkbench }) => {
+		test(`SCM Multi Diff shares diff title actions and unchanged-region settings in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench, restartWorkbench, reloadWorkbench }) => {
 			const otherFile = join(testWorkspace.directory, 'other.ts');
 			const original = Array.from({ length: 40 }, (_, index) => `const line${index + 1} = ${index + 1};`);
 			await writeFile(testWorkspace.file, `${original.join('\n')}\n`);
@@ -850,14 +852,14 @@ test.describe('SCM editor groups', () => {
 				const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
 				await picker.getByRole('combobox').fill('简体中文');
 				await picker.getByRole('combobox').press('Enter');
-				({ workbench } = await restartWorkbench());
+				({ workbench, application } = await restartWorkbench());
 			} else {
 				// Start from the completed Git fixture rather than its intermediate commit statuses.
-				({ workbench } = await reloadWorkbench());
+				({ workbench, application } = await reloadWorkbench());
 			}
 			const page = workbench.page;
-			await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-			await page.getByRole('button', { name: 'View All Changes', exact: true }).click();
+			await page.getByRole('tab', { name: locale === 'zh-CN' ? /^源代码管理(?:,|$)/u : /^Source Control(?:,|$)/u }).click();
+			await workbench.quickaccess.runCommand('git.openUncommittedChanges');
 			const group = workbench.editors.groupAt(0);
 			const multi = group.content.locator('.stanza-multi-diff-editor');
 			await expect(multi).toBeVisible();
@@ -866,15 +868,49 @@ test.describe('SCM editor groups', () => {
 			const next = group.title.getByRole('button', { name: locale === 'zh-CN' ? '转到下一个更改' : 'Go to Next Change', exact: true });
 			const previous = group.title.getByRole('button', { name: locale === 'zh-CN' ? '转到上一个更改' : 'Go to Previous Change', exact: true });
 			const openFile = group.title.getByRole('button', { name: locale === 'zh-CN' ? '打开文件' : 'Open File', exact: true });
-			await expect(collapse.locator('svg')).toHaveAttribute('data-ash-icon-id', 'map');
-			await expect(openFile.locator('svg')).toHaveAttribute('data-ash-icon-id', 'go-to-file');
-			const positions = await Promise.all([previous, next, collapse, openFile].map(button => button.boundingBox()));
+			const collapseAll = group.title.getByRole('button', { name: locale === 'zh-CN' ? '折叠所有差异' : 'Collapse All Diffs', exact: true });
+			const more = group.title.getByRole('button', { name: locale === 'zh-CN' ? '更多操作' : 'More Actions', exact: true });
+			await expect(openFile).toHaveCount(0);
+			await expect(collapse).toHaveCount(0);
+			await expect(collapseAll.locator('svg')).toHaveAttribute('data-ash-icon-id', 'fold');
+			const actionIds = await group.title.locator('.ash-editor-title-actions [data-action-id]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-action-id')));
+			expect(actionIds).toEqual(['multiDiffEditor.goToPreviousChange', 'multiDiffEditor.goToNextChange', 'multiDiffEditor.toggleCollapseAll', 'workbench.action.splitEditor', 'ash.toolbar.moreActions']);
+			const positions = await Promise.all([previous, next, collapseAll, more].map(button => button.boundingBox()));
 			expect(positions.every((box, index) => box && (index === 0 || box.x > positions[index - 1]!.x))).toBe(true);
-			await expect(collapse).toHaveAttribute('aria-pressed', 'false');
-			await collapse.hover();
-			await expect(page.locator('.ash-hover')).toContainText(locale === 'zh-CN' ? '切换折叠未变更区域' : 'Toggle Collapse Unchanged Regions');
-			await collapse.click();
-			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
+			await expect(collapseAll).toHaveAttribute('aria-pressed', 'false');
+			await collapseAll.focus();
+			await collapseAll.press('Space');
+			await expect(collapseAll).toHaveAttribute('aria-pressed', 'true');
+			await expect(multi.locator('.stanza-multi-diff-editor-header-toggle')).toHaveCount(2);
+			for (const header of await multi.locator('.stanza-multi-diff-editor-header-toggle').all()) {
+				await expect(header).toHaveAttribute('aria-expanded', 'false');
+			}
+			await expect(multi.locator('.stanza-multi-diff-editor-title .ash-file-icon')).toHaveCount(2);
+			await previous.focus();
+			await page.mouse.move(0, 0);
+			const firstSection = multi.locator('.stanza-multi-diff-editor-section').first();
+			const firstActions = firstSection.locator('.stanza-multi-diff-editor-file-actions');
+			await expect(firstActions).toHaveCSS('opacity', '0');
+			const titleBeforeHover = await firstSection.locator('.stanza-multi-diff-editor-title').boundingBox();
+			await firstSection.hover();
+			await expect(firstActions).toHaveCSS('opacity', '1');
+			expect(await firstSection.locator('.stanza-multi-diff-editor-title').boundingBox()).toEqual(titleBeforeHover);
+			await page.mouse.move(0, 0);
+			await firstSection.locator('.stanza-multi-diff-editor-header-toggle').focus();
+			await expect(firstActions).toHaveCSS('opacity', '1');
+			await firstSection.locator('.stanza-multi-diff-editor-header-toggle').press('Tab');
+			await expect(firstActions.getByRole('button', { name: locale === 'zh-CN' ? '打开文件' : 'Open File', exact: true })).toBeFocused();
+			await multi.locator('.stanza-multi-diff-editor-header-toggle').first().click();
+			await expect(collapseAll).toHaveAttribute('aria-pressed', 'false');
+			await collapseAll.click();
+			await expect(collapseAll).toHaveAttribute('aria-pressed', 'true');
+			await page.mouse.move(0, 0);
+			await collapseAll.hover();
+			await expect(page.locator('.ash-hover')).toContainText(locale === 'zh-CN' ? '展开所有差异' : 'Expand All Diffs');
+			await collapseAll.press('Space');
+			await expect(collapseAll).toHaveAttribute('aria-pressed', 'false');
+			await expect(collapseAll.locator('svg')).toHaveAttribute('data-ash-icon-id', 'fold');
+			await workbench.menus.select(application, () => more.click(), [locale === 'zh-CN' ? '切换折叠未变更区域' : 'Toggle Collapse Unchanged Regions']);
 			await expect.poll(() => multi.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			const location = multi.locator('.stanza-multi-diff-editor-accessibility-status');
 			await expect(location).toContainText('main.ts');
@@ -891,13 +927,15 @@ test.describe('SCM editor groups', () => {
 			await expect(multi.locator('.stanza-multi-diff-editor-section.active')).toContainText('other.ts');
 			await expect.poll(() => multi.locator('.stanza-multi-diff-editor-section.active .ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			const count = await group.tabs.count();
-			await openFile.click();
+			const activeHeader = multi.locator('.stanza-multi-diff-editor-section.active .stanza-multi-diff-editor-header');
+			await activeHeader.hover();
+			await activeHeader.getByRole('button', { name: locale === 'zh-CN' ? '打开文件' : 'Open File', exact: true }).click();
 			await expect(group.tabs.filter({ hasText: 'other.ts' })).toHaveAttribute('aria-selected', 'true');
 			await expect(group.content.locator('.stanza-editor:visible')).toHaveCount(1);
 			await group.editor.waitForEditorContents(content => content.includes('const line2 = 200;'));
 			await expect(group.tabs).toHaveCount(count + 1);
 			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
-			await tree.getByRole('button', { name: 'Open other.ts for Changes', exact: true }).click();
+			await tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 更改 的other.ts' : 'Open other.ts for Changes', exact: true }).click();
 			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
 			await expect.poll(() => group.content.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			await collapse.focus();
@@ -906,8 +944,69 @@ test.describe('SCM editor groups', () => {
 			await expect(group.content.locator('.ash-diff-hidden-region')).toHaveCount(0);
 			await page.locator(`[id="${multiTabId}"]`).click();
 			await expect(multi).toBeVisible();
-			await expect(collapse).toHaveAttribute('aria-pressed', 'false');
+			await expect(collapse).toHaveCount(0);
+			await expect(collapseAll).toHaveAttribute('aria-pressed', 'false');
 			await expect(multi.locator('.ash-diff-hidden-region')).toHaveCount(0);
+		});
+	}
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`SCM resource group actions open their own Multi Diff in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, restartWorkbench, reloadWorkbench }, testInfo) => {
+			const stagedFile = join(testWorkspace.directory, 'staged.ts');
+			await writeFile(stagedFile, 'export const staged = 1;\n');
+			await run('git', ['add', '--', 'staged.ts'], { cwd: testWorkspace.directory });
+			await run('git', ['commit', '-m', 'Prepare SCM group comparisons'], { cwd: testWorkspace.directory });
+			await writeFile(stagedFile, 'export const staged = 2;\n');
+			await run('git', ['add', '--', 'staged.ts'], { cwd: testWorkspace.directory });
+			await writeFile(stagedFile, 'export const staged = 3;\n');
+			await writeFile(join(testWorkspace.directory, 'untracked.txt'), 'Only in the untracked group.\n');
+			const settings = await readUserSettings(workbench.page);
+			await writeUserSettings(workbench.page, JSON.stringify({
+				...parseJsonc(settings.content) as Record<string, unknown>,
+				'git.untrackedChanges': 'separate',
+				'git.alwaysShowStagedChangesResourceGroup': true,
+			}), settings.revision);
+			if (locale === 'zh-CN') {
+				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+				const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+				await picker.getByRole('combobox').fill('简体中文');
+				await picker.getByRole('combobox').press('Enter');
+				({ workbench } = await restartWorkbench());
+			} else {
+				({ workbench } = await reloadWorkbench());
+			}
+			const page = workbench.page;
+			await page.getByRole('tab', { name: locale === 'zh-CN' ? /^源代码管理(?:,|$)/u : /^Source Control(?:,|$)/u }).click();
+			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
+			await expect(tree).toHaveAttribute('aria-description', locale === 'zh-CN' ? /多文件差异编辑器/u : /multi-file diff editor/u);
+			const comparison = workbench.editors.groupAt(0).content.locator('.stanza-multi-diff-editor:visible');
+			for (const [label, files, original, modified, row] of [
+				[locale === 'zh-CN' ? '查看所有暂存的更改' : 'View All Staged Changes', ['staged.ts'], 'staged = 1', 'staged = 2', 0],
+				[locale === 'zh-CN' ? '查看所有更改' : 'View All Changes', ['main.ts', 'staged.ts'], 'value = 1', 'value = 2', 2],
+				[locale === 'zh-CN' ? '查看所有未跟踪的更改' : 'View All Untracked Changes', ['untracked.txt'], '', 'Only in the untracked group.', 5],
+			] as const) {
+				// Group actions are revealed by keyboard focus as well as pointer hover.
+				await tree.focus();
+				await tree.press('Home');
+				for (let index = 0; index < row; index++) {
+					await tree.press('ArrowDown');
+				}
+				const button = tree.getByRole('button', { name: label, exact: true });
+				await expect(button).toBeEnabled();
+				await expect(button.locator('svg')).toHaveAttribute('data-ash-icon-id', 'diff-multiple-1');
+				await button.focus();
+				await expect(button).toBeFocused();
+				await button.press('Enter');
+				await expect(comparison).toBeVisible();
+				await expect.poll(() => comparison.locator('.stanza-multi-diff-editor-section').evaluateAll(sections => sections.map(section => section.getAttribute('aria-label')))).toEqual([...files]);
+				const first = comparison.locator('.stanza-multi-diff-editor-section').first();
+				await expect(first.locator('.stanza-diff-editor-side.original')).toContainText(original);
+				await expect(first.locator('.stanza-diff-editor-side.modified')).toContainText(modified);
+			}
+			await tree.locator('.ash-scm-section-heading').filter({ has: page.getByText(locale === 'zh-CN' ? '更改' : 'Changes', { exact: true }) }).hover();
+			await tree.getByRole('button', { name: locale === 'zh-CN' ? '查看所有更改' : 'View All Changes', exact: true }).click();
+			await expect.poll(() => comparison.locator('.stanza-multi-diff-editor-section').evaluateAll(sections => sections.map(section => section.getAttribute('aria-label')))).toEqual(['main.ts', 'staged.ts']);
+			await testInfo.attach(`scm-group-multi-diff-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
 		});
 	}
 
@@ -952,6 +1051,11 @@ test.describe('SCM editor groups', () => {
 			({ workbench } = await reloadWorkbench());
 			const page = workbench.page;
 			await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+			if (multiDiff) {
+				const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
+				await tree.focus();
+				await tree.press('Home');
+			}
 			await page.getByRole('button', { name: multiDiff ? 'View All Changes' : 'Open main.ts for Changes', exact: true }).click();
 			await runningApplication.driver.setWindowSize({ width: 1600, height: 1000 });
 			await workbench.quickaccess.runCommand('workbench.action.toggleSideBar');
@@ -983,7 +1087,7 @@ test.describe('SCM editor groups', () => {
 	test('SCM Multi Diff splits keep collapse state and closing independent', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-		await page.getByRole('button', { name: 'View All Changes', exact: true }).click();
+		await workbench.quickaccess.runCommand('git.openUncommittedChanges');
 		const original = workbench.editors.groupAt(0);
 		await expect(original.content.locator('.stanza-multi-diff-editor-section')).toHaveCount(1);
 		await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');

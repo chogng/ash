@@ -1,302 +1,380 @@
-.ash-library {
+.ash-projects {
 	display: flex;
-	height: 100%;
 	flex: 1;
 	min-width: 0;
 	min-height: 0;
+	height: 100%;
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);
 	font-size: var(--ash-fontSize-body1);
-}
-
-.ash-library[hidden] {
-	display: none;
-}
-
-.ash-library-sidebar {
-	flex: 1;
-	min-width: 0;
-	padding: 24px 16px;
-	background: var(--ash-sideBar-background);
 	overflow: auto;
 }
 
-.ash-library h1,
-.ash-library-surface h2,
-.ash-library-surface h3 {
-	margin: 0;
-}
-.ash-library h1,
-.ash-library-sidebar h2 {
-	font-size: var(--ash-fontSize-heading2);
-	font-weight: var(--ash-fontWeight-semiBold);
-	line-height: 1.4;
-}
-
-.ash-library-navigation {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	margin-top: 24px;
-}
-.ash-library-navigation > .ash-button {
-	justify-content: flex-start;
-	width: 100%;
-	min-height: 40px;
-	border-radius: var(--ash-cornerRadius-large);
-}
-.ash-library-navigation > .ash-button.selected {
-	background: var(--ash-list-inactiveSelectionBackground);
-	color: var(--ash-foreground);
-}
-.ash-library-collections-heading {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	margin: 24px 8px 8px;
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label1);
-}
-
-.ash-library-main {
-	display: flex;
-	flex-direction: column;
-	flex: 1;
-	min-width: 0;
-	min-height: 0;
-	padding: 32px;
-	gap: 20px;
-}
-.ash-library-tools,
-.ash-library-options {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	min-width: 0;
-}
-.ash-library-tools > .ash-button {
-	min-height: 36px;
-	padding: 8px 16px;
-	border-radius: var(--ash-cornerRadius-large);
-}
-.ash-library-search {
-	flex: 1;
-	min-width: 0;
-	height: 36px;
-	box-sizing: border-box;
-	border: var(--ash-strokeThickness) solid var(--ash-input-border);
-	border-radius: var(--ash-cornerRadius-large);
-	padding: 8px 12px;
-	color: var(--ash-input-foreground);
-	background: var(--ash-input-background);
-	font: inherit;
-}
-.ash-library-search::placeholder {
-	color: var(--ash-input-placeholderForeground);
-}
-.ash-library-options > select {
-	margin-right: auto;
-	max-width: 60%;
-	min-height: 28px;
-	padding: 4px 8px;
-	border: var(--ash-strokeThickness) solid var(--ash-input-border);
-	border-radius: var(--ash-cornerRadius-small);
-	color: var(--ash-input-foreground);
-	background: var(--ash-input-background);
-	font-size: var(--ash-fontSize-label1);
-}
-.ash-library-options > .ash-button[hidden] {
+.ash-projects [hidden] {
 	display: none;
 }
-.ash-library-options .ash-button.checked {
-	background: var(--ash-list-inactiveSelectionBackground);
+
+.ash-projects-main {
+	width: 100%;
+	max-width: 1280px;
+	min-width: 0;
+	box-sizing: border-box;
+	margin: 0 auto;
+	padding: var(--ash-spacing-size400);
 }
-.ash-library-message {
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label1);
-	line-height: 1.5;
+
+.ash-projects-heading,
+.ash-projects-tools,
+.ash-projects-section-heading,
+.ash-projects-form-actions,
+.ash-projects-feedback,
+.ash-projects-material {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size120);
+	min-width: 0;
+}
+
+.ash-projects-heading {
+	justify-content: space-between;
+	margin: var(--ash-spacing-size200) 0 var(--ash-spacing-size320);
+}
+
+.ash-projects h1 {
+	margin: 0;
+	min-width: 0;
+	font-size: var(--ash-fontSize-heading1);
+	font-weight: var(--ash-fontWeight-semiBold);
+	line-height: 1.35;
 	overflow-wrap: anywhere;
 }
-.ash-library-body {
-	display: flex;
-	flex: 1;
-	min-width: 0;
-	min-height: 0;
-	gap: 24px;
+
+.ash-projects h2 {
+	margin: 0;
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
+	line-height: 1.5;
 }
-.ash-library-results {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr));
-	align-content: start;
-	gap: 16px;
-	flex: 1;
-	min-width: 0;
-	min-height: 0;
-	overflow: auto;
-	padding: 2px;
+
+.ash-projects-tools {
+	flex-shrink: 0;
+	gap: var(--ash-spacing-size80);
 }
-.ash-library-item-row {
-	min-width: 0;
+
+.ash-projects-tools > .ash-button,
+.ash-projects-empty > .ash-button,
+.ash-projects-form-actions > .ash-button {
+	min-height: 36px;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size160);
 }
-.ash-library-item {
-	display: flex;
-	flex-direction: column;
+
+.ash-projects-tools > .ash-button.icon-only {
+	padding: var(--ash-spacing-size80);
+}
+
+.ash-projects-search,
+.ash-projects-form input,
+.ash-projects-form textarea {
 	width: 100%;
 	min-width: 0;
-	padding: 0;
-	border: var(--ash-strokeThickness) solid var(--ash-border);
-	border-radius: var(--ash-cornerRadius-large);
-	background: var(--ash-editor-background);
-	color: inherit;
-	cursor: pointer;
-	text-align: left;
-	overflow: hidden;
+	box-sizing: border-box;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-small);
+	padding: var(--ash-spacing-size120);
+	background: var(--ash-input-background);
+	color: var(--ash-input-foreground);
 	font: inherit;
 }
-.ash-library-item:hover {
-	background: var(--ash-list-hoverBackground);
-	border-color: var(--ash-widget-border);
+
+.ash-projects-search::placeholder,
+.ash-projects-form input::placeholder,
+.ash-projects-form textarea::placeholder {
+	color: var(--ash-input-placeholderForeground);
 }
-.ash-library-item.selected {
-	background: var(--ash-list-inactiveSelectionBackground);
-	border-color: var(--ash-focusBorder);
+
+.ash-projects-search {
+	margin-bottom: var(--ash-spacing-size240);
 }
-.ash-library-item-image {
-	width: 100%;
-	height: 132px;
-	object-fit: contain;
-	background: var(--ash-sideBar-background);
+
+.ash-projects-feedback {
+	margin-bottom: var(--ash-spacing-size200);
+	color: var(--ash-description-foreground);
 }
-.ash-library-item-caption {
+
+.ash-projects-feedback p {
+	margin: 0;
+	flex: 1;
+}
+
+.ash-projects-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	gap: var(--ash-spacing-size200);
+	padding: var(--ash-spacing-size400) var(--ash-spacing-size160);
+	margin: var(--ash-spacing-size400) auto 0;
+	max-width: 380px;
+}
+
+.ash-projects-empty h2 {
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-regular);
+}
+
+.ash-projects-empty p {
+	margin: 0;
+	line-height: 1.6;
+	color: var(--ash-description-foreground);
+}
+
+.ash-projects-illustration {
+	position: relative;
+	width: 88px;
+	height: 88px;
+	margin-bottom: var(--ash-spacing-size80);
+}
+
+.ash-projects-illustration span {
+	position: absolute;
+	width: 36px;
+	height: 40px;
+	border: 2px solid currentColor;
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-editor-background);
+}
+
+.ash-projects-illustration span:nth-child(1) {
+	left: 8px;
+	top: 8px;
+	transform: rotate(-8deg);
+}
+.ash-projects-illustration span:nth-child(2) {
+	left: 36px;
+	top: 20px;
+	transform: rotate(10deg);
+}
+.ash-projects-illustration span:nth-child(3) {
+	left: 24px;
+	top: 36px;
+	transform: rotate(-3deg);
+}
+
+.ash-projects-grid {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	gap: 6px;
-	padding: 12px;
-	min-width: 0;
-	width: 100%;
-	box-sizing: border-box;
+	grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+	gap: var(--ash-spacing-size200);
+	padding: 0;
+	margin: 0;
+	list-style: none;
 }
-.ash-library-item-name {
-	grid-column: 1;
+
+.ash-projects-grid li {
 	min-width: 0;
+}
+
+.ash-projects-card {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--ash-spacing-size160);
+	width: 100%;
+	min-height: 168px;
+	padding: var(--ash-spacing-size240);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-medium);
+	background: var(--ash-editor-background);
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.ash-projects-card:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-projects-card-name {
+	width: 100%;
+	font-weight: var(--ash-fontWeight-semiBold);
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
 }
-.ash-library-item-meta {
-	grid-column: 1;
+
+.ash-projects-card-mark {
+	width: 28px;
+	height: 20px;
+	border: var(--ash-strokeThickness) solid currentColor;
+	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-body2);
 }
-.ash-library-item-favorite {
-	grid-column: 2;
-	grid-row: 1;
-	font-size: var(--ash-fontSize-label1);
-}
-.ash-library-details {
-	display: flex;
-	flex-direction: column;
-	flex: 1;
-	min-width: 0;
-	overflow: auto;
-	padding: var(--ash-spacing-size160);
-	gap: var(--ash-spacing-size120);
-}
-.ash-library-detail-heading {
-	display: flex;
-	align-items: flex-start;
-	gap: 8px;
-}
-.ash-library-detail-heading h2 {
-	flex: 1;
-	min-width: 0;
-	overflow-wrap: anywhere;
-	font-size: var(--ash-fontSize-heading3);
-	line-height: 1.5;
-}
-.ash-library-detail-image {
-	width: 100%;
-	max-height: 240px;
-	object-fit: contain;
-}
-.ash-library-details h3 {
-	font-size: var(--ash-fontSize-label1);
-	font-weight: var(--ash-fontWeight-semiBold);
-}
-.ash-library-details p {
-	margin: 0;
-	line-height: 1.5;
-}
-.ash-library-detail-value {
-	overflow-wrap: anywhere;
+
+.ash-projects-card-caption,
+.ash-projects-muted,
+.ash-projects-source-note {
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-body2);
+	line-height: 1.6;
 }
-.ash-library-membership {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	min-height: 28px;
+
+.ash-projects-breadcrumb .ash-button {
+	padding-left: 0;
 }
-.ash-library-membership span {
-	overflow-wrap: anywhere;
+
+.ash-projects-detail {
+	display: grid;
+	grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+	gap: var(--ash-spacing-size400);
+	align-items: start;
 }
-.ash-library-details[hidden],
-.ash-library-item-favorite[hidden] {
-	display: none;
-}
-.ash-library.list-view .ash-library-results {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-}
-.ash-library.list-view .ash-library-item {
-	flex-direction: row;
-	align-items: center;
-	min-height: 64px;
-	border-color: transparent;
-}
-.ash-library.list-view .ash-library-item-image {
-	width: 64px;
-	height: 56px;
-	flex: 0 0 64px;
+
+.ash-projects-overview,
+.ash-projects-materials {
+	min-width: 0;
+	padding: var(--ash-spacing-size240);
 	border-radius: var(--ash-cornerRadius-medium);
+	background: var(--ash-sideBar-background);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
 }
-.ash-library.list-view .ash-library-item-caption {
+
+.ash-projects-section-heading {
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-projects-section-heading h2 {
+	font-size: var(--ash-fontSize-heading3);
+}
+
+.ash-projects-description {
+	min-height: 80px;
+	margin: var(--ash-spacing-size200) 0 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	line-height: 1.8;
+}
+
+.ash-projects-materials {
+	min-height: 320px;
+}
+.ash-projects-materials-empty {
+	padding: var(--ash-spacing-size400) 0;
+	color: var(--ash-description-foreground);
+	text-align: center;
+	line-height: 1.6;
+}
+
+.ash-projects-material-list {
+	padding: 0;
+	margin: var(--ash-spacing-size200) 0;
+	list-style: none;
+}
+
+.ash-projects-material {
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size40) 0;
+}
+
+.ash-projects-material > .ash-button:first-child {
 	flex: 1;
+	min-width: 0;
+	justify-content: flex-start;
 }
-.ash-library.narrow {
+
+.ash-projects-source-note {
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-projects-dialog {
+	width: 580px;
+	max-width: calc(100vw - 40px);
+	box-sizing: border-box;
+	padding: var(--ash-spacing-size320);
+}
+
+.ash-projects-dialog .ash-dialog-title {
+	font-size: var(--ash-fontSize-heading1);
+	padding-right: var(--ash-spacing-size320);
+	margin-bottom: var(--ash-spacing-size240);
+}
+
+.ash-projects-dialog-close {
+	position: absolute;
+	top: 24px;
+	right: 24px;
+}
+
+.ash-projects-form {
+	display: flex;
 	flex-direction: column;
+	gap: var(--ash-spacing-size240);
 }
-.ash-library.narrow .ash-library-main {
-	padding: 20px;
-	gap: 16px;
+
+.ash-projects-form label {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+	line-height: 1.5;
 }
-.ash-library.narrow .ash-library-tools,
-.ash-library.narrow .ash-library-options {
+
+.ash-projects-form textarea {
+	min-height: 100px;
+	resize: vertical;
+}
+.ash-projects-form-actions {
+	justify-content: flex-end;
 	flex-wrap: wrap;
 }
-.ash-library.narrow .ash-library-search {
-	flex-basis: 100%;
+.ash-projects-form-error {
+	color: var(--ash-error-foreground);
+	margin: 0;
 }
-.ash-library.narrow .ash-library-options > select {
-	max-width: 100%;
-	box-sizing: border-box;
+.ash-projects-form-error:empty {
+	display: none;
 }
-.ash-library.narrow .ash-library-body {
-	flex-direction: column;
-	gap: 16px;
+
+.ash-projects-skeleton {
+	display: grid;
+	grid-template-columns: 1.6fr 1fr;
+	gap: var(--ash-spacing-size400);
 }
-.ash-library.compact .ash-library-main {
-	padding: var(--ash-spacing-size80);
+.ash-projects-skeleton > div {
+	height: 120px;
+	background: var(--ash-sideBar-background);
+	border-radius: var(--ash-cornerRadius-medium);
 }
-.ash-library :focus-visible,
-.ash-library-surface :focus-visible {
+.ash-projects-skeleton > div:last-child {
+	height: 320px;
+}
+
+.ash-projects.narrow .ash-projects-main {
+	padding: var(--ash-spacing-size200);
+}
+.ash-projects.narrow .ash-projects-heading {
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size160);
+}
+.ash-projects.narrow .ash-projects-detail {
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--ash-spacing-size200);
+}
+.ash-projects.narrow .ash-projects-empty {
+	margin-top: var(--ash-spacing-size200);
+}
+.ash-projects.narrow .ash-projects-tools {
+	flex-wrap: wrap;
+}
+
+.ash-projects :focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
-:is(.hc-black, .hc-light) .ash-library-item,
-:is(.hc-black, .hc-light) .ash-library-details {
+
+:is(.hc-black, .hc-light) .ash-projects-card,
+:is(.hc-black, .hc-light) .ash-projects-dialog {
 	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
 }

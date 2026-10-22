@@ -1,0 +1,117 @@
+.ash-extensions {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	height: 100%;
+	font-size: var(--ash-fontSize-body1);
+}
+.ash-extensions .extensions-search {
+	padding: 8px 12px 4px;
+}
+.ash-extensions .extensions-marketplace-controls {
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size120);
+	min-width: 0;
+}
+.ash-extensions .extensions-marketplace-controls[hidden] {
+	display: none;
+}
+.ash-extensions .extensions-marketplace-controls .ash-select-box {
+	max-width: 100%;
+}
+.ash-extensions > .extensions-marketplace-more[hidden] {
+	display: none;
+}
+.ash-extensions .extensions-controls-host {
+	flex-shrink: 0;
+	height: 24px;
+	min-width: 0;
+}
+.ash-extensions .extensions-controls-host > .ash-scrollable-element {
+	height: 100%;
+}
+.ash-extensions .extensions-controls {
+	display: flex;
+	gap: 4px;
+	padding: 0 12px;
+	width: max-content;
+}
+.ash-extensions .extensions-status {
+	padding: 4px 12px;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+.ash-extensions .extensions-status:empty {
+	display: none;
+}
+.ash-extensions .extensions-list {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+}
+.ash-extensions .extensions-list > .ash-list-scrollable {
+	flex: 1;
+}
+.ash-extensions .extension-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 8px 12px;
+	min-width: 0;
+}
+.ash-extensions .extension-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 40px;
+	height: 40px;
+	color: var(--ash-description-foreground);
+	background: var(--ash-editor-background);
+	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	border-radius: var(--ash-cornerRadius-small);
+}
+.ash-extensions .extension-body {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+}
+.ash-extensions .extension-name {
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+.ash-extensions .extension-description {
+	margin-top: 4px;
+}
+.ash-extensions .extension-metadata {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	margin-top: 4px;
+}
+.ash-extensions .extension-footer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-top: 4px;
+}
+.ash-extensions .extension-row-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+	margin-left: auto;
+}
+.ash-extensions .extension-state {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.extension-capability-pane .extensions-status {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}

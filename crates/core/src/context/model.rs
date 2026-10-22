@@ -8,6 +8,7 @@ use ash_protocol::ToolDefinition;
 use ash_protocol::TurnId;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 /// Stable rendering position, not permission or semantic authority.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -180,7 +181,9 @@ pub(crate) struct ContextInput {
     terminal_turns: BTreeSet<TurnId>,
     turn_endings: BTreeMap<TurnId, ash_prompts::PromptArtifact>,
     item_sequences: BTreeMap<ItemId, u64>,
-    tools: Vec<ToolDefinition>,
+    // Planning (including a buffered Handoff clone) borrows the invocation's immutable
+    // schemas. Only the final protocol request needs an owned Vec.
+    tools: Arc<Vec<ToolDefinition>>,
     budget: ContextBudget,
     allow_empty_current_turn: bool,
 }
@@ -190,7 +193,7 @@ impl ContextInput {
         snapshot: &ThreadSnapshot,
         current_turn_id: TurnId,
         instructions: Vec<InstructionFragment>,
-        tools: Vec<ToolDefinition>,
+        tools: impl Into<Arc<Vec<ToolDefinition>>>,
         budget: ContextBudget,
     ) -> Self {
         let allow_empty_current_turn = snapshot.commands.iter().any(|command| {
@@ -248,7 +251,7 @@ impl ContextInput {
                 })
                 .collect(),
             item_sequences: snapshot.item_sequences.clone(),
-            tools,
+            tools: tools.into(),
             budget,
             allow_empty_current_turn,
         }
@@ -350,7 +353,7 @@ impl ContextInput {
         self.item_sequences.get(item_id).copied()
     }
 
-    pub(crate) fn tools(&self) -> &[ToolDefinition] {
+    pub(crate) fn tools(&self) -> &Arc<Vec<ToolDefinition>> {
         &self.tools
     }
 

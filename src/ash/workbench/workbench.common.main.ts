@@ -19,6 +19,7 @@ import './services/dataChannel/browser/dataChannelService.js';
 import './api/browser/mainThreadDataChannels.contribution.js';
 import './api/browser/mainThreadUriOpeners.js';
 import './contrib/bulkEdit/browser/bulkEditService.js';
+import './contrib/format/browser/format.contribution.js';
 import './contrib/localHistory/browser/localHistory.contribution.js';
 /**
  * Shared Workbench registrations loaded by every renderer host.
@@ -31,12 +32,12 @@ import "./browser/workbench.contribution.js";
 import './contrib/speech/browser/speech.contribution.js';
 import './contrib/accessibilitySignals/browser/accessibilitySignal.contribution.js';
 import './browser/actions/layoutActions.js';
+import './contrib/workspace/browser/workspace.contribution.js';
 import "./contrib/modernUI/browser/modernUI.contribution.js";
 import './contrib/mediaPreview/browser/mediaPreview.contribution.js';
 
 import './contrib/extensions/browser/extensions.contribution.js';
 import './contrib/chat/browser/aiCustomization/customizationMarketplace.contribution.js';
-import './contrib/extensions/browser/extensionRecommendations.contribution.js';
 import './contrib/language/browser/languageServers.contribution.js';
 import './contrib/localization/common/localization.contribution.js';
 import './contrib/commands/common/commands.contribution.js';
@@ -52,6 +53,9 @@ import './contrib/dropOrPasteInto/browser/dropOrPasteInto.contribution.js';
 import './contrib/externalUriOpener/common/externalUriOpener.contribution.js';
 import './contrib/url/browser/url.contribution.js';
 import './contrib/folding/browser/folding.contribution.js';
+import './contrib/inlayHints/browser/inlayHintsAccessibilty.js';
+import './contrib/limitIndicator/browser/limitIndicator.contribution.js';
+import './contrib/opener/browser/opener.contribution.js';
 import './contrib/snippets/browser/snippets.contribution.js';
 import './contrib/scrollLocking/browser/scrollLocking.contribution.js';
 import { registerCallView } from './contrib/call/browser/call.contribution.js';

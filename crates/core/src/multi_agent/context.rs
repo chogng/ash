@@ -149,8 +149,8 @@ fn materialized_content_text(content: &AgentContextContent) -> String {
 pub(crate) fn scope_agent_tools(
     snapshot: &ThreadSnapshot,
     tool_mode: ash_protocol::ToolMode,
-    tools: Vec<ToolDefinition>,
-) -> Vec<ToolDefinition> {
+    tools: std::sync::Arc<Vec<ToolDefinition>>,
+) -> std::sync::Arc<Vec<ToolDefinition>> {
     let Some(seed) = snapshot.agent_configuration() else {
         return tools;
     };
@@ -160,15 +160,21 @@ pub(crate) fn scope_agent_tools(
         .iter()
         .cloned()
         .collect::<BTreeSet<_>>();
+    let permits = |tool: &ToolDefinition| {
+        allowed.contains(&tool.name)
+            || (!allowed.is_empty()
+                && tool_mode.requires_code_mode()
+                && matches!(tool.name.as_str(), "exec" | "wait"))
+    };
+    if tools.iter().all(permits) {
+        return tools;
+    }
     tools
-        .into_iter()
-        .filter(|tool| {
-            allowed.contains(&tool.name)
-                || (!allowed.is_empty()
-                    && tool_mode.requires_code_mode()
-                    && matches!(tool.name.as_str(), "exec" | "wait"))
-        })
-        .collect()
+        .iter()
+        .filter(|tool| permits(tool))
+        .cloned()
+        .collect::<Vec<_>>()
+        .into()
 }
 
 fn xml_escape(value: &str) -> String {

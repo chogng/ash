@@ -56,7 +56,16 @@ impl<'a> ExtensionRequestProcessor<'a> {
             .lock()
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
             .list(reload);
-        result(&ExtensionListResult {
+        // The package owner still confirms the live generation on every read.
+        // An unchanged reply avoids rebuilding and serializing all manifests.
+        if params.reload == ExtensionCatalogReloadDto::Cached
+            && params.known_generation == Some(snapshot.generation)
+        {
+            return result(&ExtensionListResult::Unchanged {
+                generation: snapshot.generation,
+            });
+        }
+        result(&ExtensionListResult::Updated {
             generation: snapshot.generation,
             extensions: snapshot
                 .extensions

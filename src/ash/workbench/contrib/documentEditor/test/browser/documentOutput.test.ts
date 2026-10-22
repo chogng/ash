@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { createDefaultDocumentSchema } from '../../../../../../../extensions/academic/common/model/documentSchema.js';
-import { exportDocx, importDocx } from '../../../../../../../extensions/academic/browser/contrib/documentOutput/docx.js';
-import { zipFiles, unzipFiles } from '../../../../../../../extensions/academic/browser/contrib/documentOutput/zip.js';
-import { documentToPlainText } from '../../../../../../../extensions/academic/common/model/documentSerialization.js';
-import { createResolveRevisionCommand } from '../../../../../../../extensions/academic/common/model/documentReview.js';
-import { DocumentTextModel } from '../../../../../../../extensions/academic/common/model/documentTextModel.js';
+import { createDefaultDocumentSchema } from '../../../../../../../extensions/academy/common/model/documentSchema.js';
+import { exportDocx, importDocx } from '../../../../../../../extensions/academy/browser/contrib/documentOutput/docx.js';
+import { zipFiles, unzipFiles } from '../../../../../../../extensions/academy/browser/contrib/documentOutput/zip.js';
+import { documentToPlainText } from '../../../../../../../extensions/academy/common/model/documentSerialization.js';
+import { createResolveRevisionCommand } from '../../../../../../../extensions/academy/common/model/documentReview.js';
+import { DocumentTextModel } from '../../../../../../../extensions/academy/common/model/documentTextModel.js';
 
 const environment = new JSDOM('<!doctype html>');
 suiteTeardown(() => environment.window.close());
@@ -71,8 +71,8 @@ test('DOCX rejects unsupported features, invalid archives, expansion and cancell
 });
 
 test('DOCX native Academic imports preserve their profile, paper structure and citation identities', async () => {
-	const { createAcademicDocumentSchema, createEmptyAcademicDocument } = await import('../../../../../../../extensions/academic/browser/contrib/academic/common/schema.js');
-	const { importDocxDocument } = await import('../../../../../../../extensions/academic/browser/contrib/documentOutput/docx.js');
+	const { createAcademicDocumentSchema, createEmptyAcademicDocument } = await import('../../../../../../../extensions/academy/browser/contrib/academic/common/schema.js');
+	const { importDocxDocument } = await import('../../../../../../../extensions/academy/browser/contrib/documentOutput/docx.js');
 	const academic = createAcademicDocumentSchema();
 	const empty = createEmptyAcademicDocument(academic);
 	const document = academic.createDocument([...empty.content,
@@ -85,7 +85,7 @@ test('DOCX native Academic imports preserve their profile, paper structure and c
 });
 
 test('DOCX citation output uses current bibliography ordinals and retains explicit and unresolved labels', async () => {
-	const { createAcademicDocumentSchema } = await import('../../../../../../../extensions/academic/browser/contrib/academic/common/schema.js');
+	const { createAcademicDocumentSchema } = await import('../../../../../../../extensions/academy/browser/contrib/academic/common/schema.js');
 	const academic = createAcademicDocumentSchema();
 	const document = academic.createDocument([
 		academic.createNode('bibliography', { content: ['first', 'second'].map(key => academic.createNode('reference', { attrs: { key }, content: [academic.createNode('paragraph', { content: [academic.createText(key)] })] })) }),

@@ -4,6 +4,19 @@
 
 任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**布局前置**表示须先补齐布局 owner 的位置或移动契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
 
+## Connectors 面板 · 点击后窗口无响应
+
+- [ ] **历史现场复核** · 2026-10-21 用户随后确认点击已正常；实际开发窗口的只读检查也显示主线程响应、无活动动画、Connectors 读取已结束。隔离 Desktop 中全折叠后展开／键盘切换通过，尚未建立原先整窗无响应的故障链。潜在的状态通知请求放大已单独复现并修复：25 次通知在读取进行中不再追加 25 组读取，只在结束后补读一次；保留最新状态、隐藏时撤销待补读，显式导航及可物理取消的市场查询仍可抢占。原始故障仅在再次出现时采集实际 Renderer／Main 栈继续归因，不把这一防护称为历史根因修复；证据与运行限制见 `.build/ash-playwright-mcp/connectors-validation.json`。
+
+## SCM 普通文件点击 · 残余极端往返
+
+- [ ] **测量** · 最终独立窗口中最慢暖点击 375.6 ms：extensionHost/invoke/read（connection 1，request 2907）客户端往返 274.3 ms，同 ID 服务端处理 0.088 ms、出站 0.040 ms，Git 请求在之后才开始且仅 3.4 ms。尚未拆清 Renderer→Main→daemon 送达与返程 decode/dispatch，不能归因扩展执行或渲染。下一步补这些边界的 method/request ID 标记，保留极值复现；本轮全部原始数据和已完成实现见[报告](.build/scm-tail-v2/report.md)。
+- [ ] **checkIgnore 排队残余** · 统计读取与普通文件读取的两层共享读已完成；新 16 窗对照中 Git RPC p99 79.8→16.6 ms、资源排队 p99 77→0 ms，暖端到端 p95/p99 均通过预设稳定规则。仍有 1/960 暖点击等待 47 ms，前方三个独占 `git/checkIgnore` 请求依次完成；后续评估该路径须保留取消、写者顺序及仓库权限约束，不直接移除序列化。原始关联与完整结果见[报告](.build/scm-statistics-concurrency/report.md)。
+
+## macOS 系统内存耗尽 · 历史现场复核
+
+- [ ] **复核** · 2026-10-21 截图中的 203.48 GB 尚无故障进程 footprint／分配栈，应用已经退出，不能确认分配 owner。文件监听的无界入口、路径积压和重复重扫防护已完成，并通过有界突发、慢消费者及真实 Ash 验证；实现契约见 [file-watcher](crates/file-watcher/README.md#事件风暴的预算与恢复)，原始现场及验证证据见 [.build/investigations/macos-memory-20261021](.build/investigations/macos-memory-20261021)。后续若再次发生，需采集当时 PID、footprint、监听丢事件日志及触发操作；不能用已修复的风险反推历史根因。
+
 ## PR #57 · 合并后剩余项
 
 [PR #57](https://github.com/chogng/ash/pull/57) 已于 2026-10-20 正常 squash merge（`ee3dea640`）。后续仅在当前 main 本地整批修复与验证；不推送、不主动触发远端 CI、不恢复已暂停的 `pr-57-ci` heartbeat。保留其它任务修改，完整批次提交前准确 stage 并执行 `just commit-check origin/main`。
@@ -14,29 +27,6 @@
 
 - [ ] **验收** · 在支持 PSEC 的 Windows、WSL2 和独立 Linux／x64 运行当前 SDK pin `f1e8694b`，并补外部局域网／公网 IPv6。命令与验收边界见 [MXC 清单](MXC-TODO.md) 与 [适配器验证](crates/mxc-sandbox/README.md#验证)。
 
-## Terminal · 独立 PTY 宿主跨平台验收
-
-- [ ] **验收 · Windows／Linux**：终端已迁到 profile 独立的 `--terminal-host` 进程，App Server 重启后恢复原 PTY；macOS 的超过 35 秒后端中断、每命令 2 MiB 输出、原 PID 保留、窗口存活连接、关闭／reload／跨窗口转移及 Main 强杀回收均已通过；中英文 6 项清理场景记录的 38 个 PID 无残留，验收见 [.build/terminal-host/cleanup-validation.json](.build/terminal-host/cleanup-validation.json)。补两平台 `just rust-warnings ash-exec-server -p ash-app-server-runtime -p ash-utils-pty`、终端 Rust 测试及 `terminal.spec.ts --grep 'independent terminal host|terminal window lifetime cleanup'` 真实 Desktop 验收；验证后端父进程／Job 退出不结束 PTY 宿主，且窗口／Main 退出时 owner 辅助进程、Shell、任务及子进程全部回收。当前本机 Linux 交叉检查缺 `x86_64-linux-gnu-gcc`，Windows 交叉检查缺 SDK 的 `stdlib.h`，均在 C 依赖构建处停止，不能算通过。日志为 `.build/terminal-host-{linux,windows}-check.log`。
-
-## 搜索与 MCP 进程回收 · Windows 验收
-
-已修复 tgrep／MCP 仅终止直接子进程的缺口，改用 Unix session／Windows Job Object 回收后代；同时修复 tgrep 启动器退出后，后代继承输出管道导致搜索无法结束的问题。macOS 此前两包 `just verify` 通过；提交前 MCP 再验 14 项通过，tgrep 首跑 54 passed／1 failed／2 ignored（managed daemon 重启报 `view-not-found`），该失败用例单独复跑通过，两包警告检查与依赖检查通过。首次与复跑日志见 `/tmp/ash-commit-tgrep{,-retry}.log`；tgrep 的 Windows x64 全目标警告检查通过。MCP 交叉编译被本机缺少 Windows SDK 的 `stdlib.h`／`windows.h` 阻塞，以下 Windows 项目尚未验收。
-
-- [ ] **构建来源**：Windows 检出须包含本次进程树回收提交中的 `crates/tgrep`、`crates/rmcp-client` 和 `Cargo.lock` 修改；按现有 Windows 构建入口重建并启动 Ash。记录 commit、工作区修改、版本和实际运行路径，确认使用的是新构建。
-- [ ] **包验证**：执行下列命令，保存完整输出；不得把编译失败、超时或跳过当作通过。
-
-  ```powershell
-  just verify ash-tgrep
-  just verify ash-rmcp-client
-  ```
-
-- [ ] **搜索循环**：在同一仓库连续进行至少 20 轮搜索，包含快速更换查询、取消、达到结果上限；再关闭并重新打开仓库。记录开始前、过程中、停止操作 10 秒后的进程快照。搜索应正常完成或取消；同一工作区在相同空闲状态下，tgrep 数量不得随轮次持续增加。
-- [ ] **MCP 循环**：使用一个已授权的本地 stdio MCP，优先覆盖 `npm exec`／`npx` 启动 Node 服务的配置，连续进行至少 10 轮连接、调用、断开或禁用、重新启用。每轮确认旧连接所属的启动器和后代退出；`process_tests` 回归须覆盖初始化超时、取消及反复 shutdown／Drop，不使用公网故障模拟超时。
-- [ ] **窗口与退出**：关闭一个工作区窗口，确认其独占的搜索／MCP 进程退出，其他仍打开窗口的搜索和工具继续可用；最后正常退出 Ash，等待 10 秒，确认本次 Ash 启动的 tgrep、npm／npx、node 后代均已退出。
-- [ ] **现场证据与结论**：每次快照保存时间、`ProcessId`、`ParentProcessId`、`CreationDate`、`ExecutablePath`、完整 `CommandLine`，与新构建路径及父子关系关联。附测试输出、操作轮数和各阶段计数；若失败，保留残留 PID、命令行、日志及最短复现步骤。仅统计本次 Ash 所属进程，不能按名称把其他应用的 Node 进程算进来；全部通过后移除此待办。
-
-macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的父进程属于 ChatGPT/Codex，不能视为 Ash 泄漏的现场证据，本轮未终止这些进程。
-
 ## Windows 开发实验资源清理
 
 - 保存 Rust 到 App 可用的 15 秒目标尚未达到。2026-10-19 在 `3df4938da` 暂停开发与同步后完成迁移修复的 20 次匹配尝试：空库成功中位数 20.06 → 19.80 秒（5/5 → 5/5），100 条历史会话 22.27 → 21.15 秒（3/5 → 5/5），历史成功样本快 1.12 秒（5.0%）；仍差 4.80／6.15 秒。空库差异很小，不能用成功样本的条件中位数替代总体延迟或失败率结论。原始样本与阶段成本见 `docs/build.md` 完整循环复测及 `.build/perf-win-edit-20261019-migration/q2-summary.json`。
@@ -44,16 +34,14 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 
 ## Rust 函数级增量编译
 
-- [ ] 将已验证的同 crate 跨文件标量图扩展到跨 crate 和非标量 Rust：先闭合准确的 artifact target／feature／cfg 与实例身份，再处理一般语义依赖／布局失效、泛型单态化、引用／堆对象、drop／unwind、间接调用和更多实际注册入口。独占 helper 可直接更新，共享原生调用者与上下文变化退回整模块；路径／Git 依赖及其声明的构建脚本输入已纳入完整 rustc 检查上下文复用，真实 App Server 注册 diff 链路已达数百毫秒；owner 自身 build script 与上述跨 crate／非标量代码生成仍需后续实现。RA MIR 操作数没有公开接口，不能把现有标量链路视为通用 Rust JIT。实现与测量见 [标量 MIR 边界](docs/rust-analysis.md#标量-mir-与本机代码边界)、[跨文件测量](docs/build.md#2026-10-21同-crate-跨文件依赖失效与真实业务函数) 和 [App Server 实测](docs/build.md#2026-10-21路径依赖检查复用与-app-server-真实热更新)。
-
-- [ ] **验收 · 构建工具 Windows**：在 Windows 复核 `build/builtin/editorClients.test.ts`、`build/desktop/host.test.ts`、`build/desktop/launch/electron.test.ts` 和 `build/testRunners.test.ts` 的原失败目标，并运行完整 `pnpm --dir build run test:prepared`。macOS arm64 已于 2026-10-21 完成整套回归（220 通过、0 失败、16 跳过），并修复本机暴露的 Host 监听、测试夹具和工具定位问题；本机结果不覆盖 Windows、独立开发宿主或 F5 调试环境。命令、首败与最终证据见 [构建验证](docs/build.md#2026-10-21路径依赖检查复用与-app-server-真实热更新)。
+- [ ] **后端前置 · 跨 crate／非标量函数热更新**：先闭合准确的 artifact target／feature／cfg 与实例身份，再处理一般语义依赖／布局失效、泛型单态化、引用／堆对象、drop／unwind、间接调用和更多实际注册入口；完整检查上下文复用还缺 owner 自身 build script。当前源码明确拒绝跨 crate 调用，现有同 crate 标量链路不能视为通用 Rust JIT。已完成范围与测量见 [标量 MIR 边界](docs/rust-analysis.md#标量-mir-与本机代码边界) 和 [App Server 实测](docs/build.md#2026-10-21路径依赖检查复用与-app-server-真实热更新)。
 
 ## Remote / Browser 多根工作区 · TODO
 
 工作区契约见 `docs/desktop-architecture.md` §4.2。
 
 - [ ] **后端前置** · 实现直接保存工作区配置到远端机器；当前 SSH 配置仍保存在 Desktop 本地，内容为远端 URI 根。
-- [ ] **验收** · 补 Windows／Linux 远端多根及 Windows 真实系统文件选择器验证。现有多根 SSH 验证使用 macOS 同机隔离 OpenSSH fixture，远端选择器使用受控返回值；跨机器单独步骤通过不能替代多根场景验证。
+- [ ] **验收** · 补 Windows／Linux 远端多根验证。现有多根 SSH 验证使用 macOS 同机隔离 OpenSSH fixture，远端选择器使用受控返回值；跨机器单独步骤通过不能替代多根场景验证。
 
 ## Desktop 窗口收尾弹窗 · TODO
 
@@ -80,6 +68,9 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 
 - [ ] **修复候选 · 兼容 Chat Completions 的结构化流内容**：`crates/ash-api/src/sse/openai_chat_completions.rs` 仍把 `delta.content` 限定为字符串，已启用 native streaming 的 OpenAI-compatible 端点遇到 text/thinking 数组会报错；参考 [Zed 混合流适配](https://github.com/zed-industries/zed/pull/65915)（已合并 main，未核实进入稳定版），沿现有 decoder 与 terminal assembly 支持经确认的结构化内容，保持思考与正文分离。不新增 provider 抽象或账号接线。
   - 兼容与验收：记录的 string／thinking-array／text-array 交替流应完整结束，实时事件顺序与最终输出一致；覆盖空 thinking、可选 closed、usage、tool-call 分片、取消和严格 DONE。同步参照 [推理字段选择](https://github.com/zed-industries/zed/pull/65926) 验证 reasoning／reasoning_content 的明确优先级与空值回退，不按全局文本去重；Ash 当前只读后者，不把上游双发缺陷误写成已复现 Ash 问题。保留原有 DeepSeek／Kimi／GLM 行为，对未知内容类型明确报错；本条依据静态核对，真实 provider 回归待实施时验收。
+
+- [ ] **修复候选 · Responses 推理文本兼容性**：`crates/ash-api/src/endpoint/responses/events.rs` 仅消费 `response.reasoning_summary_text.delta`，`responses.rs` 的最终推理项也只读取 `summary`；已配置 Responses 的兼容端点若只提供 `reasoning_text`，实时思考与最终推理文本均可能缺失。参考 [Responses 推理文本适配](https://github.com/zed-industries/zed/pull/65938)（2026-10-22 已合并 main，未核实进入稳定版），沿现有 decoder 与最终解析补齐经确认的事件和内容类型，不新增 provider 抽象或账号入口。本项为静态核对的兼容缺口，尚未复现真实端点故障，与上方 Chat Completions 协议不同。
+  - 范围与验收：先明确 summary 与 reasoning content 共存时的选择规则，不盲目拼接或按全局文本去重；保留加密 `ReasoningState` 的回放边界，不能把密文当作展示文本。在 `crates/ash-api/src/endpoint/responses/events_tests.rs`、`responses_tests.rs` 覆盖空／非空 delta、done 不重复发全文、`output_item.done` 与终态合成、非流式 content、未知内容项、仅 summary、两类共存、工具交错、usage、取消与 WebSocket 共用 decoder；实时事件和最终结果保持一致，既有终态／身份校验不放宽。真实兼容端点回归通过后才关闭本项。
 
 以下新产品能力和专项环境验收暂缓，按实际使用需要恢复。
 
@@ -128,6 +119,7 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 
 - [ ] **独立准备 · PDF 查看、批注与 AI 阅读 Plugin**：方案归 [PDF Viewer](extensions/pdf-viewer/docs/pdf-content.md)。先核对已有批注保存／恢复与实际 AI 文字、页面图读取链，再选一个最小阅读场景复用工具和 Skill；仅对证实的阻碍补接线或最小 SDK 能力。不引入通用文档编辑；仓库外开发链不再作为下一项 SDK 功能需求，F5／`.ashx` 继续暂停。本轮仅记录方案，功能、Skill 和 Plugin 打包留待单独实施。
 - [ ] **复核 · macOS 原生监听故障来源**：已复现原生监听注册／注销阻塞及注册成功却不送事件，并以隔离 helper、限时终止和限定目录轮询恢复修复 Ash 卡住的问题；系统 `fseventsd` 长期高 CPU 的来源仍未证实，不能认定由 Ash 引起。保留 `.build/file-watcher-reproduction-before.json`、`.build/file-watcher-deletion-reproduction.json`，后续需另取现场证据；本轮未重启系统服务。
+- [ ] **功能 · 文献检索扩展**：后续实现查询、元数据获取及向文献管理扩展入库的工具／Skill 链路，PDF 阅读复用独立查看器；作者接入遵循本节扩展 SDK 任务。Agent 结构化文档写入仍按下方 Work 文档服务契约另行实施。尚未新增检索代码或迁仓。
 - [ ] **Academy 作者侧迁移**：先以 Academy 现有声明、标签和注册接线确定具体作者阻碍，再由 Manifest、TS SDK 或构建工具承担必要的 Rust 接线，使普通作者无需手写 Rust 即可开发编辑器、提供 Agent 工具并附带 Skill；不借迁移预建通用 API。高级编辑器能力使用明确的公开客户端契约；Agent 结构化写入依赖下方 Work 文档服务任务，不另建模型或编辑历史。确有原生算法需求时再选用 Rust／WASM 等组件。
 - [ ] **本地开发与源码调试**：按用户当前要求暂停，待明确恢复后实施；只读调查已确认可复用现有 F5／DebugService／Rust DAP 链，独立 Node DAP adapter 需要“受管子进程＋私有 socket”启动组合。隔离 Ash 开发实例显式加载开发目录，开发授权与正式安装信任分开；补 TS Source Map、源码断点、单步、变量、构建／重载及诊断。暂停预算归开发会话，普通调用的取消、撤权、deadline 与晚回复墓碑继续生效；不能只扩大 Host RPC 超时。验证暂停超过 30 秒后不误重启、恢复不续旧权限、停止／断连释放宿主和 adapter；Rust/V8 Inspector 另按实际宿主实现。
 - [ ] **测试、打包与安装**：按用户当前要求暂停 `.ashx`，待明确恢复后实施；只读调查已确认可复用 `LocalPluginPackage`、`PluginPackageStore` 和 `PluginActivationAuthority`。计划使用带明确格式标记与内容摘要的 ZIP envelope／payload，严格解压后交同一安装 authority；普通 ZIP／改名 VSIX 拒绝，安装不自动启用或授权，也不冒充签名来源。支持已构建 TS、资源及按平台独立打包的可选原生程序；不在安装时执行构建脚本。补 CLI pack／install 与真实 `pack → install → enable/grant → TS 调 Rust → revoke/uninstall`，覆盖篡改、路径逃逸、重复／链接条目和大小限制。
@@ -135,35 +127,21 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 
 ## Stanza 编辑器 · TODO
 
-当前 Editor 待办统一维护于本节，完成后移除；不再续写 API 对齐台账或维护声明完成数量。以下由旧记录归并，尚未逐项重跑；复核项先确认当前调用方与行为，历史失败和成员差异不直接视为现存缺陷。
+本节只维护 Stanza 通用文本机制与 Code／普通文件宿主的未完成工作，完成后移除；架构与证据范围见[编辑器架构](docs/editor-architecture.md#验证范围)。扩展业务、装载组合和产品入口由所属扩展／宿主单独验收。具体契约由实现文档维护，不按上游成员数量建立补齐清单。
 
-- [ ] **复核 · 配置与语言身份**：核对配置节点／默认 override、语言身份及语言配置的生产调用链，确认是否仍有并行 owner；已完成的配置 registry 迁移不重复实施。
-- [ ] **复核 · 文本模型与光标**：沿 `TextModel`、`ViewModel`、`CursorsController` 检查编辑、选区与撤销的剩余公开契约，保留唯一模型与历史 owner；只补真实消费者需要的行为，不为上游私有结构或成员数量增加转发层。
-- [ ] **复核 · 输入生命周期与辅助阅读**：确认输入实例的构造／释放已完整归属 `View`，再核对 Native EditContext、Textarea fallback、简单／富屏幕阅读内容的构造与事件链；验证 IME、失焦取消、剪贴板、系统选区及迟到事件。物理 IME 与屏幕阅读器现场验收沿下方平台组合任务执行。
-- [ ] **布局前置 · 视图与滚动**：从真实布局、指针和滚轮入口核对 `ViewLayout`、`ViewLine`、覆盖层、小地图、滚动条和 Overview Ruler 的 owner 与缺失契约；不得为 `getDomNode` 等成员新造 DOM wrapper 或第二份滚动状态。
-- [ ] **复核 · Widget 与 Diff／MultiDiff 宿主**：核对 `CodeEditorWidget` 的模型切换、稳定身份、贡献与外部 Widget 释放，以及 Diff／MultiDiff 的实际服务调用；按行为确认旧记录中的同名职责问题是否仍存在。
-- [ ] **复核 · 语言功能控件**：按现有生产入口逐项核对 Peek、Code Action、CodeLens、Find、Folding、颜色检测／选择和 Sticky Scroll 的剩余契约；重点确认 Sticky Scroll 的定义查询与高度事件消费者，避免重复实现已接通能力。
-- [ ] **复核 · 格式化与资源级 Worker**：确认默认格式化器选择、冲突选择界面、输入格式化自动触发及资源级 worker 的当前生产链；旧记录存在先后修正，须先核对实际缺口，再验证取消、语言切换、多选区和一次撤销。
-- [ ] **验收 · 补全、提示与片段**：验证 Suggest 的触发／调度／事件、Inline Completions 的接受与取消、Inlay Hints 的行内布局／展示选项，以及 Snippet 的合并和插入选项；覆盖模型切换、只读和撤销。
-- [ ] **复核 · 批量编辑预览与撤销**：确认批量预览的分类／实时差异及平台 UndoRedoService／UndoRedoSource 接入是否有当前产品消费者，再确定实施范围；保留现有事务、回滚与顺序快照的唯一 owner。
-- [ ] **复核 · Editor 完整回归**：复跑受本轮范围影响的现有 Editor 检查，确认旧 Windows URI-list 路径断言、测试产物缺失及 Electron 中文重启关闭超时是否仍可复现；已被后续修复覆盖的旧失败直接移除，不把历史记录当作当前阻塞。新行为通过 Ash 自身对应入口验收。
-
-- [ ] **候选／链路补齐（未排期）· Desktop 文件粘贴的路径回退**：现有 `src/ash/editor/browser/controller/editContext/clipboardUtils.ts` 在无文本、无编辑器元数据而有文件时只插入 `File.name`；EditContext 与 TextArea 共用此入口。补齐文件管理器复制文件后在普通文本编辑器粘贴可定位路径的操作链路，参考 [VS Code 文件粘贴路径回退](https://github.com/microsoft/vscode/pull/342695)（2026-10-19 已合并，未确认稳定版包含）。这是现有文件名回退的增强，不是已复现的文件内容丢失缺陷。
-  - 范围与前提：复用 `src/ash/platform/dnd/browser/dnd.ts` 的既有宿主 File 路径解析边界，保持 editor → platform 依赖方向，不直接引入 Electron；不让浏览器读取本地路径，不读取文件内容、不自动打开文件、不改变 URI-list provider、普通文本及编辑器元数据的优先级。无宿主路径时仍回退文件名。
-  - 验收：扩展 `src/ash/editor/contrib/dropOrPasteInto/test/browser/copyPasteController.test.ts`，覆盖单／多文件、空格与非 ASCII 路径、宿主无路径或异常、文本与元数据优先，并保留“不读取文件内容”断言；分别走 EditContext／TextArea，补真实 Electron 文件管理器复制粘贴与 Web 回退验收，记录平台差异。
-
-- [ ] **功能 · 文献检索扩展**：后续实现查询、元数据获取及向文献管理扩展入库的工具／Skill 链路，PDF 阅读复用独立查看器；作者接入遵循上方扩展 SDK 任务。Agent 结构化文档写入仍按下方 Work 文档服务契约另行实施。尚未新增检索代码或迁仓。
-
-- [ ] **验收 · 编辑器扩展平台组合**：在真实 Electron 多窗口／远端环境验收 Academy、可选 Reference Manager／PDF Viewer 外置签名包的装载、版本匹配、dirty／恢复及释放，同时验收客户端内置 Code 的编辑与共享宿主生命周期，并补物理 IME、屏幕阅读器、跨页输入以及目标 Word 打开／编辑／再次保存的互通验收。PDF 查看器独立包迁移及本机验证见[扩展说明](extensions/pdf-viewer/README.md)，拆分本身不再列为待办。文献管理的本机验证范围见 [Reference Manager](extensions/reference-manager/README.md)。已完成的迁移、纵向分页、分节、DOCX／页面图像 PDF 与块级审阅的支持范围见 [Academy 包说明](extensions/academic/README.md)，不再列作功能待办；本机结果不能替代尚缺的真实环境证据。
+- [ ] **验收 · 其他平台与输入法**：在目标 macOS／Linux 及其他支持的物理输入法上，补齐候选提交／取消、选区方向、撤销重做与保存重开的可复核证据。Windows 微软拼音 Native／textarea 的已有证据及适用范围见[验证范围](docs/editor-architecture.md#验证范围)；CDP 组合输入不替代物理输入法验收。
+- [ ] **验收 · 真实屏幕阅读器**：使用真实屏幕阅读器验证文本朗读、选区、候选和帮助焦点，并保留可复核输出。2026-10-22 本机未安装 NVDA，系统讲述人尚无实际朗读证据；已有 ARIA、Windows 原生正文／选区读取、帮助焦点与高对比度自动化结果见[验证范围](docs/editor-architecture.md#验证范围)，不能据此消项。
 
 设计边界与功能依赖见[编辑器设计与演进](docs/design/editor-roadmap.md)；具体工作仅维护于本清单，不把整篇设计当作一个未完成任务。
 
 ## Work / 通用文档 · TODO
 
-产品范围与约束见 [Work / Code 设计](docs/design/work-code-workbench.md)。
+- [ ] **验收 · 文档扩展与共享宿主**：独立验收 Academy、可选 Reference Manager／PDF Viewer 外置签名包在真实 Electron 多窗口／远端环境的装载、版本匹配、dirty／恢复及释放；Academy 的物理输入法跨页输入、扩展视图的屏幕阅读器及目标 Word 打开／编辑／再次保存的互通均归此项。客户端 Code 与普通文件宿主按 Stanza 自身契约验收，扩展组合不作为 Stanza 完成条件。已有范围见 [Academy](extensions/academy/README.md)、[Reference Manager](extensions/reference-manager/README.md) 和 [PDF Viewer](extensions/pdf-viewer/README.md)；本机已安装 Word，不能将未执行的 Word 往返记作缺少 Word 环境。真实签名包、远端及对应输入法／辅助技术覆盖仍需逐项取证。
+
+产品范围与约束见 [Agent Window 文档工作区设计](docs/design/work-code-workbench.md)。
 
 - [ ] **Ash 产品** · Agent 结构化文档编辑经统一文档服务校验模型版本／文件修订、权限和 schema，一次事务可撤销；覆盖打开和未打开资源及过期拒绝。现有 `AppServerTextDocumentHost` 仅闭合普通文本快照和 WorkspaceEdit；须先定义结构化编辑的真实 producer／领域端口及审阅行为，不能把 `.ash-doc` 的共享模型再解析成第二份普通文本模型。
-- [ ] **Ash 产品** · 增加 Work 产品入口和默认布局，复用现有生命周期，明确 Code／Work 的资源、未保存内容、会话与状态恢复，不恢复模式注册表或第二份配置。
+- [ ] **Ash 产品 · Stanza 基础之后** · 将 Academy 的插件消费限定在 Agent Window，沿产品装配收敛 IDE 既有文档贡献、菜单与恢复接线；共享编辑器桥、文件和工作副本服务继续复用。独立 Activity Bar 图标与界面仍为待定方案，不先实现入口；选定入口后沿现有 Parts 和生命周期验证资源、未保存内容、会话与恢复，不恢复模式注册表或第二份配置。2026-10-22 已同步目标设计；本轮未改宿主准入或运行时接线，既有备份的退出／恢复策略及真实宿主范围验收仍待闭合。
 
 ## Desktop 启动性能 · TODO
 
@@ -178,10 +156,9 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 
 - [ ] **测量** · 量化 receive／assemble／decode／parse／schema／adapter／apply／paint 阶段、队列 bytes／elapsed 与真实 task yield；核对 ACK 跟随消费和跨进程时钟关系。
 - [ ] **复核** · 继续识别大内容按需资源及领域物理取消的具体消费者。文件模型、Chat Changes 摘要及 Code／Cowork Thread／transcript 的在途只读刷新已合并；后者补齐代次隔离、写后补读和落后 bounded 快照的有界重试，两个模型/视图文件 239 项测试通过。GitHub 已取消读取可跳过无消费者 payload 的 schema／Worker 回传；这些结果不代表通用传输取消或所有读取入口均完成。约束见[消费者刷新约束](docs/ash-app-server-data-path-audit.md#已接入的消费者刷新约束)。
+  - **具体消费者测量 · 长 Chat 历史首次解析**：`src/ash/workbench/contrib/chat/browser/widget/chatListWidget.ts` 为全部条目建立 row，`chatContentParts/chatMarkdownContentPart.ts` 对短文本立即解析、长文本按面板可见性排到下一帧，尚非逐行视口准入。参考 [按需首次解析 Markdown](https://github.com/zed-industries/zed/pull/65470)（2026-10-21 已合并，未核实进入稳定版），先测相同长历史首开时屏幕外解析次数、主线程时间、峰值内存和首次可读绘制；现有增量复用／每帧合并／代码块延迟资源不重复列为缺失，不把上游数据当作 Ash 收益。
+    - 仅在测量显示屏幕外解析占据实质成本后，评估现有 row／block owner 的首次激活，保留完整原文与唯一 transcript；否则记录结果并停止，不预设全列表虚拟化或另建缓存。使用普通文本、代码及工具 Markdown 的重复样本，覆盖恢复滚动／阅读锚点、异步高度变化、流式尾部、复制／搜索／导出、辅助阅读与焦点；成本下降且上述行为不退化才采用。
 - [ ] **测量** · 把后端结果构造和 writer／producer 等待纳入资源准入测量，评估有界数据／控制输出契约与同连接队头阻塞；不靠降低既有文件上限掩盖成本。
-- [ ] **测量 · 模型调用的不可变工具 schema 复制**：`crates/core/src/services.rs` 的 `ModelToolCatalogSnapshot` 持有 `Vec<ToolDefinition>`；`crates/core/src/turn/executor.rs` 为每个模型步骤复制 definitions，并再次复制给 invocation preparation；`crates/core/src/context/planner.rs` 的 Handoff 预算分支还会克隆包含工具定义的 `ContextInput`，`crates/app-server/src/tool_composition.rs` 的 Code Mode catalog 另有复制。参考 [Codex 共享冻结工具定义](https://github.com/openai/codex/pull/55261)，先量化工具数量、schema 大小、多步骤和 Handoff 场景的分配字节、峰值内存及准备耗时，再决定是否复用不可变切片或按需复制；尚无 Ash 性能收益证据。
-  - 范围与风险：仅处理同一冻结 catalog 的重复副本，保留 Core 的唯一 owner、精确 generation／binder、工具 scope 及每次调用的提示内容；不把动态过滤结果共享为可变缓存，不顺带重构整个上下文系统。
-  - 验收：相同输入下比对最终工具 schema、顺序及预算结果；覆盖配置热更后旧 invocation 仍绑定旧 generation、新 invocation 使用新 catalog，以及 Code Mode 和 Handoff。记录优化前后重复样本；只有复制成本实际下降且上述行为不变才保留改动，局部结果不替代整条 Desktop 性能结论。
 
 - [ ] **测量 · 流式文件路径索引的重复存储**：`crates/file-search/src/lib.rs` 的 `walker_worker` 为每条路径同时保存 `Arc<str>` 与 Nucleo 的 `Utf32String` 列，`build_snapshot` 再从原路径计算排名与高亮。参考 [Codex 减少路径索引副本](https://github.com/openai/codex/pull/55351)（2026-10-19 已合并，未确认稳定版包含），先量化 TUI `@file` 与独立文件搜索 CLI 所用 `Service::start` 在大目录的分配字节、峰值内存、扫描和连续查询耗时，再决定是否让纯 ASCII 路径复用匹配列；尚无 Ash 收益测量，不泛化到使用 tgrep 的 Desktop 搜索。
   - 范围与风险：保留单根、仅普通文件、目录准入、取消和 `query_revision` 契约，不引入多根索引或第二份缓存。Unicode 匹配列并非原路径的无损表示，组合字符与 emoji 不能由该列重建；非 ASCII 路径仍须保留可精确返回的原串。
@@ -225,3 +202,9 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 
 - 进入条件与范围：先确定查询及排序语义，再在 `src/ash/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.ts` 的 owner 内接入；可评估既有 `src/ash/base/common/fuzzyScorer.ts`，但 ActionList 尚无领域专用评分入口，须先提供窄范围的可选接入，不全局替换通用列表语义、不新建平行 picker、不顺带扩张到独立 Sessions picker 或后端模型目录。
 - 风险与验收：保留 provider／模型 ID、跨字段及不同词序的既有查询；名称和详情分别评分、同分稳定、空查询恢复原顺序，元数据命中不伪造名称高亮。由 `src/ash/workbench/contrib/chat/test/browser/modelPickerWidget.test.ts` 与真实输入场景覆盖精确名称、紧凑输入、非拉丁文字、同名跨 provider、目录刷新／移除、已选身份、禁用项、Auto、键盘与焦点；通用 ActionList 行为保持不变。不移植上游 GPUI 任务模型或把其基准当作 Ash 性能收益。
+
+### Desktop 文件粘贴路径回退
+
+- [ ] **候选／链路补齐（未排期）· Desktop 文件粘贴的路径回退**：现有 `src/ash/editor/browser/controller/editContext/clipboardUtils.ts` 在无文本、无编辑器元数据而有文件时只插入 `File.name`；EditContext 与 TextArea 共用此入口。补齐文件管理器复制文件后在普通文本编辑器粘贴可定位路径的操作链路，参考 [VS Code 文件粘贴路径回退](https://github.com/microsoft/vscode/pull/342695)（2026-10-19 已合并，未确认稳定版包含）。这是现有文件名回退的增强，不是已复现的文件内容丢失缺陷。
+  - 范围与前提：复用 `src/ash/platform/dnd/browser/dnd.ts` 的既有宿主 File 路径解析边界，保持 editor → platform 依赖方向，不直接引入 Electron；不让浏览器读取本地路径，不读取文件内容、不自动打开文件、不改变 URI-list provider、普通文本及编辑器元数据的优先级。无宿主路径时仍回退文件名。
+  - 验收：扩展 `src/ash/editor/contrib/dropOrPasteInto/test/browser/copyPasteController.test.ts`，覆盖单／多文件、空格与非 ASCII 路径、宿主无路径或异常、文本与元数据优先，并保留“不读取文件内容”断言；分别走 EditContext／TextArea，补真实 Electron 文件管理器复制粘贴与 Web 回退验收，记录平台差异。

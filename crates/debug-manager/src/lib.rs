@@ -658,7 +658,19 @@ impl DebugManager {
                     }
                 }
             }
+            let terminated =
+                entry.message["type"] == "event" && entry.message["event"] == "terminated";
             session.observe(DebugMessageDirection::Incoming, entry.message);
+            if terminated {
+                if let Some(message) = session
+                    .lifecycle
+                    .disconnect_after_termination(&mut session.client)?
+                {
+                    // Queue the acknowledgement before a view can observe the
+                    // ended snapshot and close this transport.
+                    self.send(session, message)?;
+                }
+            }
             self.progress(session)?;
         }
         // Retain stderr even when request polling, rather than the view reader,

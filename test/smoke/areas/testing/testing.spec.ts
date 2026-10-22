@@ -83,16 +83,17 @@ test.describe('built-in Rust testing', () => {
 		await pane.getByRole('button', { name: 'Debug Selected Test', exact: true }).click();
 		await expect(pane.getByRole('status')).toHaveText('Debugging test…', { timeout: 30_000 });
 		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
-		const debug = page.locator('[data-view-id="workbench.view.debug"]');
+		const debug = page.locator('[data-view-container-id="ash.debug"]');
 		await expect(debug.getByRole('status')).toContainText('stopped');
 		await expect(debug.locator('.ash-debug-stack')).toContainText('checks::passes');
 		await expect(editor.element.locator('.ash-debug-breakpoint-gutter.verified')).toHaveCount(1);
 		// Macro expressions can resolve to multiple instruction locations on one line.
 		// Retire the verified breakpoint before checking continuation and session cleanup.
-		await debug.locator('.ash-debug-breakpoint-remove').click();
+		await debug.getByRole('button', { name: 'Remove breakpoint', exact: true }).click();
 		await expect(editor.element.locator('.ash-debug-breakpoint-gutter')).toHaveCount(0);
 		await debug.getByRole('button', { name: 'Continue', exact: true }).click();
-		await expect(debug.getByRole('status')).toHaveText('Add a debug configuration in .vscode/launch.json to get started.');
+		await expect(debug.locator('.ash-debug-status')).toBeHidden();
+		await expect(debug.locator('.ash-debug-frame')).toHaveCount(0);
 		await page.getByRole('tab', { name: 'Testing', exact: true }).first().click();
 		await expect(pane.getByRole('button', { name: 'Run All Tests', exact: true })).toBeEnabled();
 	});

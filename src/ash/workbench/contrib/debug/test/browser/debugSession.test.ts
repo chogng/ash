@@ -174,11 +174,11 @@ test("DebugSession handles zero-sequence DAP messages, clears breakpoints, and r
 
 	assert.equal(session.state, "running");
 	assert.deepEqual(processes.started, { program: 'C:\\workspace\\adapter', arguments: ['--stdio', 'C:\\workspace'] });
-	assert.deepEqual(processes.request("launch").arguments, { program: 'C:\\workspace\\bin\\app', cwd: 'C:\\workspace' });
+	assert.deepEqual(processes.request("launch").arguments, { type: "example", request: "launch", name: "Test", program: 'C:\\workspace\\bin\\app', cwd: 'C:\\workspace' });
 	assert.deepEqual(processes.request("setBreakpoints").arguments, { source: { path: breakpointPath }, breakpoints: [{ line: 4 }] });
 	assert.deepEqual(processes.request("setExceptionBreakpoints").arguments, { filters: ["uncaught"] });
 	assert.deepEqual(updates, [{ id: "main:4", verified: true }]);
-	assert.deepEqual(session.capabilities, { supportsRestart: true, supportsTerminate: true, supportsSetVariable: true, supportsConditionalBreakpoints: true, supportsHitConditionalBreakpoints: true, supportsLogPoints: true, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsSteppingGranularity: false, supportsCompletionsRequest: true, supportsCancelRequest: true, completionTriggerCharacters: ['.'], exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions", default: false }] });
+	assert.deepEqual(session.capabilities, { supportsRestart: true, supportsTerminate: true, supportsSetVariable: true, supportsConditionalBreakpoints: true, supportsHitConditionalBreakpoints: true, supportsLogPoints: true, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsReadMemoryRequest: false, supportsWriteMemoryRequest: false, supportsLoadedSourcesRequest: false, supportsExceptionInfoRequest: false, supportsSteppingGranularity: false, supportsCompletionsRequest: true, supportsCancelRequest: true, completionTriggerCharacters: ['.'], exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions", default: false }] });
 	processes.event("output", { output: "adapter ready\n" });
 	await waitFor(() => session.output === "adapter ready\n");
 
@@ -225,7 +225,7 @@ test("DebugSession keeps Remote adapter paths on the Remote Workspace authority"
 	const session = await startSession({ configuration: configurationValue, processService: processes, breakpoints: () => [remoteBreakpoint], workspace });
 
 	assert.deepEqual(processes.started, { program: "/srv/project/adapter", arguments: ["--stdio"] });
-	assert.deepEqual(processes.request("launch").arguments, { program: "/srv/project/bin/app", cwd: "/srv/project" });
+	assert.deepEqual(processes.request("launch").arguments, { type: "example", request: "launch", name: "Test", program: "/srv/project/bin/app", cwd: "/srv/project" });
 	assert.deepEqual(processes.request("setBreakpoints").arguments, { source: { path: "/srv/project/src/main file.ts" }, breakpoints: [{ line: 4 }] });
 	processes.event("stopped", { reason: "breakpoint", allThreadsStopped: true });
 	await waitFor(() => session.state === "stopped");
@@ -563,6 +563,7 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	heldBreakpointResponse: Record<string, unknown> | undefined;
 	disassemblyReply: Record<string, unknown> = { instructions: [{ address: '0x1000', instruction: 'mov r0, r1', instructionBytes: '90', symbol: 'main', location: { name: 'main.ts', path: '/srv/project/main.ts' }, line: 4, column: 1 }] };
 	completionCapabilities: Record<string, unknown> = { supportsCompletionsRequest: true, supportsCancelRequest: true, completionTriggerCharacters: ['.'] };
+	readonly extraReplies = new Map<string, unknown>();
 	completionReply: unknown = { targets: [{ label: 'answer', text: 'answer(value)', start: 3, length: 2, selectionStart: 7, selectionLength: 5 }] };
 	holdCompletions = false;
 	private heldCompletionResponse: unknown;
@@ -578,8 +579,8 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 		this.sent.push(request);
 		if (request.type !== "request") return;
 		const command = String(request.command);
-		if (command === "launch") this.event("initialized");
-		const body = command === "initialize" ? { ...this.completionCapabilities, supportsConfigurationDoneRequest: true, supportsRestartRequest: true, supportsTerminateRequest: true, supportsSetVariable: this.supportsSetVariable, supportsConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsHitConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsLogPoints: this.supportsAdvancedBreakpoints, supportsFunctionBreakpoints: this.supportsBreakpointFamilies, supportsDataBreakpoints: this.supportsBreakpointFamilies, supportsInstructionBreakpoints: this.supportsBreakpointFamilies, supportsDisassembleRequest: this.supportsDisassembly, supportsSteppingGranularity: this.supportsDisassembly, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions" }] }
+		if (command === "launch" || command === "attach") this.event("initialized");
+		const body = this.extraReplies.has(command) ? this.extraReplies.get(command) : command === "initialize" ? { ...this.completionCapabilities, supportsConfigurationDoneRequest: true, supportsRestartRequest: true, supportsTerminateRequest: true, supportsSetVariable: this.supportsSetVariable, supportsConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsHitConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsLogPoints: this.supportsAdvancedBreakpoints, supportsFunctionBreakpoints: this.supportsBreakpointFamilies, supportsDataBreakpoints: this.supportsBreakpointFamilies, supportsInstructionBreakpoints: this.supportsBreakpointFamilies, supportsDisassembleRequest: this.supportsDisassembly, supportsSteppingGranularity: this.supportsDisassembly, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions" }] }
 			: command === "completions" ? this.completionReply
 				: command === "threads" ? { threads: [{ id: this.threadId, name: "main" }, { id: 8, name: "worker" }] }
 					: command === "stackTrace" ? { stackFrames: [{ id: this.frameId, name: "main", source: { name: "main.ts", path: this.stackFramePath }, line: 4, column: 1 }, { id: 12, name: "system", line: 0, column: 0 }] }
@@ -823,3 +824,53 @@ suite('Debug Console completion session boundary', () => {
 		} finally { await session.disconnect(); }
 	});
 });
+
+
+test('DebugSession typed inspection ports preserve bytes, source identities and adapter progress', async () => {
+	using processes = new FakeDebugAdapterProcessService('/workspace/main.ts');
+	Object.assign(processes.completionCapabilities, { supportsReadMemoryRequest: true, supportsWriteMemoryRequest: true, supportsLoadedSourcesRequest: true, supportsExceptionInfoRequest: true });
+	processes.extraReplies.set('readMemory', { address: '0x1000', data: 'AAH/', unreadableBytes: 1 });
+	processes.extraReplies.set('writeMemory', { bytesWritten: 3 });
+	processes.extraReplies.set('loadedSources', { sources: [{ name: 'generated.ts', sourceReference: 25 }] });
+	processes.extraReplies.set('exceptionInfo', { exceptionId: 'TypeError', breakMode: 'always', details: { message: 'bad value', innerException: [{ typeName: 'Inner' }] } });
+	const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
+	try {
+		const loaded = await session.loadedSources();
+		assert.equal(loaded[0].sourceReference, 25);
+		await assert.rejects(session.readMemory('0x1000', 0, 4));
+		processes.event('stopped', { reason: 'exception', threadId: 7 });
+		await waitFor(() => session.state === 'stopped');
+		const memory = await session.readMemory('0x1000', 0, 4);
+		assert.deepEqual([...memory.data], [0, 1, 255]);
+		assert.equal(memory.unreadableBytes, 1);
+		assert.equal(await session.writeMemory('0x1000', 2, new Uint8Array([0, 1, 255])), 3);
+		assert.deepEqual(processes.request('writeMemory').arguments, { memoryReference: '0x1000', offset: 2, data: 'AAH/', allowPartial: false });
+		assert.equal((await session.exceptionInfo(7)).details?.innerException?.[0].typeName, 'Inner');
+		const progress: string[] = [];
+		using start = session.onDidProgressStart(value => progress.push(`start:${value.progressId}:${value.title}`));
+		using update = session.onDidProgressUpdate(value => progress.push(`update:${value.percentage}`));
+		using end = session.onDidProgressEnd(value => progress.push(`end:${value.progressId}`));
+		processes.event('progressStart', { progressId: 'job', title: 'Symbols', cancellable: true });
+		processes.event('progressUpdate', { progressId: 'job', percentage: 50 });
+		processes.event('progressEnd', { progressId: 'job' });
+		await waitFor(() => progress.length === 3);
+		assert.deepEqual(progress, ['start:job:Symbols', 'update:50', 'end:job']);
+		await session.cancelProgress('job');
+		assert.deepEqual(processes.request('cancel').arguments, { progressId: 'job' });
+		processes.extraReplies.set('readMemory', { address: '0x1000', data: '!!' });
+		await assert.rejects(session.readMemory('0x1000', 0, 4));
+		await session.continue();
+		await assert.rejects(session.exceptionInfo(7));
+	} finally { await session.disconnect(); }
+});
+
+for (const request of ['launch', 'attach'] as const) {
+	test(`DebugSession stops ${request} with the correct debuggee ownership`, async () => {
+		using processes = new FakeDebugAdapterProcessService();
+		using session = await startSession({ configuration: { ...configuration(), request }, processService: processes, workspace: URI.file('/workspace'), breakpoints: () => [] });
+		const stopping = session.disconnect();
+		assert.strictEqual(session.disconnect(), stopping);
+		await stopping;
+		assert.deepEqual(processes.request('disconnect').arguments, { restart: false, terminateDebuggee: request === 'launch' });
+	});
+}

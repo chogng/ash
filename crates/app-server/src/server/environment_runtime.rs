@@ -3297,6 +3297,7 @@ impl AppServer {
         path: &std::path::Path,
     ) -> Result<FsResolvePathResult, RpcError> {
         use std::path::Component;
+        let path = dunce::simplified(path);
         if let Some(route) = self.web_configuration_route(path) {
             return Ok(route);
         }

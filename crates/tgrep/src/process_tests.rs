@@ -344,6 +344,13 @@ fn process_tree_fixture() {
     if mode == "limit" {
         writeln!(std::io::stdout(), "\ndone").unwrap();
     }
+    if mode == "exit" {
+        // No newline: EOF must release the reader's buffered final record after
+        // the exited launcher is observed and its pipe-holding descendant ends.
+        write!(std::io::stdout(), "\ndone").unwrap();
+        std::io::stdout().flush().unwrap();
+        std::process::exit(0);
+    }
     if mode != "exit" {
         child.wait().unwrap();
     }
@@ -386,7 +393,7 @@ fn scans_reap_descendants_on_cancellation_limit_and_launcher_exit() {
             match mode {
                 "cancel" => assert!(matches!(result, Err(Error::Cancelled(_)))),
                 "limit" => assert_eq!(result.unwrap(), vec!["done"]),
-                "exit" => assert!(result.is_ok()),
+                "exit" => assert_eq!(result.unwrap(), vec!["done"]),
                 _ => unreachable!(),
             }
         });

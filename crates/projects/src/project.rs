@@ -31,6 +31,22 @@ pub struct ProjectRoot {
     pub purpose: String,
 }
 
+/// A user-selected file or folder reference. It never grants file access or owns the source bytes.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectMaterial {
+    pub path: PathBuf,
+    pub name: String,
+    pub kind: ProjectMaterialKind,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProjectMaterialKind {
+    File,
+    Folder,
+}
+
 /// Long-lived weak associations for opening multi-root work.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,6 +59,8 @@ pub struct Project {
     pub description: String,
     pub roots: BTreeMap<DirId, ProjectRoot>,
     pub session_ids: BTreeSet<SessionId>,
+    #[serde(default)]
+    pub materials: Vec<ProjectMaterial>,
 }
 
 impl Project {
@@ -66,6 +84,27 @@ impl Project {
                 ));
             }
             root.validate()?;
+        }
+        if self.materials.len() > 1000 {
+            return Err(crate::ProjectError::InvalidInput(
+                "too many Project materials".into(),
+            ));
+        }
+        let mut paths = BTreeSet::new();
+        for material in &self.materials {
+            validate_text("Project material name", &material.name)?;
+            if material.name.len() > 1024
+                || !material.path.is_absolute()
+                || material
+                    .path
+                    .components()
+                    .any(|component| matches!(component, Component::ParentDir | Component::CurDir))
+                || !paths.insert(&material.path)
+            {
+                return Err(crate::ProjectError::InvalidInput(
+                    "invalid or duplicate Project material".into(),
+                ));
+            }
         }
         Ok(())
     }

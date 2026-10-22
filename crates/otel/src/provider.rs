@@ -147,6 +147,29 @@ pub struct TelemetrySpan {
 }
 
 impl TelemetrySpan {
+    /// Identifies a registered RPC without recording its parameters or resource names.
+    pub fn record_rpc(&self, method: &'static str, connection_id: u64, request_id: u64) {
+        let span = self.context.span();
+        span.set_attribute(KeyValue::new("rpc.method", method));
+        span.set_attribute(KeyValue::new(
+            "rpc.connection_id",
+            connection_id.to_string(),
+        ));
+        span.set_attribute(KeyValue::new("rpc.request_id", request_id.to_string()));
+    }
+
+    /// Adds an interval on this span's clock without attaching a thread-local context.
+    pub fn record_interval(&self, name: &'static str, started: SystemTime, elapsed: Duration) {
+        record_interval(&self.context, name, started, elapsed);
+    }
+
+    /// Records bounded diagnostic counts without retaining request content.
+    pub fn record_count(&self, name: &'static str, count: usize) {
+        self.context
+            .span()
+            .set_attribute(KeyValue::new(name, count.min(i64::MAX as usize) as i64));
+    }
+
     /// Records a duration in milliseconds without changing the span's execution context.
     pub fn record_duration(&self, name: &'static str, duration: Duration) {
         self.context.span().set_attribute(KeyValue::new(
@@ -158,6 +181,29 @@ impl TelemetrySpan {
     pub fn finish(mut self, outcome: Outcome) {
         self.outcome = outcome;
     }
+}
+
+fn record_interval(context: &Context, name: &'static str, started: SystemTime, elapsed: Duration) {
+    context.span().add_event_with_timestamp(
+        name,
+        started,
+        vec![KeyValue::new(
+            "duration_us",
+            elapsed.as_micros().min(i64::MAX as u128) as i64,
+        )],
+    );
+}
+
+/// Measures synchronous work under the current request, including cancellation and failures.
+pub fn measure_current<T>(name: &'static str, operation: impl FnOnce() -> T) -> T {
+    struct Measurement(Context, &'static str, SystemTime, Instant);
+    impl Drop for Measurement {
+        fn drop(&mut self) {
+            record_interval(&self.0, self.1, self.2, self.3.elapsed());
+        }
+    }
+    let _measurement = Measurement(Context::current(), name, SystemTime::now(), Instant::now());
+    operation()
 }
 
 impl Drop for TelemetrySpan {

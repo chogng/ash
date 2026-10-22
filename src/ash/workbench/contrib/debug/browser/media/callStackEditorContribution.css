@@ -1,0 +1,13 @@
+.ash-debug-stack-frame {
+	background-color: var(--ash-editor-selectionBackground);
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	outline-offset: -1px;
+}
+
+.ash-debug-stack-frame-gutter {
+	color: var(--ash-accent-foreground);
+}
+
+.ash-debug-stack-frame-gutter::before {
+	content: "\2192";
+}

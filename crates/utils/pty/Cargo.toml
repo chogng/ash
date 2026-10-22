@@ -21,7 +21,7 @@ pretty_assertions = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 log = { workspace = true }
-winapi = { workspace = true, features = ["handleapi", "namedpipeapi", "jobapi2", "minwinbase", "processthreadsapi", "synchapi", "winbase", "wincon", "winerror", "winnt"] }
+winapi = { workspace = true, features = ["handleapi", "namedpipeapi", "jobapi", "jobapi2", "minwinbase", "processthreadsapi", "synchapi", "winbase", "wincon", "winerror", "winnt"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }

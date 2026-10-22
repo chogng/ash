@@ -52,7 +52,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	private readonly pendingWrites: ((terminal: Terminal) => void)[] = [];
 	private focusSource: Element | null | undefined;
 	private readonly alternateScroll = new AlternateScrollMode();
-	private readonly shellIntegrationAddon: ShellIntegrationAddon;
+	readonly shellIntegration: ShellIntegrationAddon;
 	private readonly decorationAddon: DecorationAddon;
 	readonly onDidRequestRunCommand: Event<{ command: ITerminalCommand; noNewLine?: boolean; }>;
 	private readonly markNavigationAddon = this._register(new MarkNavigationAddon(() => this.instance.capabilities?.has(TerminalCapability.CommandDetection)
@@ -89,7 +89,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		super();
 		this.decorationAddon = this._register(instantiation.createInstance(DecorationAddon, this.capabilities));
 		this.onDidRequestRunCommand = this.decorationAddon.onDidRequestRunCommand;
-		this.shellIntegrationAddon = this._register(instantiation.createInstance(ShellIntegrationAddon, this.capabilities, undefined));
+		this.shellIntegration = this._register(instantiation.createInstance(ShellIntegrationAddon, this.capabilities, undefined));
 		this.element = h(container.ownerDocument, "div");
 		this.element.className = "ash-terminal-instance";
 		this.element.hidden = true;
@@ -172,7 +172,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		this.fitAddon = new FitAddon();
 		terminal.loadAddon(this.fitAddon);
 		terminal.loadAddon(this.lineData);
-		terminal.loadAddon(this.shellIntegrationAddon);
+		terminal.loadAddon(this.shellIntegration);
 		terminal.loadAddon(this.decorationAddon);
 		terminal.loadAddon(this.markNavigationAddon);
 		if (!restored) {
@@ -264,7 +264,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	}
 
 	handleShellIntegration(event: TerminalShellIntegrationEvent): void {
-		this.shellIntegrationAddon.handleSequence(event);
+		this.shellIntegration.handleSequence(event);
 	}
 
 	clearBuffer(): void {

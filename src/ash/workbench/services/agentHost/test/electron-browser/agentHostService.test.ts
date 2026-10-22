@@ -64,6 +64,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	let onInitialized: ((channel: string) => void) | undefined;
 	let onLog: ((entry: LogEntry) => void) | undefined;
 	let failDirectoryBinding: boolean;
+	let beforeWorkspaceRead: (() => Promise<void>) | undefined;
 	let beforeHostOpen: (() => Promise<void>) | undefined;
 	const hostOpens: { id: string; connection: { name: string; host: string; workspace: string; }; }[] = [];
 	const hostCloses: string[] = [];
@@ -85,7 +86,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 				if (channel === REMOTE_AGENT_HOST_OPEN_CHANNEL) { hostOpens.push(payload as typeof hostOpens[number]); await beforeHostOpen?.(); return; }
 				if (channel === REMOTE_AGENT_HOST_CLOSE_CHANNEL) { hostCloses.push((payload as { id: string; }).id); return; }
 				if (channel === 'ash:remote:connection') return windowConnection;
-				if (channel === 'ash:workspace:context:read') return { id: 'desktop', folders: [{ id: 'workspace-folder', uri: requestedWorkspace.toString(), name: 'Project', index: 0 }] };
+				if (channel === 'ash:workspace:context:read') { await beforeWorkspaceRead?.(); return { id: 'desktop', folders: [{ id: 'workspace-folder', uri: requestedWorkspace.toString(), name: 'Project', index: 0 }] }; }
 				if (channel.endsWith(':initialized')) { onInitialized?.(channel); return; }
 				assert.ok(channel.endsWith(':acquire'), channel);
 				acquired.push(channel);
@@ -139,7 +140,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		directoryBindings.length = 0;
 		onDirectoryBound = onInitialized = onLog = undefined;
 		failDirectoryBinding = false;
-		beforeHostOpen = undefined;
+		beforeHostOpen = beforeWorkspaceRead = undefined;
 		hostOpens.length = hostCloses.length = 0;
 		windowConnection = { kind: 'ssh', generation: 1, authority: 'ssh+host', host: 'host' };
 		requestedWorkspace = createSshRemoteWorkspaceUri('host', '/workspace');
@@ -309,25 +310,84 @@ suite('Desktop Workbench Agent Host selection', () => {
 		]);
 	});
 
-	test('workspace rebind failure is logged on the selected renderer connection and a later recovery can rebind again', async () => {
+	test('workspace rebind failure remains failed and concurrent retries restore directories without reconnecting the ready carrier', async () => {
 		using renderer = await createRendererApi([], { browser: false }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		const recovery = renderer.appServer.recovery!;
+		const states: string[] = [];
+		const failedState = new DeferredPromise<void>();
+		using changed = recovery.onDidChange(() => {
+			states.push(recovery.status);
+			if (recovery.status === 'failed') void failedState.complete();
+		});
 		failDirectoryBinding = true;
 		const failed = new DeferredPromise<LogEntry>();
-		using failureDeadline = new TimeoutTimer(() => { void failed.error(new Error('Workspace recovery log was not delivered')); }, 5_000);
+		using failureDeadline = new TimeoutTimer(() => {
+			void failed.error(new Error('Workspace recovery log was not delivered'));
+			void failedState.error(new Error('Workspace recovery failure was not exposed'));
+		}, 5_000);
 		onLog = entry => { if (entry.message.startsWith('Workspace recovery failed')) void failed.complete(entry); };
 		restart('ash:app-server:restart');
-		const diagnostic = await failed.p;
+		const [diagnostic] = await Promise.all([failed.p, failedState.p]);
 		assert.match(String(diagnostic.error), /PermissionRequired|restore rejected/);
+		assert.equal(recovery.status, 'failed');
+		assert.match(recovery.error!, /restore rejected/);
 		assert.equal(directoryBindings.length, 2);
+		await assert.rejects(recovery.reconnect(), /restore rejected/);
+		assert.equal(recovery.status, 'failed');
 		failDirectoryBinding = false;
-		beforeHostOpen = undefined;
-		hostOpens.length = hostCloses.length = 0;
-		const rebound = new DeferredPromise<void>();
-		onDirectoryBound = () => { void rebound.complete(); };
-		restart('ash:app-server:restart');
-		await rebound.p;
-		assert.equal(directoryBindings.length, 3);
+		const generation = renderer.appServer.connectionGeneration;
+		const acquisitions = acquired.length;
+		await Promise.all([recovery.reconnect(), recovery.reconnect()]);
+		assert.equal(directoryBindings.length, 4, 'concurrent retries share one directory binding');
+		assert.equal(renderer.appServer.connectionGeneration, generation);
+		assert.equal(acquired.length, acquisitions);
+		assert.equal(recovery.status, 'idle');
+		assert.equal(recovery.error, undefined);
+		assert.ok(states.includes('recovering'));
 		assert.ok(directoryBindings.every(binding => binding.channel === 'ash:app-server:acquire'));
+		await recovery.reconnect();
+		assert.equal(acquired.length, acquisitions + 1, 'an explicit reconnect after full recovery still replaces the carrier');
+		assert.ok(renderer.appServer.connectionGeneration > generation);
+	});
+
+	test('a retired workspace restoration cannot fail a newer ready connection', async () => {
+		using renderer = await createRendererApi([], { browser: false }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		const recovery = renderer.appServer.recovery!;
+		const entered = new DeferredPromise<void>();
+		const carrierSettled = new DeferredPromise<void>();
+		const barrier = new DeferredPromise<void>();
+		const restored = new DeferredPromise<void>();
+		const staleFailure = new DeferredPromise<void>();
+		using deadline = new TimeoutTimer(() => {
+			for (const pending of [entered, carrierSettled, restored, staleFailure]) void pending.error(new Error('Workspace restoration did not settle'));
+		}, 5_000);
+		let first = true;
+		beforeWorkspaceRead = async () => {
+			if (!first) return;
+			first = false;
+			void entered.complete();
+			await barrier.p;
+		};
+		using changes = recovery.onDidChange(() => {
+			if (entered.isSettled && recovery.status === 'recovering') void carrierSettled.complete();
+			if (directoryBindings.length === 2 && recovery.status === 'idle') void restored.complete();
+		});
+		try {
+			restart('ash:app-server:restart');
+			await entered.p;
+			await carrierSettled.p;
+			assert.equal(recovery.status, 'recovering');
+			restart('ash:app-server:restart');
+			await restored.p;
+			assert.equal(recovery.status, 'idle');
+			onLog = entry => { if (entry.message.startsWith('Workspace recovery failed')) void staleFailure.complete(); };
+			void barrier.error(new Error('Obsolete workspace restoration'));
+			await staleFailure.p;
+			assert.equal(recovery.status, 'idle');
+			assert.equal(recovery.error, undefined);
+		} finally {
+			void barrier.complete();
+		}
 	});
 
 	test('local windows select one shared lease and concurrent startup waits for the same handshake', async () => {

@@ -66,7 +66,7 @@ export class SignedExtensionRegistry implements BackendFixture {
 			const targetsDirectory = join(repository, 'targets');
 			await mkdir(metadata, { recursive: true });
 			await mkdir(join(targetsDirectory, 'packages', 'ash', 'language-pack-zh-cn'), { recursive: true });
-			await mkdir(join(targetsDirectory, 'extensions'), { recursive: true });
+			await mkdir(join(targetsDirectory, 'marketplace'), { recursive: true });
 			await writeFile(join(metadata, '1.root.json'), trustedRoot);
 			const targets: Record<string, unknown> = {};
 			for (const release of releases.slice(0, count)) {
@@ -75,18 +75,18 @@ export class SignedExtensionRegistry implements BackendFixture {
 				targets[target] = {
 					...fileMetadata(release.archive),
 					custom: {
-						extension_packagesPackage: { schemaVersion: 1, id: 'ash/language-pack-zh-cn', version: release.version, packageDigest: release.digest },
-						extension_packagesCatalog: { schemaVersion: 1, manifest: release.manifest, packageFileCount: release.fileCount, packageSizeBytes: release.size },
+						marketplacePackage: { schemaVersion: 1, id: 'ash/language-pack-zh-cn', version: release.version, packageDigest: release.digest },
+						marketplaceCatalog: { schemaVersion: 1, manifest: release.manifest, packageFileCount: release.fileCount, packageSizeBytes: release.size },
 					},
 				};
 			}
 			const publisher = envelope({ _type: 'targets', spec_version: '1.0.0', version: count, expires, targets });
 			await writeFile(join(metadata, 'publishers%2Fash.json'), publisher);
 			const revocations = Buffer.from(JSON.stringify({ schemaVersion: 1, revoked: [] }));
-			await writeFile(join(targetsDirectory, 'extensions', 'revocations.json'), revocations);
+			await writeFile(join(targetsDirectory, 'marketplace', 'revocations.json'), revocations);
 			const topTargets = envelope({
 				_type: 'targets', spec_version: '1.0.0', version: count, expires,
-				targets: { 'extensions/revocations.json': fileMetadata(revocations) },
+				targets: { 'marketplace/revocations.json': fileMetadata(revocations) },
 				delegations: { keys: { [keyId]: publicKey }, roles: [{ name: 'publishers/ash', ...role, terminating: true, paths: ['packages/ash/*'] }] },
 			});
 			await writeFile(join(metadata, 'targets.json'), topTargets);

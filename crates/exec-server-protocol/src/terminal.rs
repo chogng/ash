@@ -116,6 +116,16 @@ pub struct TerminalProcessReady {
     /// Shell identified from the spawned executable, retained across attach.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shell_type: Option<TerminalShellType>,
+    /// Immutable spawn facts, retained by the execution owner across reattachment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch: Option<TerminalProcessLaunch>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct TerminalProcessLaunch {
+    pub executable: String,
+    pub args: TerminalArguments,
+    pub used_shell_integration_injection: bool,
 }
 
 /// Current backend-owned process properties; shell cwd is retained after exit when detected.

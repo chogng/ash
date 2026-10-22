@@ -11,7 +11,7 @@ import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { ILanguagePackService } from '../../../src/ash/platform/languagePacks/common/languagePacks.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
 import { createTestEditorServices, createTestFileService } from '../../../src/ash/workbench/test/common/testEditorServices.js';
@@ -41,7 +41,7 @@ services.registerInstance(IFileService, lifetime.add(createTestFileService(new M
 services.registerInstance(IKeybindingService, { onDidUpdateKeybindings: Event.None } as IKeybindingService);
 services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => '' } as unknown as IAccessibleViewService);
 services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
-services.registerInstance(INotificationService, lifetime.add(new NotificationService()));
+services.registerInstance(INotificationService, lifetime.add(new TestNotificationService()));
 services.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
 const fixture = createBuiltinExtensionFixture();
 const packageChanges = lifetime.add(new Emitter<void>());

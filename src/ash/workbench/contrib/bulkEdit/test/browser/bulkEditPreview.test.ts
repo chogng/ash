@@ -16,6 +16,8 @@ import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { BulkFileOperations } from '../../browser/preview/bulkEditPreview.js';
 import { ConflictDetector } from '../../browser/conflicts.js';
 import { BulkEditPane } from '../../browser/preview/bulkEditPane.js';
+import { ViewContainerLocation, WorkbenchViewContainerId, ViewsRegistry } from '../../../../common/views.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { BulkEditPreviewContribution } from '../../browser/preview/bulkEdit.contribution.js';
 import { registerWindow } from '../../../../../base/browser/window.js';
 import { IFileTextModelService, ITextModelResourceService, type ITextModelSaveParticipant, type ITextModelSaveCompletionParticipant, type TextModelReference } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
@@ -115,7 +117,7 @@ test('conflict detection covers both rename resources, model mutations and dispo
 	}
 });
 
-for (const outcome of ['accept', 'conflict', 'dispose'] as const) {
+for (const outcome of ['accept', 'conflict', 'cancel', 'dispose', 'abort', 'replace'] as const) {
 	test(`bulk edit contribution ${outcome} connects the registered service, selection and conflict lifecycle`, async () => {
 		const browser = new JSDOM('<!doctype html><body></body>');
 		const globals = installDomGlobals(browser);
@@ -142,19 +144,43 @@ for (const outcome of ['accept', 'conflict', 'dispose'] as const) {
 			using pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: 'Refactor Preview' });
 			browser.window.document.body.append(pane.element);
 			pane.setVisible(true);
-			services.registerInstance(IViewsService, { openView: async () => pane, getViewWithId: () => pane, focusView: async () => { pane.focus(); return true; } } as unknown as IViewsService);
+			const previousPanelId = outcome === 'cancel' ? undefined : WorkbenchViewContainerId.Output;
+			let selectedPanelId: string | undefined = previousPanelId;
+			const previousFocus = browser.window.document.createElement('button');
+			browser.window.document.body.append(previousFocus);
+			previousFocus.focus();
+			const enabled = () => contextKeys.contextMatchesRules(ContextKeyExpr.has('refactorPreview.enabled'));
+			services.registerInstance(IViewsService, {
+				openView: async () => {
+					assert.equal(enabled(), true, 'activate the conditional view before opening it');
+					selectedPanelId = WorkbenchViewContainerId.BulkEdit;
+					return pane;
+				},
+				getViewWithId: () => pane,
+				getVisibleViewContainer: () => selectedPanelId ? { id: selectedPanelId, location: ViewContainerLocation.Panel } : null,
+				openViewContainer: async (id: string) => { selectedPanelId = id; return null; },
+				closeViewContainer: () => { selectedPanelId = undefined; },
+				focusView: async () => { pane.focus(); return true; },
+			} as unknown as IViewsService);
 			using bulkEdits = services.createInstance(BulkEditService);
 			services.registerInstance(IBulkEditService, bulkEdits);
 			using contribution = services.createInstance(BulkEditPreviewContribution);
-			const ready = new Promise<void>(resolve => {
+			const descriptor = ViewsRegistry.getView(BulkEditPane.ID)!;
+			assert.equal(ViewsRegistry.getViewContainer(WorkbenchViewContainerId.BulkEdit)!.hideIfEmpty, true);
+			assert.equal(contextKeys.contextMatchesRules(descriptor.when), false);
+			const waitForInput = () => new Promise<void>(resolve => {
 				const observer = new browser.window.MutationObserver(() => {
 					if (pane.hasInput) { observer.disconnect(); resolve(); }
 				});
 				observer.observe(pane.element, { childList: true, subtree: true });
 			});
 			const edits = [{ range: new Range(1, 1, 1, 2), text: 'A' }, { range: new Range(1, 2, 1, 3), text: 'B' }];
-			const pending = bulkEdits.apply({ entries: [{ kind: 'textDocument', resource, expectedText: 'ab', edits }] }, { showPreview: true });
+			const ready = waitForInput();
+			const controller = new AbortController();
+			const pending = bulkEdits.apply({ entries: [{ kind: 'textDocument', resource, expectedText: 'ab', edits }] }, { showPreview: true, token: controller.signal });
 			await ready;
+			assert.equal(selectedPanelId, WorkbenchViewContainerId.BulkEdit);
+			assert.equal(contextKeys.contextMatchesRules(descriptor.when), true);
 			const provider = AccessibleViewRegistry.getImplementations().find(provider => provider.name === 'bulk-edit-preview-help')!.getProvider(services);
 			assert.match(provider!.provideContent(), /Press Escape to cancel/);
 			provider!.dispose();
@@ -170,9 +196,24 @@ for (const outcome of ['accept', 'conflict', 'dispose'] as const) {
 					assert.equal(pane.element.querySelector<HTMLButtonElement>('.ash-bulk-edit-apply')!.disabled, true);
 					pane.accept();
 					pane.discard();
-				} else contribution.dispose();
+				} else if (outcome === 'dispose') contribution.dispose();
+				else if (outcome === 'abort') controller.abort();
+				else if (outcome === 'replace') {
+					const replacementReady = waitForInput();
+					const replacement = bulkEdits.apply({ entries: [{ kind: 'textDocument', resource, expectedText: 'ab', edits }] }, { showPreview: true });
+					await replacementReady;
+					assert.equal(enabled(), true);
+					assert.equal(selectedPanelId, WorkbenchViewContainerId.BulkEdit);
+					pane.discard();
+					assert.equal((await replacement).isApplied, false);
+				} else {
+					pane.element.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+				}
 				assert.deepEqual({ applied: (await pending).isApplied, text: models.getModel(resource)!.getText() }, { applied: false, text: outcome === 'conflict' ? 'changed' : 'ab' });
 			}
+			assert.equal(enabled(), false);
+			assert.equal(selectedPanelId, previousPanelId);
+			assert.equal(browser.window.document.activeElement, previousFocus);
 		} finally {
 			globals.dispose();
 			browser.window.close();

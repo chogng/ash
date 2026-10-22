@@ -29,11 +29,56 @@ import { WorkbenchFileIconThemesRegistry } from '../../../themes/common/themeExt
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
 import { FileIconThemeData } from '../../browser/fileIconThemeData.js';
 import { WorkbenchThemeService } from '../../browser/workbenchThemeService.js';
+import { getIconClasses } from '../../../../../editor/common/services/getIconClasses.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
 const directory = 'extensions/theme-seti/icons/';
+
+test('Seti TODO filenames retain their checkbox glyph and Markdown color in every color scheme', async () => {
+	const document = JSON.parse(await readFile(directory + 'vs-seti-icon-theme.json', 'utf8'));
+	const theme = await FileIconThemeData.load('vs-seti', 'Seti', document, path => readFile(directory + path));
+	using languages = new LanguageService();
+	using markdown = languages.registerLanguage({ id: 'markdown', extensions: ['.md'] });
+	for (const scheme of [ColorScheme.Dark, ColorScheme.Light, ColorScheme.HighContrastDark, ColorScheme.HighContrastLight]) {
+		for (const name of ['TODO', 'todo.txt', 'TODO.md', 'ToDo.md']) {
+			const icon = theme.resolveFileIcon(getIconClasses(undefined, languages, URI.file('/workspace/' + name)), scheme);
+			assert.equal(icon?.character, '\uE096', `${name} in ${scheme}`);
+		}
+		const todo = theme.resolveFileIcon(getIconClasses(undefined, languages, URI.file('/workspace/TODO.md')), scheme);
+		const markdown = theme.resolveFileIcon(getIconClasses(undefined, languages, URI.file('/workspace/notes.md')), scheme);
+		assert.equal(todo?.color, markdown?.color);
+		assert.equal(todo?.color, scheme === ColorScheme.Light || scheme === ColorScheme.HighContrastLight ? '#498ba7' : '#519aba');
+	}
+});
+
+test('specific associations outrank scheme variants while equal matches use the active scheme', async () => {
+	const theme = await FileIconThemeData.load('precedence', 'Precedence', {
+		fonts: [{ id: 'icons', src: [{ path: 'icons.woff', format: 'woff' }] }],
+		iconDefinitions: {
+			file: { fontCharacter: 'F', fontColor: '#111111' },
+			compound: { fontCharacter: 'C' },
+			light: { fontCharacter: 'L', fontColor: '#222222' },
+			contrast: { fontCharacter: 'H', fontColor: '#ffffff' },
+		},
+		file: 'file',
+		fileExtensions: { 'test.ts': 'compound', ts: 'file' },
+		light: { fileExtensions: { ts: 'light' } },
+		highContrast: { fileExtensions: { ts: 'contrast' } },
+	}, async () => new Uint8Array([1]));
+	for (const [scheme, character, color] of [
+		[ColorScheme.Dark, 'F', '#111111'],
+		[ColorScheme.Light, 'L', '#222222'],
+		[ColorScheme.HighContrastDark, 'H', '#ffffff'],
+		[ColorScheme.HighContrastLight, 'H', '#ffffff'],
+	] as const) {
+		const ordinary = theme.resolveFileIcon(['file-icon', 'ts-ext-file-icon'], scheme);
+		assert.deepEqual([ordinary?.character, ordinary?.color], [character, color]);
+		const compound = theme.resolveFileIcon(['file-icon', 'test.ts-ext-file-icon', 'ts-ext-file-icon'], scheme);
+		assert.deepEqual([compound?.character, compound?.color], ['C', color]);
+	}
+});
 
 test('packaged Seti resolves filenames, extensions and light variants and can be disabled', async () => {
 	const document = JSON.parse(await readFile(directory + 'vs-seti-icon-theme.json', 'utf8'));

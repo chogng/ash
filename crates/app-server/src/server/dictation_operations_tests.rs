@@ -148,7 +148,11 @@ fn model_operations_keep_resource_progress_private_and_broadcast_shared_snapshot
     ))
     .unwrap();
     assert!(stopped.get("result").is_some());
-    assert!(notifications.drain().is_empty());
+    // Shared model changes can follow the final private progress event. Stopping
+    // joins the operation, so no further resource progress may remain queued.
+    assert!(notifications.drain().iter().all(|message| {
+        serde_json::from_str::<Value>(message).unwrap()["method"] == "dictation/model/changed"
+    }));
     assert!(!root.path().join("dictation-models/custom").exists());
     server.close_connection(owner);
     server.close_connection(other);

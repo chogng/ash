@@ -13,7 +13,10 @@ mod options;
 
 pub use engine::{DiffCancellation, DiffEngine, NeverCancel};
 pub use error::{DiffError, DiffSide};
-pub use model::{DiffDocument, DiffHunk, DiffLine, DiffRow, DiffRowKind, InlineChange, LineEnding};
+pub use model::{
+    DiffDocument, DiffHunk, DiffLine, DiffRow, DiffRowKind, DiffStatistics, InlineChange,
+    LineEnding,
+};
 pub use options::{
     CaseSensitivity, DiffLimits, DiffOptions, InlineDiffMode, LineEndingPolicy, WhitespacePolicy,
 };

@@ -137,6 +137,7 @@ interface AsyncTreeView<T> extends IDisposable {
 	expandTo(element: T): boolean;
 	isCollapsed(element: T): boolean | undefined;
 	rerender(element: T): void;
+	openFind(): void;
 	setFindPattern(pattern: string): void;
 	findNext(): T | undefined;
 	findPrevious(): T | undefined;
@@ -233,6 +234,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	setFocus(element: T, browserEvent?: UIEvent): void { this.tree.setFocus(element, browserEvent); }
 	setSelection(elements: readonly T[], browserEvent?: UIEvent): void { this.tree.setSelection(elements, browserEvent); }
 	domFocus(): void { this.tree.domFocus(); }
+	openFind(): void { this.tree.openFind(); }
 	setFindPattern(pattern: string): void { this.tree.setFindPattern(pattern); }
 	findNext(): T | undefined { return this.tree.findNext(); }
 	findPrevious(): T | undefined { return this.tree.findPrevious(); }
@@ -612,6 +614,7 @@ function objectTreeView<T>(tree: ObjectTree<T>, getId: (element: T) => string): 
 		expandTo: (element) => tree.expandTo(getId(element)),
 		isCollapsed: (element) => tree.model.getNode(getId(element))?.collapsed,
 		rerender: (element) => { if (tree.model.has(getId(element))) tree.rerender(getId(element)); },
+		openFind: () => tree.openFind(),
 		setFindPattern: (pattern) => tree.setFindPattern(pattern),
 		findNext: () => tree.findNext(),
 		findPrevious: () => tree.findPrevious(),
@@ -653,6 +656,7 @@ function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView
 		expandTo: (element) => tree.expandTo(element),
 		isCollapsed: (element) => tree.model.getNode(element)?.collapsed,
 		rerender: (element) => { if (tree.model.getNode(element)) tree.rerender(element); },
+		openFind: () => tree.openFind(),
 		setFindPattern: (pattern) => tree.setFindPattern(pattern),
 		findNext: () => tree.findNext(),
 		findPrevious: () => tree.findPrevious(),

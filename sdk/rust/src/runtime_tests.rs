@@ -238,7 +238,8 @@ fn closing_client_calls_releases_waiters_and_accepts_their_late_correlated_repli
         4,
     );
     let waiting = client.clone();
-    let token = crate::CancellationToken::new(1_900_000_000_000, RequestContext::new(3, 2, 3));
+    let token =
+        crate::CancellationToken::new(1_900_000_000_000, RequestContext::new(3, 2, 3)).unwrap();
     let caller = std::thread::spawn(move || waiting.backend_state("test", 0, &token));
     let frame = client_frame(&buffer);
     client.close();
@@ -261,7 +262,8 @@ fn closing_client_calls_releases_waiters_and_accepts_their_late_correlated_repli
     let after_close = client.clone();
     let (done, finished) = std::sync::mpsc::channel();
     let caller = std::thread::spawn(move || {
-        let token = crate::CancellationToken::new(1_900_000_000_000, RequestContext::new(4, 2, 3));
+        let token =
+            crate::CancellationToken::new(1_900_000_000_000, RequestContext::new(4, 2, 3)).unwrap();
         done.send(after_close.backend_state("test", 0, &token))
             .unwrap();
     });
@@ -281,7 +283,8 @@ fn closing_client_calls_releases_waiters_and_accepts_their_late_correlated_repli
     buffer.0.lock().unwrap().clear();
     let reopened = client.clone();
     let caller = std::thread::spawn(move || {
-        let token = crate::CancellationToken::new(1_900_000_000_000, RequestContext::new(5, 2, 3));
+        let token =
+            crate::CancellationToken::new(1_900_000_000_000, RequestContext::new(5, 2, 3)).unwrap();
         reopened.backend_state("test", 0, &token)
     });
     let next = client_frame(&buffer);

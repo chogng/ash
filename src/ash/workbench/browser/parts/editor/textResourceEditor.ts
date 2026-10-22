@@ -15,7 +15,7 @@ import { assertDefined } from "../../../../base/common/types.js";
 import * as strings from '../../../../base/common/strings.js';
 import type { URI } from "../../../../base/common/uri.js";
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IConfigurationService, type IConfigurationOverrides } from '../../../../platform/configuration/common/configuration.js';
 import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IResourceEditorInput, type ISaveOptions, type EditorPaneStatus } from '../../../common/editor.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
@@ -201,7 +201,21 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				renderControlCharacters?: IEditorOptions['renderControlCharacters'];
 				selectionClipboard?: IEditorOptions['selectionClipboard'];
 				find?: IEditorOptions['find'];
+				formatOnType?: boolean;
+				colorDecorators?: boolean;
+				colorDecoratorsLimit?: number;
+				folding?: boolean;
+				foldingMaximumRegions?: number;
+				foldingStrategy?: IEditorOptions['foldingStrategy'];
 			} = {};
+			if (event.affectsConfiguration('editor.colorDecorators', fontOverrides)) update.colorDecorators = this.configurationService.getValue('editor.colorDecorators', fontOverrides);
+			if (event.affectsConfiguration('editor.colorDecoratorsLimit', fontOverrides)) update.colorDecoratorsLimit = this.configurationService.getValue('editor.colorDecoratorsLimit', fontOverrides);
+			if (event.affectsConfiguration('editor.folding', fontOverrides)) update.folding = this.configurationService.getValue('editor.folding', fontOverrides);
+			if (event.affectsConfiguration('editor.foldingMaximumRegions', fontOverrides)) update.foldingMaximumRegions = this.configurationService.getValue('editor.foldingMaximumRegions', fontOverrides);
+			if (event.affectsConfiguration('editor.foldingStrategy', fontOverrides)) update.foldingStrategy = this.configurationService.getValue('editor.foldingStrategy', fontOverrides);
+			if (event.affectsConfiguration('editor.formatOnType', fontOverrides)) {
+				update.formatOnType = this.configurationService.getValue<boolean>('editor.formatOnType', fontOverrides);
+			}
 			if (this.options.fontFamily === undefined && event.affectsConfiguration('editor.fontFamily', fontOverrides)) {
 				update.fontFamily = this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined;
 			}
@@ -223,14 +237,8 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			if (event.affectsConfiguration('editor.wordWrapColumn', fontOverrides)) {
 				update.wordWrapColumn = this.configurationService.getValue('editor.wordWrapColumn', fontOverrides);
 			}
-			if (this.options.minimap === undefined && [
-				EditorMinimapConfiguration.enabled,
-				EditorMinimapConfiguration.renderCharacters,
-				EditorMinimapConfiguration.size,
-				EditorMinimapConfiguration.showSlider,
-				EditorMinimapConfiguration.side,
-			].some(key => event.affectsConfiguration(key))) {
-				update.minimap = this.readMinimapOptions();
+			if (this.options.minimap === undefined && Object.values(EditorMinimapConfiguration).some(key => event.affectsConfiguration(key, fontOverrides))) {
+				update.minimap = this.readMinimapOptions(fontOverrides);
 			}
 			if (event.affectsConfiguration(renderWhitespaceConfiguration)) {
 				update.renderWhitespace = this.configurationService.getValue(renderWhitespaceConfiguration);
@@ -258,13 +266,21 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		};
 	}
 
-	private readMinimapOptions(): IEditorOptions['minimap'] {
+	private readMinimapOptions(overrides: IConfigurationOverrides): IEditorOptions['minimap'] {
 		return {
-			enabled: this.configurationService.getValue(EditorMinimapConfiguration.enabled),
-			renderCharacters: this.configurationService.getValue(EditorMinimapConfiguration.renderCharacters),
-			size: this.configurationService.getValue(EditorMinimapConfiguration.size),
-			showSlider: this.configurationService.getValue(EditorMinimapConfiguration.showSlider),
-			side: this.configurationService.getValue(EditorMinimapConfiguration.side),
+			enabled: this.configurationService.getValue(EditorMinimapConfiguration.enabled, overrides),
+			renderCharacters: this.configurationService.getValue(EditorMinimapConfiguration.renderCharacters, overrides),
+			size: this.configurationService.getValue(EditorMinimapConfiguration.size, overrides),
+			showSlider: this.configurationService.getValue(EditorMinimapConfiguration.showSlider, overrides),
+			side: this.configurationService.getValue(EditorMinimapConfiguration.side, overrides),
+			maxColumn: this.configurationService.getValue(EditorMinimapConfiguration.maxColumn, overrides),
+			scale: this.configurationService.getValue(EditorMinimapConfiguration.scale, overrides),
+			autohide: this.configurationService.getValue(EditorMinimapConfiguration.autohide, overrides),
+			showRegionSectionHeaders: this.configurationService.getValue(EditorMinimapConfiguration.showRegionSectionHeaders, overrides),
+			showMarkSectionHeaders: this.configurationService.getValue(EditorMinimapConfiguration.showMarkSectionHeaders, overrides),
+			markSectionHeaderRegex: this.configurationService.getValue(EditorMinimapConfiguration.markSectionHeaderRegex, overrides),
+			sectionHeaderFontSize: this.configurationService.getValue(EditorMinimapConfiguration.sectionHeaderFontSize, overrides),
+			sectionHeaderLetterSpacing: this.configurationService.getValue(EditorMinimapConfiguration.sectionHeaderLetterSpacing, overrides),
 		};
 	}
 
@@ -313,13 +329,14 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				lineWrapping: this.options.lineWrapping,
 				wordWrap: this.options.lineWrapping ?? this.configurationService.getValue(wordWrapConfiguration, fontOverrides),
 				wordWrapColumn: this.configurationService.getValue('editor.wordWrapColumn', fontOverrides),
+				formatOnType: this.configurationService.getValue<boolean>('editor.formatOnType', fontOverrides),
 				wrappingIndent: this.options.wrappingIndent,
 				fontFamily: this.options.fontFamily ?? (this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined),
 				fontSize: this.options.fontSize ?? this.configurationService.getValue<number>('editor.fontSize', fontOverrides),
 				lineHeight: this.options.lineHeight ?? this.configurationService.getValue<number>('editor.lineHeight'),
 				fontLigatures: this.options.fontLigatures ?? this.configurationService.getValue<boolean>('editor.fontLigatures'),
 				experimentalGpuAcceleration: this.options.experimentalGpuAcceleration,
-				minimap: this.options.minimap ?? this.readMinimapOptions(),
+				minimap: this.options.minimap ?? this.readMinimapOptions(fontOverrides),
 				renderWhitespace: this.configurationService.getValue(renderWhitespaceConfiguration),
 				renderControlCharacters: this.configurationService.getValue(renderControlCharactersConfiguration),
 				renderLineHighlight: this.options.renderLineHighlight,
@@ -341,7 +358,10 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				codeLens: this.options.codeLens,
 				colorDecorators: this.options.colorDecorators,
 				colorDecoratorsActivatedOn: this.options.colorDecoratorsActivatedOn,
-				colorDecoratorsLimit: this.options.colorDecoratorsLimit,
+				colorDecoratorsLimit: this.configurationService.getValue('editor.colorDecoratorsLimit', fontOverrides),
+				folding: this.configurationService.getValue('editor.folding', fontOverrides),
+				foldingMaximumRegions: this.configurationService.getValue('editor.foldingMaximumRegions', fontOverrides),
+				foldingStrategy: this.configurationService.getValue('editor.foldingStrategy', fontOverrides),
 				defaultColorDecorators: this.options.defaultColorDecorators,
 				formatOnSave: this.options.formatOnSave,
 				find: this.readFindOptions(),
@@ -390,10 +410,14 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			this.languageId = resolvedModel.getLanguageId();
 			const fontOverrides = { resource: resolvedModel.uri, overrideIdentifier: this.languageId };
 			part.updateOptions({
+				minimap: this.options.minimap ?? this.readMinimapOptions(fontOverrides),
+				colorDecoratorsLimit: this.configurationService.getValue('editor.colorDecoratorsLimit', fontOverrides),
+				foldingMaximumRegions: this.configurationService.getValue('editor.foldingMaximumRegions', fontOverrides),
 				fontFamily: this.options.fontFamily ?? (this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined),
 				fontSize: this.options.fontSize ?? this.configurationService.getValue<number>('editor.fontSize', fontOverrides),
 				wordWrap: this.options.lineWrapping ?? this.configurationService.getValue(wordWrapConfiguration, fontOverrides),
 				wordWrapColumn: this.configurationService.getValue('editor.wordWrapColumn', fontOverrides),
+				formatOnType: this.configurationService.getValue<boolean>('editor.formatOnType', fontOverrides),
 			});
 			this.statusChangeEmitter.fire();
 		}));

@@ -15,7 +15,7 @@ import { IWorkspaceContextService } from '../../../../../../platform/workspace/c
 import type { IResourceEditorInput } from '../../../../../common/editor.js';
 import { createBinaryDiffEditorInput, createDiffEditorInput } from '../../../../../common/editor/diffEditorInput.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
-import { NotificationService } from '../../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../../services/notification/test/common/testNotificationService.js';
 import { IWorkingCopyService } from '../../../../../services/workingCopy/common/workingCopyService.js';
 import { emptyEditorServiceState } from '../../../../../test/common/testEditorService.js';
 import { ChatAttachmentModel } from '../../../browser/attachments/chatAttachmentModel.js';
@@ -39,7 +39,7 @@ function setup(resources: DisposableStore, read: (resource: URI) => Promise<stri
 	services.registerInstance(IWorkingCopyService, { get: () => unsaved === undefined ? [] : [{ backupKind: 'text', backup: () => unsaved }] } as unknown as IWorkingCopyService);
 	services.registerInstance(IWorkspaceContextService, {} as IWorkspaceContextService);
 	services.registerInstance(IFileSearchService, {} as IFileSearchService);
-	const notifications = resources.add(new NotificationService());
+	const notifications = resources.add(new TestNotificationService());
 	services.registerInstance(INotificationService, notifications);
 	const attachments = resources.add(new ChatAttachmentModel());
 	const input = document.createElement('textarea');

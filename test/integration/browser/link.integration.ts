@@ -6,7 +6,7 @@ import { CommandService } from '../../../src/ash/workbench/services/commands/com
 import { renderMarkdown } from '../../../src/ash/base/browser/markdownRenderer.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { openChatMarkdownLink } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatWidget.js';
 import { openChatMarkdownLink as openCoworkMarkdownLink } from '../../../src/ash/sessions/contrib/cowork/browser/widget/coworkWidget.js';
 import '../../../src/ash/workbench/contrib/commands/common/commands.contribution.js';
@@ -154,7 +154,7 @@ const commandHost = document.createElement('section');
 commandHost.id = 'command-link';
 document.body.append(commandHost);
 services.registerInstance(ILogService, new NullLoggerService());
-const commandNotifications = resources.add(new NotificationService());
+const commandNotifications = resources.add(new TestNotificationService());
 services.registerInstance(INotificationService, commandNotifications);
 resources.add(commandNotifications.model.onDidAdd(item => {
 	const notice = document.createElement('div');

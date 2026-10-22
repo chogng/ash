@@ -158,10 +158,12 @@ impl LanguageServerAcquisition {
     }
 
     /// Uses a product-pinned upstream release, with no GitHub API or latest-version lookup.
+    /// Cache reuse is silent; `on_download` runs only when the store must fetch the release.
     pub fn install(
         &self,
         home: &Path,
         http: &dyn HttpClient,
+        on_download: impl FnOnce(),
     ) -> Result<InstalledExecutable, ManagedLanguageServerError> {
         let suffix = match std::env::consts::OS {
             "macos" => "apple-darwin",
@@ -187,6 +189,7 @@ impl LanguageServerAcquisition {
             &self.executable,
             release,
             http,
+            on_download,
         )?)
     }
 

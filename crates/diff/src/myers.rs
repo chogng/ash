@@ -51,7 +51,7 @@ pub(crate) fn edits<T: Eq>(
         let next_trace_cells = trace
             .len()
             .checked_add(1)
-            .and_then(|count| count.checked_mul(frontier_len))
+            .and_then(|count| count.checked_mul(count))
             .ok_or(DiffError::TraceLimit {
                 limit: limits.max_trace_cells(),
             })?;
@@ -94,7 +94,10 @@ pub(crate) fn edits<T: Eq>(
                 break;
             }
         }
-        trace.push(frontier.clone());
+        // Only [-depth, depth] can be reached at this edit distance. Copying
+        // the full input-sized frontier at every depth makes sparse changes
+        // consume O((N + M)D) trace cells instead of O(D²).
+        trace.push(frontier[(offset - depth) as usize..=(offset + depth) as usize].to_vec());
         if reached_end {
             final_depth = Some(depth as usize);
             break 'search;
@@ -104,7 +107,6 @@ pub(crate) fn edits<T: Eq>(
     Ok(reconstruct(
         old.len(),
         new.len(),
-        offset,
         final_depth.expect("bounded Myers search reaches its terminal diagonal"),
         &trace,
     ))
@@ -134,7 +136,6 @@ fn linear_edits(
 fn reconstruct(
     old_len: usize,
     new_len: usize,
-    offset: isize,
     final_depth: usize,
     trace: &[Vec<isize>],
 ) -> Vec<Edit> {
@@ -144,6 +145,7 @@ fn reconstruct(
     for depth in (1..=final_depth).rev() {
         let diagonal = x - y;
         let previous = &trace[depth - 1];
+        let offset = depth as isize - 1;
         let previous_diagonal = if diagonal == -(depth as isize)
             || (diagonal != depth as isize
                 && previous[(offset + diagonal - 1) as usize]

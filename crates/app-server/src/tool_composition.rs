@@ -761,10 +761,11 @@ impl ToolService for ReloadableToolService {
         let generation = self.ports.generation();
         let definitions = generation.tools.model_definitions(activated)?;
         let ports = Arc::clone(&self.ports);
-        Ok(ModelToolCatalogSnapshot::with_binder(
-            definitions,
-            move |call, caller| ports.bind_call_in_generation(&generation, call, caller),
-        ))
+        Ok(
+            ModelToolCatalogSnapshot::new(definitions).with_binder(move |call, caller| {
+                ports.bind_call_in_generation(&generation, call, caller)
+            }),
+        )
     }
 
     fn code_mode_catalog_snapshot(
@@ -774,10 +775,9 @@ impl ToolService for ReloadableToolService {
         let generation = self.ports.generation();
         let catalog = generation.tools.code_mode_catalog_snapshot(activated)?;
         let ports = Arc::clone(&self.ports);
-        Ok(ModelToolCatalogSnapshot::with_binder(
-            catalog.definitions().to_vec(),
-            move |call, caller| ports.bind_call_in_generation(&generation, call, caller),
-        ))
+        Ok(catalog.with_binder(move |call, caller| {
+            ports.bind_call_in_generation(&generation, call, caller)
+        }))
     }
 
     fn bind_call(

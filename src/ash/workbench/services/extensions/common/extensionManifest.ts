@@ -1,3 +1,4 @@
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ExtensionsRegistry } from './extensionsRegistry.js';
 import { localize } from '../../../../nls.js';
 import { validateJsonValue } from '../../../../base/common/jsonValue.js';
@@ -65,6 +66,8 @@ export interface ExtensionManifest {
 	readonly version: string;
 	readonly displayName: string;
 	readonly contributes: {
+		readonly breakpoints: readonly { readonly language: string; readonly when?: string; }[];
+		readonly debugVisualizers: readonly { readonly id: string; readonly title: string; readonly command: string; readonly type?: string; }[];
 		readonly speechProviders: readonly { readonly name: string; readonly description?: string; }[];
 		readonly terminal: { readonly profiles: readonly { readonly id: string; readonly title: string; readonly icon?: string; readonly color?: string; }[]; };
 		readonly localizations: readonly ILocalizationContribution[];
@@ -134,6 +137,8 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		displayName,
 		contributes: Object.freeze({
 			speechProviders: parseSpeechProviders(contributes.speechProviders),
+			debugVisualizers: parseDebugVisualizers(contributes.debugVisualizers),
+			breakpoints: parseBreakpointContributions(contributes.breakpoints),
 			terminal: parseTerminalContribution(contributes.terminal, contributes.terminalProfiles),
 			localizations: parseLocalizations(contributes.localizations),
 			configuration: parseConfigurations(contributes.configuration, Object.freeze({ id: descriptor.id, displayName })),
@@ -640,4 +645,30 @@ function parseSpeechProviders(value: unknown): ExtensionManifest['contributes'][
 	const point = ExtensionsRegistry.getExtensionPoint<ExtensionManifest['contributes']['speechProviders']>('speechProviders');
 	if (!point) throw new TypeError(localize('speech.providerDeclarationInvalid', 'Invalid speech provider contribution.'));
 	return point.validate(value);
+}
+
+
+function parseDebugVisualizers(value: unknown): ExtensionManifest['contributes']['debugVisualizers'] {
+	if (value === undefined) return Object.freeze([]);
+	if (!Array.isArray(value) || value.length > 32) throw new TypeError(localize('debug.visualizerDeclarationInvalid', 'Invalid debug visualizer declaration.'));
+	const ids = new Set<string>();
+	return Object.freeze(value.map(candidate => {
+		const item = record(candidate, 'contributes.debugVisualizers');
+		const id = requiredString(item.id, 'contributes.debugVisualizers.id', 128);
+		if (!/^[A-Za-z][\w.-]*$/.test(id) || ids.has(id) || Object.keys(item).some(key => !['id', 'title', 'command', 'type'].includes(key))) throw new TypeError(localize('debug.visualizerDeclarationInvalid', 'Invalid debug visualizer declaration.'));
+		ids.add(id);
+		return Object.freeze({ id, title: requiredString(item.title, 'contributes.debugVisualizers.title', 256), command: requiredString(item.command, 'contributes.debugVisualizers.command', 256), ...(item.type === undefined ? {} : { type: requiredString(item.type, 'contributes.debugVisualizers.type', 256) }) });
+	}));
+}
+
+
+function parseBreakpointContributions(value: unknown): ExtensionManifest['contributes']['breakpoints'] {
+	if (value === undefined) return Object.freeze([]);
+	if (!Array.isArray(value) || value.length > 128) throw new TypeError(localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'));
+	return Object.freeze(value.map(candidate => {
+		const item = record(candidate, 'contributes.breakpoints');
+		if (Object.keys(item).some(key => key !== 'language' && key !== 'when')) throw new TypeError(localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'));
+		if (item.when !== undefined && (typeof item.when !== 'string' || !ContextKeyExpr.deserialize(item.when))) throw new TypeError(localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'));
+		return Object.freeze({ language: languageId(item.language, 'contributes.breakpoints.language'), ...(item.when === undefined ? {} : { when: requiredString(item.when, 'contributes.breakpoints.when', 1024) }) });
+	}));
 }

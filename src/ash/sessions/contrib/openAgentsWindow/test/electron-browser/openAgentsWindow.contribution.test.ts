@@ -16,7 +16,7 @@ import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../../w
 import { INativeHostService } from '../../../../../workbench/common/services.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../../../../workbench/contrib/chat/common/constants.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
-import { NotificationService } from '../../../../../workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../../workbench/services/notification/test/common/testNotificationService.js';
 import { OpenAgentsWindowSystemWideKeybindingContribution } from '../../electron-browser/openAgentsWindow.contribution.js';
 import { registerOpenAgentsWindowCommand } from '../../electron-browser/openAgentsWindowCommand.js';
 
@@ -50,7 +50,7 @@ class RecordingLog extends NullLoggerService {
 class Fixture extends Disposable {
 	public readonly services = this._register(new InstantiationService());
 	public readonly resource = this._register(new TestKeybindingService());
-	public readonly notifications = this._register(new NotificationService());
+	public readonly notifications = this._register(new TestNotificationService());
 	public readonly log = new RecordingLog();
 	public readonly payloads: INativeSystemWideKeybinding[][] = [];
 	public readonly opened: (IOpenAgentsWindowOptions | undefined)[] = [];

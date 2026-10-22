@@ -8913,8 +8913,12 @@ fn instruction_list_and_explicit_attachment_use_current_authorized_files() {
         serde_json::json!({"jsonrpc":"2.0","id":12,"method":"instructions/list","params":{}}),
     );
     assert_eq!(
-        preview["result"]["instructions"][0]["path"],
-        path.display().to_string()
+        std::path::Path::new(
+            preview["result"]["instructions"][0]["path"]
+                .as_str()
+                .unwrap()
+        ),
+        path
     );
     assert_eq!(
         preview["result"]["instructions"].as_array().unwrap().len(),
@@ -8929,17 +8933,18 @@ fn instruction_list_and_explicit_attachment_use_current_authorized_files() {
         serde_json::json!({"jsonrpc":"2.0","id":3,"method":"instructions/list","params":{"sessionId":session_id}}),
     );
     assert_eq!(
-        listed["result"]["instructions"][0]["path"],
-        path.display().to_string()
+        std::path::Path::new(
+            listed["result"]["instructions"][0]["path"]
+                .as_str()
+                .unwrap()
+        ),
+        path
     );
     assert_eq!(listed["result"]["instructions"][0]["load"], "onDemand");
     assert_eq!(listed["result"]["diagnostics"].as_array().unwrap().len(), 1);
     assert_eq!(
-        listed["result"]["diagnostics"][0]["path"],
-        root.path()
-            .join("instructions/bad.md")
-            .display()
-            .to_string()
+        std::path::Path::new(listed["result"]["diagnostics"][0]["path"].as_str().unwrap()),
+        root.path().join("instructions/bad.md")
     );
     assert!(
         !listed

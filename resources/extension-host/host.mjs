@@ -11,11 +11,23 @@ let registrationListener;
 let registrationRevision = 0;
 let speechRegistrationGeneration = 0;
 const dynamicTerminalRegistration = kind => ['terminalProfileProvider', 'terminalPty', 'terminalLinkProvider', 'terminalCompletionProvider', 'terminalQuickFixProvider'].includes(kind);
-const dynamicRegistration = kind => kind === 'speechProvider' || dynamicTerminalRegistration(kind);
+const dynamicRegistration = kind => kind === 'speechProvider' || kind === 'treeDataProvider' || dynamicTerminalRegistration(kind);
 
 function publishDynamicRegistrations() {
 	if (phase !== 'active') return;
-	registrationListener?.(JSON.stringify({ revision: ++registrationRevision, speechProviders: [...registrations.values()].filter(value => value.kind === 'speechProvider').map(({ registrationId, kind, identifier, registrationGeneration }) => ({ registrationId, kind, identifier, registrationGeneration })), terminalProviders: [...registrations.values()].filter(value => dynamicTerminalRegistration(value.kind)).map(({ registrationId, kind, triggerCharacters, providerId, profileId, title }) => ({ registrationId, kind, ...(triggerCharacters ? { triggerCharacters } : {}), ...(providerId ? { providerId } : {}), ...(profileId ? { profileId, title } : {}) })) }));
+	const active = [...registrations.values()];
+	registrationListener?.(JSON.stringify({
+		revision: ++registrationRevision,
+		treeProviders: active.filter(value => value.kind === 'treeDataProvider')
+			.map(({ registrationId, kind, viewId, title, containerId }) => ({ registrationId, kind, viewId, title, ...(containerId ? { containerId } : {}) })),
+		speechProviders: active.filter(value => value.kind === 'speechProvider')
+			.map(({ registrationId, kind, identifier, registrationGeneration }) => ({ registrationId, kind, identifier, registrationGeneration })),
+		terminalProviders: active.filter(value => dynamicTerminalRegistration(value.kind))
+			.map(({ registrationId, kind, triggerCharacters, providerId, profileId, title }) => ({
+				registrationId, kind,
+				...(triggerCharacters ? { triggerCharacters } : {}), ...(providerId ? { providerId } : {}), ...(profileId ? { profileId, title } : {})
+			})),
+	}));
 }
 
 export class CancellationTokenSource {

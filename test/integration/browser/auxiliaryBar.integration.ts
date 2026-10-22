@@ -35,6 +35,12 @@ import { ViewsService } from '../../../src/ash/workbench/services/views/browser/
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { createTestWorkbenchContextKeysHandler } from '../../../src/ash/workbench/test/common/testWorkbenchContextKeys.js';
 import { bindTestColorTheme } from './themeFixture.js';
+import { h, addDisposableListener } from '../../../src/ash/base/browser/dom.js';
+import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
+import { ActivityBarPosition } from '../../../src/ash/workbench/common/configuration.js';
+import type { PartTitleProjection } from '../../../src/ash/workbench/browser/parts/views/viewPane.js';
+import { HoverService, IHoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
+import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import chinese from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 
 const resources = new DisposableStore();
@@ -46,6 +52,8 @@ const context = services.get(IContextKeyService);
 const commands = resources.add(new CommandService(services));
 services.registerInstance(IMenuService, new MenuService(commands, context));
 services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } });
+const contextViews = resources.add(new BrowserContextViewService(root));
+services.registerInstance(IHoverService, resources.add(new HoverService(services.get(IConfigurationService), contextViews, services.get(IContextMenuService))));
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 const theme = resources.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, theme);
@@ -55,17 +63,25 @@ await import('../../../src/ash/workbench/browser/parts/auxiliarybar/auxiliaryBar
 
 class DraftView extends ViewPane {
 	private readonly input: HTMLTextAreaElement;
+	private readonly titleControl = h(document, 'button');
+	private readonly titleActions = h(document, 'button');
 	constructor(container: HTMLElement, options: IViewPaneOptions) {
 		super(container, options);
 		this.input = document.createElement('textarea');
 		this.input.setAttribute('aria-label', 'Chat draft');
 		this.contentElement.append(this.input);
+		this.titleControl.textContent = 'Chat title control';
+		this.titleActions.textContent = 'Clear draft';
+		this._register(addDisposableListener(this.titleActions, 'click', () => { this.input.value = ''; }));
 	}
 	public override focus(): void { this.input.focus(); }
+	public override get partTitleProjection(): PartTitleProjection { return { content: this.titleControl, actions: this.titleActions }; }
 }
-const registry = new WorkbenchViewRegistry();
+const registry = resources.add(new WorkbenchViewRegistry());
 registry.registerStaticViewContainer({ id: 'test.chat', title: 'Chat', location: ViewContainerLocation.AuxiliaryBar, isDefault: true });
 registry.registerStaticViews('test.chat', [{ id: 'test.chat.draft', title: 'Chat', ctorDescriptor: new SyncDescriptor(DraftView) }]);
+resources.add(registry.registerViewContainer({ id: 'test.other', title: 'Other', location: ViewContainerLocation.AuxiliaryBar, hideIfEmpty: true }));
+resources.add(registry.registerViews('test.other', [{ id: 'test.other.view', title: 'Other', when: ContextKeyExpr.has('test.otherActive'), ctorDescriptor: new SyncDescriptor(DraftView) }]));
 services.registerInstance(IViewDescriptorService, resources.add(services.createInstance(ViewDescriptorService, { registry })));
 services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 const layout = resources.add(services.createInstance(WorkbenchLayout, root, { workbenchState: WorkbenchState.FOLDER, initialDimension: new Dimension(innerWidth, innerHeight), defaultLayout: { parts: { panel: true } } }));
@@ -101,6 +117,13 @@ window.ashAuxiliaryBarIntegration = {
 	command: id => commands.executeCommand(id),
 	setTheme: index => theme.setColorTheme([lightColorTheme, darkColorTheme, highContrastLightColorTheme, highContrastDarkColorTheme][index]!),
 	setSide: side => services.get(IConfigurationService).updateValue(WorkbenchConfiguration.sideBarLocation, side),
+	setLocation: position => services.get(IConfigurationService).updateValue(WorkbenchConfiguration.activityBarLocation, position),
+	setAutoHide: value => services.get(IConfigurationService).updateValue(WorkbenchConfiguration.activityBarAutoHide, value),
+	setOtherActive: value => context.setContext('test.otherActive', value),
+	moveOther: location => {
+		const descriptors = services.get(IViewDescriptorService);
+		descriptors.moveViewContainerToLocation(descriptors.getViewContainerById('test.other')!, location);
+	},
 	state: () => ({ maximized: layout.isAuxiliaryBarMaximized(), width: layout.getPartSize('auxiliarybar').width, saved: layout.state, active: auxiliary.activeCompositeId }),
 };
 
@@ -110,6 +133,10 @@ declare global {
 			command(id: string): Promise<unknown>;
 			setTheme(index: number): void;
 			setSide(side: 'left' | 'right'): Promise<void>;
+			setLocation(position: ActivityBarPosition): Promise<void>;
+			setAutoHide(value: boolean): Promise<void>;
+			setOtherActive(value: boolean): void;
+			moveOther(location: ViewContainerLocation): void;
 			state(): { maximized: boolean; width: number; saved: import('../../../src/ash/workbench/browser/layout.js').WorkbenchLayoutState; active: string | undefined; };
 		};
 	}

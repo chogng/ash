@@ -7,8 +7,61 @@ import { EditorAction, registerEditorAction, registerEditorContribution, type Se
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { IVersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
-import { formatEditor, FormattingKind, FormattingMode } from './format.js';
+import { formatEditor, formatEditorOnType, FormattingKind, FormattingMode } from './format.js';
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+
+export class FormatOnType extends Disposable {
+	public static readonly ID = 'editor.contrib.autoFormat';
+	private pending: CancellationTokenSource | undefined;
+
+	constructor(
+		private readonly editor: ICodeEditor,
+		private readonly onError: (error: unknown) => void,
+		@ILanguageFeaturesService private readonly features: ILanguageFeaturesService,
+		@IVersionedEditorWorkerClient private readonly worker: IVersionedEditorWorkerClient,
+	) {
+		super();
+		this._register(editor.onDidType(text => {
+			this.cancel();
+			void this.trigger(text).catch(error => { if (!this.isDisposed) this.onError(error); });
+		}));
+		this._register(editor.onDidChangeConfiguration(() => this.cancel()));
+		this._register(features.onTypeFormattingEditProvider.onDidChange(() => this.cancel()));
+		const model = editor.getModel();
+		if (model) this._register(model.onDidChangeLanguage(() => this.cancel()));
+		this._register(editor.onDidCompositionStart(() => this.cancel()));
+		this._register(toDisposable(() => this.cancel()));
+	}
+
+	private cancel(): void {
+		this.pending?.dispose(true);
+		this.pending = undefined;
+	}
+
+	private async trigger(text: string): Promise<void> {
+		const model = this.editor.getModel();
+		const selections = this.editor.getSelections();
+		if (!model || !text || !this.editor.getOption(EditorOption.formatOnType) || this.editor.getOption(EditorOption.readOnly)
+			|| !selections?.length || selections.some(selection => !selection.isEmpty())) return;
+		const source = new CancellationTokenSource();
+		this.pending = source;
+		try {
+			await formatEditorOnType(this.editor, this.features, this.worker, text, source.token);
+		} catch (error) {
+			if (!source.token.isCancellationRequested) throw error;
+		} finally {
+			if (this.pending === source) this.cancel();
+		}
+	}
+}
+
+registerEditorContribution({
+	id: FormatOnType.ID,
+	install: context => context.instantiationService.createInstance(FormatOnType, context.editor, context.onLanguageError),
+});
 
 class FormatDocumentAction extends EditorAction {
 	constructor() {

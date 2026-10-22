@@ -1,15 +1,10 @@
 # 工具系统
 
-> 计划物理位置：`crates/tools/`
+> 物理位置：`crates/tools/`
 > Rust crate：`ash_tools`
-> 当前状态：T1 主链完成，T2 MCP/dynamic 主链完成；MCP host runtime 已提取到 `ext/mcp`。T3 的
-> Tool Search、capability-bearing extension、Connector discovery projection、Plugin catalog projection 与
-> typed discovery request 已接入共享契约；`ext/web-search` 已提供默认关闭、宿主注入 backend 后才注册的
-> `web_search` 工具。Tool Call 已持久化 registry
-> generation、definition digest、source chain 与 direct/code-mode caller；Tool Result 已能持久化结构化
-> 图片内容。Code Mode 已完成 exec/wait、V8 cell runtime、durable nested-call broker 和可选 stdio Host；
-> Plugin local content store 已落地，但安装 authority、activation、grant，以及 dynamic owner 断连后的持久化重启
-> 端到端 fixture 仍未完成。
+> 当前状态：共享 registry/executor、MCP/dynamic、Tool Search、Connector/Plugin discovery 与 typed request 已接入；MCP host runtime 位于 `ext/mcp`。`ext/web-search` 默认关闭，仅在宿主注入 backend 后注册。
+> Tool Call 持久化 registry generation、definition digest、source chain 与 caller；Tool Result 保留结构化图片。Code Mode 使用 exec/wait、V8 cell runtime、durable nested-call broker 和可选 stdio Host。
+> Plugin local content store、安装 authority、activation 和 grant 由包管理 owner 提供；dynamic owner 断连后的持久化重启端到端 fixture 仍未完成。
 > Canonical value 与 durable Tool Item：[`protocol.md`](../protocol.md)
 > Core 调度、approval 与恢复：[`core.md`](../core.md)
 > MCP client runtime：[`mcp.md`](../mcp.md)
@@ -25,16 +20,16 @@
 本文统一维护架构、业务能力工具集、产品组合、范围和执行契约，并分别标明当前实现与待实现规则。
 逐项名称、用途、执行归属与可用条件只维护在[完整工具目录](tool-catalog.md)。
 
-| 读者首先会问                     | 直接答案                                                                                                             | 深入阅读                                                                         |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| 不同来源的工具为什么能统一调用？ | 每个来源先转换成统一定义、规格、绑定和调用值                                                                         | [三层工具契约](#3-三层工具契约)                                                  |
-| 工具名称就是执行身份吗？         | 不是；稳定身份还包含来源、绑定和快照 generation                                                                      | [身份、来源与绑定](#5-身份来源与绑定)                                            |
-| 工具如何按业务能力分组？         | ToolSet 声明可复用的工具成员，产品组合选择集合，Scope 冻结本轮名单                                                   | [业务分组原则](#65-业务能力工具集与产品组合)、[目标集合](#66-业务能力工具集目标) |
-| Agent 当前能看到和调用哪些工具？ | 冻结范围限制目录与调用，暴露方式决定何时加载；实时授权仍可拒绝操作                                                   | [Scope 计算](#74-scope-计算与调用约束)、[生命周期](#73-安全点与排空)             |
-| 哪些集合默认启用，哪些按需选择？ | 当前 Profile 仅有单一 sets；Tasks 拆分、默认／可选分离及待补集合属于目标规则                                         | [产品组合](#75-产品组合与接纳规则)、[默认与可选](#默认启用与可选组合)            |
-| 如何检查实例实际注册的工具？     | 命令面板打开只读目录快照；它不等于某个 Turn 的实时权限                                                               | [查看工具目录](#174-查看工具目录与范围诊断)                                      |
-| 谁决定工具能不能执行？           | 权限系统决定授权；Core 调度；工具执行器落实调用                                                                      | [当前本地工具来源](#41-当前本地工具来源运行时)                                   |
-| 当前完成到哪里？                 | 统一 registry/executor/search、durable provenance、结构化图片和 Code Mode 主链已落地；Plugin 安装 authority 尚未完成 | [当前仓库审计](#2-当前仓库审计)                                                  |
+| 读者首先会问                     | 直接答案                                                                                                            | 深入阅读                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| 不同来源的工具为什么能统一调用？ | 每个来源先转换成统一定义、规格、绑定和调用值                                                                        | [三层工具契约](#3-三层工具契约)                                                  |
+| 工具名称就是执行身份吗？         | 不是；稳定身份还包含来源、绑定和快照 generation                                                                     | [身份、来源与绑定](#5-身份来源与绑定)                                            |
+| 工具如何按业务能力分组？         | ToolSet 声明可复用的工具成员，产品组合选择集合，Scope 冻结本轮名单                                                  | [业务分组原则](#65-业务能力工具集与产品组合)、[目标集合](#66-业务能力工具集目标) |
+| Agent 当前能看到和调用哪些工具？ | 冻结范围限制目录与调用，暴露方式决定何时加载；实时授权仍可拒绝操作                                                  | [Scope 计算](#74-scope-计算与调用约束)、[生命周期](#73-安全点与排空)             |
+| 哪些集合默认启用，哪些按需选择？ | 当前 Profile 仅有单一 sets；Tasks 拆分、默认／可选分离及待补集合属于目标规则                                        | [产品组合](#75-产品组合与接纳规则)、[默认与可选](#默认启用与可选组合)            |
+| 如何检查实例实际注册的工具？     | 命令面板打开只读目录快照；它不等于某个 Turn 的实时权限                                                              | [查看工具目录](#174-查看工具目录与范围诊断)                                      |
+| 谁决定工具能不能执行？           | 权限系统决定授权；Core 调度；工具执行器落实调用                                                                     | [当前本地工具来源](#41-当前本地工具来源运行时)                                   |
+| 当前完成到哪里？                 | 统一 registry/executor/search、durable provenance、结构化图片和 Code Mode 主链已接入；安装与授权由包管理 owner 提供 | [当前仓库审计](#2-当前仓库审计)                                                  |
 
 ## 1. 结论
 
@@ -1880,66 +1875,16 @@ mod tests;
 但 `ash-tools` 仍只保留窄 bridge contract。第一版不创建 `tools-common`、`tools-types`、
 `tool-runtime` 等无独立消费者的小 crate。
 
-## 20. 迁移顺序
+## 20. 扩展边界与验证范围
 
-### 阶段 T0：固定共享边界（完成）
+共享工具契约、registry、MCP/dynamic、检索和 Code Mode 的实现由前文维护；Plugin authority 与 Connector OAuth/connect/revoke 的状态分别见 [Plugins](../plugins.md) 和 [Connectors](../connectors.md)。来源安装或连接不能由 executable registry 反向代替，discovery 不产生可执行 binding 或隐式 grant。
 
-- ✅ 创建 `ash-tools`；
-- ✅ 复用 protocol `ToolName` / `ToolCallId`，不复制 identity；
-- ✅ 建立受限 schema parser、`ToolDefinition`、function/freeform invocation 与基础 output content；
-- ✅ 为当前 protocol `ToolDefinition/ToolResult` 提供 adapter；
-- ✅ 为 dynamic tool 与 wire-neutral MCP projection 提供 definition adapter；
-- ✅ 加入 schema/name/output fixture。
+以下范围仍需实现、验证或独立评审：
 
-完成条件：OpenAI/Anthropic 当前 function tool request round-trip 不回归，且新 crate 不依赖 Core。
-
-### 阶段 T1：执行器与注册表（主执行链已接入）
-
-- ✅ 定义 `ToolBinding`、`ToolExecutor`、materialized invocation、cancellation context 与 outcome；
-- ✅ built-in process、direct filesystem suite 与 `apply_patch` tool 实现 executor contract；
-- ✅ App Server 构造 immutable registry snapshot，并在 Directory replacement 时单调递增 generation；
-- ✅ Core `ToolService` adapter 按 frozen binding/runtime key 路由，并把 durable Turn facts 投影为 `ToolInvocation`；
-- ✅ prepared call 在 hot reload 后继续使用原 Tool/Policy generation，sandbox retry 不切换 generation；
-- ✅ definitions 与 execution route 由同一个 immutable registry snapshot 产生，不按 live name 直接猜 service。
-
-完成条件：registry 更新不能劫持 in-flight call，stale binding 被明确拒绝。
-
-### 阶段 T2：MCP 与动态适配器（MCP/动态与 durable 来源主链完成）
-
-- ✅ `ash-mcp` 输出 `McpToolProjection` 并建立 immutable catalog/binding；
-- ✅ 接通 MCP schema/name/result conversion 与调用取消；
-- ✅ MCP App Server/Core adapter 接入逐次 approval、durable commit 和 unknown outcome；
-- ✅ MCP host integration 从 App Server 私有模块提取到 `crates/ext/mcp`；App Server 仅组合和 safe-point replacement；
-- ✅ dynamic definition 进入共享 registry，execution 经过 approval、durable interaction 与 Tool Result commit；
-- ✅ dynamic request 固定 definition digest、call id、name 与 arguments；同名新定义不能认领旧 response；
-- ✅ 多连接 delivery 还按 initialize capability 的 exact dynamic tool name 选 owner；
-- ✅ 已投递 dynamic owner 断连/退订后不重新分配，按 unknown outcome 且不重试收口；
-- ✅ Tool Call durable provenance 保存 registry generation、definition digest、source chain 与 caller；
-- 部分具备：MCP transport-lost 已覆盖；dynamic owner-disconnect 已覆盖 broker/Core continuation，
-  仍需补持久化重启的完整端到端 fixture。
-
-完成条件：MCP/dynamic 工具都不能绕过普通 approval、commit 和 recovery。
-
-### 阶段 T3：工具搜索与 Plugin 发现
-
-- ✅ deferred exposure 和 deterministic search index；
-- ✅ host tool-search vertical slice；
-- ✅ Core 根据 successful durable search result 在下一 model step 增量暴露定义；
-- ✅ `ReadOnlyToolContributor` 产出的 host extension executor 进入共享 registry/policy/runtime（当前包括统一的 `skills-read`）；
-- ✅ `CapabilityToolContributor` 冻结 exact network/credential scope，并通过普通一次性 approval 执行；
-- ✅ `ext/web-search` 提供 eager `web_search`、可注入 backend 和默认关闭门禁；
-- ✅ `ext/connectors` 统一管理 Connector 账号连接、目录发现与就绪 MCP 绑定；
-- ✅ enabled connector/MCP catalog 与 local/dynamic/extension port 做统一 collision check；
-- ✅ Plugin/Connector catalog-only discovery value、generation-bound snapshot 与 local Plugin projection；
-- ✅ typed install/enable/connect request 和通用 client capability filtering；
-- ✅ local Plugin package store 已完成 staging、copy-time identity check、digest 复验和 content-addressed
-  atomic promotion；
-- 尚未完成：Connector OAuth/connect/revoke、默认生产 Web Search provider、Agent helper、用户确认
-  interaction 与 Plugin 安装/启用 authority；dynamic owner 的 exact
-  tool-name filtering 已完成。
-
-完成条件：search 只返回当前 registry 工具，Plugin discovery 不产生可执行 binding，install 无隐式
-grant。
+- dynamic owner 断连后的 broker/Core continuation 已有覆盖，但持久化重启的完整端到端 fixture 仍缺失。
+- Web Search 尚无默认生产 provider 或 credential UI；发现链的 Agent helper 与用户确认接线仍有缺口，不以 typed request 存在认定产品入口完整。
+- 图片 downgrade decision 已有 fixture；data URL 的 byte/pixel/MIME 限制与跨 provider 端到端 wire fixture 尚未完成。unsupported `Original` 不能到达 provider wire，实际 detail 必须可解释。
+- Code Mode 的音频结果、gRPC Host 与崩溃后 cell 重放明确推迟。任意 nested side effect 继续经过普通 binding、approval、durable commit、取消与 unknown outcome 契约。
 
 当前受控检索回归包含 20 个代表工具、140 个 collision/distractor 工具和中英文 semantic cases：
 
@@ -1952,29 +1897,6 @@ grant。
 
 真实 embedding 的模型质量必须按具体 provider/model 另做可重复 eval；CI 中的 controlled semantic
 ranking 只证明 gate、document embedding、cosine ranking 和 hybrid merge 接线不会退化成伪 fallback。
-
-### 阶段 T4：代码模式
-
-- ✅ code-mode definition projection、naming/collision table；
-- ✅ nested call 写入 durable binding 并重新进入普通 ToolScheduler path；
-- ✅ structured/MCP/image result adapter；
-- ✅ exec/wait、V8 cell lifecycle、yield/terminate、并发 nested calls 和 uncertain outcome；
-- ✅ 内嵌运行时与可选 stdio Host、帧大小/版本/EOF 校验；
-- ✅ Cargo/Bazel 的 sandbox-enabled V8 输入锁定，以及 Desktop/发布 Host 打包；
-- 明确推迟：音频结果、gRPC Host 和崩溃后 cell 重放。
-
-完成条件：code mode 的任意 nested side effect 都可审批、可审计、可取消，并具有准确恢复语义。
-
-### 阶段 T5：图片精度与供应商能力收敛
-
-- ✅ 统一 `ImageDetailSelection/Decision`；
-- ✅ model invocation 最终 capability gate；
-- ✅ provider adapter 只接收 effective detail；
-- ✅ Tool Executor/MCP/dynamic output 统一转为 durable structured content 并 sanitize；
-- 部分具备：downgrade decision fixture 已有；data URL byte/pixel/MIME 限制和跨 provider 端到端
-  wire fixture 尚未完成。
-
-完成条件：unsupported `Original` 不会到达 provider wire，且调用方能解释实际使用的 detail。
 
 ## 21. 验证门
 

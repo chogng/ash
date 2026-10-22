@@ -2062,36 +2062,11 @@ pub(crate) fn local_sandbox_scope(
     Ok(scope)
 }
 
-fn local_command_authority(
+pub(crate) fn local_command_authority(
     authorization: &ToolAuthorization,
     shell_policy: SandboxPolicy,
     scope: Option<&SandboxScope>,
 ) -> Result<CommandExecutionAuthority, CoreError> {
-    if let Some(scope) = scope.filter(|scope| scope.policy_ceiling().is_some()) {
-        let requested = match authorization {
-            ToolAuthorization::Sandboxed(policy) => *policy,
-            ToolAuthorization::UnsandboxedGrant { .. }
-            | ToolAuthorization::ExecPolicyGranted(_)
-            | ToolAuthorization::AutoReviewed(_)
-            | ToolAuthorization::PermissionBypassed(_)
-            | ToolAuthorization::ApprovedOnce(_) => {
-                SandboxPolicy::new(FileSystemAccess::FullAccess, NetworkAccess::Allowed)
-            }
-        };
-        return Ok(CommandExecutionAuthority::Sandboxed(
-            scope.constrain_policy(requested),
-        ));
-    }
-    match authorization {
-        ToolAuthorization::Sandboxed(policy) => {
-            return Ok(CommandExecutionAuthority::Sandboxed(*policy));
-        }
-        ToolAuthorization::UnsandboxedGrant { .. }
-        | ToolAuthorization::ExecPolicyGranted(_)
-        | ToolAuthorization::AutoReviewed(_)
-        | ToolAuthorization::PermissionBypassed(_)
-        | ToolAuthorization::ApprovedOnce(_) => {}
-    }
     // Approval may authorize a broader command, but cannot erase directory or
     // profile read-only constraints when choosing the process launch path.
     let restricted = scope
@@ -2121,9 +2096,49 @@ fn local_command_authority(
         .transpose()
         .map_err(|error| CoreError::Policy(error.to_string()))?
         .unwrap_or(false);
+    // Windows account execution represents protected paths through scoped ACLs.
+    // Normalize after applying every authority source, including profile ceilings.
+    let platform_policy = |policy: SandboxPolicy| {
+        if restricted && cfg!(windows) && policy.file_system() == FileSystemAccess::FullAccess {
+            SandboxPolicy::new(FileSystemAccess::DirectoryWrite, policy.network())
+                .with_host_acl_changes(policy.host_acl_changes())
+                .with_file_system_isolation(policy.file_system_isolation())
+        } else {
+            policy
+        }
+    };
+    if let Some(scope) = scope.filter(|scope| scope.policy_ceiling().is_some()) {
+        let requested = match authorization {
+            ToolAuthorization::Sandboxed(policy) => *policy,
+            ToolAuthorization::UnsandboxedGrant { .. }
+            | ToolAuthorization::ExecPolicyGranted(_)
+            | ToolAuthorization::AutoReviewed(_)
+            | ToolAuthorization::PermissionBypassed(_)
+            | ToolAuthorization::ApprovedOnce(_) => {
+                SandboxPolicy::new(FileSystemAccess::FullAccess, NetworkAccess::Allowed)
+                    .with_host_acl_changes(shell_policy.host_acl_changes())
+                    .with_file_system_isolation(shell_policy.file_system_isolation())
+            }
+        };
+        return Ok(CommandExecutionAuthority::Sandboxed(platform_policy(
+            scope.constrain_policy(requested),
+        )));
+    }
+    match authorization {
+        ToolAuthorization::Sandboxed(policy) => {
+            return Ok(CommandExecutionAuthority::Sandboxed(platform_policy(
+                *policy,
+            )));
+        }
+        ToolAuthorization::UnsandboxedGrant { .. }
+        | ToolAuthorization::ExecPolicyGranted(_)
+        | ToolAuthorization::AutoReviewed(_)
+        | ToolAuthorization::PermissionBypassed(_)
+        | ToolAuthorization::ApprovedOnce(_) => {}
+    }
     let network = shell_policy.network();
     if restricted || network == NetworkAccess::Managed {
-        return Ok(CommandExecutionAuthority::Sandboxed(
+        return Ok(CommandExecutionAuthority::Sandboxed(platform_policy(
             SandboxPolicy::new(
                 FileSystemAccess::FullAccess,
                 if network == NetworkAccess::Managed {
@@ -2134,7 +2149,7 @@ fn local_command_authority(
             )
             .with_host_acl_changes(shell_policy.host_acl_changes())
             .with_file_system_isolation(shell_policy.file_system_isolation()),
-        ));
+        )));
     }
     Ok(CommandExecutionAuthority::Unrestricted)
 }

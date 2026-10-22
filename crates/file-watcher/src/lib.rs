@@ -4,6 +4,7 @@
 //! their owned state before publishing a new snapshot.
 
 mod channel;
+mod ingress;
 mod matching;
 #[cfg(target_os = "macos")]
 mod native;
@@ -49,3 +50,6 @@ pub struct WatchPath {
 #[cfg(test)]
 #[path = "file_watcher_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod memory_stress_tests;

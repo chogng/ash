@@ -102,3 +102,30 @@ async fn path_scoped_snapshot_rejects_paths_outside_the_repository() {
             .is_err()
     );
 }
+
+#[tokio::test]
+async fn statistics_projection_matches_contents_for_renames_binary_and_fresh_worktree() {
+    let repository = TestRepository::init();
+    repository.write("old.txt", "before\r\n");
+    repository.write("other.txt", "same\n");
+    repository.commit_all("initial");
+    repository.git(&["mv", "old.txt", "renamed.txt"]);
+    repository.write("renamed.txt", "after\nnew\n");
+    repository.write("other.txt", "changed\n");
+    repository.write("binary.bin", "a\0b");
+    repository.write("untracked.txt", "new\nfile\n");
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let limits = GitTextDiffLimits::new(1024).unwrap();
+    for modified in ["first\n", "second\nline\n"] {
+        repository.write("other.txt", modified);
+        let full = client.text_diff_snapshot(&opened, limits).await.unwrap();
+        let (status, summary) = client
+            .text_diff_summary_under(&opened, Path::new(""), limits)
+            .await
+            .unwrap();
+        assert_eq!(summary, full.statistics());
+        assert_eq!(status.changes().len(), full.repository().changes().len());
+        assert!(summary.files() < status.changes().len());
+    }
+}

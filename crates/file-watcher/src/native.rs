@@ -180,16 +180,14 @@ fn helper_command(mode: HelperMode) -> Result<Command, String> {
 }
 
 impl NativeWatcher {
-    pub(crate) fn new(
-        events: tokio::sync::mpsc::UnboundedSender<notify::Result<Event>>,
-    ) -> Result<Self, String> {
+    pub(crate) fn new(events: crate::ingress::EventSender) -> Result<Self, String> {
         let command = helper_command(HelperMode::Native)?;
         Self::spawn(command, events, REGISTER_TIMEOUT).inspect_err(|_| backend_failed())
     }
 
     pub(crate) fn spawn(
         mut command: Command,
-        events: tokio::sync::mpsc::UnboundedSender<notify::Result<Event>>,
+        events: crate::ingress::EventSender,
         timeout: Duration,
     ) -> Result<Self, String> {
         // The parent owns probe cleanup even when the helper must be killed inside an OS call.
@@ -257,9 +255,7 @@ impl NativeWatcher {
         self.alive.load(Ordering::Acquire)
     }
 
-    pub(crate) fn new_polling(
-        events: tokio::sync::mpsc::UnboundedSender<notify::Result<Event>>,
-    ) -> Result<Self, String> {
+    pub(crate) fn new_polling(events: crate::ingress::EventSender) -> Result<Self, String> {
         let command = helper_command(HelperMode::Polling)?;
         Self::spawn(command, events, REGISTER_TIMEOUT)
     }
@@ -386,7 +382,7 @@ impl Drop for NativeWatcher {
 fn read_replies(
     socket: UnixStream,
     pending: &Pending,
-    events: &tokio::sync::mpsc::UnboundedSender<notify::Result<Event>>,
+    events: &crate::ingress::EventSender,
 ) -> Result<(), String> {
     let mut reader = BufReader::new(socket);
     while let Some(reply) = read_frame::<Reply>(&mut reader)? {

@@ -27,6 +27,22 @@ pub struct ProjectRootDto {
     pub purpose: String,
 }
 
+/// An organizational reference, without any authorization to read the source.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProjectMaterialDto {
+    pub path: PathUri,
+    pub name: String,
+    pub kind: ProjectMaterialKindDto,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ProjectMaterialKindDto {
+    File,
+    Folder,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectDto {
@@ -38,6 +54,7 @@ pub struct ProjectDto {
     pub description: String,
     pub roots: Vec<ProjectRootDto>,
     pub session_ids: Vec<SessionId>,
+    pub materials: Vec<ProjectMaterialDto>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -79,6 +96,8 @@ pub struct ProjectReadResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProjectCreateParams {
+    #[serde(default)]
+    pub materials: Vec<ProjectMaterialDto>,
     pub command_id: CommandId,
     pub project_id: ProjectId,
     pub name: String,
@@ -88,6 +107,9 @@ pub struct ProjectCreateParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProjectDetailsUpdateParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub materials: Option<Vec<ProjectMaterialDto>>,
     pub command_id: CommandId,
     pub project_id: ProjectId,
     #[ts(type = "number")]

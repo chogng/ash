@@ -18,6 +18,10 @@
 	border-radius: var(--ash-cornerRadius-large);
 	box-shadow: 0 4px 16px var(--ash-widget-shadow);
 }
+.ash-notification:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
 .ash-sessions-window {
 	position: relative;
 }
@@ -29,4 +33,13 @@
 	width: min(420px, calc(100% - 24px));
 	max-height: calc(100% - 56px);
 	pointer-events: none;
+}
+.ash-feedback-host.ash-notifications-placement[data-notification-position="bottom-left"] {
+	inset-inline-start: 12px;
+	inset-inline-end: auto;
+}
+.ash-feedback-host.ash-notifications-placement[data-notification-position="top-right"] {
+	inset-block-start: var(--ash-notifications-top);
+	inset-block-end: auto;
+	max-height: calc(100% - var(--ash-notifications-top) - 8px);
 }

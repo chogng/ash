@@ -25,22 +25,27 @@ const windowsPowerShellSettings = process.platform === 'win32' ? {
 test.use({ electronUserSettings: windowsPowerShellSettings });
 
 for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal profile dropdown (${locale})`, () => {
-	const shell = {
+	const platform = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'osx' : 'linux';
+	const shell = process.platform === 'win32' ? {
 		path: join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
 		args: ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'RemoteSigned'],
+	} : {
+		path: '/bin/bash',
+		// Skip user startup files while allowing Ash's injected shell integration.
+		args: ['--login', '--noprofile'],
 	};
 	test.use({
 		electronUserSettings: {
 			...windowsPowerShellSettings,
 			'workbench.locale': locale,
 			'window.menuStyle': 'custom',
-			'terminal.integrated.profiles.windows': { 'Smoke PowerShell': shell, 'Copilot Test CLI': shell },
-			'terminal.integrated.agentHostProfile.windows': { ...shell, env: { ASH_AGENT_PROFILE: 'agent-shell' } },
+			[`terminal.integrated.profiles.${platform}`]: { 'Smoke Shell': shell, 'Copilot Test CLI': shell, 'Claude Test CLI': shell },
+			[`terminal.integrated.defaultProfile.${platform}`]: 'Smoke Shell',
+			[`terminal.integrated.agentHostProfile.${platform}`]: { ...shell, env: { ASH_AGENT_PROFILE: 'agent-shell' } },
 		}
 	});
 
-	test('groups AI profiles and launches the agent host shell from the keyboard menu', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace, driver }, testInfo) => {
-		test.skip(process.platform !== 'win32', 'Windows shell discovery and launch');
+	test('keeps configured profiles together and launches the agent host shell from the keyboard menu', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace, driver }, testInfo) => {
 		const page = workbench.page;
 		const zh = locale === 'zh-CN';
 		await workbench.quickaccess.runCommand('workbench.action.terminal.focus');
@@ -49,13 +54,16 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal profile d
 		await trigger.focus();
 		await trigger.press('ArrowDown');
 		const menu = page.getByRole('menu');
-		const ai = menu.getByRole('menuitem', { name: 'Copilot Test CLI', exact: true });
-		await expect(ai).toBeVisible();
+		await expect(menu.getByRole('menuitem', { name: 'Copilot Test CLI', exact: true })).toBeVisible();
 		const entries = await menu.locator('[role="menuitem"], [role="separator"]').evaluateAll(rows => rows.map(row => ({
 			role: row.getAttribute('role'), label: row.getAttribute('aria-label') ?? row.textContent?.trim(),
 		})));
-		const aiIndex = entries.findIndex(entry => entry.label === 'Copilot Test CLI');
-		expect(entries[aiIndex + 1]?.role).toBe('separator');
+		const shellIndex = entries.findIndex(entry => entry.label?.startsWith('Smoke Shell'));
+		expect(shellIndex).toBeGreaterThanOrEqual(0);
+		expect(entries.slice(shellIndex + 1, shellIndex + 3)).toEqual([
+			{ role: 'menuitem', label: 'Copilot Test CLI' },
+			{ role: 'menuitem', label: 'Claude Test CLI' },
+		]);
 		await page.keyboard.press('Escape');
 		await expect(trigger).toBeFocused();
 		await trigger.press('ArrowDown');
@@ -99,13 +107,12 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`independent termin
 	test.use({ electronUserSettings: { ...windowsPowerShellSettings, 'workbench.locale': locale, 'terminal.integrated.confirmOnKill': 'never', 'terminal.integrated.confirmOnExit': 'never' } });
 
 	test('a failed PTY host retains the screen and explicit relaunch starts a fresh shell without restarting App Server', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }, testInfo) => {
-		test.skip(process.platform === 'win32', 'This process-parent verification uses POSIX ps; Windows host lifetime is tracked separately.');
 		if (!('windows' in application)) throw new Error('Expected Electron');
 		const zh = locale === 'zh-CN';
 		const exec = promisify(execFile);
 		const location = { appPath: resolve(import.meta.dirname, '../../../..'), isPackaged: false, platform: process.platform, resourcesPath: '' };
 		const profile = await application.evaluate(() => process.env.ASH_HOME!);
-		const env = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: appServerExecutablePath(location), ASH_ELECTRON_RUN_AS_NODE_PATH: application.process().spawnfile };
+		const env = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: appServerExecutablePath(location), ASH_ELECTRON_RUN_AS_NODE_PATH: await application.evaluate(() => process.execPath) };
 		const backend = async () => JSON.parse((await exec(appServerDaemonExecutablePath(location), ['version'], { env, timeout: 15_000 })).stdout) as { pid: number; };
 		await writeFile(join(testWorkspace.directory, 'owner-once.cjs'), `const fs=require('fs');fs.appendFileSync('owner-executions.txt','once');fs.writeFileSync('owner-process.json',JSON.stringify({pid:process.pid,shell:process.ppid}));console.log('OWNER_COMMAND_RUNNING');setInterval(()=>{},1000);`);
 		await workbench.page.getByRole('button', { name: zh ? '切换面板显示' : 'Toggle Panel Visibility', exact: true }).click();
@@ -116,9 +123,9 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`independent termin
 		await input.press('Enter');
 		await expect(pane.locator('.xterm-rows')).toContainText('OWNER_COMMAND_RUNNING');
 		const child = JSON.parse(await readFile(join(testWorkspace.directory, 'owner-process.json'), 'utf8')) as { pid: number; shell: number; };
-		const owner = Number((await exec('ps', ['-o', 'ppid=', '-p', String(child.shell)])).stdout.trim());
+		const owner = (await terminalProcessInfo(child.shell)).parent;
 		expect(owner).toBeGreaterThan(0);
-		expect((await exec('ps', ['-o', 'command=', '-p', String(owner)])).stdout).toContain(' --terminal-host ');
+		expect((await terminalProcessInfo(owner)).command).toContain(' --terminal-host ');
 		const original = await backend();
 		expect(owner).not.toBe(original.pid);
 		const instanceId = await pane.getAttribute('data-instance-id');
@@ -145,11 +152,11 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`independent termin
 		if (!('windows' in application)) throw new Error('Expected Electron');
 		const location = { appPath: resolve(import.meta.dirname, '../../../..'), isPackaged: false, platform: process.platform, resourcesPath: '' };
 		const profile = await application.evaluate(() => process.env.ASH_HOME!);
-		const env = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: appServerExecutablePath(location), ASH_ELECTRON_RUN_AS_NODE_PATH: application.process().spawnfile };
+		const env = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: appServerExecutablePath(location), ASH_ELECTRON_RUN_AS_NODE_PATH: await application.evaluate(() => process.execPath) };
 		const daemon = appServerDaemonExecutablePath(location);
 		const control = async (command: string) => JSON.parse((await promisify(execFile)(daemon, [command], { env, timeout: 30_000, windowsHide: true })).stdout) as { pid: number; instanceId: string; endpointPath: string; };
-		const state = async (index: number): Promise<{ pid: number; shell: number; count: number; }> => JSON.parse(await readFile(join(testWorkspace.directory, `host-live-${index}.json`), 'utf8'));
-		await writeFile(join(testWorkspace.directory, 'host-live.cjs'), `const fs = require('fs'); const id = process.argv[2]; let count = 0; fs.appendFileSync('host-executions.txt', id + String.fromCharCode(10)); setInterval(() => { fs.writeFileSync('host-live-' + id + '.tmp', JSON.stringify({pid:process.pid,shell:process.ppid,count:++count})); fs.renameSync('host-live-' + id + '.tmp','host-live-' + id + '.json'); console.log('HOST-LIVE:' + id + ':' + count); if(fs.existsSync('host-flood-'+id)) { fs.unlinkSync('host-flood-'+id); process.stdout.write('x'.repeat(2*1024*1024)+String.fromCharCode(10),()=>fs.writeFileSync('host-flood-drained-'+id,'done')); } }, 100);`);
+		const state = (index: number): Promise<{ pid: number; shell: number; count: number; }> => readTerminalHeartbeat(join(testWorkspace.directory, `host-live-${index}.jsonl`));
+		await writeFile(join(testWorkspace.directory, 'host-live.cjs'), `const fs = require('fs'); const id = process.argv[2]; let count = 0; fs.appendFileSync('host-executions.txt', id + String.fromCharCode(10)); setInterval(() => { fs.appendFileSync('host-live-' + id + '.jsonl', JSON.stringify({pid:process.pid,shell:process.ppid,count:++count})+String.fromCharCode(10)); console.log('HOST-LIVE:' + id + ':' + count); if(fs.existsSync('host-flood-'+id)) { fs.unlinkSync('host-flood-'+id); process.stdout.write('x'.repeat(2*1024*1024)+String.fromCharCode(10),()=>fs.writeFileSync('host-flood-drained-'+id,'done')); } }, 100);`);
 		await workbench.page.getByRole('button', { name: locale === 'zh-CN' ? '切换面板显示' : 'Toggle Panel Visibility', exact: true }).click();
 		const panes = workbench.page.locator('.ash-terminal-group-pane:visible');
 		for (let index = 0; index < 2; index++) {
@@ -165,7 +172,7 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`independent termin
 		const ids = await panes.evaluateAll(elements => elements.map(element => element.getAttribute('data-instance-id')));
 		await workbench.page.locator('body').evaluate(element => element.dataset.terminalHostRetention = 'same-renderer');
 		const generations: unknown[] = [];
-		for (const mode of (process.platform === 'win32' ? ['crash', 'restart'] as const : ['crash', 'prolonged-outage', 'restart'] as const)) {
+		for (const mode of ['crash', 'prolonged-outage', 'restart'] as const) {
 			const old = await control('version');
 			expect(old.pid).toBeGreaterThan(0);
 			const counts = await Promise.all([state(0), state(1)]);
@@ -1425,9 +1432,16 @@ test.describe('terminal contributions execution chain', () => {
 interface LifetimeIdentity { pid: number; shell: number; child: number; count: number; }
 const lifetimePidAlive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
+async function readTerminalHeartbeat<T>(path: string): Promise<T> {
+	// Append complete records instead of replacing a file while Windows readers
+	// and workspace watchers hold it open. Ignore an in-flight trailing record.
+	const records = (await readFile(path, 'utf8')).split('\n');
+	return JSON.parse(records.at(-2) ?? '') as T;
+}
+
 async function writeLifetimeFixture(directory: string): Promise<string> {
 	const file = join(directory, 'window-lifetime.cjs');
-	await writeFile(file, `const fs=require('fs'),path=require('path'),cp=require('child_process');const root=${JSON.stringify(directory)},id=process.argv[2];process.on('SIGHUP',()=>{});const child=cp.spawn(process.execPath,['-e',"process.on('SIGHUP',()=>{});require('fs').writeFileSync(process.argv[1],String(process.pid));setInterval(()=>{},1000)",path.join(root,id+'.child')],{stdio:'ignore'});let count=0;setInterval(()=>{const state={pid:process.pid,shell:process.ppid,child:child.pid,count:++count};fs.writeFileSync(path.join(root,id+'.tmp'),JSON.stringify(state));fs.renameSync(path.join(root,id+'.tmp'),path.join(root,id+'.json'));console.log('WINDOW-LIFETIME:'+id+':'+count)},100);`);
+	await writeFile(file, `const fs=require('fs'),path=require('path'),cp=require('child_process');const root=${JSON.stringify(directory)},id=process.argv[2];process.on('SIGHUP',()=>{});const child=cp.spawn(process.execPath,['-e',"process.on('SIGHUP',()=>{});require('fs').writeFileSync(process.argv[1],String(process.pid));setInterval(()=>{},1000)",path.join(root,id+'.child')],{stdio:'ignore'});let count=0;setInterval(()=>{const state={pid:process.pid,shell:process.ppid,child:child.pid,count:++count};fs.appendFileSync(path.join(root,id+'.jsonl'),JSON.stringify(state)+String.fromCharCode(10));console.log('WINDOW-LIFETIME:'+id+':'+count)},100);`);
 	return file;
 }
 
@@ -1439,27 +1453,54 @@ async function startLifetimeCommand(workbench: import('../../../automation/workb
 	await input.press('Enter');
 	const directory = resolve(file, '..');
 	await expect.poll(() => readFile(join(directory, `${id}.child`), 'utf8').catch(() => '')).toMatch(/^\d+$/u);
-	await expect.poll(() => readFile(join(directory, `${id}.json`), 'utf8').catch(() => '')).toContain('"child":');
-	return JSON.parse(await readFile(join(directory, `${id}.json`), 'utf8')) as LifetimeIdentity;
+	await expect.poll(() => readFile(join(directory, `${id}.jsonl`), 'utf8').catch(() => '')).toContain('"child":');
+	return readTerminalHeartbeat<LifetimeIdentity>(join(directory, `${id}.jsonl`));
 }
 
 async function lifetimeHostPids(application: import('@playwright/test').ElectronApplication, identities: readonly LifetimeIdentity[], profile: string): Promise<number[]> {
-	if (process.platform === 'win32') return [];
-	const rows = (await promisify(execFile)('ps', ['-Ao', 'pid=,ppid=,command='])).stdout.split('\n');
+	// The Windows development launcher can leave cmd.exe as Playwright's child.
+	// Read Main's own identity before inspecting or force-terminating its owners.
+	const mainPid = await application.evaluate(() => process.pid);
+	const rows = process.platform === 'win32'
+		? await windowsTerminalProcesses([`ParentProcessId = ${mainPid}`, ...identities.map(identity => `ProcessId = ${identity.shell}`)].join(' OR '))
+		: (await promisify(execFile)('ps', ['-Ao', 'pid=,ppid=,command='])).stdout.split('\n').flatMap(line => {
+			const match = /^\s*(\d+)\s+(\d+)\s+(.*)$/u.exec(line);
+			return match ? [{ pid: Number(match[1]), parent: Number(match[2]), command: match[3]! }] : [];
+		});
 	const pids = new Set<number>();
-	for (const line of rows) {
-		const match = /^\s*(\d+)\s+(\d+)\s+(.*)$/u.exec(line);
-		if (!match) continue;
-		if (Number(match[2]) === application.process().pid && match[3]!.includes(' --terminal-owner ') && match[3]!.includes(profile)) pids.add(Number(match[1]));
-		if (identities.some(identity => identity.shell === Number(match[1]))) pids.add(Number(match[2]));
+	for (const row of rows) {
+		if (row.parent === mainPid && row.command.includes(' --terminal-owner ') && row.command.includes(profile)) pids.add(row.pid);
+		if (identities.some(identity => identity.shell === row.pid)) pids.add(row.parent);
 	}
 	return [...pids];
+}
+
+interface TerminalProcessInfo { pid: number; parent: number; command: string; }
+
+async function windowsTerminalProcesses(filter: string): Promise<TerminalProcessInfo[]> {
+	const env = { ...process.env };
+	delete env.PSModulePath;
+	const command = `Get-CimInstance Win32_Process -Filter '${filter}' | Select-Object @{Name='pid';Expression={$_.ProcessId}},@{Name='parent';Expression={$_.ParentProcessId}},@{Name='command';Expression={$_.CommandLine}} | ConvertTo-Json -Compress`;
+	const output = (await promisify(execFile)(join(process.env.SystemRoot!, 'System32/WindowsPowerShell/v1.0/powershell.exe'), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], { env, windowsHide: true, timeout: 10_000 })).stdout.trim();
+	return output ? [JSON.parse(output)].flat() : [];
+}
+
+async function terminalProcessInfo(pid: number): Promise<TerminalProcessInfo> {
+	if (process.platform === 'win32') {
+		const rows = await windowsTerminalProcesses(`ProcessId = ${pid}`);
+		expect(rows).toHaveLength(1);
+		return rows[0]!;
+	}
+	const output = (await promisify(execFile)('ps', ['-o', 'ppid=,command=', '-p', String(pid)])).stdout;
+	const match = /^\s*(\d+)\s+(.*)$/u.exec(output.trim());
+	expect(match).not.toBeNull();
+	return { pid, parent: Number(match![1]), command: match![2]! };
 }
 
 async function blockLifetimeBackend(application: import('@playwright/test').ElectronApplication): Promise<{ profile: string; release(): Promise<void>; }> {
 	const profile = await application.evaluate(() => process.env.ASH_HOME!);
 	const location = { appPath: resolve(import.meta.dirname, '../../../..'), isPackaged: false, platform: process.platform, resourcesPath: '' };
-	const env = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: appServerExecutablePath(location), ASH_ELECTRON_RUN_AS_NODE_PATH: application.process().spawnfile };
+	const env = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: appServerExecutablePath(location), ASH_ELECTRON_RUN_AS_NODE_PATH: await application.evaluate(() => process.execPath) };
 	const state = JSON.parse((await promisify(execFile)(appServerDaemonExecutablePath(location), ['version'], { env, timeout: 30_000, windowsHide: true })).stdout) as { pid: number; endpointPath: string; };
 	expect(state.endpointPath).toMatch(/\.sock$/u);
 	const gate = state.endpointPath.replace(/\.sock$/u, '.operation');
@@ -1492,16 +1533,15 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal window li
 		const second = await startLifetimeCommand(peer, file, 'second');
 		const profile = await application.evaluate(() => process.env.ASH_HOME!);
 		const hosts = await lifetimeHostPids(application, [first, second], profile);
-		if (process.platform !== 'win32') expect(hosts).toHaveLength(3);
+		expect(hosts).toHaveLength(3);
 		const sourceWindow = await application.browserWindow(workbench.page);
-		const mainPid = application.process().pid!;
 		const gate = await blockLifetimeBackend(application);
 		try {
 			await expect(workbench.terminal.activeInstance).toHaveAttribute('data-state', 'reconnecting');
 			await sourceWindow.evaluate(window => window.destroy());
 			await expect.poll(() => [first.pid, first.child, first.shell].filter(lifetimePidAlive)).toEqual([]);
 			for (const pid of [second.pid, second.child, second.shell]) expect(lifetimePidAlive(pid)).toBe(true);
-			await expect.poll(async () => JSON.parse(await readFile(join(testWorkspace.directory, 'second.json'), 'utf8')).count).toBeGreaterThan(second.count + 3);
+			await expect.poll(async () => (await readTerminalHeartbeat<LifetimeIdentity>(join(testWorkspace.directory, 'second.jsonl'))).count).toBeGreaterThan(second.count + 3);
 		} finally { await gate.release(); }
 		await expect(peer.terminal.activeInstance).toHaveAttribute('data-state', 'running', { timeout: 30_000 });
 		await peer.page.screenshot({ path: testInfo.outputPath(`terminal-window-peer-${locale}.png`) });
@@ -1519,8 +1559,8 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal window li
 		const command = await startLifetimeCommand(workbench, file, 'exit');
 		const profile = await application.evaluate(() => process.env.ASH_HOME!);
 		const hosts = await lifetimeHostPids(application, [command], profile);
-		if (process.platform !== 'win32') expect(hosts).toHaveLength(2);
-		const mainPid = application.process().pid!;
+		expect(hosts).toHaveLength(2);
+		const mainPid = await application.evaluate(() => process.pid);
 		const gate = await blockLifetimeBackend(application);
 		try {
 			await expect(workbench.terminal.activeInstance).toHaveAttribute('data-state', 'reconnecting');

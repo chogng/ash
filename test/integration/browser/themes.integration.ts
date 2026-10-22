@@ -1,3 +1,4 @@
+import '../../../extensions/pdf-viewer/browser/media/pdfEditor.css';
 import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
 const codeFeatures = registerTestCodeEditorFeatures();
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
@@ -40,7 +41,7 @@ import '../../../src/ash/base/browser/ui/selectbox/selectbox.css';
 import '../../../src/ash/base/browser/ui/scrollbar/scrollbar.css';
 import '../../../src/ash/base/browser/ui/tree/tree.css';
 import '../../../src/ash/base/browser/ui/list/list.css';
-import '../../../extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.css';
+import '../../../extensions/academy/browser/widget/richTextEditor/richTextEditorWidget.css';
 import '../../../src/ash/editor/contrib/hover/browser/hover.css';
 import '../../../src/ash/platform/actionWidget/browser/actionWidget.css';
 import '../../../src/ash/sessions/browser/parts/titlebar/media/titlebarpart.css';
@@ -150,6 +151,7 @@ const services = resources.add(new InstantiationService());
 services.registerInstance(IConfigurationService, configuration);
 const languages = resources.add(new LanguageService());
 resources.add(languages.registerLanguage({ id: 'typescript', extensions: ['.ts'] }));
+resources.add(languages.registerLanguage({ id: 'markdown', extensions: ['.md'] }));
 services.registerInstance(ILanguageService, languages);
 services.registerInstance(IHostColorSchemeService, resources.add(new BrowserHostColorSchemeService(window)));
 const themes = resources.add(services.createInstance(WorkbenchThemeService, document.querySelector<HTMLElement>('#root')!));
@@ -319,6 +321,12 @@ const workspace = resources.add(new TestWorkspaceService({ id: 'icon-models', fo
 resources.add(languages.registerLanguage({ id: 'rust' }));
 const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, { languageService: languages }));
 const labels = resources.add(new ResourceLabels(DEFAULT_LABELS_CONTAINER, { workspaceContextService: workspace, resourceIconRenderer: themes, fileModels: models, languageService: languages }));
+for (const [id, name] of [['todo-icon', 'TODO.md'], ['markdown-icon', 'notes.md']] as const) {
+	const host = document.createElement('button');
+	host.id = id;
+	document.querySelector('#root')!.append(host);
+	labels.create(host).setFile(URI.file('/workspace/' + name), { hidePath: true });
+}
 const decorations = resources.add(new DecorationsService(document, new NullLoggerService()));
 const decorationUpdates = resources.add(new Emitter<readonly URI[]>());
 let decorationData: IDecorationData | undefined;

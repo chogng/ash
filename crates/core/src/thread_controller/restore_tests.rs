@@ -494,7 +494,7 @@ fn fork_continuations_keep_identical_model_input_prefixes() {
                     harness_context: &crate::HarnessContext::default(),
                     extension_fragments: vec![],
                     evidence: vec![],
-                    tools: vec![],
+                    tools: vec![].into(),
                     budget: crate::ContextBudget::provider_managed(),
                 },
             )

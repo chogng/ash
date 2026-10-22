@@ -7,7 +7,7 @@ import { MenuService } from '../../../../../platform/actions/common/menuService.
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import { CommandService } from '../../../commands/common/commandService.js';
-import { NotificationService } from '../../../notification/common/notificationService.js';
+import { TestNotificationService } from '../../../notification/test/common/testNotificationService.js';
 import { ElectronContextMenuService } from '../../electron-browser/contextMenuService.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -63,7 +63,7 @@ test('system menus retain scoped shortcut hints, chord labels and delegate overr
 	services.registerInstance(IMenuService, {} as IMenuService);
 	services.registerInstance(IContextKeyService, contexts);
 	services.registerInstance(IKeybindingService, keybindings);
-	services.registerInstance(INotificationService, lifetime.add(new NotificationService()));
+	services.registerInstance(INotificationService, lifetime.add(new TestNotificationService()));
 	const { NativeContextMenuService } = await import('../../electron-browser/contextMenuService.js');
 	const service = lifetime.add(services.createInstance(NativeContextMenuService, api));
 	const actions: IAction[] = ['copy', 'copyPath'].map(id => ({ id, label: id, tooltip: '', enabled: true, run() { } }));
@@ -314,7 +314,7 @@ test('Electron context menus reject missing window services without retaining re
 class SystemMenuFixture extends Disposable {
 	readonly document: Document;
 	readonly menus: ElectronContextMenuService;
-	readonly notifications: NotificationService;
+	readonly notifications: TestNotificationService;
 	readonly popups: { request: INativeContextMenuRequest; finish(result: INativeContextMenuResult): void; }[] = [];
 	readonly hidden: { label: string; cancelled: boolean; }[] = [];
 	readonly events: string[] = [];
@@ -327,7 +327,7 @@ class SystemMenuFixture extends Disposable {
 		this._register(toDisposable(() => browser.window.close()));
 		this.document = browser.window.document;
 		const services = this._register(new InstantiationService());
-		this.notifications = this._register(new NotificationService());
+		this.notifications = this._register(new TestNotificationService());
 		services.registerInstance(INotificationService, this.notifications);
 		const contextKeys = this._register(new ContextKeyService());
 		services.registerInstance(IContextKeyService, contextKeys);

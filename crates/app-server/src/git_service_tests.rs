@@ -362,7 +362,7 @@ fn branch_listing_discovers_once_and_refreshes_worktree_occupancy() {
 }
 
 #[test]
-fn git_change_file_at_paths_reads_fresh_contents_without_status_queries() {
+fn git_change_file_at_paths_reads_fresh_contents_without_rediscovering_repository() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().canonicalize().unwrap();
     git(&root, &["init", "--initial-branch=main"]);
@@ -385,8 +385,13 @@ fn git_change_file_at_paths_reads_fresh_contents_without_status_queries() {
     let mut service = GitService::new(authorization, root.clone()).unwrap();
     let (client, commands) = recording_git(&root);
     service.client = client;
+    let repository = service
+        .repository_for_request(&ash_async_utils::CancellationSource::new().token())
+        .unwrap();
+    std::fs::write(&commands, "").unwrap();
     let staged = service
         .change_file_at_paths(
+            &repository,
             Path::new("old.txt"),
             Path::new("renamed.txt"),
             ash_git::GitChangeFileComparison::Staged,
@@ -396,6 +401,7 @@ fn git_change_file_at_paths_reads_fresh_contents_without_status_queries() {
     assert_eq!(staged.modified(), Some(b"from index\n".as_slice()));
     let unstaged = service
         .change_file_at_paths(
+            &repository,
             Path::new("renamed.txt"),
             Path::new("renamed.txt"),
             ash_git::GitChangeFileComparison::Unstaged,
@@ -405,7 +411,8 @@ fn git_change_file_at_paths_reads_fresh_contents_without_status_queries() {
     assert_eq!(unstaged.modified(), Some(b"from working tree\n".as_slice()));
     let log = std::fs::read_to_string(commands).unwrap();
     assert!(
-        !log.split_whitespace().any(|argument| argument == "status"),
+        !log.split_whitespace()
+            .any(|argument| matches!(argument, "status" | "rev-parse")),
         "{log}"
     );
 }

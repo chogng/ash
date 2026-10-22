@@ -6,6 +6,28 @@ quick diff, ignore decorations, blame, timeline and multi-file diff policy. Its 
 owns menus, welcome content, colors, settings and English/Chinese messages. Workbench
 owns generic SCM rendering, editor models, undo, dirty state and file persistence.
 
+The SCM snapshot advertises file timeline support through `timeline.label` and an opaque
+`timeline.resetKey` for presentation policy changes. Workbench registers that provider in
+the existing Timeline service and forwards cancellable `timeline` provide/open requests
+through the same SCM registration. Git returns commit entries, historical paths and page
+cursors from the existing file-history backend; optional staged/working entries obey
+`git.timeline.showUncommitted`. History and resource revisions refresh the view, while
+blame and commit-draft updates do not. Removing a provider retires its requests and entry
+commands. Comparisons use immutable revision models with the working file as their
+preferred resource, so the timeline follows that file without pinning the view.
+
+File history has no total-entry cap. Each `git/fileHistory` request supplies a page
+size and an optional opaque continuation, and returns `nextCursor` until the root
+is reached. The cursor binds the worktree, requested file, initial HEAD, log offset
+and historical rename path. Git streams the anchored traversal and discards the
+consumed prefix without retaining it; only the requested page and one lookahead
+record are buffered, and only returned entries need rename metadata. This avoids
+Git's `--follow --skip` rename loss and the merge-parent loss caused by restarting
+at one matching commit. Cancellation or completion drops the request's Git process;
+no process or cursor registry remains between requests. `timeline.pageSize` bounds
+commit entries per request; optional uncommitted entries appear only on the first
+page. The file-history picker also offers Load More instead of truncating history.
+
 The extension uses the public Rust SDK's source-control, command, terminal and client
 contracts. App Server grants backend routes, directory authority and private credential
 services. Its shared `GitRuntime` / `GitService` owns repository facts, status revisions,
@@ -119,10 +141,22 @@ The background subscription waits for admitted backend notifications and refresh
 as they arrive. It consumes status snapshots rather than ignore invalidation hints, which
 arrive before status is ready and would start redundant configuration/discovery work.
 Cursor and unsaved-text changes emit coalesced editor revisions without invalidating discovery.
+The private backend-state facts retain `editorFoldersChanged` separately from a full reset.
+Git checks changed editor resources against its known repository roots; switching among
+subdirectories only updates blame, while an unknown workspace path still enters discovery.
 Blame reads metadata first and requests full text only after the active signature changes.
 Idle waits renew after 20 seconds, below the SDK deadline; renewals skip configuration and
 discovery when the workspace is unchanged. State waits run outside the discovery lock and
 are cancelled before shutdown joins the monitor.
+
+Workspace line totals use `git/changesSummary`, a fresh directory-scoped observation that
+returns total changed-file and readable-text line counts. It does not publish status, change
+history revisions, or refresh refs/remotes/stashes. The RPC and repository operation leases
+allow it to overlap ordinary index/worktree reads and watcher observations, while excluding
+writes. Staged and rename/copy-dependent file reads retain their publication ordering.
+`git/textDiff` retains its authoritative status and content/statistics projection contract.
+HEAD objects are resolved in bounded batches per operation, without caching mutable index
+or worktree contents between requests.
 
 Use **Manage built-in editor extensions** to disable `ash.git` for the current profile.
 Other SCM providers, editors, undo and saving retain their lifetimes. Shared Rust Git and

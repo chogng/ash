@@ -1,3 +1,16 @@
+import { TestExtensionService } from '../../../../test/common/testExtensionServices.js';
+import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
+import { AccessibilityService } from '../../../../../platform/accessibility/browser/accessibilityService.js';
+import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
+import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { getUriFromSource } from '../../common/debugSource.js';
+import { Range } from '../../../../../editor/common/core/range.js';
+import { Position } from '../../../../../editor/common/core/position.js';
+import { generateUuid } from '../../../../../base/common/uuid.js';
+import type { IBreakpointUpdateData } from '../../common/debug.js';
+import { DISASSEMBLY_VIEW_ID } from '../../common/debug.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { localize } from '../../../../../nls.js';
 import { ViewModel } from '../../common/debugViewModel.js';
 import type { DebugConsoleEntry } from '../../../../../platform/debug/common/debugAdapterProcessService.js';
 import { ConfigurationManager } from '../../browser/debugConfigurationManager.js';
@@ -43,16 +56,14 @@ import { ViewsRegistry, IViewDescriptorService, ViewContainerLocation, Workbench
 import { ViewDescriptorService } from '../../../../services/views/browser/viewDescriptorService.js';
 import '../../browser/debug.contribution.js';
 import { DebugViewPaneContainer } from '../../browser/debugViewlet.js';
-import type { DebugViewPane } from '../../browser/debugViewPane.js';
 import { PaneCompositePart } from '../../../../browser/parts/paneCompositePart.js';
 import { IActivityService } from '../../../../services/activity/common/activity.js';
 import { ActivityService } from '../../../../services/activity/browser/activityService.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { ViewsService } from '../../../../services/views/browser/viewsService.js';
-import { DEBUG_VIEW_ID } from '../../common/debug.js';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 
@@ -60,6 +71,7 @@ export class MockDebugService extends Disposable implements IDebugService {
 	public readonly onWillNewSession = Event.None;
 	public readonly onDidNewSession = Event.None;
 	public readonly onDidEndSession = Event.None;
+	public readonly onDidWriteTerminalData = Event.None;
 	private readonly configurationManager = this._register(new ConfigurationManager());
 	private readonly breakpointEmitter = this._register(new Emitter<readonly DebugBreakpoint[]>());
 	private readonly watchEmitter = this._register(new Emitter<readonly string[]>());
@@ -67,7 +79,14 @@ export class MockDebugService extends Disposable implements IDebugService {
 	private readonly sessionEmitter = this._register(new Emitter<IDebugSession | undefined>());
 	private readonly viewModel = this._register(new ViewModel());
 	public getViewModel(): ViewModel { return this.viewModel; }
-	public focusStackFrame(frame: IDebugStackFrame | undefined, thread?: IDebugThread): void { this.viewModel.setFocus(frame, thread, this.session, true); }
+	private focusGeneration = 0;
+	public onNavigationError: (error: unknown) => void = () => { };
+	public navigateFrame: ((frame: IDebugStackFrame, session: IDebugSession, isCurrent: () => boolean, explicit: boolean, preserveFocus?: boolean) => Promise<void>) | undefined;
+	public async focusStackFrame(frame: IDebugStackFrame | undefined, thread?: IDebugThread, session = this.session, options?: { explicit?: boolean; preserveFocus?: boolean; }): Promise<void> {
+		const generation = ++this.focusGeneration;
+		this.viewModel.setFocus(frame, thread, session, options?.explicit ?? true);
+		if (frame && session) await this.navigateFrame?.(frame, session, () => !this.isDisposed && generation === this.focusGeneration && this.session === session && session.state === 'stopped', options?.explicit ?? true, options?.preserveFocus);
+	}
 	public getConfigurationManager(): ConfigurationManager { return this.configurationManager; }
 	public get configurations(): readonly IDebugConfiguration[] { return this.configurationManager.configurations; }
 	public set configurations(value: readonly IDebugConfiguration[]) { this.configurationManager.setConfigurations(value, this.compounds); }
@@ -95,6 +114,9 @@ export class MockDebugService extends Disposable implements IDebugService {
 		this.configurations = [configuration('One')];
 		this.sessions = Object.freeze([this._register(new MockDebugSession('session-one', 'One', source)), this._register(new MockDebugSession('session-two', 'Two', source))]);
 		this.replModel = this._register(new ReplModel(this));
+		for (const session of this.sessions) this._register(session.onDidChangeThread(() => {
+			if (this.session === session) this.activate(session);
+		}));
 	}
 	public initialConfigurations: readonly DebugConfiguration[] = [];
 	public async provideDebugConfigurations(_folder: URI, _signal?: AbortSignal): Promise<readonly DebugConfiguration[]> { return this.initialConfigurations; }
@@ -117,13 +139,27 @@ export class MockDebugService extends Disposable implements IDebugService {
 	public async restart(session = this.session): Promise<IDebugSession> { return session!; }
 	public async stop(): Promise<void> { this.operations.push('stop'); }
 	public async stopAll(): Promise<void> { }
-	public addBreakpoints(): void { throw new Error('Bulk breakpoints are unsupported in this fixture'); }
+	public addBreakpoints(points: readonly IDebugBreakpoint[]): void {
+		this.breakpoints = Object.freeze([...this.breakpoints, ...points.map(point => ({ ...point }))]);
+		this.breakpointEmitter.fire(this.breakpoints);
+	}
+	public async updateBreakpoints(resource: URI, data: Map<string, IBreakpointUpdateData>, _sendOnResourceSaved: boolean): Promise<void> {
+		this.breakpoints = Object.freeze(this.breakpoints.map(point => {
+			const update = data.get(point.id);
+			if (!update || point.resource.toString() !== resource.toString()) return point;
+			return {
+				...point, ...('lineNumber' in update ? { lineNumber: update.lineNumber! } : {}), ...('column' in update ? { columnNumber: update.column } : {}),
+				...Object.fromEntries((['condition', 'hitCondition', 'logMessage'] as const).filter(key => update[key] !== undefined).map(key => [key, update[key] || undefined]))
+			};
+		}));
+		this.breakpointEmitter.fire(this.breakpoints);
+	}
 	public removeBreakpoints(ids: readonly string[]): void { for (const id of ids) { this.removeBreakpoint(id); } }
 	public toggleBreakpoint(resource: URI, lineNumber: number): void {
-		const id = `${resource.toString()}:${lineNumber}`;
-		if (this.breakpoints.some(point => point.id === id)) this.removeBreakpoint(id);
+		const existing = this.breakpoints.find(point => point.resource.toString() === resource.toString() && point.lineNumber === lineNumber);
+		if (existing) this.removeBreakpoint(existing.id);
 		else {
-			this.breakpoints = Object.freeze([...this.breakpoints, { id, resource, lineNumber, enabled: true, verified: false }]);
+			this.breakpoints = Object.freeze([...this.breakpoints, { id: generateUuid(), resource, lineNumber, enabled: true, verified: false }]);
 			this.breakpointEmitter.fire(this.breakpoints);
 		}
 	}
@@ -178,13 +214,37 @@ export class MockDebugService extends Disposable implements IDebugService {
 		this.watchEmitter.fire(this.watchExpressions);
 	}
 	public async setExceptionBreakpoints(filters: readonly string[]): Promise<void> { this.exceptionBreakpoints = Object.freeze([...filters]); this.exceptionEmitter.fire(this.exceptionBreakpoints); }
-	public activate(session: IDebugSession | undefined): void { this.session = session; this.focusStackFrame(undefined); this.sessionEmitter.fire(session); }
+	public activate(session: IDebugSession | undefined): void {
+		this.session = session;
+		void this.focusStackFrame(undefined);
+		this.sessionEmitter.fire(session);
+		const generation = this.focusGeneration;
+		if (session?.state === 'stopped') void session.inspectStack(session.threadId).then(inspection => {
+			if (this.isDisposed || generation !== this.focusGeneration || this.session !== session || session.state !== 'stopped') return;
+			session.selectThread(inspection.threadId!);
+			this.viewModel.setFocus(inspection.frames[0], inspection.threads.find(thread => thread.id === inspection.threadId), session, false);
+			if (inspection.frames[0]) return this.navigateFrame?.(inspection.frames[0], session, () => !this.isDisposed && generation === this.focusGeneration && this.session === session && session.state === 'stopped', false);
+		}).catch(error => this.onNavigationError(error));
+	}
 }
 
 export class MockDebugSession extends Disposable implements IDebugSession {
+	inspectionRevision = 0;
+	readonly onDidProgressStart = Event.None;
+	readonly onDidProgressUpdate = Event.None;
+	readonly onDidProgressEnd = Event.None;
+	readonly onDidLoadedSource = Event.None;
+	readonly onDidInvalidateMemory = Event.None;
+	async loadedSources(): ReturnType<IDebugSession['loadedSources']> { throw new Error('Loaded-source IO is not configured in this fixture'); }
+	async readMemory(..._args: Parameters<IDebugSession['readMemory']>): ReturnType<IDebugSession['readMemory']> { throw new Error('Memory IO is not configured in this fixture'); }
+	async writeMemory(..._args: Parameters<IDebugSession['writeMemory']>): ReturnType<IDebugSession['writeMemory']> { throw new Error('Memory IO is not configured in this fixture'); }
+	async exceptionInfo(): ReturnType<IDebugSession['exceptionInfo']> { throw new Error('Exception IO is not configured in this fixture'); }
+	async cancelProgress(_progressId: string): Promise<void> { }
+
 	private readonly stateEmitter = this._register(new Emitter<DebugSessionState>());
 	private readonly outputEmitter = this._register(new Emitter<void>());
 	private selectedThread = 1;
+	private readonly threadEmitter = this._register(new Emitter<number | undefined>());
 	public readonly configuration: IDebugConfiguration;
 	public readonly capabilities = Object.freeze({ supportsRestart: true, supportsTerminate: true, supportsSetVariable: true, supportsConditionalBreakpoints: true, supportsHitConditionalBreakpoints: true, supportsLogPoints: true, supportsFunctionBreakpoints: true, supportsDataBreakpoints: true, supportsInstructionBreakpoints: true, supportsDisassembleRequest: true, supportsSteppingGranularity: true, supportsCompletionsRequest: false, supportsCancelRequest: false, completionTriggerCharacters: [], exceptionBreakpointFilters: Object.freeze([{ filter: 'uncaught', label: 'Uncaught', default: true }, { filter: 'caught', label: 'Caught', default: false }]) });
 	public state: DebugSessionState = 'stopped';
@@ -196,7 +256,7 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 	public readonly onDidChangeReplElements = this.outputEmitter.event;
 	public readonly onDidCustomEvent = Event.None;
 	public readonly onDidChangeName = Event.None;
-	public readonly onDidChangeThread = Event.None;
+	public readonly onDidChangeThread = this.threadEmitter.event;
 	readonly exceptionBreakpoints: readonly string[] = ['uncaught'];
 	readonly onDidChangeExceptionBreakpoints = Event.None;
 	public get name(): string { return this.configuration.name; }
@@ -241,7 +301,7 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 	public async stepOut(): Promise<void> { }
 	public async restart(): Promise<void> { }
 	public async threads(): Promise<readonly IDebugThread[]> { return Object.freeze([{ id: 1, name: 'main' }, { id: 2, name: 'worker' }]); }
-	public selectThread(threadId: number): void { this.selectedThread = threadId; }
+	public selectThread(threadId: number): void { if (this.selectedThread !== threadId) { this.selectedThread = threadId; this.threadEmitter.fire(threadId); } }
 	public async stackTrace(_threadId?: number): Promise<readonly IDebugStackFrame[]> { return Object.freeze([{ id: 10, name: 'main', source: this.stackSource, lineNumber: 1, columnNumber: 1 }]); }
 	public async scopes(_frameId?: number): Promise<readonly IDebugScope[]> { return Object.freeze([{ name: 'Locals', variablesReference: 20, expensive: false }]); }
 	public async variables(reference: number): Promise<readonly IDebugVariable[]> { return reference === 20 ? Object.freeze([{ name: 'parent', value: 'Object', variablesReference: 21 }]) : Object.freeze([{ name: 'child', value: 'value', variablesReference: 0 }]); }
@@ -266,6 +326,7 @@ function configuration(name: string): IDebugConfiguration { return { id: name, n
 export class DebugViewTestServices extends Disposable {
 	public readonly workspace: TestWorkspaceService;
 	public readonly documents = new Map<string, string>();
+	public readonly notifications = this._register(new TestNotificationService());
 	public folderOpens = 0;
 	public writes = 0;
 
@@ -275,7 +336,7 @@ export class DebugViewTestServices extends Disposable {
 	}
 
 	/** Mounts the registered Debug constructor through the real Part title renderer. */
-	public createContainer(services: InstantiationService, parent: HTMLElement): { part: PaneCompositePart; container: DebugViewPaneContainer; pane: DebugViewPane; } {
+	public createContainer(services: InstantiationService, parent: HTMLElement): { part: PaneCompositePart; container: DebugViewPaneContainer; } {
 		setIconResolver(parent.ownerDocument, icon => getIconDefinition(icon));
 		if (!services.has(IContextKeyService)) services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		if (!services.has(IStorageService)) services.registerInstance(IStorageService, this._register(new BrowserStorageService({ ownerWindow: parent.ownerDocument.defaultView!, workspaceId: 'debug-view', flushInterval: 0, onError() { } })));
@@ -284,7 +345,8 @@ export class DebugViewTestServices extends Disposable {
 		services.registerInstance(IViewDescriptorService, descriptors);
 		if (!services.has(IActivityService)) services.registerInstance(IActivityService, this._register(services.createInstance(ActivityService)));
 		if (!services.has(IMenuService)) services.registerInstance(IMenuService, services.createInstance(MenuService));
-		if (!services.has(INotificationService)) services.registerInstance(INotificationService, this._register(new NotificationService()));
+		if (!services.has(INotificationService)) services.registerInstance(INotificationService, this.notifications);
+		if (!services.has(IAccessibilityService)) services.registerInstance(IAccessibilityService, this._register(new AccessibilityService({ root: parent, configurationService: services.get(IConfigurationService), contextKeyService: services.get(IContextKeyService) })));
 		const contextKeys = services.get(IContextKeyService);
 		const part = this._register(services.createInstance(PaneCompositePart, parent, {
 			id: 'sidebar', location: ViewContainerLocation.Sidebar, ariaLabel: 'Run and Debug', viewsAriaLabel: 'Views',
@@ -293,25 +355,28 @@ export class DebugViewTestServices extends Disposable {
 			openComposite: async (id: string) => { part.showComposite(id); return part.getComposite(id)!; },
 		}));
 		const descriptor = descriptors.getViewContainers(ViewContainerLocation.Sidebar).find(candidate => candidate.id === WorkbenchViewContainerId.Debug)!;
-		const container = services.createInstance(descriptor.ctorDescriptor!, part.domNode, {
-			viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id), instantiationService: services,
-			contextKeyService: contextKeys, onDidFailCreateView: (error: unknown) => { throw error; },
-		});
-		if (!(container instanceof DebugViewPaneContainer)) throw new Error('Debug container registration uses the wrong owner');
-		part.addComposite(container);
 		services.registerInstance(IViewsService, this._register(new ViewsService(descriptors, {
 			onDidPaneCompositeOpen: Event.map(part.onDidCompositeOpen, event => ({ composite: part.getComposite(event.composite.getId())!, viewContainerLocation: ViewContainerLocation.Sidebar })),
 			onDidPaneCompositeClose: Event.map(part.onDidCompositeClose, composite => ({ composite: part.getComposite(composite.getId())!, viewContainerLocation: ViewContainerLocation.Sidebar })),
 			getActivePaneComposite: () => part.getComposite(part.activeCompositeId ?? ''), getLastActivePaneCompositeId: () => part.activeCompositeId,
-			getPartId: () => 'sidebar', openPaneComposite: async (id, _location, focus) => { part.showComposite(id ?? container.id, focus); return container; },
+			getPartId: () => 'sidebar', openPaneComposite: async (id, _location, focus) => { part.showComposite(id ?? container.id, focus); return part.getComposite(container.id); },
 			hideActivePaneComposite: () => part.setVisible(false),
 		}, contextKeys)));
+		const container = services.createInstance(descriptor.ctorDescriptor!, part.domNode, {
+			viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id), instantiationService: services,
+			contextKeyService: contextKeys, localizationService: { whenReady: Promise.resolve(), translate: (bundle: string, key: string, fallback: string, parameters?: Readonly<Record<string, string | number>>) => localize({ bundle, key }, fallback, ...Object.values(parameters ?? {})) }, onDidFailCreateView: (error: unknown) => { throw error; },
+		});
+		if (!(container instanceof DebugViewPaneContainer)) throw new Error('Debug container registration uses the wrong owner');
+		part.addComposite(container);
+
 		part.showComposite(container.id);
-		return { part, container, pane: container.getView(DEBUG_VIEW_ID) as DebugViewPane };
+		return { part, container, };
 	}
 
 	public register(services: ServiceCollection): ServiceCollection {
+		if (!services.get(IAccessibleViewService)) services.set(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { }, dispose() { }, [Symbol.dispose]() { } });
 		if (!services.get(IContextKeyService)) services.set(IContextKeyService, this._register(new ContextKeyService()));
+		if (!services.get(INotificationService)) services.set(INotificationService, this.notifications);
 		// This fixture also runs in a real browser; model resolution must not load jsdom or editor widgets.
 		const configuration = this._register(new WorkbenchConfigurationService());
 		const languages = this._register(new LanguageService());
@@ -326,7 +391,25 @@ export class DebugViewTestServices extends Disposable {
 		services.set(ILogService, new NullLoggerService());
 		services.set(IModelService, models);
 		services.set(ILanguageService, languages);
-		services.set(ITextModelService, new TextModelResolverService(fileModels));
+		const textModels = new TextModelResolverService(fileModels);
+		services.set(ITextModelService, textModels);
+		const debug = services.get(IDebugService);
+		const editor = services.get(IEditorService) as IEditorService | undefined;
+		if (debug instanceof MockDebugService && editor) {
+			// The UI fixture supplies the service's navigation effect. Production
+			// sequencing and cancellation are exercised by DebugService and Desktop tests.
+			debug.onNavigationError = error => this.notifications.error(error instanceof Error ? error.message : String(error));
+			debug.navigateFrame = async (frame, session, isCurrent, explicit, preserveFocus) => {
+				if (!frame.source || !isCurrent() || !explicit && (frame.lineNumber <= 0 || frame.columnNumber <= 0 || editor.activeEditor?.editorId === DISASSEMBLY_VIEW_ID)) return;
+				const resource = getUriFromSource(frame.source, frame.source.path, session.id, identity.get(IUriIdentityService), services.get(ILogService)! as ILogService);
+				const selection = frame.lineNumber > 0 && frame.columnNumber > 0 ? Range.fromPositions(new Position(frame.lineNumber, frame.columnNumber)) : undefined;
+				if (resource.scheme === 'debug') {
+					using reference = await textModels.createModelReference(resource);
+					if (isCurrent()) await editor.openEditor({ resource, label: frame.source.name, readOnly: true }, { selection, preserveFocus });
+				} else await editor.openEditor({ resource, label: frame.source.name }, { selection, preserveFocus });
+			};
+			this._register(toDisposable(() => { debug.navigateFrame = undefined; debug.onNavigationError = () => { }; }));
+		}
 		const providerServices = this._register(new InstantiationService(services));
 		if (!services.get(IConfigurationService)) services.set(IConfigurationService, configuration);
 		services.set(IContextViewService, this._register(new BrowserContextViewService(document.body)));
@@ -335,6 +418,7 @@ export class DebugViewTestServices extends Disposable {
 		this._register(providerServices.createInstance(DebugContentProvider));
 		const stat = (resource: URI): IFileStat => ({ resource, kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined });
 		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
+		if (!services.get(IExtensionService)) services.set(IExtensionService, this._register(new TestExtensionService()));
 		services.set(IWorkspaceContextService, this.workspace);
 		services.set(IFileDialogService, { pickFolderAndOpen: async () => { this.folderOpens++; }, pickWorkspaceAndOpen: unexpected, pickFileToSave: unexpected, showOpenDialog: unexpected, showSaveDialog: unexpected, showSaveConfirm: unexpected });
 		services.set(IFileService, this._register(createTestFileService({

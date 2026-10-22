@@ -24,7 +24,10 @@ test('scenario cold-start fixtures copy only declared synthetic persistence', as
 	assert.equal(await readFile(join(destination, 'state.sqlite3'), 'utf8'), 'state.sqlite3');
 	await assert.rejects(readFile(join(destination, 'secrets')), { code: 'ENOENT' });
 	await rm(join(fixture, 'settings.json'));
-	await symlink(join(fixture, 'secrets'), join(fixture, 'settings.json'));
+	// Directory junctions exercise Windows reparse-point rejection without symlink privileges.
+	const linked = process.platform === 'win32' ? join(fixture, 'private') : join(fixture, 'secrets');
+	if (process.platform === 'win32') await mkdir(linked);
+	await symlink(linked, join(fixture, 'settings.json'), process.platform === 'win32' ? 'junction' : 'file');
 	await assert.rejects(seedScenarioProfile(fixture, destination), /regular file/);
 	await writeFile(join(fixture, 'fixture.json'), JSON.stringify({ format: 'ash-ui-profile-fixture-v1', synthetic: false }));
 	await assert.rejects(seedScenarioProfile(fixture, destination), /declare synthetic/);
@@ -75,12 +78,78 @@ test('browser integration preserves filters and rejects discarded or empty selec
 	}
 });
 
+test('Stanza collection works before browser installation and fails before building for invalid filters', { timeout: 30_000 }, async t => {
+	const cli = ['test/stanza/run.ts'];
+	const emptyCache = await mkdtemp(join(repository, 'test/.stanza-browser-cache-'));
+	t.after(() => rm(emptyCache, { recursive: true, force: true }));
+	const selected = await execute(process.execPath, [...cli, '--list', '--project=chromium', '--grep', 'keyboard (typing|edits)'], {
+		cwd: repository, env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: emptyCache }, timeout: 10_000,
+	});
+	assert.match(selected.stdout, /Total: 2 tests in 1 file/u);
+	assert.doesNotMatch(selected.stdout, /Stanza distribution:|building client/u);
+	for (const args of [
+		['--grep', 'absent-stanza-test'], ['--grep='], ['--grepp', 'keyboard'],
+		['--list', '--', '--grep', 'keyboard'], ['--pass-with-no-tests'],
+	]) {
+		await assert.rejects(execute(process.execPath, [...cli, ...args], { cwd: repository, timeout: 10_000 }), error => {
+			assert.ok(error instanceof Error);
+			const failure = error as Error & { stdout: string; code: number; };
+			assert.doesNotMatch(failure.stdout, /Stanza distribution:|building client/u);
+			return failure.code !== 0;
+		});
+	}
+});
+
+test('editor browser prepares a selected Rust Git fixture before building or launching the browser', { timeout: 20_000 }, async t => {
+	const directory = await mkdtemp(join(repository, 'test/.integration-runner-'));
+	t.after(() => rm(directory, { recursive: true, force: true }));
+	const config = join(directory, 'playwright.config.ts');
+	await writeFile(config, `export default { testDir: '.', outputDir: './results', projects: [{ name: 'chromium' }], reporter: 'list' };`);
+	await writeFile(join(directory, 'diff.integration.spec.ts'), `import { test } from '@playwright/test'; test('requires Rust Git', () => { throw Error('must not run before Git preparation'); });`);
+	const missingPython = join(directory, 'missing-python');
+	for (const prefix of [[], ['--editor']]) {
+		await assert.rejects(execute(process.execPath, ['test/integration/browser/run.ts', ...prefix, '--config', config, 'diff.integration.spec.ts'], {
+			cwd: repository, env: { ...process.env, PYTHON: missingPython }, timeout: 10_000,
+		}), error => {
+			assert.ok(error instanceof Error);
+			const failure = error as Error & { stdout: string; stderr: string; };
+			assert.match(failure.stdout, /Test selection: 1 tests/);
+			assert.ok((failure.stdout + failure.stderr).includes(`spawn ${missingPython} ENOENT`), failure.stdout + failure.stderr);
+			assert.doesNotMatch(failure.stdout, /Browser integration server|Running 1 test/);
+			return true;
+		});
+	}
+});
+
+test('editor browser prepares its backend through the invoking package-manager script with literal arguments', { timeout: 20_000 }, async t => {
+	const directory = await mkdtemp(join(repository, 'test/.integration-runner-'));
+	t.after(() => rm(directory, { recursive: true, force: true }));
+	const config = join(directory, 'playwright.config.ts');
+	await writeFile(config, `export default { testDir: '.', projects: [{ name: 'chromium' }], reporter: 'list' };`);
+	await writeFile(join(directory, 'textModel.integration.spec.ts'), `import { test } from '@playwright/test'; test('requires backend', () => { throw Error('must not run before backend preparation'); });`);
+	const invocation = join(directory, 'invocation.json');
+	const manager = join(directory, 'manager with spaces.cjs');
+	await writeFile(manager, `require('node:fs').writeFileSync(${JSON.stringify(invocation)}, JSON.stringify(process.argv.slice(2))); process.exit(43);`);
+	await assert.rejects(execute(process.execPath, ['test/integration/browser/run.ts', '--editor', '--config', config, 'textModel.integration.spec.ts'], {
+		cwd: repository, env: { ...process.env, npm_execpath: manager }, timeout: 15_000,
+	}), error => {
+		assert.ok(error instanceof Error);
+		const failure = error as Error & { stdout: string; code: number; };
+		assert.equal(failure.code, 43);
+		assert.match(failure.stdout, /Test selection: 1 tests/);
+		assert.doesNotMatch(failure.stdout, /Browser integration server|Running 1 test/);
+		return true;
+	});
+	assert.deepEqual(JSON.parse(await readFile(invocation, 'utf8')), ['run', 'prepare:backend']);
+});
+
 test('CI rejects exclusive tests during collection before browser or smoke launches', { timeout: 20_000 }, async t => {
 	const directory = await mkdtemp(join(repository, 'test/.exclusive-runner-'));
 	t.after(() => rm(directory, { recursive: true, force: true }));
 	await writeFile(join(directory, 'exclusive.spec.ts'), `import { test } from '@playwright/test'; test.only('exclusive', () => { throw Error('must not execute'); }); test('sibling', () => {});`);
 	for (const [name, source, entrypoint] of [
 		['integration', 'test/integration/browser/playwright.config.ts', ['test/integration/browser/run.ts']],
+		['stanza', 'test/stanza/playwright.config.ts', ['test/stanza/run.ts']],
 		['smoke', 'playwright.config.ts', ['test/smoke/run.ts', 'electron-ui']],
 	] as const) {
 		const config = join(directory, `${name}.config.ts`);
@@ -95,7 +164,7 @@ test('CI rejects exclusive tests during collection before browser or smoke launc
 	}
 });
 
-test('the combined editor target rejects filters before starting either suite', async () => {
+test('the combined editor target rejects filters before starting any suite', async () => {
 	await assert.rejects(execute(process.execPath, ['test/editor.ts', '--grep', 'selected'], { cwd: repository, timeout: 5_000 }), error => {
 		assert.ok(error instanceof Error);
 		const failure = error as Error & { stdout: string; stderr: string; code: number; };

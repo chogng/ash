@@ -381,6 +381,13 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		exactKeys(input, "Extension Host Test Profile provider registration", ["kind", "label", "providerId", "registrationId"]);
 		return Object.freeze({ kind, registrationId, providerId: boundedText(input.providerId, "Extension Host Test Profile provider ID", 256), label: boundedText(input.label, "Extension Host Test Profile provider label", 512) });
 	}
+	if (kind === 'treeDataProvider') {
+		exactKeys(input, 'Extension Host tree registration', ['kind', 'registrationId', 'viewId', 'title'], ['containerId']);
+		const viewId = boundedText(input.viewId, 'Tree view ID', 128);
+		const containerId = input.containerId === undefined ? undefined : boundedText(input.containerId, 'Tree container ID', 128);
+		if (![viewId, containerId].every(value => value === undefined || /^[A-Za-z][A-Za-z0-9._-]*$/u.test(value))) { throw new TypeError('Invalid tree view or container ID'); }
+		return Object.freeze({ kind, registrationId, viewId, title: boundedText(input.title, 'Tree title', 512), ...(containerId === undefined ? {} : { containerId }) });
+	}
 	if (kind === 'speechProvider') {
 		exactKeys(input, 'Extension Host speech registration', ['kind', 'registrationId', 'identifier', 'registrationGeneration']);
 		const identifier = boundedText(input.identifier, 'Speech provider identifier', 256);

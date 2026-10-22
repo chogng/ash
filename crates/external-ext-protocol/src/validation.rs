@@ -75,6 +75,7 @@ pub(super) fn validate_registrations(
     let mut terminal_profiles = BTreeSet::new();
     let mut terminal_quick_fixes = BTreeSet::new();
     let mut speech_providers = BTreeSet::new();
+    let mut tree_views = BTreeSet::new();
     let mut speech_generations = BTreeSet::new();
     let mut has_terminal_environment = false;
     let mut test_profile_providers = BTreeSet::new();
@@ -155,6 +156,19 @@ pub(super) fn validate_registrations(
                 }
                 validate_display_text(label, "external URI opener label")?;
                 ExtensionCapability::ExternalUriOpener
+            }
+            RegistrationKind::TreeDataProvider {
+                view_id,
+                title,
+                container_id,
+            } => {
+                validate_identifier(view_id)?;
+                validate_display_text(title, "tree view title")?;
+                if let Some(container_id) = container_id {
+                    validate_identifier(container_id)?;
+                }
+                require_unique(&mut tree_views, view_id, "tree view identifiers")?;
+                ExtensionCapability::TreeView
             }
             RegistrationKind::SpeechProvider {
                 identifier,

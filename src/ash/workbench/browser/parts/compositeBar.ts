@@ -8,7 +8,7 @@ import { ActionBar, type ActionBarDropPosition, type ActionBarOrientation } from
 import { Separator, type IAction } from "../../../base/common/actions.js";
 import { onUnexpectedError } from '../../../base/common/errors.js';
 import type { IComposite } from '../../common/composite.js';
-import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 
 import { localize, type ILocalizationService } from "../../services/localization/common/localizationService.js";
 import { localize as resolveNls } from '../../../nls.js';
@@ -63,6 +63,7 @@ export class CompositeBar extends Disposable {
 	private readonly containerFilter: (container: IViewContainerDescriptor) => boolean;
 	private readonly openComposite: ICompositeBarOptions['openComposite'];
 	private containers: readonly IViewContainerDescriptor[] = [];
+	private readonly containerListeners = this._register(new DisposableMap<string, IDisposable>());
 	private displayedContainers: readonly IViewContainerDescriptor[] = [];
 	private hiddenContainerIds = new Set<string>();
 	private disabledBadgeIds = new Set<string>();
@@ -307,7 +308,18 @@ export class CompositeBar extends Disposable {
 
 	private render(): void {
 		const availableContainers = this.viewDescriptorService.getViewContainers(this.location);
-		this.containers = availableContainers.filter(this.containerFilter);
+		const conditionalContainers = availableContainers.filter(container => container.hideIfEmpty);
+		for (const id of this.containerListeners.keys()) {
+			if (!conditionalContainers.some(container => container.id === id)) this.containerListeners.deleteAndDispose(id);
+		}
+		for (const container of conditionalContainers) {
+			if (!this.containerListeners.has(container.id)) {
+				const model = this.viewDescriptorService.getViewContainerModel(container.id);
+				this.containerListeners.set(container.id, model.onDidChangeActiveViewDescriptors(() => this.render()));
+			}
+		}
+		this.containers = availableContainers.filter(container => this.containerFilter(container)
+			&& (!container.hideIfEmpty || this.viewDescriptorService.getViewContainerModel(container.id).activeViewDescriptors.length > 0));
 		this.displayedContainers = this.containers.filter(container => !this.hiddenContainerIds.has(container.id) || container.id === this._activeCompositeId);
 		if (
 			this._activeCompositeId !== undefined &&

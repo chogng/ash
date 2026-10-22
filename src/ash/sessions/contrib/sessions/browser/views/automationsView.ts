@@ -290,7 +290,7 @@ export class AutomationsCardsWidget extends Disposable {
 				const run = lifetime.add(new Button(actions, {
 					...defaultButtonStyles,
 					label: localize('automations.runNow', 'Run now'),
-					icon: Lxicon.start,
+					icon: Lxicon.play,
 					presentation: 'secondary',
 					onClick: () => {
 						const current = this.automations.getAutomation(plan.id);
@@ -496,7 +496,7 @@ export class AutomationsCardsWidget extends Disposable {
 			const run = lifetime.add(new Button(actions, {
 				...defaultButtonStyles,
 				label: localize('automations.runNow', 'Run now'),
-				icon: Lxicon.start,
+				icon: Lxicon.play,
 				onClick: () => {
 					const plan = this.automations.getAutomation(selected.id);
 					if (plan) void this.perform(plan.id, () => this.runner.runOnce(plan).whenDispatched);

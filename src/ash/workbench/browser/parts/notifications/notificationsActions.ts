@@ -4,7 +4,7 @@ import { IClipboardService } from '../../../../platform/clipboard/common/clipboa
 import type { NotificationItem } from '../../../common/notifications.js';
 import { localize } from '../../../../nls.js';
 
-/** The notification's producer owns the operations exposed by this menu. */
+/** Groups source policy and the notification producer's secondary operations. */
 export class ConfigureNotificationAction extends SubmenuAction {
 	static readonly ID = 'workbench.action.configureNotification';
 

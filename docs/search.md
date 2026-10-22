@@ -91,7 +91,7 @@ tgrep 的准备失败、协议错误或超时显式返回，不悄悄切换引�
 实现入口：[宿主组装](../crates/app-server/src/server/environment_runtime.rs)、
 [检索组合](../crates/codebase/src/retrieval/service.rs)、
 [文件路径搜索](../crates/file-search/README.md)、
-[搜索协议适配](../crates/app-server/src/server/search_operations.rs)。下文描述当前内容搜索行为。
+[搜索协议适配](../crates/app-server/src/server/request_processors/search.rs)。下文描述当前内容搜索行为。
 
 ## TS 工作区文件查询
 

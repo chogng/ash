@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../../../base/common/uri.js";
 import { DocumentTypes } from '../../../../services/documentEditor/common/documentTypes.js';
-import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from '../../../../../../../extensions/academic/browser/documentTypes.js';
+import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from '../../../../../../../extensions/academy/browser/documentTypes.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { EditorResourceAccessor, SideBySideEditor } from '../../../../common/editor.js';
 

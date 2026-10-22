@@ -1,4 +1,5 @@
 use crate::FileWatcherEvent;
+use crate::ingress::RESCAN_INTERVAL;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -10,45 +11,101 @@ use tokio::sync::Notify;
 use tokio::time::Instant;
 use tokio::time::sleep_until;
 
+const MAX_PENDING_PATHS: usize = 4096;
+const MAX_PENDING_BYTES: usize = 1024 * 1024;
+
+/// A byte- and count-bounded set shared by routing and subscriber accumulation.
 #[derive(Default)]
-struct PendingEvent {
-    changed_paths: BTreeSet<PathBuf>,
-    rescan_paths: BTreeSet<PathBuf>,
+pub(crate) struct PathBatch {
+    paths: BTreeSet<PathBuf>,
+    bytes: usize,
+}
+
+impl PathBatch {
+    pub(crate) fn insert(&mut self, path: PathBuf) -> bool {
+        if self.paths.contains(&path) {
+            return true;
+        }
+        let bytes = path.capacity();
+        if self.paths.len() >= MAX_PENDING_PATHS
+            || bytes > MAX_PENDING_BYTES.saturating_sub(self.bytes)
+        {
+            return false;
+        }
+        self.paths.insert(path);
+        self.bytes += bytes;
+        true
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.paths.is_empty()
+    }
+
+    pub(crate) fn into_paths(self) -> Vec<PathBuf> {
+        self.paths.into_iter().collect()
+    }
+}
+
+#[derive(Default)]
+enum PendingEvent {
+    #[default]
+    None,
+    Paths(PathBatch),
+    Rescan {
+        watched_paths: Vec<PathBuf>,
+    },
 }
 
 impl PendingEvent {
-    fn add_changed_paths(&mut self, paths: &[PathBuf]) {
-        if self.rescan_paths.is_empty() {
-            self.changed_paths.extend(paths.iter().cloned());
+    fn add_changed_paths(&mut self, changes: &[PathBuf], roots: impl FnOnce() -> Vec<PathBuf>) {
+        if matches!(self, Self::None) {
+            *self = Self::Paths(PathBatch::default());
+        }
+        if let Self::Paths(paths) = self {
+            for path in changes {
+                if !paths.insert(path.clone()) {
+                    self.require_rescan(roots());
+                    return;
+                }
+            }
+        } else {
+            // Registration can change while a slow consumer still owes a rescan.
+            // Keep a snapshot of the current owned roots, not a history of old roots.
+            self.require_rescan(roots());
         }
     }
 
-    fn require_rescan(&mut self, watched_paths: &[PathBuf]) {
-        self.changed_paths.clear();
-        self.rescan_paths.extend(watched_paths.iter().cloned());
+    fn require_rescan(&mut self, watched_paths: Vec<PathBuf>) {
+        *self = Self::Rescan {
+            watched_paths: watched_paths
+                .into_iter()
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect(),
+        };
     }
 
     fn is_empty(&self) -> bool {
-        self.changed_paths.is_empty() && self.rescan_paths.is_empty()
+        matches!(self, Self::None)
     }
 
     fn take(&mut self) -> Option<FileWatcherEvent> {
-        if !self.rescan_paths.is_empty() {
-            return Some(FileWatcherEvent::RescanRequired {
-                watched_paths: std::mem::take(&mut self.rescan_paths).into_iter().collect(),
-            });
+        match std::mem::take(self) {
+            Self::None => None,
+            Self::Paths(paths) => Some(FileWatcherEvent::PathsChanged {
+                paths: paths.into_paths(),
+            }),
+            Self::Rescan { watched_paths } => {
+                Some(FileWatcherEvent::RescanRequired { watched_paths })
+            }
         }
-        (!self.changed_paths.is_empty()).then(|| FileWatcherEvent::PathsChanged {
-            paths: std::mem::take(&mut self.changed_paths)
-                .into_iter()
-                .collect(),
-        })
     }
 }
 
-/// Receives coalesced invalidation hints for one subscriber.
+/// Receives bounded, coalesced invalidation hints for one subscriber.
 pub struct Receiver {
     inner: Arc<ReceiverInner>,
+    next_rescan: Option<Instant>,
 }
 
 pub(crate) struct WatchSender {
@@ -62,32 +119,63 @@ struct ReceiverInner {
 }
 
 impl Receiver {
-    /// Waits for the next hint, returning `None` after its subscriber is gone.
-    pub async fn recv(&mut self) -> Option<FileWatcherEvent> {
+    async fn wait_pending(&self) -> bool {
         loop {
             let notified = self.inner.notify.notified();
             {
-                let mut pending = self.inner.pending.lock().await;
-                if let Some(event) = pending.take() {
-                    return Some(event);
+                let pending = self.inner.pending.lock().await;
+                if !pending.is_empty() {
+                    return true;
                 }
                 if self.inner.sender_count.load(Ordering::Acquire) == 0 {
-                    return None;
+                    return false;
                 }
             }
             notified.await;
         }
     }
+
+    /// Waits for the next hint, returning `None` after its subscriber is gone.
+    /// Repeated full rescans are coalesced for at least one second; changes after
+    /// a delivered hint remain pending so a scan in progress cannot swallow them.
+    pub async fn recv(&mut self) -> Option<FileWatcherEvent> {
+        while self.wait_pending().await {
+            let deadline = {
+                let mut pending = self.inner.pending.lock().await;
+                if matches!(*pending, PendingEvent::Rescan { .. }) {
+                    if let Some(deadline) = self
+                        .next_rescan
+                        .filter(|deadline| *deadline > Instant::now())
+                    {
+                        Some(deadline)
+                    } else {
+                        self.next_rescan = Some(Instant::now() + RESCAN_INTERVAL);
+                        return pending.take();
+                    }
+                } else {
+                    return pending.take();
+                }
+            };
+            if let Some(deadline) = deadline {
+                sleep_until(deadline).await;
+            }
+        }
+        None
+    }
 }
 
 impl WatchSender {
-    pub(crate) async fn add_changed_paths(&self, paths: &[PathBuf]) {
+    pub(crate) async fn add_changed_paths(
+        &self,
+        paths: &[PathBuf],
+        roots: impl FnOnce() -> Vec<PathBuf>,
+    ) {
         if paths.is_empty() {
             return;
         }
         let mut pending = self.inner.pending.lock().await;
         let was_empty = pending.is_empty();
-        pending.add_changed_paths(paths);
+        pending.add_changed_paths(paths, roots);
         if was_empty && !pending.is_empty() {
             self.inner.notify.notify_one();
         }
@@ -97,8 +185,11 @@ impl WatchSender {
         if watched_paths.is_empty() {
             return;
         }
-        let mut pending = self.inner.pending.lock().await;
-        pending.require_rescan(watched_paths);
+        self.inner
+            .pending
+            .lock()
+            .await
+            .require_rescan(watched_paths.to_vec());
         self.inner.notify.notify_one();
     }
 }
@@ -114,9 +205,8 @@ impl Clone for WatchSender {
 
 impl Drop for WatchSender {
     fn drop(&mut self) {
-        if self.inner.sender_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.inner.notify.notify_waiters();
-        }
+        self.inner.sender_count.fetch_sub(1, Ordering::AcqRel);
+        self.inner.notify.notify_one();
     }
 }
 
@@ -130,7 +220,10 @@ pub(crate) fn watch_channel() -> (WatchSender, Receiver) {
         WatchSender {
             inner: Arc::clone(&inner),
         },
-        Receiver { inner },
+        Receiver {
+            inner,
+            next_rescan: None,
+        },
     )
 }
 
@@ -168,7 +261,7 @@ impl ThrottledWatchReceiver {
 pub struct DebouncedWatchReceiver {
     rx: Receiver,
     interval: Duration,
-    pending: Option<FileWatcherEvent>,
+    deadline: Option<Instant>,
 }
 
 impl DebouncedWatchReceiver {
@@ -177,68 +270,26 @@ impl DebouncedWatchReceiver {
         Self {
             rx,
             interval,
-            pending: None,
+            deadline: None,
         }
     }
 
-    /// Receives the next debounced hint batch.
+    /// Receives the next debounced hint batch without moving it into a second,
+    /// potentially unbounded accumulator. Cancellation preserves the deadline.
     pub async fn recv(&mut self) -> Option<FileWatcherEvent> {
-        while self.pending.is_none() {
-            self.pending = self.rx.recv().await;
-            self.pending.as_ref()?;
-        }
-        let deadline = Instant::now() + self.interval;
-        loop {
-            tokio::select! {
-                event = self.rx.recv() => match event {
-                    Some(event) => merge_event(&mut self.pending, event),
-                    None => break,
-                },
-                _ = sleep_until(deadline) => break,
+        if self.deadline.is_none() {
+            if !self.rx.wait_pending().await {
+                return None;
             }
+            self.deadline = Some(Instant::now() + self.interval);
         }
-        self.pending.take()
+        sleep_until(self.deadline.unwrap()).await;
+        let event = self.rx.recv().await;
+        self.deadline = None;
+        event
     }
 }
 
-fn merge_event(pending: &mut Option<FileWatcherEvent>, next: FileWatcherEvent) {
-    let Some(current) = pending.take() else {
-        *pending = Some(next);
-        return;
-    };
-    let merged = match (current, next) {
-        (
-            FileWatcherEvent::PathsChanged { paths: left },
-            FileWatcherEvent::PathsChanged { paths: right },
-        ) => FileWatcherEvent::PathsChanged {
-            paths: merge_paths(left, right),
-        },
-        (
-            FileWatcherEvent::RescanRequired {
-                watched_paths: left,
-            },
-            FileWatcherEvent::RescanRequired {
-                watched_paths: right,
-            },
-        ) => FileWatcherEvent::RescanRequired {
-            watched_paths: merge_paths(left, right),
-        },
-        (
-            FileWatcherEvent::RescanRequired { watched_paths },
-            FileWatcherEvent::PathsChanged { .. },
-        )
-        | (
-            FileWatcherEvent::PathsChanged { .. },
-            FileWatcherEvent::RescanRequired { watched_paths },
-        ) => FileWatcherEvent::RescanRequired { watched_paths },
-    };
-    *pending = Some(merged);
-}
-
-fn merge_paths(left: Vec<PathBuf>, right: Vec<PathBuf>) -> Vec<PathBuf> {
-    left.into_iter()
-        .chain(right)
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect()
-}
+#[cfg(test)]
+#[path = "channel_tests.rs"]
+mod tests;

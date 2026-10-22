@@ -423,6 +423,7 @@ function assertLineIndex(lineIndex: number): void {
 /** Lazily styles one model token index and invalidates its cached lines with that index. */
 export class StyledTokenSource extends Disposable implements SemanticTokenSource {
 	private readonly lineTokens = new Map<number, readonly ResolvedSemanticToken[]>();
+	private cachedModelVersion = -1;
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changeEmitter.event;
 
@@ -445,6 +446,14 @@ export class StyledTokenSource extends Disposable implements SemanticTokenSource
 
 	public getLineTokens(lineIndex: number): readonly ResolvedSemanticToken[] {
 		this.assertNotDisposed();
+		// A backend can retain captures while its next parse is pending, but its
+		// read API already bounds them to the current text. Do not cache styled
+		// ranges across an edit just because no provider result has arrived yet.
+		const modelVersion = this.source.textModel.version;
+		if (this.cachedModelVersion !== modelVersion) {
+			this.lineTokens.clear();
+			this.cachedModelVersion = modelVersion;
+		}
 		let tokens = this.lineTokens.get(lineIndex);
 		if (!tokens) {
 			tokens = resolveLineTokens(this.source.getLineTokens(lineIndex), this.kind, this.source.textModel.getLanguageId());

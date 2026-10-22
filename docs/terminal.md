@@ -36,7 +36,7 @@ Agent 执行、审批与终端呈现的详细边界以 [Platform Terminal 的前
 
 `TerminalProfileService` 合并执行端发现、自定义与扩展 Profile；`TerminalProfileResolverService` 解析执行端变量、Shell 参数、cwd、环境和图标，实际可执行文件由后端确认。多根工作区新建终端使用活动文件所属目录，无法确定时由用户选择；Split 继承原实例的目录与启动配置。
 
-Windows 执行端从当前用户的 WSL 注册读取发行版，并以独立的 `wsl:<发行版>` 配置保留 `wsl.exe --distribution <发行版>` 的启动参数；同一可执行文件的不同参数不会互相去重。发现期间不启动 WSL，注册信息在该执行服务启动时读取。下拉菜单将 Copilot／Claude 配置独立分组；扩展配置仍由原提供者创建。`TerminalMainContribution` 在执行连接就绪时注册“智能体主机”配置，使用 `terminal.integrated.agentHostProfile`，未配置时回到交互 Shell。断线撤销配置，工作区变更使在途创建失效并回收迟到的实例；重连重新注册，不终止已存在的终端。
+Windows 执行端从当前用户的 WSL 注册读取发行版，并以独立的 `wsl:<发行版>` 配置保留 `wsl.exe --distribution <发行版>` 的启动参数；同一可执行文件的不同参数不会互相去重。发现期间不启动 WSL，注册信息在该执行服务启动时读取。下拉菜单按终端配置列表的顺序统一展示，不按品牌或扩展 ID 优先排序、单独分组；扩展配置仍由原提供者创建。`TerminalMainContribution` 在执行连接就绪时注册“智能体主机”配置，使用 `terminal.integrated.agentHostProfile`，未配置时回到交互 Shell。断线撤销配置，工作区变更使在途创建失效并回收迟到的实例；重连重新注册，不终止已存在的终端。
 
 扩展 Profile 使用标准 `contributes.terminal.profiles` 声明。旧 `contributes.terminalProfiles` 仅在读取边界转换为同一声明；同时提供两种 Profile 声明会被拒绝。静态菜单声明与动态工厂注册分别管理，撤销工厂后不能再调用它，但不会关闭已创建的自供 PTY。
 
@@ -187,3 +187,45 @@ pnpm run smoketest test/smoke/areas/windows/terminal.spec.ts
 just verify ash-exec-server
 just test ash-app-server-runtime --lib terminal
 ```
+
+### 2026-10-22 Windows 本机验收
+
+Windows 11 专业版 23H2 x64、build 22631.6199，Node 24.21.0、Electron 44.4.5。使用当前检出的真实 Desktop、隔离 profile 和合成工作区；首批后端经正常 `prepare:backend` 构建为开发代次 `19adf41a97390a30f6d36d4ce0922df8ecfb334b43853221d72a5f07d20876f3`。起始提交为 `c1906879d`，验证期间检出先到 `b891244d3`，最终到 `b577e6be6`；这些快进未修改终端和 Rust 后端源码，各批次构建与来源见 `.build/local-todo-windows-20261022/validation.json`。具体产物、首败、源码差异和结果集中于同目录。
+
+`just rust-warnings ash-exec-server -p ash-app-server-runtime -p ash-utils-pty` 全目标通过；终端库 72 项、PTY 库 29 项、App Server `tests::terminal_` 定向 13 项通过。PTY 首败选中了普通启动探测能运行、ConPTY 却拒绝执行的 Store PowerShell；测试现使用系统 Windows PowerShell，并通过真实前台子进程 Ctrl+C 与恢复验证。首次较宽的 `terminal_` 筛选还发现搜索取消误报 `InvalidParams`：文件枚举混用了 Windows 普通路径与 verbatim 路径。改由目录 owner 解析 scope 后，搜索库 13 项、包含原取消用例的 3 项 glob RPC 及全目标 warnings 全部通过；首败 `app-server-terminal-tests.log` 与复验 `search-{glob,rpc,warnings}-fixed.log` 均保留。
+
+中英文 `independent terminal host` 与 `terminal window lifetime cleanup` 合计 10 项整批通过，无跳过。超过 35 秒的实际后端中断分别持续 35.23／35.41 秒，两个命令各排空 2 MiB 输出，恢复后 Shell／命令 PID 和实例身份相同，执行记录没有重放，Ctrl+C 后可继续输入。强杀 PTY 宿主后保留原屏幕，显式 Relaunch 启动新 Shell，App Server PID 不变。窗口关闭、转移后关闭另一窗口、正常 quit 及强杀实际 Electron Main 均验证资源回收；6 项清理场景记录 38 条 PID（跨场景有一条 PID 复用），最终存活列表均为空。
+
+Windows 进程检查使用 CIM，并从 Main 自身取得 PID／可执行文件，避免把开发启动器的 `cmd.exe` 当作 Main。心跳探针追加完整 JSONL 记录，读者只消费完整行；原 PID、持续进度、输出和资源回收断言保持有效。失败 fixture 在删除隔离 profile 前附加 App Server 进程日志，使启动失败也有底层证据。原始结果为 `terminal-final.log`、`terminal-report/index.html`、`terminal-identities.json` 和 `terminal-summary.json`。
+
+当前 UI 重建后另通过 5 项补验：中英文取消 pane／window 关闭保留进程与焦点，中英文 reload 保留原 PID、输出、分屏比例、未提交输入和焦点，以及真实窗口转移保留 Shell PID／cwd／输出／输入。命令筛选为 `reload retains original processes|moving a terminal to a real desktop window|canceling pane and window close`，结果见 `terminal-reload.log` 与 `terminal-reload-report/index.html`。Windows Desktop 合计 15 个不同场景通过。
+
+pnpm 12.8.0 的 Windows Job 禁止显式 breakaway，独立宿主创建因此被拒绝。仓库 pin 与对应 lockfile 已升级为 [pnpm 12.10.0](https://pnpm.io/blog/releases/12.10.0)，使用上游恢复显式 breakaway 的修复，保留 Ash 的脱离标志和资源回收断言。小型进程对照确认父进程仍在 Job 中、显式脱离的子进程不在 Job 中；随后正常准备当前后端代次 `7ed501c50c6f3886b08ec22ed08e75748b6eaeea6bee2ecae958679ae44f8205`，通过标准 pnpm 入口重新完成上述 10 项宿主／生命周期验收，无失败或跳过。证据为 `job-fixed.log`、`backend-completed.log`、`terminal-pnpm-fixed.log` 和 `terminal-pnpm-report/index.html`。该本机缺口已闭环。
+
+当前可复用的 Windows 入口为先完成 `pnpm run prepare:backend`、`pnpm run build` 和 automation 类型检查，再运行：
+
+```sh
+pnpm run test:smoke:desktop:no-compile test/smoke/areas/windows/terminal.spec.ts --grep 'independent terminal host|terminal window lifetime cleanup' --workers=1
+```
+
+### 2026-10-22 WSLg Linux 本机验收
+
+在本机 AshBuild 的 Ubuntu 24.04.5 x64、WSL2 内核 `6.18.40.1-microsoft-standard-WSL2`、WSLg 1.0.79 上完成真实 Linux Desktop 验收。使用同一检出 `b577e6be6` 加当前工作区改动，Linux Node 24.21.0、pnpm 12.10.0、Electron 44.4.5 和 Rust 1.98.0；Electron 与 App Server 均为 Linux ELF 程序。测试以 UID 1000 运行，通过 WSLg X11 创建真实窗口，Renderer 保持沙箱启用。Linux 的依赖、Python 环境及构建输出在独立 mount namespace 中使用 ext4 缓存，Windows 产物和后端 selector 保持不变。
+
+正常 generated／Desktop／backend 构建和 automation 类型检查通过，首批后端代次为 `b278d1a6161ffa5d27be6b8814887a7be5f9ab1675dcdad3ec134e9c989ff68c`。三包全目标 warnings 通过；终端库 82 项、PTY 库 26 项、App Server 终端筛选 14 项通过，共 122 项，无失败或忽略。首批终端验收复用现有用例，后续控制器初始化修复与复验见本节末尾。
+
+中英文 Desktop 合计 15 项全部通过，无跳过：独立宿主故障后的保屏与显式重启，后端崩溃／长中断／正常重启，取消关闭，reload，真实跨窗口转移，以及窗口销毁／正常 quit／Main 强杀后的回收。两次实际长中断为 35.83／35.36 秒，每个场景两个命令各排空 2 MiB；恢复后保留原 Shell／命令 PID，没有重放，Ctrl+C 后仍可输入。六项回收场景共记录 38 个不同 PID，最终存活列表均为空；关闭源窗口期间转移后的另一窗口继续运行。已审阅中文恢复画面与英文存活窗口截图。
+
+在上述 Linux 准备环境内执行：
+
+```sh
+just rust-warnings ash-exec-server -p ash-app-server-runtime -p ash-utils-pty
+just test ash-exec-server --lib terminal::
+just test ash-utils-pty --lib
+just test ash-app-server-runtime --lib tests::terminal_
+dbus-run-session -- pnpm run smoketest-no-compile test/smoke/areas/windows/terminal.spec.ts --grep 'independent terminal host|terminal window lifetime cleanup|reload retains original processes|moving a terminal to a real desktop window|canceling pane and window close' --workers=1 --max-failures=1
+```
+
+证据位于 `.build/wsl-linux-terminal-20261022/`：`validation.json`、`desktop-build.log`、`backend-build.log`、`rust-{warnings,tests}.log`、`desktop-terminal.log`、`identities.json`、`report/index.html` 和截图 `results/`。测试命令均已退出，未遗留本轮 Electron、App Server 或终端宿主；隔离环境也已关闭，见 `cleanup.json`。本轮完成了原 Linux 终端验收范围，根 TODO 中对应整节已移除。
+
+随后 Linux Code 复核发现控制器将 Electron 的非标准描述符继续传入后台及空闲 PTY 宿主，导致 Main 退出后的调试连接等待宿主空闲超时。进程初始化现隔离 Linux 描述符的后代继承；正常重建后端代次 `b30ff0c60086b07a78a4b1c2bf953c958499eafd5150b827a0f6aee1f743e5bd` 后，再次通过三包全目标 warnings、上述 122 项 Rust 测试和全部 15 项 Desktop 场景，六项清理场景仍无存活 PID。最终证据与进程清理记录在 `.build/wsl-linux-code-20261022/{validation.json,rust-warnings.log,rust-tests.log,desktop-terminal.log,terminal-report/index.html,cleanup.json}`，覆盖范围见[编辑器验证范围](editor-architecture.md#验证范围)；未增加退出或测试等待预算。

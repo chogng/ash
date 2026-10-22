@@ -6,9 +6,9 @@ import type { IExtensionHostApi, ExtensionHostFleetSnapshot } from '../../../../
 import { AdapterManager } from '../../../debug/browser/debugAdapterManager.js';
 import assert from "node:assert/strict";
 import { before, test } from "mocha";
-import { academicProfile } from "../../../../../../../extensions/academic/browser/editorProfile.js";
+import { academicProfile } from "../../../../../../../extensions/academy/browser/editorProfile.js";
 import { createDocumentEditorPaneOptions } from "../../../documentEditor/browser/editorProfile.js";
-import { deserializeDocument } from '../../../../../../../extensions/academic/common/model/documentSerialization.js';
+import { deserializeDocument } from '../../../../../../../extensions/academy/common/model/documentSerialization.js';
 
 before(function () {
 	this.timeout(600_000);
@@ -55,19 +55,19 @@ for (const [locale, label] of [['en', 'Academic Document'], ['zh-CN', '学术论
 		try {
 			using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: `academic-${locale}`, flushInterval: 0 });
 			using enablement = new GlobalExtensionEnablementService(storage);
-			const manifestJson = await readFile('extensions/academic/package.json', 'utf8');
+			const manifestJson = await readFile('extensions/academy/package.json', 'utf8');
 			const entry = {
-				id: 'ash.academic', name: 'academic', publisher: 'ash', version: '1.0.0', displayName: 'Academy',
+				id: 'ash.academy', name: 'academy', publisher: 'ash', version: '1.0.0', displayName: 'Academy',
 				sourceKind: 'registry' as const, manifestJson,
 				manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`, packageSha256: `sha256:${'a'.repeat(64)}`,
 				rendererClient: {
-					runtimeId: 'ash.academic', apiVersion: 1 as const, entry: 'dist/editor.js', digest: `sha256:${'b'.repeat(64)}`,
+					runtimeId: 'ash.academy', apiVersion: 1 as const, entry: 'dist/editor.js', digest: `sha256:${'b'.repeat(64)}`,
 					style: 'dist/editor.css', styleDigest: `sha256:${'c'.repeat(64)}`, sourceDigest: `sha256:${'d'.repeat(64)}`,
 				},
 			};
 			const api = {
 				list: async () => ({ generation: 1, extensions: [{ ...entry, rendererClient: enablement.getDisabledExtensions().some(disabled => disabled.id === entry.id) ? undefined : entry.rendererClient }], diagnostics: [] }),
-				resources: new ExtensionResourceLoaderService(async request => new Uint8Array(await readFile(`extensions/academic/${request.path}`))),
+				resources: new ExtensionResourceLoaderService(async request => new Uint8Array(await readFile(`extensions/academy/${request.path}`))),
 			};
 			using adapters = new AdapterManager();
 			using service = new AppServerExtensionService({
@@ -83,12 +83,12 @@ for (const [locale, label] of [['en', 'Academic Document'], ['zh-CN', '学术论
 			assert.equal(DocumentTypes.find(inputs[0]), undefined, 'a declaration alone does not install an editor');
 			const provider = await startAcademyExtension(locale);
 			try {
-				using bridge = new MainThreadClientEditors(30_000, async () => import('../../../../../../../extensions/academic/browser/editor.js'), {
+				using bridge = new MainThreadClientEditors(30_000, async () => import('../../../../../../../extensions/academy/browser/editor.js'), {
 					invoke: (request, signal) => provider.invoke(request.registrationId, request.operation, request.payload, signal),
 				} as IExtensionHostApi, api, emptyEditorDeclarations);
 				const snapshot: ExtensionHostFleetSnapshot = {
 					generation: 1, extensions: [{
-						id: 'ash.academic', version: '1.0.0', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+						id: 'ash.academy', version: '1.0.0', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
 						activationGeneration: 1, incarnation: 1, lifecycle: 'ready', failure: undefined, stderr: '', outputEvents: [], registrations: provider.registrations,
 					}]
 				};
@@ -120,7 +120,7 @@ for (const [locale, label] of [['en', 'Academic Document'], ['zh-CN', '学术论
 }
 
 test('bound package codecs validate opaque collaboration transactions without relying on constructor identity', async () => {
-	const { DocumentTransaction } = await import('../../../../../../../extensions/academic/common/model/documentTransaction.js');
+	const { DocumentTransaction } = await import('../../../../../../../extensions/academy/common/model/documentTransaction.js');
 	const codec = academicProfile.create().codec;
 	const transaction = new DocumentTransaction().replaceText('body-text', 0, 0, 'Draft');
 	const structuralTransaction = { ...transaction };

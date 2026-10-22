@@ -27,16 +27,32 @@ export function createDisconnectedExtensionApi(unavailable: UnavailableOperation
 
 /** Both executable and declarative consumers read the same profile enablement. */
 export function withEnabledBuiltInExtensions(packages: IExtensionApi, enablement: IGlobalExtensionEnablementService, management?: IExtensionManagementService): IExtensionApi {
+	let preloadProviders = false;
+	let pendingProviders: Promise<Awaited<ReturnType<IExtensionManagementService['listBuiltInProviders']>> | undefined> | undefined;
+	const readProviders = () => {
+		if (!management) return Promise.resolve(undefined);
+		if (pendingProviders) return pendingProviders;
+		const operation = management.listBuiltInProviders().catch(() => undefined);
+		pendingProviders = operation;
+		const settled = () => { if (pendingProviders === operation) pendingProviders = undefined; };
+		void operation.then(settled, settled);
+		return operation;
+	};
 	return {
 		onDidChange: Event.any(packages.onDidChange ?? Event.None, Event.map(enablement.onDidChangeEnablement, () => undefined), management?.onDidChangeInstalled ?? Event.None),
 		list: async (reload, options) => {
-			const catalog = await packages.list(reload);
+			const catalogRead = packages.list(reload);
+			// The last catalog is only a scheduling hint. Every result still uses the
+			// current catalog and an in-flight provider read, never retained enablement.
+			const providerRead = !options?.includeDisabled && preloadProviders ? readProviders() : undefined;
+			const catalog = await catalogRead;
 			if (options?.includeDisabled) { return catalog; }
 			const disabled = new Set(enablement.getDisabledExtensions().map(extension => extension.id));
 			const languageExtensions = new Set(catalog.extensions.filter(extension => extension.sourceKind === 'builtIn' && JSON.parse(extension.manifestJson).ashLanguageServers).map(extension => extension.id));
+			preloadProviders = languageExtensions.size > 0;
 			// The backend owns these extensions' enablement for both syntax and executable
 			// contributions. Do not mirror it in the declarative-only profile setting.
-			const providers = languageExtensions.size ? await management?.listBuiltInProviders().catch(() => undefined) : undefined;
+			const providers = languageExtensions.size ? await (providerRead ?? readProviders()) : undefined;
 			return { ...catalog, extensions: catalog.extensions.filter(extension => languageExtensions.has(extension.id) ? providers?.providers.some(provider => provider.id === extension.id && provider.enabled) : extension.sourceKind !== 'builtIn' || !disabled.has(extension.id.toLowerCase())) };
 		},
 		resources: packages.resources,
@@ -63,8 +79,16 @@ export function createAppServerExtensionApi(connection: AppServerProtocolClient,
 			if (pending && (reload === 'cached' || pending.reload === 'refresh')) return pending.promise;
 			const load = async () => {
 				const incarnation = resourceApi.connectionGeneration;
-				const catalog = normalizeExtensionCatalog(await appServerRequest(connection, 'extensions/list', { reload }));
+				const previous = published?.connectionGeneration === incarnation ? published : undefined;
+				const reply = await appServerRequest(connection, 'extensions/list', {
+					reload, knownGeneration: reload === 'cached' ? previous?.backendGeneration ?? null : null,
+				});
 				if (incarnation !== resourceApi.connectionGeneration) { throw retired(); }
+				if (reply.status === 'unchanged') {
+					if (!previous || reload !== 'cached' || previous.backendGeneration !== reply.generation) { throw retired(); }
+					return previous.catalog;
+				}
+				const catalog = normalizeExtensionCatalog(reply);
 				if (published?.connectionGeneration === incarnation && published.backendGeneration === catalog.generation) { return published.catalog; }
 				const exposed = Object.freeze({ ...catalog, generation: ++generation });
 				resources.clear();

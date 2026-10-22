@@ -9,17 +9,20 @@ import { type TextModel } from '../../../common/model/textModel.js';
 import { ColorService, type ColorData } from '../common/languageColors.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
+import { Emitter } from '../../../../base/common/event.js';
 
 export const ColorDecorationInjectedTextMarker = Object.freeze({});
 
 /** Owns provider refresh, version cancellation, tracked ranges, and color-swatch metadata. */
 export class ColorDetector extends Disposable {
+	private static readonly byEditor = new WeakMap<ICodeEditor, ColorDetector>();
+	public static get(editor: ICodeEditor): ColorDetector | null { return this.byEditor.get(editor) ?? null; }
+	public readonly limitReporter = this._register(new DecoratorLimitReporter());
 	private readonly decorations: TextDecorationCollection<ColorData>;
 	private readonly dynamicCssRules: DynamicCssRules;
 	private readonly colorDecorationClassRefs: DisposableStore;
 	private readonly refreshTimer = this._register(new MutableDisposable<IDisposable>());
 	private request: AbortController | undefined;
-	private detectedCount = 0;
 
 	constructor(
 		private readonly editor: ICodeEditor,
@@ -29,6 +32,7 @@ export class ColorDetector extends Disposable {
 		private readonly onError: (error: unknown) => void,
 	) {
 		super();
+		ColorDetector.byEditor.set(editor, this);
 		this.decorations = this._register(new TextDecorationCollection<ColorData>(model));
 		this.dynamicCssRules = this._register(new DynamicCssRules(editor));
 		this.colorDecorationClassRefs = this._register(new DisposableStore());
@@ -36,7 +40,7 @@ export class ColorDetector extends Disposable {
 		const refreshProviders = () => {
 			this.decorations.clear();
 			this.colorDecorationClassRefs.clear();
-			this.detectedCount = 0;
+			this.limitReporter.update(0, false);
 			this.scheduleRefresh(0);
 		};
 		this._register(model.onDidChangeLanguage(refreshProviders));
@@ -54,11 +58,11 @@ export class ColorDetector extends Disposable {
 	}
 
 	get totalColorCount(): number {
-		return this.detectedCount;
+		return this.limitReporter.computed;
 	}
 
 	get isLimited(): boolean {
-		return this.detectedCount > this.editor.getOption(EditorOption.colorDecoratorsLimit);
+		return this.limitReporter.limited !== false;
 	}
 
 	getColorData(position: Position): ColorData | null {
@@ -71,7 +75,7 @@ export class ColorDetector extends Disposable {
 		this.refreshTimer.clear();
 		this.request?.abort();
 		if (!this.editor.getOption(EditorOption.colorDecorators) || this.model.largeFile.tooLargeForTokenization) {
-			this.detectedCount = 0;
+			this.limitReporter.update(0, false);
 			this.colorDecorationClassRefs.clear();
 			this.decorations.clear();
 			return;
@@ -79,7 +83,6 @@ export class ColorDetector extends Disposable {
 		const request = this.request = new AbortController();
 		void this.service.provideDocumentColors(this.model.getLanguageId(), this.editor.getOption(EditorOption.defaultColorDecorators), request.signal).then(colors => {
 			if (request.signal.aborted || this.isDisposed) return;
-			this.detectedCount = colors.length;
 			this.colorDecorationClassRefs.clear();
 			this.decorations.replaceAll(colors.slice(0, this.editor.getOption(EditorOption.colorDecoratorsLimit)).map(data => {
 				const ref = this.colorDecorationClassRefs.add(this.dynamicCssRules.createClassNameRef({
@@ -102,6 +105,8 @@ export class ColorDetector extends Disposable {
 					metadata: data,
 				};
 			}));
+			const limit = this.editor.getOption(EditorOption.colorDecoratorsLimit);
+			this.limitReporter.update(colors.length, colors.length > limit ? limit : false);
 		}, error => {
 			if (!request.signal.aborted) this.onError(error);
 		});
@@ -109,6 +114,7 @@ export class ColorDetector extends Disposable {
 
 	private scheduleRefresh(delay: number): void {
 		this.request?.abort();
+		this.limitReporter.update(0, false);
 		if (this.model.isDisposed()) return;
 		this.refreshTimer.value = disposableWindowTimeout(this.targetWindow, () => {
 			this.refreshTimer.clear();
@@ -119,7 +125,22 @@ export class ColorDetector extends Disposable {
 	protected override disposeCore(): void {
 		this.request?.abort();
 		this.request = undefined;
+		if (ColorDetector.byEditor.get(this.editor) === this) ColorDetector.byEditor.delete(this.editor);
 		super.disposeCore();
+	}
+}
+
+/** Reports the detector's current result; it never stores or recomputes color data. */
+export class DecoratorLimitReporter extends Disposable {
+	private readonly changed = this._register(new Emitter<void>());
+	public readonly onDidChange = this.changed.event;
+	private value: { computed: number; limited: number | false; } = { computed: 0, limited: false };
+	public get computed(): number { return this.value.computed; }
+	public get limited(): number | false { return this.value.limited; }
+	public update(computed: number, limited: number | false): void {
+		if (computed === this.value.computed && limited === this.value.limited) return;
+		this.value = { computed, limited };
+		this.changed.fire();
 	}
 }
 

@@ -161,7 +161,10 @@ fn environment_service_is_installed_before_the_local_host_shares_its_runtime() {
     assert_eq!(read["result"]["profile"]["revision"], 0);
     assert_eq!(
         read["result"]["root"],
-        root.path().canonicalize().unwrap().display().to_string()
+        dunce::canonicalize(root.path())
+            .unwrap()
+            .display()
+            .to_string()
     );
 }
 

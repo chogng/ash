@@ -3,7 +3,7 @@ import { IActivityService } from '../../../services/activity/common/activity.js'
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IActivityHoverOptions } from "../compositeBarActions.js";
 import "./sidebarpart.css";
-import { h } from "../../../../base/browser/dom.js";
+import { Dimension, h } from "../../../../base/browser/dom.js";
 import { MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IBoundarySashes } from '../../../../base/browser/ui/sash/sash.js';
 import { IWorkbenchLayoutService, Position } from '../../../services/layout/browser/layoutService.js';
@@ -15,7 +15,10 @@ import type { ILocalizationService, LocalizationKey } from "../../../services/lo
 import { localize2 } from '../../../../nls.js';
 import type { IViewDescriptorService } from "../../../common/views.js";
 import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompositePart.js";
-import { ActivityBarPosition } from '../../../common/configuration.js';
+import { ActivityBarPosition, WorkbenchConfiguration } from '../../../common/configuration.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { VisibleViewContainersTracker } from '../visibleViewContainersTracker.js';
 import type { ICompositeBarOptions } from '../compositeBar.js';
 import type { PartTitleProjection } from '../views/viewPane.js';
 
@@ -46,6 +49,8 @@ export class SidebarPart extends PaneCompositePart {
 	private readonly bottomCompositeBarDomNode: HTMLDivElement | undefined;
 	private readonly activeTitleListener = this._register(new MutableDisposable());
 	private readonly boundarySashPresentation = this._register(new MutableDisposable());
+	private readonly visibleViewContainersTracker: VisibleViewContainersTracker | undefined;
+	private activityBarLocation = ActivityBarPosition.DEFAULT;
 	override get minimumWidth(): number { return 180; }
 	override get maximumWidth(): number { return 600; }
 	override get preferredWidth(): number | undefined {
@@ -61,6 +66,8 @@ export class SidebarPart extends PaneCompositePart {
 		@IStorageService storageService: IStorageService,
 		@IActivityService activityService: IActivityService,
 		@IWorkbenchLayoutService private readonly layoutService: Pick<IWorkbenchLayoutService, 'getSideBarPosition'>,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		const location = options.location ?? ViewContainerLocation.Sidebar;
 		super(container, {
@@ -96,6 +103,20 @@ export class SidebarPart extends PaneCompositePart {
 			this.activeTitleDomNode.className = "ash-sidebar-title-label";
 			this.titleContentDomNode.replaceChildren(this.activeTitleDomNode);
 		}
+		// Sessions supplies its own navigation bar and deliberately disables this selector.
+		if (location === ViewContainerLocation.Sidebar && options.compositeBarVisible !== false) {
+			this.visibleViewContainersTracker = this._register(instantiationService.createInstance(VisibleViewContainersTracker, location));
+			this._register(this.visibleViewContainersTracker.onDidChange(({ before, after }) => {
+				if ((before > 1) !== (after > 1)) {
+					this.updateActivityBarVisibility();
+				}
+			}));
+			this._register(configurationService.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(WorkbenchConfiguration.activityBarAutoHide)) {
+					this.updateActivityBarVisibility();
+				}
+			}));
+		}
 	}
 
 	override setBoundarySashes(sashes: IBoundarySashes): void {
@@ -110,6 +131,7 @@ export class SidebarPart extends PaneCompositePart {
 
 	public setActivityBarLocation(location: ActivityBarPosition): void {
 		if (!this.topCompositeBarDomNode || !this.bottomCompositeBarDomNode) return;
+		this.activityBarLocation = location;
 		const isTop = location === ActivityBarPosition.TOP;
 		const isBottom = location === ActivityBarPosition.BOTTOM;
 		this.topCompositeBarDomNode.hidden = !isTop;
@@ -119,6 +141,33 @@ export class SidebarPart extends PaneCompositePart {
 			(isTop ? this.topCompositeBarDomNode : this.bottomCompositeBarDomNode).append(this.compositeBar.domNode);
 		} else {
 			this.compositeBar.setOrientation('vertical');
+		}
+		this.updateActivityBarVisibility();
+	}
+
+	private updateActivityBarVisibility(): void {
+		if (!this.visibleViewContainersTracker) {
+			return;
+		}
+		const isTop = this.activityBarLocation === ActivityBarPosition.TOP;
+		const isBottom = this.activityBarLocation === ActivityBarPosition.BOTTOM;
+		const hide = (isTop || isBottom)
+			&& this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarAutoHide)
+			&& this.visibleViewContainersTracker.visibleCount <= 1;
+		const restoreFocus = hide && this.compositeBar.domNode.contains(this.domNode.ownerDocument.activeElement);
+		this.topCompositeBarDomNode!.hidden = !isTop || hide;
+		this.bottomCompositeBarDomNode!.hidden = !isBottom || hide;
+		this.setCompositeBarVisible(!hide);
+		// Flex has changed the available content height; publish it to the retained view immediately.
+		this.layout(new Dimension(this.domNode.clientWidth, this.domNode.clientHeight));
+		if (restoreFocus) {
+			const active = this.activeCompositeId ? this.getComposite(this.activeCompositeId) : undefined;
+			if (active?.panes.length) {
+				active.focus();
+			} else {
+				this.domNode.tabIndex = -1;
+				this.domNode.focus();
+			}
 		}
 	}
 

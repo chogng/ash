@@ -1,10 +1,10 @@
 # Stanza
 
-> 本文是 `src/ash/editor` 的 canonical 目录、所有权和装配入口。Stanza 类似 Monaco 在 VS Code 中的位置；`editor/` 是一个扁平领域目录，不是第二个品牌或额外架构层。TextBuffer 与富文档的设计规范分别见 [`text-engine.md`](./text-engine.md) 和 [`document-engine.md`](./document-engine.md)，跨 Workbench、文件、语言服务与 App Server 的系统边界见 [`docs/editor-architecture.md`](../../../docs/editor-architecture.md)。
+> 本文是 `src/ash/editor` 的 canonical 目录、所有权和装配入口。Stanza 类似 Monaco 在 VS Code 中的位置；`editor/` 是一个扁平领域目录，不是第二个品牌或额外架构层。文本内核的设计规范见 [`text-engine.md`](./text-engine.md)，跨 Workbench、文件、语言服务与 App Server 的系统边界见 [`docs/editor-architecture.md`](../../../docs/editor-architecture.md)。
 
 ## 快速理解
 
-Stanza 以 VS Code `src/vs/editor` 为职责参照：`common` 拥有编辑器公共契约与内核，`browser` 拥有浏览器编辑器实现，`contrib` 拥有通用文本编辑功能与对应回归测试，`test` 保存内核级回归测试。Academy 的完整既有富文档实现由 [`extensions/academic`](../../../extensions/academic/README.md) 拥有，经独立 Rust 扩展和共享宿主注入；基础 `TextModel` 不导入 Academy；客户端内置 Code 通过 `textModelFeatures` 的可释放端口接入，并保持事件与 token 来源对象稳定。运行环境不代替职责判断：功能自己的纯算法可以留在其 `browser` 目录，不要求每个 contribution 建立 `common`。当前代码的归属缺口见[Editor TODO](../../../TODO.md#stanza-编辑器--todo)。Stanza 只有一个源码域、一套公开入口和一个同步权威：按行存储的 `TextModel`。代码与富文档使用同一模型，Academic 是富文档的一种配置。
+Stanza 以 VS Code `src/vs/editor` 为职责参照：`common` 拥有公共契约与同步内核，`browser` 拥有浏览器编辑器实现，`contrib` 拥有通用文本编辑功能，`test` 保存内核回归。客户端 Code 通过 `textModelFeatures` 的可释放端口接入；模型、事件与 token 来源对象保持稳定。宿主可复用这些机制或构造符合契约的实现再注入，具体扩展的 Schema、视图、codec 与验收归扩展和共享宿主，见[系统边界](../../../docs/editor-architecture.md)。运行环境不代替职责判断，功能自己的纯算法可以留在其 `browser` 目录。
 
 | 产品或调用方式       | 加载入口             | 得到的能力                                                                                                                                                                                                                                                                             |
 | -------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -30,40 +30,35 @@ Editor 维护以下核心入口。实现 README 可以补充局部细节，但�
 | [`README.md`](./README.md)                                 | 扁平目录、单一 TextModel、依赖方向和 Workbench 贡献装配                                                                               | 单套功能实现的完整行为和实现台账                 |
 | [`text-engine.md`](./text-engine.md)                       | 行式文本内核、view 架构、input、Contribution 与生命周期契约                                                                           | Workbench pane、文件协议和 App Server transport  |
 | [`text-engine-geometry.md`](./text-engine-geometry.md)     | 文本几何、浏览器渲染后端、测量、输入坐标和长期目标契约；中文翻译见 [`text-engine-geometry.zh-CN.md`](./text-engine-geometry.zh-CN.md) | 不拥有完整行式 engine、Workbench pane 或文件协议 |
-| [`document-engine.md`](./document-engine.md)               | Schema-backed Block、transaction、browser projection、profile 和 collaboration                                                        | TextBuffer 语义和产品 pane 生命周期              |
 | [根目录 Editor TODO](../../../TODO.md#stanza-编辑器--todo) | 当前未完成的用户行为、owner 复核与验收事项                                                                                            | 不把尚未实现的上游能力标记为已完成               |
 
 跨系统的 editor/file/language/Workbench/App Server 关系只在 [`docs/editor-architecture.md`](../../../docs/editor-architecture.md) 详细说明。[`browser/README.md`](./browser/README.md) 和其他子目录 README 面向实现维护者，记录局部调用路径、DOM ownership、failure semantics 和测试影响。
 
 ## 所有权与依赖方向
 
-| 目录                                                                     | 允许依赖                                                             | 拥有                                                                                                                         | 不得拥有                                                                        |
-| ------------------------------------------------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `common/core`                                                            | `base/common`                                                        | 文本坐标、文档坐标、selection、纯变换算法                                                                                    | DOM、Workbench service、App Server DTO                                          |
-| `common/model`                                                           | `common/core`、`base/common`                                         | `TextModel`、`ITextBuffer`、有序逻辑行、LineId、mark/atom/facet/region/relation、history、schema、transaction、serialization | 文件传输、浏览器 focus、产品 profile                                            |
-| `common/services`                                                        | `common/languages`、编辑器公共契约、`base/common`、`platform/common` | 语言身份、语言配置和 provider registry 的独立服务契约，以及公开 API 的基础值对象组合                                         | contribution-owned 契约或实现、App Server DTO、产品 provider、Workbench adapter |
-| `common/cursor`、`common/viewModel`、`common/viewLayout`                 | 文本内核与 `base/common`                                             | 行式编辑器实例状态和纯布局投影                                                                                               | DOM 和产品判断                                                                  |
-| `browser`                                                                | `common`、`base/browser` 和显式前端 service contract                 | code/document/diff/multi-diff widget、输入、viewport、contribution registry 与 editor-facing runtime adapter                 | Workbench pane/input、文件/working-copy 生命周期、Workbench 模式选择            |
-| `standalone/common`、`standalone/browser`                                | `editor/browser`、`editor/common`、`platform`                        | 单窗口 services、命名主题、URI/language model registry、`editor.create/createModel` 生命周期                                 | 用户主题持久化、文件 dirty/save/revert、Workbench service 或 pane               |
-| `contrib/<feature>`                                                      | 对应 engine 的最小 contract                                          | 可移除的编辑能力及其命令、状态和投影                                                                                         | 第二套 model、产品级 `if code/academic`                                         |
-| `editor.*.all.ts`                                                        | contribution entry                                                   | 静态 editor 能力装配                                                                                                         | Workbench pane/input 注册、模型或功能实现                                       |
-| `workbench/contrib/{codeEditor,multiDiffEditor,documentEditor,academic}` | Editor 与 Workbench contract                                         | pane/input、产品 profile、factory 注入和服务接线                                                                             | 编辑事务、selection、viewport 或 feature controller                             |
+| 目录                                                     | 允许依赖                                                             | 拥有                                                                                                                         | 不得拥有                                                                        |
+| -------------------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `common/core`                                            | `base/common`                                                        | 文本坐标、文档坐标、selection、纯变换算法                                                                                    | DOM、Workbench service、App Server DTO                                          |
+| `common/model`                                           | `common/core`、`base/common`                                         | `TextModel`、`ITextBuffer`、有序逻辑行、LineId、mark/atom/facet/region/relation、history、schema、transaction、serialization | 文件传输、浏览器 focus、产品 profile                                            |
+| `common/services`                                        | `common/languages`、编辑器公共契约、`base/common`、`platform/common` | 语言身份、语言配置和 provider registry 的独立服务契约，以及公开 API 的基础值对象组合                                         | contribution-owned 契约或实现、App Server DTO、产品 provider、Workbench adapter |
+| `common/cursor`、`common/viewModel`、`common/viewLayout` | 文本内核与 `base/common`                                             | 行式编辑器实例状态和纯布局投影                                                                                               | DOM 和产品判断                                                                  |
+| `browser`                                                | `common`、`base/browser` 和显式前端 service contract                 | code/document/diff/multi-diff widget、输入、viewport、contribution registry 与 editor-facing runtime adapter                 | Workbench pane/input、文件/working-copy 生命周期、Workbench 模式选择            |
+| `standalone/common`、`standalone/browser`                | `editor/browser`、`editor/common`、`platform`                        | 单窗口 services、命名主题、URI/language model registry、`editor.create/createModel` 生命周期                                 | 用户主题持久化、文件 dirty/save/revert、Workbench service 或 pane               |
+| `contrib/<feature>`                                      | 对应 engine 的最小 contract                                          | 可移除的编辑能力及其命令、状态和投影                                                                                         | 第二套 model、产品级 `if code/academic`                                         |
+| `editor.*.all.ts`                                        | contribution entry                                                   | 静态 editor 能力装配                                                                                                         | Workbench pane/input 注册、模型或功能实现                                       |
+| `workbench/contrib/{codeEditor,multiDiffEditor}`         | Editor 与 Workbench contract                                         | pane/input、产品 profile、factory 注入和服务接线                                                                             | 编辑事务、selection、viewport 或 feature controller                             |
 
-顶层依赖遵循[代码组织规范](../../../.github/instructions/source-code-organization.instructions.md)：`workbench → editor → platform → base`。因此 Editor 可以依赖 Base 和 Platform；反向依赖禁止。Editor 内部由贡献消费公共契约，公共契约与 registry 不反向依赖贡献，即使只是类型导入。`common` 不使用 DOM 是运行环境限制，不是文件归属标准。每个 `TextModel` 原生拥有有序逻辑行和稳定 `LineId`；Code 使用只有行与文档 metadata 的受限 profile，Academic 额外使用 mark、atom、facet、region 与 relation。浏览器投影和 Workbench 不得为代码区域或其他语义对象再创建隐藏模型。
+顶层依赖遵循[代码组织规范](../../../.github/instructions/source-code-organization.instructions.md)：`workbench → editor → platform → base`。因此 Editor 可以依赖 Base 和 Platform；反向依赖禁止。Editor 内部由贡献消费公共契约，公共契约与 registry 不反向依赖贡献，即使只是类型导入。`common` 不使用 DOM 是运行环境限制，不是文件归属标准。每个 `TextModel` 原生拥有有序逻辑行和稳定 `LineId`；通用语义快照通过 mark、atom、facet、region 与 relation 引用同一内容。宿主的派生模型和投影不创建第二份可写正文或编辑历史。
 
 语言提供者、请求及返回值统一声明在 `common/languages.ts`；`ILanguageFeaturesService` 与 `LanguageFeaturesService` 只依赖该公共契约。Standalone、Workbench 和扩展适配器直接注册这些类型；贡献中的 service / controller 继续持有提供者选择、版本检查、取消与结果应用。共享 registry 不导入贡献文件，也不替功能保存请求状态。
 
 内容主轴只有 `TextModel → LineSequence → ModelLine`。持久语义通过互相正交的 `RangeStore`、`PointStore`、`LineFacetStore`、`RegionStore` 与 `RelationStore` 引用 `LineId`；字符仍由 TextModel 私有拥有的 `ITextBuffer` 保存。buffer 当前由 Builder 构建的红黑树 `PieceTreeTextBuffer` 实现，PieceTree 不属于公开模型拓扑。
 
-## 代码与文档在同一工作台
+## 宿主复用与能力注入
 
-Stanza 是整个编辑器的名称。代码编辑器组合行式命令、语言能力与 diff；通用文档编辑器组合 group、typed block、document transaction 和 formatting。Academic 通过文档配置添加论文结构、citation、节点视图与工具栏。Code 工作台同时注册代码和文档 pane，资源类型决定使用哪个视图。
+宿主负责选择模型、Widget、Provider 和文件生命周期，并通过已有公开契约装配。复用基础模型或自行实现投影不会改变业务归属；Stanza 不能反向导入扩展实现，模型、选区和历史也不能因注入而产生第二份权威状态。
 
-Academic 代码区域是当前 `TextModel` 中一个带类型和连续行范围的 projection。`RichTextEditorWidget` 直接编辑这段行范围；它不创建嵌套 `TextModel`，也不启动 Code pane 或 Code contribution bundle。
-
-## 一个同步内核，两套投影
-
-### 行式文本 engine
+## 同步文本内核与浏览器投影
 
 `TextModel` 是文本、分行、版本、transaction、undo/redo、tracked range 和 snapshot 的唯一同步权威。`CodeEditorWidget` 使用它，但不拥有共享 model；Widget 保持根 DOM 和编辑器身份，View 通过 `onBeforeAttached` / `onBeforeDetached` 报告每次模型挂载。`browser/editorBrowser.ts` 只拥有与 VS Code 同路径的浏览器编辑器契约；`browser/widget/codeEditor/codeEditorWidget.ts` 负责编辑器装配、操作、模型切换和 view state，`codeEditorContributions.ts` 统一拥有每次挂接的 contribution 实例化阶段与生命周期。`BrowserTextModelService` 管理普通文件的 model reference、dirty/conflict 和保存语义；Workbench 的 working copy 持有 reference，并拥有保存前处理、保存、回退、快捷键、结果呈现和 Pane 生命周期。Standalone 则由 `standalone/browser` 管理 URI/language identity；外部传入 model 时 editor 不拥有 model，使用 `value` 隐式创建时 editor 拥有 model，并在切走它时释放。
 
@@ -75,23 +70,16 @@ Diff 的版本化结果由 `common/diff/diffModel.ts` 持有。`browser/widget/d
 
 `diffEditor.renderIndicators` 默认显示新增行的加号和删除行的减号，可在创建或更新 Diff Widget 时覆盖。设置变化同时更新单栏和双栏标记，关闭标记仍保留差异背景。单栏删除行不属于修改侧文本模型，其减号与边栏背景由同一 View Zone 的 `marginDomNode` 持有，沿用修改侧编辑器的边栏宽度、滚动和释放流程。
 
-### 富文档 engine
-
-Academic 使用与 Code 相同的 `TextModel`、`TextBuffer`、`LineSequence` 和版本号，并用 schema 定义允许的 mark、atom、facet、region、relation、selection、transaction history、plugin state 与 serialization。`TextModel.lineDocument` 给出当前不可变语义快照；字符和逻辑行始终由 TextModel 唯一保存。Workbench-owned `DocumentEditorTextModelService` 负责 reference、working copy 和保存边界。
-
-Code 与 Academic 都使用原生 line-first TextModel。Schema-backed 命令必须通过 `TextModel.dispatch()` 同时更新 TextBuffer 与语义快照；不能直接修改 PieceTree 实现。新增能力应依赖 TextModel、TextBuffer 或五类语义 store 的小而完整 contract，不得创建第二套 model authority。
-
 ## Contribution 装配
 
 Contribution 必须满足以下条件：
 
 - 移除后对应 engine 仍能保持模型有效性和基本编辑正确性；
 - 依赖 engine contract，而不是读取产品 ID；
-- schema-bearing 能力通过 `EditorProfile` 稳定组合，不能在打开文档后任意开关；
 - 贡献只依赖所需实现，不读取工作台模式决定编辑规则。
-- `editor.all.ts` 仅装配基础文本命令，`editor.code.all.ts` 装配客户端 Code 贡献；Academy 由独立 Rust 扩展注册并按需装载其客户端包。
+- `editor.all.ts` 仅装配基础文本命令，`editor.code.all.ts` 装配客户端 Code 贡献。
 
-因此 transaction、selection mapping、IME commit、schema validation 和 model lifecycle 属于 engine；find、folding、suggest、citation toolbar 与 collaboration projection 等属于 contribution 或 profile composition。
+transaction、selection mapping、IME commit 和 model lifecycle 属于内核；find、folding 与 suggest 等可移除功能归各自 contribution。宿主对语义快照的校验仍在其拥有的边界完成。
 
 ## 入口与调用路径
 
@@ -99,8 +87,7 @@ Contribution 必须满足以下条件：
 Shared Workbench ─────────→ workbench/contrib/multiDiffEditor ─────────→ multi-diff pane/controller/action registration
 Code build mode ───────┬→ editor.code.all.ts → editor.all.ts ─────────→ Code feature implementation
                        └→ workbench/contrib/codeEditor ────────────────→ code/diff pane + input registration
-Academy Rust extension → public SDK / Host RPC → shared client-editor bridge → package profiles / Widget
-Shared Workbench ─────────→ document pane / model references / dirty / backup / file and collaboration transport
+Shared Workbench ─────────→ model references / dirty / backup / file transport
 
 editor.api.ts ─────────────→ editor.create/createModel + languages.register/registerLanguage*Provider + TextModel + generic line snapshots
 editor.main.ts ────────────→ editor.code.all.ts + editor.api.ts
@@ -112,11 +99,11 @@ standalone/{common,browser} ─→ window services + model/editor/language/theme
 格式化职责与当前行为：
 
 - 文档、范围和输入格式化分别使用 `DocumentFormattingEditProvider`、`DocumentRangeFormattingEditProvider`、`OnTypeFormattingEditProvider`，从 `ITextModel` 读取模型，通过 `CancellationToken` 接收取消。
-- `format.ts` 整理整文与范围提供者，按扩展身份忽略大小写去重，并通过 `FormattingConflicts` 选择。后注册的策略优先，释放后恢复旧策略。Standalone 服务与 Workbench 生命周期分别注册默认排序策略；默认格式化器配置和选择界面仍待实现。
+- `format.ts` 整理整文与范围提供者，按扩展身份忽略大小写去重；同一个宿主 adapter 同时注册两个接口时仍只算一个提供者。`FormattingConflicts` 使用最近注册的选择策略，释放后恢复旧策略。Workbench 的窗口贡献读取语言级 `editor.defaultFormatter`，显式冲突通过 Quick Pick 选择本次格式化器，或通过“配置默认格式化器”保存当前语言默认值；自动格式化遇到冲突或失效默认值不弹窗、不静默改用其他提供者。独立 Standalone 宿主未注册选择策略时仍取排序后的首个提供者。
 - 整文与选区命令只执行选中的提供者，空结果或失败不切换到其他提供者。手动命令传递 `FormattingMode.Explicit`，保存格式化传递 `Silent`。
 - `editor.action.formatSelection`（Ctrl/Cmd+K、Ctrl/Cmd+F）把空选区扩展为当前行；多选区优先使用批量接口，否则逐范围查询。结果交叠时合并请求范围重新查询，丢弃旧结果；选区变化取消等待，所有编辑共享一次撤销。命令可用状态随提供者注册、注销和模型语言变化更新。
 - `format.ts` 拥有请求选择、交叠处理、取消和 worker 调用，`formattingEdit.ts` 提交编辑；不再构造格式化控制器。`formatActions.ts` 注册命令、当前键盘入口和保存钩子。Widget 将既有 worker 客户端注册到模型作用域，模型解绑时释放；格式化选项读取当前模型。资源级 worker-service 与完整上游格式化调度 API 仍待对齐，`formatEditor` 是当前模型绑定调用入口。
-- 输入格式化要求提供者声明触发字符；Standalone 支持显式注册，`formatOnType` 自动触发链仍未接通。扩展注册协议尚未提供触发字符，因此扩展桥接只注册文档和范围格式化。
+- 输入格式化要求提供者声明触发字符。`FormatOnType` 在启用 `formatOnType` 后消费 `onDidType`，支持普通字符和 Enter，通过同一模型 Worker 提交最小编辑，并与触发字符一次撤销；设置关闭、provider 撤回、模型／语言变化、只读和组合输入开始取消等待。App Server LSP 桥接协商 `firstTriggerCharacter`／`moreTriggerCharacter`，按目录与语言注册，并将输入后位置、字符、格式选项与快照发送至 `textDocument/onTypeFormatting`；取消传播到 LSP，旧版本或已撤回能力的结果不再应用。独立扩展宿主的 provider 注册协议仍只桥接文档和范围格式化。
 
 共享扩展宿主在恢复标签页之前接入 Academy 的实时能力注册；旧的静态文档和 Academic factory 已退出。`DocumentTypes` 保存活跃文档类型和包声明的保护路由，默认代码 pane 排除这些资源；文档 pane 使用已准入 profile 的 Widget、Schema 和 codec。Workbench 范围的 `DocumentEditorTextModelService` 管理资源引用，多视图共享模型和保存状态，最后一个引用释放时才销毁模型。
 
@@ -157,14 +144,13 @@ F1 的 `Developer: Inspect Tokens` 动作在光标旁显示当前词法 token �
 
 - 文本和结构化 mutation 失败必须在提交前抛出，不能留下部分版本、history、structure index 或 plugin state。
 - 异步语言、diff、文件和协作结果必须按 model version 或服务器版本拒绝过期结果。
-- Academic schema 与 `collaborationSchemaId` 是持久兼容边界；改变节点语义时必须同步迁移、serialization 测试和 collaboration 测试。
 - Workbench 模式 bundle 在 Renderer 启动时静态装配，不提供运行时卸载 contribution 的承诺。
 - Stanza 自有的公开入口、editor ID、content type 和 DOM vocabulary 必须使用 `stanza` 品牌；Workbench 通用 editor part 与主题语义 token 仍由各自 owner 命名。不得重新引入旧 editor 兼容标识。
 
 ## 测试与修改影响
 
-- `test:editor:unit` 编译并运行 editor 内核测试，以及随 owner 迁移到 Workbench 的 code/document pane 与 collaboration adapter 测试。
-- `test:editor:browser` 运行编辑器相关的浏览器集成用例，验证 Code/Academic TextModel、Diff、输入、布局、主题、语言和可访问性；`test:browser:integration` 运行该目录的全部浏览器集成用例。
+- `test:editor:unit` 编译并运行 Stanza 内核、Code/Diff Pane、语言与普通文件宿主 adapter 测试。
+- `test:editor:browser` 验证 Stanza 的 TextModel、Code、Diff、输入、布局、主题、语言和可访问性。扩展客户端通过 `test:browser:integration <spec>` 独立验证；完整浏览器入口和 CI 继续覆盖这些扩展用例。
 - `test/architecture/editor-architecture.test.ts` 验证扁平目录、单一 TextModel authority 和模式 bundle。
 
-修改 product composition 时至少运行架构测试和两个 Renderer 类型检查目标；修改 model、input、serialization 或 schema 时运行对应 engine 的 unit/browser suite。浏览器集成测试应在统一 Stanza 测试入口下按具体 model 挂载点命名，不再以历史 engine 代号表达架构所有权。
+修改产品装配时运行相关架构测试和 Common／Renderer 类型检查；修改模型、输入或序列化时运行对应的 unit/browser suite。按代码 owner 选择验证范围，扩展组合与产品环境验收不计入 Stanza 基础完成条件。

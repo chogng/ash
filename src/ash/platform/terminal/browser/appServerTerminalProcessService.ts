@@ -92,7 +92,15 @@ export function profileSelection(profile: TerminalProcessProfileSelection) {
 /** Spawn and attach use the same execution-owned shell identity. */
 export function decodeTerminalProcessReady(ready: TerminalProcessReady): ITerminalProcessReady {
 	const shellType = ready.shellType === 'bash' ? PosixShellType.Bash : ready.shellType === 'zsh' ? PosixShellType.Zsh : ready.shellType === 'pwsh' ? GeneralShellType.PowerShell : undefined;
-	return { pid: ready.pid, cwd: ready.cwd, ...(shellType === undefined ? {} : { shellType }) };
+	return {
+		pid: ready.pid, cwd: ready.cwd, ...(shellType === undefined ? {} : { shellType }),
+		...(ready.launch ? {
+			launch: Object.freeze({
+				...ready.launch,
+				args: typeof ready.launch.args === 'string' ? ready.launch.args : Object.freeze([...ready.launch.args]),
+			})
+		} : {}),
+	};
 }
 
 /** Both connection lifecycles expose the same frontend bytes and exit-code semantics. */

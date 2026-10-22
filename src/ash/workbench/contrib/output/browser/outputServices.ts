@@ -104,6 +104,8 @@ export class OutputService extends Disposable implements IOutputService {
 
 	private unregisterChannel(id: string): void {
 		if (!this.channelsById.delete(id)) return;
+		// Scope teardown releases owned channels after dependent services may have retired.
+		if (this.isDisposed) return;
 		if (this.activeChannelId === id) {
 			this.activeChannelId = undefined;
 			const fallback = this.channelsById.values().next().value as OutputChannel | undefined;

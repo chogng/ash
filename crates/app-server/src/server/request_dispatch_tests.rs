@@ -1219,3 +1219,116 @@ fn subscription_dictation_upload_cannot_occupy_its_cancellation_lane() {
         RequestLane::Control
     );
 }
+
+#[test]
+fn git_observations_overlap_but_do_not_overtake_a_queued_write() {
+    use ash_file_access::Dir;
+    use ash_file_access::Grant;
+    use ash_file_access::GrantSource;
+    use ash_file_access::Permission;
+    use ash_file_access::Permissions;
+    let root = tempfile::tempdir().unwrap();
+    let init = std::process::Command::new("git")
+        .args(["init", "--initial-branch=main"])
+        .current_dir(root.path())
+        .output()
+        .unwrap();
+    assert!(init.status.success());
+    std::fs::write(root.path().join("fresh.txt"), "fresh\n").unwrap();
+    let authorization = Grant::for_environment(
+        Dir::open_local(root.path()).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::MutateRepository]),
+    )
+    .authorize(Permission::MutateRepository)
+    .unwrap();
+    let server = Arc::new(server().with_git_root(authorization).unwrap());
+    let mut connection = server.connection();
+    let initialized = server.handle_json(&mut connection, &json!({"jsonrpc":"2.0", "id":1,
+        "method":"initialize", "params":{"clientInfo":{"name":"git-observation-test","version":"1"},"capabilities":{}}}).to_string());
+    assert!(serde_json::from_str::<Value>(&initialized).unwrap()["result"].is_object());
+    let git = server.git_runtime_service().unwrap();
+    let repository_id = git.repositories().repositories[0].id.clone();
+    let held = server
+        .request_scheduler
+        .acquire(
+            99,
+            RequestSerializationScope::Repository {
+                common_dir: git.common_dir_for(None).unwrap(),
+                access: SerializationAccess::SharedRead,
+            },
+        )
+        .unwrap();
+    thread::scope(|scope| {
+        let requests = RequestDispatcher::start(scope).unwrap();
+        let (sent, received) = mpsc::channel();
+        let dispatch = |id, method, params| {
+            let sent = sent.clone();
+            requests
+                .dispatch(
+                    Arc::clone(&server),
+                    &connection,
+                    json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}).to_string(),
+                    move |response| {
+                        sent.send(serde_json::from_str::<Value>(&response).unwrap())
+                            .unwrap();
+                        Ok(())
+                    },
+                )
+                .unwrap();
+        };
+        // Omitted and explicit repository IDs resolve to the same admission resource.
+        dispatch(
+            2,
+            "git/changesSummary",
+            json!({"repositoryId":repository_id}),
+        );
+        dispatch(
+            3,
+            "git/changeFile",
+            json!({"path":"fresh.txt","comparison":"unstaged"}),
+        );
+        let first = received.recv_timeout(Duration::from_secs(3));
+        let second = received.recv_timeout(Duration::from_secs(3));
+        // Record before releasing, but release on the failure path before joining workers.
+        let shared_completed = first.is_ok() && second.is_ok();
+        if shared_completed {
+            dispatch(4, "git/stage", json!({"paths":["fresh.txt"]}));
+            let deadline = Instant::now() + Duration::from_secs(3);
+            while server.request_scheduler.waiting_count() != 1 && Instant::now() < deadline {
+                thread::sleep(Duration::from_millis(5));
+            }
+            dispatch(5, "git/changesSummary", json!({}));
+        }
+        let overtook_write = received.recv_timeout(Duration::from_millis(100)).is_ok();
+        drop(held);
+        let writer = received.recv_timeout(Duration::from_secs(3));
+        let later = received.recv_timeout(Duration::from_secs(3));
+        requests.finish().unwrap();
+        assert!(
+            shared_completed,
+            "observations queued behind another shared observation"
+        );
+        assert!(!overtook_write, "read overtook the queued stage operation");
+        let mut observations = [first.unwrap(), second.unwrap()];
+        observations.sort_by_key(|response| response["id"].as_u64());
+        assert_eq!(observations[0]["result"]["files"], 1);
+        assert_eq!(observations[0]["result"]["statistics"]["additions"], 1);
+        assert_eq!(observations[1]["result"]["modified"]["text"], "fresh\n");
+        let completed = [writer.unwrap(), later.unwrap()];
+        assert!(
+            completed
+                .iter()
+                .all(|response| response["result"].is_object()),
+            "{completed:?}"
+        );
+        let staged = std::process::Command::new("git")
+            .args(["show", ":fresh.txt"])
+            .current_dir(root.path())
+            .output()
+            .unwrap();
+        assert!(staged.status.success());
+        assert_eq!(staged.stdout, b"fresh\n");
+    });
+    server.close_connection(connection);
+}

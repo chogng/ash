@@ -15,6 +15,7 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import './media/multiDiffEditorPane.css';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { IconLabel } from '../../../../base/browser/ui/iconlabel/iconlabel.js';
 import { type IDimension } from '../../../../base/browser/dom.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import type { IAction } from '../../../../base/common/actions.js';
@@ -33,6 +34,7 @@ import { type ITextModelResourceService } from '../../../services/textmodelResol
 import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { MenuId, type IMenuService } from '../../../../platform/actions/common/actions.js';
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { type IEditorPaneWithViewState } from '../../../browser/parts/editor/editorWithViewState.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -53,6 +55,9 @@ import {
 } from '../../../common/contextkeys.js';
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
 import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/editor/common/editorConfiguration.js';
+import { IResourceIconRenderer } from '../../../browser/labels.js';
+
+export const MultiDiffEditorAllCollapsed = new RawContextKey<boolean>('multiDiffEditorAllCollapsed', false);
 
 export interface MultiDiffEditorOptions {
 	/** A composed editor retains its own menu identity while reusing this comparison widget. */
@@ -86,6 +91,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 	private dimension: IDimension = { width: 0, height: 0 };
 	private readonly workingCopiesEmitter = this._register(new Emitter<void>());
 	private readonly workingCopiesListener = this._register(new MutableDisposable<IDisposable>());
+	private readonly collapseStateListener = this._register(new MutableDisposable<IDisposable>());
 	public readonly onDidChangeWorkingCopies = this.workingCopiesEmitter.event;
 
 	public getWorkingCopies(): readonly IWorkingCopy[] {
@@ -152,15 +158,19 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		}
 		this.session.value = this.pendingSession.clearAndLeak();
 		this.workingCopiesListener.value = this.session.value?.onDidChangeWorkingCopies(() => this.workingCopiesEmitter.fire());
+		this.collapseStateListener.value = this.session.value?.editor?.onDidChangeCollapseState(() => this.updateCollapseContext());
+		this.updateCollapseContext();
 		this.workingCopiesEmitter.fire();
 		this.session.value?.show();
 		if (input.source?.kind !== 'snapshot') { await this.options.viewsService?.focusView(VIEW_PANE_ID); }
 	}
 
 	public override clearInput(): void {
+		this.collapseStateListener.clear();
 		this.workingCopiesListener.clear();
 		this.pendingSession.clear();
 		this.session.clear();
+		this.updateCollapseContext();
 		this.workingCopiesEmitter.fire();
 	}
 
@@ -172,6 +182,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 	public override setVisible(visibility: boolean): void {
 		super.setVisible(visibility);
 		if (visibility) this.session.value?.layout(this.dimension);
+		if (visibility) this.updateCollapseContext();
 	}
 
 	public override focus(): void {
@@ -230,8 +241,19 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		this.session.value?.editor?.expandAll();
 	}
 
-	public toggleCollapseUnchangedRegions(): void {
-		this.session.value?.editor?.toggleCollapseUnchangedRegions();
+	public toggleCollapseAll(): void {
+		this.session.value?.editor?.toggleCollapseAll();
+	}
+
+	private updateCollapseContext(): void {
+		// Retained hidden tabs must not overwrite the active editor's title state.
+		if (this.isVisible()) {
+			this.options.fileActions?.contextKeyService.setContext(MultiDiffEditorAllCollapsed.key, this.session.value?.editor?.allCollapsed ?? false);
+		}
+	}
+
+	public toggleCollapseUnchangedRegions(): Promise<void> | undefined {
+		return this.session.value?.editor?.toggleCollapseUnchangedRegions();
 	}
 
 	private requireContainer(): HTMLDivElement {
@@ -270,6 +292,7 @@ class MultiDiffEditorSession extends Disposable {
 		@ICommandService private readonly commandService: ICommandService,
 		@IMultiDiffSourceResolverService private readonly sourceResolvers: IMultiDiffSourceResolverService,
 		@IWorkingCopyService private readonly workingCopyService: IWorkingCopyService,
+		@IResourceIconRenderer private readonly resourceIcons: IResourceIconRenderer,
 	) {
 		super();
 		try {
@@ -314,7 +337,6 @@ class MultiDiffEditorSession extends Disposable {
 				}
 			}));
 			const fileActions = options.fileActions;
-			this.createToolbar();
 			this._register(toDisposable(() => this.abortController.abort()));
 			this.emptyDomNode = h(container.ownerDocument, 'div');
 			this.emptyDomNode.className = 'stanza-multi-diff-editor-empty';
@@ -326,6 +348,20 @@ class MultiDiffEditorSession extends Disposable {
 				...this.getEditorOptions(),
 				...(fileActions ? {
 					workbenchUIElementFactory: {
+						createResourceLabel: (container: HTMLElement, item: IDocumentDiffItem) => {
+							const input = this.inputsById.get(item.id);
+							if (!input) throw new RangeError(`Unknown multi-diff item '${item.id}'`);
+							const resource = (input.goToFile ?? input.modified).resource;
+							const resources = new DisposableStore();
+							const label = resources.add(new IconLabel(container, { label: item.label, title: item.label }));
+							const render = (): void => {
+								const hasFileIcons = this.resourceIcons.getFileIconTheme().hasFileIcons;
+								label.setIcon(undefined, hasFileIcons ? target => this.resourceIcons.renderFileIcon(resource, target) : undefined, hasFileIcons);
+							};
+							render();
+							resources.add(this.resourceIcons.onDidChangeResourceIcons(render));
+							return resources;
+						},
 						createItemActions: (container: HTMLElement, item: IDocumentDiffItem) => {
 							const input = this.inputsById.get(item.id);
 							if (!input) throw new RangeError(`Unknown multi-diff item '${item.id}'`);
@@ -334,6 +370,7 @@ class MultiDiffEditorSession extends Disposable {
 					},
 				} : {}),
 			}));
+			this.createToolbar();
 			this.updateEmptyState();
 			this._register(this.sourceResolvers.onDidChange(() => { void this.refreshSource().catch(error => { if (!this.isDisposed) void this.dialogs.error(String(error)); }); }));
 			void this.refreshSource().catch(error => { if (!this.isDisposed) void this.dialogs.error(String(error)); });
@@ -487,13 +524,15 @@ class MultiDiffEditorSession extends Disposable {
 	}
 
 	private createToolbar(): void {
-		if (!this.options.fileActions || !this.paneInput.source || this.paneInput.source.kind === 'snapshot') return;
+		const editor = this.editor;
+		if (!editor || !this.options.fileActions || !this.paneInput.source || this.paneInput.source.kind === 'snapshot') return;
 		this.toolbar.value = this.instantiationService.createInstance(MultiDiffEditorToolbar, {
 			container: this.domNode,
 			input: this.paneInput,
 			contextMenuProvider: this.options.fileActions.contextMenuProvider,
 			editorService: this.options.editorService,
 			viewsService: this.options.viewsService,
+			editor,
 		});
 		this.domNode.prepend(this.toolbar.value.domNode);
 	}

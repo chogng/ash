@@ -3,6 +3,7 @@ import './colors.js';
 import { addDisposableListener, getClientArea, getWindow, h, stopEvent } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import type { Event } from '../../../../base/common/event.js';
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/common/numbers.js';
 import { formatNlsMessage, localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -63,9 +64,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private readonly itemListeners = this._register(new DisposableStore());
 	private readonly sections: VirtualizedItemManager<DiffEditorItemTemplate>;
 	private readonly viewModel: MultiDiffEditorViewModel;
+	public readonly onDidChangeCollapseState: Event<void>;
 	private readonly layouts: MultiDiffSectionLayout[] = [];
 	private readonly measuredHeights = new Map<string, number>();
-	private hideUnchangedRegionsEnabled = true;
 	private editorOptions: Pick<DiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'showLineNumbers' | 'showInlineChanges' | 'loopChanges' | 'wordWrapColumn'>;
 	private rowLayouts = new WeakMap<DiffModel, DiffRowLayout>();
 	private lineHeight: number;
@@ -99,7 +100,8 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		validateMultiDiffEditorOptions(options);
 		this.items = options.model.items;
 		this._register(toDisposable(() => this.navigationAbortController.abort()));
-		this.viewModel = new MultiDiffEditorViewModel(this.items);
+		this.viewModel = this._register(new MultiDiffEditorViewModel(this.items));
+		this.onDidChangeCollapseState = this.viewModel.onDidChangeCollapseState;
 		this.workbenchUIElementFactory = options.workbenchUIElementFactory;
 		const rawLineHeight = options.lineHeight ?? DEFAULT_LINE_HEIGHT;
 		this.overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
@@ -166,9 +168,6 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.bindItems();
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (['enabled', 'contextLineCount', 'minimumLineCount', 'revealLineCount'].some(name => event.affectsConfiguration(`diffEditor.hideUnchangedRegions.${name}`))) {
-				if (event.affectsConfiguration('diffEditor.hideUnchangedRegions.enabled')) {
-					this.hideUnchangedRegionsEnabled = configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled');
-				}
 				this.updateHideUnchangedRegions();
 			}
 		}));
@@ -223,16 +222,15 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 
 	private getHideUnchangedRegionsOptions(): HideUnchangedRegionsOptions {
 		return {
-			enabled: this.hideUnchangedRegionsEnabled,
+			enabled: this.configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled'),
 			contextLineCount: this.configuration.getValue('diffEditor.hideUnchangedRegions.contextLineCount'),
 			minimumLineCount: this.configuration.getValue('diffEditor.hideUnchangedRegions.minimumLineCount'),
 			revealLineCount: this.configuration.getValue('diffEditor.hideUnchangedRegions.revealLineCount'),
 		};
 	}
 
-	public toggleCollapseUnchangedRegions(): void {
-		this.hideUnchangedRegionsEnabled = !this.hideUnchangedRegionsEnabled;
-		this.updateHideUnchangedRegions();
+	public toggleCollapseUnchangedRegions(): Promise<void> {
+		return this.configuration.updateValue('diffEditor.hideUnchangedRegions.enabled', !this.configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled'));
 	}
 
 	private updateHideUnchangedRegions(): void {
@@ -350,6 +348,18 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.refreshLayout();
 	}
 
+	public get allCollapsed(): boolean {
+		return this.viewModel.allCollapsed;
+	}
+
+	public toggleCollapseAll(): void {
+		if (this.allCollapsed) {
+			this.expandAll();
+		} else {
+			this.collapseAll();
+		}
+	}
+
 	public expandAll(): void {
 		if (!this.viewModel.expandAll()) return;
 		for (const section of this.sections.values()) section.setCollapsed(false);
@@ -363,6 +373,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		if (index < 0) { return; }
 		this.cancelPendingNavigation();
 		const item = this.items[index]!;
+		const previous = this.viewModel.activeChange;
+		if (previous) this.sections.get(this.items.findIndex(candidate => candidate.id === previous.itemId))?.editor?.clearActiveChange();
+		this.viewModel.activeChange = undefined;
 		if (this.viewModel.expand(item.id)) {
 			this.sections.get(index)?.setCollapsed(false);
 			this.refreshLayout();
@@ -373,15 +386,20 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		if (options?.range) {
 			const range = options.range;
 			const generation = this.navigationGeneration;
+			const signal = this.navigationAbortController.signal;
 			// A requested row can be outside the mounted viewport and still resolving.
-			void item.resolve().then(() => {
+			void item.resolve().then(async model => {
+				if (model) await this.waitForReady(model, signal);
 				if (this.isDisposed || generation !== this.navigationGeneration || !this.items.includes(item) || this.viewModel.isCollapsed(item.id)) { return; }
+				// Loading can replace estimated row heights and move the requested file.
+				this.refreshLayout();
+				this.scrollView.setLogicalScrollTop(this.layouts[index]!.top);
 				this.project();
 				const editor = this.sections.get(index)?.editor;
 				const control = item.modifiedUri ? editor?.modifiedEditor : editor?.originalEditor;
 				control?.revealRange(range);
 				if (options.highlight) { control?.setSelection(range); }
-			}, () => { /* The file header owns reporting its resolution error. */ });
+			}).catch(() => { /* The file header owns reporting its resolution error. */ });
 		}
 	}
 

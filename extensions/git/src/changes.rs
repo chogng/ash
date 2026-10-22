@@ -207,7 +207,10 @@ impl GitRuntime {
         scope: &str,
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
-        if !matches!(scope, "staged" | "unstaged" | "uncommitted") {
+        if !matches!(
+            scope,
+            "staged" | "unstaged" | "uncommitted" | "changes" | "untracked"
+        ) {
             return Err(invalid("Invalid Git change scope"));
         }
         let status = self.api.status(repository, Some(token))?;
@@ -216,8 +219,16 @@ impl GitRuntime {
             !change.conflicted
                 && (scope != "staged" || change.index_status != "unmodified")
                 && (scope != "unstaged" || change.worktree_status != "unmodified")
+                // Group actions follow the SCM grouping preference; the existing
+                // unstaged command still compares all changes outside the index.
+                && (scope != "changes"
+                    || change.worktree_status != "unmodified"
+                        && (change.worktree_status != "untracked"
+                            || repository.configuration.text("untrackedChanges", "mixed") == "mixed"))
+                && (scope != "untracked" || change.worktree_status == "untracked")
         }) {
-            let staged = change.index_status != "unmodified";
+            let staged = matches!(scope, "staged" | "uncommitted")
+                && change.index_status != "unmodified";
             let unstaged = change.worktree_status != "unmodified";
             let (mut original, modified) = self.change_inputs(
                 repository,
@@ -248,7 +259,8 @@ impl GitRuntime {
         let label = self.api.text(
             match scope {
                 "staged" => "git.stagedChanges",
-                "unstaged" => "git.changes",
+                "unstaged" | "changes" => "git.changes",
+                "untracked" => "git.untrackedChanges",
                 _ => "git.uncommittedChanges",
             },
             &[],
@@ -430,17 +442,7 @@ impl GitRuntime {
             json!({"method":"activeEditor","context":context}),
             Some(token),
         )?;
-        let Some(uri) = active["input"]["modified"]["resource"]
-            .as_str()
-            .and_then(|uri| url::Url::parse(uri).ok())
-        else {
-            return Ok(Value::Null);
-        };
-        let Some(resource) = uri
-            .query_pairs()
-            .find(|(key, _)| key == "resource")
-            .map(|(_, value)| value.into_owned())
-        else {
+        let Some(resource) = working_file_resource(&active["input"]["modified"]) else {
             return Ok(Value::Null);
         };
         self.api.editor(json!({"method":"open","input":{"resource":resource},"options":{"pinned":false,"revealIfOpened":true,"selection":active["selection"]}}),Some(token))
@@ -459,66 +461,80 @@ impl GitRuntime {
         else {
             return Ok(Value::Null);
         };
-        let history = json!(self.api.file_history(repository, &path, token)?);
-        let values = history["items"].as_array().cloned().unwrap_or_default();
-        let date_key = if repository.configuration.text("timeline.date", "committed") == "authored"
-        {
-            "authorTime"
-        } else {
-            "commitTime"
-        };
-        let dates=self.api.editor(json!({"method":"formatTimestamps","timestamps":values.iter().map(|item|item[date_key].as_i64().unwrap_or(0)*1000).collect::<Vec<_>>()}),Some(token))?;
-        let mut choices: Vec<_> = values
-            .iter()
-            .enumerate()
-            .map(|(index, item)| {
-                let author = if repository
-                    .configuration
-                    .boolean("timeline.showAuthor", true)
-                {
-                    item["authorName"].as_str().unwrap_or_default()
+        let mut cursor = None;
+        let mut values = Vec::new();
+        let index = loop {
+            let history = self
+                .api
+                .file_history(repository, &path, 50, cursor.as_deref(), token)?;
+            values.extend(history.items.into_iter().map(|item| json!(item)));
+            cursor = history.next_cursor;
+            let date_key =
+                if repository.configuration.text("timeline.date", "committed") == "authored" {
+                    "authorTime"
                 } else {
-                    ""
+                    "commitTime"
                 };
-                (
-                    item["subject"].as_str().unwrap_or_default().to_owned(),
-                    Some(
-                        format!(
-                            "{author} {}",
-                            dates[index]["date"].as_str().unwrap_or_default()
-                        )
-                        .trim()
-                        .to_owned(),
-                    ),
-                )
-            })
-            .collect();
-        let mut pending = Vec::new();
-        if repository
-            .configuration
-            .boolean("timeline.showUncommitted", false)
-        {
-            let status = self.api.status(repository, Some(token))?;
-            if let Some(change) = status.changes.iter().find(|change| change.path == path) {
-                if change.index_status != "unmodified" {
-                    pending.push(("staged", self.api.text("git.stagedChanges", &[])));
-                }
-                if change.worktree_status != "unmodified" {
-                    pending.push(("changes", self.api.text("git.uncommittedChanges", &[])));
+            let dates=self.api.editor(json!({"method":"formatTimestamps","timestamps":values.iter().map(|item|item[date_key].as_i64().unwrap_or(0)*1000).collect::<Vec<_>>()}),Some(token))?;
+            let mut choices: Vec<_> = values
+                .iter()
+                .enumerate()
+                .map(|(index, item)| {
+                    let author = if repository
+                        .configuration
+                        .boolean("timeline.showAuthor", true)
+                    {
+                        item["authorName"].as_str().unwrap_or_default()
+                    } else {
+                        ""
+                    };
+                    (
+                        item["subject"].as_str().unwrap_or_default().to_owned(),
+                        Some(
+                            format!(
+                                "{author} {}",
+                                dates[index]["date"].as_str().unwrap_or_default()
+                            )
+                            .trim()
+                            .to_owned(),
+                        ),
+                    )
+                })
+                .collect();
+            let mut pending = Vec::new();
+            if repository
+                .configuration
+                .boolean("timeline.showUncommitted", false)
+            {
+                let status = self.api.status(repository, Some(token))?;
+                if let Some(change) = status.changes.iter().find(|change| change.path == path) {
+                    if change.index_status != "unmodified" {
+                        pending.push(("staged", self.api.text("git.stagedChanges", &[])));
+                    }
+                    if change.worktree_status != "unmodified" {
+                        pending.push(("changes", self.api.text("git.uncommittedChanges", &[])));
+                    }
                 }
             }
-        }
-        choices.extend(pending.iter().map(|(_, label)| (label.clone(), None)));
-        let Some(index) = self.api.pick("git.timelineTitle", choices, token)? else {
-            return Ok(Value::Null);
+            choices.extend(pending.iter().map(|(_, label)| (label.clone(), None)));
+            if cursor.is_some() {
+                choices.push((self.api.text("git.timelineLoadMore", &[]), None));
+            }
+            let Some(index) = self.api.pick("git.timelineTitle", choices, token)? else {
+                return Ok(Value::Null);
+            };
+            if cursor.is_some() && index == values.len() + pending.len() {
+                continue;
+            }
+            if index >= values.len() {
+                return self.open_change(
+                    repository,
+                    &json!({"resourceId":format!("{}:{path}",pending[index-values.len()].0)}),
+                    token,
+                );
+            }
+            break index;
         };
-        if index >= values.len() {
-            return self.open_change(
-                repository,
-                &json!({"resourceId":format!("{}:{path}",pending[index-values.len()].0)}),
-                token,
-            );
-        }
         let item = &values[index];
         let id = item["objectId"]
             .as_str()
@@ -849,7 +865,7 @@ impl GitRuntime {
         Ok(result)
     }
 }
-fn content_input(content: &FileContent, resource: String, label: &str) -> Value {
+pub(crate) fn content_input(content: &FileContent, resource: String, label: &str) -> Value {
     if let FileContent::Binary { data } = content {
         let mut input = json!({"resource":resource,"label":label,"readOnly":true,"contentType":"application/octet-stream"});
         if let Some(bytes) = data
@@ -884,3 +900,18 @@ fn percent_decode_path(path: &str) -> Result<String, ExtensionError> {
         .map(|path| path.into_owned())
         .map_err(|_| invalid("Invalid encoded path"))
 }
+
+fn working_file_resource(input: &Value) -> Option<String> {
+    let uri = url::Url::parse(input["resource"].as_str()?).ok()?;
+    // Unstaged text diffs use the live working copy; staged snapshots retain
+    // their working-file identity in the Git resource URI.
+    if uri.scheme() != "git-change" {
+        return Some(uri.into());
+    }
+    let resource = uri.query_pairs().find(|(key, _)| key == "resource")?.1;
+    url::Url::parse(&resource).ok().map(Into::into)
+}
+
+#[cfg(test)]
+#[path = "changes_tests.rs"]
+mod tests;

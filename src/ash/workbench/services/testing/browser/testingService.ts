@@ -207,9 +207,9 @@ export class TestingService extends Disposable implements ITestingService {
 				this.debugConfigurationId = operation.id;
 				const session = await this.debug.startDebugging({
 					id: operation.id, dirId: test.dirId, workspaceFolderName: folder.name,
-					name: localize('testing.debugName', 'Debug {0}', test.name), type: 'lldb-dap', request: 'launch',
-					adapter: { program: launch.adapterProgram, arguments: [] },
-					arguments: { program: launch.program, args: [...launch.arguments], cwd: launch.directory, stopOnEntry: false },
+					// Use the same provider, runtime settings and authorization as an ordinary Rust launch.
+					name: localize('testing.debugName', 'Debug {0}', test.name), type: 'lldb', request: 'launch',
+					arguments: { program: launch.program, args: [...launch.arguments], cwd: launch.directory, stopOnEntry: false, sourceLanguages: ['rust'], terminal: 'console' },
 				});
 				if (controller.signal.aborted) { await this.debug.stop(session); return; }
 			} finally { await this.releaseOperation(operation); }

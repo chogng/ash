@@ -354,19 +354,17 @@ impl Api {
     ) -> Result<model::ChangesSummary, ExtensionError> {
         #[derive(serde::Deserialize)]
         struct Response {
-            status: Status,
-            // Only the number of readable text paths is needed for summary completeness.
-            diffs: Vec<serde::de::IgnoredAny>,
+            files: usize,
             statistics: model::CommitStatistics,
         }
         let response: Response =
-            decode(self.repository_request(repository, "textDiff", json!({}), token)?)?;
-        let files = response.status.changes.len();
+            decode(self.repository_request(repository, "changesSummary", json!({}), token)?)?;
+        let files = response.files;
         Ok(model::ChangesSummary {
             files,
             additions: response.statistics.additions,
             deletions: response.statistics.deletions,
-            partial: response.diffs.len() < files,
+            partial: response.statistics.files < files,
         })
     }
     pub fn change_file(
@@ -631,9 +629,16 @@ impl Api {
         &self,
         repository: &Repository,
         path: &RepoPath,
+        limit: usize,
+        cursor: Option<&str>,
         token: &CancellationToken,
     ) -> Result<model::FileHistory, ExtensionError> {
-        decode(self.repository_request(repository, "fileHistory", json!({"path":path}), token)?)
+        decode(self.repository_request(
+            repository,
+            "fileHistory",
+            json!({"path":path,"limit":limit,"cursor":cursor}),
+            token,
+        )?)
     }
     pub fn conflict_file(
         &self,

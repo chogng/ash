@@ -41,6 +41,7 @@ pub use connector::ConnectorMcpRuntimeProvider;
 pub use connector::RuntimeInvocationFence;
 pub use connector::RuntimeInvocationLease;
 pub use connector::StandaloneMcpServer;
+pub use connector::connector_mcp_server_id;
 pub use plugin::PluginConnectorMcpRuntimeProvider;
 pub use status::{
     McpRuntimeStatusSnapshot, McpServerRuntimeIntent, McpServerRuntimeState, McpServerRuntimeStatus,

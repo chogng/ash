@@ -442,18 +442,11 @@ HTTP request/response/client/config/error 来自 `ash-http-client`，不在本 c
 
 Proxy、TLS、redirect、HTTP timeout 和 pool tests 只属于 `ash-http-client`，不在本 crate 重复。
 
-## 12. 迁移顺序
+## 12. 分层调整约束
 
-1. 建立 `ash-http-client` 的 raw HTTP value、client/config/error port。
-2. 将 `HttpHeader`、raw request/response、`HttpClient` 和 `UreqHttpClient` 从本 crate 迁出。
-3. 本 crate 改为依赖 `ash-http-client` 并保留现有 unary behavior。
-4. 把 operation retry loop 改为执行一个或多个 bounded transport attempts。
-5. 增加 live raw stream execution 后接入现有 SSE framer。
-6. 增加 NDJSON framer、operation deadline 与 framed backpressure。
-7. 拆分 transport telemetry 与 operation telemetry。
-8. 更新 `ash-api` 和 `model-provider`，删除旧 raw transport compatibility surface。
+当前调用链由 `ash-http-client` 执行 raw transport，`ash-client` 处理 operation retry、framing 与背压；各自职责和验证入口见前文。协议解释继续归 `ash-api`，Provider 选择归 `ash-model-provider`。
 
-当前处于开发阶段，迁移时直接更新全部调用方，不建立旧 `UreqHttpClient` public API 的长期兼容层。
+调整分层时同批更新全部调用方，保持现有 unary/stream 行为及 typed replay safety，不建立旧 `UreqHttpClient` public API 的长期兼容层，也不同时保留两份 raw transport authority。
 
 ## 13. 固定决策
 

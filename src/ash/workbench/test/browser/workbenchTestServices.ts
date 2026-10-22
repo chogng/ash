@@ -38,7 +38,7 @@ import { ContextKeyService, IContextKeyService } from '../../../platform/context
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { TestQuickInputService } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
-import { NotificationService } from '../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../services/notification/test/common/testNotificationService.js';
 import { ViewsService } from '../../services/views/browser/viewsService.js';
 import { IViewsService } from '../../services/views/common/viewsService.js';
 import { WorkbenchViewRegistry } from '../../common/views.js';
@@ -125,7 +125,7 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 	owner?.add(services);
 	const resources = services.resources;
 	services.registerSingleton(ICommandService, () => new CommandService(services));
-	services.registerSingleton(INotificationService, () => new NotificationService());
+	services.registerSingleton(INotificationService, () => new TestNotificationService());
 	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	services.registerSingleton(IProgressService, () => services.createInstance(ProgressService));
 	const uriIdentityServices = resources.add(new TestUriIdentityServices());
@@ -174,7 +174,7 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 export function registerTestWorkbenchInteractionServices(owner: DisposableStore, services: InstantiationService): void {
 	services.registerSingleton(IFileSearchService, () => services.createInstance(BrowserFileSearchService));
 	const viewContext = owner.add(new ContextKeyService());
-	const descriptors = owner.add(new ViewDescriptorService({ registry: owner.add(new WorkbenchViewRegistry()) }, viewContext));
+	const descriptors = owner.add(new TestViewDescriptorService({ registry: owner.add(new WorkbenchViewRegistry()) }, viewContext));
 	// Service scenarios have no UI Parts. The real view owner returns null for
 	// unregistered views; Web/Electron scenarios exercise their actual containers.
 	services.registerInstance(IViewsService, owner.add(new ViewsService(descriptors, {
@@ -188,5 +188,23 @@ export function registerTestWorkbenchInteractionServices(owner: DisposableStore,
 	const window = new JSDOM('', { url: 'https://ash.test' });
 	owner.add(toDisposable(() => window.window.close()));
 	services.registerInstance(IQuickInputService, owner.add(new TestQuickInputService({ container: window.window.document.body, contextKeyService: owner.add(new ContextKeyService()) })));
-	if (!services.has(INotificationService)) services.registerInstance(INotificationService, owner.add(new NotificationService()));
+	if (!services.has(INotificationService)) services.registerInstance(INotificationService, owner.add(new TestNotificationService()));
+}
+
+/** Assembles the real Views owner with isolated profile storage for non-window units. */
+export class TestViewDescriptorService extends ViewDescriptorService {
+	constructor(options: ConstructorParameters<typeof ViewDescriptorService>[0], contextKeys: IContextKeyService, storage?: IStorageService) {
+		const resources = new DisposableStore();
+		const services = resources.add(new InstantiationService());
+		services.registerInstance(IContextKeyService, contextKeys);
+		if (!storage) {
+			const browser = new JSDOM('', { url: 'https://views.test' });
+			resources.add(toDisposable(() => browser.window.close()));
+			storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'views-test', flushInterval: 0 }));
+		}
+		services.registerInstance(IStorageService, storage);
+		try { super(options, services, storage); }
+		catch (error) { resources.dispose(); throw error; }
+		this._register(resources);
+	}
 }

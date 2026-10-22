@@ -22,7 +22,7 @@ Commands: [Rust development](../../.agents/skills/rust-development/SKILL.md#vali
 
 ## 验证选择
 
-按受影响行为及其运行边界选择下表中的最小验证。自举验证通过 Ash 产品入口执行实际流程；是否需要启动产品由改动决定。混合改动组合必要检查，不逐层重复验证同一结论。
+按受影响行为及其运行边界选择下表中的最小验证；是否需要启动产品由改动决定。混合改动组合必要检查，不逐层重复验证同一结论。
 
 | 改动类型 | 验证入口与升级条件 |
 | --- | --- |
@@ -40,7 +40,7 @@ Commands: [Rust development](../../.agents/skills/rust-development/SKILL.md#vali
 - 优先复用现有诊断。每个目标默认运行一次，通过后停止；代码、相关依赖、工具链及验证配置未变时复用结果。运行产物须包含当前 checkout 的相关修改，满足此前提才复用 no-compile 入口；已安装的旧版本不能验证未包含的本地修改。修复失败后先重跑失败目标，仅在变更或新证据要求时扩大范围。Web、Electron UI 与 App Server 连接是不同覆盖。
 - 偶发失败只对具体用例或套件配置有界重试，保留首次失败诊断并报告重试结果。循环运行仅用于性能测量、偶发故障调查或用户要求。
 - 运行验证以独立于操作的结果断言判断通过，例如文件内容、退出码、持久状态或焦点；Agent 的完成报告或截图不能单独证明行为成功。日常使用 Ash 发现的问题进入对应回归测试，日常自用不能代替定向验收。
-- Web 和 Electron 使用仓库 Playwright 项目。Web 默认 headless，调试可见窗口行为时才显示。Electron 使用真实进程与窗口；macOS 隐藏窗口不等于 headless，Linux 可用虚拟显示。
+- UI 验收优先使用仓库 Playwright 项目、smoke 或 scenario runner；只有必需的系统级交互无法由这些入口覆盖，或用户明确要求时，才使用 Computer Use。缺少现成用例时优先补充可复跑的 Playwright 场景。Web 默认 headless，调试可见窗口行为时才显示。Electron 使用真实进程与窗口；macOS 隐藏窗口不等于 headless，Linux 可用虚拟显示。
 - 未增改测试时说明现有覆盖为何足够。不得复制实现断言或削弱断言。
 
 ## 本地结果与 CI 覆盖

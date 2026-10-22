@@ -1,4 +1,6 @@
 import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
+import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
+import { AbstractLifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycleService.js';
 import { IndexedDBFileSystemProvider } from '../../../src/ash/platform/files/browser/indexedDBFileSystemProvider.js';
 import { ILogService, ILoggerService, LogLevel } from '../../../src/ash/platform/log/common/log.js';
 import { LogService } from '../../../src/ash/platform/log/common/logServiceImpl.js';
@@ -31,7 +33,7 @@ import { AuxiliaryBarPart } from '../../../src/ash/workbench/browser/parts/auxil
 import { Grid } from '../../../src/ash/base/browser/ui/grid/grid.js';
 import { WorkbenchPartView } from '../../../src/ash/workbench/browser/workbenchPartView.js';
 import { Part } from '../../../src/ash/workbench/browser/part.js';
-import { PaneComposite } from '../../../src/ash/workbench/browser/parts/views/paneComposite.js';
+import { PaneComposite } from '../../../src/ash/workbench/browser/panecomposite.js';
 import type { PartTitleProjection } from '../../../src/ash/workbench/browser/parts/views/viewPane.js';
 import { ChatViewTitleControl } from '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewTitleControl.js';
 import { CopyChatSessionLinkAction } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatCopyActions.js';
@@ -43,7 +45,7 @@ import { IAccessibilityService } from '../../../src/ash/platform/accessibility/c
 import { AccessibilityService } from '../../../src/ash/platform/accessibility/browser/accessibilityService.js';
 import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { CompositeBar } from '../../../src/ash/workbench/browser/parts/compositeBar.js';
 import { HoverPosition } from '../../../src/ash/base/browser/ui/hover/hoverWidget.js';
@@ -56,6 +58,7 @@ import '../../../src/ash/base/browser/ui/splitview/splitview.css';
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import { HoverService, IHoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import chatMessages from '../../../extensions/language-pack-zh-cn/translations/chat.json' with { type: 'json' };
@@ -111,7 +114,7 @@ import { IFileService, FileSystemProviderErrorCode, toFileSystemProviderErrorCod
 import { IUriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentity.js';
 import { AgentHostFileSystemProvider } from '../../../src/ash/platform/agentHost/common/agentHostFileSystemProvider.js';
 import { createDisconnectedFileApi } from '../../../src/ash/platform/files/browser/fileApi.js';
-import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
+import { TestWorkspaceService, TestConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { FileEditorInput } from '../../../src/ash/workbench/contrib/files/browser/editors/fileEditorInput.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
@@ -187,6 +190,7 @@ declare global {
 			setEditorTheme(id: string): void;
 			closeEditor(name: string): Promise<void>;
 			openFileAliases(target?: 'modalGroup'): Promise<{ tabs: number; models: number; retained: boolean; text: string; }>;
+			openModalEditor(name: string, size?: { width: number; height: number; }): Promise<void>;
 			editorState(): readonly { name: string; focused: boolean; visible: boolean; retained: boolean; }[];
 		};
 	}
@@ -206,6 +210,8 @@ class FocusView extends ViewPane {
 		this.contentElement.querySelector<HTMLInputElement>('input')!.focus();
 	}
 }
+
+class FixtureLifecycleService extends AbstractLifecycleService { }
 
 const resources = new DisposableStore();
 if (new URLSearchParams(location.search).has('editorTabs') || new URLSearchParams(location.search).has('badges') || new URLSearchParams(location.search).has('emptyEditor')) {
@@ -241,6 +247,7 @@ if (new URLSearchParams(location.search).has('problems')) {
 	await import('../../../src/ash/workbench/browser/parts/panel/panelActions.js');
 }
 const services = resources.add(new InstantiationService());
+services.registerSingleton(IConfigurationService, () => new TestConfigurationService());
 const contexts = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contexts);
 const storage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'composite', backend: window.localStorage, flushInterval: 0 }));
@@ -267,7 +274,8 @@ if (new URLSearchParams(location.search).has('output')) {
 	await import('../../../src/ash/workbench/browser/parts/panel/panelActions.js');
 	registerOutputView(registry);
 	if (new URLSearchParams(location.search).has('agentOutput')) {
-		await import('../../../src/ash/editor/contrib/links/browser/links.js');
+		// The product entry admits the declared editor features, including link detection.
+		await import('../../../src/ash/editor/editor.code.all.js');
 		services.registerInstance(ICommandService, {
 			onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None, executeCommand: async <T>(id: string, ...args: unknown[]) => {
 				if (id === 'sessions.trace.open') { openedAgentEvents.push(args[0]); return undefined as T; }
@@ -302,6 +310,7 @@ if (new URLSearchParams(location.search).has('output')) {
 		services.registerInstance(IWorkbenchEnvironmentService, environment);
 		services.registerInstance(ILogService, logger);
 		services.registerInstance(ILoggerService, logger);
+		services.registerInstance(ILifecycleService, resources.add(services.createInstance(FixtureLifecycleService, undefined)));
 		services.registerInstance(IUriIdentityService, uriIdentityServices.get(IUriIdentityService));
 		services.registerInstance(IWorkingCopyService, resources.add(services.createInstance(BrowserWorkingCopyService)));
 		const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, {
@@ -345,11 +354,12 @@ if (new URLSearchParams(location.search).has('problems')) {
 	services.registerInstance(IContextMenuService, resources.add(new BrowserContextMenuService(
 		services.get(IMenuService), contexts,
 		{ lookupKeybinding: () => undefined } as unknown as IKeybindingService,
-		resources.add(new BrowserContextViewService(document.body)), resources.add(new NotificationService()))));
+		resources.add(new BrowserContextViewService(document.body)), resources.add(new TestNotificationService()))));
 }
 const panel = resources.add(registerTestComponentServices(services).createInstance(PanelPart, document.body));
 resources.add(bindTestColorTheme(services.get(IThemeService), panel.domNode));
 if (new URLSearchParams(location.search).has('partWidth')) {
+	registerCodeEditorServices(services);
 	const host = h(document, 'section');
 	host.id = 'part-width-host';
 	host.style.cssText = 'width:1000px;height:400px';
@@ -368,7 +378,6 @@ if (new URLSearchParams(location.search).has('partWidth')) {
 	const composite = resources.add(services.createInstance(PaneComposite, part.domNode, {
 		viewContainer: descriptor,
 		model: services.get(IViewDescriptorService).getViewContainerModel(descriptor.id)!,
-		instantiationService: services, contextKeyService: contexts,
 		paneHeaders: 'hidden', paneLayout: 'fill',
 	}));
 	part.addComposite(composite);
@@ -482,7 +491,7 @@ if (new URLSearchParams(location.search).has('editorTabs')) {
 		const menus = new MenuService(commands, editorServices.get(IContextKeyService));
 		editorServices.registerInstance(IMenuService, menus);
 		const views = resources.add(new BrowserContextViewService(document.body));
-		const notifications = resources.add(new NotificationService());
+		const notifications = resources.add(new TestNotificationService());
 		const menuKeybindings = { onDidUpdateKeybindings: Event.None, lookupKeybinding: () => undefined } as unknown as IKeybindingService;
 		editorServices.registerInstance(IContextMenuService, resources.add(new BrowserContextMenuService(menus, editorServices.get(IContextKeyService), menuKeybindings, views, notifications)));
 		editorServices.registerInstance(IAppServerApi, { connectionGeneration: 1, onConnectionState: Event.None, getConnectionState: async () => 'ready', getSlashCommands: async () => [] } as IAppServerApi);
@@ -496,6 +505,8 @@ if (new URLSearchParams(location.search).has('editorTabs')) {
 	}
 	editorServices.registerInstance(IViewDescriptorService, services.get(IViewDescriptorService));
 	editorServices.registerInstance(ILocalizationService, services.get(ILocalizationService));
+	const hoverViews = resources.add(new BrowserContextViewService(document.body));
+	editorServices.registerInstance(IHoverService, resources.add(new HoverService(editorServices.get(IConfigurationService), hoverViews, editorServices.get(IContextMenuService))));
 	const chatPart = resources.add(editorServices.createInstance(ChatTabsPart, chatHost));
 	chatPart.domNode.style.cssText = 'box-sizing:border-box;width:100%;height:100%';
 	const chat = resources.add(editorServices.createInstance(ChatViewTitleControl, chatPart.domNode, 'chat', () => {
@@ -586,7 +597,7 @@ if (editorMenu) {
 	editorServices.registerInstance(ICommandService, commands);
 	const menus = new MenuService(commands, editorServices.get(IContextKeyService));
 	const views = resources.add(new BrowserContextViewService(document.body));
-	const notifications = resources.add(new NotificationService());
+	const notifications = resources.add(new TestNotificationService());
 	editorServices.registerInstance(INotificationService, notifications);
 	editorServices.registerInstance(IUserDataProfileService, new UserDataProfileService());
 	const layouts = resources.add(new BrowserKeyboardLayoutService({ navigator }));
@@ -729,6 +740,11 @@ window.ashCompositeIntegration = {
 		const alias = resources.add(new FileEditorInput(URI.file('/composite/Original/ALIAS.txt')));
 		const secondPane = await editor.openEditor(alias, { pinned: true }, target);
 		return { tabs: editor.activeGroup.inputs.length, models: models.getModels().length, retained: firstPane === secondPane && firstModel === models.getModel(alias.resource), text: firstModel.getText() };
+	},
+	openModalEditor: async (name, size) => {
+		await import('../../../src/ash/base/browser/ui/styles.css');
+		await import('../../../src/ash/workbench/browser/media/style.css');
+		await editor.openEditor(editorInput(name), { pinned: true, modal: { size } }, 'modalGroup');
 	},
 	closeEditor: async name => { await editor.closeEditor(editorInput(name)); },
 	editorState: () => [...editorPanes].map(([name, { pane, control }]) => ({ name, focused: pane.hasFocus(), visible: pane.isVisible(), retained: control === pane.getControl() })),

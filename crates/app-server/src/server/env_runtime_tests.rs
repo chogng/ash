@@ -565,7 +565,12 @@ fn directory_revocation_does_not_require_restarting_a_watch_on_a_removed_root() 
         ])
         .unwrap();
     let selected = server.file_system_service_for(Some("first")).unwrap();
+    // Windows pins the opened root against deletion; revocation must still release its
+    // consumers without restarting the retained primary directory's services.
+    #[cfg(not(windows))]
     std::fs::remove_dir_all(&second.path).unwrap();
+    #[cfg(windows)]
+    assert!(std::fs::remove_dir_all(&second.path).is_err());
     server
         .env_runtime_control()
         .unwrap()
@@ -783,7 +788,7 @@ fn dirs_are_session_scoped_and_removable() {
         0
     );
     let (mutation, directories) = server
-        .remove_session_dir(&first.session_id, &session_dir.path)
+        .remove_session_dir(&first.session_id, &session_dir.path.canonicalize().unwrap())
         .unwrap();
     assert_eq!(mutation, Mutation::RemovedDir);
     assert!(directories.dirs.is_empty());
@@ -927,8 +932,9 @@ fn projectless_session_terminal_uses_its_grant_without_enabling_an_unscoped_term
     assert!(granted.get("error").is_none(), "{granted}");
     let encoded_session: String =
         url::form_urlencoded::byte_serialize(session.session_id.as_str().as_bytes()).collect();
+    let requested_path = dir.path.canonicalize().unwrap();
     let encoded_path: String =
-        url::form_urlencoded::byte_serialize(dir.path.to_str().unwrap().as_bytes()).collect();
+        url::form_urlencoded::byte_serialize(requested_path.to_str().unwrap().as_bytes()).collect();
     let scope = format!("session:{encoded_session}:{encoded_path}");
     let profiles: serde_json::Value = serde_json::from_str(
         &server.handle_json(
@@ -949,7 +955,7 @@ fn projectless_session_terminal_uses_its_grant_without_enabling_an_unscoped_term
     let canonical = dunce::canonicalize(&dir.path).unwrap();
     #[cfg(windows)]
     assert_ne!(
-        dir.path, canonical,
+        requested_path, canonical,
         "exercise verbatim and ordinary spellings"
     );
     let sibling = TestDir::new("projectless-terminal-ungranted", "fixture.txt");
@@ -2638,7 +2644,7 @@ impl TestDir {
         // Keep environment fixtures outside the source checkout so Git discovery and
         // watchers cannot attach to the developer's repository.
         let temporary = tempfile::Builder::new().prefix(label).tempdir().unwrap();
-        let path = temporary.path().canonicalize().unwrap();
+        let path = dunce::canonicalize(temporary.path()).unwrap();
         std::fs::write(path.join(file), label).unwrap();
         Self {
             path,
@@ -4362,6 +4368,11 @@ fn filesystem_resource_routes_are_independent_of_selection_and_never_grant_acces
     };
     let a_route = resolve(&mut connection, &first.path.join("missing/child.txt"));
     assert!(a_route.get("error").is_none(), "{a_route}");
+    let alias_route = resolve(
+        &mut connection,
+        &first.path.canonicalize().unwrap().join("missing/child.txt"),
+    );
+    assert_eq!(alias_route["result"], a_route["result"], "{alias_route}");
     assert_eq!(a_route["result"]["root"], serde_json::json!(first.path));
     assert_eq!(
         a_route["result"]["target"],

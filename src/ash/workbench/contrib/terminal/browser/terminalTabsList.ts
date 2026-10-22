@@ -5,19 +5,18 @@ import { IconLabel } from '../../../../base/browser/ui/iconlabel/iconlabel.js';
 import { DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { killTerminalIcon } from './terminalIcons.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { getShellProcessTooltip } from './terminalTooltip.js';
+import { TerminalInstanceHover } from './terminalTooltip.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../nls.js';
 import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
-import { TerminalActiveInstanceStateContext } from '../common/terminalContextKey.js';
+import { TerminalActiveInstanceStateContext, TerminalContextKeys } from '../common/terminalContextKey.js';
 import { ITerminalService, ITerminalGroupService, TerminalDataTransfers, type ITerminalInstance } from './terminal.js';
 import { InstanceContext, openContextMenu } from './terminalContextMenu.js';
 import { terminalProfileIcon } from './terminalIcon.js';
-import { IEnvironmentVariableService } from '../common/environmentVariable.js';
-import { EnvironmentVariableInfoChangesActive } from './environmentVariableInfo.js';
 import { TerminalCommandId } from '../common/terminal.js';
 
 export const enum TerminalTabsListSizes {
@@ -33,6 +32,7 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 	private readonly instanceListeners = this._register(new DisposableMap<ITerminalInstance, IDisposable>());
 	private readonly labels = new Map<ITerminalInstance, IconLabel>();
 	private readonly branches = new Map<ITerminalInstance, HTMLElement>();
+	private readonly hovers = new Map<ITerminalInstance, TerminalInstanceHover>();
 	private readonly focused = this._register(new Emitter<void>());
 	public readonly onDidFocusInstance = this.focused.event;
 	private draggedTerminal: ITerminalInstance | undefined;
@@ -46,9 +46,9 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 		@IMenuService menuService: IMenuService,
 		@IContextMenuService private readonly contextMenu: IContextMenuService,
 		@IContextKeyService contextKeys: IContextKeyService,
-		@IEnvironmentVariableService private readonly environmentVariables: IEnvironmentVariableService,
 		@ICommandService private readonly commands: ICommandService,
 		@ITerminalGroupService private readonly groups: ITerminalGroupService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super(parent, {
 			ariaLabel: localize('terminal.tabs.instances', 'Terminal instances'),
@@ -84,6 +84,12 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 			this.draggedTerminal = undefined;
 		}, true));
 		const scope = this._register(contextKeys.createScoped(this.element));
+		const tabsFocus = TerminalContextKeys.tabsFocus.bindTo(scope);
+		this._register(addDisposableListener(this.element, 'focusin', () => tabsFocus.set(true)));
+		this._register(addDisposableListener(this.element, 'focusout', event => {
+			if (!this.element.contains(event.relatedTarget as Node | null)) tabsFocus.set(false);
+		}));
+		this._register(toDisposable(() => tabsFocus.reset()));
 		const state = TerminalActiveInstanceStateContext.bindTo(scope);
 		const menu = this._register(menuService.createMenu(MenuId.TerminalInstanceContext, scope));
 		const show = (target: HTMLElement, event: MouseEvent): void => {
@@ -115,7 +121,6 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 		}));
 		this._register(terminals.onDidChangeInstances(() => this.refresh()));
 		this._register(groups.onDidChangeGroups(() => this.refresh()));
-		this._register(environmentVariables.onDidChangeCollections(() => this.refresh()));
 		this._register(terminals.onDidChangeActiveInstance(() => this.refresh()));
 		this.refresh();
 	}
@@ -132,7 +137,6 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 				this.instanceListeners.set(instance, lifetime);
 			}
 		}
-		const environmentInfo = new EnvironmentVariableInfoChangesActive(this.environmentVariables.collections);
 		// Group membership owns adjacency and pane order; the process list alone can interleave groups.
 		const positions = new Map(this.terminals.instances.map((instance, index) => [instance, index]));
 		const firstPosition = (group: typeof this.groups.groups[number]): number =>
@@ -143,7 +147,8 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 		this.setTabs(rows.map(instance => {
 			const group = this.groups.getGroupForInstance(instance)!;
 			return {
-				id: instance.id, value: instance, label: instance.title, tooltip: instance.title + getShellProcessTooltip(instance, true, environmentInfo),
+				// The row's custom label owns the interactive instance card.
+				id: instance.id, value: instance, label: instance.title, tooltip: '',
 				ariaDescription: group.terminalInstances.length > 1
 					? localize('terminal.tabs.splitDescription', 'Split {0} of {1} in terminal group {2}', group.terminalInstances.indexOf(instance) + 1, group.terminalInstances.length, orderedGroups.indexOf(group) + 1)
 					: undefined,
@@ -161,6 +166,8 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 					}],
 				},
 				renderLabel: (container: HTMLElement) => {
+					const hover = this.instantiation.createInstance(TerminalInstanceHover, container, instance);
+					this.hovers.set(instance, hover);
 					const branch = container.ownerDocument.createElement('span');
 					branch.className = 'ash-terminal-group-branch';
 					branch.setAttribute('aria-hidden', 'true');
@@ -168,7 +175,7 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 					this.branches.set(instance, branch);
 					const label = new IconLabel(container, { label: instance.title, icon: terminalProfileIcon(instance.profile) });
 					this.labels.set(instance, label);
-					return toDisposable(() => { this.branches.delete(instance); this.labels.delete(instance); label.dispose(); });
+					return toDisposable(() => { this.hovers.delete(instance); this.branches.delete(instance); this.labels.delete(instance); label.dispose(); hover.dispose(); });
 				},
 			};
 		}), active && rows.includes(active) ? active.id : undefined);
@@ -186,6 +193,13 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 	public layout(_height?: number, width = this.element.clientWidth): void {
 		this.hasLabels = width >= TerminalTabsListSizes.MidpointViewWidth;
 		this.element.classList.toggle('ash-terminal-tabs-narrow', !this.hasLabels);
+	}
+
+	public focusHover(): void {
+		const row = this.element.ownerDocument.activeElement?.closest('[role="tab"]');
+		const focused = this.terminals.instances.find(instance => row?.id === `${instance.id}-tab`);
+		const instance = focused ?? this.groups.activeGroup?.activeInstance;
+		if (instance) this.hovers.get(instance)?.focus();
 	}
 
 	private async closeTerminal(instance: ITerminalInstance): Promise<void> {

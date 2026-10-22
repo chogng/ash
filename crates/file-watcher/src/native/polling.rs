@@ -99,6 +99,13 @@ pub(super) fn run_with_scan(
             };
             next
         };
+        // Registering another lease can resend the same complete root set. There is
+        // no new baseline gap in that case: emitting a rescan would cause every
+        // consumer to repeat its full reconciliation for an unchanged registration.
+        // Explicit replacement markers still force a baseline even for equal paths.
+        if watchers.is_some() && roots == active && replaced.is_empty() {
+            continue;
+        }
         poll_interval = Duration::from_millis(interval);
         let (contents, metadata) = match watchers.as_mut() {
             Some(watchers) => watchers,

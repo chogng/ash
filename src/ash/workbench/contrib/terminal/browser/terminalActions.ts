@@ -8,7 +8,7 @@ import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle
 import { terminalStrings } from '../common/terminalStrings.js';
 import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
+import { KeyChord, KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { CONTEXT_ACCESSIBILITY_MODE_ENABLED } from '../../../../platform/accessibility/common/accessibility.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
@@ -35,6 +35,24 @@ import type { Terminal } from '@xterm/xterm';
 
 /** Command definitions use the invoking window's services, never a retained View callback. */
 export function registerTerminalActions(): void {
+	registerAction2(class FocusTerminalHoverAction extends Action2 {
+		constructor() {
+			super({
+				id: TerminalCommandId.FocusHover,
+				title: localize2('terminal.focusHover', 'Terminal: Focus Hover'),
+				f1: true,
+				precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
+				keybinding: {
+					primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyI),
+					when: ContextKeyExpr.or(TerminalContextKeys.focus.isEqualTo(true), TerminalContextKeys.tabsFocus.isEqualTo(true)),
+					weight: KeybindingWeight.WorkbenchContrib,
+				},
+			});
+		}
+		override run(accessor: ServicesAccessor): Promise<void> {
+			return accessor.get(ITerminalGroupService).focusHover();
+		}
+	});
 	const normalBufferFocused = ContextKeyExpr.and(TerminalContextKeys.focus.isEqualTo(true), TerminalContextKeys.altBufferActive.isEqualTo(false));
 	// These operations use the retained screen, including exited and read-only terminals.
 	for (const action of [

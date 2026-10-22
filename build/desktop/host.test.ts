@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -30,7 +30,7 @@ test('packaging publishes final desktop assets without hashing metadata or user 
 });
 
 for (const mode of ['build', 'watch'] as const) {
-	test(`Host ${mode} regenerates deleted outputs when incremental metadata remains`, { timeout: 30_000 }, async t => {
+	test(`Host ${mode} regenerates deleted outputs when incremental metadata remains`, { timeout: process.platform === 'win32' ? 60_000 : 30_000 }, async t => {
 		const temporary = await realpath(await mkdtemp(join(tmpdir(), 'ash-host-')));
 		const root = join(temporary, 'workspace', 'project', 'desktop');
 		await mkdir(root, { recursive: true });
@@ -144,6 +144,15 @@ for (const mode of ['build', 'watch'] as const) {
 			await until(() => ready);
 			assert.match(await readFile(join(output, 'main/src/main.js'), 'utf8'), /version = 3/u);
 			assert.equal((await stat(preloadOutput)).mtimeMs, preloadModified);
+			if (process.platform === 'win32') {
+				const source = join(desktop, 'src/main.ts');
+				const sourceBefore = await stat(source);
+				ready = false;
+				await writeFile(source, 'export const version = 4;');
+				await utimes(source, sourceBefore.atime, sourceBefore.mtime);
+				await until(() => ready);
+				assert.match(await readFile(join(output, 'main/src/main.js'), 'utf8'), /version = 4/u, 'Equal-size edits with restored mtime still rebuild');
+			}
 			ready = false;
 			await writeFile(join(desktop, 'tsconfig.base.json'), '{"compilerOptions":{"removeComments":true}}');
 			await until(() => ready);

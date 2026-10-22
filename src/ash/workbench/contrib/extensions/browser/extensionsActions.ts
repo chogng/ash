@@ -1,5 +1,5 @@
 import { localize, localize2 } from '../../../../nls.js';
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -11,28 +11,133 @@ import { IPluginManagementService, type PluginPackageView, type PluginPermission
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { type IGlobalExtensionEnablementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
 import type { IExtensionApi } from '../../../../platform/extensions/common/extensionApi.js';
-import { ExtensionsInputSource, type ExtensionsInput } from '../common/extensionsInput.js';
+import { ExtensionsInputSource, type ExtensionsInput, type ExtensionsCapabilityTarget } from '../common/extensionsInput.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import type { McpServerRuntimeState } from '../../../../platform/mcp/common/mcpServerStatusService.js';
-import type { ConnectorState } from '../../../../platform/connectors/common/connectorService.js';
+import type { ConnectorState, IConnectorService } from '../../../../platform/connectors/common/connectorService.js';
 import type { IMcpServerManagementService, McpServerConfiguration, McpServerConfigurationSnapshot } from '../../../../platform/mcp/common/mcpServerManagementService.js';
+
+/** Selection uses the catalog's actions; account and server mutations stay with their domain owners. */
+export async function addConnection(connectors: IConnectorService, mcp: IMcpServerManagementService, quickInput: IQuickInputService, dialogs: IDialogService, signal: AbortSignal): Promise<ExtensionsCapabilityTarget | undefined> {
+	const title = localize({ bundle: 'ash.extensions', key: 'addConnection' }, 'Add connection');
+	const choice = await pickConnectionItem<IQuickPickItem & { readonly kind: 'account' | 'mcp'; }>(quickInput, title,
+		mcp.isAvailable
+			? localize({ bundle: 'ash.extensions', key: 'connectionChooseKind' }, 'How would you like to connect?')
+			: localize({ bundle: 'ash.extensions', key: 'connectionAccountOnlyHelp' }, 'Sign in to a supported service. Custom MCP configuration is unavailable in this window.'),
+		[
+			{ label: localize({ bundle: 'ash.extensions', key: 'connectionAccount' }, 'Service account'), kind: 'account', detail: localize({ bundle: 'ash.extensions', key: 'connectionServiceHelp' }, 'Sign in to a supported service or authorize with an API token.') },
+			...(mcp.isAvailable ? [{ label: localize({ bundle: 'ash.extensions', key: 'connectionCustomMcp' }, 'Custom MCP server'), kind: 'mcp' as const, detail: localize({ bundle: 'ash.extensions', key: 'connectionCustomMcpHelp' }, 'Connect external tools using a server URL or a local command.') }] : []),
+		], signal);
+	if (!choice || signal.aborted) { return undefined; }
+	if (choice.kind === 'mcp') {
+		const snapshot = await mcp.readConfiguration();
+		if (signal.aborted) { return undefined; }
+		const serverId = await configureMcpServer(mcp, dialogs, snapshot, undefined, signal);
+		return serverId ? { kind: 'mcp', serverId } : undefined;
+	}
+	const catalog = await connectors.list();
+	if (signal.aborted) { return undefined; }
+	if (!catalog.connectors.length) {
+		await dialogs.info(
+			localize({ bundle: 'ash.extensions', key: 'connectionNoAccounts' }, 'No service accounts are available.'),
+			localize({ bundle: 'ash.extensions', key: 'connectionInstallAccount' }, 'Install a plugin that provides a service account, then add a connection again.'),
+		);
+		return undefined;
+	}
+	const selected = await pickConnectionItem(quickInput,
+		localize({ bundle: 'ash.extensions', key: 'connectionChooseService' }, 'Choose a service account'),
+		localize({ bundle: 'ash.extensions', key: 'connectionSearchServices' }, 'Search services to sign in or authorize with an API token'),
+		catalog.connectors.map(connector => ({ label: connector.displayName, description: describeConnectorState(connector.state), detail: connector.description, connector })), signal);
+	if (!selected || signal.aborted) { return undefined; }
+	// Selection can outlive a catalog update. Use fresh permissions and a matching generation for authorization.
+	const current = await connectors.list();
+	if (signal.aborted) { return undefined; }
+	const connector = current.connectors.find(entry => entry.id === selected.connector.id);
+	if (!connector) { throw new Error(localize({ bundle: 'ash.extensions', key: 'connectorMissing' }, 'This connection is no longer available. Refresh Connections.')); }
+	if (!connector.canConnectOAuth && !connector.canConnectApiToken) {
+		await dialogs.info(connector.displayName, [describeConnectorState(connector.state), connector.state.status === 'unavailable' ? connector.state.reason : ''].filter(Boolean).join('\n\n'));
+		return { kind: 'connector', connectorId: connector.id };
+	}
+	const authorization = await dialogs.prompt<'oauth' | 'token'>({
+		title: connector.displayName,
+		message: localize({ bundle: 'ash.extensions', key: 'connectionChooseAuthorization' }, 'Choose how to authorize {0}.', connector.displayName),
+		detail: connector.description,
+		buttons: [
+			...(connector.canConnectOAuth ? [{ label: localize({ bundle: 'ash.extensions', key: 'mcpSignIn' }, 'Sign in'), run: () => 'oauth' as const }] : []),
+			...(connector.canConnectApiToken ? [{ label: localize({ bundle: 'ash.extensions', key: 'connectorConnectToken' }, 'Connect with API token'), run: () => 'token' as const }] : []),
+		],
+	});
+	if (!authorization.result || signal.aborted) { return undefined; }
+	if (authorization.result === 'oauth') {
+		await connectors.connectOAuth(connector, current.generation);
+	} else {
+		const input = await promptConnectorApiToken(dialogs, connector.displayName);
+		if (!input || signal.aborted) { return undefined; }
+		await connectors.connectApiToken(connector, current.generation, input);
+	}
+	return { kind: 'connector', connectorId: connector.id };
+}
+
+async function pickConnectionItem<T extends IQuickPickItem>(quickInput: IQuickInputService, label: string, placeholder: string, items: readonly T[], signal: AbortSignal): Promise<T | undefined> {
+	using resources = new DisposableStore();
+	const picker = resources.add(quickInput.createQuickPick<T>());
+	picker.ariaLabel = label;
+	picker.placeholder = placeholder;
+	picker.items = items;
+	return await new Promise<T | undefined>(resolve => {
+		resources.add(picker.onDidAccept(() => {
+			const item = picker.selectedItems[0];
+			if (!item) { return; }
+			resolve(item);
+			picker.hide();
+		}));
+		resources.add(picker.onDidHide(() => resolve(undefined)));
+		resources.add(picker.onDidBlur(() => picker.hide()));
+		const abort = () => { resolve(undefined); picker.hide(); };
+		signal.addEventListener('abort', abort, { once: true });
+		resources.add(toDisposable(() => signal.removeEventListener('abort', abort)));
+		picker.show();
+	});
+}
+
+/** Shared credential boundary for the add flow and account details. Never retain a token in view state. */
+export async function promptConnectorApiToken(dialogs: IDialogService, displayName: string): Promise<{ readonly accountId: string; readonly accountDisplayName: string; readonly token: string; } | undefined> {
+	const result = await dialogs.input({
+		title: displayName,
+		message: localize({ bundle: 'ash.extensions', key: 'connectorTokenPrompt' }, 'Enter the account and API token for this connection.'),
+		inputs: [
+			{ placeholder: localize({ bundle: 'ash.extensions', key: 'connectorAccountId' }, 'Account ID') },
+			{ placeholder: localize({ bundle: 'ash.extensions', key: 'connectorAccountName' }, 'Account name') },
+			{ type: 'password', placeholder: localize({ bundle: 'ash.extensions', key: 'connectorApiToken' }, 'API token') },
+		],
+		primaryButton: localize({ bundle: 'ash.extensions', key: 'mcpConnect' }, 'Connect'),
+	});
+	if (!result.confirmed) { return undefined; }
+	const [accountId, accountDisplayName, token] = result.values ?? [];
+	if (!accountId?.trim() || !accountDisplayName?.trim() || !token?.trim()) { throw new Error(localize({ bundle: 'ash.extensions', key: 'connectorTokenRequired' }, 'Enter an account ID, account name and API token.')); }
+	return { accountId: accountId.trim(), accountDisplayName: accountDisplayName.trim(), token };
+}
 
 /** The dialog edits one revision-bound declaration; changing transports never changes its identity. */
 export async function configureMcpServer(service: IMcpServerManagementService, dialogs: IDialogService, snapshot: McpServerConfigurationSnapshot, previous?: McpServerConfiguration, signal?: AbortSignal): Promise<string | undefined> {
 	const title = previous
 		? localize({ bundle: 'ash.extensions', key: 'mcpEditServer' }, 'Edit MCP server')
-		: localize({ bundle: 'ash.extensions', key: 'mcpAddServer' }, 'Add MCP server');
+		: localize({ bundle: 'ash.extensions', key: 'addConnection' }, 'Add connection');
+	const httpLabel = localize({ bundle: 'ash.extensions', key: 'mcpHttpTransport' }, 'HTTP server');
+	const stdioLabel = localize({ bundle: 'ash.extensions', key: 'mcpStdioTransport' }, 'Local process (stdio)');
 	const choice = await dialogs.prompt<'streamableHttp' | 'stdio'>({
 		title,
-		message: localize({ bundle: 'ash.extensions', key: 'mcpChooseTransport' }, 'Choose how to connect to this server.'),
+		message: localize({ bundle: 'ash.extensions', key: 'mcpChooseTransport' }, 'Choose a connection method.'),
+		detail: localize({ bundle: 'ash.extensions', key: 'mcpTransportHelp' }, 'MCP servers provide external tools. Use {0} for a service URL, or {1} to run a server on this computer.', httpLabel, stdioLabel),
 		buttons: [
-			{ label: localize({ bundle: 'ash.extensions', key: 'mcpHttpTransport' }, 'HTTP server'), run: () => 'streamableHttp' },
-			{ label: localize({ bundle: 'ash.extensions', key: 'mcpStdioTransport' }, 'Local process (stdio)'), run: () => 'stdio' },
+			{ label: httpLabel, run: () => 'streamableHttp' },
+			{ label: stdioLabel, run: () => 'stdio' },
 		],
 	});
 	if (!choice.result || signal?.aborted) { return undefined; }
 	const transport = choice.result;
+	const methodLabel = transport === 'streamableHttp' ? httpLabel : stdioLabel;
 	const fields = [
 		...(!previous ? [{ placeholder: localize({ bundle: 'ash.extensions', key: 'mcpLocalId' }, 'Server ID'), value: '' }] : []),
 		{ placeholder: localize({ bundle: 'ash.extensions', key: 'mcpDisplayName' }, 'Display name'), value: previous?.displayName ?? '' },
@@ -48,7 +153,7 @@ export async function configureMcpServer(service: IMcpServerManagementService, d
 	let detail = localize({ bundle: 'ash.extensions', key: 'mcpConfigurationHelp' }, 'Use a unique server ID without spaces or colons. Credentials are references to stored credentials. Enabling is saved; Connect and Disconnect control this running instance.');
 	for (; ;) {
 		const input = await dialogs.input({
-			title, message: previous ? previous.id : title, detail, inputs: fields,
+			title, message: previous ? previous.id : localize({ bundle: 'ash.extensions', key: 'connectionConfigureMethod' }, 'Configure {0}.', methodLabel), detail, inputs: fields,
 			checkbox: { label: localize({ bundle: 'ash.extensions', key: 'mcpEnableServer' }, 'Enable this server'), checked: enabled },
 			primaryButton: localize({ bundle: 'ash.extensions', key: 'mcpSaveServer' }, 'Save'),
 		});

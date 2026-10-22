@@ -2,8 +2,8 @@ import { IActivityService } from '../../services/activity/common/activity.js';
 import { Separator } from "../../../base/common/actions.js";
 import { SeparatorActionViewItem } from "../../../base/browser/ui/actionbar/actionViewItems.js";
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
-import type { PaneCompositeOptions } from './views/paneComposite.js';
-import type { PaneComposite } from './views/paneComposite.js';
+import type { PaneCompositeOptions } from '../panecomposite.js';
+import type { PaneComposite } from '../panecomposite.js';
 import { HoverPosition } from "../../../base/browser/ui/hover/hoverWidget.js";
 import type { IActivityHoverOptions } from "./compositeBarActions.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
@@ -185,16 +185,17 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 
 	/** Resolves the last valid workspace selection, then falls back to the Registry default. */
 	getCompositeIdToRestore(): string | undefined {
+		const available = this.viewDescriptorService.getViewContainers(this.location).filter(container =>
+			!container.hideIfEmpty || this.viewDescriptorService.getViewContainerModel(container.id).activeViewDescriptors.length > 0);
 		const stored = this.storageService.get(
 			activeCompositeStorageKeys[this.location],
 			StorageScope.WORKSPACE,
 		);
-		if (stored && this.viewDescriptorService
-			.getViewContainers(this.location)
-			.some((container) => container.id === stored)) {
+		if (stored && available.some(container => container.id === stored)) {
 			return stored;
 		}
-		return this.viewDescriptorService.getDefaultViewContainer(this.location)?.id;
+		const defaultId = this.viewDescriptorService.getDefaultViewContainer(this.location)?.id;
+		return available.find(container => container.id === defaultId)?.id ?? available[0]?.id;
 	}
 
 	setCompositeBarVisible(visible: boolean): void {

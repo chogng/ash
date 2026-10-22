@@ -1,0 +1,17 @@
+{
+  "name": "debug-server-ready",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "engines": {
+    "ash": "*"
+  },
+  "ashRuntime": {
+    "kind": "rust",
+    "entrypoint": "ash-debug-server-ready"
+  },
+  "activationEvents": [
+    "onDebug"
+  ]
+}

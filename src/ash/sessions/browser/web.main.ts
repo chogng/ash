@@ -82,6 +82,8 @@ export class SessionsBrowserMain extends Disposable {
 					return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
 				} : undefined,
 				contributionIds: [
+					'workbench.contrib.limitIndicator',
+					'workbench.contrib.opener',
 					'chatResponseResourceWorkbenchContribution',
 					'terminalAutoReplies',
 					'terminalTelemetry',
@@ -89,6 +91,7 @@ export class SessionsBrowserMain extends Disposable {
 					'workbench.contrib.webUpdate',
 					'workbench.contrib.preferences',
 					'workbench.contrib.snippets',
+					'workbench.contrib.defaultFormatter',
 					'workbench.contrib.sessionsLayout',
 					'workbench.contrib.call',
 					'sessions.contrib.multiDiffSource',
@@ -100,6 +103,7 @@ export class SessionsBrowserMain extends Disposable {
 					'workbench.contrib.output',
 					'workbench.contrib.logs',
 					'workbench.contrib.appServerRecovery',
+					'workbench.contrib.workspacePermissionStatus',
 					'workbench.contrib.githubLinkPresentations',
 					'workbench.contrib.url',
 					'workbench.contrib.chatAccessibilitySignals',

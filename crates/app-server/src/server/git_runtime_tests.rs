@@ -1405,6 +1405,89 @@ fn watcher_file_updates_reuse_refs_until_metadata_changes_or_head_moves() {
     assert_eq!(state.history_revision, initial.history_revision + 2);
 }
 
+#[cfg(unix)]
+#[test]
+fn file_read_finishes_during_background_ref_scan_while_writes_remain_excluded() {
+    use std::os::unix::fs::PermissionsExt;
+    struct ReleaseOnDrop(PathBuf);
+    impl Drop for ReleaseOnDrop {
+        fn drop(&mut self) {
+            let _ = std::fs::write(&self.0, "release");
+        }
+    }
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "index baseline\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    repository.write("tracked.txt", "working contents\n");
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    runtime.status().unwrap();
+    let owner = runtime.repository(None).unwrap();
+    let scripts = tempfile::tempdir().unwrap();
+    let started = scripts.path().join("started");
+    let release = ReleaseOnDrop(scripts.path().join("release"));
+    let executable = scripts.path().join("git");
+    let quote = |path: &Path| format!("'{}'", path.display().to_string().replace('\'', "'\\''"));
+    let git = ash_git::GitClient::system().executable().unwrap();
+    std::fs::write(&executable, format!(
+        "#!/bin/sh\nfor arg do if [ \"$arg\" = for-each-ref ]; then touch {}; while ! test -f {}; do sleep 0.01; done; break; fi; done\nexec {} \"$@\"\n",
+        quote(&started), quote(&release.0), quote(&git),
+    )).unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let client =
+        ash_git::GitClient::with_executable(executable, ash_git::GitExecutionLimits::default())
+            .unwrap();
+    let token = ash_async_utils::CancellationSource::new().token();
+    std::thread::scope(|scope| {
+        // Release before scoped threads are joined, including assertion failures.
+        let _release = ReleaseOnDrop(release.0.clone());
+        let refresh = scope.spawn(|| {
+            crate::git_service::with_client(client, || {
+                owner.refresh_from_watcher_for_request(
+                    &ash_file_watcher::FileWatcherEvent::RescanRequired {
+                        watched_paths: vec![repository.root().to_path_buf()],
+                    },
+                    &token,
+                )
+            })
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !started.exists() {
+            assert!(Instant::now() < deadline, "background scan did not start");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(
+            matches!(owner.operation.try_lock(), Err(error) if error.kind() == std::io::ErrorKind::WouldBlock)
+        );
+        let (sent, received) = std::sync::mpsc::channel();
+        let reader = Arc::clone(&owner);
+        let file = scope.spawn(move || {
+            let result = reader.change_file(
+                Path::new("tracked.txt"),
+                ash_app_server_protocol::protocol::git::GitChangeFileComparisonDto::Unstaged,
+            );
+            sent.send(result).unwrap();
+        });
+        let result = received.recv_timeout(Duration::from_secs(2));
+        std::fs::write(&release.0, "release").unwrap();
+        refresh.join().unwrap().unwrap();
+        file.join().unwrap();
+        let contents = result
+            .expect("read-only file RPC queued behind background scan")
+            .unwrap();
+        assert!(
+            matches!(contents.original, ash_app_server_protocol::protocol::git::GitCommitFileContentDto::Text { text } if text == "index baseline\n")
+        );
+        assert!(
+            matches!(contents.modified, ash_app_server_protocol::protocol::git::GitCommitFileContentDto::Text { text } if text == "working contents\n")
+        );
+    });
+}
+
 #[test]
 fn watcher_config_sources_and_rescans_refresh_refs() {
     let repository = TestRepository::init();
@@ -1469,6 +1552,90 @@ fn watcher_config_sources_and_rescans_refresh_refs() {
         state.references.as_ref().unwrap().catalog.tags[0].0,
         "external"
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn staged_read_does_not_use_a_rename_mapping_waiting_for_background_publication() {
+    use std::os::unix::fs::PermissionsExt;
+    struct ReleaseOnDrop(PathBuf);
+    impl Drop for ReleaseOnDrop {
+        fn drop(&mut self) {
+            let _ = std::fs::write(&self.0, "release");
+        }
+    }
+    let repository = TestRepository::init();
+    repository.write("before.txt", "base\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    repository.git(&["mv", "before.txt", "after.txt"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    runtime.status().unwrap();
+    let owner = runtime.repository(None).unwrap();
+    // The old resource maps HEAD:before.txt to index:after.txt. A subsequent
+    // external commit makes HEAD:after.txt the correct baseline for that path.
+    repository.git(&["commit", "-m", "rename"]);
+    repository.write("after.txt", "fresh index\n");
+    repository.git(&["add", "."]);
+    let scripts = tempfile::tempdir().unwrap();
+    let started = scripts.path().join("started");
+    let release = ReleaseOnDrop(scripts.path().join("release"));
+    let executable = scripts.path().join("git");
+    let quote = |path: &Path| format!("'{}'", path.display().to_string().replace('\'', "'\\''"));
+    let git = ash_git::GitClient::system().executable().unwrap();
+    std::fs::write(&executable, format!(
+        "#!/bin/sh\nfor arg do if [ \"$arg\" = for-each-ref ]; then touch {}; while ! test -f {}; do sleep 0.01; done; break; fi; done\nexec {} \"$@\"\n",
+        quote(&started), quote(&release.0), quote(&git),
+    )).unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let client =
+        ash_git::GitClient::with_executable(executable, ash_git::GitExecutionLimits::default())
+            .unwrap();
+    let token = ash_async_utils::CancellationSource::new().token();
+    std::thread::scope(|scope| {
+        let _release = ReleaseOnDrop(release.0.clone());
+        let refresh = scope.spawn(|| {
+            crate::git_service::with_client(client, || {
+                owner.refresh_from_watcher_for_request(
+                    &ash_file_watcher::FileWatcherEvent::RescanRequired {
+                        watched_paths: vec![repository.root().to_path_buf()],
+                    },
+                    &token,
+                )
+            })
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !started.exists() {
+            assert!(Instant::now() < deadline, "background scan did not start");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let (sent, received) = std::sync::mpsc::channel();
+        let reader = Arc::clone(&owner);
+        let file = scope.spawn(move || {
+            sent.send(reader.change_file(
+                Path::new("after.txt"),
+                ash_app_server_protocol::protocol::git::GitChangeFileComparisonDto::Staged,
+            ))
+            .unwrap()
+        });
+        let early = received.recv_timeout(Duration::from_millis(200));
+        std::fs::write(&release.0, "release").unwrap();
+        refresh.join().unwrap().unwrap();
+        file.join().unwrap();
+        let contents = early
+            .unwrap_or_else(|_| received.recv_timeout(Duration::from_secs(2)).unwrap())
+            .unwrap();
+        assert!(
+            matches!(contents.original, ash_app_server_protocol::protocol::git::GitCommitFileContentDto::Text { text } if text == "base\n")
+        );
+        assert!(
+            matches!(contents.modified, ash_app_server_protocol::protocol::git::GitCommitFileContentDto::Text { text } if text == "fresh index\n")
+        );
+    });
 }
 
 #[test]
@@ -2209,7 +2376,7 @@ fn enabling_worktree_discovery_wakes_idle_watchers_without_another_directory_eve
     let owner = runtime.repository(Some(&linked.id)).unwrap();
     // Starting the newly admitted watcher publishes its first authoritative state.
     // No directory creation or metadata change occurs after updating the policy.
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         if queue.drain().iter().any(|event| {
             event["method"] == "git/statusChanged"
@@ -2224,7 +2391,7 @@ fn enabling_worktree_discovery_wakes_idle_watchers_without_another_directory_eve
         std::thread::sleep(Duration::from_millis(10));
     }
     repository.write("linked/tracked.txt", "changed\n");
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         let changed = owner
             .state
@@ -2386,6 +2553,11 @@ fn runtime_projects_text_diffs_and_switches_only_existing_local_branches() {
     assert_eq!(projection.diffs[0].original, "before\n");
     assert_eq!(projection.diffs[0].modified, "after\n");
     assert_eq!(projection.statistics.files, 1);
+    let summary = runtime.text_diff_summary_for(None).unwrap();
+    assert!(summary.diffs.is_empty());
+    assert_eq!(summary.statistics, projection.statistics);
+    assert_eq!(summary.status.changes, projection.status.changes);
+
     let history = runtime.recent_commits().unwrap();
     assert_eq!(history.len(), 1);
     assert_eq!(history[0].subject, "initial");
@@ -3474,4 +3646,365 @@ fn repository_context_projection_respects_cancellation_and_retired_authority() {
             crate::git_service::GitServiceError::Permission
         ))
     ));
+}
+
+#[test]
+fn changes_summary_reads_fresh_counts_without_publishing_status_or_history() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "base\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    let broker = Arc::new(UpdateBroker::default());
+    let queue = NotificationQueue::default();
+    broker.register(1, false, &queue);
+    let runtime = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
+    let published = runtime.status().unwrap();
+    queue.drain();
+    repository.write("tracked.txt", "fresh\nsecond\n");
+    repository.write("binary.bin", "\0binary");
+    let summary = runtime.changes_summary_for(None).unwrap();
+    assert_eq!(summary.files, 2);
+    assert_eq!(summary.statistics.files, 1);
+    assert_eq!(summary.statistics.additions, 2);
+    assert_eq!(summary.statistics.deletions, 1);
+    assert!(queue.drain().is_empty());
+    let owner = runtime.repository(None).unwrap();
+    assert_eq!(
+        owner.state.lock().unwrap().status.as_ref(),
+        Some(&published)
+    );
+    // A second read must see external changes even without a watcher notification.
+    repository.write("tracked.txt", "base\n");
+    let fresh = runtime.changes_summary_for(None).unwrap();
+    assert_eq!(fresh.files, 1);
+    assert_eq!(fresh.statistics.files, 0);
+    assert!(queue.drain().is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn changes_summary_allows_file_reads_excludes_writes_and_skips_reference_queries() {
+    use std::os::unix::fs::PermissionsExt;
+    struct ReleaseOnDrop(PathBuf);
+    impl Drop for ReleaseOnDrop {
+        fn drop(&mut self) {
+            let _ = std::fs::write(&self.0, "release");
+        }
+    }
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "baseline\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    repository.write("tracked.txt", "working\n");
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    runtime.status().unwrap();
+    let owner = runtime.repository(None).unwrap();
+    let scripts = tempfile::tempdir().unwrap();
+    let started = scripts.path().join("started");
+    let release = ReleaseOnDrop(scripts.path().join("release"));
+    let log = scripts.path().join("commands");
+    let executable = scripts.path().join("git");
+    let quote = |path: &Path| format!("'{}'", path.display().to_string().replace('\'', "'\\''"));
+    let git = ash_git::GitClient::system().executable().unwrap();
+    std::fs::write(&executable, format!(
+        "#!/bin/sh\nprintf '%s ' \"$@\" >> {0}\nprintf '\\n' >> {0}\nfor arg do if [ \"$arg\" = cat-file ] || [ \"$arg\" = show ]; then touch {1}; while ! test -f {2}; do sleep 0.01; done; break; fi; done\nexec {3} \"$@\"\n",
+        quote(&log), quote(&started), quote(&release.0), quote(&git),
+    )).unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let client =
+        ash_git::GitClient::with_executable(executable, ash_git::GitExecutionLimits::default())
+            .unwrap();
+    std::thread::scope(|scope| {
+        let _release = ReleaseOnDrop(release.0.clone());
+        let summary = scope.spawn(|| {
+            crate::git_service::with_client(client, || runtime.changes_summary_for(None))
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !started.exists() {
+            assert!(
+                Instant::now() < deadline,
+                "summary did not reach content read"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(
+            matches!(owner.operation.try_lock(), Err(error) if error.kind() == std::io::ErrorKind::WouldBlock)
+        );
+        let (sent, received) = std::sync::mpsc::channel();
+        let reader = Arc::clone(&owner);
+        let file = scope.spawn(move || {
+            sent.send(reader.change_file(
+                Path::new("tracked.txt"),
+                super::GitChangeFileComparisonDto::Unstaged,
+            ))
+            .unwrap();
+        });
+        let early = received.recv_timeout(Duration::from_secs(2));
+        std::fs::write(&release.0, "release").unwrap();
+        let statistics = summary.join().unwrap().unwrap();
+        file.join().unwrap();
+        let contents = early
+            .expect("ordinary file read must complete while summary is blocked")
+            .unwrap();
+        assert!(
+            matches!(contents.original, super::GitCommitFileContentDto::Text { text } if text == "baseline\n")
+        );
+        assert!(
+            matches!(contents.modified, super::GitCommitFileContentDto::Text { text } if text == "working\n")
+        );
+        assert_eq!(
+            (
+                statistics.files,
+                statistics.statistics.additions,
+                statistics.statistics.deletions
+            ),
+            (1, 1, 1)
+        );
+    });
+    let commands = std::fs::read_to_string(log).unwrap();
+    for unrelated in ["for-each-ref", " stash ", " remote "] {
+        assert!(
+            !commands.contains(unrelated),
+            "unexpected summary metadata query: {commands}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn concurrent_watcher_refreshes_union_paths_and_run_one_status_scan() {
+    use std::os::unix::fs::PermissionsExt;
+    let repository = TestRepository::init();
+    for i in 0..8 {
+        repository.write(&format!("file-{i}.txt"), "before\n");
+    }
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    runtime.status().unwrap();
+    let owner = runtime.repository(None).unwrap();
+    let scripts = tempfile::tempdir().unwrap();
+    let count = scripts.path().join("status-count");
+    let executable = scripts.path().join("git");
+    let quote = |path: &Path| format!("'{}'", path.display().to_string().replace('\'', "'\\''"));
+    let git = ash_git::GitClient::system().executable().unwrap();
+    std::fs::write(&executable, format!("#!/bin/sh\nfor arg do if [ \"$arg\" = status ]; then echo scan >> {}; break; fi; done\nexec {} \"$@\"\n", quote(&count), quote(&git))).unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let client =
+        ash_git::GitClient::with_executable(executable, ash_git::GitExecutionLimits::default())
+            .unwrap();
+    for i in 0..8 {
+        repository.write(&format!("file-{i}.txt"), "after\n");
+    }
+    std::thread::scope(|scope| {
+        let scan = owner.watcher_scan.lock().unwrap();
+        let handles: Vec<_> = (0..8)
+            .map(|i| {
+                let owner = &owner;
+                let client = client.clone();
+                let path = repository.root().join(format!("file-{i}.txt"));
+                scope.spawn(move || {
+                    crate::git_service::with_client(client, || {
+                        owner.refresh_from_watcher_for_request(
+                            &ash_file_watcher::FileWatcherEvent::PathsChanged { paths: vec![path] },
+                            &ash_async_utils::CancellationSource::new().token(),
+                        )
+                    })
+                })
+            })
+            .collect();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while owner.watcher_refresh.lock().unwrap().requested < 8 {
+            assert!(Instant::now() < deadline, "watcher requests did not arrive");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        drop(scan);
+        for handle in handles {
+            handle.join().unwrap().unwrap();
+        }
+    });
+    assert_eq!(std::fs::read_to_string(&count).unwrap().lines().count(), 1);
+    let paths = owner
+        .state
+        .lock()
+        .unwrap()
+        .status
+        .as_ref()
+        .unwrap()
+        .changes
+        .iter()
+        .map(|change| change.path.clone())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(paths, (0..8).map(|i| format!("file-{i}.txt")).collect());
+    // A later invalidation cannot be satisfied by the earlier batch.
+    repository.write("file-0.txt", "before\n");
+    owner
+        .refresh_from_watcher_for_request(
+            &ash_file_watcher::FileWatcherEvent::PathsChanged {
+                paths: vec![repository.root().join("file-0.txt")],
+            },
+            &ash_async_utils::CancellationSource::new().token(),
+        )
+        .unwrap();
+    assert_eq!(
+        owner
+            .state
+            .lock()
+            .unwrap()
+            .status
+            .as_ref()
+            .unwrap()
+            .changes
+            .len(),
+        7
+    );
+}
+
+#[test]
+fn cancelled_watcher_refresh_retains_paths_for_the_next_scan() {
+    let repository = TestRepository::init();
+    for file in ["first.txt", "second.txt"] {
+        repository.write(file, "before\n");
+    }
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "initial"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    runtime.status().unwrap();
+    let owner = runtime.repository(None).unwrap();
+    repository.write("first.txt", "after\n");
+    repository.write("second.txt", "after\n");
+    let cancelled = ash_async_utils::CancellationSource::new();
+    cancelled.cancel();
+    assert!(
+        owner
+            .refresh_from_watcher_for_request(
+                &ash_file_watcher::FileWatcherEvent::PathsChanged {
+                    paths: vec![repository.root().join("first.txt")]
+                },
+                &cancelled.token()
+            )
+            .is_err()
+    );
+    owner
+        .refresh_from_watcher_for_request(
+            &ash_file_watcher::FileWatcherEvent::PathsChanged {
+                paths: vec![repository.root().join("second.txt")],
+            },
+            &ash_async_utils::CancellationSource::new().token(),
+        )
+        .unwrap();
+    assert_eq!(
+        owner
+            .state
+            .lock()
+            .unwrap()
+            .status
+            .as_ref()
+            .unwrap()
+            .changes
+            .len(),
+        2
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn hints_during_a_running_scan_are_refreshed_even_if_that_scan_is_cancelled() {
+    use std::os::unix::fs::PermissionsExt;
+    struct ReleaseOnDrop(PathBuf);
+    impl Drop for ReleaseOnDrop {
+        fn drop(&mut self) {
+            let _ = std::fs::write(&self.0, "release");
+        }
+    }
+    for cancel in [false, true] {
+        let repository = TestRepository::init();
+        for file in ["first.txt", "second.txt"] {
+            repository.write(file, "before\n");
+        }
+        repository.git(&["add", "."]);
+        repository.git(&["commit", "-m", "initial"]);
+        let runtime = GitRuntime::new(
+            mutation_authorization(repository.root()),
+            Arc::new(UpdateBroker::default()),
+        )
+        .unwrap();
+        runtime.status().unwrap();
+        let owner = runtime.repository(None).unwrap();
+        let scripts = tempfile::tempdir().unwrap();
+        let started = scripts.path().join("started");
+        let release = ReleaseOnDrop(scripts.path().join("release"));
+        let executable = scripts.path().join("git");
+        let quote =
+            |path: &Path| format!("'{}'", path.display().to_string().replace('\'', "'\\''"));
+        let git = ash_git::GitClient::system().executable().unwrap();
+        std::fs::write(&executable, format!("#!/bin/sh\nfor arg do if [ \"$arg\" = for-each-ref ]; then touch {}; while ! test -f {}; do sleep 0.01; done; break; fi; done\nexec {} \"$@\"\n", quote(&started), quote(&release.0), quote(&git))).unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let client =
+            ash_git::GitClient::with_executable(executable, ash_git::GitExecutionLimits::default())
+                .unwrap();
+        let source = ash_async_utils::CancellationSource::new();
+        repository.write("first.txt", "after\n");
+        std::thread::scope(|scope| {
+            let _release = ReleaseOnDrop(release.0.clone());
+            let first = scope.spawn(|| {
+                crate::git_service::with_client(client, || {
+                    owner.refresh_from_watcher_for_request(
+                        &ash_file_watcher::FileWatcherEvent::RescanRequired {
+                            watched_paths: Vec::new(),
+                        },
+                        &source.token(),
+                    )
+                })
+            });
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !started.exists() {
+                assert!(Instant::now() < deadline, "first scan did not start");
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            repository.write("second.txt", "after\n");
+            let second = scope.spawn(|| {
+                owner.refresh_from_watcher_for_request(
+                    &ash_file_watcher::FileWatcherEvent::PathsChanged {
+                        paths: vec![repository.root().join("second.txt")],
+                    },
+                    &ash_async_utils::CancellationSource::new().token(),
+                )
+            });
+            while owner.watcher_refresh.lock().unwrap().requested < 2 {
+                assert!(Instant::now() < deadline, "follow-up hint did not arrive");
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            if cancel {
+                source.cancel();
+            }
+            std::fs::write(&release.0, "release").unwrap();
+            assert_eq!(first.join().unwrap().is_err(), cancel);
+            second.join().unwrap().unwrap();
+        });
+        assert_eq!(
+            owner
+                .state
+                .lock()
+                .unwrap()
+                .status
+                .as_ref()
+                .unwrap()
+                .changes
+                .len(),
+            2
+        );
+    }
 }

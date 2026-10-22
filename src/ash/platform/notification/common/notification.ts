@@ -11,11 +11,32 @@ export enum NotificationPriority {
 	DEFAULT,
 	OPTIONAL,
 	SILENT,
+	/** Urgent notifications remain visible while do not disturb is enabled. */
+	URGENT,
+}
+
+/** Do not disturb keeps errors visible and delivers other notifications silently. */
+export enum NotificationsFilter {
+	OFF = 0,
+	ERROR = 1,
 }
 
 export interface INotificationSource {
 	readonly id: string;
 	readonly label: string;
+}
+
+export interface INotificationSourceFilter extends INotificationSource {
+	readonly filter: NotificationsFilter;
+}
+
+export interface IStatusMessageOptions {
+	readonly showAfter?: number;
+	readonly hideAfter?: number;
+}
+
+export interface IStatusHandle {
+	close(): void;
 }
 
 export interface INotificationProgressProperties {
@@ -44,6 +65,8 @@ export interface INotification {
 	readonly source?: string | INotificationSource;
 	readonly priority?: NotificationPriority;
 	readonly progress?: INotificationProgressProperties;
+	/** Keeps the toast visible until explicitly dismissed. */
+	readonly sticky?: boolean;
 	readonly actions?: INotificationActions;
 }
 
@@ -61,10 +84,16 @@ export interface INotificationHandle {
 
 /** Window-scoped notification service. */
 export interface INotificationService {
+	readonly onDidChangeFilter: Event<void>;
+	setFilter(filter: NotificationsFilter | INotificationSourceFilter): void;
+	getFilter(source?: INotificationSource): NotificationsFilter;
+	getFilters(): INotificationSourceFilter[];
+	removeFilter(sourceId: string): void;
 	notify(options: INotification): INotificationHandle;
 	info(message: NotificationMessage | NotificationMessage[]): void;
 	warn(message: NotificationMessage | NotificationMessage[]): void;
 	error(message: NotificationMessage | NotificationMessage[]): void;
+	status(message: NotificationMessage, options?: IStatusMessageOptions): IStatusHandle;
 }
 
 export const INotificationService = createServiceIdentifier<INotificationService>("notificationService");

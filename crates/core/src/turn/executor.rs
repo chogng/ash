@@ -1100,7 +1100,7 @@ impl TurnExecutor {
                     turn.instructions.as_ref(),
                 )
                 .map_err(ExecutionFailure::model)?;
-            let tools = tool_catalog.definitions().to_vec();
+            let tools = tool_catalog.shared_definitions();
             let frozen_model = turn.model.clone();
             let model = match frozen_model.as_ref() {
                 Some(model) => ModelSelection::Session(model),

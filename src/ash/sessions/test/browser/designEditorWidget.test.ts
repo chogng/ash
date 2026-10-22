@@ -44,7 +44,7 @@ import { UserDataProfileService } from '../../../workbench/services/userDataProf
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { ISessionsLayoutService } from '../../services/layout/common/sessionsLayoutService.js';
 
 const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
@@ -83,7 +83,7 @@ const DESIGN_EDITOR_RESOURCE = URI.parse('ash-creator:/design');
 await import('../../contrib/creator/browser/creatorEditor.contribution.js');
 const { createDesignEditorContributions } = await import('../../contrib/creator/design.main.js');
 const services = new InstantiationService();
-const notifications = new NotificationService();
+const notifications = new TestNotificationService();
 services.registerInstance(INotificationService, notifications);
 setup(() => notifications.model.clear());
 suiteTeardown(() => notifications.dispose());

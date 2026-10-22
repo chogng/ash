@@ -81,15 +81,13 @@ pub(crate) fn discover(
         .into_iter()
         .filter(|package| members.contains(&package.id))
     {
-        let directory = package
-            .manifest_path
-            .parent()
-            .ok_or(TestingError::InvalidInput)?
-            .canonicalize()
-            .map_err(|error| TestingError::Failed(error.to_string()))?;
-        if !directory.starts_with(root) {
-            return Err(TestingError::PermissionRequired);
-        }
+        let directory = source_path(
+            read,
+            package
+                .manifest_path
+                .parent()
+                .ok_or(TestingError::InvalidInput)?,
+        )?;
         for target in package.targets {
             let kind = if target.kind.iter().any(|kind| {
                 matches!(
@@ -180,6 +178,16 @@ pub(crate) fn discover(
     Ok(tests)
 }
 
+/// Keeps Cargo and rustdoc paths in the authorized directory's host namespace.
+pub(crate) fn source_path(read: &Authorization, path: &Path) -> Result<PathBuf, TestingError> {
+    read.dir()
+        .resolve_existing_path(path)
+        .map_err(|error| match error {
+            ash_file_access::DirPathError::OutsideDir(_) => TestingError::PermissionRequired,
+            other => TestingError::Failed(other.to_string()),
+        })
+}
+
 struct Scanner<'a> {
     parser: &'a mut Parser,
     read: &'a Authorization,
@@ -203,12 +211,7 @@ impl Scanner<'_> {
         self.cancellation
             .check()
             .map_err(|_| TestingError::Cancelled)?;
-        let canonical = path
-            .canonicalize()
-            .map_err(|error| TestingError::Failed(error.to_string()))?;
-        if !canonical.starts_with(self.read.dir().canonical_path()) {
-            return Err(TestingError::PermissionRequired);
-        }
+        let canonical = source_path(self.read, path)?;
         if !self.visited.insert((canonical.clone(), modules.to_vec())) {
             return Ok(());
         }

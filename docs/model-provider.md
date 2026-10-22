@@ -534,21 +534,11 @@ credential、cancellation、retry 和 secret redaction 责任。
 Public API 不导出 ChatGPT token、PKCE verifier、通用 secret header map 或 `SecretStore`。登录账户
 projection 由 [`ash-login`](login.md) 提供；App Server 只读取该 redacted projection。
 
-## 14. 迁移顺序
+## 14. 新能力的接入边界
 
-1. 建立 `ash-http-client` 的 unary request/response/config port；
-2. 将当前 `ash-client::UreqHttpClient` 和 raw transport value 迁入底层 crate；
-3. 让 `ash-client` 通过共享 transport 执行 operation retry/framing；
-4. 将 `ash-api::Api` 改为 endpoint/profile API；
-5. `model-provider/src/providers/*` 直接选择 endpoint/profile；
-6. 增加 streaming binding；
-7. 以 OpenAI API key 建立第一个 direct-provider credential vertical slice；
-8. 建立 `ash-login` 与 `ash-chatgpt`，以 native ChatGPT OAuth 和本地 `TurnExecutor` 接入 subscription vertical slice；
-9. 实现 models manager 的 catalog source；
-10. 删除旧 Provider 级双重 dispatch。
-11. 已建立 Responses WebSocket 与 Realtime GA 会话及显式 runtime 工厂；每个调用者拥有连接，Responses 按精确前缀续接，失败不自动推理重放。详细能力和未覆盖项见[端点实现](model-api.md#46-端点归属与-websocket-实现)。
+当前 runtime 已组合共享 HTTP transport、operation retry/framing 和 endpoint/profile API；职责与调用链见前文。新增供应商或协议能力时，继续由 runtime 选择准确 endpoint、credential 与 retry policy，不恢复 Provider 级双重 dispatch，不创建空模块或两套长期 public facade。
 
-迁移期间不创建空模块，也不同时保留两套长期 public facade。
+Responses WebSocket 与 Realtime GA 使用显式 runtime 工厂，每个调用者拥有连接；Responses 按精确前缀续接，失败不自动推理重放。详细能力和未覆盖项见[端点实现](model-api.md#46-端点归属与-websocket-实现)。
 
 ## 15. 固定决策
 

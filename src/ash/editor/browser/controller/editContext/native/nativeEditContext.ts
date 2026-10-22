@@ -41,7 +41,7 @@ export class NativeEditContext extends AbstractEditContext {
 	private readonly keyupEmitter = this._register(new Emitter<IKeyboardEvent>());
 	private readonly compositionStartEmitter = this._register(new Emitter<EditContextCompositionData>());
 	private readonly compositionUpdateEmitter = this._register(new Emitter<EditContextCompositionData>());
-	private readonly compositionEndEmitter = this._register(new Emitter<void>());
+	private readonly compositionEndEmitter = this._register(new Emitter<EditContextCompositionData>());
 	private connected = false;
 	private readOnlyState: boolean;
 	private shadowText = "";
@@ -80,7 +80,7 @@ export class NativeEditContext extends AbstractEditContext {
 	readonly onKeyUp: Event<IKeyboardEvent> = this.keyupEmitter.event;
 	readonly onDidCompositionStart: Event<EditContextCompositionData> = this.compositionStartEmitter.event;
 	readonly onDidCompositionUpdate: Event<EditContextCompositionData> = this.compositionUpdateEmitter.event;
-	readonly onDidCompositionEnd: Event<void> = this.compositionEndEmitter.event;
+	readonly onDidCompositionEnd: Event<EditContextCompositionData> = this.compositionEndEmitter.event;
 
 	constructor(
 		context: ViewContext,
@@ -685,7 +685,7 @@ export class NativeEditContext extends AbstractEditContext {
 		});
 	}
 
-	private handleCompositionEnd(_event: CompositionEvent): void {
+	private handleCompositionEnd(event: CompositionEvent): void {
 		if (this.pendingHighSurrogate) {
 			const pending = this.pendingHighSurrogate;
 			this.pendingHighSurrogate = undefined;
@@ -696,7 +696,7 @@ export class NativeEditContext extends AbstractEditContext {
 		this.composing = false;
 		this.compositionText = '';
 		this.compositionActiveOffset = 0;
-		this.compositionEndEmitter.fire(undefined);
+		this.compositionEndEmitter.fire({ data: normalizeTextLineEndings(event.data ?? '') });
 	}
 
 	private handleTextFormatUpdate(event: TextFormatUpdateEvent): void {
@@ -775,11 +775,12 @@ export class NativeEditContext extends AbstractEditContext {
 		const text = this.shadowText.slice(start, end);
 		const activeOffset = clampOffset(this.shadowSelectionEnd - start, text.length);
 		if (text === this.compositionText && activeOffset === this.compositionActiveOffset) return;
+		const caretOnly = text === this.compositionText;
 		this.emitType({
-			text,
-			replacePrevCharCnt: this.compositionText.length,
-			replaceNextCharCnt: 0,
-			positionDelta: activeOffset - text.length,
+			text: caretOnly ? '' : text,
+			replacePrevCharCnt: caretOnly ? 0 : this.compositionActiveOffset,
+			replaceNextCharCnt: caretOnly ? 0 : this.compositionText.length - this.compositionActiveOffset,
+			positionDelta: caretOnly ? activeOffset - this.compositionActiveOffset : activeOffset - text.length,
 		});
 		this.compositionText = text;
 		this.compositionActiveOffset = activeOffset;

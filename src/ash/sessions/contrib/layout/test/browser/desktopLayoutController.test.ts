@@ -509,7 +509,7 @@ class LayoutFixture extends Disposable {
 			}
 		}));
 		this.services.registerInstance(IPaneCompositePartService, {
-			onDidPaneCompositeOpen: listener => this.panelOpened.event(id => listener({ composite: { id } as import('../../../../../workbench/browser/parts/views/paneComposite.js').PaneComposite, viewContainerLocation: ViewContainerLocation.Panel })),
+			onDidPaneCompositeOpen: listener => this.panelOpened.event(id => listener({ composite: { id } as import('../../../../../workbench/browser/panecomposite.js').PaneComposite, viewContainerLocation: ViewContainerLocation.Panel })),
 			onDidPaneCompositeClose: Event.None,
 			getActivePaneComposite: () => undefined,
 			getPartId: () => 'panel',

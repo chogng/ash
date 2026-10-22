@@ -23,6 +23,7 @@ export function registerFilesViews(registry: WorkbenchViewRegistry = ViewsRegist
 			order: 0,
 			hideByDefault: true,
 			canToggleVisibility: true,
+			canMoveView: true,
 			ctorDescriptor: new SyncDescriptor(OpenEditorsView),
 		},
 		{
@@ -32,6 +33,7 @@ export function registerFilesViews(registry: WorkbenchViewRegistry = ViewsRegist
 			order: 1,
 			when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
 			canToggleVisibility: false,
+			canMoveView: true,
 			ctorDescriptor: new SyncDescriptor(ExplorerView),
 		},
 		{

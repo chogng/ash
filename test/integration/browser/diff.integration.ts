@@ -148,6 +148,8 @@ await import('../../../src/ash/sessions/contrib/changes/browser/changesetReviewA
 const resources = new DisposableStore();
 const uriIdentityServices = resources.add(new TestUriIdentityServices());
 const editorServices = StandaloneServices.initialize();
+// These comparison fixtures exercise folded files; product defaults are tested separately.
+await editorServices.get(IConfigurationService).updateValue('diffEditor.hideUnchangedRegions.enabled', true);
 editorServices.registerInstance(IWorkingCopyService, resources.add(uriIdentityServices.createInstance(BrowserWorkingCopyService)));
 resources.add(toDisposable(resetNlsResolver));
 const symbolProvider = resources.add(editorServices.languageFeaturesService.documentSymbolProvider.register('*', {
@@ -370,7 +372,7 @@ resources.add(registerAction2(ChangeEOLAction));
 resources.add(registerAction2(ChangeEncodingAction));
 
 const harness = {
-	async openTitleComparison(kind: 'diff' | 'history' | 'git' | 'writable' | 'binary' | 'encoding' | 'markdown' = 'diff', gitComparison: 'staged' | 'unstaged' = 'unstaged', encoding: 'utf8' | 'utf8bom' = 'utf8'): Promise<void> {
+	async openTitleComparison(kind: 'diff' | 'history' | 'git' | 'writable' | 'binary' | 'encoding' | 'markdown' = 'diff', gitComparison: 'staged' | 'unstaged' = 'unstaged', encoding: 'utf8' | 'utf8bom' = 'utf8', singleGitFile = false): Promise<void> {
 		titleGitEncoding = encoding;
 		registerDiffEditorCommands();
 		const host = document.createElement('div');
@@ -570,7 +572,17 @@ const harness = {
 			}
 			await window.__rustGitRequest('start', { language: new URLSearchParams(location.search).get('locale') ?? 'en', workspaceFolders: [], configurationValues: {}, configurationData: {} });
 			await invokeRustGit('ash.scm', 'scm', { method: 'initialize' });
-			await titleEditor.openEditor(await createGitMultiDiffEditorInput(titleGit, gitComparison), { pinned: true });
+			const input = await createGitMultiDiffEditorInput(titleGit, gitComparison);
+			if (singleGitFile) {
+				if (!isMultiDiffEditorInput(input)) throw new Error('Expected multi-diff');
+				const first = input.items[0]!;
+				// Individual working-tree comparisons edit the live file, as Git's open-change command does.
+				await titleEditor.openEditor(createDiffEditorInput(first.original, {
+					...first.modified, resource: URI.file('/workspace/src/first.ts'), readOnly: false,
+				}), { pinned: true });
+			} else {
+				await titleEditor.openEditor(input, { pinned: true });
+			}
 			return;
 		}
 		if (kind === 'writable' || kind === 'binary') {
@@ -1041,6 +1053,9 @@ const harness = {
 	},
 	setHiddenRegions(enabled: boolean): void {
 		single.setHideUnchangedRegionsOptions({ enabled, contextLineCount: 1, minimumLineCount: 3, revealLineCount: 2 });
+	},
+	setMultiHiddenRegions(enabled: boolean): Promise<void> {
+		return editorServices.get(IConfigurationService).updateValue('diffEditor.hideUnchangedRegions.enabled', enabled);
 	},
 	removeSymbolProvider(): void {
 		symbolProvider.dispose();

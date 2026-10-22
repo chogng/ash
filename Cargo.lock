@@ -69,6 +69,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "allocation-counter"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "beb9e990c0a33699f1984d85a6abead615ccc72dd8130bf3e15dcabe2ca149c9"
+
+[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -680,6 +686,7 @@ dependencies = [
  "ash-websocket-client",
  "ash-workflows",
  "base64 0.22.1",
+ "cc",
  "dirs",
  "dunce",
  "external-agent-migration",
@@ -1219,6 +1226,7 @@ version = "0.1.0"
 name = "ash-core"
 version = "0.1.0"
 dependencies = [
+ "allocation-counter",
  "ash-action-policy",
  "ash-agent-environment",
  "ash-agent-graph-store",
@@ -1323,6 +1331,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-debug-javascript"
+version = "0.1.0"
+dependencies = [
+ "ash-external-ext-sdk",
+ "ash-sandboxing",
+ "globset",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio-tungstenite 0.28.0",
+ "url",
+]
+
+[[package]]
 name = "ash-debug-lldb"
 version = "0.1.0"
 dependencies = [
@@ -1356,6 +1379,17 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.21",
+ "url",
+]
+
+[[package]]
+name = "ash-debug-server-ready"
+version = "0.1.0"
+dependencies = [
+ "ash-external-ext-sdk",
+ "regex",
+ "serde",
+ "serde_json",
  "url",
 ]
 
@@ -3211,6 +3245,7 @@ dependencies = [
  "ash-grammars",
  "ash-sandboxing",
  "ash-utils-string",
+ "cc",
  "serde",
  "serde_json",
  "tempfile",

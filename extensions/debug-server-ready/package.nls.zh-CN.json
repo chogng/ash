@@ -1,0 +1,5 @@
+{
+  "displayName": "服务就绪动作",
+  "description": "通过 Rust 调试工作流执行服务就绪动作。",
+  "error.configuration": "服务就绪配置无效或正则表达式不受支持。"
+}

@@ -244,7 +244,7 @@ fn regular_wire_clients_cannot_declare_application_window_authority() {
 fn development_task_tools_review_and_dispatch_on_the_bound_window() {
     let directory_root = tempfile::tempdir().unwrap();
     let profile = tempfile::tempdir().unwrap();
-    let root = directory_root.path().canonicalize().unwrap();
+    let root = dunce::canonicalize(directory_root.path()).unwrap();
     let directory = root.to_string_lossy().into_owned();
     let revision = "a".repeat(64);
     let model = model(vec![

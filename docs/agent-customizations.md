@@ -226,7 +226,7 @@ Instructions、Agent references、已激活 Skill 内容、用户消息和 Tool 
 
 Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill selector 把用户选择绑定到稳定 `SkillRef`。两种入口的名称、补全和展示状态都不能代替目标对象的 identity、权限或 activation validation。文件和 Plugin 提供的上下文继续使用 `@`，不进入 Skill selector。
 
-## 7. 当前状态与实施顺序
+## 7. 当前能力与限制
 
 | 能力                                                             | 状态     | 实现证据或前置条件                                                                                                                            |
 | ---------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -251,16 +251,7 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 复制到 Ash 的目标文件；已有非空目标报告冲突，不交给 Agent 合并。来源正文不进入 `/init`
 或任何用于整理导入内容的 Agent Turn。四种来源的项目指令均已接通预览与目标写入。
 
-实施顺序：
-
-1. 固定本文的三类对象、命名空间和 import boundary，代码与文档不再新增 Prompt/Task artifact。
-2. 已完成 Directory 三类 catalog、Global Instruction safe-point injection 与 watcher refresh。
-3. 已完成 Skill 显式 activation、可信 built-in 自动 selector、Directory source、用户可调用投影
-   和通用 context injection；已接通按需读取、显式附件与写入前规则检查；管理界面仍待接入。
-4. Agent definition catalog 已开放给 multi-agent delegation 的受限选择；已授权环境目录的定义可由新聊天选择器列出并用于创建根 Session，
-   cross-authority reference 在具备明确 authority contract 前继续拒绝。
-5. `external-agent-migration` 的 bounded parsers 和 typed preview fragments 已实现；四种来源的项目指令已接入
-   App Server 预览与发布。其他条目只在具备对应 target authority 时开放 apply。
+Skill 与 Agent 的独立管理界面仍需接入。cross-authority reference 在具备明确 authority contract 前继续拒绝；导入条目仅在具备对应 target authority 时开放 apply，不由 parser 或 preview 自动授予写入权。
 
 ## 8. 长期不变量
 

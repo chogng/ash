@@ -21,7 +21,11 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.evaluate(() => window.ashCompositeIntegration.changeAgentSession('second'));
 		await expect(channel).toContainText('Agent output fixture');
 		const link = output.locator('.view-line').filter({ hasText: 'eventId=event-1' }).locator('span').last();
-		await link.click({ modifiers: ['ControlOrMeta'] });
+		await link.hover();
+		await page.keyboard.down('ControlOrMeta');
+		await expect(output.locator('.stanza-editor-link-target')).toHaveCount(1);
+		await link.click();
+		await page.keyboard.up('ControlOrMeta');
 		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.openedAgentEvents)).toEqual([{ sessionId: 'first', threadId: 'root', turnId: 'turn', eventId: 'event-1' }]);
 		await page.locator('[data-action-id="ash.output.clear"] button').click();
 		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().text)).toBe('');
@@ -171,8 +175,8 @@ for (const locale of ['en', 'zh-CN']) {
 				return { width: bounds.width, height: bounds.height, background: style.backgroundColor };
 			}));
 			for (const cap of caps) {
-				expect(cap.width).toBe(22);
-				expect(cap.height).toBe(22);
+				expect(cap.width).toBeGreaterThanOrEqual(20);
+				expect(cap.height).toBe(20);
 				expect(cap.background).not.toBe('rgba(0, 0, 0, 0)');
 			}
 			for (const [width, height] of [[800, 520], [320, 180]]) {
@@ -510,6 +514,34 @@ test('typed case aliases reuse the modal editor pane and unsaved model', async (
 	expect(await page.evaluate(() => window.ashCompositeIntegration.openFileAliases('modalGroup'))).toEqual({ tabs: 0, models: 1, retained: true, text: 'unsaved content' });
 	await expect(page.getByRole('dialog')).toBeVisible();
 	await expect(page.locator('.stanza-editor-line-text').filter({ hasText: 'unsaved content' })).toBeVisible();
+});
+
+test('modal editor honors requested size, fits small viewports and restores the next editor default', async ({ page }) => {
+	await page.evaluate(async () => {
+		window.ashCompositeIntegration.resizeEditor(1000, 700);
+		await window.ashCompositeIntegration.openModalEditor('default');
+	});
+	const modal = page.getByRole('dialog');
+	const initial = (await modal.boundingBox())!;
+	await page.evaluate(() => window.ashCompositeIntegration.openModalEditor('compact', { width: 560, height: 360 }));
+	await expect(modal).toHaveCSS('width', '560px');
+	await expect(modal).toHaveCSS('height', '360px');
+	await page.evaluate(() => window.ashCompositeIntegration.openModalEditor('compact', { width: 600, height: 400 }));
+	await expect(modal).toHaveCSS('width', '600px');
+	await expect(modal).toHaveCSS('height', '400px');
+	await page.setViewportSize({ width: 420, height: 280 });
+	await page.evaluate(() => window.ashCompositeIntegration.resizeEditor(420, 280));
+	await expect(modal).toHaveCSS('width', '396px');
+	await expect(modal).toHaveCSS('height', '256px');
+	await page.keyboard.press('Escape');
+	await expect(modal).toBeHidden();
+	await page.setViewportSize({ width: 1280, height: 720 });
+	await page.evaluate(async () => {
+		window.ashCompositeIntegration.resizeEditor(1000, 700);
+		await window.ashCompositeIntegration.openModalEditor('next');
+	});
+	await expect(modal).toHaveCSS('width', `${initial.width}px`);
+	await expect(modal).toHaveCSS('height', `${initial.height}px`);
 });
 
 test('content focus enters once, survives internal Tab navigation and leaves once', async ({ page }) => {

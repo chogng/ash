@@ -15,7 +15,10 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from build.builtin import copy_builtin_extensions
-from build.lib.package_test_support import prepare_builtin_fixture
+from build.lib.package_test_support import (
+    prepare_builtin_fixture,
+    copy_debug_runtime_fixture,
+)
 from build.lib.targets import TARGETS
 from build.code.package import build_code_package
 from build.app_server import main as build_main
@@ -61,6 +64,11 @@ class PackageTests(unittest.TestCase):
         cls.package_sources = create_package_sources(Path(temporary.name))
 
     def setUp(self) -> None:
+        boundary = patch(
+            "build.lib.js_debug.copy_runtime", side_effect=copy_debug_runtime_fixture
+        )
+        boundary.start()
+        self.addCleanup(boundary.stop)
         boundary = patch("build.app_server.generate_protocol", return_value=False)
         boundary.start()
         self.addCleanup(boundary.stop)
@@ -123,6 +131,8 @@ class PackageTests(unittest.TestCase):
                 "ash-remote-ssh-extension",
                 "ash-dev-container-provider",
                 "ash-debug-lldb",
+                "ash-debug-javascript",
+                "ash-debug-server-ready",
                 "ash-voice-host",
                 "ash-livekit-client",
                 "ash-realtime-voice",
@@ -310,7 +320,9 @@ class PackageTests(unittest.TestCase):
         "csharp",
         "css",
         "dart",
+        "debug-javascript",
         "debug-lldb",
+        "debug-server-ready",
         "dev-containers",
         "diff",
         "docker",
@@ -619,7 +631,7 @@ class PackageTests(unittest.TestCase):
             self.assertFalse(
                 (output / "ash-resources/extensions/reference-manager").exists()
             )
-            self.assertFalse((output / "ash-resources/extensions/academic").exists())
+            self.assertFalse((output / "ash-resources/extensions/academy").exists())
             self.assertEqual(
                 b"markdown-extension",
                 (output / "bin" / "ash-markdown-language-features").read_bytes(),

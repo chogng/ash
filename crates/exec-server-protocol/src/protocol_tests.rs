@@ -159,6 +159,14 @@ fn terminal_ready_and_binary_contract_preserve_process_identity_and_bytes() {
             pid: 42,
             cwd: "/workspace".into(),
             shell_type: Some(crate::terminal::TerminalShellType::Bash),
+            launch: Some(crate::terminal::TerminalProcessLaunch {
+                executable: "/bin/bash".into(),
+                args: crate::terminal::TerminalArguments::Argv(vec![
+                    "--rcfile".into(),
+                    "/private/fixture bashrc".into(),
+                ]),
+                used_shell_integration_injection: true,
+            }),
         },
         profile: crate::terminal::TerminalProfile {
             profile_id: "sh".into(),

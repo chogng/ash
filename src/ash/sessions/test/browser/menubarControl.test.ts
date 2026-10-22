@@ -17,7 +17,7 @@ import { NativeMenubarControl } from '../../../workbench/electron-browser/parts/
 import type { INativeMenubarData, INativeMenubarSelection } from '../../../platform/menubar/common/nativeMenubar.js';
 import { Menus } from '../../browser/menus.js';
 import { RETURN_TO_WORKBENCH_COMMAND_ID } from '../../common/windowNavigation.js';
-import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 
 test('Sessions and Workbench menus keep product commands separate while sharing menu interaction', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
@@ -77,7 +77,7 @@ test('Sessions and Workbench menus keep product commands separate while sharing 
 		assert.deepEqual([...menubar.domNode.querySelectorAll('button')].map(button => [button.getAttribute('aria-label'), button.getAttribute('aria-pressed')]), [['Application menu', null], ['Toggle', 'true']]);
 		using selections = new Emitter<INativeMenubarSelection>();
 		using resources = new DisposableStore();
-		using notifications = new NotificationService();
+		using notifications = new TestNotificationService();
 		const published = new Promise<INativeMenubarData>(resolve => {
 			resources.add(new NativeMenubarControl(Menus.MenubarMainMenu, {
 				_serviceBrand: undefined,

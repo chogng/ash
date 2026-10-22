@@ -1,5 +1,6 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import "./views.css";
+import './media/paneviewlet.css';
+import './media/views.css';
 import { Emitter } from "../../../../base/common/event.js";
 import { Pane, type IPaneOptions } from "../../../../base/browser/ui/splitview/paneview.js";
 import type { IView } from "../../../common/views.js";
@@ -18,8 +19,20 @@ import type { IAction } from '../../../../base/common/actions.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { FilterWidget, type IFilterWidgetOptions } from './viewFilter.js';
 
+export enum ViewPaneShowActions {
+	/** Reveal expanded-pane actions on hover or focus. */
+	Default,
+	/** Keep actions visible while the pane is expanded. */
+	WhenExpanded,
+	/** Keep actions visible in both expansion states. */
+	Always,
+}
+
 /** Runtime inputs supplied by a browser view container to every pane. */
-export type IViewPaneOptions = IPaneOptions;
+export interface IViewPaneOptions extends IPaneOptions {
+	readonly showActions?: ViewPaneShowActions;
+	readonly canMoveView?: boolean;
+}
 
 export interface IFilterViewPaneOptions extends IViewPaneOptions {
 	readonly filterOptions: IFilterWidgetOptions;
@@ -33,6 +46,7 @@ export interface PartTitleProjection {
 
 /** A titled, independently managed view hosted inside a workbench view container. */
 export abstract class ViewPane extends Pane implements IView {
+	private titleDescriptionElement: HTMLSpanElement | undefined;
 	private readonly constraintsChanged = this._register(new Emitter<void>());
 	readonly onDidChangeConstraints = this.constraintsChanged.event;
 
@@ -51,6 +65,21 @@ export abstract class ViewPane extends Pane implements IView {
 
 	protected updateTitleArea(): void {
 		this.titleAreaUpdate.fire();
+	}
+
+	/** Keeps secondary context beside the title, inside the pane's collapse button. */
+	protected updateTitleDescription(description?: string): void {
+		if (!this.titleDescriptionElement && !description) { return; }
+		if (!this.titleDescriptionElement) {
+			this.titleDescriptionElement = h(this.element.ownerDocument, 'span');
+			this.titleDescriptionElement.className = 'ash-view-pane-header-description';
+			this.titleElement.after(this.titleDescriptionElement);
+		}
+		if (this.titleDescriptionElement.textContent === (description ?? '')) { return; }
+		this.titleDescriptionElement.textContent = description ?? '';
+		this.titleDescriptionElement.hidden = !description;
+		this.titleElement.classList.toggle('ash-view-pane-header-title-with-description', !!description);
+		this.updateTitleArea();
 	}
 
 	/** Includes fixed controls in the body constraint while retaining an independent content viewport. */
@@ -109,9 +138,19 @@ export abstract class ViewPane extends Pane implements IView {
 	public readonly onDidChangeVisibility = this.visibility.event;
 
 	protected constructor(container: HTMLElement, options: IViewPaneOptions) {
-		super(container, options);
+		let headerActionsVisibility = options.headerActionsVisibility ?? 'whenExpanded';
+		if (options.showActions === ViewPaneShowActions.WhenExpanded) {
+			headerActionsVisibility = 'whenExpanded';
+		} else if (options.showActions === ViewPaneShowActions.Always) {
+			headerActionsVisibility = 'always';
+		}
+		super(container, { ...options, headerActionsVisibility });
 		this.element.classList.add("ash-view-pane");
+		// Pane owns collapse visibility; this variant bypasses its hover/focus reveal.
+		this.element.classList.toggle('show-actions', options.showActions === ViewPaneShowActions.WhenExpanded || options.showActions === ViewPaneShowActions.Always);
 		this.element.dataset.viewId = options.id;
+		this.headerElement.draggable = options.canMoveView === true;
+		if (options.canMoveView) this.headerElement.querySelector('button')?.setAttribute('aria-description', localize('views.moveViewHint', 'Drag to move this view, or use Move View in the Command Palette.'));
 		this.element.hidden = true;
 	}
 

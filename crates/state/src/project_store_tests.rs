@@ -26,6 +26,7 @@ fn sqlite_projects_persist_records_and_original_command_results() {
             command: ProjectCommand::UpdateDetails {
                 name: "Renamed".into(),
                 description: "still the same weak associations".into(),
+                materials: None,
             },
         })
         .unwrap();
@@ -64,6 +65,7 @@ fn create_request() -> ProjectCommandRequest {
         command: ProjectCommand::Create {
             name: "Ash".into(),
             description: "multi-root project".into(),
+            materials: Vec::new(),
         },
     }
 }

@@ -11,9 +11,9 @@ use lsp_types::notification::{
 use lsp_types::request::{Initialize, Request, Shutdown};
 use lsp_types::{
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    DidSaveTextDocumentParams, InitializeParams, InitializeResult, InitializedParams,
-    PositionEncodingKind, ServerCapabilities, TextDocumentContentChangeEvent,
-    TextDocumentIdentifier, TextDocumentItem, Uri, VersionedTextDocumentIdentifier,
+    DidSaveTextDocumentParams, InitializeParams, InitializedParams, PositionEncodingKind,
+    ServerCapabilities, TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem,
+    Uri, VersionedTextDocumentIdentifier,
 };
 use tokio::io::{AsyncBufRead, AsyncReadExt, AsyncWrite, BufReader};
 use tokio::process::Child;
@@ -41,6 +41,34 @@ pub struct LanguageServerInitialization {
     pub capabilities: ServerCapabilities,
     pub position_encoding: PositionEncodingKind,
     pub document_sync: DocumentSyncPolicy,
+    /// lsp-types 0.97 omits this standard server capability from ServerCapabilities.
+    pub type_hierarchy: bool,
+}
+
+// Preserve the missing standard field at the initialize boundary instead of
+// assuming every peer implements type hierarchy requests.
+enum InitializeWithTypeHierarchy {}
+
+impl Request for InitializeWithTypeHierarchy {
+    type Params = InitializeParams;
+    type Result = InitializationResponse;
+    const METHOD: &'static str = Initialize::METHOD;
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InitializationResponse {
+    capabilities: InitializationCapabilities,
+    server_info: Option<lsp_types::ServerInfo>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InitializationCapabilities {
+    #[serde(flatten)]
+    standard: ServerCapabilities,
+    type_hierarchy_provider:
+        Option<lsp_types::OneOf<bool, lsp_types::TypeHierarchyRegistrationOptions>>,
 }
 
 /// One initialized language-server session.
@@ -146,11 +174,15 @@ impl LanguageServerClient {
         // The deadline includes initialized and all queued writes. A peer that stops reading
         // cannot make error cleanup wait behind the very write that exhausted the deadline.
         let handshake = tokio::time::timeout(options.timeouts.initialize, async {
-            let initialized: InitializeResult = raw
-                .request::<Initialize>(initialize_params, options.timeouts.initialize)
+            let initialized = raw
+                .request::<InitializeWithTypeHierarchy>(
+                    initialize_params,
+                    options.timeouts.initialize,
+                )
                 .await?;
             let encoding = initialized
                 .capabilities
+                .standard
                 .position_encoding
                 .clone()
                 .unwrap_or(PositionEncodingKind::UTF16);
@@ -160,7 +192,7 @@ impl LanguageServerClient {
                 )));
             }
             raw.notify::<Initialized>(InitializedParams {}).await?;
-            Ok::<InitializeResult, LanguageServerError>(initialized)
+            Ok::<InitializationResponse, LanguageServerError>(initialized)
         })
         .await
         .unwrap_or_else(|_| {
@@ -181,15 +213,24 @@ impl LanguageServerClient {
         };
         let position_encoding = initialized
             .capabilities
+            .standard
             .position_encoding
             .clone()
             .unwrap_or(PositionEncodingKind::UTF16);
         let initialization = LanguageServerInitialization {
             server_info: initialized.server_info,
             document_sync: DocumentSyncPolicy::from_capability(
-                initialized.capabilities.text_document_sync.as_ref(),
+                initialized
+                    .capabilities
+                    .standard
+                    .text_document_sync
+                    .as_ref(),
             ),
-            capabilities: initialized.capabilities,
+            type_hierarchy: matches!(
+                initialized.capabilities.type_hierarchy_provider,
+                Some(lsp_types::OneOf::Left(true)) | Some(lsp_types::OneOf::Right(_))
+            ),
+            capabilities: initialized.capabilities.standard,
             position_encoding,
         };
         Ok(Self {

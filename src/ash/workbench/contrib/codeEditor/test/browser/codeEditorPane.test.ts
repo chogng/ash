@@ -227,6 +227,11 @@ test('open code editor applies live view settings and actions without replacing 
 	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.On);
 	await configuration.updateValue(EditorMinimapConfiguration.enabled, false);
 	await configuration.updateValue(EditorMinimapConfiguration.side, 'left');
+	await configuration.updateValue(EditorMinimapConfiguration.maxColumn, 20);
+	await configuration.updateValue(EditorMinimapConfiguration.scale, 2);
+	await configuration.updateValue(EditorMinimapConfiguration.autohide, 'mouseover');
+	await configuration.updateValue(EditorMinimapConfiguration.showMarkSectionHeaders, false);
+	await configuration.updateValue(EditorMinimapConfiguration.sectionHeaderFontSize, 16);
 	using pane = createPane(services, resourceStore, {});
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file('/project/settings.ts') }, new AbortController().signal);
@@ -240,6 +245,11 @@ test('open code editor applies live view settings and actions without replacing 
 	assert.equal(control.getOption(EditorOption.selectionClipboard), false);
 	assert.equal(control.getOption(EditorOption.minimap).enabled, false);
 	assert.equal(control.getOption(EditorOption.minimap).side, 'left');
+	assert.equal(control.getOption(EditorOption.minimap).maxColumn, 20);
+	assert.equal(control.getOption(EditorOption.minimap).scale, 2);
+	assert.equal(control.getOption(EditorOption.minimap).autohide, 'mouseover');
+	assert.equal(control.getOption(EditorOption.minimap).showMarkSectionHeaders, false);
+	assert.equal(control.getOption(EditorOption.minimap).sectionHeaderFontSize, 16);
 
 	await configuration.updateValue(CodeEditorConfiguration.findGlobalClipboard, true);
 	await configuration.updateValue(CodeEditorConfiguration.selectionClipboard, true);
@@ -247,6 +257,14 @@ test('open code editor applies live view settings and actions without replacing 
 	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.Off);
 	await configuration.updateValue(EditorMinimapConfiguration.enabled, true);
 	await configuration.updateValue(EditorMinimapConfiguration.size, 'fit');
+	await configuration.updateValue(EditorMinimapConfiguration.maxColumn, 40);
+	await configuration.updateValue(EditorMinimapConfiguration.scale, 1);
+	await configuration.updateValue(EditorMinimapConfiguration.autohide, 'scroll');
+	await configuration.updateValue(EditorMinimapConfiguration.showRegionSectionHeaders, false);
+	await configuration.updateValue(EditorMinimapConfiguration.showMarkSectionHeaders, true);
+	await configuration.updateValue(EditorMinimapConfiguration.markSectionHeaderRegex, 'PART (?<label>.*)');
+	await configuration.updateValue(EditorMinimapConfiguration.sectionHeaderFontSize, 12);
+	await configuration.updateValue(EditorMinimapConfiguration.sectionHeaderLetterSpacing, 2);
 	assert.equal(pane.getControl(), control);
 	assert.equal(control.getOption(EditorOption.lineNumbers).renderType, 1);
 	assert.equal(control.getOption(EditorOption.wordWrap), 'off');
@@ -254,6 +272,14 @@ test('open code editor applies live view settings and actions without replacing 
 	assert.equal(control.getOption(EditorOption.selectionClipboard), true);
 	assert.equal(control.getOption(EditorOption.minimap).enabled, true);
 	assert.equal(control.getOption(EditorOption.minimap).size, 'fit');
+	assert.equal(control.getOption(EditorOption.minimap).maxColumn, 40);
+	assert.equal(control.getOption(EditorOption.minimap).scale, 1);
+	assert.equal(control.getOption(EditorOption.minimap).autohide, 'scroll');
+	assert.equal(control.getOption(EditorOption.minimap).showRegionSectionHeaders, false);
+	assert.equal(control.getOption(EditorOption.minimap).showMarkSectionHeaders, true);
+	assert.equal(control.getOption(EditorOption.minimap).markSectionHeaderRegex, 'PART (?<label>.*)');
+	assert.equal(control.getOption(EditorOption.minimap).sectionHeaderFontSize, 12);
+	assert.equal(control.getOption(EditorOption.minimap).sectionHeaderLetterSpacing, 2);
 	assert.equal(control.getOption(EditorOption.renderWhitespace), 'selection');
 	assert.equal(control.getOption(EditorOption.renderControlCharacters), true);
 	await configuration.updateValue(CodeEditorConfiguration.fontFamily, 'Arial');
@@ -287,7 +313,7 @@ test('open code editor applies live view settings and actions without replacing 
 	assert.equal(control.getOption(EditorOption.minimap).enabled, true);
 });
 
-test('font and wrapping settings follow resource language on open, updates and language changes without replacing the control', async () => {
+test('font, wrapping and format-on-type settings follow resource language without replacing the control', async () => {
 	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using closeWindow = toDisposable(() => dom.window.close());
@@ -295,7 +321,7 @@ test('font and wrapping settings follow resource language on open, updates and l
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using parentServices = paneServices(models);
 	using services = parentServices.createChild();
-	using configuration = new WorkbenchConfigurationService({ source: '{ "editor.fontSize": 17, "[plaintext]": { "editor.fontSize": 23, "editor.fontFamily": "Arial", "editor.wordWrap": "bounded", "editor.wordWrapColumn": 36 }, "[settings-font-other]": { "editor.fontSize": 29, "editor.wordWrap": "off" } }' });
+	using configuration = new WorkbenchConfigurationService({ source: '{ "editor.fontSize": 17, "[plaintext]": { "editor.fontSize": 23, "editor.fontFamily": "Arial", "editor.wordWrap": "bounded", "editor.wordWrapColumn": 36, "editor.minimap.maxColumn": 20, "editor.formatOnType": true }, "[settings-font-other]": { "editor.fontSize": 29, "editor.minimap.maxColumn": 60, "editor.wordWrap": "off", "editor.formatOnType": false } }' });
 	services.registerInstance(IConfigurationService, configuration);
 	using language = services.get(ILanguageService).registerLanguage({ id: 'settings-font-other' });
 	using pane = createPane(services, resourceStore, {});
@@ -306,12 +332,18 @@ test('font and wrapping settings follow resource language on open, updates and l
 	assert.deepEqual([control.getOption(EditorOption.fontSize), control.getOption(EditorOption.fontFamily)], [23, 'Arial']);
 	assert.equal(control.getOption(EditorOption.wordWrap), 'bounded');
 	assert.equal(control.getOption(EditorOption.wordWrapColumn), 36);
+	assert.equal(control.getOption(EditorOption.minimap).maxColumn, 20);
+	assert.equal(control.getOption(EditorOption.formatOnType), true);
 	await configuration.updateValue('editor.fontSize', 26, { overrideIdentifier: 'plaintext' }, ConfigurationTarget.USER_LOCAL);
 	await configuration.updateValue('editor.wordWrap', 'on', { overrideIdentifier: 'plaintext' }, ConfigurationTarget.USER_LOCAL);
 	assert.equal(control.getOption(EditorOption.wordWrap), 'on');
 	assert.equal(control.getOption(EditorOption.fontSize), 26);
+	await configuration.updateValue('editor.minimap.maxColumn', 30, { overrideIdentifier: 'plaintext' }, ConfigurationTarget.USER_LOCAL);
+	assert.equal(control.getOption(EditorOption.minimap).maxColumn, 30);
 	control.getModel()!.setLanguage('settings-font-other');
+	assert.equal(control.getOption(EditorOption.minimap).maxColumn, 60);
 	assert.equal(control.getOption(EditorOption.fontSize), 29);
+	assert.equal(control.getOption(EditorOption.formatOnType), false);
 	assert.equal(control.getOption(EditorOption.wordWrap), 'off');
 	await configuration.updateValue('editor.fontSize', 28, { overrideIdentifier: 'plaintext' }, ConfigurationTarget.USER_LOCAL);
 	assert.equal(control.getOption(EditorOption.fontSize), 29, 'an unrelated language cannot update this control');
@@ -321,6 +353,9 @@ test('font and wrapping settings follow resource language on open, updates and l
 	assert.equal(control.getOption(EditorOption.fontSize), 28);
 	assert.equal(control.getOption(EditorOption.wordWrap), 'on');
 	assert.equal(control.getOption(EditorOption.wordWrapColumn), 48);
+	assert.equal(control.getOption(EditorOption.formatOnType), true);
+	await configuration.updateValue('editor.formatOnType', false, { overrideIdentifier: 'plaintext' }, ConfigurationTarget.USER_LOCAL);
+	assert.equal(control.getOption(EditorOption.formatOnType), false);
 	assert.equal(pane.getControl(), control);
 	pane.clearInput();
 	await configuration.updateValue('editor.fontSize', 30, { overrideIdentifier: 'plaintext' }, ConfigurationTarget.USER_LOCAL);
@@ -773,6 +808,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = paneServices(models);
+	await services.get(IConfigurationService).updateValue(CodeEditorConfiguration.colorDecoratorsLimit, 250);
 	let received: EditorPanePartOptions | undefined;
 	const pane = createPane(services, resourceStore, {
 		fontFamily: "Fira Code, monospace",
@@ -801,7 +837,6 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 		codeLens: false,
 		colorDecorators: false,
 		colorDecoratorsActivatedOn: "click",
-		colorDecoratorsLimit: 250,
 		defaultColorDecorators: "always",
 		formatOnSave: true,
 		find: {

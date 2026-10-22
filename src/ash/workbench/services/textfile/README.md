@@ -200,10 +200,69 @@ ASH_TEST_SYSTEM_AUTHORIZATION=approve pnpm run smoketest test/smoke/areas/editor
 ASH_TEST_SYSTEM_AUTHORIZATION=cancel pnpm run smoketest-no-compile test/smoke/areas/editor/elevated-save.spec.ts --grep "real system authorization cancel"
 ```
 
-On Windows PowerShell, set `$env:ASH_TEST_SYSTEM_AUTHORIZATION` before running the same
-commands without the shell assignment prefix, then remove the variable afterwards. Use a
-standard-user session with UAC enabled to check credential elevation to another administrator.
-An already elevated test process cannot establish the ordinary permission-failure precondition.
+### Windows UAC regression
 
-For the Windows interactive checklist and PowerShell commands, see
-[Windows UAC 保存验收手册](../../../../../docs/windows-system-authorization.md).
+Use a Windows machine or VM with an interactive desktop and UAC enabled. Run from an
+unelevated Developer PowerShell at the repository root; an elevated process cannot establish
+the ordinary permission-failure precondition. Prepare the current checkout using the
+[Windows build instructions](../../../../../docs/build.md#windows-开发环境) and
+`pnpm run pretest:smoke:desktop`. Preserve the source commit, working-tree changes, actual
+App Server path and binary SHA-256 with the results.
+
+Before each assisted run, tell the operator whether to cancel (No) or approve (Yes), and
+wait for confirmation that they are ready before starting the command. Keep the interactive
+desktop available and respond promptly in the real UAC window. Record its program name and
+publisher; a missing prompt or unavailable authorization is not a successful interaction.
+
+Run cancellation first and select No in UAC:
+
+```powershell
+$env:ASH_TEST_SYSTEM_AUTHORIZATION = 'cancel'
+try {
+    pnpm run smoketest-no-compile test/smoke/areas/editor/elevated-save.spec.ts --grep 'real system authorization cancel' --output .build/desktop/playwright/elevation-windows-cancel
+    if ($LASTEXITCODE -ne 0) { throw 'UAC 取消用例失败，请保留日志和测试产物。' }
+} finally {
+    Remove-Item Env:ASH_TEST_SYSTEM_AUTHORIZATION -ErrorAction SilentlyContinue
+}
+```
+
+After the operator is ready for approval, run the second command and select Yes in UAC:
+
+```powershell
+$env:ASH_TEST_SYSTEM_AUTHORIZATION = 'approve'
+try {
+    pnpm run smoketest-no-compile test/smoke/areas/editor/elevated-save.spec.ts --grep 'real system authorization approve' --output .build/desktop/playwright/elevation-windows-approve
+    if ($LASTEXITCODE -ne 0) { throw 'UAC 成功用例失败，请保留日志和测试产物。' }
+} finally {
+    Remove-Item Env:ASH_TEST_SYSTEM_AUTHORIZATION -ErrorAction SilentlyContinue
+}
+```
+
+Each run must report `1 passed`, not skipped. Cancellation must report explicit authorization
+denial, preserve the original bytes and edited content, and keep the editor dirty. Approval
+must save the complete edited bytes, preserve BOM/CRLF and clear dirty. Both cases must
+preserve ACLs and restore input focus. The fixture restores directory permissions in
+`finally`; on timeout, preserve output and stop the test through the runner so teardown can
+finish. Do not close the terminal to stop it.
+
+Keep the Windows version/architecture, account and elevation state, UAC settings, observed
+operator actions, full command output and artifact locations. Preserve `error-context.md`
+and `trace.zip` when generated on failure. Passwords belong only in the OS authorization
+window and must not be collected as evidence.
+
+### Windows acceptance evidence
+
+On 2026-10-21, Windows 11 x64 build 22631 passed real UAC cancellation (`1 passed (12.3s)`)
+and approval (`1 passed (11.7s)`), including the byte, dirty-state, ACL and focus assertions
+above. The scope was the current administrator-group account running unelevated; credential
+elevation from a separate standard-user account was excluded by the user's decision.
+`just verify ash-file-system` passed 72 tests, check and warnings; Desktop preparation and
+automation typechecking passed, and the zh-CN denial message was verified through client NLS.
+The fixes, tests and full historical acceptance record are in commit `f3ad8dc796227767de258d460ee5a6bc846a0b94`.
+
+Local evidence remains under `.build/desktop/playwright/`: `uac-environment-final-20261021.json`,
+`uac-visible-cancel-20261021.log`, `uac-approved-final-20261021.log`,
+`uac-final-verify-20261021.log` and `uac-final-preparation-20261021.log`. Final result directories
+are `elevation-windows-visible-cancel-20261021/` and `elevation-windows-approved-final-20261021/`.
+Earlier failed or unobserved interactions do not count as passes. The remaining macOS and
+Linux system-authorization acceptance is tracked in the [root TODO](../../../../../TODO.md#系统授权保存--todo).

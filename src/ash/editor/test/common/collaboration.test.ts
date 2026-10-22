@@ -1,14 +1,14 @@
-import { DocumentTextModel } from '../../../../../extensions/academic/common/model/documentTextModel.js';
+import { DocumentTextModel } from '../../../../../extensions/academy/common/model/documentTextModel.js';
 import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../nls.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { DocumentRebaseError, rebaseDocumentHistory, rebaseDocumentTransaction } from "../../../../../extensions/academic/common/contrib/collaboration/rebase.js";
+import { DocumentRebaseError, rebaseDocumentHistory, rebaseDocumentTransaction } from "../../../../../extensions/academy/common/contrib/collaboration/rebase.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { TextModelRemoteHistoryPolicy } from "../../../../../extensions/academic/common/model/textModelBlockState.js";
-import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../extensions/academic/common/model/documentSchema.js";
-import { nodeSelection, textSelection } from "../../../../../extensions/academic/common/core/documentSelection.js";
-import { DocumentTransaction } from "../../../../../extensions/academic/common/model/documentTransaction.js";
+import { TextModelRemoteHistoryPolicy } from "../../../../../extensions/academy/common/model/textModelBlockState.js";
+import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../extensions/academy/common/model/documentSchema.js";
+import { nodeSelection, textSelection } from "../../../../../extensions/academy/common/core/documentSelection.js";
+import { DocumentTransaction } from "../../../../../extensions/academy/common/model/documentTransaction.js";
 
 function createDocument(schema: DocumentSchema) {
 	return schema.createDocument([

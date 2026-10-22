@@ -61,6 +61,16 @@ pub enum LanguageServerState {
     },
     Failed(String),
     Stopped,
+    /// Explicitly suspended while retaining its definition and document snapshots.
+    /// Unlike retirement during replacement, language requests must not wait for a restart.
+    UserStopped,
+}
+
+/// An explicit user action, independent of persistent enablement and crash recovery.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LanguageServerControl {
+    Restart,
+    Stop,
 }
 
 /// Document operation that failed after crossing the asynchronous service boundary.
@@ -681,6 +691,25 @@ impl LspManager {
         self.send(SupervisorCommand::RetireServers(names))
     }
 
+    /// Acknowledges after named processes have stopped. Restart retains document snapshots
+    /// and starts new instances; their normal lifecycle events report initialization.
+    pub fn control_servers(
+        &self,
+        action: LanguageServerControl,
+        names: Vec<LanguageServerName>,
+    ) -> Result<(), LspManagerError> {
+        let (completion, response) = std_mpsc::sync_channel(1);
+        self.send(SupervisorCommand::ControlServers {
+            action,
+            names,
+            completion,
+        })?;
+        response
+            .recv_timeout(SHUTDOWN_TIMEOUT)
+            .map_err(|_| LspManagerError::ShutdownTimeout)?;
+        Ok(())
+    }
+
     /// Cancels one queued or in-flight request. Unknown or already completed IDs are a no-op.
     pub fn cancel_request(&self, request_id: LanguageRequestId) -> Result<(), LspManagerError> {
         self.events.on_request_abandoned(request_id);
@@ -1025,6 +1054,24 @@ impl LspManager {
         })
     }
 
+    pub fn request_on_type_formatting(
+        &self,
+        path: impl Into<PathBuf>,
+        revision: LanguageDocumentRevision,
+        position: LanguageDocumentPosition,
+        character: String,
+        options: LanguageFormattingOptions,
+    ) -> Result<LanguageRequestId, LspManagerError> {
+        self.queue_request(PendingLanguageRequest::OnTypeFormatting {
+            id: self.next_request_id(),
+            path: path.into(),
+            revision,
+            position,
+            character,
+            options,
+        })
+    }
+
     pub fn request_signature_help(
         &self,
         path: impl Into<PathBuf>,
@@ -1279,6 +1326,11 @@ enum SupervisorCommand {
         configuration_generation: u64,
     },
     RetireServers(Vec<String>),
+    ControlServers {
+        action: LanguageServerControl,
+        names: Vec<LanguageServerName>,
+        completion: std_mpsc::SyncSender<()>,
+    },
     ProtocolEvent {
         server: LanguageServerName,
         generation: u64,
@@ -1457,6 +1509,14 @@ impl Supervisor {
                             self.retire_server(&name).await;
                         }
                     }
+                }
+                SupervisorCommand::ControlServers {
+                    action,
+                    names,
+                    completion,
+                } => {
+                    self.control_servers(action, names).await;
+                    let _ = completion.send(());
                 }
                 SupervisorCommand::ProtocolEvent {
                     server,

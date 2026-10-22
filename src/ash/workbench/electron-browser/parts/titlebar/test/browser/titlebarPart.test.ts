@@ -9,7 +9,7 @@ import { ICommandService } from '../../../../../../platform/commands/common/comm
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { IMenubarService } from '../../../../../../platform/menubar/electron-browser/menubar.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../../services/notification/test/common/testNotificationService.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
@@ -130,7 +130,7 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 			onDidChangeAccessibilitySupport: () => ({ dispose() { } }),
 		});
 		services.registerInstance(IMenubarService, { _serviceBrand: undefined, updateMenubar: async () => { }, onDidSelect: Event.None });
-		using notifications = new NotificationService();
+		using notifications = new TestNotificationService();
 		services.registerInstance(INotificationService, notifications);
 		const factory = createElectronTitlebarPartFactory();
 		const options = {

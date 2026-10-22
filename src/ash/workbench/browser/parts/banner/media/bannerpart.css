@@ -1,0 +1,83 @@
+.ash-workbench-banner {
+	flex-direction: row;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: 0 var(--ash-spacing-size120);
+	box-sizing: border-box;
+	background: var(--ash-banner-background);
+	color: var(--ash-banner-foreground);
+	font-size: var(--ash-fontSize-body1);
+	border-bottom: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+}
+
+.ash-workbench-banner.neutral {
+	background: var(--ash-workbench-background);
+}
+
+.ash-banner-message {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-banner-message .ash-rendered-markdown,
+.ash-banner-message p {
+	display: inline;
+	margin: 0;
+}
+
+.ash-banner-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size120);
+	flex-shrink: 0;
+}
+
+.ash-banner-actions .ash-link,
+.ash-banner-message a {
+	color: var(--ash-banner-foreground);
+	text-decoration: underline;
+}
+
+.ash-banner-icon,
+.ash-banner-close {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.ash-banner-icon img,
+.ash-banner-icon .ash-icon,
+.ash-banner-close .ash-icon {
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
+}
+
+.ash-banner-icon {
+	color: var(--ash-banner-iconForeground);
+}
+
+.ash-banner-close {
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--ash-cornerRadius-small);
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+}
+
+.ash-banner-close:hover {
+	background: var(--ash-toolbar-hoverBackground);
+}
+
+.ash-workbench-banner:focus-visible,
+.ash-workbench-banner :focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}

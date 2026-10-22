@@ -35,6 +35,7 @@ fn executable_download_is_verified_atomic_and_reused_across_concurrent_callers()
         calls: AtomicUsize::new(0),
     };
     let home = tempfile::tempdir().unwrap();
+    let downloads = AtomicUsize::new(0);
     std::thread::scope(|scope| {
         let handles: Vec<_> = (0..3)
             .map(|_| {
@@ -45,6 +46,10 @@ fn executable_download_is_verified_atomic_and_reused_across_concurrent_callers()
                         "rust-analyzer",
                         &release,
                         &http,
+                        || {
+                            assert_eq!(http.calls.load(Ordering::SeqCst), 0);
+                            downloads.fetch_add(1, Ordering::SeqCst);
+                        },
                     )
                     .unwrap()
                 })
@@ -59,6 +64,16 @@ fn executable_download_is_verified_atomic_and_reused_across_concurrent_callers()
         }
     });
     assert_eq!(http.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(downloads.load(Ordering::SeqCst), 1);
+    install_executable(
+        home.path(),
+        "rust-analyzer",
+        "rust-analyzer",
+        &release,
+        &http,
+        || panic!("cache reuse must not report a download"),
+    )
+    .unwrap();
     let store = PackageStore::open(home.path().join("capabilities/rust-analyzer")).unwrap();
     let previous = store.current().unwrap().unwrap().package_root;
     let mut corrupt = release.clone();
@@ -69,11 +84,15 @@ fn executable_download_is_verified_atomic_and_reused_across_concurrent_callers()
             "rust-analyzer",
             "rust-analyzer",
             &corrupt,
-            &http
+            &http,
+            || {
+                downloads.fetch_add(1, Ordering::SeqCst);
+            },
         ),
         Err(CapabilityInstallError::Invalid)
     ));
     assert_eq!(store.current().unwrap().unwrap().package_root, previous);
+    assert_eq!(downloads.load(Ordering::SeqCst), 2);
     // Mutating a cached executable must fail validation, even when the release binding matches.
     std::fs::write(
         previous
@@ -88,7 +107,8 @@ fn executable_download_is_verified_atomic_and_reused_across_concurrent_callers()
             "rust-analyzer",
             "rust-analyzer",
             &release,
-            &http
+            &http,
+            || panic!("cache validation failure must not report a download"),
         )
         .is_err()
     );
@@ -118,6 +138,7 @@ fn executable_zip_accepts_only_the_expected_regular_entry() {
             "rust-analyzer",
             &release,
             &http,
+            || {},
         );
         assert_eq!(result.is_ok(), !name.contains(".."));
     }

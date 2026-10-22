@@ -9,7 +9,7 @@ import { IAgentVoiceService } from '../../../../../platform/agentHost/common/age
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { BrowserKeyboardLayoutService } from '../../../../services/keybinding/browser/keyboardLayoutService.js';
 import { WorkbenchKeybindingService } from '../../../../services/keybinding/browser/keybindingService.js';
@@ -30,7 +30,7 @@ test('Voice push to talk shortcut suppresses repeats and releases on keyup and w
 	});
 	const commands = resources.add(new CommandService(services));
 	const layouts = resources.add(new BrowserKeyboardLayoutService({ navigator: {} as Navigator, operatingSystem: OperatingSystem.Windows }));
-	const keybindings = resources.add(new WorkbenchKeybindingService({ ownerDocument: dom.window.document, commandService: commands, contextKeyService: contexts, keyboardLayoutService: layouts }, resources.add(new NotificationService()), profiles.files, profiles.profiles));
+	const keybindings = resources.add(new WorkbenchKeybindingService({ ownerDocument: dom.window.document, commandService: commands, contextKeyService: contexts, keyboardLayoutService: layouts }, resources.add(new TestNotificationService()), profiles.files, profiles.profiles));
 	services.registerInstance(IKeybindingService, keybindings);
 	await commands.executeCommand('agentsVoice.pushToTalk'); assert.equal(controls.length, 0);
 	for (const end of ['keyup', 'blur']) {

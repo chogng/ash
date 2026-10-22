@@ -198,3 +198,42 @@ test("TrackedRange rejects unknown stickiness", () => {
 		/Unknown tracked range stickiness/,
 	);
 });
+
+for (const stickiness of [
+	TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
+	TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+	TrackedRangeStickiness.GrowsOnlyWhenTypingBefore,
+	TrackedRangeStickiness.GrowsOnlyWhenTypingAfter,
+]) {
+	test(`forced marker movement overrides insertion edges for stickiness ${stickiness}`, () => {
+		using model = new TextModel('abcd');
+		using collapsed = model.trackRange(range(1, 1), stickiness);
+		using expanded = model.trackRange(range(1, 3), stickiness);
+		model.applyOperations([
+			{ range: range(3, 3), text: 'Y', forceMoveMarkers: true },
+			{ range: range(1, 1), text: 'XX', forceMoveMarkers: true },
+		]);
+		assert.deepEqual({ text: model.getText(), collapsed: collapsed.range, expanded: expanded.range }, {
+			text: 'aXXbcYd', collapsed: range(3, 3), expanded: range(3, 6),
+		});
+		model.undo();
+		assert.deepEqual({ text: model.getText(), collapsed: collapsed.range }, { text: 'abcd', collapsed: range(1, 1) });
+		model.redo();
+		assert.equal(model.getText(), 'aXXbcYd');
+		assert.ok(model.isValidRange(collapsed.range));
+		assert.ok(model.isValidRange(expanded.range));
+	});
+}
+
+test('forced and ordinary marker movement remain independent in the same replacement batch', () => {
+	using model = new TextModel('abcdef');
+	using forced = model.trackRange(range(1, 1), TrackedRangeStickiness.GrowsOnlyWhenTypingBefore);
+	using ordinary = model.trackRange(range(4, 4), TrackedRangeStickiness.GrowsOnlyWhenTypingBefore);
+	model.applyEdits([
+		{ range: range(4, 5), text: 'YY', forceMoveMarkers: false },
+		{ range: range(1, 3), text: 'XX', forceMoveMarkers: true },
+	]);
+	assert.deepEqual({ text: model.getText(), forced: forced.range, ordinary: ordinary.range }, {
+		text: 'aXXdYYf', forced: range(3, 3), ordinary: range(4, 4),
+	});
+});

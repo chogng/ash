@@ -77,12 +77,40 @@ pub struct LanguageServersParams {
 pub struct LanguageServerDescriptorDto {
     pub id: String,
     pub language_ids: Vec<String>,
+    /// Absent until this connection has started the server in this directory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub state: Option<LanguageServerStateDto>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LanguageServersResult {
     pub servers: Vec<LanguageServerDescriptorDto>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageServerControlActionDto {
+    Restart,
+    Stop,
+}
+
+/// Controls only this connection's server in an authorized workspace directory. Omitting
+/// serverId applies to servers already started there; listing never installs or starts one.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LanguageServerControlParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<SessionDirSelector>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub server_id: Option<String>,
+    pub action: LanguageServerControlActionDto,
 }
 
 /// Updates the language server with one authoritative editor document snapshot.
@@ -516,6 +544,17 @@ pub struct LanguageDocumentFormattingParams {
 pub struct LanguageRangeFormattingParams {
     pub document: LanguageDocumentDto,
     pub range: LanguageRangeDto,
+    pub options: LanguageFormattingOptionsDto,
+}
+
+/// Formatting after one negotiated trigger character in an exact editor snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageOnTypeFormattingParams {
+    pub document: LanguageDocumentDto,
+    pub position: LanguagePositionDto,
+    #[schemars(length(min = 1, max = 1))]
+    pub character: String,
     pub options: LanguageFormattingOptionsDto,
 }
 
@@ -1010,7 +1049,45 @@ pub struct LanguageResolveCodeActionParams {
     pub provider_data: Value,
 }
 
-/// Trigger metadata negotiated by this connection's exact server incarnation.
+/// Negotiated operations supported by one language-server incarnation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageServerFeatureDto {
+    Hover,
+    Completion,
+    CompletionResolve,
+    ExecuteCommand,
+    Declaration,
+    Definition,
+    Implementation,
+    TypeDefinition,
+    References,
+    CallHierarchy,
+    TypeHierarchy,
+    WorkspaceSymbols,
+    Rename,
+    RenamePrepare,
+    CodeActions,
+    CodeActionResolve,
+    DocumentFormatting,
+    RangeFormatting,
+    OnTypeFormatting,
+    SignatureHelp,
+    InlayHints,
+    LinkedEditingRanges,
+    SemanticTokens,
+    DocumentSymbols,
+    CodeLens,
+    CodeLensResolve,
+    DocumentLinks,
+    DocumentLinkResolve,
+    DocumentColors,
+    FoldingRanges,
+    PullDiagnostics,
+    WorkspaceDiagnostics,
+}
+
+/// Capabilities negotiated by this connection's exact server incarnation.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LanguageServerCapabilitiesNotification {
@@ -1019,7 +1096,9 @@ pub struct LanguageServerCapabilitiesNotification {
     pub dir_id: Option<String>,
     pub server: String,
     pub language_ids: Vec<String>,
+    pub features: Vec<LanguageServerFeatureDto>,
     pub completion_trigger_characters: Vec<String>,
+    pub on_type_formatting_trigger_characters: Vec<String>,
     pub signature_help_trigger_characters: Vec<String>,
     pub signature_help_retrigger_characters: Vec<String>,
 }

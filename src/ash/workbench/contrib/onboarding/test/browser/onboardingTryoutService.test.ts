@@ -1,4 +1,4 @@
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
@@ -40,7 +40,7 @@ suite('OnboardingTryoutService', () => {
 			async input() { throw new Error('Unexpected input dialog'); },
 			async prompt(): Promise<never> { throw new Error('Unexpected prompt'); },
 		});
-		services.registerSingleton(INotificationService, () => new class extends NotificationService {
+		services.registerSingleton(INotificationService, () => new class extends TestNotificationService {
 			override notify(options: INotification) {
 				notifications.push(options);
 				return super.notify(options);

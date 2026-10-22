@@ -18,6 +18,7 @@ mod restart;
 mod semantic_tokens;
 mod workspace_diagnostics;
 
+pub use ash_lsp::LanguageServerName;
 pub use ash_lsp_server_provider::LanguageServerDefinition;
 pub use capabilities::{LanguageServerCapabilities, LanguageServerFeature};
 pub use configuration::{LspManagerConfiguration, LspManagerEnablement};
@@ -33,9 +34,9 @@ pub use document_features::{
 };
 pub use error::LspManagerError;
 pub use manager::{
-    LanguageServerMessageSeverity, LanguageServerMessageSource, LanguageServerProgress,
-    LanguageServerState, LanguageServiceEvent, LanguageServiceEventSink, LspDocumentOperation,
-    LspManager, LspManagerEvent, LspManagerEventSink, LspManagerNotification,
+    LanguageServerControl, LanguageServerMessageSeverity, LanguageServerMessageSource,
+    LanguageServerProgress, LanguageServerState, LanguageServiceEvent, LanguageServiceEventSink,
+    LspDocumentOperation, LspManager, LspManagerEvent, LspManagerEventSink, LspManagerNotification,
     LspManagerRequestResult, NoopLanguageServiceEventSink, NoopLspManagerEventSink,
 };
 pub use metrics::LanguageRequestMetric;

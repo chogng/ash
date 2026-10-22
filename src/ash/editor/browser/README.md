@@ -3,7 +3,7 @@
 `suggestController.ts` owns the standard Suggest registration. Hosts that create a dedicated SuggestController, such as Chat input, set `suggestions: false` to disable automatic assembly and keep one completion session and widget.
 `snippetController2.ts` owns the editor's active tabstop session for completion, paste, and drop snippets. It handles Tab, Shift+Tab, choices, and Escape before ordinary editor key handling; changing the editor model releases the session.
 
-> 行式文本编辑器的 canonical 设计规范见 [`text-engine.md`](../text-engine.md)，文本几何与浏览器渲染后端的长期目标见 [`text-engine-geometry.md`](../text-engine-geometry.md)（中文翻译见 [`text-engine-geometry.zh-CN.md`](../text-engine-geometry.zh-CN.md)），结构化文档规范见 [`document-engine.md`](../document-engine.md)。本文只拥有 browser implementation contracts、DOM lifecycle、input projection 和修改影响。
+> 行式文本编辑器的 canonical 设计规范见 [`text-engine.md`](../text-engine.md)，文本几何与浏览器渲染后端的长期目标见 [`text-engine-geometry.md`](../text-engine-geometry.md)（中文翻译见 [`text-engine-geometry.zh-CN.md`](../text-engine-geometry.zh-CN.md)），结构化文档规范见 [Academy 扩展规范](../../../../extensions/academy/document-engine.md)。本文只拥有 browser implementation contracts、DOM lifecycle、input projection 和修改影响。
 
 This directory owns Stanza's native browser projection of contracts from `../common/`. It may import `base/common`, `base/browser`, and editor common contracts. Neither `editor/common` nor `base` may import this layer.
 

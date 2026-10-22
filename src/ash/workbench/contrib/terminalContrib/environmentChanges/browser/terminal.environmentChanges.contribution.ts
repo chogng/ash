@@ -5,6 +5,9 @@ import { OperatingSystem } from '../../../../../base/common/platform.js';
 import Severity from '../../../../../base/common/severity.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
+import { MarshalledId } from '../../../../../base/common/marshallingIds.js';
+import { onUnexpectedError } from '../../../../../base/common/errors.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { ITextModel } from '../../../../../editor/common/model.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
@@ -31,6 +34,7 @@ export class TerminalEnvironmentChangesContribution extends Disposable implement
 		@IEnvironmentVariableService private readonly environment: IEnvironmentVariableService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
+		@ICommandService private readonly commands: ICommandService,
 	) {
 		super();
 		this._register(environment.onDidChangeCollections(() => this.update()));
@@ -53,7 +57,15 @@ export class TerminalEnvironmentChangesContribution extends Disposable implement
 		}
 		if (snapshot.diff(current, scope)) instance.statusList?.add({
 			id: statusId, severity: Severity.Warning,
-			tooltip: localize('terminal.environmentChanges.changedStatus', 'Extensions changed this terminal’s environment contributions. Relaunch the terminal to apply the current contributions; Show Environment Contributions opens the details.')
+			tooltip: localize('terminal.environmentChanges.changedSummary', 'Extensions changed this terminal’s environment contributions. Relaunch to apply them.'),
+			detailedTooltip: localize('terminal.environmentChanges.changedStatus', 'Extensions changed this terminal’s environment contributions. Relaunch the terminal to apply the current contributions; Show Environment Contributions opens the details.'),
+			hoverActions: !instance.isReadOnly && !instance.shellLaunchConfig?.customPtyImplementation && instance.state !== 'reconnecting' ? [{
+				commandId: TerminalCommandId.Relaunch,
+				label: localize('terminal.context.relaunch', 'Relaunch Terminal'),
+				run: () => {
+					void this.commands.executeCommand(TerminalCommandId.Relaunch, { $mid: MarshalledId.TerminalContext, instanceId: instance.instanceId }).catch(onUnexpectedError);
+				},
+			}] : undefined,
 		});
 	}
 
@@ -127,8 +139,11 @@ class EnvironmentCollectionProvider extends Disposable {
 
 registerAction2(class ShowEnvironmentContributionsAction extends Action2 {
 	constructor() { super({ id: TerminalCommandId.ShowEnvironmentContributions, title: localize2('terminal.environmentChanges.show', 'Terminal: Show Environment Contributions'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
-	override async run(accessor: ServicesAccessor): Promise<void> {
-		const instance = accessor.get(ITerminalService).activeInstance;
+	override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+		if (context !== undefined && !URI.isUri(context)) throw new TypeError(localize('terminal.context.invalid', 'Invalid terminal instance context'));
+		const terminals = accessor.get(ITerminalService);
+		const instance = URI.isUri(context) ? terminals.instances.find(instance => instance.resource?.toString() === context.toString()) : terminals.activeInstance;
+		if (context !== undefined && !instance) throw new Error(localize('terminal.context.closed', 'This terminal has been closed'));
 		if (!instance) return;
 		const scope = { workspaceFolder: accessor.get(IWorkspaceContextService).getWorkspace().folders.find(folder => folder.id === instance.dirId) };
 		const content = describeEnvironmentChanges(instance, currentCollection(instance, accessor.get(IEnvironmentVariableService), accessor.get(ITerminalProcessService)), scope);

@@ -131,15 +131,7 @@ pub(crate) fn materialize_connector_servers(
             .ok_or_else(|| McpToolCompositionError::new("Connector credential is unavailable"))?;
         let credential = project_runtime_credential(credential)
             .map_err(|_| McpToolCompositionError::new("Connector credential is invalid"))?;
-        let contribution_server_id = McpServerId::new(
-            entry
-                .definition()
-                .runtime_binding()
-                .mcp_server_id()
-                .to_string(),
-        )
-        .map_err(|error| McpToolCompositionError::new(error.to_string()))?;
-        let server_id = connector_server_id(&contribution_server_id, entry.definition().id())?;
+        let server_id = connector_mcp_server_id(entry.definition())?;
         let transport = provider
             .materialize(entry.definition(), credential)
             .map_err(|error| McpToolCompositionError::new(error.to_string()))?;
@@ -186,10 +178,13 @@ pub(crate) fn materialize_connector_servers(
     })
 }
 
-fn connector_server_id(
-    contribution: &McpServerId,
-    connector: &connectors::ConnectorId,
+/// Resolves the same runtime identity for catalog presentation and live materialization,
+/// including before the service account has connected.
+pub fn connector_mcp_server_id(
+    definition: &ConnectorDefinition,
 ) -> Result<McpServerId, McpToolCompositionError> {
+    let contribution = McpServerId::new(definition.runtime_binding().mcp_server_id().to_string())
+        .map_err(|error| McpToolCompositionError::new(error.to_string()))?;
     let local = contribution
         .as_str()
         .split_once(":mcp:")
@@ -197,6 +192,6 @@ fn connector_server_id(
         .ok_or_else(|| {
             McpToolCompositionError::new("invalid Connector MCP contribution identity")
         })?;
-    McpServerId::new(format!("{}:mcp:{local}", connector.as_str()))
+    McpServerId::new(format!("{}:mcp:{local}", definition.id().as_str()))
         .map_err(|error| McpToolCompositionError::new(error.to_string()))
 }

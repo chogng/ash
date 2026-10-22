@@ -27,12 +27,59 @@ use std::collections::HashSet;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::runtime::Runtime;
 
 thread_local! {
     static INVOCATION: RefCell<Option<CancellationToken>> = const { RefCell::new(None) };
     static CLIENT: RefCell<Option<GitClient>> = const { RefCell::new(None) };
+    static PROCESS_TIMINGS: RefCell<Option<Arc<GitProcessTimings>>> = const { RefCell::new(None) };
+}
+
+#[derive(Debug, Default)]
+struct GitProcessTimings(Mutex<GitProcessTimingRecords>);
+
+#[derive(Debug, Default)]
+pub(crate) struct GitProcessTimingRecords {
+    pub records: Vec<ash_git::GitProcessTiming>,
+    pub omitted: usize,
+}
+
+impl ash_git::GitProcessObserver for GitProcessTimings {
+    fn observe(&self, timing: ash_git::GitProcessTiming) {
+        if let Ok(mut timings) = self.0.lock() {
+            // Bound diagnostics even for large repository scans. This stores no Git output.
+            if timings.records.len() < 48 {
+                timings.records.push(timing);
+            } else {
+                timings.omitted += 1;
+            }
+        }
+    }
+}
+
+pub(crate) fn with_process_timings<T>(
+    operation: impl FnOnce() -> T,
+) -> (T, GitProcessTimingRecords) {
+    struct Restore(Option<Arc<GitProcessTimings>>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            PROCESS_TIMINGS.with(|current| *current.borrow_mut() = self.0.take());
+        }
+    }
+    let timings = Arc::new(GitProcessTimings::default());
+    let _restore = Restore(PROCESS_TIMINGS.with(|current| current.replace(Some(timings.clone()))));
+    let result = operation();
+    let records = std::mem::take(&mut *timings.0.lock().expect("Git timings poisoned"));
+    (result, records)
+}
+
+fn observe_client(client: GitClient) -> GitClient {
+    PROCESS_TIMINGS.with(|current| match current.borrow().as_ref() {
+        Some(observer) => client.with_process_observer(observer.clone()),
+        None => client,
+    })
 }
 
 pub(crate) fn with_invocation<T>(token: CancellationToken, operation: impl FnOnce() -> T) -> T {
@@ -59,9 +106,11 @@ pub(crate) fn with_client<T>(client: GitClient, operation: impl FnOnce() -> T) -
 }
 
 pub(crate) fn current_client() -> GitClient {
-    CLIENT
-        .with(|current| current.borrow().clone())
-        .unwrap_or_else(GitClient::system)
+    observe_client(
+        CLIENT
+            .with(|current| current.borrow().clone())
+            .unwrap_or_else(GitClient::system),
+    )
 }
 
 pub(crate) fn invocation_cancellation() -> Option<CancellationToken> {
@@ -93,27 +142,19 @@ fn run<T, E: InvocationCancelled>(
     runtime: &Runtime,
     future: impl std::future::Future<Output = Result<T, E>>,
 ) -> Result<T, E> {
-    if let Some(token) = invocation_cancellation() {
-        runtime.block_on(async {
-            tokio::select! {
-                biased;
-                _ = token.cancelled() => Err(E::cancelled()),
-                result = future => result,
-            }
-        })
-    } else {
-        runtime.block_on(future)
-    }
-}
-
-fn lock_current_runtime<T>(
-    lock: &Mutex<T>,
-) -> Result<std::sync::MutexGuard<'_, T>, GitServiceError> {
-    if let Some(token) = invocation_cancellation() {
-        lock_for_request(lock, &token)
-    } else {
-        lock.lock().map_err(|_| GitServiceError::Runtime)
-    }
+    ash_otel::measure_current("git.runtime", || {
+        if let Some(token) = invocation_cancellation() {
+            runtime.block_on(async {
+                tokio::select! {
+                    biased;
+                    _ = token.cancelled() => Err(E::cancelled()),
+                    result = future => result,
+                }
+            })
+        } else {
+            runtime.block_on(future)
+        }
+    })
 }
 
 const MAX_TEXT_DIFF_FILE_BYTES: usize = 2 * 1024 * 1024;
@@ -184,7 +225,10 @@ pub(crate) struct GitService {
     authorization: Authorization,
     projection_root: PathBuf,
     client: GitClient,
-    runtime: Mutex<Runtime>,
+    // Runtime::block_on supports concurrent calls even with the current-thread scheduler.
+    // Repository leases own mutation ordering; an executor mutex would also serialize
+    // unrelated read-only Git processes and turn background refreshes into UI stalls.
+    runtime: Runtime,
 }
 
 impl GitService {
@@ -211,14 +255,17 @@ impl GitService {
             authorization,
             projection_root,
             client: GitClient::system(),
-            runtime: Mutex::new(runtime),
+            runtime,
         })
     }
 
     fn client(&self) -> GitClient {
-        CLIENT
-            .with(|current| current.borrow().clone())
-            .unwrap_or_else(|| self.client.clone())
+        observe_client(
+            CLIENT
+                .with(|current| current.borrow().clone())
+                .map(|client| client.with_shared_reads(&self.client))
+                .unwrap_or_else(|| self.client.clone()),
+        )
     }
 
     fn canonical_client(&self) -> GitClient {
@@ -258,9 +305,9 @@ impl GitService {
         // The runtime retains the discovered working-tree identity and sends
         // metadata/configuration hints through the full rediscovery path.
         self.ensure_readable()?;
-        let runtime = lock_for_request(&self.runtime, cancellation)?;
+        let runtime = &self.runtime;
         let client = self.canonical_client();
-        run(&runtime, async {
+        run(runtime, async {
             tokio::select! {
                 biased;
                 _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
@@ -277,8 +324,8 @@ impl GitService {
         cancellation: &CancellationToken,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_for_request(&self.runtime, cancellation)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             tokio::select! {
                 biased;
                 _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
@@ -300,8 +347,8 @@ impl GitService {
         cancellation: &CancellationToken,
     ) -> Result<GitRepository, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_for_request(&self.runtime, cancellation)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             tokio::select! {
                 biased;
                 _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
@@ -316,9 +363,9 @@ impl GitService {
         cancellation: &CancellationToken,
     ) -> Result<ash_git::GitReferenceState, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_for_request(&self.runtime, cancellation)?;
+        let runtime = &self.runtime;
         let client = self.client();
-        run(&runtime, async {
+        run(runtime, async {
             tokio::select! {
                 biased;
                 _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
@@ -335,9 +382,17 @@ impl GitService {
         cancellation: &CancellationToken,
     ) -> Result<bool, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_for_request(&self.runtime, cancellation)?;
+        cancellation
+            .check()
+            .map_err(|_| GitServiceError::Cancelled)?;
+        // Equal immutable roots need no executor. In particular, a status publication
+        // must not hold the state mutex while queuing behind an unrelated runtime user.
+        if previous == current {
+            return Ok(true);
+        }
+        let runtime = &self.runtime;
         let client = self.client();
-        run(&runtime, async {
+        run(runtime, async {
             tokio::select! {
                 biased;
                 _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
@@ -353,9 +408,9 @@ impl GitService {
         cancellation: &CancellationToken,
     ) -> Result<Vec<PathBuf>, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_for_request(&self.runtime, cancellation)?;
+        let runtime = &self.runtime;
         let client = self.client();
-        run(&runtime, async {
+        run(runtime, async {
             tokio::select! {
                 biased;
                 _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
@@ -370,9 +425,9 @@ impl GitService {
         cancellation: &CancellationToken,
     ) -> Result<Vec<PathBuf>, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_for_request(&self.runtime, cancellation)?;
+        let runtime = &self.runtime;
         let client = self.client();
-        run(&runtime, async {
+        run(runtime, async {
             tokio::select! {
                 biased;
                 _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
@@ -414,8 +469,8 @@ impl GitService {
         contents: Option<&str>,
     ) -> Result<ash_git::GitBlameLine, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let path = self.repository_prefix(&repository)?.join(path);
             self.client()
@@ -428,35 +483,37 @@ impl GitService {
     pub(crate) fn file_history(
         &self,
         path: &Path,
-    ) -> Result<Vec<ash_git::GitFileHistoryItem>, GitServiceError> {
+        limit: NonZeroUsize,
+        cursor: Option<ash_git::GitFileHistoryCursor>,
+    ) -> Result<ash_git::GitFileHistoryPage, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let path = self.repository_prefix(&repository)?.join(path);
             {
-                let mut items = self
+                let mut page = self
                     .client()
-                    .file_history(&repository, &path)
+                    .file_history(&repository, &path, limit, cursor)
                     .await
                     .map_err(GitServiceError::Git)?;
                 let prefix = self.repository_prefix(&repository)?;
-                for item in &mut items {
+                for item in &mut page.items {
                     item.path = item
                         .path
                         .strip_prefix(&prefix)
                         .map_err(|_| GitServiceError::Boundary)?
                         .to_path_buf();
                 }
-                Ok(items)
+                Ok(page)
             }
         })
     }
 
     pub(crate) fn local_branches(&self) -> Result<GitServiceBranches, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let worktrees = self
                 .client()
@@ -482,8 +539,8 @@ impl GitService {
 
     pub(crate) fn pull_upstream_was_rewritten(&self) -> Result<bool, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             self.client()
                 .pull_upstream_was_rewritten(&repository)
@@ -494,8 +551,8 @@ impl GitService {
 
     pub(crate) fn catalog(&self) -> Result<ash_git::GitCatalog, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             self.client()
                 .catalog(&repository)
@@ -510,9 +567,9 @@ impl GitService {
         cancellation: &CancellationToken,
     ) -> Result<ash_git::GitCommandOutcome, GitServiceError> {
         self.ensure_mutable()?;
-        let runtime = lock_for_request(&self.runtime, cancellation)?;
+        let runtime = &self.runtime;
         run(
-            &runtime,
+            runtime,
             async {
                 let repository = self.open_repository().await?;
                 // These intents affect checkout-wide state and cannot run through a grant for only
@@ -539,8 +596,8 @@ impl GitService {
         comparison: GitChangeFileComparison,
     ) -> Result<ash_git::GitIndexDiff, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let path = self.repository_prefix(&repository)?.join(path);
             self.client()
@@ -555,8 +612,8 @@ impl GitService {
         request: &ash_git::GitIndexEdit,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
         self.ensure_mutable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let scoped = ash_git::GitIndexEdit {
                 path: self.repository_prefix(&repository)?.join(&request.path),
@@ -580,8 +637,8 @@ impl GitService {
 
     pub(crate) fn create_branch(&self, name: &str) -> Result<(), GitServiceError> {
         self.ensure_mutable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             self.client()
                 .create_branch(&repository, name)
@@ -592,8 +649,8 @@ impl GitService {
 
     pub(crate) fn delete_branch(&self, name: &str) -> Result<(), GitServiceError> {
         self.ensure_mutable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             self.client()
                 .delete_merged_branch(&repository, name)
@@ -604,8 +661,8 @@ impl GitService {
 
     pub(crate) fn recent_commits(&self) -> Result<Vec<GitCommitSummary>, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             self.client()
                 .recent_commits(&repository, RECENT_COMMIT_LIMIT)
@@ -619,8 +676,8 @@ impl GitService {
         revisions: Option<&[String]>,
     ) -> Result<GitGraphCursor, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             self.client()
                 .start_graph_for_refs(&repository, revisions)
@@ -635,8 +692,8 @@ impl GitService {
         limit: NonZeroUsize,
     ) -> Result<GitGraph, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, cursor.page(limit)).map_err(GitServiceError::Git)
+        let runtime = &self.runtime;
+        run(runtime, cursor.page(limit)).map_err(GitServiceError::Git)
     }
 
     pub(crate) fn commit_changes(
@@ -644,8 +701,8 @@ impl GitService {
         object_id: &str,
     ) -> Result<GitServiceCommitChanges, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let (parent_object_id, changes) = self
                 .client()
@@ -667,8 +724,8 @@ impl GitService {
         mode: ash_git::GitComparisonMode,
     ) -> Result<GitServiceCommitChanges, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let (base, changes) = self
                 .client()
@@ -685,8 +742,8 @@ impl GitService {
 
     pub(crate) fn commit_message(&self, object_id: &str) -> Result<String, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             self.client()
                 .commit_message(&repository, object_id)
@@ -700,8 +757,8 @@ impl GitService {
         object_id: &str,
     ) -> Result<ash_git::GitCommitDetails, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             self.client()
                 .commit_details(&repository, object_id)
@@ -717,8 +774,8 @@ impl GitService {
         comparison_base: Option<&str>,
     ) -> Result<GitCommitFile, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let dir_prefix = self.repository_prefix(&repository)?;
             let repository_path = dir_prefix.join(path);
@@ -769,8 +826,8 @@ impl GitService {
         comparison: GitChangeFileComparison,
     ) -> Result<GitChangeFile, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let dir_prefix = self.repository_prefix(&repository)?;
             let repository_path = dir_prefix.join(path);
@@ -814,18 +871,20 @@ impl GitService {
 
     pub(crate) fn change_file_at_paths(
         &self,
+        repository: &GitRepository,
         original_path: &Path,
         modified_path: &Path,
         comparison: GitChangeFileComparison,
     ) -> Result<GitChangeFile, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
-            let repository = self.open_repository().await?;
-            let dir_prefix = self.repository_prefix(&repository)?;
+        let runtime = &self.runtime;
+        run(runtime, async {
+            // The runtime already owns this discovered repository. Resolve only
+            // its scoped paths here; the index and working contents stay fresh.
+            let dir_prefix = self.repository_prefix(repository)?;
             self.client()
                 .change_file_at_paths(
-                    &repository,
+                    repository,
                     &dir_prefix.join(original_path),
                     &dir_prefix.join(modified_path),
                     comparison,
@@ -841,8 +900,8 @@ impl GitService {
         path: &Path,
     ) -> Result<ash_git::GitConflictFile, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let repository_path = self.repository_prefix(&repository)?.join(path);
             let snapshot = self
@@ -870,8 +929,8 @@ impl GitService {
         resolution: GitConflictResolution,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
         self.ensure_mutable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let paths = self.repository_paths(&repository, vec![path.to_path_buf()])?;
             let repository_path = &paths.paths()[0];
@@ -938,14 +997,40 @@ impl GitService {
         })
     }
 
+    pub(crate) fn text_diff_summary(
+        &self,
+    ) -> Result<
+        (
+            GitRepository,
+            GitRepositorySnapshot,
+            ash_git::GitDiffStatistics,
+        ),
+        GitServiceError,
+    > {
+        self.ensure_readable()?;
+        let limits =
+            GitTextDiffLimits::new(MAX_TEXT_DIFF_FILE_BYTES).map_err(GitServiceError::Git)?;
+        let runtime = &self.runtime;
+        run(runtime, async {
+            let repository = self.open_repository().await?;
+            let prefix = self.repository_prefix(&repository)?;
+            let (snapshot, statistics) = self
+                .client()
+                .text_diff_summary_under(&repository, &prefix, limits)
+                .await
+                .map_err(GitServiceError::Git)?;
+            Ok((repository, snapshot, statistics))
+        })
+    }
+
     pub(crate) fn text_diff_snapshot(
         &self,
     ) -> Result<(GitRepository, GitTextDiffSnapshot), GitServiceError> {
         self.ensure_readable()?;
         let limits =
             GitTextDiffLimits::new(MAX_TEXT_DIFF_FILE_BYTES).map_err(GitServiceError::Git)?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let dir_prefix = self.repository_prefix(&repository)?;
             let snapshot = self
@@ -963,8 +1048,8 @@ impl GitService {
         policy: ash_git::GitCheckoutPolicy,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
         self.ensure_mutable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let branches = self
                 .client()
@@ -1009,8 +1094,8 @@ impl GitService {
         editor_evidence: &[(PathBuf, String)],
     ) -> Result<bool, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let status = self
                 .canonical_client()
@@ -1092,8 +1177,8 @@ impl GitService {
         paths: Vec<PathBuf>,
     ) -> Result<GitRemovalReview, GitServiceError> {
         self.ensure_readable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let normalized = self.repository_paths(&repository, paths.clone())?;
             if normalized.paths().iter().any(|path| {
@@ -1211,8 +1296,8 @@ impl GitService {
         request: GitCommitRequest,
     ) -> Result<GitServiceCommit, GitServiceError> {
         self.ensure_mutable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             // Even an index-only commit publishes checkout-wide state, including staged paths
             // outside a nested grant. Validate the whole checkout before any staging or commit.
@@ -1283,8 +1368,8 @@ impl GitService {
         paths: Vec<PathBuf>,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
         self.ensure_mutable()?;
-        let runtime = lock_current_runtime(&self.runtime).map_err(|_| GitServiceError::Runtime)?;
-        run(&runtime, async {
+        let runtime = &self.runtime;
+        run(runtime, async {
             let repository = self.open_repository().await?;
             let paths = self.repository_paths(&repository, paths)?;
             match operation {
@@ -1323,9 +1408,9 @@ impl GitService {
         cancellation: &CancellationToken,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {
         self.ensure_mutable()?;
-        let runtime = lock_for_request(&self.runtime, cancellation)?;
+        let runtime = &self.runtime;
         run(
-            &runtime,
+            runtime,
             async {
                 let repository = self.open_repository().await?;
                 match operation {

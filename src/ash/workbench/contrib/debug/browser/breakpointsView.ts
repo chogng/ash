@@ -1,3 +1,6 @@
+import { IViewsService } from '../../../services/views/common/viewsService.js';
+import { WorkbenchViewContainerId } from '../../../common/views.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -8,7 +11,6 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { type Event as CommonEvent } from '../../../../base/common/event.js';
 import { Checkbox } from '../../../../base/browser/ui/toggle/toggle.js';
 import { defaultCheckboxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { observeElementSize, observeResize } from '../../../../base/browser/observer.js';
@@ -35,12 +37,12 @@ export class BreakpointsView extends ViewPane {
 	private breakpointEdit: { readonly id?: string; readonly form: HTMLFormElement; readonly sessionId?: string; } | undefined;
 	private readonly exceptionControls = this._register(new DisposableStore());
 	constructor(container: HTMLElement, options: IViewPaneOptions,
-		dataRequests: CommonEvent<IDataBreakpointOptions>, instructionRequests: CommonEvent<string>, sizingChanges: CommonEvent<void>,
-		private readonly canFillSpace: () => boolean, private readonly reportError: (message: string) => void,
 		@IDebugService private readonly debug: IDebugService,
 		@IEditorService private readonly editor: IEditorService,
-		@IContextMenuService contextMenus: IContextMenuService) {
-		super(container, options);
+		@IContextMenuService contextMenus: IContextMenuService,
+		@IViewsService private readonly views: IViewsService,
+		@INotificationService private readonly notifications: INotificationService) {
+		super(container, { minimumBodySize: 32, ...options });
 		const document = container.ownerDocument;
 		this.element.classList.add('ash-debug-section');
 		this.contentElement.classList.add('ash-debug-section-content');
@@ -58,7 +60,7 @@ export class BreakpointsView extends ViewPane {
 				id: "debug.addFunctionBreakpoint",
 				label: localize("debug.addFunctionBreakpoint", "Add Function Breakpoint"),
 				icon: Lxicon.add,
-				run: () => this.showBreakpointEditor({ kind: "function" }),
+				run: () => this.renderInputBox({ kind: "function" }),
 			},
 			{ id: "debug.enableAllBreakpoints", label: localize("debug.enableAllBreakpoints", "Enable All Breakpoints"), icon: Lxicon.check, run: () => this.debug.setBreakpointsEnabled(true) },
 			{ id: "debug.disableAllBreakpoints", label: localize("debug.disableAllBreakpoints", "Disable All Breakpoints"), icon: Lxicon.pause, run: () => this.debug.setBreakpointsEnabled(false) },
@@ -70,37 +72,40 @@ export class BreakpointsView extends ViewPane {
 		this._register(debug.onDidChangeBreakpoints(() => this.render()));
 		this._register(debug.onDidChangeExceptionBreakpoints(() => this.render()));
 		this._register(debug.onDidChangeSession(() => this.render()));
-		this._register(dataRequests(options => this.showBreakpointEditor({ kind: 'data', options })));
-		this._register(instructionRequests(instructionReference => this.showBreakpointEditor({ kind: 'instruction', instructionReference })));
-		this._register(sizingChanges(() => this.updateSize()));
+		this._register(views.onDidChangeViewVisibility(() => this.updateSize()));
+		this._register(views.onDidChangeViewContainerVisibility(() => this.updateSize()));
 		this._register(observeResize([this.breakpointsElement, this.exceptionsElement], () => this.updateSize()));
 		this._register(this.onDidChangeExpansionState(() => this.updateSize()));
-		this.setVisible(true);
-		this.element.remove();
 		this.render();
 	}
 	private async changeExceptionBreakpoints(): Promise<void> {
 		const filters = [...this.exceptionsElement.querySelectorAll<HTMLInputElement>("input[data-exception-filter]:checked")].map(input => input.dataset.exceptionFilter!).filter(Boolean);
 		try { await this.debug.setExceptionBreakpoints(filters); }
-		catch (error) { this.reportError(message(error)); this.render(); }
+		catch (error) { this.notifications.error(message(error)); this.render(); }
 	}
 
 	private editBreakpoint(breakpoint: IDebugBreakpoint): void {
-		this.showBreakpointEditor({ kind: "source", breakpoint });
+		this.renderInputBox({ kind: "source", breakpoint });
 	}
 
 	private editAdditionalBreakpoint(breakpoint: Exclude<DebugBreakpoint, IDebugBreakpoint>): void {
 		switch (breakpoint.kind) {
-			case "function": this.showBreakpointEditor({ kind: "function", breakpoint }); break;
+			case "function": this.renderInputBox({ kind: "function", breakpoint }); break;
 			case "data": {
-				this.showBreakpointEditor({ kind: "data", breakpoint });
+				this.renderInputBox({ kind: "data", breakpoint });
 				break;
 			}
-			case "instruction": this.showBreakpointEditor({ kind: "instruction", breakpoint, instructionReference: breakpoint.instructionReference }); break;
+			case "instruction": this.renderInputBox({ kind: "instruction", breakpoint, instructionReference: breakpoint.instructionReference }); break;
 		}
 	}
 
-	private showBreakpointEditor(state: BreakpointEditorState): void {
+	renderInputBox(state: BreakpointEditorState | undefined): void {
+		if (!state) {
+			this.breakpointEdit = undefined;
+			this.breakpointEditControls.clear();
+			this.updateSize();
+			return;
+		}
 		const breakpoint = state.breakpoint;
 		this.breakpointEditControls.clear();
 		const controls = new DisposableStore();
@@ -148,10 +153,7 @@ export class BreakpointsView extends ViewPane {
 		field("hitCondition", localize("debug.breakpointHitCondition", "Hit count condition"), breakpoint?.hitCondition);
 		if (state.kind === "source") field("logMessage", localize("debug.breakpointLogMessage", "Log message"), state.breakpoint.logMessage);
 		const close = () => {
-			this.breakpointEdit = undefined;
-			form.remove();
-			this.breakpointEditControls.clear();
-			this.updateSize();
+			this.renderInputBox(undefined);
 			if (breakpoint) this.breakpointItems.get(breakpoint.id)?.focusEdit();
 			else this.breakpointToolbar.focus();
 		};
@@ -233,7 +235,7 @@ export class BreakpointsView extends ViewPane {
 		this.breakpointsElement.replaceChildren(...allBreakpoints.map(breakpoint => {
 			let item = this.breakpointItems.get(breakpoint.id);
 			if (!item) item = this.breakpointItems.set(breakpoint.id, new DebugBreakpointItem(this.element.ownerDocument, this.debug, point => {
-				if ("resource" in point) void this.editor.openEditor({ resource: point.resource }, { selection: lineSelection(point.lineNumber) }).catch(error => { this.reportError(message(error)); this.render(); });
+				if ("resource" in point) void this.editor.openEditor({ resource: point.resource }, { selection: lineSelection(point.lineNumber) }).catch(error => { this.notifications.error(message(error)); this.render(); });
 				else this.editAdditionalBreakpoint(point);
 			}, point => {
 				if ("resource" in point) this.editBreakpoint(point);
@@ -251,7 +253,8 @@ export class BreakpointsView extends ViewPane {
 		// Measure intrinsic children rather than the allocated body, so removing rows can shrink it.
 		const contentHeight = Math.ceil([...this.contentElement.children].reduce((height, child) => height + child.getBoundingClientRect().height, 0));
 		const minimum = Math.min(contentHeight, 9 * listRowHeight);
-		const fillSpace = this.canFillSpace();
+		const container = this.views.getActiveViewPaneContainerWithId(WorkbenchViewContainerId.Debug);
+		const fillSpace = container?.panes.every(pane => pane.id === this.id || !pane.isBodyVisible()) ?? false;
 		const maximum = fillSpace ? Number.POSITIVE_INFINITY : contentHeight;
 		// Keep the constraints valid while moving between empty, populated and filling states.
 		if (minimum > breakpoints.maximumBodySize) breakpoints.maximumBodySize = maximum;

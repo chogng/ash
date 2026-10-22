@@ -1,5 +1,5 @@
 import { raceCancellationError } from '../../../../base/common/async.js';
-import { type CancellationToken } from '../../../../base/common/cancellation.js';
+import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { type IVersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
@@ -19,8 +19,12 @@ export function getRealAndSyntheticDocumentFormattersOrdered(
 	model: ITextModel,
 ): DocumentFormattingEditProvider[] {
 	const providers = documentFormattingEditProvider.ordered(model);
+	const seen = new Set<DocumentFormattingEditProvider | DocumentRangeFormattingEditProvider>(providers);
 	const extensions = new Set(providers.flatMap(provider => provider.extensionId ? [ExtensionIdentifier.toKey(provider.extensionId)] : []));
 	for (const provider of documentRangeFormattingEditProvider.ordered(model)) {
+		// Adapters can implement both contracts without claiming an extension identity.
+		if (seen.has(provider)) continue;
+		seen.add(provider);
 		if (provider.extensionId) {
 			const key = ExtensionIdentifier.toKey(provider.extensionId);
 			if (extensions.has(key)) {
@@ -48,7 +52,7 @@ export const enum FormattingMode {
 }
 
 export interface IFormattingEditProviderSelector {
-	<T extends DocumentFormattingEditProvider | DocumentRangeFormattingEditProvider>(formatters: T[], document: ITextModel, mode: FormattingMode, kind: FormattingKind): Promise<T | undefined>;
+	<T extends DocumentFormattingEditProvider | DocumentRangeFormattingEditProvider>(formatters: T[], document: ITextModel, mode: FormattingMode, kind: FormattingKind, token: CancellationToken): Promise<T | undefined>;
 }
 
 export abstract class FormattingConflicts {
@@ -65,12 +69,12 @@ export abstract class FormattingConflicts {
 		});
 	}
 
-	public static async select<T extends DocumentFormattingEditProvider | DocumentRangeFormattingEditProvider>(formatters: T[], document: ITextModel, mode: FormattingMode, kind: FormattingKind): Promise<T | undefined> {
+	public static async select<T extends DocumentFormattingEditProvider | DocumentRangeFormattingEditProvider>(formatters: T[], document: ITextModel, mode: FormattingMode, kind: FormattingKind, token: CancellationToken = CancellationToken.None): Promise<T | undefined> {
 		if (formatters.length === 0) {
 			return undefined;
 		}
 		const selector = this.selectors.at(-1);
-		return selector ? selector.select(formatters, document, mode, kind) : formatters[0];
+		return selector ? selector.select(formatters, document, mode, kind, token) : formatters[0];
 	}
 }
 
@@ -84,8 +88,33 @@ export async function formatEditor(
 	kind: FormattingKind,
 	mode = FormattingMode.Explicit,
 ): Promise<boolean> {
+	return runFormatting(editor, worker, (model, token) => provideEdits(editor, model, features, kind, mode, model.getFormattingOptions(), token), true);
+}
+
+/** Formats only declared trigger characters after the keyboard edit has committed. */
+export async function formatEditorOnType(editor: ICodeEditor, features: ILanguageFeaturesService, worker: IVersionedEditorWorkerClient, text: string, token: CancellationToken = CancellationToken.None): Promise<boolean> {
 	const model = editor.getModel();
-	if (!model || editor.getOption(EditorOption.readOnly)) {
+	if (!model || !editor.getOption(EditorOption.formatOnType) || !text) return false;
+	const ch = [...text].at(-1)!;
+	const provider = features.onTypeFormattingEditProvider.ordered(model).find(provider => provider.autoFormatTriggerCharacters.includes(ch));
+	if (!provider) return false;
+	const positions = (editor.getSelections() ?? []).map(selection => selection.getPosition());
+	return runFormatting(editor, worker, async (model, token) => {
+		const batches = await Promise.all(positions.map(position => provider.provideOnTypeFormattingEdits(model, position, ch, model.getFormattingOptions(), token)));
+		const edits: TextEdit[] = [];
+		for (const edit of batches.flatMap(batch => batch ?? [])) {
+			if (edits.some(other => Range.equalsRange(edit.range, other.range) && edit.text === other.text && edit.eol === other.eol)) continue;
+			// Independent cursors must not submit conflicting replacements.
+			if (edits.some(other => Range.areIntersectingOrTouching(edit.range, other.range))) return undefined;
+			edits.push(edit);
+		}
+		return edits;
+	}, false, token);
+}
+
+async function runFormatting(editor: ICodeEditor, worker: IVersionedEditorWorkerClient, provide: (model: ITextModel, token: CancellationToken) => Promise<TextEdit[] | null | undefined>, addUndoStops: boolean, token: CancellationToken = CancellationToken.None): Promise<boolean> {
+	const model = editor.getModel();
+	if (!model || editor.getOption(EditorOption.readOnly) || token.isCancellationRequested) {
 		return false;
 	}
 	requests.get(editor)?.cancel();
@@ -98,18 +127,19 @@ export async function formatEditor(
 		source.dispose(true);
 	}));
 	resources.add(source.token.onCancellationRequested(() => abort.abort()));
+	resources.add(token.onCancellationRequested(() => source.cancel()));
 	resources.add(model.onDidChangeLanguage(() => source.cancel()));
 	resources.add(editor.onDidChangeConfiguration(() => {
 		if (editor.getOption(EditorOption.readOnly)) source.cancel();
 	}));
 	try {
-		const edits = await raceCancellationError(provideEdits(editor, model, features, kind, mode, model.getFormattingOptions(), source.token), source.token);
+		const edits = await raceCancellationError(provide(model, source.token), source.token);
 		if (abort.signal.aborted || !edits?.length) {
 			return false;
 		}
 		const minimalEdits = await worker.computeMoreMinimalEdits(edits, abort.signal);
 		if (!abort.signal.aborted && minimalEdits) {
-			FormattingEdit.execute(editor, [...minimalEdits], true);
+			FormattingEdit.execute(editor, [...minimalEdits], addUndoStops);
 			return minimalEdits.length > 0;
 		}
 		return false;
@@ -140,7 +170,7 @@ async function provideEdits(
 			features.documentRangeFormattingEditProvider,
 			model,
 		);
-		const provider = await raceCancellationError(FormattingConflicts.select(providers, model, mode, FormattingKind.File), token);
+		const provider = await raceCancellationError(FormattingConflicts.select(providers, model, mode, FormattingKind.File, token), token);
 		if (!provider || token.isCancellationRequested) {
 			return undefined;
 		}
@@ -162,7 +192,7 @@ async function provideEdits(
 		return;
 	}
 	const providers = features.documentRangeFormattingEditProvider.ordered(model);
-	const provider = await raceCancellationError(FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.Selection), token);
+	const provider = await raceCancellationError(FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.Selection, token), token);
 	if (!provider || token.isCancellationRequested) {
 		return undefined;
 	}

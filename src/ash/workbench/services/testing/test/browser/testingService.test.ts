@@ -217,7 +217,9 @@ test('TestingService starts the prepared exact test with the DAP owner and cance
 	await service.refreshTests();
 	const selected = service.tests[0]!;
 	await service.debugTest(selected.key);
-	assert.deepEqual(debug.launches[0]!.arguments, { program: '/workspace/target/test', args: ['--exact', selected.name], cwd: '/workspace', stopOnEntry: false });
+	assert.deepEqual(debug.launches[0]!.arguments, { program: '/workspace/target/test', args: ['--exact', selected.name], cwd: '/workspace', stopOnEntry: false, sourceLanguages: ['rust'], terminal: 'console' });
+	assert.equal(debug.launches[0]!.type, 'lldb');
+	assert.equal(debug.launches[0]!.adapter, undefined, 'The Debug provider must select the adapter, including configured runtime settings');
 	assert.equal(debug.launches[0]!.dirId, 'workspace');
 	assert.equal(service.isDebuggingTest, true);
 	assert.equal(backend.runs.length, 0);

@@ -68,8 +68,17 @@ jobs:
       - name: Test scoped formatting with real tools
         working-directory: scripts
         run: .venv/bin/python -B -m unittest test_format.ScopedFormattingTests
-      - name: Install Chromium for browser service unit tests
-        run: pnpm exec playwright install --with-deps chromium
+      - name: Install browsers for Stanza and browser service unit tests
+        run: pnpm exec playwright install --with-deps chromium firefox
+      - name: Test Stanza distribution
+        run: pnpm run test:stanza:no-compile
+      - name: Upload Stanza test diagnostics
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: frontend-stanza
+          path: .build/desktop/playwright/stanza-*/
+          if-no-files-found: warn
       - name: Test frontend units
         run: |
           pnpm run prepare:output

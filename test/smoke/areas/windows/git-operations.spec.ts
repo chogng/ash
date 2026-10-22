@@ -403,6 +403,11 @@ test.describe('SCM commit authorization', () => {
 		await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Open Read Only', exact: true }).click();
 		await workbench.waitForReady();
 		await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toContainText('Read-only');
+		const banner = page.locator('[data-part="banner"]');
+		await expect(banner).toContainText('This workspace is read-only');
+		await banner.getByRole('button', { name: 'Close Banner', exact: true }).click();
+		await expect(banner).toBeHidden();
+		await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toBeVisible();
 		await workbench.git.open();
 		const input = page.locator('.ash-scm-input');
 		await input.getByRole('textbox', { name: /^Commit message/u }).focus();

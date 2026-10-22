@@ -19,7 +19,6 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
-use tokio::sync::mpsc;
 use tokio::time::timeout;
 
 const COALESCE_INTERVAL: Duration = Duration::from_millis(40);
@@ -42,7 +41,7 @@ fn notify_event(kind: EventKind, paths: Vec<std::path::PathBuf>) -> Event {
 #[tokio::test]
 async fn raw_receiver_sorts_deduplicates_and_closes() {
     let (tx, mut rx) = watch_channel();
-    tx.add_changed_paths(&[path("b"), path("a"), path("b")])
+    tx.add_changed_paths(&[path("b"), path("a"), path("b")], Vec::new)
         .await;
 
     assert_eq!(
@@ -58,7 +57,7 @@ async fn raw_receiver_sorts_deduplicates_and_closes() {
 #[tokio::test]
 async fn rescan_supersedes_pending_path_changes() {
     let (tx, mut rx) = watch_channel();
-    tx.add_changed_paths(&[path("changed")]).await;
+    tx.add_changed_paths(&[path("changed")], Vec::new).await;
     tx.require_rescan(&[path("root-b"), path("root-a")]).await;
 
     assert_eq!(
@@ -73,7 +72,7 @@ async fn rescan_supersedes_pending_path_changes() {
 async fn throttled_receiver_holds_the_next_batch_until_interval() {
     let (tx, rx) = watch_channel();
     let mut rx = ThrottledWatchReceiver::new(rx, COALESCE_INTERVAL);
-    tx.add_changed_paths(&[path("a")]).await;
+    tx.add_changed_paths(&[path("a")], Vec::new).await;
     assert_eq!(
         rx.recv().await,
         Some(FileWatcherEvent::PathsChanged {
@@ -81,7 +80,7 @@ async fn throttled_receiver_holds_the_next_batch_until_interval() {
         })
     );
 
-    tx.add_changed_paths(&[path("b")]).await;
+    tx.add_changed_paths(&[path("b")], Vec::new).await;
     assert!(timeout(COALESCE_INTERVAL / 2, rx.recv()).await.is_err());
     assert_eq!(
         timeout(COALESCE_INTERVAL * 2, rx.recv()).await.unwrap(),
@@ -95,11 +94,11 @@ async fn throttled_receiver_holds_the_next_batch_until_interval() {
 async fn debounced_receiver_merges_a_burst() {
     let (tx, rx) = watch_channel();
     let mut rx = DebouncedWatchReceiver::new(rx, COALESCE_INTERVAL);
-    tx.add_changed_paths(&[path("c")]).await;
+    tx.add_changed_paths(&[path("c")], Vec::new).await;
     let delayed_tx = tx.clone();
     tokio::spawn(async move {
         tokio::time::sleep(COALESCE_INTERVAL / 2).await;
-        delayed_tx.add_changed_paths(&[path("d")]).await;
+        delayed_tx.add_changed_paths(&[path("d")], Vec::new).await;
     });
 
     assert_eq!(
@@ -163,7 +162,7 @@ async fn ordinary_file_edits_do_not_restart_the_backend() {
         .register_paths(vec![watch(&file, false)])
         .unwrap();
     let registered = operations.lock().unwrap().clone();
-    let (raw_tx, raw_rx) = mpsc::unbounded_channel();
+    let (raw_tx, raw_rx) = crate::ingress::event_channel();
     watcher.spawn_event_loop_for_test(raw_rx);
     for edit in 0..6 {
         fs::write(&file, format!("edit {edit}")).unwrap();
@@ -538,7 +537,7 @@ async fn backend_filters_access_events_and_routes_mutations() {
     let _registration = subscriber
         .register_paths(vec![watch("/tmp/ash-skills", true)])
         .unwrap();
-    let (raw_tx, raw_rx) = mpsc::unbounded_channel();
+    let (raw_tx, raw_rx) = crate::ingress::event_channel();
     watcher.spawn_event_loop_for_test(raw_rx);
 
     raw_tx
@@ -573,7 +572,7 @@ async fn backend_error_requires_scoped_rescan_for_every_subscriber() {
             watch("/tmp/ash-plugins", true),
         ])
         .unwrap();
-    let (raw_tx, raw_rx) = mpsc::unbounded_channel();
+    let (raw_tx, raw_rx) = crate::ingress::event_channel();
     watcher.spawn_event_loop_for_test(raw_rx);
     raw_tx
         .send(Err(notify::Error::generic("synthetic overflow")))
@@ -594,7 +593,7 @@ async fn backend_rescan_flag_requires_scoped_rescan() {
     let _registration = subscriber
         .register_paths(vec![watch("/tmp/ash-skills", true)])
         .unwrap();
-    let (raw_tx, raw_rx) = mpsc::unbounded_channel();
+    let (raw_tx, raw_rx) = crate::ingress::event_channel();
     watcher.spawn_event_loop_for_test(raw_rx);
     raw_tx
         .send(Ok(Event::new(EventKind::Other).set_flag(Flag::Rescan)))
@@ -606,6 +605,49 @@ async fn backend_rescan_flag_requires_scoped_rescan() {
             watched_paths: vec![path("/tmp/ash-skills")],
         })
     );
+}
+
+#[tokio::test]
+async fn subscriber_overflow_rescans_owned_roots_and_preserves_future_changes() {
+    let dir = TestDir::new();
+    let root = dir.create_dir("owned");
+    let other = dir.create_dir("unrelated");
+    let watcher = Arc::new(FileWatcher::noop());
+    let (subscriber, mut receiver) = watcher.add_subscriber();
+    let (unrelated, mut unrelated_receiver) = watcher.add_subscriber();
+    let _registration = subscriber.register_paths(vec![watch(&root, true)]).unwrap();
+    let _unrelated = unrelated.register_paths(vec![watch(&other, true)]).unwrap();
+    // Each routed batch is small, but a stalled consumer spans many batches.
+    for batch in 0..40 {
+        watcher
+            .send_paths_for_test(
+                (0..128)
+                    .map(|index| root.join(format!("generated-{}", batch * 128 + index)))
+                    .collect(),
+            )
+            .await;
+    }
+    assert_eq!(
+        receiver.recv().await,
+        Some(FileWatcherEvent::RescanRequired {
+            watched_paths: vec![root.clone()]
+        })
+    );
+    assert!(
+        timeout(Duration::from_millis(20), unrelated_receiver.recv())
+            .await
+            .is_err()
+    );
+    let final_path = root.join("final.txt");
+    fs::write(&final_path, "final disk state").unwrap();
+    watcher.send_paths_for_test(vec![final_path.clone()]).await;
+    assert_eq!(
+        receiver.recv().await,
+        Some(FileWatcherEvent::PathsChanged {
+            paths: vec![final_path.clone()]
+        })
+    );
+    assert_eq!(fs::read_to_string(final_path).unwrap(), "final disk state");
 }
 
 static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);

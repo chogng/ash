@@ -3,7 +3,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
-import { ITerminalService, type ITerminalGroup, type ITerminalGroupService, type ITerminalInstance } from './terminal.js';
+import { ITerminalService, type ITerminalGroup, type ITerminalGroupService, type ITerminalInstance, type ITerminalView } from './terminal.js';
 import { TERMINAL_VIEW_ID } from '../common/terminal.js';
 import { TerminalGroup } from './terminalGroup.js';
 
@@ -129,5 +129,11 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 	async showPanel(focus = false): Promise<void> {
 		await this.views.openView(TERMINAL_VIEW_ID, focus);
 		if (focus) this.terminals.activeInstance?.xterm?.focus();
+	}
+
+	async focusHover(): Promise<void> {
+		if (!this.activeGroup?.activeInstance) return;
+		const view = await this.views.openView<ITerminalView>(TERMINAL_VIEW_ID, false);
+		view?.focusHover();
 	}
 }

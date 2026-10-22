@@ -128,7 +128,7 @@ export class MouseHandler extends ViewEventHandler {
 			event.preventDefault();
 			this.viewHelper.focusTextArea();
 		}
-		if (event.defaultPrevented || (!event.leftButton && !event.middleButton) || target.type === MouseTargetType.UNKNOWN || target.type === MouseTargetType.SCROLLBAR || isWidget(target) || isViewZone(target) && !suppressedViewZone || !target.position) {
+		if (event.defaultPrevented || (!event.leftButton && !event.middleButton) || target.type === MouseTargetType.UNKNOWN || target.type === MouseTargetType.SCROLLBAR || target.type === MouseTargetType.GUTTER_GLYPH_MARGIN || isWidget(target) || isViewZone(target) && !suppressedViewZone || !target.position) {
 			this.viewController.emitMouseDown(editorEvent);
 			return;
 		}

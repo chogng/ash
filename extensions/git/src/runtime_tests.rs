@@ -135,3 +135,43 @@ fn initial_watched_status_respects_client_policy_and_never_overwrites_a_live_vie
         Some(foreign)
     ));
 }
+
+#[test]
+fn editor_discovery_skips_known_repositories_but_detects_unknown_workspace_paths() {
+    for workspace in ["file:///workspace", "ash-remote://ssh+host/workspace"] {
+        let mut state = super::State::default();
+        state.folders.push(crate::model::WorkspaceFolder {
+            id: "workspace".into(),
+            name: "Workspace".into(),
+            uri: crate::paths::ResourceUri::parse(workspace).unwrap(),
+        });
+        let mut known = repository(None);
+        known.root_uri = crate::paths::ResourceUri::parse(&format!("{workspace}/repo")).unwrap();
+        state.repositories.insert("repo".into(), known);
+        for resources in [
+            serde_json::json!([]),
+            serde_json::json!([
+                format!("{workspace}/repo/src/first.ts"),
+                format!("{workspace}/repo/tests/second.ts")
+            ]),
+            serde_json::json!([
+                "git-index:/file.ts?revision=1",
+                "untitled:/new",
+                "file:///outside/file.ts"
+            ]),
+            serde_json::json!(["ash-remote://ssh+other/workspace/new/file.ts"]),
+        ] {
+            assert!(
+                !super::editor_resources_need_discovery(&state, resources.as_array().unwrap()),
+                "{resources}"
+            );
+        }
+        for path in ["new-repo/file.ts", "repo-other/file.ts"] {
+            let resources = serde_json::json!([format!("{workspace}/{path}")]);
+            assert!(
+                super::editor_resources_need_discovery(&state, resources.as_array().unwrap()),
+                "{resources}"
+            );
+        }
+    }
+}

@@ -1,6 +1,28 @@
 import { Emitter, Event } from "../../base/common/event.js";
 import { Disposable, DisposableStore } from "../../base/common/lifecycle.js";
-import type { INotification, INotificationActions, INotificationHandle } from "../../platform/notification/common/notification.js";
+import type { INotification, INotificationActions, INotificationHandle, INotificationProgressProperties, IStatusHandle, IStatusMessageOptions } from "../../platform/notification/common/notification.js";
+import type { IConfigurationService } from '../../platform/configuration/common/configuration.js';
+
+export const enum NotificationsSettings {
+	NOTIFICATIONS_POSITION = 'workbench.notifications.position',
+	NOTIFICATIONS_BUTTON = 'workbench.notifications.showInTitleBar',
+}
+
+export const enum NotificationsPosition {
+	BOTTOM_RIGHT = 'bottom-right',
+	BOTTOM_LEFT = 'bottom-left',
+	TOP_RIGHT = 'top-right',
+}
+
+export function getNotificationsPosition(configurationService: IConfigurationService): NotificationsPosition {
+	const position = configurationService.getValue<NotificationsPosition>(NotificationsSettings.NOTIFICATIONS_POSITION);
+	return position === NotificationsPosition.BOTTOM_LEFT || position === NotificationsPosition.TOP_RIGHT ? position : NotificationsPosition.BOTTOM_RIGHT;
+}
+
+export interface IStatusMessageViewItem {
+	readonly message: string;
+	readonly options?: IStatusMessageOptions;
+}
 
 /** Window history and presentation state stay in the Workbench, outside the producer contract. */
 export interface NotificationItem extends Omit<INotification, 'message' | 'source'> {
@@ -8,7 +30,9 @@ export interface NotificationItem extends Omit<INotification, 'message' | 'sourc
 	readonly createdAt: number;
 	readonly message: string;
 	readonly source?: string;
+	readonly sourceId?: string;
 	readonly visible: boolean;
+	readonly hasActiveProgress: boolean;
 	readonly onDidChange: Event<NotificationItem>;
 	updateVisibility(visible: boolean): void;
 }
@@ -24,8 +48,26 @@ export class NotificationsModel extends Disposable {
 
 	readonly onDidAdd: Event<NotificationItem> = this._onDidAdd.event;
 	readonly onDidRemove: Event<NotificationItem> = this._onDidRemove.event;
+	private readonly statusChanges = this._register(new Emitter<void>());
+	readonly onDidChangeStatusMessage = this.statusChanges.event;
+	private currentStatusMessage: IStatusMessageViewItem | undefined;
+	get statusMessage(): IStatusMessageViewItem | undefined { return this.currentStatusMessage; }
+
+	showStatusMessage(message: string, options?: IStatusMessageOptions): IStatusHandle {
+		this.assertNotDisposed();
+		const item = this.currentStatusMessage = { message, options: options ? { ...options } : undefined };
+		this.statusChanges.fire();
+		return {
+			close: () => {
+				if (this.currentStatusMessage !== item) { return; }
+				this.currentStatusMessage = undefined;
+				this.statusChanges.fire();
+			}
+		};
+	}
 
 	addNotification(options: INotification): INotificationHandle {
+		this.assertNotDisposed();
 		const id = this.nextId++;
 		const resources = new DisposableStore();
 		const closedEmitter = resources.add(new Emitter<void>());
@@ -41,7 +83,10 @@ export class NotificationsModel extends Disposable {
 			id,
 			message: options.message instanceof Error ? options.message.message : options.message,
 			source: typeof options.source === 'string' ? options.source : options.source?.label,
+			sourceId: typeof options.source === 'object' ? options.source.id : undefined,
 			visible: false,
+			progress: options.progress ? Object.freeze({ ...options.progress }) : undefined,
+			hasActiveProgress: hasActiveProgress(options.progress),
 			updateVisibility,
 			onDidChange: ((listener, thisArgs, disposables) => this._onDidChange.event(current => {
 				if (current.id === id) listener.call(thisArgs, current);
@@ -67,7 +112,11 @@ export class NotificationsModel extends Disposable {
 			updateActions: actions => this.update(id, { actions: freezeActions(actions) }),
 			progress: {
 				infinite: () => this.update(id, { progress: { infinite: true } }),
-				total: total => this.update(id, { progress: { total, worked: 0 } }),
+				total: total => {
+					const progress = this.get(id)?.progress;
+					if (progress?.total === total && !progress.infinite) return;
+					this.update(id, { progress: { total, worked: progress?.worked ?? 0 } });
+				},
 				worked: value => {
 					const progress = this.get(id)?.progress;
 					this.update(id, { progress: { total: progress?.total, worked: (progress?.worked ?? 0) + value } });
@@ -93,7 +142,7 @@ export class NotificationsModel extends Disposable {
 	private update(id: number, changes: Partial<Pick<NotificationItem, 'severity' | 'message' | 'actions' | 'progress' | 'visible'>>): void {
 		const current = this.items.get(id);
 		if (!current) return;
-		const item = Object.freeze({ ...current, ...changes });
+		const item = Object.freeze({ ...current, ...changes, hasActiveProgress: hasActiveProgress('progress' in changes ? changes.progress : current.progress) });
 		this.items.set(id, item);
 		this._onDidChange.fire(item);
 	}
@@ -115,8 +164,13 @@ export class NotificationsModel extends Disposable {
 
 	protected override disposeCore(): void {
 		this.clear();
+		if (this.currentStatusMessage) { this.currentStatusMessage = undefined; this.statusChanges.fire(); }
 		super.disposeCore();
 	}
+}
+
+function hasActiveProgress(progress: INotificationProgressProperties | undefined): boolean {
+	return progress?.infinite === true || progress?.total !== undefined || progress?.worked !== undefined;
 }
 
 function freezeActions(actions: INotificationActions | undefined): INotificationActions {

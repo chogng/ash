@@ -84,12 +84,18 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 			content.className = 'ash-accessible-view-content';
 			content.readOnly = true;
 			const selectedProvider = provider;
+			const updateHint = (): void => {
+				const hint = this.getOpenAriaHint(selectedProvider.verbositySettingKey);
+				if (hint) content.setAttribute('aria-description', hint);
+				else content.removeAttribute('aria-description');
+			};
 			const updateContent = (): void => {
 				const value = selectedProvider.provideContent();
 				const text = type === AccessibleViewType.Help
 					? resolveContentAndKeybindingItems(this.keybindings, value)?.content.value ?? ''
 					: value;
 				this.updateText(content, text);
+				updateHint();
 			};
 			updateContent();
 			const title = type === AccessibleViewType.Help
@@ -110,12 +116,11 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 			if (provider.onDidChangeContent) {
 				lifetime.add(provider.onDidChangeContent(updateContent));
 			}
-			if (type === AccessibleViewType.Help) {
-				lifetime.add(this.keybindings.onDidUpdateKeybindings(updateContent));
-			}
+			lifetime.add(this.keybindings.onDidUpdateKeybindings(updateContent));
 			lifetime.add(this.configuration.onDidChangeConfiguration(event => {
 				if (event.affectsConfiguration(selectedProvider.verbositySettingKey)) {
 					verbosityEnabled.set(this.configuration.getValue<boolean>(selectedProvider.verbositySettingKey));
+					updateHint();
 				}
 			}));
 			this.provider = provider;

@@ -1,3 +1,4 @@
+import { TestViewDescriptorService } from '../../../../test/browser/workbenchTestServices.js';
 import { MutableDisposable } from '../../../../../base/common/lifecycle.js';
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../browser/parts/views/viewPane.js';
@@ -8,8 +9,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { CompositeBar } from '../../../../browser/parts/compositeBar.js';
 import { HoverPosition } from '../../../../../base/browser/ui/hover/hoverWidget.js';
-import { ViewContainerLocation, ViewsRegistry, WorkbenchViewRegistry } from '../../../../common/views.js';
-import { ViewDescriptorService } from '../../../views/browser/viewDescriptorService.js';
+import { ViewContainerLocation, WorkbenchViewRegistry } from '../../../../common/views.js';
 import { ActivityService } from '../../browser/activityService.js';
 import { NumberBadge } from '../../common/activity.js';
 import { BrowserStorageService } from '../../../storage/browser/storageService.js';
@@ -21,9 +21,10 @@ ensureNoDisposablesAreLeakedInTestSuite();
 test('activity counts abbreviate visually while retaining complete descriptions', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
-		using container = ViewsRegistry.registerViewContainer({ id: 'large-count', title: 'Changes', location: ViewContainerLocation.Sidebar });
+		using registry = new WorkbenchViewRegistry();
+		using container = registry.registerViewContainer({ id: 'large-count', title: 'Changes', location: ViewContainerLocation.Sidebar });
 		using contexts = new ContextKeyService();
-		using views = new ViewDescriptorService({}, contexts);
+		using views = new TestViewDescriptorService({ registry }, contexts);
 		using activity = new ActivityService(views);
 		using bar = new CompositeBar(dom.window.document.body, {
 			openComposite: async () => null, activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: views, location: ViewContainerLocation.Sidebar, ariaLabel: 'Views',
@@ -45,10 +46,10 @@ test('activity counts abbreviate visually while retaining complete descriptions'
 
 test('ActivityService combines concurrent counts and descriptions and releases only their own activities', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const registry = ViewsRegistry;
+	using registry = new WorkbenchViewRegistry();
 	using container = registry.registerViewContainer({ id: 'test', title: 'Test', location: ViewContainerLocation.Sidebar });
 	using contextKeys = new ContextKeyService();
-	using views = new ViewDescriptorService({ registry }, contextKeys);
+	using views = new TestViewDescriptorService({ registry }, contextKeys);
 	using activity = new ActivityService(views);
 	using bar = new CompositeBar(dom.window.document.body, {
 		openComposite: async () => null, activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: views, location: ViewContainerLocation.Sidebar, ariaLabel: 'Views'
@@ -86,10 +87,11 @@ test('ActivityService combines concurrent counts and descriptions and releases o
 test('Activity Bar badge menu uses Chinese labels and restores independent visibility across workspaces', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	try {
-		using firstContainer = ViewsRegistry.registerViewContainer({ id: 'badge-first', title: 'First', location: ViewContainerLocation.Sidebar });
-		using secondContainer = ViewsRegistry.registerViewContainer({ id: 'badge-second', title: 'Second', location: ViewContainerLocation.Sidebar });
+		using registry = new WorkbenchViewRegistry();
+		using firstContainer = registry.registerViewContainer({ id: 'badge-first', title: 'First', location: ViewContainerLocation.Sidebar });
+		using secondContainer = registry.registerViewContainer({ id: 'badge-second', title: 'Second', location: ViewContainerLocation.Sidebar });
 		using contexts = new ContextKeyService();
-		using views = new ViewDescriptorService({}, contexts);
+		using views = new TestViewDescriptorService({ registry }, contexts);
 		const options = { ownerWindow: dom.window as unknown as Window, workspaceId: 'first', flushInterval: 0 };
 		using storage = new BrowserStorageService(options);
 		let actions: readonly IAction[] = [];
@@ -150,7 +152,7 @@ test('view activity follows late registration and container changes without depe
 	using first = registry.registerViewContainer({ id: 'first', title: 'First', location: ViewContainerLocation.Sidebar });
 	using second = registry.registerViewContainer({ id: 'second', title: 'Second', location: ViewContainerLocation.Panel });
 	using contexts = new ContextKeyService();
-	using views = new ViewDescriptorService({ registry }, contexts);
+	using views = new TestViewDescriptorService({ registry }, contexts);
 	using activity = new ActivityService(views);
 	const changed: string[] = [];
 	using listener = activity.onDidChangeActivity(container => changed.push(typeof container === 'string' ? container : container.id));

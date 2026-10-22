@@ -40,6 +40,7 @@ export class MainThreadDebugService extends Disposable {
 			this.breakpointSnapshots = current;
 			if (added.length || changed.length || removed.length) { this.emit({ type: 'breakpoints', added, changed, removed }); }
 		}));
+		this._register(debug.onDidWriteTerminalData(event => this.emit({ type: 'terminalOutput', sessionId: event.session.id, output: event.data })));
 		this._register(debug.onWillNewSession(session => this.observeSession(session)));
 		this._register(debug.onDidNewSession(session => this.emit({ type: 'start', session: this.sessionSnapshot(session) })));
 		this._register(debug.onDidEndSession(session => {

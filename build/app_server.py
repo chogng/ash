@@ -137,6 +137,16 @@ def parse_arguments(
         help="Prebuilt Rust Remote SSH extension.",
     )
     parser.add_argument(
+        "--javascript-debug-extension-bin",
+        type=Path,
+        help="Prebuilt Rust JavaScript debug provider.",
+    )
+    parser.add_argument(
+        "--server-ready-extension-bin",
+        type=Path,
+        help="Prebuilt Rust server-ready provider.",
+    )
+    parser.add_argument(
         "--lldb-extension-bin",
         type=Path,
         help="Optional prebuilt Rust LLDB debugger extension. If omitted, Cargo builds it.",
@@ -309,6 +319,8 @@ def build_package(args: argparse.Namespace) -> int:
         "ash-remote-ssh-extension": args.remote_ssh_extension_bin,
         "ash-dev-container-provider": args.dev_container_provider_bin,
         "ash-debug-lldb": args.lldb_extension_bin,
+        "ash-debug-javascript": args.javascript_debug_extension_bin,
+        "ash-debug-server-ready": args.server_ready_extension_bin,
         "ash-remote": args.remote_bin,
         "ash-remote-host": None,
         "ash-remote-server": args.remote_server_bin,
@@ -449,6 +461,8 @@ def build_package(args: argparse.Namespace) -> int:
         remote_ssh_extension_binary=binaries["ash-remote-ssh-extension"],
         dev_container_provider_binary=binaries["ash-dev-container-provider"],
         lldb_extension_binary=binaries["ash-debug-lldb"],
+        javascript_debug_extension_binary=binaries["ash-debug-javascript"],
+        server_ready_extension_binary=binaries["ash-debug-server-ready"],
         remote_host_binary=binaries["ash-remote-host"],
         voice_host_binary=binaries.get("ash-voice-host")
         if media_distribution == "bundled"

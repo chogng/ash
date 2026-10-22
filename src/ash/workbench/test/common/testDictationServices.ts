@@ -20,7 +20,7 @@ import { DisposableStore, toDisposable, type IDisposable } from '../../../base/c
 import { Emitter, Event } from '../../../base/common/event.js';
 import { PCM_FLUSH_ACK } from '../../contrib/chat/browser/pcmCaptureWorklet.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../services/notification/test/common/testNotificationService.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 
 export interface TestDictationSession { stop(): Promise<void>; cancel(): Promise<void>; }
@@ -122,7 +122,7 @@ export function registerTestDictationOnboarding(services: InstantiationService, 
 	if (!services.has(IVoiceCodeTranscriptionBackendService)) services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	if (!services.has(IVoiceCodeTranscriptionClient)) services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
 	if (!services.has(ITelemetryService)) services.registerInstance(ITelemetryService, NullTelemetryService);
-	if (!services.has(INotificationService)) services.registerSingleton(INotificationService, () => new NotificationService());
+	if (!services.has(INotificationService)) services.registerSingleton(INotificationService, () => new TestNotificationService());
 	if (!services.has(ILocalTranscriptionModelService)) services.registerSingleton(ILocalTranscriptionModelService, () => new NullLocalTranscriptionService());
 	if (!services.has(ILocalTranscriptionService)) services.registerSingleton(ILocalTranscriptionService, () => new NullLocalTranscriptionService());
 	if (!services.has(IConfigurationService)) services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());

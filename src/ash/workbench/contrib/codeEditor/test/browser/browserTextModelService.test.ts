@@ -174,6 +174,29 @@ test('Stanza text model service drops retained history when persisted content ch
 	reopened.dispose();
 });
 
+test('reopening a shared file reserves restored redo line identities for subsequent edits', async () => {
+	const resource = URI.file('C:\\project\\line-history.txt');
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new TestTextFileService('a')), {});
+	const first = await models.acquire({ resource }, new AbortController().signal);
+	const original = first.model;
+	try {
+		original.applyOperations([{ range: new Range(1, 2, 1, 2), text: '\n' }]);
+		original.undo();
+	} finally {
+		first.dispose();
+	}
+	using reopened = await models.acquire({ resource }, new AbortController().signal);
+	assert.notEqual(reopened.model, original);
+	assert.equal(original.isDisposed(), true);
+	assert.equal(reopened.model.canRedo(), true);
+	reopened.model.redo();
+	reopened.model.applyOperations([{ range: new Range(2, 1, 2, 1), text: '\n' }]);
+	const ids = [0, 1, 2].map(index => reopened.model.getLineId(index));
+	assert.equal(new Set(ids).size, 3);
+	assert.deepEqual(ids.map(id => reopened.model.getLineIndex(id)), [0, 1, 2]);
+	assert.equal(reopened.model.lineDocument.getText(), 'a\n\n');
+});
+
 test("Stanza text model references track dirty content, save snapshots, and explicitly revert", async () => {
 	const textFiles = new TestTextFileService("from disk");
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
@@ -548,6 +571,56 @@ test('read-only supplied snapshots stay unchanged across filesystem invalidation
 	textFiles.fireExternalChange(resource);
 	await models.refresh(resource);
 	assert.deepEqual([reference.model.getText(), reference.isDirty, textFiles.resolveCount], ['checkpoint text', false, 1]);
+});
+
+test('concurrent first readers share content resolution while cancellation releases only the departing waiter', async () => {
+	const resource = URI.file('/project/shared.ts');
+	const started = new DeferredPromise<void>();
+	const result = new DeferredPromise<TextResourceContent>();
+	let reads = 0;
+	let remoteSignal: AbortSignal | undefined;
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
+		onDidChange: Event.None,
+		resolve: async (_request: TextResourceResolveRequest, signal: AbortSignal) => { reads++; remoteSignal = signal; void started.complete(); return result.p; },
+		save: async () => ({ revision: undefined }),
+	}, {});
+	const controller = new AbortController();
+	const cancelled = models.acquire({ resource }, controller.signal);
+	await started.p;
+	const survivor = models.acquire({ resource }, new AbortController().signal);
+	// Wait until the second acquisition has reached resolution, without timing assumptions.
+	await new Promise<void>(resolve => queueMicrotask(() => queueMicrotask(resolve)));
+	controller.abort();
+	await assert.rejects(cancelled, isCancellationError);
+	assert.deepEqual([reads, remoteSignal?.aborted], [1, false]);
+	await result.complete({ resource, text: 'shared', revision: '1' });
+	using reference = await survivor;
+	assert.equal(reference.model.getText(), 'shared');
+});
+
+test('abandoned shared reads abort their operation and a retry cannot publish a late result', async () => {
+	const resource = URI.file('/project/retry.ts');
+	const started = new DeferredPromise<void>();
+	const old = new DeferredPromise<TextResourceContent>();
+	let firstSignal: AbortSignal | undefined;
+	let reads = 0;
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
+		onDidChange: Event.None,
+		resolve: async (_request: TextResourceResolveRequest, signal: AbortSignal) => {
+			if (++reads === 1) { firstSignal = signal; void started.complete(); return old.p; }
+			return { resource, text: 'current', revision: '2' };
+		},
+		save: async () => ({ revision: undefined }),
+	}, {});
+	const controller = new AbortController();
+	const abandoned = models.acquire({ resource }, controller.signal);
+	await started.p;
+	controller.abort();
+	await assert.rejects(abandoned, isCancellationError);
+	assert.equal(firstSignal?.aborted, true);
+	using current = await models.acquire({ resource }, new AbortController().signal);
+	await old.complete({ resource, text: 'stale', revision: '1' });
+	assert.deepEqual([reads, current.model.getText(), models.getModels().length], [2, 'current', 1]);
 });
 
 test('failed background file checks preserve clean and dirty editor states', async () => {

@@ -12,11 +12,12 @@ import type { IEditorService } from '../../../services/editor/common/editorServi
 import type { IViewsService } from '../../../services/views/common/viewsService.js';
 import { createMultiDiffEditorInput, type MultiDiffEditorInput } from './multiDiffEditorInput.js';
 import { IMultiDiffSourceResolverService } from './multiDiffSourceResolverService.js';
+import type { MultiDiffEditorWidget } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
 
 export interface MultiDiffEditorToolbarOptions {
 	readonly container: HTMLElement; readonly input: MultiDiffEditorInput;
 	readonly contextMenuProvider: IContextMenuProvider; readonly editorService?: IEditorService;
-	readonly viewsService?: IViewsService; readonly collapseAll: () => void; readonly expandAll: () => void;
+	readonly viewsService?: IViewsService; readonly editor: MultiDiffEditorWidget;
 }
 
 /** Source owners contribute repository actions; the editor owns their accessible presentation. */
@@ -62,8 +63,15 @@ export class MultiDiffEditorToolbar extends Disposable {
 		}));
 		const files = new ToolbarAction('multiDiff.files', localize('multiDiff.files', 'Files'), localize('multiDiff.openFiles', 'Open Files'), Lxicon.files, options.viewsService !== undefined, () => options.viewsService?.focusView(VIEW_ID));
 		toolbar.setActions(wrapped ? [wrapped, files] : [files], [
-			new ToolbarAction('multiDiff.collapseAll', localize('multiDiff.collapseAll', 'Collapse All'), localize('multiDiff.collapseAllTooltip', 'Collapse all diffs'), Lxicon.fold, true, options.collapseAll),
-			new ToolbarAction('multiDiff.expandAll', localize('multiDiff.expandAll', 'Expand All'), localize('multiDiff.expandAllTooltip', 'Expand all diffs'), Lxicon.unfold, true, options.expandAll),
+			{
+				id: 'multiDiff.toggleCollapseAll',
+				label: localize('multiDiff.collapseAll', 'Collapse All'),
+				get tooltip() { return options.editor.allCollapsed ? localize('multiDiff.expandAllTooltip', 'Expand all diffs') : localize('multiDiff.collapseAllTooltip', 'Collapse all diffs'); },
+				icon: Lxicon.fold,
+				enabled: true,
+				get checked() { return options.editor.allCollapsed; },
+				run: () => options.editor.toggleCollapseAll(),
+			},
 		]);
 		toolbar.element.classList.add('stanza-multi-diff-editor-repository-toolbar');
 	}

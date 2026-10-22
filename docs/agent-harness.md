@@ -453,7 +453,7 @@ Turn 变更；报告关联可导入 Chat Debug 的 rollout Trace，包含历史�
 - **多 Agent 对抗回归（无网络）**：运行 `just multi-agent-eval scripted`，每个场景必须实际触发攻击条件，缺少攻击、宿主证据或终态都不能算通过；
 - **真实模型安全评测（显式成本）**：只在专用 profile 和明确成本确认下运行相同版本的受支持场景，模型是被测对象，不是裁判；
 - **真实开发任务 benchmark**：只有在有受控测试凭据和明确产品目标时，才运行版本化任务集 × 主力 provider/model × 候选 profile，并与单 Agent 结果对照；没有 benchmark 时继续使用统一 profile；
-- M0–M6 每个里程碑的验收优先使用对应的确定性测试；模型指标只在 benchmark 启动后作为补充。
+- 各行为的验收优先使用对应的确定性测试；模型指标只在 benchmark 启动后作为补充。
 
 默认 PR 不依赖网络或真实模型凭据。真实模型和真实任务 benchmark 只记录明确允许的去内容化指标；目录内容、日志和任务输出不得进入聚合。
 
@@ -465,26 +465,16 @@ Turn 变更；报告关联可导入 Chat Debug 的 rollout Trace，包含历史�
 
 发布检查表只在产品发布范围确定后生成，并汇总当前能力矩阵、已知限制、迁移和回滚条件。发布前必须满足：没有 P0 缺口；协议、schema、生成物和文档同步；主力路径通过故障注入；未支持能力在产品中隐藏或明确解释；所有持久化副作用在崩溃恢复测试中保持只发生一次或明确为结果未知，绝不静默重放。
 
-## 15. 实现状态
+## 15. 实现与验证范围
 
-M0–M6 是本文行为规格的覆盖总账，不再充当阶段性构建计划。ChatGPT 订阅剩余兼容工作由 [ChatGPT 验证范围](models/chatgpt.md#验证) 维护；内置与自定义 Agent 的统一定义由 [`agents.md`](agents.md) 维护；运行时观测与发布门由 [§14.5](#145-运行时观测与发布门) 维护。
+提示词、工具、失败恢复、上下文预算／压缩、缓存、MCP 和 Skills 的实现边界由各行为章节维护。当前已具备“接入已配置模型即可 coding”的最小闭环；真实模型 benchmark 只在有明确产品目标、版本化任务集和受控预算后启动，不阻塞本地闭环。
 
-| 里程碑                        | 内容                                                                                                                                                                           | 关键改动点                                                                                                     | 前置接线                         |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| M0（完成）提示词接线          | 模型基础 instructions 在 Turn 创建时持久化，review 使用独立 rubric，环境快照、Global `.ash/instructions`、功能 fragments 与稳定组装已接线；工具契约随各自 definition 注入      | `ash-models-manager`、`ash-prompts`、`TurnInstructions`、`ContextAssembler`、host 环境快照、`DirContributions` | 无                               |
-| M1（实现完成）工具最小闭环    | canonical 文件工具、`apply_patch`、shell、模型中立的 `coding-v1` ToolProfile、durable `update_plan` 与模型输入逐项限幅已接线；确定性行为由现有测试覆盖                         | 本地工具组合、executor contributions、profile 声明层                                                           | 现有行为测试                     |
-| M2（完成）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal、overflow 恢复、steering、重复失败工具熔断和对话内错误动作已实现                                                                      | executor 重试层、Thread command、App Server protocol                                                           | protocol/schema/Desktop 同批同步 |
-| M3（实现完成）限幅/预算/压缩  | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本、跨 Turn 累计的 Thread Goal token 预算已实现；限幅、预算和压缩由现有测试覆盖 | ContextPlan 选入路径、checkpoint、usage 与 Goal 持久化                                                         | 现有行为测试                     |
-| M4（完成）缓存                | Anthropic tools/system/滚动 user 三断点、字节稳定、cached usage 观测，以及模型/profile/压缩 cache scope 回归已接通                                                             | `anthropic_messages` adapter、conformance fixture                                                              | 无                               |
-| M5（完成）MCP 策略            | registry snapshot、≤15/≤5k 平铺阈值、超阈值整体 `search_tools`/`call_mcp_tool` 与 catalog/definition digest binding 已实现                                                     | MCP registry 之上的冻结暴露策略                                                                                | ToolProfile contract             |
-| M6（完成）Skills/commands     | `$name` 显式 SkillRef、slash commands、frozen activation、`skills-read`、Desktop 显式选择与仅限 verified built-in 的 metadata 自动 selector 已接通                             | App Server 展开、Skill metadata selector、ActivatedSkill layer                                                 | 评测与信任策略                   |
-
-当前已经具备“接入已配置模型即可 coding”的最小闭环；真实模型 benchmark 属于有明确产品目标、版本化任务集和受控预算后才启动的产品度量，不阻塞本地闭环。后续实现直接更新上述长期 owner 的状态和完成门，不再维护一份重复的总计划。
+ChatGPT 订阅剩余兼容工作见 [ChatGPT 验证范围](models/chatgpt.md#验证)，Agent 定义与启动范围见 [`agents.md`](agents.md)，尚未完成的运行时观测与发布门见 [§14.5](#145-运行时观测与发布门)。
 
 ## 16. 参考
 
 - [`agent-tools-spec.md`](agent-tools-spec.md) — 逐工具规格与提示词正文
-- [`agent-runtime.md`](agent-runtime.md) — 执行内核与阶段计划
+- [`agent-runtime.md`](agent-runtime.md) — 执行内核与验证要求
 - [`core-context.md`](core-context.md) — ContextPlan / checkpoint 机制
 - [工具系统](tools/tools.md) — 工具三层契约与 registry snapshot
 - [`skills.md`](skills.md) / [`slash-commands` crate](../crates/slash-commands) — 扩展来源

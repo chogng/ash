@@ -99,15 +99,25 @@ pub struct ExtensionDiagnosticDto {
 pub struct ExtensionListParams {
     #[serde(default)]
     pub reload: ExtensionCatalogReloadDto,
+    /// A connection's last confirmed catalog; refresh always returns the full snapshot.
+    #[serde(default)]
+    #[ts(type = "number | null")]
+    pub known_generation: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct ExtensionListResult {
-    #[ts(type = "number")]
-    pub generation: u64,
-    pub extensions: Vec<ExtensionDto>,
-    pub diagnostics: Vec<ExtensionDiagnosticDto>,
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum ExtensionListResult {
+    Updated {
+        #[ts(type = "number")]
+        generation: u64,
+        extensions: Vec<ExtensionDto>,
+        diagnostics: Vec<ExtensionDiagnosticDto>,
+    },
+    Unchanged {
+        #[ts(type = "number")]
+        generation: u64,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

@@ -5,6 +5,7 @@ import { CursorContext } from './cursorContext.js';
 import { Selection, SelectionDirection } from '../core/selection.js';
 import { Position } from '../core/position.js';
 import { Range } from '../core/range.js';
+import { getTextGraphemeBoundaries } from '../core/textSegmentation.js';
 import { TrackedRangeStickiness, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type ITextModel, type IValidEditOperation } from '../model.js';
 import { type TrackedRange } from '../model/trackedRange.js';
 import { normalizeTextLineEndings, TextModelChangeReason, type TextModelChange } from '../core/textChange.js';
@@ -221,6 +222,7 @@ interface SelectionHistoryEntry {
 
 interface ActiveComposition {
 	readonly historyGroup: UndoRedoGroup;
+	readonly selectionsBefore: readonly Selection[];
 	readonly deletions: Array<CompositionDeletion | null>;
 	outcomes: CompositionOutcome[] | null;
 	valid: boolean;
@@ -417,6 +419,12 @@ export class CursorsController extends Disposable {
 		const selections = this.cursors.getSelections();
 		eventsCollector.emitViewEvent(new ViewCursorStateChangedEvent(this.cursors.getViewSelections(), selections, reason));
 		if (!selectionsEqual(oldSelections, selections)) {
+			// User and host selection changes end typing. Edit, composition, and
+			// shared-model recovery keep the transaction that owns their cursor update.
+			if (this.commandVersion === undefined && !this.activeComposition && (reason === CursorChangeReason.Explicit || reason === CursorChangeReason.NotSet)) {
+				this.model.pushStackElement();
+				this.previousEditOperationType = EditOperationType.Other;
+			}
 			eventsCollector.emitOutgoingEvent(new CursorStateChangedEvent(
 				oldSelections,
 				selections,
@@ -528,12 +536,18 @@ export class CursorsController extends Disposable {
 		this.assertNotDisposed();
 		if (edits.length === 0) return;
 		const before = this.getSelections();
+		let change: TextModelChange | undefined;
+		const capture = this.model.onDidChangeContent(event => { change = event; });
 		this.commandVersion = this.model.version;
 		try {
 			const after = this.model.pushEditOperations(before, edits, cursorStateComputer, undefined, reason);
 			if (after) this.setStates(eventsCollector, source, CursorChangeReason.NotSet, CursorState.fromModelSelections(after));
+			// Formatting may extend the typing transaction while moving its tracked cursors.
+			// Redo must restore those final positions rather than the pre-format typing result.
+			if (change) this.rememberSelectionHistory(change.transactionId, { before, after: this.getSelections() });
 		} finally {
 			this.commandVersion = undefined;
+			capture.dispose();
 		}
 	}
 
@@ -554,6 +568,7 @@ export class CursorsController extends Disposable {
 		});
 		return {
 			historyGroup: new UndoRedoGroup(),
+			selectionsBefore: selections,
 			deletions,
 			outcomes: null,
 			valid: true,
@@ -565,6 +580,14 @@ export class CursorsController extends Disposable {
 		const active = this.activeComposition;
 		if (!active) return;
 		active.valid = false;
+		if (source === 'compositionCancel') {
+			// Cancel only this protected revision. Finishing and then undoing
+			// would expose candidates to redo, or undo an earlier edit for a no-op.
+			this.activeComposition = undefined;
+			this.model.cancelHistoryRevision(active.historyGroup);
+			this.setStates(eventsCollector, source, CursorChangeReason.Undo, CursorState.fromModelSelections([...active.selectionsBefore]));
+			return;
+		}
 		try {
 			if (source === 'keyboard') {
 				this.executeEditOperation(eventsCollector, TypeOperations.compositionEndWithInterceptors(this.previousEditOperationType, this.context.cursorConfig, this.model, active.outcomes, this.getSelections(), [...this.getAutoClosedCharacters()]), EditSources.cursor({ kind: 'compositionEnd', detailedSource: source }), source);
@@ -599,7 +622,12 @@ export class CursorsController extends Disposable {
 
 	private *typingUnits(text: string): IterableIterator<string> {
 		if (this.context.cursorConfig.inputMode === 'overtype') {
-			yield* text;
+			// One visible character replaces one following grapheme, including
+			// combining marks and joined emoji received in a single input event.
+			const boundaries = getTextGraphemeBoundaries(text);
+			for (let index = 1; index < boundaries.length; index += 1) {
+				yield text.slice(boundaries[index - 1]!, boundaries[index]!);
+			}
 			return;
 		}
 		let offset = 0;

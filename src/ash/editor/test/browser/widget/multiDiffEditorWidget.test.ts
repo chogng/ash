@@ -15,6 +15,7 @@ import { type ITextModel } from '../../../common/model.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { DocumentDiffItem, MultiDiffEditorModel, type IDocumentDiffItem } from '../../../browser/widget/multiDiffEditor/model.js';
 import { installEditorTestDom } from '../editorTestGlobals.js';
 import { getIconDefinition } from '../../../../platform/theme/common/iconRegistry.js';
@@ -40,6 +41,44 @@ suiteTeardown(() => {
 	browserEnvironment.window.close();
 });
 const diffOptions: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
+
+test('MultiDiff collapse toggle follows individual headers, restored state and source replacement', () => {
+	using resources = new DisposableStore();
+	const services = createCodeEditorServices(resources);
+	const container = h(browserEnvironment.window.document, 'main');
+	browserEnvironment.window.document.body.append(container);
+	try {
+		const first = resources.add(new DocumentDiffItem({ id: 'first', label: 'first.bin', binary: true }, undefined));
+		const second = resources.add(new DocumentDiffItem({ id: 'second', label: 'second.bin', binary: true }, undefined));
+		const third = resources.add(new DocumentDiffItem({ id: 'third', label: 'third.bin', binary: true }, undefined));
+		using collection = new MultiDiffEditorModel([first, second]);
+		using editor = services.createInstance(MultiDiffEditorWidget, { container, model: collection });
+		editor.layout({ width: 800, height: 300 });
+		const states: boolean[] = [];
+		using listener = editor.onDidChangeCollapseState(() => states.push(editor.allCollapsed));
+		assert.equal(editor.allCollapsed, false);
+		editor.toggleCollapseAll();
+		assert.equal(editor.allCollapsed, true);
+		const collapsedState = editor.saveViewState();
+		requiredElement<HTMLButtonElement>(container, '.stanza-multi-diff-editor-header-toggle').click();
+		assert.equal(editor.allCollapsed, false);
+		editor.toggleCollapseAll();
+		assert.equal(editor.allCollapsed, true);
+		editor.toggleCollapseAll();
+		assert.equal(editor.allCollapsed, false);
+		editor.restoreViewState(collapsedState);
+		assert.equal(editor.allCollapsed, true);
+		collection.setItems([second, third]);
+		assert.equal(editor.allCollapsed, false, 'New source items start expanded');
+		editor.toggleCollapseAll();
+		assert.equal(editor.allCollapsed, true);
+		collection.setItems([]);
+		assert.equal(editor.allCollapsed, false, 'An empty source has no collapsed display mode');
+		assert.deepEqual(states, [true, false, true, false, true, false, true, false]);
+	} finally {
+		container.remove();
+	}
+});
 
 test('source replacement releases readiness waits for disposed models during initial navigation', async function () {
 	this.timeout(2000);
@@ -87,6 +126,7 @@ for (const restore of [false, true]) {
 			const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 			container.focus();
 			const original = Array.from({ length: 100 }, (_, index) => `shared ${index + 1}`);
+			await services.get(IConfigurationService).updateValue('diffEditor.hideUnchangedRegions.enabled', true);
 			const modified = [...original];
 			modified[59] = 'changed';
 			using before = new TextModel(original.join('\n'));
@@ -110,10 +150,10 @@ for (const restore of [false, true]) {
 				const changeTop = editor.getActiveControl()!.modifiedEditor.getTopForLineNumber(60);
 				assert.ok(changeTop >= 0 && changeTop < 300);
 				editor.collapseAll();
-				editor.toggleCollapseUnchangedRegions();
+				await editor.toggleCollapseUnchangedRegions();
 				editor.expandAll();
 				assert.equal(container.querySelectorAll('.ash-diff-hidden-region').length, 0);
-				editor.toggleCollapseUnchangedRegions();
+				await editor.toggleCollapseUnchangedRegions();
 				assert.ok(container.querySelectorAll('.ash-diff-hidden-region').length > 0);
 			}
 		} finally {

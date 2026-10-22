@@ -9,6 +9,7 @@ import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { type TextModelChange } from '../../common/core/textChange.js';
 import { TextModel } from "../../common/model/textModel.js";
+import { EditSources } from '../../common/textModelEditSource.js';
 import { ReplaceCommand, ReplaceCommandThatPreservesSelection } from '../../common/commands/replaceCommand.js';
 import { CursorState } from '../../common/cursorCommon.js';
 import { ScrollType, type ICommand } from '../../common/editorCommon.js';
@@ -112,6 +113,22 @@ test('CursorsController types at two cursors in one model transaction', () => {
 	});
 	model.undo();
 	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: 'abcd\nefgh', selections: before });
+});
+
+for (const count of [1, 2]) test(`CursorsController restores the formatted cursor positions when redoing coalesced input at ${count} cursors`, () => {
+	const original = Array.from({ length: count }, () => '    value').join('\n');
+	using model = new TextModel(original);
+	const before = Array.from({ length: count }, (_, row) => new Selection(row + 1, 10, row + 1, 10));
+	using controller = createTestCursorsController(model, before);
+	controller.type(new ViewModelEventsCollector(), ';', 'keyboard');
+	controller.executeEdits(new ViewModelEventsCollector(), 'formatEditsCommand', Array.from({ length: count }, (_, row) => ({ range: new Range(row + 1, 1, row + 1, 5), text: '  ' })), () => null, EditSources.unknown({ name: 'formatEditsCommand' }));
+	const formatted = Array.from({ length: count }, () => '  value;').join('\n');
+	const after = Array.from({ length: count }, (_, row) => new Selection(row + 1, 9, row + 1, 9));
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: formatted, selections: after });
+	model.undo();
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: original, selections: before });
+	model.redo();
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: formatted, selections: after });
 });
 
 test('CursorsController inserts long ordinary text without a transaction per character', () => {

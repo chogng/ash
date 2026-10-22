@@ -6,22 +6,23 @@
 
 ## 所有权与接口
 
-| Symbol                             | 可见性  | 精确职责                                                                  |
-| ---------------------------------- | ------- | ------------------------------------------------------------------------- |
-| `DiffEngine`                       | public  | 冻结一次 diff 的策略；提供 text/bytes 与 cancellable/non-cancellable 入口 |
-| `DiffDocument::from_text`          | public  | 用默认三行上下文、精确比较和默认 limits 构建映射                          |
-| `DiffDocument::with_options`       | public  | 以显式 `DiffOptions` 构建映射                                             |
-| `DiffOptions`                      | public  | 组合 context、whitespace、case、line-ending、inline 与 limits policy      |
-| `DiffLimits`                       | public  | 限制每侧 bytes/lines、最大 edit distance 和 Myers trace cells             |
-| `DiffCancellation` / `NeverCancel` | public  | 由 host 提供低成本取消探针；crate 不拥有 timer 或 task lifecycle          |
-| `DiffLine` / `LineEnding`          | public  | 保留一基行号、line text 和 LF/CRLF/CR/EOF terminator                      |
-| `DiffRow` / `DiffRowKind`          | public  | 表达 Context、Added、Removed、Modified 及两侧行 correspondence            |
-| `InlineChange`                     | public  | 用 UTF-8 byte range 表达 grapheme-boundary 内联变化                       |
-| `DiffHunk`                         | public  | 表达 Git-style old/new start/count 与 document row 半开范围               |
-| `engine::split_lines`              | private | 单次扫描 UTF-8，保留精确 line ending 并观察 cancellation                  |
-| `myers::edits`                     | private | 在 edit-distance/trace limits 内计算最短行或 grapheme 编辑路径            |
-| `engine::map_rows`                 | private | 把编辑路径配对为稳定行映射，并为 Modified 行计算 inline ranges            |
-| `engine::group_hunks`              | private | 根据 context 合并相邻变化并生成 Git-style header                          |
+| Symbol                                      | 可见性  | 精确职责                                                                  |
+| ------------------------------------------- | ------- | ------------------------------------------------------------------------- |
+| `DiffEngine`                                | public  | 冻结一次 diff 的策略；提供 text/bytes 与 cancellable/non-cancellable 入口 |
+| `DiffDocument::from_text`                   | public  | 用默认三行上下文、精确比较和默认 limits 构建映射                          |
+| `DiffDocument::with_options`                | public  | 以显式 `DiffOptions` 构建映射                                             |
+| `DiffEngine::statistics` / `DiffStatistics` | public  | 复用有界行匹配计算增删行数，不构造显示行、hunk 或字符范围                 |
+| `DiffOptions`                               | public  | 组合 context、whitespace、case、line-ending、inline 与 limits policy      |
+| `DiffLimits`                                | public  | 限制每侧 bytes/lines、最大 edit distance 和 Myers trace cells             |
+| `DiffCancellation` / `NeverCancel`          | public  | 由 host 提供低成本取消探针；crate 不拥有 timer 或 task lifecycle          |
+| `DiffLine` / `LineEnding`                   | public  | 保留一基行号、line text 和 LF/CRLF/CR/EOF terminator                      |
+| `DiffRow` / `DiffRowKind`                   | public  | 表达 Context、Added、Removed、Modified 及两侧行 correspondence            |
+| `InlineChange`                              | public  | 用 UTF-8 byte range 表达 grapheme-boundary 内联变化                       |
+| `DiffHunk`                                  | public  | 表达 Git-style old/new start/count 与 document row 半开范围               |
+| `engine::split_lines`                       | private | 单次扫描 UTF-8，保留精确 line ending 并观察 cancellation                  |
+| `myers::edits`                              | private | 在 edit-distance/trace limits 内计算最短行或 grapheme 编辑路径            |
+| `engine::map_rows`                          | private | 把编辑路径配对为稳定行映射，并为 Modified 行计算 inline ranges            |
+| `engine::group_hunks`                       | private | 根据 context 合并相邻变化并生成 Git-style header                          |
 
 ```text
 DiffEngine::compute[_bytes][_cancellable]
@@ -82,3 +83,5 @@ source text/ending 不丢失；修改 Myers trace 必须保留取消和 memory b
 当前仍不拥有语法 token、移动代码检测、二进制 diff、非 UTF-8 解码、增量复用或 file watcher。
 这些能力出现第二个真实消费者和独立 contract 后再扩展；不能让 Native/TUI presentation
 反向决定共享 diff 语义。
+
+默认精确匹配及去除行首尾空白的比较键借用原文切片；只有需要归一化时分配字符串。显示行仍持有自己的文本。Myers 回溯只保留当前编辑距离内可达的对角线，`max_trace_cells` 按实际保存的单元数计费；输入 frontier、编辑距离及取消边界仍有原有上限。

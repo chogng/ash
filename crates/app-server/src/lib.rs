@@ -65,6 +65,9 @@ pub use server::ConnectionState;
 #[path = "server_tests.rs"]
 mod tests;
 
+#[cfg(test)]
+use server::test_shell;
+
 mod product_discovery;
 mod startup;
 pub use product_discovery::load_discovered_product_services;

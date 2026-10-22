@@ -87,10 +87,11 @@ start without a workspace. Installed packages use the same SDK and host with the
 workspace authorization; they cannot request the product authority. Browser Workers cannot
 register `ssh`, and there is no core resolver fallback.
 
-`academic` declares the optional Academic document editor, using the shared Stanza
-profile, model, undo, save and collaboration services. Its file associations and
-editor registration follow extension enablement; see [Academic](academic/README.md).
-Pagination and PDF export remain future work.
+`academy` provides the optional document editor for general documents, Academic
+papers and channel notes. It reuses the shared text model and host services while
+owning its schemas, views, pagination and codecs. File associations and editor
+registration follow extension enablement; supported behavior and limits are in
+[Academy](academy/README.md).
 
 `markdown-language-features` is one Rust extension owning Markdown preview, rich editing and
 link semantics. Its private `pulldown-cmark` parser has no separate package or process.

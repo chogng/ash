@@ -87,8 +87,10 @@ export async function exportExtensionSdk(sdk: string, project: string, devHost: 
 		const emitted = program.emit();
 		if (emitted.emitSkipped) throw new Error(`Cannot emit editor API declarations: ${ts.formatDiagnostics(emitted.diagnostics, { getCanonicalFileName: path => path, getCurrentDirectory: () => repository, getNewLine: () => '\n' })}`);
 		for (const source of program.getSourceFiles()) {
-			if (!source.isDeclarationFile || !source.fileName.startsWith(repository + '/src/')) continue;
-			const destination = resolve(sdkStage, 'types/internal', relative(repository, source.fileName));
+			// TypeScript normalizes source paths to '/', including on Windows.
+			const path = relative(repository, source.fileName);
+			if (!source.isDeclarationFile || !path.replaceAll('\\', '/').startsWith('src/')) continue;
+			const destination = resolve(sdkStage, 'types/internal', path);
 			await mkdir(dirname(destination), { recursive: true });
 			await copyFile(source.fileName, destination);
 		}
@@ -103,7 +105,7 @@ export async function exportExtensionSdk(sdk: string, project: string, devHost: 
 			await mkdir(dirname(destination), { recursive: true });
 			await writeFile(destination, `${api.modules[key]?.length ? `export { ${api.modules[key].join(', ')} } from '${internal}';\n` : ''}${names.length ? `export type { ${names.join(', ')} } from '${internal}';\n` : ''}`);
 		}
-		const academy = resolve(repository, 'extensions/academic');
+		const academy = resolve(repository, 'extensions/academy');
 		for (const name of ['src', 'browser', 'common', 'tests', 'build.rs', 'package.json', 'package.nls.json', 'package.nls.zh-CN.json', 'README.md']) await cp(resolve(academy, name), resolve(projectStage, name), { recursive: true });
 		await copyFile(resolve(repository, 'LICENSE'), resolve(projectStage, 'LICENSE'));
 		const pkg = metadata.packages.find(pkg => pkg.name === 'ash-academy')!;

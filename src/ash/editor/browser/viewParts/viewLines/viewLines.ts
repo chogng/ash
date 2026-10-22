@@ -8,6 +8,7 @@ import { resolveSemanticTokenPresentation } from '../../../common/services/seman
 import type { IColorTheme } from '../../../../platform/theme/common/themeService.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { Position } from '../../../common/core/position.js';
+import { PositionAffinity } from '../../../common/model.js';
 import { Range } from '../../../common/core/range.js';
 import { editorSelectionForeground } from '../../../common/core/editorColorRegistry.js';
 import { InlineDecoration, InlineDecorationType } from '../../../common/viewModel/inlineDecorations.js';
@@ -451,10 +452,9 @@ export class ViewLines extends ViewPart implements IViewLines {
 	private projectLineText(line: ViewLine, visualLine: EditorVisualLine, tokens: readonly ResolvedSemanticToken[]): void {
 		const viewLineNumber = visualLine.visualLineIndex + 1;
 		const lineData = this.lastViewportData!.getViewLineRenderingData(viewLineNumber);
-		const hasInjectedText = !!visualLine.projectionData?.injectionOffsets;
 		// Resolving the setting merges configuration layers. All tokens on this line
 		// share that decision, regardless of which syntax backend produced them.
-		const semanticHighlightingEnabled = !hasInjectedText && tokens.length > 0 && this.semanticHighlightingEnabled(this._context.theme.value);
+		const semanticHighlightingEnabled = tokens.length > 0 && this.semanticHighlightingEnabled(this._context.theme.value);
 		const inlineDecorations = [...lineData.inlineDecorations];
 		if (this._context.theme.value.getColor(editorSelectionForeground)) {
 			const lineRange = new Range(viewLineNumber, 1, viewLineNumber, lineData.content.length + 1);
@@ -467,7 +467,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 		}
 		line.renderLine(
 			lineData.content,
-			hasInjectedText ? [] : clipSemanticTokens(tokens, visualLine.startColumn, visualLine.endColumn).map(token => ({
+			projectSemanticTokens(tokens, visualLine).map(token => ({
 				...token, syntaxPresentation: resolveSemanticTokenPresentation(token, this._context.theme.value, semanticHighlightingEnabled),
 			})),
 			0,
@@ -525,6 +525,27 @@ function directChildOf(parent: HTMLElement, descendant: HTMLElement): HTMLElemen
 }
 
 const EMPTY_LINE_INDEXES: ReadonlySet<number> = new Set();
+
+function projectSemanticTokens(tokens: readonly ResolvedSemanticToken[], line: EditorVisualLine): readonly ResolvedSemanticToken[] {
+	const data = line.projectionData;
+	if (!data) return clipSemanticTokens(tokens, line.startColumn, line.endColumn);
+	const outputLineIndex = line.outputLineIndex!;
+	return tokens.flatMap(token => {
+		// Split at injections so hints retain their own styling even inside a token.
+		// The projection owner handles wrapping and continuation indentation.
+		const boundaries = [token.startColumn, ...(data.injectionOffsets ?? []).filter(offset => offset > token.startColumn && offset < token.endColumn), token.endColumn];
+		const projected: ResolvedSemanticToken[] = [];
+		for (let index = 0; index + 1 < boundaries.length; index++) {
+			const start = data.translateToOutputPosition(boundaries[index]!, PositionAffinity.Right);
+			const end = data.translateToOutputPosition(boundaries[index + 1]!, PositionAffinity.Left);
+			if (outputLineIndex < start.outputLineIndex || outputLineIndex > end.outputLineIndex) continue;
+			const startColumn = outputLineIndex === start.outputLineIndex ? start.outputOffset : data.getMinOutputOffset(outputLineIndex);
+			const endColumn = outputLineIndex === end.outputLineIndex ? end.outputOffset : data.getMaxOutputOffset(outputLineIndex);
+			if (endColumn > startColumn) projected.push({ ...token, startColumn, endColumn });
+		}
+		return projected;
+	});
+}
 
 function clipSemanticTokens(tokens: readonly ResolvedSemanticToken[], startColumn: number, endColumn: number): readonly ResolvedSemanticToken[] {
 	return Object.freeze(tokens.flatMap(token => {

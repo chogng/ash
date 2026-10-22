@@ -44,7 +44,7 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	get onKeyUp(): Event<IKeyboardEvent> { return this.textAreaInput.onKeyUp; }
 	get onDidCompositionStart(): Event<ICompositionStartEvent> { return this.textAreaInput.onCompositionStart; }
 	get onDidCompositionUpdate(): Event<ICompositionData> { return this.textAreaInput.onCompositionUpdate; }
-	get onDidCompositionEnd(): Event<void> { return this.textAreaInput.onCompositionEnd; }
+	get onDidCompositionEnd(): Event<ICompositionData> { return this.textAreaInput.onCompositionEnd; }
 
 	constructor(
 		context: ViewContext,
@@ -188,7 +188,8 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	}
 
 	prepareComposition(): void {
-		this.textAreaInput.clear();
+		// Preserve the native buffer: the IME has already anchored its range
+		// before compositionstart. Clearing it would shift the system caret.
 		this.textArea.toggleClassName("ime-input", true);
 	}
 
@@ -199,7 +200,6 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	}
 
 	clearComposition(): void {
-		this.textAreaInput.clear();
 		this.textArea.toggleClassName("ime-input", false);
 		this.textArea.setLeft("");
 		this.textArea.setTop("");

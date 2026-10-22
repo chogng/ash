@@ -15,9 +15,19 @@ use serde_json::json;
 use super::AppServer;
 use super::ConnectionState;
 
+#[cfg(all(windows, target_arch = "x86_64"))]
+#[path = "../../../../test/fixtures/rust_toolchain.rs"]
+mod rust_toolchain;
+
 #[test]
 fn testing_rpc_discovers_runs_and_releases_only_the_issuing_connection() {
     let temp = tempfile::tempdir().unwrap();
+    #[cfg(all(windows, target_arch = "x86_64"))]
+    rust_toolchain::configure(
+        temp.path(),
+        cc::windows_registry::find_tool("x86_64-pc-windows-msvc", "link.exe")
+            .expect("Windows Rust fixtures require the installed MSVC toolchain"),
+    );
     std::fs::create_dir(temp.path().join("src")).unwrap();
     std::fs::write(
         temp.path().join("Cargo.toml"),
@@ -63,7 +73,7 @@ fn testing_rpc_discovers_runs_and_releases_only_the_issuing_connection() {
             .is_null()
     );
     let catalog = await_complete(&server, &mut owner, "catalog");
-    assert_eq!(catalog["status"], "completed");
+    assert_eq!(catalog["status"], "completed", "{catalog}");
     assert_eq!(catalog["tests"][0]["name"], "passes");
     let id = catalog["tests"][0]["id"].clone();
     let denied = call(
@@ -83,7 +93,7 @@ fn testing_rpc_discovers_runs_and_releases_only_the_issuing_connection() {
             .is_null()
     );
     let run = await_complete(&server, &mut owner, "run");
-    assert_eq!(run["results"][0]["state"], "passed");
+    assert_eq!(run["results"][0]["state"], "passed", "{run}");
     assert_eq!(catalog["tests"][0]["source"]["path"], "src/lib.rs");
     assert_eq!(catalog["tests"][0]["debuggable"], true);
     let denied_debug = call(

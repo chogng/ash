@@ -78,7 +78,6 @@ pub struct TestingDebugLaunch {
     pub program: String,
     pub arguments: Vec<String>,
     pub directory: String,
-    pub adapter_program: String,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

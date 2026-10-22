@@ -26,7 +26,9 @@
     "voiceHost": "bin/ash-voice-host{exe}",
     "livekit": "bin/livekit-server{exe}",
     "livekitClient": "bin/ash-livekit-client{exe}",
-    "recognizer": "bin/ash-realtime-voice{exe}"
+    "recognizer": "bin/ash-realtime-voice{exe}",
+    "javascriptDebugExtension": "bin/ash-debug-javascript{exe}",
+    "serverReadyExtension": "bin/ash-debug-server-ready{exe}"
   },
   "licenses": [
     {

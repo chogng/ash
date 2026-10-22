@@ -35,6 +35,7 @@ interface GpuTextIntegrationHarness {
 	setFontMetrics(fontSize: number, lineHeight: number): void;
 	readDecorationRasters(): Readonly<Record<string, readonly number[]>>;
 	measureGpuAdvance(text: string): number;
+	decorationPixels(reverse: boolean): { inherited: number[]; explicit: number[]; plain: number[]; };
 	resetGpuFrameTrace(): void;
 	readGpuFrameTrace(): readonly GpuRenderPassTrace[];
 	loseDevice(): Promise<void>;
@@ -116,6 +117,20 @@ window.ashGpuTextIntegration = {
 			const pixels = source.getContext('2d')!.getImageData(0, 0, source.width, source.height).data;
 			return [name, Array.from(pixels)];
 		}));
+	},
+	decorationPixels: reverse => {
+		const cache = new DecorationStyleCache();
+		const inherited = () => cache.getOrCreateEntry(undefined, undefined, 1, undefined, undefined, undefined);
+		const explicit = () => cache.getOrCreateEntry(undefined, false, 1, false, undefined, undefined);
+		const ids = reverse ? [explicit(), inherited()].reverse() : [inherited(), explicit()];
+		using rasterizer = new GlyphRasterizer(24, 'monospace', 1, cache);
+		const pixels = (metadata: number, id: number): number[] => {
+			const glyph = rasterizer.rasterizeGlyph('M', metadata, id, ['#ffffff', '#ffffff']);
+			return [...glyph.source.getContext('2d')!.getImageData(0, 0, glyph.source.width, glyph.source.height).data];
+		};
+		const metadata = (FontStyle.Bold | FontStyle.Strikethrough) << MetadataConsts.FONT_STYLE_OFFSET;
+		return { inherited: pixels(metadata, ids[0]!), explicit: pixels(metadata, ids[1]!), plain: pixels(0, 0) };
+
 	},
 	initialText,
 	getValue: () => editor.getValue(),

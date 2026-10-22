@@ -46,7 +46,7 @@
     "text": "body { color: red; }",
     "lexeme": "color",
     "capture": "property",
-    "tokenType": "variable"
+    "tokenType": "property"
   },
   {
     "language": "scss",
@@ -109,14 +109,14 @@
     "text": "key=value\n",
     "lexeme": "key",
     "capture": "property",
-    "tokenType": "variable"
+    "tokenType": "property"
   },
   {
     "language": "markdown",
     "text": "# Title\n\nSome **text**.\n",
     "lexeme": "Title",
     "capture": "text.title",
-    "tokenType": "source"
+    "tokenType": "text"
   },
   {
     "language": "sql",

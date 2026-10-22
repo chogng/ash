@@ -11,10 +11,14 @@ import { BrowserHostColorSchemeService } from '../../../../workbench/services/th
 import { createSessionsWorkbench } from '../../../browser/workbenchFactory.js';
 import { TitlebarPart } from '../../../browser/parts/titlebar/titlebarPart.js';
 import { IWorkingCopyBackupService, InMemoryWorkingCopyBackupService } from '../../../../workbench/services/workingCopy/common/workingCopyBackupService.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { IWorkbenchEnvironmentService } from '../../../../workbench/services/environment/common/environmentService.js';
+import { BrowserWorkbenchEnvironmentService } from '../../../../workbench/services/environment/browser/environmentService.js';
 
 const host = await createThemePreviewHost();
 await import('../../../sessions.web.main.js');
 const { resources, root, api, serviceCollection, workspaceRoot, workspaceFiles, storage } = host;
+serviceCollection.set(IWorkbenchEnvironmentService, new SyncDescriptor(BrowserWorkbenchEnvironmentService, [window.location, 'https://{{uuid}}.invalid']));
 serviceCollection.set(IWorkingCopyBackupService, resources.add(new InMemoryWorkingCopyBackupService('theme-preview')));
 
 // The production Sessions workbench owns every Part, page and local draft. This

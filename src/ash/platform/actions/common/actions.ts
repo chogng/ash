@@ -74,6 +74,7 @@ export class MenuId {
 	static readonly ViewContainerTitleContext = new MenuId('ViewContainerTitleContext');
 	static readonly ActivityBarPositionMenu = new MenuId('ActivityBarPositionMenu');
 	static readonly TitleBar = new MenuId("TitleBar");
+	static readonly NotificationsCenterPositionMenu = new MenuId('NotificationsCenterPositionMenu');
 	static readonly LayoutControlMenu = new MenuId("LayoutControlMenu");
 	static readonly TitleBarLeft = new MenuId("TitleBarLeft");
 	static readonly TitleBarAdjacentCenter = new MenuId("TitleBarAdjacentCenter");

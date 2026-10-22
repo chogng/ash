@@ -393,6 +393,7 @@ export function registerSCMViews(
 			order: 0,
 			when: ContextKeyExpr.and(ContextKeyExpr.has('scm.providerCount'), ContextKeyExpr.notEquals('scm.providerCount', 1)),
 			canToggleVisibility: true,
+			canMoveView: true,
 			ctorDescriptor: new SyncDescriptor(SCMRepositoriesViewPane),
 		},
 		{
@@ -401,6 +402,7 @@ export function registerSCMViews(
 			localizationKey: { bundle: "ash.views", key: "changes" },
 			order: 1,
 			canToggleVisibility: true,
+			canMoveView: true,
 			ctorDescriptor: new SyncDescriptor(ScmViewPane),
 		},
 		{
@@ -411,6 +413,7 @@ export function registerSCMViews(
 			when: ContextKeyExpr.greater('scm.providerCount', 0),
 			collapsed: true,
 			canToggleVisibility: true,
+			canMoveView: true,
 			ctorDescriptor: new SyncDescriptor(ScmAgentReviewViewPane),
 		},
 		{
@@ -421,6 +424,7 @@ export function registerSCMViews(
 			when: ContextKeyExpr.greater('scm.historyProviderCount', 0),
 			collapsed: true,
 			canToggleVisibility: true,
+			canMoveView: true,
 			ctorDescriptor: new SyncDescriptor(SCMHistoryViewPane),
 		},
 	]);

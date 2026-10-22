@@ -74,6 +74,7 @@ fn connector(
         display_name: id.into(),
         description: format!("Connect {id}."),
         runtime_server_id: format!("plugin:acme/{id}:mcp:{id}"),
+        mcp_server_id: Some(format!("acme/{id}:connector:account:mcp:{id}")),
         definition_digest: "sha256:definition".into(),
         connection_generation: 1,
         state,

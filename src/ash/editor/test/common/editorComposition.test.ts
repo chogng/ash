@@ -211,6 +211,86 @@ test("Composition keeps command ownership inside the standard lifecycle", () => 
 	assert.equal(multiModel.getText(), "XabX");
 });
 
+test('Chinese composition revisions replace around a caret inside the candidate', () => {
+	using model = new TextModel('前后');
+	using controller = createTestCursorsController(model, selection(1, 1));
+	const events = new ViewModelEventsCollector();
+	controller.startComposition(events);
+	controller.compositionType(events, '你好', 0, 0, 0, 'keyboard');
+	controller.compositionType(events, '', 0, 0, -1, 'keyboard');
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: '前你好后', selections: selection(2, 2) });
+	controller.compositionType(events, '您好', 1, 1, -1, 'keyboard');
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: '前您好后', selections: selection(2, 2) });
+	controller.compositionType(events, '您们好', 1, 1, 0, 'keyboard');
+	controller.endComposition(events, 'keyboard');
+	assert.equal(model.getText(), '前您们好后');
+	model.undo();
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: '前后', selections: selection(1, 1) });
+	model.redo();
+	assert.equal(model.getText(), '前您们好后');
+});
+
+test('Cancelled Chinese composition restores a backward multiline selection without a redo candidate', () => {
+	using model = new TextModel('前一行\n后一行');
+	const before = [new Selection(2, 3, 1, 2)];
+	using controller = createTestCursorsController(model, before);
+	const events = new ViewModelEventsCollector();
+	controller.startComposition(events);
+	controller.compositionType(events, 'ni', 0, 0, 0, 'keyboard');
+	controller.compositionType(events, '你', 2, 0, 0, 'keyboard');
+	controller.endComposition(events, 'compositionCancel');
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections(), canUndo: model.canUndo(), canRedo: model.canRedo() }, {
+		text: '前一行\n后一行', selections: before, canUndo: false, canRedo: false,
+	});
+});
+
+test('Cancelling an unchanged composition preserves the preceding edit and original selection', () => {
+	using model = new TextModel('中文');
+	using controller = createTestCursorsController(model, selection(2, 2));
+	const events = new ViewModelEventsCollector();
+	controller.type(events, '!', 'keyboard');
+	controller.setSelections(selection(1, 0));
+	controller.startComposition(events);
+	controller.compositionType(events, '中', 0, 0, 0, 'keyboard');
+	controller.endComposition(events, 'compositionCancel');
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections(), canRedo: model.canRedo() }, {
+		text: '中文!', selections: selection(1, 0), canRedo: false,
+	});
+	model.undo();
+	assert.equal(model.getText(), '中文');
+	model.redo();
+	assert.equal(model.getText(), '中文!');
+});
+
+test('Cancelling an empty composition preserves existing undo and redo history', () => {
+	using model = new TextModel('中文');
+	using controller = createTestCursorsController(model, selection(2, 2));
+	const events = new ViewModelEventsCollector();
+	controller.type(events, '!', 'keyboard');
+	model.undo();
+	controller.startComposition(events);
+	controller.endComposition(events, 'compositionCancel');
+	assert.deepEqual({ text: model.getText(), canUndo: model.canUndo(), canRedo: model.canRedo() }, {
+		text: '中文', canUndo: false, canRedo: true,
+	});
+	model.redo();
+	assert.equal(model.getText(), '中文!');
+});
+
+test('Cancelling a composition which returned to its original text restores the saved revision', () => {
+	using model = new TextModel('中文');
+	const beforeVersion = model.getAlternativeVersionId();
+	using controller = createTestCursorsController(model, selection(1, 0));
+	const events = new ViewModelEventsCollector();
+	controller.startComposition(events);
+	controller.compositionType(events, 'n', 0, 0, 0, 'keyboard');
+	controller.compositionType(events, '中', 1, 0, 0, 'keyboard');
+	controller.endComposition(events, 'compositionCancel');
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections(), version: model.getAlternativeVersionId(), canUndo: model.canUndo(), canRedo: model.canRedo() }, {
+		text: '中文', selections: selection(1, 0), version: beforeVersion, canUndo: false, canRedo: false,
+	});
+});
+
 function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
 	if (primaryIndex === 0) return Object.freeze([...items]);
 	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);

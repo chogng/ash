@@ -51,6 +51,10 @@ pub struct DebugCapabilities {
     pub supports_data_breakpoints: bool,
     pub supports_instruction_breakpoints: bool,
     pub supports_disassemble_request: bool,
+    pub supports_read_memory_request: bool,
+    pub supports_write_memory_request: bool,
+    pub supports_loaded_sources_request: bool,
+    pub supports_exception_info_request: bool,
     pub supports_stepping_granularity: bool,
     pub supports_completions_request: bool,
     pub supports_cancel_request: bool,
@@ -99,6 +103,7 @@ pub(super) struct Lifecycle {
     no_debug: bool,
     initialized_deadline: Option<Instant>,
     execution_requests: HashMap<u64, (String, u64)>,
+    disconnect_sent: bool,
 }
 
 impl Lifecycle {
@@ -124,6 +129,7 @@ impl Lifecycle {
             no_debug: false,
             initialized_deadline: None,
             execution_requests: HashMap::new(),
+            disconnect_sent: false,
             exception_request: None,
             exceptions: Default::default(),
             inspections: HashMap::new(),
@@ -142,6 +148,7 @@ impl Lifecycle {
             "clientID":"ash", "clientName":"Ash Code", "adapterID":options.adapter_id,
             "pathFormat":"path", "linesStartAt1":true, "columnsStartAt1":true,
             "supportsVariableType":true, "supportsVariablePaging":true, "supportsMemoryReferences":true,
+            "supportsProgressReporting":true,
             "supportsRunInTerminalRequest":options.run_in_terminal,
             "supportsArgsCanBeInterpretedByShell":options.run_in_terminal,
             "supportsStartDebuggingRequest":options.start_debugging
@@ -221,9 +228,19 @@ impl Lifecycle {
     }
 
     pub fn requested(&mut self, id: u64, command: &str) {
+        if command == "disconnect" {
+            self.disconnect_sent = true;
+        }
         if matches!(
             command,
-            "stackTrace" | "scopes" | "variables" | "setVariable" | "completions"
+            "stackTrace"
+                | "scopes"
+                | "variables"
+                | "setVariable"
+                | "completions"
+                | "readMemory"
+                | "writeMemory"
+                | "exceptionInfo"
         ) {
             self.inspections
                 .insert(id, self.snapshot.inspection_revision);
@@ -235,6 +252,26 @@ impl Lifecycle {
             self.execution_requests
                 .insert(id, (command.to_owned(), self.snapshot.execution_revision));
         }
+    }
+
+    /// DAP `terminated` ends debugging, but the client must still release the
+    /// adapter with `disconnect`. A multiplexing adapter can await this child
+    /// acknowledgement before answering its parent's disconnect request.
+    pub fn disconnect_after_termination(
+        &mut self,
+        client: &mut DebugClient,
+    ) -> Result<Option<Value>, DebugClientError> {
+        if self.disconnect_sent {
+            return Ok(None);
+        }
+        let mut arguments = json!({"restart": false});
+        if self.snapshot.capabilities.supports_terminate {
+            // Termination can also mean detaching from a borrowed runtime.
+            arguments["terminateDebuggee"] = json!(false);
+        }
+        let (id, message) = client.request("disconnect", Some(arguments))?;
+        self.requested(id, "disconnect");
+        Ok(Some(message))
     }
 
     pub fn response(&mut self, id: u64, response: DebugResponse) -> DebugResponse {
@@ -280,6 +317,42 @@ impl Lifecycle {
                     && self.snapshot.state == DebugExecutionState::Stopped
             }
             "disassemble" => capabilities.supports_disassemble_request,
+            "loadedSources" => capabilities.supports_loaded_sources_request,
+            "exceptionInfo" => {
+                capabilities.supports_exception_info_request
+                    && self.snapshot.state == DebugExecutionState::Stopped
+                    && arguments
+                        .as_ref()
+                        .and_then(|args| args.get("threadId"))
+                        .and_then(Value::as_i64)
+                        .is_some()
+            }
+            "readMemory" | "writeMemory" => {
+                let Some(args) = arguments.as_ref() else {
+                    return false;
+                };
+                let reference = args.get("memoryReference").and_then(Value::as_str);
+                let location = reference.is_some_and(|value| {
+                    !value.is_empty() && value.len() <= 4096 && !value.contains('\0')
+                }) && args
+                    .get("offset")
+                    .is_none_or(|value| value.as_i64().is_some());
+                location
+                    && self.snapshot.state == DebugExecutionState::Stopped
+                    && if command == "readMemory" {
+                        capabilities.supports_read_memory_request
+                            && args
+                                .get("count")
+                                .and_then(Value::as_u64)
+                                .is_some_and(|value| (1..=4096).contains(&value))
+                    } else {
+                        capabilities.supports_write_memory_request
+                            && args
+                                .get("data")
+                                .and_then(Value::as_str)
+                                .is_some_and(valid_memory_data)
+                    }
+            }
             "completions" => capabilities.supports_completions_request,
             "cancel" => capabilities.supports_cancel_request,
             "dataBreakpointInfo" => capabilities.supports_data_breakpoints,
@@ -335,7 +408,7 @@ impl Lifecycle {
                 self.snapshot.revision += 1;
             }
             Some("continued") => self.execution(DebugExecutionState::Running, None, None),
-            Some("terminated" | "exited") => self.end(None),
+            Some("terminated") => self.end(None),
             Some("capabilities") => self.merge_capabilities(&body["capabilities"])?,
             _ => {}
         }
@@ -501,6 +574,10 @@ impl Lifecycle {
                 "supportsDataBreakpoints",
                 "supportsInstructionBreakpoints",
                 "supportsDisassembleRequest",
+                "supportsReadMemoryRequest",
+                "supportsWriteMemoryRequest",
+                "supportsLoadedSourcesRequest",
+                "supportsExceptionInfoRequest",
                 "supportsSteppingGranularity",
                 "supportsCompletionsRequest",
                 "supportsCancelRequest",
@@ -591,6 +668,10 @@ impl Lifecycle {
             supports_data_breakpoints: flag("supportsDataBreakpoints"),
             supports_instruction_breakpoints: flag("supportsInstructionBreakpoints"),
             supports_disassemble_request: flag("supportsDisassembleRequest"),
+            supports_read_memory_request: flag("supportsReadMemoryRequest"),
+            supports_write_memory_request: flag("supportsWriteMemoryRequest"),
+            supports_loaded_sources_request: flag("supportsLoadedSourcesRequest"),
+            supports_exception_info_request: flag("supportsExceptionInfoRequest"),
             supports_stepping_granularity: flag("supportsSteppingGranularity"),
             supports_completions_request: flag("supportsCompletionsRequest"),
             supports_cancel_request: flag("supportsCancelRequest"),
@@ -658,3 +739,18 @@ impl Lifecycle {
 #[cfg(test)]
 #[path = "lifecycle_tests.rs"]
 mod tests;
+
+// DAP writes use standard padded base64; validate the actual decoded byte budget
+// before a caller can dispatch arbitrary JSON to an adapter.
+fn valid_memory_data(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.is_empty() || bytes.len() > 5464 || !bytes.len().is_multiple_of(4) {
+        return false;
+    }
+    let padding = bytes.iter().rev().take_while(|byte| **byte == b'=').count();
+    padding <= 2
+        && bytes[..bytes.len() - padding]
+            .iter()
+            .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'+' || *byte == b'/')
+        && (1..=4096).contains(&(bytes.len() / 4 * 3 - padding))
+}

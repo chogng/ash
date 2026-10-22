@@ -1,0 +1,110 @@
+{
+  "name": "debug-javascript",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "engines": {
+    "ash": "*"
+  },
+  "ashRuntime": {
+    "kind": "rust",
+    "entrypoint": "ash-debug-javascript"
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:ash.debug-javascript.toggleAutoAttach",
+    "onDebug:node",
+    "onDebug:pwa-node",
+    "onDebug:chrome",
+    "onDebug:pwa-chrome",
+    "onDebug:msedge",
+    "onDebug:pwa-msedge",
+    "onDebugInitialConfigurations"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "ash.debug-javascript.toggleAutoAttach",
+        "title": "%command.toggleAutoAttach%"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "node",
+        "label": "Node.js",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      {
+        "type": "pwa-node",
+        "label": "Node.js",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      {
+        "type": "chrome",
+        "label": "Chrome",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      {
+        "type": "pwa-chrome",
+        "label": "Chrome",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      {
+        "type": "msedge",
+        "label": "Edge",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
+      {
+        "type": "pwa-msedge",
+        "label": "Edge",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "%configuration.title%",
+      "properties": {
+        "debug.javascript.autoAttachFilter": {
+          "type": "string",
+          "enum": [
+            "disabled",
+            "always",
+            "smart",
+            "onlyWithFlag"
+          ],
+          "default": "disabled",
+          "scope": "window",
+          "description": "%setting.autoAttach%"
+        },
+        "debug.javascript.autoAttachSmartPattern": {
+          "type": "array",
+          "default": [
+            "**/node_modules/**"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "%setting.smartPattern%"
+        }
+      }
+    }
+  }
+}

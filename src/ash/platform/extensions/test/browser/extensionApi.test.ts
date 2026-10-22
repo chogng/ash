@@ -47,6 +47,37 @@ test('concurrent cached extension reads share one request while refresh stays qu
 	assert.deepEqual(requests, ['cached', 'refresh']);
 });
 
+test('extension catalogs reuse only a backend-confirmed version from the same connection', async () => {
+	let connectionGeneration = 1;
+	const requests: unknown[] = [];
+	let reply: unknown = { status: 'updated', generation: 17, extensions: [], diagnostics: [] };
+	const connection = {
+		request: async (_definition: unknown, params: unknown) => { requests.push(params); return reply; },
+	} as unknown as AppServerProtocolClient;
+	const resources = { ...resourceApi({}), get connectionGeneration() { return connectionGeneration; } };
+	const api = createAppServerExtensionApi(connection, resources);
+	const first = await api.list('cached');
+	reply = { status: 'unchanged', generation: 17 };
+	assert.strictEqual(await api.list('cached'), first);
+	assert.deepEqual(requests, [
+		{ reload: 'cached', knownGeneration: null }, { reload: 'cached', knownGeneration: 17 },
+	]);
+	reply = { status: 'unchanged', generation: 18 };
+	await assert.rejects(api.list('cached'), /retired/);
+	connectionGeneration++;
+	reply = { status: 'unchanged', generation: 17 };
+	await assert.rejects(api.list('cached'), /retired/);
+	assert.deepEqual(requests.at(-1), { reload: 'cached', knownGeneration: null });
+	reply = { status: 'updated', generation: 17, extensions: [], diagnostics: [] };
+	const reconnected = await api.list('cached');
+	assert.notStrictEqual(reconnected, first);
+	assert.equal(reconnected.generation, first.generation + 1);
+	await api.list('refresh');
+	assert.deepEqual(requests.at(-1), { reload: 'refresh', knownGeneration: null });
+	reply = { status: 'unchanged', generation: 17 };
+	await assert.rejects(api.list('refresh'), /retired/);
+});
+
 test("Vite extension resources reject oversized open metadata before reading", async () => {
 	let reads = 0;
 	let releases = 0;

@@ -1,23 +1,23 @@
-import { createReplaceDocumentMatchesCommand, findDocumentText } from '../../../../../extensions/academic/common/commands/documentFindCommands.js';
-import { createDefineParagraphStyleCommand } from '../../../../../extensions/academic/common/commands/documentParagraphCommands.js';
-import { getDocumentParagraphStyles } from '../../../../../extensions/academic/common/model/documentParagraph.js';
-import { DocumentTextModel } from '../../../../../extensions/academic/common/model/documentTextModel.js';
+import { createReplaceDocumentMatchesCommand, findDocumentText } from '../../../../../extensions/academy/common/commands/documentFindCommands.js';
+import { createDefineParagraphStyleCommand } from '../../../../../extensions/academy/common/commands/documentParagraphCommands.js';
+import { getDocumentParagraphStyles } from '../../../../../extensions/academy/common/model/documentParagraph.js';
+import { DocumentTextModel } from '../../../../../extensions/academy/common/model/documentTextModel.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { TextModel } from "../../common/model/textModel.js";
-import type { DocumentNode } from "../../../../../extensions/academic/common/model/document.js";
-import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../extensions/academic/common/model/documentSchema.js";
-import { DocumentTransaction } from "../../../../../extensions/academic/common/model/documentTransaction.js";
-import { textSelection, type DocumentSelection } from "../../../../../extensions/academic/common/core/documentSelection.js";
-import type { DocumentCollaborationConnection } from "../../../../../extensions/academic/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationSnapshot } from "../../../../../extensions/academic/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationPresence } from "../../../../../extensions/academic/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationSubmitOutcome } from "../../../../../extensions/academic/common/services/documentCollaborationService.js";
-import { DocumentCollaborationController } from "../../../../../extensions/academic/common/contrib/collaboration/controller.js";
-import type { DocumentCollaborationEnvelope } from "../../../../../extensions/academic/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../../../../extensions/academic/common/services/documentCollaborationService.js";
+import type { DocumentNode } from "../../../../../extensions/academy/common/model/document.js";
+import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../extensions/academy/common/model/documentSchema.js";
+import { DocumentTransaction } from "../../../../../extensions/academy/common/model/documentTransaction.js";
+import { textSelection, type DocumentSelection } from "../../../../../extensions/academy/common/core/documentSelection.js";
+import type { DocumentCollaborationConnection } from "../../../../../extensions/academy/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationSnapshot } from "../../../../../extensions/academy/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationPresence } from "../../../../../extensions/academy/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationSubmitOutcome } from "../../../../../extensions/academy/common/services/documentCollaborationService.js";
+import { DocumentCollaborationController } from "../../../../../extensions/academy/common/contrib/collaboration/controller.js";
+import type { DocumentCollaborationEnvelope } from "../../../../../extensions/academy/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRemoteEnvelope } from "../../../../../extensions/academy/common/services/documentCollaborationService.js";
 
 test('Academy structural replay conflict retains local content and stops resubmission', async () => {
 	const schema = createDefaultDocumentSchema();

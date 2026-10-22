@@ -39,7 +39,7 @@ import {
 import { ContextKeyExpr } from "../../../../../platform/contextkey/common/contextkey.js";
 import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
-import { NotificationService } from "../../../../../workbench/services/notification/common/notificationService.js";
+import { TestNotificationService } from '../../../notification/test/common/testNotificationService.js';
 import { NotificationsAlerts } from "../../../../browser/parts/notifications/notificationsAlerts.js";
 import { AccessibilityService } from "../../../../../platform/accessibility/browser/accessibilityService.js";
 import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
@@ -90,7 +90,7 @@ test('keybinding hold mode follows the invoking shortcut, suppresses repeats and
 		ownerDocument: dom.window.document,
 		commandService: resources.add(new CommandService(resources.add(new InstantiationService()), commands)),
 		contextKeyService: contexts, keyboardLayoutService: layouts, registry, commandRegistry: commands,
-	}, resources.add(new NotificationService()), profileFixture.files, profileFixture.profiles));
+	}, resources.add(new TestNotificationService()), profileFixture.files, profileFixture.profiles));
 	let release: Promise<void> | undefined;
 	let executions = 0;
 	resources.add(commands.register('test.hold', () => {
@@ -234,7 +234,7 @@ test("browser service executes chords and restores IME state", async () => {
 		keyboardLayoutService: keyboardLayout,
 		statusbarService: statusbar,
 		registry,
-	}, registrations.add(new NotificationService()), profileFixture.files, profileFixture.profiles));
+	}, registrations.add(new TestNotificationService()), profileFixture.files, profileFixture.profiles));
 
 	IME.enable();
 	const first = keyboardEvent({ code: "KeyK", key: "k" });
@@ -276,7 +276,7 @@ test("browser layout observation preserves a chord ending with Shift+Enter", asy
 	registrations.add(registry.registerKeybindingRule({ command: "test.shiftEnter", keybinding: Keybinding.chord(physicalKey("KeyK", { ctrlKey: true }), logicalKey("Enter", { shiftKey: true })) }));
 	using services = new InstantiationService();
 	using commandService = new CommandService(services, commands);
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	using keybindings = new WorkbenchKeybindingService({ ownerDocument: dom.window.document, commandService, contextKeyService: contexts, keyboardLayoutService: layouts, registry }, notifications, profileFixture.files, profileFixture.profiles);
 	let layoutChanges = 0;
 	using listener = layouts.onDidChangeKeyboardLayout(() => { layoutChanges += 1; });
@@ -306,7 +306,7 @@ for (const operatingSystem of [OperatingSystem.Windows, OperatingSystem.Macintos
 			resources.add(registry.registerKeybindingRule({ command, keybinding: Keybinding.single(logicalKey('c', { ...modifiers, shiftKey })) }));
 		}
 		const commandService = resources.add(new CommandService(resources.add(new InstantiationService()), commands));
-		const service = resources.add(new WorkbenchKeybindingService({ ownerDocument: dom.window.document, commandService, contextKeyService: contexts, keyboardLayoutService: layouts, registry }, resources.add(new NotificationService()), profileFixture.files, profileFixture.profiles));
+		const service = resources.add(new WorkbenchKeybindingService({ ownerDocument: dom.window.document, commandService, contextKeyService: contexts, keyboardLayoutService: layouts, registry }, resources.add(new TestNotificationService()), profileFixture.files, profileFixture.profiles));
 		assert.equal(layouts.getRawKeyboardMapping()?.KeyC, undefined);
 		assert.equal(service.dispatchEvent(keyboardEvent({ key: 'c', code: 'KeyC', keyCode: 67, ...modifiers, shiftKey: true }).event), true);
 		assert.equal(service.dispatchEvent(keyboardEvent({ key: 'c', code: 'KeyC', keyCode: 67, ...modifiers, shiftKey: false }).event), true);
@@ -345,7 +345,7 @@ test("browser service dispatches Ctrl+Shift+P with a shifted key value", async (
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,
-	}, registrations.add(new NotificationService()), profileFixture.files, profileFixture.profiles));
+	}, registrations.add(new TestNotificationService()), profileFixture.files, profileFixture.profiles));
 	const shortcut = keyboardEvent({
 		code: "KeyP",
 		key: "P",
@@ -383,7 +383,7 @@ test('registered auxiliary window dispatches workbench shortcuts until it closes
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,
-	}, resources.add(new NotificationService()), profileFixture.files, profileFixture.profiles));
+	}, resources.add(new TestNotificationService()), profileFixture.files, profileFixture.profiles));
 	const registration = resources.add(registerWindow(auxiliary.window as unknown as Window));
 	const button = auxiliary.window.document.querySelector('button')!;
 	const pressShortcut = (): void => {
@@ -421,7 +421,7 @@ test('failed keyboard command appears as a warning notification', async () => {
 		navigator: fakeNavigator(),
 		operatingSystem: OperatingSystem.Windows,
 	}));
-	const notifications = resources.add(new NotificationService());
+	const notifications = resources.add(new TestNotificationService());
 	const files = resources.add(new KeybindingTestServices());
 	const services = files.services;
 	services.registerInstance(INotificationService, notifications);
@@ -473,7 +473,7 @@ test("keyboard shortcut troubleshooting traces native, mapped, and resolved even
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,
-	}, registrations.add(new NotificationService()), profileFixture.files, profileFixture.profiles));
+	}, registrations.add(new TestNotificationService()), profileFixture.files, profileFixture.profiles));
 	const messages: string[] = [];
 	registrations.add(service.onDidLog(message => messages.push(message)));
 
@@ -533,7 +533,7 @@ test("single modifier bindings dispatch on keyup only when the modifier was unus
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,
-	}, registrations.add(new NotificationService()), profileFixture.files, profileFixture.profiles));
+	}, registrations.add(new TestNotificationService()), profileFixture.files, profileFixture.profiles));
 
 	const firstDown = keyboardEvent({ key: "Control", code: "ControlLeft", keyCode: 17, ctrlKey: true });
 	const firstUp = keyboardEvent({ key: "Control", code: "ControlLeft", keyCode: 17, ctrlKey: false });
@@ -975,7 +975,7 @@ test('user keybindings load conditions, arguments, OS overrides and blockers thr
 	const contexts = registrations.add(new ContextKeyService());
 	registrations.add(registry.registerKeybindingRule({ command: 'test.builtin', keybinding: Keybinding.single(logicalKey('p', { ctrlKey: true })), source: KeybindingSource.Builtin }));
 	const layouts = registrations.add(new BrowserKeyboardLayoutService({ navigator: dom.window.navigator, operatingSystem: OperatingSystem.Windows }));
-	const notifications = registrations.add(new NotificationService());
+	const notifications = registrations.add(new TestNotificationService());
 	const service = registrations.add(new WorkbenchKeybindingService({ ownerDocument: dom.window.document, commandService: registrations.add(new CommandService(registrations.add(new InstantiationService()))), contextKeyService: contexts, keyboardLayoutService: layouts, registry }, notifications, fixture.files, fixture.profiles));
 	const resolver = new KeybindingResolver({ registry, resolveKeybinding: binding => resolveKeybinding(binding, OperatingSystem.Windows) });
 	await fixture.write([{ key: 'ctrl+q', mac: 'ctrl+p', linux: 'ctrl+p', win: 'ctrl+p', command: 'test.user', when: String.raw`test.enabled && mode in modes && count >= 2 && path =~ /\.md$/ && true`, args: { source: 'user' } }]);
@@ -1108,7 +1108,7 @@ test('keybinding schema registration updates conditional command arguments and r
 	using services = new InstantiationService();
 	const registry = new CommandRegistry();
 	using commands = new CommandService(services, registry);
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	using keybindings = new WorkbenchKeybindingService({
 		ownerDocument: dom.window.document,
 		commandService: commands,
@@ -1159,7 +1159,7 @@ test('registered command metadata drives nested batch validation, completion and
 	using services = new InstantiationService();
 	const registry = new CommandRegistry();
 	using commands = new CommandService(services, registry);
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	using batch = registry.registerMany([CommandsRegistry.getCommands().get('runCommands')!]);
 	using keybindings = new WorkbenchKeybindingService({
 		ownerDocument: dom.window.document, commandService: commands, commandRegistry: registry,

@@ -45,6 +45,102 @@ async function openEditor(page: Page, locale?: string, theme?: string): Promise<
 	return popup;
 }
 
+for (const [theme, locale] of [['ash-light', 'en'], ['ash-dark', 'zh-CN'], ['ash-high-contrast-light', 'en'], ['ash-high-contrast-dark', 'zh-CN']] as const) {
+	test(`diff preview updates real line and word highlights in Theme Editor (${theme}, ${locale})`, async ({ page }, testInfo) => {
+		const popup = await openEditor(page, locale, theme);
+		await saveEditableTheme(popup, locale);
+		const tabs = popup.getByRole('tablist', { name: locale === 'zh-CN' ? '预览窗口' : 'Preview window', exact: true });
+		await tabs.getByRole('tab', { name: locale === 'zh-CN' ? '桌面工作台' : 'Workbench', exact: true }).focus();
+		await popup.keyboard.press('ArrowRight');
+		const diffTab = tabs.getByRole('tab', { name: locale === 'zh-CN' ? '差异对比' : 'Diff', exact: true });
+		await expect(diffTab).toBeFocused();
+		await diffTab.press('Enter');
+		await expect(diffTab).toHaveAttribute('aria-selected', 'true');
+		await popup.getByRole('searchbox').fill('diffEditor.');
+		const frame = popup.frameLocator('.ash-theme-editor-preview');
+		const preview = frame.locator('#app');
+		const diff = frame.locator('.stanza-diff-editor');
+		await expect(diff).toBeVisible();
+		await expect(frame.getByRole('tab', { name: locale === 'zh-CN' ? '颜色更改' : 'Color changes', exact: true })).toBeVisible();
+		const initialEditor = await diff.elementHandle();
+		for (const [id, value, selector, expected] of [
+			['diffEditor.insertedLineBackground', '#d0e8d7', '.stanza-diff-line-added', 'rgb(208, 232, 215)'],
+			['diffEditor.removedLineBackground', '#f5d9d5', '.stanza-diff-line-removed', 'rgb(245, 217, 213)'],
+			['diffEditor.insertedTextBackground', '#a7cdb3', '.stanza-diff-inline-added', 'rgb(167, 205, 179)'],
+			['diffEditor.removedTextBackground', '#e4aaa5', '.stanza-diff-inline-removed', 'rgb(228, 170, 165)'],
+		] as const) {
+			const row = popup.locator('#theme-color-group-editor .ash-theme-color').filter({
+				has: popup.locator('.ash-theme-color-name').getByText(id, { exact: true }),
+			});
+			const field = row.getByRole('textbox');
+			await expect(field).toBeEnabled();
+			const initial = await field.inputValue();
+			const variable = `--ash-${id.replaceAll('.', '-')}`;
+			const inherited = await preview.evaluate((element, name) => getComputedStyle(element).getPropertyValue(name).trim(), variable);
+			const highlight = diff.locator(selector).first();
+			await expect(highlight).toBeVisible();
+			const initialBackground = await highlight.evaluate(element => getComputedStyle(element).backgroundColor);
+			await editColor(field, value);
+			await expect(preview).toHaveCSS(variable, value);
+			await expect(highlight).toHaveCSS('background-color', expected);
+			expect(await page.evaluate(() => window.themeEditorTest.source())).toContain(`"${id}": "${value}"`);
+			await row.locator('.ash-theme-color-reset').press('Enter');
+			await expect(field).toHaveValue(initial);
+			await expect(preview).toHaveCSS(variable, inherited);
+			await expect(highlight).toHaveCSS('background-color', initialBackground);
+			expect(await page.evaluate(() => window.themeEditorTest.source())).not.toContain(`"${id}"`);
+		}
+		expect(await initialEditor!.evaluate(element => element.isConnected)).toBe(true);
+		await initialEditor!.dispose();
+		await popup.screenshot({ path: testInfo.outputPath('diff-theme-colors.png') });
+	});
+}
+
+test('diff preview preserves sample edits through theme undo and redo and resets them when switching', async ({ page }) => {
+	const popup = await openEditor(page);
+	const source = await page.evaluate(() => window.themeEditorTest.source());
+	const persisted = await page.evaluate(() => window.themeEditorTest.persisted());
+	const tabs = popup.getByRole('tablist', { name: 'Preview window', exact: true });
+	const diffTab = tabs.getByRole('tab', { name: 'Diff', exact: true });
+	await diffTab.press('Space');
+	const frame = popup.frameLocator('.ash-theme-editor-preview');
+	const input = frame.locator('.stanza-diff-editor-side.modified').getByRole('textbox');
+	await input.focus();
+	await input.press('ControlOrMeta+End');
+	await input.press('Enter');
+	await input.pressSequentially('// preview_only');
+	await expect.poll(() => page.evaluate(() => window.themeEditorTest.accessibleContent())).toContain('preview_only');
+	await input.press('Alt+F2');
+	const accessible = popup.getByRole('dialog', { name: 'Accessible View', exact: true }).getByRole('textbox');
+	await expect(accessible).toHaveValue(/palette\.before\.ts[\s\S]*legacyColor[\s\S]*palette\.after\.ts[\s\S]*withOpacity[\s\S]*preview_only/u);
+	await popup.keyboard.press('Escape');
+	expect(await page.evaluate(() => window.themeEditorTest.source())).toBe(source);
+
+	await popup.getByRole('searchbox').fill('diffEditor.insertedTextBackground');
+	const field = popup.getByRole('textbox', { name: 'Hex color for diffEditor.insertedTextBackground', exact: true });
+	const initial = await field.inputValue();
+	await editColor(field, '#123456');
+	const highlight = frame.locator('.stanza-diff-inline-added').first();
+	await expect(highlight).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+	const titlebar = popup.locator('.ash-auxiliary-titlebar');
+	await titlebar.getByRole('button', { name: 'Undo', exact: true }).press('Enter');
+	await expect(field).toHaveValue(initial);
+	await titlebar.getByRole('button', { name: 'Redo', exact: true }).press('Enter');
+	await expect(highlight).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+	await input.focus();
+	await expect.poll(() => page.evaluate(() => window.themeEditorTest.accessibleContent())).toContain('preview_only');
+
+	await tabs.getByRole('tab', { name: 'Workbench', exact: true }).press('Enter');
+	await expect(frame.getByRole('textbox', { name: 'palette.ts', exact: true })).toBeVisible();
+	await diffTab.press('Space');
+	await expect(highlight).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+	await input.focus();
+	await expect.poll(() => page.evaluate(() => window.themeEditorTest.accessibleContent())).toContain('withOpacity');
+	await expect.poll(() => page.evaluate(() => window.themeEditorTest.accessibleContent())).not.toContain('preview_only');
+	await expect(popup.locator('iframe.ash-theme-editor-preview')).toHaveCount(1);
+	expect(await page.evaluate(() => window.themeEditorTest.persisted())).toBe(persisted);
+});
+
 test('titlebar shares undo and redo history and offers a primary save split button', async ({ page }, testInfo) => {
 	const popup = await openEditor(page);
 	const titlebar = popup.locator('.ash-auxiliary-titlebar');
@@ -938,6 +1034,8 @@ test('switches to the production Agent Window, edits its colors and keeps one is
 	const tabs = popup.getByRole('tablist', { name: 'Preview window', exact: true });
 	const agent = tabs.getByRole('tab', { name: 'Agent Window', exact: true });
 	await tabs.getByRole('tab', { name: 'Workbench', exact: true }).focus();
+	await popup.keyboard.press('ArrowRight');
+	await expect(tabs.getByRole('tab', { name: 'Diff', exact: true })).toBeFocused();
 	await popup.keyboard.press('ArrowRight');
 	await expect(agent).toBeFocused();
 	await popup.keyboard.press('Enter');

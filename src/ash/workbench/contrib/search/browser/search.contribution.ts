@@ -55,6 +55,7 @@ export function registerSearchViews(
 		localizationKey: { bundle: "ash.views", key: "search" },
 		order: 1,
 		canToggleVisibility: false,
+		canMoveView: true,
 		ctorDescriptor: new SyncDescriptor(SearchView),
 	}]);
 }

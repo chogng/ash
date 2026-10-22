@@ -344,6 +344,12 @@ impl<'de> Deserialize<'de> for ExtensionHostRegistrationDescriptorDto {
     deny_unknown_fields
 )]
 pub enum ExtensionHostRegistrationKindDto {
+    TreeDataProvider {
+        view_id: String,
+        title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container_id: Option<String>,
+    },
     SourceControl {
         #[ts(type = "number")]
         revision: u64,

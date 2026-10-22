@@ -93,8 +93,9 @@ fn frozen_model_messages_select_only_active_mode_identity_and_available_tools() 
         parameters: serde_json::json!({"type":"object", "properties":{"task":{"type":"string"}}, "required":["task"], "additionalProperties":false}),
         strict: true,
     };
-    let catalog = crate::ModelToolCatalogSnapshot::new(vec![original.clone()])
-        .with_model_descriptions(&restored);
+    let frozen = crate::ModelToolCatalogSnapshot::new(vec![original.clone()]);
+    let catalog = frozen.clone().with_model_descriptions(&restored);
+    assert_eq!(frozen.definitions(), [original.clone()]);
     let mut expected = original;
     expected.description.push_str("\n\nMODEL_TOOL");
     assert_eq!(catalog.definitions(), [expected]);

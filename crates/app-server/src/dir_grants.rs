@@ -530,7 +530,10 @@ impl DirGrants {
             .retain(|grant| {
                 &grant.session != session_id
                     || !grant.directories.iter().any(|entry| {
-                        path == entry.dir().canonical_path() || path == entry.dir().requested_path()
+                        entry
+                            .dir()
+                            .project_observed_path(path)
+                            .is_some_and(|relative| relative.as_os_str().is_empty())
                     })
             });
         let mut session_trees = self

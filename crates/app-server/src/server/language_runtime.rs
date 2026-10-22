@@ -13,6 +13,7 @@ use ash_config::LanguageServersConfig;
 use ash_install_context::InstallContext;
 use ash_lsp_manager::LanguageRequestId;
 use ash_lsp_manager::LanguageRequestMetric;
+use ash_lsp_manager::LanguageServerFeature;
 use ash_lsp_manager::LanguageServerMessageSeverity;
 use ash_lsp_manager::LanguageServerMessageSource;
 use ash_lsp_manager::LanguageServerState;
@@ -269,7 +270,42 @@ impl LspManagerEventSink for AppServerLanguageEventSink {
                 ash_app_server_protocol::protocol::language::LanguageServerCapabilitiesNotification {
                     dir_id: self.diagnostics.dir_id.clone(), server: server.clone(),
                     language_ids: self.routes.read().unwrap_or_else(std::sync::PoisonError::into_inner).get(server).cloned().unwrap_or_default(),
+                    features: capabilities.features.iter().map(|feature| match feature {
+                        LanguageServerFeature::Hover => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::Hover,
+                        LanguageServerFeature::Completion => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::Completion,
+                        LanguageServerFeature::CompletionResolve => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::CompletionResolve,
+                        LanguageServerFeature::ExecuteCommand => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::ExecuteCommand,
+                        LanguageServerFeature::Declaration => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::Declaration,
+                        LanguageServerFeature::Definition => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::Definition,
+                        LanguageServerFeature::Implementation => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::Implementation,
+                        LanguageServerFeature::TypeDefinition => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::TypeDefinition,
+                        LanguageServerFeature::References => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::References,
+                        LanguageServerFeature::CallHierarchy => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::CallHierarchy,
+                        LanguageServerFeature::TypeHierarchy => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::TypeHierarchy,
+                        LanguageServerFeature::WorkspaceSymbols => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::WorkspaceSymbols,
+                        LanguageServerFeature::Rename => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::Rename,
+                        LanguageServerFeature::RenamePrepare => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::RenamePrepare,
+                        LanguageServerFeature::CodeActions => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::CodeActions,
+                        LanguageServerFeature::CodeActionResolve => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::CodeActionResolve,
+                        LanguageServerFeature::DocumentFormatting => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::DocumentFormatting,
+                        LanguageServerFeature::RangeFormatting => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::RangeFormatting,
+                        LanguageServerFeature::OnTypeFormatting => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::OnTypeFormatting,
+                        LanguageServerFeature::SignatureHelp => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::SignatureHelp,
+                        LanguageServerFeature::InlayHints => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::InlayHints,
+                        LanguageServerFeature::LinkedEditingRanges => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::LinkedEditingRanges,
+                        LanguageServerFeature::SemanticTokens => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::SemanticTokens,
+                        LanguageServerFeature::DocumentSymbols => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::DocumentSymbols,
+                        LanguageServerFeature::CodeLens => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::CodeLens,
+                        LanguageServerFeature::CodeLensResolve => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::CodeLensResolve,
+                        LanguageServerFeature::DocumentLinks => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::DocumentLinks,
+                        LanguageServerFeature::DocumentLinkResolve => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::DocumentLinkResolve,
+                        LanguageServerFeature::DocumentColors => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::DocumentColors,
+                        LanguageServerFeature::FoldingRanges => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::FoldingRanges,
+                        LanguageServerFeature::PullDiagnostics => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::PullDiagnostics,
+                        LanguageServerFeature::WorkspaceDiagnostics => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::WorkspaceDiagnostics,
+                    }).collect(),
                     completion_trigger_characters: capabilities.completion_trigger_characters.clone(),
+                    on_type_formatting_trigger_characters: capabilities.on_type_formatting_trigger_characters.clone(),
                     signature_help_trigger_characters: capabilities.signature_help_trigger_characters.clone(),
                     signature_help_retrigger_characters: capabilities.signature_help_retrigger_characters.clone(),
                 },
@@ -279,7 +315,7 @@ impl LspManagerEventSink for AppServerLanguageEventSink {
     }
 }
 
-fn language_server_state_to_dto(state: &LanguageServerState) -> LanguageServerStateDto {
+pub(super) fn language_server_state_to_dto(state: &LanguageServerState) -> LanguageServerStateDto {
     match state {
         LanguageServerState::Starting => LanguageServerStateDto::Starting,
         LanguageServerState::Ready => LanguageServerStateDto::Ready,
@@ -300,7 +336,9 @@ fn language_server_state_to_dto(state: &LanguageServerState) -> LanguageServerSt
         LanguageServerState::Failed(message) => LanguageServerStateDto::Failed {
             message: message.clone(),
         },
-        LanguageServerState::Stopped => LanguageServerStateDto::Stopped,
+        LanguageServerState::Stopped | LanguageServerState::UserStopped => {
+            LanguageServerStateDto::Stopped
+        }
     }
 }
 
@@ -881,6 +919,84 @@ impl AppServerLanguageRuntime {
         })
     }
 
+    /// Drains the supervisor's existing lifecycle projection without starting a process.
+    pub(super) fn server_states(&mut self, root: &Path) -> BTreeMap<String, LanguageServerState> {
+        if self
+            .dir_state
+            .root
+            .as_deref()
+            .is_some_and(|current| current != root)
+        {
+            return self
+                .env_runtimes
+                .get_mut(root)
+                .map_or_else(BTreeMap::new, |runtime| runtime.server_states(root));
+        }
+        let events = self
+            .receiver
+            .as_ref()
+            .map(|receiver| receiver.try_iter().collect::<Vec<_>>())
+            .unwrap_or_default();
+        for event in events {
+            self.accept_state(&event);
+        }
+        self.dir_state.server_states.clone()
+    }
+
+    pub(super) fn control_servers(
+        &mut self,
+        root: &Path,
+        dir_id: Option<&str>,
+        generation: u64,
+        configuration: &LanguageServersConfig,
+        target: Option<(&str, &str)>,
+        action: ash_lsp_manager::LanguageServerControl,
+    ) -> Result<(), String> {
+        if self.env_runtimes.contains_key(root)
+            || self
+                .dir_state
+                .root
+                .as_deref()
+                .is_some_and(|current| current != root)
+        {
+            if !self.env_runtimes.contains_key(root) {
+                if action == ash_lsp_manager::LanguageServerControl::Stop {
+                    return Ok(());
+                }
+                let child = self.child_runtime();
+                self.env_runtimes
+                    .insert(root.to_path_buf(), Box::new(child));
+            }
+            return self
+                .env_runtimes
+                .get_mut(root)
+                .expect("directory runtime")
+                .control_servers(root, dir_id, generation, configuration, target, action);
+        }
+        let states = self.server_states(root);
+        self.dir_state.dir_id = dir_id.map(str::to_owned);
+        if let Some((id, language)) = target
+            && !states.contains_key(id)
+            && action == ash_lsp_manager::LanguageServerControl::Restart
+        {
+            // Starting an idle declaration is explicit intent. Batch controls never acquire
+            // unused tools merely because they appear in discovery.
+            return self.restart_selected(root, generation, configuration, language, Some(id));
+        }
+        let Some(manager) = &self.manager else {
+            return Ok(());
+        };
+        let names = states
+            .keys()
+            .filter(|id| target.is_none_or(|(target, _)| target == id.as_str()))
+            .map(|id| ash_lsp_manager::LanguageServerName::new(id.clone()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())?;
+        manager
+            .control_servers(action, names)
+            .map_err(|error| error.to_string())
+    }
+
     /// Background pulls may activate a declared workspace kind, but not install servers in
     /// unrelated folders merely because the client enumerates every available language.
     pub(super) fn allows_workspace_diagnostics(
@@ -1061,6 +1177,7 @@ impl AppServerLanguageRuntime {
         if self.manager.is_none()
             || self.dir_state.root.as_deref() != Some(dir_root)
             || self.definitions_dirty
+            || !self.dir_state.language_servers.contains_key(language_id)
             || self.acquisitions(configuration).any(|server| {
                 server.languages.iter().any(|id| id == language_id)
                     && !self
@@ -1261,6 +1378,23 @@ impl AppServerLanguageRuntime {
         configuration: &LanguageServersConfig,
         language_id: &str,
     ) -> Result<(), String> {
+        self.restart_selected(
+            dir_root,
+            config_generation,
+            configuration,
+            language_id,
+            None,
+        )
+    }
+
+    fn restart_selected(
+        &mut self,
+        dir_root: &Path,
+        config_generation: u64,
+        configuration: &LanguageServersConfig,
+        language_id: &str,
+        selected: Option<&str>,
+    ) -> Result<(), String> {
         let needed = self
             .acquisitions(configuration)
             .filter(|server| {
@@ -1293,6 +1427,18 @@ impl AppServerLanguageRuntime {
                 configuration,
                 &self.dir_state.settings,
             )?);
+        }
+        if let Some(selected) = selected {
+            // An explicit single-server start must not activate other idle declarations.
+            // Keep every existing route, including user-stopped definitions.
+            definitions.retain(|definition| {
+                definition.name().as_str() == selected
+                    || self
+                        .dir_state
+                        .language_servers
+                        .values()
+                        .any(|id| id == definition.name().as_str())
+            });
         }
         // Selection can perform process/network I/O. Recheck its source while registering the
         // manager, so a concurrent disable or uninstall cannot launch a retired recipe.
@@ -1422,19 +1568,8 @@ impl AppServerLanguageRuntime {
                 let home = self.home.as_deref().ok_or_else(|| {
                     ManagedLanguageServerError::Installation("Ash home is unavailable".into())
                 })?;
-                self.updates.publish_language_server_progress(
-                    self.connection_id,
-                    LanguageServerProgressNotification {
-                        dir_id: self.dir_state.dir_id.clone(),
-                        server: server.id.clone(),
-                        token: "ash.language-server.install".into(),
-                        title: Some(server.id.clone()),
-                        message: None,
-                        percentage: None,
-                        done: false,
-                    },
-                );
-                let install = || {
+                let mut downloading = false;
+                let result = (|| {
                     use ash_http_client::HttpClientConfig;
                     use ash_http_client::OutboundNetworkSnapshot;
                     use ash_http_client::RedirectPolicy;
@@ -1458,21 +1593,36 @@ impl AppServerLanguageRuntime {
                     let http = ReqwestHttpClient::with_network(network).map_err(|error| {
                         ManagedLanguageServerError::Installation(error.to_string())
                     })?;
-                    server.install(home, &http)
-                };
-                let result = install();
-                self.updates.publish_language_server_progress(
-                    self.connection_id,
-                    LanguageServerProgressNotification {
-                        dir_id: self.dir_state.dir_id.clone(),
-                        server: server.id.clone(),
-                        token: "ash.language-server.install".into(),
-                        title: None,
-                        message: None,
-                        percentage: None,
-                        done: true,
-                    },
-                );
+                    server.install(home, &http, || {
+                        downloading = true;
+                        self.updates.publish_language_server_progress(
+                            self.connection_id,
+                            LanguageServerProgressNotification {
+                                dir_id: self.dir_state.dir_id.clone(),
+                                server: server.id.clone(),
+                                token: "ash.language-server.download".into(),
+                                title: Some(server.id.clone()),
+                                message: None,
+                                percentage: None,
+                                done: false,
+                            },
+                        );
+                    })
+                })();
+                if downloading {
+                    self.updates.publish_language_server_progress(
+                        self.connection_id,
+                        LanguageServerProgressNotification {
+                            dir_id: self.dir_state.dir_id.clone(),
+                            server: server.id.clone(),
+                            token: "ash.language-server.download".into(),
+                            title: None,
+                            message: None,
+                            percentage: None,
+                            done: true,
+                        },
+                    );
+                }
                 result
             },
         );
@@ -1526,6 +1676,9 @@ impl AppServerLanguageRuntime {
                 Some(LanguageServerState::Ready) => return Ok(()),
                 Some(LanguageServerState::Failed(message)) => return Err(message.clone()),
                 Some(LanguageServerState::CrashLoop { message, .. }) => return Err(message.clone()),
+                Some(LanguageServerState::UserStopped) => {
+                    return Err("language server was stopped by the user".into());
+                }
                 _ => {}
             }
             if let Some(event) = self.recv_until(deadline)? {

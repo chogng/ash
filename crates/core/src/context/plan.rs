@@ -8,6 +8,7 @@ use ash_protocol::ToolDefinition;
 use ash_protocol::TurnId;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Arc;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct OmittedInstruction {
@@ -104,7 +105,7 @@ pub(crate) struct ContextPlan {
     selected_items: Vec<ThreadItem>,
     turn_endings: BTreeMap<TurnId, ash_prompts::PromptArtifact>,
     evidence: Vec<ContextEvidence>,
-    tools: Vec<ToolDefinition>,
+    tools: Arc<Vec<ToolDefinition>>,
     budget: ContextBudgetReport,
 }
 
@@ -118,7 +119,7 @@ pub(super) struct ContextPlanInput {
     pub selected_items: Vec<ThreadItem>,
     pub turn_endings: BTreeMap<TurnId, ash_prompts::PromptArtifact>,
     pub evidence: Vec<ContextEvidence>,
-    pub tools: Vec<ToolDefinition>,
+    pub tools: Arc<Vec<ToolDefinition>>,
     pub budget: ContextBudgetReport,
 }
 

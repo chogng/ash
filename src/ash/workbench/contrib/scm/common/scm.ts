@@ -54,6 +54,8 @@ export interface ISCMStatusBarCommand {
 	readonly text: string;
 	readonly ariaLabel: string;
 	readonly tooltip: string;
+	/** Defaults to the left side for repository status commands. */
+	readonly alignment?: 'left' | 'right';
 	readonly priority: number;
 	readonly compactGroup?: string;
 	/** Omitted while the command is unavailable; the status remains visible. */

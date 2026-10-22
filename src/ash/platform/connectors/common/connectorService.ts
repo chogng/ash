@@ -14,6 +14,9 @@ export interface ConnectorView {
 	readonly id: string;
 	readonly displayName: string;
 	readonly description: string;
+	/** Exact declaration and runtime identities supplied by the backend MCP owner. */
+	readonly mcpDeclarationId: string;
+	readonly mcpServerId: string | null;
 	readonly connectionGeneration: number;
 	readonly state: ConnectorState;
 	readonly oauthMethods: readonly ("browser" | "device")[];

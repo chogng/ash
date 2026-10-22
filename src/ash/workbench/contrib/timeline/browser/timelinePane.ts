@@ -1,6 +1,8 @@
 import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import './media/timelinePane.css';
-import { h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { observeIntersection } from '../../../../base/browser/observer.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -11,11 +13,13 @@ import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
+import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { IHoverService, type IManagedHover } from '../../../../platform/hover/browser/hoverService.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -24,6 +28,9 @@ import { EditorResourceAccessor, SideBySideEditor } from '../../../common/editor
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { ITimelineService, type Timeline, type TimelineItem } from '../common/timeline.js';
+import { setupHistoryItemHover, toHistoryItemHoverContent } from '../../scm/browser/scmHistory.js';
+import { ISCMService } from '../../scm/common/scm.js';
+import type { SCMHistoryItemViewModelTreeElement } from '../../scm/common/history.js';
 
 export const TimelineFocusedContext = new RawContextKey<boolean>('timelineFocused', false);
 
@@ -37,16 +44,16 @@ interface TimelineRow {
 export class TimelinePane extends ViewPane {
 	private readonly tree: WorkbenchObjectTree<TimelineRow>;
 	private readonly messageDomNode: HTMLDivElement;
-	private readonly resourceDomNode: HTMLDivElement;
 	private readonly rows = this._register(new DisposableStore());
+	private readonly itemHovers = new Map<string, { readonly hover: IManagedHover; readonly focus: () => void; }>();
 	private readonly pending = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly timelines = new Map<string, Timeline>();
+	private readonly failedSources = new Set<string>();
 	private readonly excludedSources = new Set<string>();
 	private readonly toolbar: WorkbenchToolBar;
 	private uri: URI | undefined;
 	private pinned = false;
 	private generation = 0;
-	private failed = false;
 
 	constructor(
 		container: HTMLElement,
@@ -55,42 +62,63 @@ export class TimelinePane extends ViewPane {
 		@IEditorService private readonly editors: IEditorService,
 		@IFileService private readonly files: IFileService,
 		@ICommandService private readonly commands: ICommandService,
-		@IContextKeyService context: IContextKeyService,
+		@IContextKeyService private readonly context: IContextKeyService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 		@IHoverService private readonly hover: IHoverService,
-		@IContextMenuService menus: IContextMenuService,
+		@IContextMenuService private readonly menus: IContextMenuService,
 		@ILogService private readonly log: ILogService,
 		@IStorageService private readonly storage: IStorageService,
+		@ISCMService private readonly scm: ISCMService,
+		@IContextViewService private readonly contextView: IContextViewService,
+		@IClipboardService private readonly clipboard: IClipboardService,
+		@IOpenerService private readonly opener: IOpenerService,
 	) {
 		super(container, { ...options, headerActionsVisibility: 'whenExpanded' });
 		this.restoreSources();
 		this.contentElement.classList.add('ash-timeline');
-		this.resourceDomNode = h(container.ownerDocument, 'div');
-		this.resourceDomNode.className = 'ash-timeline-resource';
 		this.messageDomNode = h(container.ownerDocument, 'div');
 		this.messageDomNode.className = 'ash-timeline-message';
 		this.messageDomNode.setAttribute('role', 'status');
 		this.messageDomNode.tabIndex = 0;
-		this.contentElement.append(this.resourceDomNode, this.messageDomNode);
-		this._register(hover.setupDelayedHover(this.resourceDomNode, () => ({ content: this.uri?.toString() ?? '' })));
+		this.contentElement.append(this.messageDomNode);
+		this._register(hover.setupDelayedHover(this.headerElement, () => ({ content: this.uri?.toString() ?? '' })));
 		this.tree = this._register(new WorkbenchObjectTree<TimelineRow>(this.contentElement, {
 			configurationService: configuration,
 			modelOptions: { identityProvider: { getId: row => row.id } },
-			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: row => row.item?.label ?? localize('timeline.loadMore', 'Load More') },
-			onWillRender: () => this.rows.clear(),
+			// History is flat; reserving a collapse arrow would indent every entry.
+			twistieAdditionalCssClass: () => 'ash-tree-twistie-hidden',
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: row => row.item?.label ?? this.loadMoreLabel(row.source) },
+			onWillRender: () => { this.rows.clear(); this.itemHovers.clear(); },
 			renderElement: row => this.renderRow(row),
 		}));
 		this.tree.element.classList.add('ash-timeline-tree');
 		TimelineFocusedContext.bindTo(this._register(context.createScoped(this.contentElement))).set(true);
 		this.toolbar = this._register(new WorkbenchToolBar(this.headerActionsElement, menus, { ariaLabel: localize('timeline.actions', 'Timeline Actions') }));
+		this._register(addDisposableListener(this.tree.element, 'keydown', event => {
+			if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key === 'ArrowDown') {
+				const focused = this.tree.focus;
+				const details = focused && this.itemHovers.get(focused.id);
+				if (!details) return;
+				event.preventDefault();
+				details.hover.show();
+				details.focus();
+			}
+		}, true));
 		this._register(this.tree.onDidOpen(({ element, browserEvent }) => {
 			if ('key' in browserEvent && browserEvent.key !== 'Enter' && browserEvent.key !== ' ') return;
 			if (!element.item) { void this.load(element.source, true); return; }
 			const command = element.item.command;
 			if (command) void this.commands.executeCommand(command.id, ...(command.arguments ?? [])).catch(error => this.log.error('timeline', 'Could not open timeline entry', error));
 		}));
-		this._register(this.onDidChangeBodyVisibility(() => this.refresh()));
+		this._register(this.onDidChangeBodyVisibility(visible => {
+			if (!visible) { return; }
+			if (!this.pinned && !extUri.isEqual(this.activeUri(), this.uri)) {
+				this.refresh();
+			} else {
+				this.loadMissingSources();
+			}
+		}));
 		this._register(editors.onDidActiveEditorChange(() => {
 			if (this.pinned) return;
 			const uri = this.activeUri();
@@ -126,13 +154,10 @@ export class TimelinePane extends ViewPane {
 		this.generation++;
 		this.pending.clearAndDisposeAll();
 		this.timelines.clear();
-		this.failed = false;
+		this.failedSources.clear();
+		this.tree.scrollTop = 0;
 		if (!this.pinned) this.uri = this.activeUri();
-		if (this.isBodyVisible() && this.uri) {
-			for (const source of this.timeline.getSources()) {
-				if (!this.excludedSources.has(source.id)) void this.load(source.id, false);
-			}
-		}
+		this.loadMissingSources();
 		this.render();
 	}
 
@@ -147,29 +172,49 @@ export class TimelinePane extends ViewPane {
 		return uri && this.files.hasProvider(uri) ? uri : undefined;
 	}
 
+	private loadMissingSources(): void {
+		if (!this.isBodyVisible() || !this.uri) { return; }
+		for (const source of this.timeline.getSources()) {
+			if (!this.excludedSources.has(source.id) && !this.timelines.has(source.id)) {
+				void this.load(source.id, false);
+			}
+		}
+	}
+
 	private async load(source: string, append: boolean): Promise<void> {
 		const uri = this.uri;
 		if (!uri || this.pending.has(source) || !this.isBodyVisible()) return;
+		const previous = this.timelines.get(source);
+		if (append && previous?.paging?.cursor === undefined) return;
 		const generation = this.generation;
 		const lifetime = new DisposableStore();
 		const token = new CancellationTokenSource();
 		lifetime.add(toDisposable(() => token.dispose(true)));
 		this.pending.set(source, lifetime);
+		this.failedSources.delete(source);
 		this.render();
 		try {
-			const previous = this.timelines.get(source);
 			const pageSize = this.configuration.getValue<number | null>('timeline.pageSize');
 			const request = this.timeline.getTimeline(source, uri, { cursor: append ? previous?.paging?.cursor : undefined, limit: pageSize ?? Math.max(1, Math.ceil(this.contentElement.clientHeight / listRowHeight)), cacheResults: true, resetCache: !append }, token);
 			const result = await request?.result;
 			if (this.isDisposed || generation !== this.generation || this.pending.get(source) !== lifetime || token.token.isCancellationRequested) return;
 			if (result) {
 				const items = new Map((append ? previous?.items ?? [] : []).map(item => [item.handle, item]));
+				// A failed or stalled continuation must wait for an explicit retry, not loop while visible.
+				if (append && result.paging?.cursor === previous?.paging?.cursor && result.items.every(item => items.has(item.handle))) {
+					throw new Error('Timeline provider did not advance pagination');
+				}
 				for (const item of result.items) items.set(item.handle, item);
 				this.timelines.set(source, { ...result, items: [...items.values()] });
+			} else if (append) {
+				this.failedSources.add(source);
+			} else {
+				// An empty or unsupported source is a completed query too; reopening does not invalidate it.
+				this.timelines.set(source, { source, items: [] });
 			}
 		} catch (error) {
 			if (generation === this.generation && !token.token.isCancellationRequested && !isCancellationError(error)) {
-				this.failed = true;
+				this.failedSources.add(source);
 				this.log.error('timeline', 'Could not load timeline entries', error);
 			}
 		} finally {
@@ -181,7 +226,8 @@ export class TimelinePane extends ViewPane {
 	}
 
 	private items(): TimelineRow[] {
-		return [...this.timelines.values()].flatMap(timeline => timeline.items.map(item => ({ id: `item:${item.source.length}:${item.source}${item.handle}`, source: item.source, item }))).sort((a, b) => b.item.timestamp - a.item.timestamp || a.id.localeCompare(b.id));
+		// Preserve each provider's order when timestamps tie; Git records commit times in seconds.
+		return [...this.timelines.values()].flatMap(timeline => timeline.items.map(item => ({ id: `item:${item.source.length}:${item.source}${item.handle}`, source: item.source, item }))).sort((a, b) => b.item.timestamp - a.item.timestamp || a.source.localeCompare(b.source));
 	}
 
 	private render(): void {
@@ -195,26 +241,66 @@ export class TimelinePane extends ViewPane {
 		this.tree.element.hidden = entries.length + more.length === 0;
 		this.tree.element.setAttribute('aria-busy', String(this.pending.size > 0));
 		this.messageDomNode.hidden = !this.tree.element.hidden;
-		this.resourceDomNode.textContent = this.uri ? basename(this.uri) : '';
+		this.updateTitleDescription(this.uri ? basename(this.uri) : undefined);
 		if (this.pending.size > 0) this.messageDomNode.textContent = localize('timeline.loading', 'Loading timeline…');
 		else if (!this.uri) this.messageDomNode.textContent = localize('timeline.noFile', 'Select a file to view its timeline.');
-		else if (this.failed) this.messageDomNode.textContent = localize('timeline.failed', 'Could not load timeline entries.');
+		else if (this.failedSources.size > 0) this.messageDomNode.textContent = localize('timeline.failed', 'Could not load timeline entries.');
 		else this.messageDomNode.textContent = localize('timeline.empty', 'No timeline information was provided.');
 	}
 
 	private renderRow(row: TimelineRow): HTMLElement {
 		const content = h(this.contentElement.ownerDocument, 'span');
 		content.className = 'ash-timeline-row';
+		if (row.item?.icon) appendIcon(row.item.icon, content);
 		const label = h(content.ownerDocument, 'span');
 		label.className = 'ash-timeline-label';
-		label.textContent = row.item?.label ?? localize('timeline.loadMore', 'Load More');
+		label.textContent = row.item?.label ?? this.loadMoreLabel(row.source);
 		content.append(label);
 		const description = h(content.ownerDocument, 'span');
 		description.className = 'ash-timeline-description';
 		description.textContent = row.item?.description ?? this.timeline.getSources().find(source => source.id === row.source)?.label ?? '';
 		content.append(description);
-		this.rows.add(this.hover.setupDelayedHover(content, { content: row.item?.tooltip ?? [label.textContent, description.textContent].join(' — ') }));
+		if (!row.item || !this.setupHistoryHover(content, row.id, row.item)) {
+			this.rows.add(this.hover.setupDelayedHover(content, { content: row.item?.tooltip ?? [label.textContent, description.textContent].join(' — ') }));
+		}
+		if (!row.item && !this.pending.has(row.source) && !this.failedSources.has(row.source)) {
+			const generation = this.generation;
+			this.rows.add(observeIntersection(content, entry => {
+				if (generation === this.generation && content.isConnected && entry.isIntersecting) {
+					void this.load(row.source, true);
+				}
+			}, { root: this.tree.element }));
+		}
 		return content;
+	}
+
+	private setupHistoryHover(target: HTMLElement, rowId: string, item: TimelineItem): boolean {
+		const repository = item.sourceControl && this.scm.getRepository(item.sourceControl.repositoryId);
+		if (!repository || !item.sourceControl) return false;
+		// The shared hover restores focus to its target after Escape.
+		target.tabIndex = -1;
+		const historyItem = item.sourceControl.historyItem;
+		const scope = this.rows.add(this.context.createScoped(target));
+		const menuTarget: SCMHistoryItemViewModelTreeElement = {
+			type: 'historyItemViewModel', repository,
+			historyItemViewModel: { historyItem, kind: 'node', inputSwimlanes: [], outputSwimlanes: [] },
+		};
+		const details = setupHistoryItemHover({
+			resources: this.rows,
+			target,
+			render: (resources, layout) => toHistoryItemHoverContent({
+				resources, target, historyItem, references: historyItem.references ?? [], scope, layout,
+				openChanges: () => this.commands.executeCommand('workbench.scm.action.graph.viewChanges', menuTarget),
+			}, this.menus, this.clipboard, this.opener, this.accessibleView),
+		}, this.hover, this.contextView);
+		this.itemHovers.set(rowId, details);
+		return true;
+	}
+
+	private loadMoreLabel(source: string): string {
+		if (this.pending.has(source)) return localize('timeline.loadingMore', 'Loading…');
+		if (this.failedSources.has(source)) return localize('timeline.retry', 'Retry Loading');
+		return localize('timeline.loadMore', 'Load More');
 	}
 
 	private updateAriaLabel(): void {

@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { chmod, readFile } from 'node:fs/promises';
+import { chmod, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
@@ -62,8 +62,8 @@ async function captureEditorModel(page: Page): Promise<unknown> {
 	}
 }
 
-function modelFixture() {
-	let patchSent = false;
+function modelFixture(patches: ReadonlyMap<string, string> = new Map([['Apply the isolated review edit.', '*** Begin Patch\n*** Update File: main.ts\n@@\n-const value = 1;\n+const value = 42;\n*** End Patch']]), measureDirectory = true) {
+	const sent = new Set<string>();
 	const calls: { tools: string[]; patch: boolean; attachment: boolean; }[] = [];
 	const requests: ModelRequest[] = [];
 	const server = createServer(async (request, response) => {
@@ -77,18 +77,18 @@ function modelFixture() {
 			for await (const chunk of request) { chunks.push(Buffer.from(chunk)); }
 			const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as ModelRequest;
 			requests.push(body);
-			const edit = body.messages?.some(message => message.role === 'user' && JSON.stringify(message.content).includes('Apply the isolated review edit.'));
+			const edit = [...patches].reverse().find(([prompt]) => body.messages?.some(message => message.role === 'user' && JSON.stringify(message.content).includes(prompt)));
 			const names = body.tools?.map(tool => tool.function?.name ?? '') ?? [];
-			const patch = !!edit && !patchSent;
+			const patch = !!edit && !sent.has(edit[0]);
 			const attachment = body.messages?.some(message => JSON.stringify(message.content).includes(attachmentMarker)) ?? false;
 			calls.push({ tools: names, patch, attachment });
-			if (patch && (!names.includes('apply_patch') || !names.includes('shell-command'))) { throw new Error('The real model request did not expose apply_patch and shell-command'); }
+			if (patch && (!names.includes('apply_patch') || (measureDirectory && !names.includes('shell-command')))) { throw new Error('The real model request did not expose apply_patch and shell-command'); }
 			const delta = patch ? {
 				// A read-only command in this same real editing Turn measures the Tool's
 				// selected directory. Relative dot leaves directory choice to its owner.
-				tool_calls: [{ index: 0, id: 'isolated-cwd', type: 'function', function: { name: 'shell-command', arguments: JSON.stringify({ program: '/bin/pwd', arguments: [], working_directory: '.' }) } }, { index: 1, id: 'isolated-edit', type: 'function', function: { name: 'apply_patch', arguments: JSON.stringify({ patch: '*** Begin Patch\n*** Update File: main.ts\n@@\n-const value = 1;\n+const value = 42;\n*** End Patch' }) } }],
+				tool_calls: [...(measureDirectory ? [{ index: 0, id: 'isolated-cwd', type: 'function', function: { name: 'shell-command', arguments: JSON.stringify({ program: '/bin/pwd', arguments: [], working_directory: '.' }) } }] : []), { index: measureDirectory ? 1 : 0, id: `isolated-edit-${sent.size}`, type: 'function', function: { name: 'apply_patch', arguments: JSON.stringify({ patch: edit![1] }) } }],
 			} : { content: edit ? 'Isolated edit complete.' : 'Review fixture ready.' };
-			patchSent ||= patch;
+			if (patch) sent.add(edit![0]);
 			response.writeHead(200, { 'content-type': 'text/event-stream' });
 			const packet = (value: unknown): string => 'data: ' + JSON.stringify(value) + '\n\n';
 			response.end(packet({ id: 'review-fixture', object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason: null }] })
@@ -100,6 +100,221 @@ function modelFixture() {
 	});
 	return { server, calls, requests };
 }
+
+const documentTest = test.extend<{
+	reviewAutoAcceptDelay: number;
+	agent: {
+		page: Page;
+		workbench: Workbench;
+		code: Workbench;
+		directory: string;
+		send(prompt: string, patch: string): Promise<void>;
+	};
+}>({
+	reviewAutoAcceptDelay: 0,
+	agent: async ({ application, webAppServer, target, testWorkspace, workbench, reviewAutoAcceptDelay }, use, testInfo) => {
+		const patches = new Map<string, string>();
+		const { server, calls, requests } = modelFixture(patches, false);
+		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		const source = workbench.page;
+		let control: Page | undefined;
+		let connection: Awaited<ReturnType<typeof connectProfile>> | undefined;
+		try {
+			if (target.kind === 'browser') {
+				control = await source.context().newPage();
+				await control.goto(source.url(), { waitUntil: 'domcontentloaded' });
+			}
+			connection = await connectProfile(application, webAppServer, testWorkspace.directory, control ?? source);
+			const { client } = connection;
+			const address = server.address();
+			if (!address || typeof address === 'string') throw new Error('The model fixture has no port');
+			const provider = 'custom-editor-review-fixture';
+			const model = { provider, model: 'review-fixture' };
+			const config = await client.request(APP_SERVER_METHODS['config/read'], {});
+			await client.request(APP_SERVER_METHODS['provider/configure'], {
+				commandId: 'editor-review-provider', expectedRevision: config.revision,
+				config: { connection: provider, provider, baseUrl: `http://127.0.0.1:${address.port}/v1`, custom: { name: 'Editor review fixture', protocol: 'chatCompletions', order: 0, contextWindow: 272_000 }, modelContext: { 'review-fixture': { contextWindow: 272_000 } } },
+			});
+			await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: provider, apiKey: 'isolated-fixture-key' });
+			await workbench.settingsEditor.openUserSettingsUI();
+			await workbench.settingsEditor.selectGroup('agents');
+			await workbench.settingsEditor.selectCategory('models');
+			const enabled = source.getByRole('switch', { name: 'Enable review-fixture', exact: true });
+			if (!await enabled.isChecked()) await enabled.press('Space');
+			if (reviewAutoAcceptDelay) {
+				await workbench.settingsEditor.selectCategory('agent-defaults');
+				const setting = source.getByRole('spinbutton', { name: 'Automatically accept Agent changes', exact: true });
+				await setting.fill(String(reviewAutoAcceptDelay));
+				await setting.press('Tab');
+			}
+			await source.locator('.ash-modal-editor-close').click();
+			const configured = await client.request(APP_SERVER_METHODS['config/read'], {});
+			await client.request(APP_SERVER_METHODS['config/update'], { commandId: 'editor-review-default', expectedRevision: configured.revision, model });
+			const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'editor-review-session', title: 'Editor document fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+			const root = created.session.threads[0];
+			if (!root) throw new Error('The Session has no root Thread');
+			const identity = { sessionId: created.session.sessionId, threadId: root.threadId };
+			const before = await client.request(APP_SERVER_METHODS['session/thread/read'], identity);
+			await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'editor-review-ready', sessionId: identity.sessionId, request: { type: 'startTurn', threadId: identity.threadId, expectedSequence: before.thread.sequence, mode: 'agent', approvalMode: 'manual', model, input: [{ type: 'text', text: 'Return the review fixture ready message without using tools.' }] } });
+			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], identity)).thread.turns.at(-1)?.status).toBe('completed');
+			if (before.directory?.type !== 'local') throw new Error('The Session has no local directory');
+			const page = await workbench.openAgentsWindow(target.kind);
+			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+			await page.locator('.ash-sessions-list-item').filter({ hasText: 'Editor document fixture' }).click();
+			const sessions = new Workbench(page);
+			const composer = page.locator('.ash-sessions-chat-slot.active:visible [role=region][data-thread-id]');
+			await expect(composer).toHaveAttribute('data-thread-id', identity.threadId);
+			await composer.locator('.ash-chat-input-mode-action').click();
+			await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Agent', exact: true }).click();
+			const bypass = APPROVAL_MODE_DEFINITIONS.find(mode => mode.id === 'bypassPermissions')!;
+			await composer.getByRole('button', { name: /^Permissions:/ }).click();
+			await page.getByRole('menuitemradio', { name: bypass.label.english, exact: true }).click();
+			await page.getByRole('dialog', { name: 'Confirm', exact: true }).getByRole('button', { name: bypass.label.english, exact: true }).click();
+			await sessions.quickaccess.runCommand('workbench.sessions.auxiliaryBar.filesContainer');
+			await use({
+				page, workbench: sessions, code: workbench, directory: before.directory.root,
+				async send(prompt, patch) {
+					patches.set(prompt, patch);
+					const count = (await client.request(APP_SERVER_METHODS['session/thread/read'], identity)).thread.turns.length;
+					const input = composer.locator('.ash-chat-input-editor .stanza-editor-input');
+					await input.focus();
+					await page.keyboard.insertText(prompt);
+					await expect(input).toBeFocused();
+					await input.press('Enter');
+					await expect.poll(async () => {
+						const turns = (await client.request(APP_SERVER_METHODS['session/thread/read'], identity)).thread.turns;
+						const status = turns.at(-1)?.status;
+						return { count: turns.length, done: status === 'completed' || status === 'failed' || status === 'interrupted' };
+					}, { timeout: 90_000 }).toEqual({ count: count + 1, done: true });
+					const turn = (await client.request(APP_SERVER_METHODS['session/thread/read'], identity)).thread.turns.at(-1)!;
+					expect(turn.status, JSON.stringify(turn)).toBe('completed');
+					const result = turn.items.find(item => item.type === 'toolResult' && item.toolCallId.startsWith('isolated-edit-'));
+					expect(result, JSON.stringify(turn)).toBeDefined();
+					expect(result).toMatchObject({ type: 'toolResult', isError: false });
+				},
+			});
+		} finally {
+			await testInfo.attach('real-document-traffic', { body: JSON.stringify({ calls, requests }), contentType: 'application/json' });
+			await connection?.close();
+			await control?.close();
+			await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+		}
+	},
+});
+
+documentTest('Real Agent document callbacks preserve dirty BOM/CRLF text and review open, closed and created files', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ agent }) => {
+	test.setTimeout(180_000);
+	const { page, workbench, code, directory } = agent;
+	const original = 'first\r\nseparator 1\r\nseparator 2\r\nseparator 3\r\nseparator 4\r\nlast';
+	const file = join(directory, 'agent-review.txt');
+	const closed = join(directory, 'agent-closed.txt');
+	const created = join(directory, 'agent-created.txt');
+	await writeFile(file, '\uFEFF' + original);
+	await writeFile(closed, '\uFEFFclosed original\r\nsecond');
+	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'agent-review.txt', exact: true }).dblclick();
+	const editor = new Editor(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-editor-group').first());
+	await editor.waitForEditorFocus();
+	await editor.input.press('ControlOrMeta+Home');
+	await editor.input.press('ArrowDown');
+	await editor.input.press('Home');
+	await editor.waitForTypeInEditor('user ');
+	await agent.send('Apply the multi-file editor review.', '*** Begin Patch\n*** Update File: agent-review.txt\n@@\n-first\n+agent first\n@@\n-last\n+agent last\n*** Update File: agent-closed.txt\n@@\n-closed original\n+closed agent\n*** End Patch');
+	await expect.poll(() => readFile(file)).toEqual(Buffer.from('\uFEFF' + original.replace('first', 'agent first').replace('separator 1', 'user separator 1').replace('last', 'agent last')));
+	await expect.poll(() => readFile(closed)).toEqual(Buffer.from('\uFEFFclosed agent\r\nsecond'));
+	const review = editor.element.locator('.ash-chat-editing-overlay');
+	await expect(review.locator('.ash-chat-editing-count')).toHaveText('1 of 2');
+	await expect(editor.element.locator('.ash-chat-editing-deleted')).toHaveText(['first', 'last']);
+	await workbench.quickaccess.runCommand('workbench.action.splitEditorRight');
+	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-editor-group').nth(1).locator('.ash-chat-editing-overlay')).toBeVisible();
+	expect(await review.evaluate(element => {
+		const bounds = element.getBoundingClientRect();
+		return [...element.querySelectorAll('button')].every(button => {
+			const rect = button.getBoundingClientRect();
+			return rect.left >= bounds.left && rect.right <= bounds.right;
+		});
+	})).toBe(true);
+	await workbench.quickaccess.runCommand('workbench.action.closeEditorsInGroup');
+	for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+		await code.quickaccess.runCommand('workbench.action.selectTheme');
+		await code.quickaccess.input.fill(theme);
+		await code.quickaccess.input.press('Enter');
+		await expect(review).toHaveCSS('border-top-style', 'solid');
+		await expect.poll(() => review.evaluate(element => parseFloat(getComputedStyle(element).borderTopWidth))).toBeGreaterThan(0);
+		await expect(review).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(editor.element.locator('.ash-chat-editing-deleted').first()).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	}
+
+	await page.bringToFront();
+	await review.getByRole('button', { name: 'Next change', exact: true }).click();
+	await expect(review.locator('.ash-chat-editing-count')).toHaveText('2 of 2');
+	await review.getByRole('button', { name: 'Previous change', exact: true }).click();
+	await page.keyboard.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Review Agent changes[\s\S]*Press Escape to return to the editor/);
+	await page.keyboard.press('Escape');
+	await expect(review.getByRole('button', { name: 'Previous change', exact: true })).toBeFocused();
+	await page.keyboard.press('Alt+F2');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Before:\nfirst[\s\S]*After:\nagent first/);
+	await page.keyboard.press('Escape');
+	await page.keyboard.press('Escape');
+	await expect(editor.input).toBeFocused();
+	await review.getByRole('button', { name: 'Accept change', exact: true }).click();
+	await expect(review.locator('.ash-chat-editing-count')).toHaveText('1 of 1');
+	await review.getByRole('button', { name: 'Reject file changes', exact: true }).click();
+	await expect(review).toBeHidden();
+	await expect.poll(() => readFile(file)).toEqual(Buffer.from('\uFEFF' + original.replace('first', 'agent first').replace('separator 1', 'user separator 1')));
+	await workbench.quickaccess.runCommand('chatEditing.rejectAll');
+	await expect.poll(() => readFile(closed)).toEqual(Buffer.from('\uFEFFclosed original\r\nsecond'));
+	await agent.send('Create a reviewable file.', '*** Begin Patch\n*** Add File: agent-created.txt\n+new file\n*** End Patch');
+	await expect.poll(() => readFile(created, 'utf8')).toBe('new file\n');
+	await workbench.quickaccess.runCommand('chatEditing.rejectAll');
+	await expect.poll(() => readFile(created, 'utf8').catch(error => (error as NodeJS.ErrnoException).code)).toBe('ENOENT');
+});
+
+const countdownTest = documentTest.extend({ reviewAutoAcceptDelay: 3 });
+
+documentTest('Real Agent text edits preserve BOM and CRLF through one undo and save', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ agent }) => {
+	test.setTimeout(180_000);
+	const { page, directory } = agent;
+	const path = join(directory, 'agent-undo.txt');
+	await writeFile(path, '\uFEFFfirst\r\nsecond');
+	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'agent-undo.txt', exact: true }).dblclick();
+	const editor = new Editor(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid)'));
+	await editor.waitForEditorFocus();
+	await editor.input.press('ControlOrMeta+Home');
+	await editor.waitForTypeInEditor('unsaved ');
+	await agent.send('Apply the undoable edit.', '*** Begin Patch\n*** Update File: agent-undo.txt\n@@\n-unsaved first\n+agent first\n*** End Patch');
+	await expect.poll(() => readFile(path)).toEqual(Buffer.from('\uFEFFagent first\r\nsecond'));
+	await editor.input.focus();
+	await editor.input.press('ControlOrMeta+z');
+	await editor.waitForEditorContents(text => text === 'unsaved first\nsecond');
+	await editor.input.press('ControlOrMeta+s');
+	await expect.poll(() => readFile(path)).toEqual(Buffer.from('\uFEFFunsaved first\r\nsecond'));
+});
+
+countdownTest('Real Agent countdown preserves focus, cancels, and accepts a subsequent turn', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ agent }) => {
+	test.setTimeout(180_000);
+	const { page, directory } = agent;
+	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+	const editor = new Editor(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid)'));
+	await editor.waitForEditorFocus();
+	await agent.send('Apply the first countdown edit.', '*** Begin Patch\n*** Update File: main.ts\n@@\n-const value = 1;\n+const value = 2;\n*** End Patch');
+	const review = editor.element.locator('.ash-chat-editing-overlay');
+	const cancel = review.getByRole('button', { name: 'Cancel automatic acceptance', exact: true });
+	await expect(cancel).toBeVisible();
+	await cancel.focus();
+	await expect(review.locator('.ash-chat-editing-auto-accept')).toHaveText('Accepting in 2s');
+	await expect(cancel).toBeFocused();
+	await cancel.press('Enter');
+	// Cross the actual configured deadline after cancellation. Keeping the real
+	// clock running also exercises composer and document callbacks in the next Turn.
+	await page.waitForTimeout(3100);
+	await expect(review).toBeVisible();
+	await expect(cancel).toHaveCount(0);
+	await agent.send('Apply the next countdown edit.', '*** Begin Patch\n*** Update File: main.ts\n@@\n-const value = 2;\n+const value = 3;\n*** End Patch');
+	await expect(cancel).toBeVisible();
+	await expect(review).toBeHidden();
+	await expect.poll(() => readFile(join(directory, 'main.ts'), 'utf8')).toBe('const value = 3;\n');
+});
 
 test('Agent file edits preserve user text and a failed review save remains retryable after reload', { tag: ['@browser-app-server', '@electron-app-server', '@darwin', '@linux'] }, async ({ application, webAppServer, target, testWorkspace, workbench }, testInfo) => {
 	test.setTimeout(180_000);
@@ -174,7 +389,7 @@ test('Agent file edits preserve user text and a failed review save remains retry
 		if (target.kind === 'browser') { diagnostics.dirtyEditorModel = await captureEditorModel(page).catch(error => ({ status: 'unavailable', reason: String(error) })); }
 		expect(await readFile(file, 'utf8')).toBe('const value = 1;\n');
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 1;\n');
-		const composer = page.locator('.ash-sessions-chat-slot.active:visible [role=tabpanel][data-thread-id]');
+		const composer = page.locator('.ash-sessions-chat-slot.active:visible [role=region][data-thread-id]');
 		await expect(composer).toHaveAttribute('data-thread-id', identity.threadId);
 		await composer.locator('.ash-chat-input-mode-action').click();
 		await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Agent', exact: true }).click();
@@ -194,7 +409,7 @@ test('Agent file edits preserve user text and a failed review save remains retry
 		await attachments.fill('Attach files');
 		await attachments.press('Enter');
 		await (await upload).setFiles({ name: 'review-input.txt', mimeType: 'text/plain', buffer: Buffer.from(attachmentMarker) });
-		await expect(composer.getByRole('button', { name: 'Remove review-input.txt', exact: true })).toBeVisible();
+		await expect(composer.locator('.ash-chat-code-reference').filter({ hasText: 'review-input.txt' })).toBeVisible();
 		const input = composer.locator('.ash-chat-input-editor .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.insertText('Apply the isolated review edit.');
@@ -224,7 +439,7 @@ test('Agent file edits preserve user text and a failed review save remains retry
 		expect(edited.turns.at(-1)?.items.filter(item => item.type === 'userContext').map(item => ({ name: item.name, content: item.content }))).toEqual([{ name: 'review-input.txt', content: attachmentMarker }]);
 		expect(calls.some(call => call.patch && call.attachment)).toBe(true);
 		await expect(composer.getByText('Isolated edit complete.', { exact: true })).toBeVisible();
-		await expect(composer.locator('.ash-chat-input-attachment-item')).toHaveCount(0);
+		await expect(composer.locator('.ash-chat-code-reference')).toHaveCount(0);
 		await expect.poll(() => readFile(file, 'utf8')).toBe('const value = 42;\n// unsaved user note');
 		await expect(editor.element.locator('.ash-chat-editing-overlay')).toBeVisible();
 		await chmod(file, 0o444);
@@ -267,7 +482,7 @@ test('Agent file edits preserve user text and a failed review save remains retry
 		const restoredSession = (await client.request(APP_SERVER_METHODS['session/read'], { sessionId: identity.sessionId })).session;
 		const restoredThread = restoredSession.threads.find(thread => thread.title === title)!;
 		expect(restoredThread.threadId).not.toBe(identity.threadId);
-		await expect(page.locator('.ash-sessions-chat-slot.active:visible [role=tabpanel][data-thread-id]')).toHaveAttribute('data-thread-id', restoredThread.threadId);
+		await expect(page.locator('.ash-sessions-chat-slot.active:visible [role=region][data-thread-id]')).toHaveAttribute('data-thread-id', restoredThread.threadId);
 		const restoredRead = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId: identity.sessionId, threadId: restoredThread.threadId });
 		if (restoredRead.directory?.type !== 'local') { throw new Error('The restored checkpoint has no local directory'); }
 		expect(restoredRead.directory.root).not.toBe(before.directory.root);

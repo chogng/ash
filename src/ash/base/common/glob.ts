@@ -20,7 +20,8 @@ export function parse(input: string | IRelativePattern | IExpression): ParsedPat
 		const regexp = globRegExp((typeof pattern === 'string' ? pattern : pattern.pattern).replaceAll('\\', '/'));
 		return (path: string): boolean => {
 			const normalized = path.replaceAll('\\', '/');
-			return regexp.test(typeof pattern === 'string' ? normalized : relativePath(pattern.base.replaceAll('\\', '/'), normalized));
+			const candidate = typeof pattern === 'string' ? normalized : relativePath(pattern.base.replaceAll('\\', '/'), normalized);
+			return candidate !== undefined && regexp.test(candidate);
 		};
 	}
 	const rules = Object.entries(input).filter(([, value]) => value !== false).map(([pattern, value]) => ({ pattern, value, matches: parse(pattern) }));
@@ -48,9 +49,10 @@ export function match(pattern: string | IRelativePattern, path: string): boolean
 	return parse(pattern)(path);
 }
 
-function relativePath(base: string, candidate: string): string {
+function relativePath(base: string, candidate: string): string | undefined {
 	const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base;
-	return candidate === normalizedBase ? '' : candidate.startsWith(`${normalizedBase}/`) ? candidate.slice(normalizedBase.length + 1) : candidate;
+	// A broad relative pattern must still stay inside its base directory.
+	return candidate === normalizedBase ? '' : candidate.startsWith(`${normalizedBase}/`) ? candidate.slice(normalizedBase.length + 1) : undefined;
 }
 
 function globRegExp(pattern: string): RegExp {

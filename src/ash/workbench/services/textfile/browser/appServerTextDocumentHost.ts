@@ -80,9 +80,8 @@ export class AppServerTextDocumentHost extends Disposable {
 			// Resolution is not cancellable. Closing must also release a late result.
 			throwIfCancelled(signal);
 			this.assertNotDisposed();
-			for (const [id, snapshot] of this.snapshots) {
-				if (snapshot.resource.toString() === resource.toString()) { this.snapshots.deleteAndDispose(id); }
-			}
+			// Readers own independent leases, even for the same model. Another agent's
+			// read must not invalidate a pending edit; only a changed version does that.
 			if (this.snapshots.size >= 128) { throw new Error('Document snapshot limit reached'); }
 			const model = reference.object.textEditorModel;
 			const id = crypto.randomUUID();

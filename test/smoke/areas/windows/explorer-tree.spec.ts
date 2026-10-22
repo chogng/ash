@@ -6,6 +6,36 @@ import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
+test('Explorer resumes Rust filesystem updates after a watched directory is recreated', { tag: ['@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
+	const page = workbench.page;
+	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) await showSidebar.click();
+	const explorerTab = page.getByRole('tab', { name: 'Explorer', exact: true }).first();
+	if (await explorerTab.getAttribute('aria-selected') !== 'true') await explorerTab.click();
+	const explorer = page.locator('.ash-explorer');
+	await expect(explorer).toBeVisible();
+	const entry = (name: string) => explorer.getByText(name, { exact: true });
+	const root = join(testWorkspace.directory, 'watch-rebuild');
+	const folder = explorer.getByRole('treeitem').filter({ has: page.getByText('watch-rebuild', { exact: true }) });
+	await mkdir(root);
+	await writeFile(join(root, 'before-recreation.txt'), 'before');
+	await expect(folder).toBeVisible();
+	await folder.locator('.ash-tree-twistie').click();
+	await expect(entry('before-recreation.txt')).toBeVisible();
+	await rm(root, { recursive: true });
+	await expect(folder).toHaveCount(0);
+	await mkdir(root);
+	await writeFile(join(root, 'after-recreation.txt'), 'restored');
+	await expect(folder).toBeVisible();
+	if (await folder.getAttribute('aria-expanded') !== 'true') await folder.locator('.ash-tree-twistie').click();
+	await expect(entry('after-recreation.txt')).toBeVisible();
+	await expect(entry('before-recreation.txt')).toHaveCount(0);
+	await writeFile(join(root, 'later-update.txt'), 'later');
+	await expect(entry('later-update.txt')).toBeVisible();
+	await entry('later-update.txt').dblclick();
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'later-update.txt' })).toBeVisible();
+});
+
 test.describe('Git ignore decorations', () => {
 	test.use({ gitRepository: true });
 	test.beforeEach(async ({ target, testWorkspace }) => {

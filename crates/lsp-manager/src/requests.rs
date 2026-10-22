@@ -62,6 +62,7 @@ pub enum LanguageRequestKind {
     ResolveCodeAction,
     DocumentFormatting,
     RangeFormatting,
+    OnTypeFormatting,
     SignatureHelp,
     InlayHints,
     LinkedEditingRanges,

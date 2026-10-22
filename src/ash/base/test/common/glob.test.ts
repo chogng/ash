@@ -20,6 +20,19 @@ suite('Configured path globs', () => {
 		assert.equal(match({ base: 'C:\\project', pattern: 'src\\**\\*.ts' }, 'C:\\project\\src\\main.ts'), true);
 	});
 
+	test('keeps broad relative patterns inside the exact base directory', () => {
+		const matches = parse({ base: 'C:\\project\\', pattern: '**' });
+		assert.deepEqual([
+			matches('C:\\project\\main.ts'),
+			matches('C:\\project\\nested\\main.ts'),
+			matches('C:\\project'),
+			matches('C:\\other\\main.ts'),
+			matches('C:\\project-sibling\\main.ts'),
+			matches('D:\\project\\main.ts'),
+			match({ base: '/', pattern: '**' }, '/main.ts'),
+		], [true, true, true, false, false, false, true]);
+	});
+
 	test('disables false rules and evaluates sibling conditions only when supplied', () => {
 		const expression = parse({ '**/*.map': false, '**/*.js': { when: '$(basename).ts' } });
 		assert.deepEqual([

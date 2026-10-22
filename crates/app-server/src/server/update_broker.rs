@@ -1438,7 +1438,11 @@ impl UpdateBroker {
             {
                 return true;
             }
-            queue.push(notification(method, params));
+            if method == ServerNotificationMethod::LanguageServerProgress {
+                queue.push_progress(notification(method, params));
+            } else {
+                queue.push(notification(method, params));
+            }
             true
         });
     }

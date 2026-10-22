@@ -105,3 +105,15 @@ test('auxiliary status bars observe shared entries through their owner and retai
 	assert.deepEqual(auxiliary.getEntries(StatusbarAlignment.Left), []);
 	assert.deepEqual(auxiliary.getEntries(StatusbarAlignment.Right).map(item => item.entry.text), ['Ln 2']);
 });
+
+
+test('status bar style leases respect priority and restore the prior owner on release', () => {
+	using service = new StatusbarService();
+	const debug = service.overrideStyle({ priority: 10, background: 'statusBar.debuggingBackground' });
+	const urgent = service.overrideStyle({ priority: 1, background: 'urgent' });
+	assert.equal(service.style?.background, 'urgent');
+	urgent.dispose();
+	assert.equal(service.style?.background, 'statusBar.debuggingBackground');
+	debug.dispose();
+	assert.equal(service.style, undefined);
+});

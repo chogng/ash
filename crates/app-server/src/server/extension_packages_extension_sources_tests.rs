@@ -53,7 +53,7 @@ fn installed_product_client_requires_exact_grant_and_preserves_routes_after_revo
     );
     assert_eq!(declarations.extensions.len(), 1);
     let extension = &declarations.extensions[0];
-    assert_eq!(extension.id, "ash.academic");
+    assert_eq!(extension.id, "ash.academy");
     assert_eq!(extension.package_sha256, source.package().digest);
     assert!(extension.renderer_client.is_none());
     let declaration: serde_json::Value = serde_json::from_str(&extension.manifest_json).unwrap();
@@ -81,13 +81,13 @@ fn installed_product_client_requires_exact_grant_and_preserves_routes_after_revo
     let granted = catalog.list(ExtensionPackagesReload::Cached);
     assert!(granted.generation > declarations.generation);
     let client = granted.extensions[0].renderer_client.as_ref().unwrap();
-    assert_eq!(client.runtime_id, "ash.academic");
+    assert_eq!(client.runtime_id, "ash.academy");
     assert_eq!(client.api_version, 1);
     assert_eq!(client.digest, sha256(b"export {};"));
     assert_eq!(client.style_digest, sha256(b".academic {}"));
     assert_eq!(
         catalog
-            .open_resource(granted.generation, "ash.academic", &client.entry)
+            .open_resource(granted.generation, "ash.academy", &client.entry)
             .unwrap()
             .bytes,
         b"export {};"
@@ -218,7 +218,7 @@ fn corrupt_unrelated_executable_does_not_remove_a_healthy_product_editor_or_its_
         .unwrap();
     let healthy = sources
         .iter()
-        .find(|source| source.package().id == "ash.academic@test")
+        .find(|source| source.package().id == "ash.academy@test")
         .unwrap();
     let broken = sources
         .iter()
@@ -242,7 +242,7 @@ fn corrupt_unrelated_executable_does_not_remove_a_healthy_product_editor_or_its_
     ));
     let snapshot = catalog.list(ExtensionPackagesReload::Refresh);
     assert_eq!(snapshot.extensions.len(), 1);
-    assert_eq!(snapshot.extensions[0].id, "ash.academic");
+    assert_eq!(snapshot.extensions[0].id, "ash.academy");
     assert!(snapshot.extensions[0].renderer_client.is_some());
     let manifest: serde_json::Value =
         serde_json::from_str(&snapshot.extensions[0].manifest_json).unwrap();
@@ -262,7 +262,7 @@ fn corrupt_unrelated_executable_does_not_remove_a_healthy_product_editor_or_its_
     let deployments =
         crate::extension_packages_editor_extensions::deployments(&manager, &admission).unwrap();
     assert_eq!(deployments.len(), 1);
-    assert_eq!(deployments[0].id, "ash.academic");
+    assert_eq!(deployments[0].id, "ash.academy");
     assert!(deployments[0].authority.authorizes());
     assert_eq!(
         manager
@@ -314,7 +314,7 @@ fn product_editor_without_a_native_for_this_platform_retains_routes_without_exec
         snapshot.diagnostics
     );
     assert_eq!(snapshot.extensions.len(), 1);
-    assert_eq!(snapshot.extensions[0].id, "ash.academic");
+    assert_eq!(snapshot.extensions[0].id, "ash.academy");
     assert!(snapshot.extensions[0].renderer_client.is_none());
     let declaration: serde_json::Value =
         serde_json::from_str(&snapshot.extensions[0].manifest_json).unwrap();
@@ -373,7 +373,7 @@ fn malformed_client_admission_keeps_only_declarative_document_routes() {
     for invalid in ["sha256:abc", "sha512:abc", "not-a-digest"] {
         let mut declaration = manifest();
         declaration["ashRuntime"]["client"]["sourceDigest"] = invalid.into();
-        assert!(super::renderer_client("ash.academic", &declaration.to_string()).is_err());
+        assert!(super::renderer_client("ash.academy", &declaration.to_string()).is_err());
     }
 }
 
@@ -399,7 +399,7 @@ fn installed_manager_with_files(
     let manager = Arc::new(ExtensionPackageManager::open(root.join("packages"), sources).unwrap());
     manager
         .install(InstallPackageRequest {
-            package_id: "ash.academic@test".into(),
+            package_id: "ash.academy@test".into(),
             version: Some("1.0.0".into()),
         })
         .unwrap();
@@ -408,7 +408,7 @@ fn installed_manager_with_files(
 
 fn manifest() -> serde_json::Value {
     serde_json::json!({
-        "publisher": "ash", "name": "academic", "version": "1.0.0",
+        "publisher": "ash", "name": "academy", "version": "1.0.0",
         "contributes": { "customEditors": [{ "viewType": "academic.test", "selector": [{ "filenamePattern": "*.ash-doc" }] }] },
         "ashRuntime": { "kind": "rust", "entrypoint": "academy-runtime", "client": {
             "apiVersion": 1, "entry": "dist/editor.js", "digest": sha256(b"export {};"),
@@ -536,7 +536,7 @@ impl Payload {
             hash.update(contents);
         }
         PackageRef {
-            id: "ash.academic".into(),
+            id: "ash.academy".into(),
             version: "1.0.0".into(),
             digest: format!("sha256:{:x}", hash.finalize()),
         }

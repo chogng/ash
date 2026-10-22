@@ -1,6 +1,7 @@
 import { Position } from '../core/position.js';
 import { Range } from '../core/range.js';
 import { Selection, SelectionDirection } from '../core/selection.js';
+import { getTextGraphemeBoundaries } from '../core/textSegmentation.js';
 import { ICommand, ICursorStateComputerData, IEditOperationBuilder } from '../editorCommon.js';
 import { ITextModel } from '../model.js';
 
@@ -155,11 +156,13 @@ export class ReplaceOvertypeCommandOnCompositionEnd implements ICommand {
 	public getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
 		const text = model.getValueInRange(this._range);
 		const initialEndPosition = this._range.getEndPosition();
-		const initialEndLineNumber = initialEndPosition.lineNumber;
-		let endPosition = addPositiveOffsetToModelPosition(model, initialEndPosition, text.length);
-		if (endPosition.lineNumber > initialEndLineNumber) {
-			endPosition = new Position(initialEndLineNumber, model.getLineMaxColumn(initialEndLineNumber));
-		}
+		// Match ordinary overtype: count committed and replaced text in whole
+		// graphemes, and keep the following physical line outside the edit.
+		const count = getTextGraphemeBoundaries(text).length - 1;
+		const remaining = model.getLineContent(initialEndPosition.lineNumber).slice(initialEndPosition.column - 1);
+		const boundaries = getTextGraphemeBoundaries(remaining);
+		const offset = boundaries[Math.min(count, boundaries.length - 1)]!;
+		const endPosition = initialEndPosition.delta(0, offset);
 		const replaceRange = Range.fromPositions(initialEndPosition, endPosition);
 		builder.addTrackedEditOperation(replaceRange, '');
 	}

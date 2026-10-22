@@ -8,6 +8,103 @@ test.beforeEach(async ({ page }) => {
 	await expect.poll(async () => ({ mounted: await page.getByRole('treeitem', { name: /History metadata:/u }).count(), errors })).toEqual({ mounted: 1, errors: [] });
 });
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`global header action visibility updates existing views and preserves explicit policies (${locale})`, async ({ page }, testInfo) => {
+		await page.goto(`/scmHistory.html?headerActions&locale=${locale}`);
+		const outside = page.locator('#outside');
+		const defaultPane = page.locator('[data-view-id="default"]');
+		const defaultHeader = defaultPane.locator('.ash-pane-view-header-button');
+		const defaultActions = defaultPane.locator('.ash-pane-view-header-actions');
+		const graphActions = page.locator('[data-view-id="fixture.history"] .ash-pane-view-header-actions');
+		const alwaysPane = page.locator('[data-view-id="always"]');
+		const alwaysActions = alwaysPane.locator('.ash-pane-view-header-actions');
+		const retained = await defaultActions.elementHandle();
+		await outside.hover();
+		await outside.focus();
+		await expect(defaultActions).toBeHidden();
+		await page.evaluate(async () => {
+			await window.ashSCMHistoryIntegration.setAlwaysShowHeaderActions(true);
+			window.ashSCMHistoryIntegration.addDefaultView();
+		});
+		const lateActions = page.locator('[data-view-id="late-default"] .ash-pane-view-header-actions');
+		await expect(lateActions).toBeVisible();
+		for (let theme = 0; theme < 4; theme++) {
+			await page.evaluate(index => window.ashSCMHistoryIntegration.setTheme(index), theme);
+			await page.evaluate(() => window.ashSCMHistoryIntegration.setAlwaysShowHeaderActions(true));
+			await expect(defaultActions).toBeVisible();
+			expect(await defaultPane.evaluate(element => element.matches(':hover, :focus-within'))).toBe(false);
+			await defaultHeader.press('ArrowLeft');
+			await expect(defaultActions).toBeHidden();
+			await defaultHeader.press('ArrowRight');
+			await outside.focus();
+			await expect(defaultActions).toBeVisible();
+			await alwaysPane.locator('.ash-pane-view-header-button').press('ArrowLeft');
+			await outside.focus();
+			await expect(alwaysActions).toBeVisible();
+			await page.evaluate(() => window.ashSCMHistoryIntegration.setAlwaysShowHeaderActions(false));
+			await expect(defaultActions).toBeHidden();
+			await expect(graphActions).toBeVisible();
+			await expect(alwaysActions).toBeVisible();
+			await expect(lateActions).toBeHidden();
+			await defaultHeader.focus();
+			await expect(defaultActions).toBeVisible();
+			await outside.focus();
+			await expect(defaultActions).toBeHidden();
+		}
+		expect(await retained!.evaluate(element => element.isConnected)).toBe(true);
+		await retained?.dispose();
+		await testInfo.attach(`header-actions-${locale}`, { body: await page.locator('#history-root').screenshot(), contentType: 'image/png' });
+	});
+
+	test(`history title actions remain visible while expanded without hover or focus (${locale})`, async ({ page }, testInfo) => {
+		await page.goto(`/scmHistory.html?headerActions&locale=${locale}`);
+		const history = page.locator('[data-view-id="fixture.history"]');
+		const header = history.locator('.ash-pane-view-header-button');
+		const actions = history.locator('.ash-pane-view-header-actions');
+		const keyboardAction = actions.locator('button:enabled').first();
+		const outside = page.locator('#outside');
+		const defaultPane = page.locator('[data-view-id="default"]');
+		const defaultActions = defaultPane.locator('.ash-pane-view-header-actions');
+		const alwaysPane = page.locator('[data-view-id="always"]');
+		const alwaysActions = alwaysPane.locator('.ash-pane-view-header-actions');
+		await expect(actions.getByRole('button').first()).toBeVisible();
+		const retainedActions = await actions.elementHandle();
+		for (let theme = 0; theme < 4; theme++) {
+			await page.evaluate(index => window.ashSCMHistoryIntegration.setTheme(index), theme);
+			await outside.hover();
+			await outside.focus();
+			expect(await history.evaluate(element => element.matches(':hover, :focus-within'))).toBe(false);
+			await expect(actions).toHaveCSS('visibility', 'visible');
+			await expect(actions.getByRole('button').first()).toBeVisible();
+			await expect(defaultActions).toBeHidden();
+			await defaultPane.hover();
+			await expect(defaultActions).toBeVisible();
+			await outside.hover();
+			await defaultPane.locator('.ash-pane-view-header-button').focus();
+			await expect(defaultActions).toBeVisible();
+			await outside.focus();
+			await expect(defaultActions).toBeHidden();
+			await header.press('ArrowLeft');
+			await expect(header).toHaveAttribute('aria-expanded', 'false');
+			await expect(actions).toBeHidden();
+			await header.press('ArrowRight');
+			await expect(header).toHaveAttribute('aria-expanded', 'true');
+			await expect(actions).toBeVisible();
+			await header.press('Tab');
+			await expect(keyboardAction).toBeFocused();
+			await expectVisibleFocusOutline(keyboardAction);
+			await outside.focus();
+			await expect(actions).toBeVisible();
+			await alwaysPane.locator('.ash-pane-view-header-button').press('ArrowLeft');
+			await outside.focus();
+			await expect(alwaysActions).toBeVisible();
+			await testInfo.attach(`history-title-${locale}-${theme}`, { body: await history.locator('.ash-pane-view-header').screenshot(), contentType: 'image/png' });
+		}
+		expect(await retainedActions!.evaluate(element => element.isConnected)).toBe(true);
+		await retainedActions?.dispose();
+	});
+}
+
 test('history rows retain identity and reserve title width when the pane resizes', async ({ page }) => {
 	const commit = page.getByRole('treeitem', { name: /History metadata:/u });
 	const retainedCommit = await commit.elementHandle();

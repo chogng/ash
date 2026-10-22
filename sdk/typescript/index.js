@@ -16,6 +16,7 @@ export const TerminalQuickFixOpener = unavailable;
 export const TerminalOutputAnchor = unavailable;
 export const TerminalProfile = unavailable;
 export const scm = namespace();
+export const views = namespace();
 export const files = namespace();
 export const env = namespace();
 export const l10n = namespace();

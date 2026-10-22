@@ -779,14 +779,16 @@ test('editor settings apply immediately, persist after reload and reset to their
 	await expect(control).not.toBeChecked();
 	await expect(control).not.toHaveAttribute('aria-busy', 'true');
 	await settings.element.locator('.ash-modal-editor-close').click();
-	await expect(numbers.first()).toHaveText('');
+	await expect(workbench.editors.groupAt(0).editor.element.locator('.view-line').first()).toContainText('const value = 1;');
+	await expect(numbers).toHaveCount(0);
 	({ application, workbench } = await reloadWorkbench());
 	page = workbench.page;
 	numbers = workbench.editors.groupAt(0).editor.element.locator('.line-numbers');
 	settings = workbench.settingsEditor;
 	row = settings.element.locator('[data-settings-item-id="editor.lineNumbers"]');
 	control = row.getByRole('switch');
-	await expect(numbers.first()).toHaveText('');
+	await expect(workbench.editors.groupAt(0).editor.element.locator('.view-line').first()).toContainText('const value = 1;');
+	await expect(numbers).toHaveCount(0);
 	await settings.openUserSettingsUI();
 	await settings.selectEditorCategory('editor-display');
 	await settings.element.getByRole('searchbox', { name: 'Search settings' }).fill('editor.lineNumbers');

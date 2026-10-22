@@ -8,13 +8,13 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
 import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
-import type { IAction, IActionRunner } from '../../../../base/common/actions.js';
+import { Separator, type IAction, type IActionRunner } from '../../../../base/common/actions.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { Severity } from '../../../../platform/notification/common/notification.js';
+import { INotificationService, NotificationsFilter, Severity } from '../../../../platform/notification/common/notification.js';
 import type { NotificationItem } from '../../../common/notifications.js';
 import { ConfigureNotificationAction } from './notificationsActions.js';
 
@@ -29,6 +29,7 @@ export class NotificationTemplateRenderer extends Disposable {
 		actionRunner: IActionRunner,
 		remove: (id: number) => void,
 		@IContextMenuService contextMenuService: IContextMenuService,
+		@INotificationService notificationService: INotificationService,
 	) {
 		super();
 		this.domNode = h(container.ownerDocument, 'article');
@@ -37,9 +38,7 @@ export class NotificationTemplateRenderer extends Disposable {
 		this.domNode.dataset.severity = Severity[item.severity].toLowerCase();
 		// The shared alert owner announces once, including arrivals while toasts are hidden.
 		this.domNode.setAttribute('role', presentation === 'center' ? 'listitem' : 'article');
-		if (presentation === 'center') {
-			this.domNode.tabIndex = 0;
-		}
+		this.domNode.tabIndex = 0;
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		const severity = h(container.ownerDocument, 'span');
@@ -80,13 +79,25 @@ export class NotificationTemplateRenderer extends Disposable {
 			ariaLabel: label,
 			actionViewItemProvider: (action, options) => {
 				if (action === close) return new NotificationCloseActionViewItem(action, item.id, presentation);
-				if (action instanceof ConfigureNotificationAction) return new DropdownMenuActionViewItem(action, action.actions, contextMenuService, options);
+				if (action instanceof ConfigureNotificationAction) return new DropdownMenuActionViewItem(action, () => {
+					const actions: IAction[] = [];
+					if (item.sourceId && item.source) {
+						const source = { id: item.sourceId, label: item.source };
+						const muted = notificationService.getFilter(source) === NotificationsFilter.ERROR;
+						const label = muted ? localize('notifications.source.enable', "Turn On All Notifications from '{0}'", source.label) : localize('notifications.source.disable', "Turn Off Info and Warning Notifications from '{0}'", source.label);
+						actions.push({ id: 'notification.toggleSource', label, tooltip: label, enabled: true, run: () => notificationService.setFilter({ ...source, filter: muted ? NotificationsFilter.OFF : NotificationsFilter.ERROR }) });
+					}
+					if (actions.length && secondaryActions.length) actions.push(new Separator());
+					return [...actions, ...secondaryActions];
+				}, contextMenuService, options);
 				return undefined;
 			},
 		}));
 		const primaryResources = this._register(new DisposableStore());
 		let primaryContainer: HTMLElement | undefined;
 		let previousActions: NotificationItem['actions'];
+		let previousProgress: boolean | undefined;
+		let secondaryActions: IAction[] = [];
 		// Read the contract explicitly: actions may expose getters on their prototype.
 		// Buttons invoke the producer's method with its receiver and no synthetic context.
 		const runnableAction = (action: IAction): IAction => ({
@@ -103,9 +114,21 @@ export class NotificationTemplateRenderer extends Disposable {
 			severity.replaceChildren();
 			appendIcon(current.severity === Severity.Error ? Lxicon.error : current.severity === Severity.Warning ? Lxicon.warning : Lxicon.info, severity);
 			message.textContent = current.message;
-			progress.element.hidden = current.progress === undefined;
+			progress.element.hidden = !current.hasActiveProgress;
 			progress.element.setAttribute('aria-label', current.message);
 			progress.value = current.progress?.total ? (current.progress.worked ?? 0) / current.progress.total : undefined;
+			const hasProgress = current.hasActiveProgress;
+			if (previousActions !== current.actions || previousProgress !== hasProgress) {
+				previousProgress = hasProgress;
+				secondaryActions = current.actions?.secondary?.map(action => {
+					const runnable = runnableAction(action);
+					return { ...runnable, run: () => actionRunner.run(runnable) };
+				}) ?? [];
+				const actions: IAction[] = [];
+				if (current.sourceId || secondaryActions.length) actions.push(new ConfigureNotificationAction(secondaryActions));
+				if (!hasProgress) actions.push(close);
+				toolbar.setActions(actions);
+			}
 			if (current.actions === previousActions) return;
 			previousActions = current.actions;
 			primaryResources.clear();
@@ -130,11 +153,6 @@ export class NotificationTemplateRenderer extends Disposable {
 			}
 			if (details.childElementCount) content.append(details);
 			else details.remove();
-			const secondaryActions = current.actions?.secondary?.map(action => {
-				const runnable = runnableAction(action);
-				return { ...runnable, run: () => actionRunner.run(runnable) };
-			});
-			toolbar.setActions(secondaryActions?.length ? [new ConfigureNotificationAction(secondaryActions), close] : [close]);
 		};
 		update(item);
 		this._register(item.onDidChange(update));

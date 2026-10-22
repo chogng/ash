@@ -1,3 +1,4 @@
+import { TestViewDescriptorService } from '../../../../../workbench/test/browser/workbenchTestServices.js';
 import { registerTestComponentServices } from '../../../../../workbench/test/common/testEditorServices.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
@@ -7,7 +8,9 @@ import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
-import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
@@ -15,12 +18,11 @@ import { IFileService } from '../../../../../platform/files/common/files.js';
 import { ASH_REMOTE_SCHEME } from '../../../../../platform/remote/common/remote.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { WorkspaceFolderCountContext, IsSessionsWindowContext, ResourceSchemeContext } from '../../../../../workbench/common/contextkeys.js';
-import { ViewDescriptorService } from '../../../../../workbench/services/views/browser/viewDescriptorService.js';
 import { ViewPaneContainer } from '../../../../../workbench/browser/parts/views/viewPaneContainer.js';
 import { IEditorGroupsService, type IEditorGroup } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 import { FileEditorInput } from '../../../../../workbench/contrib/files/browser/editors/fileEditorInput.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
-import { NotificationService } from '../../../../../workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../../workbench/services/notification/test/common/testNotificationService.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { SessionsViewRegistry } from '../../../../common/views.js';
@@ -30,7 +32,7 @@ import { SESSIONS_FILES_EMPTY_VIEW_ID, SESSIONS_FILES_VIEW_ID } from '../../brow
 test('Sessions Files selects one view from the current folder state and creates the localized empty pane', () => {
 	using contexts = new ContextKeyService();
 	const folders = WorkspaceFolderCountContext.bindTo(contexts);
-	using descriptors = new ViewDescriptorService({ registry: SessionsViewRegistry }, contexts);
+	using descriptors = new TestViewDescriptorService({ registry: SessionsViewRegistry }, contexts);
 	const model = descriptors.getViewContainerModel(SESSIONS_FILES_CONTAINER_ID);
 	const visibleIds = (): string[] => model.visibleViewDescriptors.map(view => view.id);
 	assert.deepEqual(visibleIds(), [SESSIONS_FILES_EMPTY_VIEW_ID]);
@@ -38,6 +40,9 @@ test('Sessions Files selects one view from the current folder state and creates 
 	assert.deepEqual(visibleIds(), [SESSIONS_FILES_VIEW_ID]);
 	folders.set(0);
 	using services = new InstantiationService();
+	services.registerInstance(IContextKeyService, contexts);
+	using configuration = new InMemoryConfigurationService();
+	services.registerInstance(IConfigurationService, configuration);
 	const storageEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'https://ash-files.test' });
 	using storageOwner = toDisposable(() => storageEnvironment.window.close());
 	using storage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'empty', backend: storageEnvironment.window.localStorage, flushInterval: 0 });
@@ -47,8 +52,6 @@ test('Sessions Files selects one view from the current folder state and creates 
 	using host = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
 		viewContainer: model.viewContainer,
 		model,
-		instantiationService: services,
-		contextKeyService: contexts,
 		onDidFailCreateView: (error: unknown) => { throw error; },
 	});
 	const message = host.element.querySelector('[role="status"]');
@@ -58,7 +61,7 @@ test('Sessions Files selects one view from the current folder state and creates 
 		setNlsResolver((bundle, key, original) => catalog.bundles[bundle]?.[key] ?? original);
 		assert.equal(message?.textContent, 'Folders and files will appear here.');
 		using translated = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
-			viewContainer: model.viewContainer, model, instantiationService: services, contextKeyService: contexts,
+			viewContainer: model.viewContainer, model,
 			onDidFailCreateView: (error: unknown) => { throw error; },
 		});
 		assert.equal(translated.element.querySelector('[role="status"]')?.textContent, '文件夹和文件将在这里显示。');
@@ -78,7 +81,7 @@ test('Sessions remote download preserves selected file bytes and reports read fa
 		editors: inputs.map(input => ({ input })),
 	} as unknown as IEditorGroup;
 	using services = new InstantiationService();
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IEditorGroupsService, { getGroup: () => group } as unknown as IEditorGroupsService);
 	const reads: URI[] = [];

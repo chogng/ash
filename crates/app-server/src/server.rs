@@ -4198,6 +4198,9 @@ impl AppServer {
             Some(ClientMethod::LanguageServers) => self
                 .language_processor(connection.connection_id)
                 .language_servers(&request.params),
+            Some(ClientMethod::LanguageServerControl) => self
+                .language_processor(connection.connection_id)
+                .language_server_control(&request.params),
             Some(ClientMethod::LanguageSynchronize) => self
                 .language_processor(connection.connection_id)
                 .language_synchronize(&request.params, cancellation),
@@ -4234,6 +4237,9 @@ impl AppServer {
             Some(ClientMethod::LanguageRangeFormatting) => self
                 .language_processor(connection.connection_id)
                 .language_range_formatting(&request.params, cancellation),
+            Some(ClientMethod::LanguageOnTypeFormatting) => self
+                .language_processor(connection.connection_id)
+                .language_on_type_formatting(&request.params, cancellation),
             Some(ClientMethod::LanguageSignatureHelp) => self
                 .language_processor(connection.connection_id)
                 .language_signature_help(&request.params, cancellation),
@@ -4366,6 +4372,9 @@ impl AppServer {
             Some(ClientMethod::GitCheckIgnoreCancel) => self
                 .git_processor()
                 .git_check_ignore_cancel(connection, &request.params),
+            Some(ClientMethod::GitChangesSummary) => {
+                self.git_processor().git_changes_summary(&request.params)
+            }
             Some(ClientMethod::GitTextDiff) => self.git_processor().git_text_diff(&request.params),
             Some(ClientMethod::GitBranchList) => {
                 self.git_processor().git_branch_list(&request.params)
@@ -4976,3 +4985,6 @@ impl AppServer {
         self.queue_processor().deliver_queued_message(message)
     }
 }
+#[cfg(test)]
+#[path = "test_shell.rs"]
+pub(crate) mod test_shell;

@@ -974,12 +974,17 @@ test('extension configuration activates in the canonical owner and rolls back ot
 	assert.deepEqual({ count: configuration.getValue('extensionConfiguration.count'), generation: service.currentCatalog.generation, matcher: parseProblemMatchers(['$extension-configuration-matcher'])[0].owner }, { count: 1, generation: 1, matcher: 'original' });
 	invalid = false; present = false; generation++;
 	await service.reload();
-	assert.equal(configuration.getValue('extensionConfiguration.value'), undefined);
+	// Withdrawing a schema retires extension defaults, while saved user settings
+	// remain in the configuration owner's read model and survive reactivation.
+	assert.equal(configuration.getValue('extensionConfiguration.value'), 'user value');
+	assert.equal(configuration.getValue('extensionConfiguration.count'), undefined);
+	assert.equal(registry.owns('extensionConfiguration.value'), false);
 	assert.equal(registry.owns('extensionConfiguration.count'), false);
 	assert.equal((await configuration.read()).source, source);
 	present = true; generation++;
 	await service.reload();
 	assert.equal(configuration.getValue('extensionConfiguration.count'), 4);
+	assert.equal(configuration.getValue('extensionConfiguration.value'), 'user value');
 	service.dispose();
 	assert.equal(registry.owns('extensionConfiguration.count'), false);
 });

@@ -40,6 +40,60 @@ test('Composition overtype removes the following text in the same undo transacti
 	assert.equal(model.getText(), 'ab');
 });
 
+for (const input of ['e\u0301', '👩‍💻', '🇨🇳', '😀', '中']) {
+	for (const composition of [false, true]) {
+		test(`Overtype ${composition ? 'composition' : 'typing'} replaces one grapheme for ${input}`, () => {
+			const original = 'ab😀e\u0301z\nend';
+			using model = new TextModel(original);
+			const before = [caret(0, 1)];
+			using controller = createTestCursorsController(model, before);
+			const events = new ViewModelEventsCollector();
+			InputMode.setInputMode('overtype');
+			try {
+				if (composition) {
+					controller.startComposition(events);
+					controller.compositionType(events, input, 0, 0, 0, 'keyboard');
+					controller.endComposition(events, 'keyboard');
+				} else {
+					controller.type(events, input, 'keyboard');
+				}
+			} finally {
+				InputMode.setInputMode('insert');
+			}
+
+			const after = [caret(0, 1 + input.length)];
+			assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, {
+				text: `a${input}😀e\u0301z\nend`, selections: after,
+			});
+			model.undo();
+			assert.deepEqual({ text: model.getText(), selections: controller.getSelections(), canUndo: model.canUndo() }, {
+				text: original, selections: before, canUndo: false,
+			});
+			model.redo();
+			assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, {
+				text: `a${input}😀e\u0301z\nend`, selections: after,
+			});
+		});
+	}
+}
+
+test('Composition overtype removes the whole following combining grapheme', () => {
+	using model = new TextModel('ae\u0301bc\nend');
+	using controller = createTestCursorsController(model, [caret(0, 1)]);
+	const events = new ViewModelEventsCollector();
+	InputMode.setInputMode('overtype');
+	try {
+		controller.startComposition(events);
+		controller.compositionType(events, '中', 0, 0, 0, 'keyboard');
+		controller.endComposition(events, 'keyboard');
+	} finally {
+		InputMode.setInputMode('insert');
+	}
+	assert.equal(model.getText(), 'a中bc\nend');
+	model.undo();
+	assert.equal(model.getText(), 'ae\u0301bc\nend');
+});
+
 function caret(lineIndex: number, columnIndex: number): Selection {
 	return Selection.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1));
 }

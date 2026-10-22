@@ -1,5 +1,5 @@
 import { test as base, expect } from "@playwright/test";
-import { mkdtemp, mkdir, rm, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, readFile, writeFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchBrowser } from "./playwrightBrowser.js";
@@ -10,6 +10,7 @@ import { playwrightTargetForProject, supportsTestTarget, type PlaywrightTarget }
 import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from "./testWorkspace.js";
 import type { Workbench } from "./workbench.js";
 import type { ElectronWindowMode } from './electron.js';
+import { isProcessRunning } from '../../build/processes.ts';
 
 interface RunningApplication {
 	driver: PlaywrightDriver;
@@ -239,17 +240,16 @@ export const test = base.extend<PlaywrightFixtures>({
 						}, marker);
 						await current.driver.workbench.page.context().tracing.stop();
 						const childProcess = current.application.process();
+						const mainPid = await current.application.evaluate(() => process.pid);
 						let processOutput = '';
 						childProcess.stderr?.on('data', data => { processOutput += data.toString(); });
-						const exited = new Promise<void>(resolve => childProcess.once('exit', () => resolve()));
-						const closed = current.application.waitForEvent('close');
 						await expect.poll(async () => current.application.evaluate(() => Boolean((globalThis as RestartDialogGlobal).ashTestRestartDialog))).toBe(true);
 						await current.application.evaluate(() => (globalThis as RestartDialogGlobal).ashTestRestartDialog!.respond('restart'));
-						await exited;
-						// The daemon can retain inherited pipes after Main exits on Windows.
-						// Release the old fixture before awaiting Playwright's pipe-close event.
+						// A Windows launcher can retain inherited pipes after Main exits.
+						// Observe the real process before releasing the old fixture; waiting
+						// for its wrapper or Playwright channel first can deadlock cleanup.
+						await expect.poll(() => isProcessRunning(mainPid), { timeout: 10_000, message: 'Electron Main completes restart shutdown' }).toBe(false);
 						await current.close();
-						await closed;
 						const relaunched = await readFile(marker, 'utf8').catch(() => 'missing');
 						if (relaunched !== 'relaunch') throw new Error(`Desktop shutdown did not request relaunch. Exit ${childProcess.exitCode}; ${processOutput}`);
 						current = await launchElectron(options);
@@ -264,6 +264,16 @@ export const test = base.extend<PlaywrightFixtures>({
 			} finally {
 				await current.close();
 			}
+		} catch (error) {
+			// Startup can fail before tracing begins. Preserve the isolated backend's
+			// diagnostics before the fixture removes its profile.
+			const logs = join(userDataDirectory, 'profile', 'run');
+			for (const entry of await readdir(logs, { withFileTypes: true }).catch(() => [])) {
+				if (entry.isFile() && entry.name.endsWith('.log')) {
+					await testInfo.attach(`app-server-${entry.name}`, { path: join(logs, entry.name), contentType: 'text/plain' }).catch(() => undefined);
+				}
+			}
+			throw error;
 		} finally {
 			await rm(userDataDirectory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
 		}

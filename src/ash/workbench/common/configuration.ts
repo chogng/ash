@@ -1,4 +1,5 @@
 import { ThemeConfigurationSettings } from '../services/themes/common/themeConfiguration.js';
+import { NotificationsPosition, NotificationsSettings } from './notifications.js';
 import { localize } from '../../nls.js';
 import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../platform/configuration/common/configurationRegistry.js";
 import { AccessibilityConfiguration } from "../../platform/accessibility/common/accessibility.js";
@@ -38,6 +39,56 @@ export function getConfigurationMigrations(): readonly ConfigurationMigration[] 
 /** Typed configuration keys owned by the workbench layer. */
 export const WorkbenchConfiguration = Object.freeze({
 	...AccessibilityConfiguration,
+	notificationsPosition: configurationRegistry.registerConfiguration<NotificationsPosition>({
+		key: NotificationsSettings.NOTIFICATIONS_POSITION, defaultValue: NotificationsPosition.BOTTOM_RIGHT, scope: ConfigurationScope.WINDOW,
+		schema: { type: 'string', enum: [NotificationsPosition.BOTTOM_RIGHT, NotificationsPosition.BOTTOM_LEFT, NotificationsPosition.TOP_RIGHT] },
+		parse(value: unknown): NotificationsPosition {
+			if (value === NotificationsPosition.BOTTOM_RIGHT || value === NotificationsPosition.BOTTOM_LEFT || value === NotificationsPosition.TOP_RIGHT) { return value; }
+			throw new TypeError(localize('notifications.position.invalid', 'Notification position must be bottom-right, bottom-left, or top-right.'));
+		},
+		setting: {
+			valueType: 'select',
+			get title() { return localize('notifications.position.title', 'Notifications: Position'); },
+			get description() { return localize('notifications.position.description', 'Controls the position of notification toasts and the notification center.'); },
+			get options() {
+				return [
+					{ value: NotificationsPosition.BOTTOM_RIGHT, label: localize('notifications.position.bottomRight', 'Bottom Right') },
+					{ value: NotificationsPosition.BOTTOM_LEFT, label: localize('notifications.position.bottomLeft', 'Bottom Left') },
+					{ value: NotificationsPosition.TOP_RIGHT, label: localize('notifications.position.topRight', 'Top Right') },
+				];
+			},
+		},
+	}),
+	notificationsShowInTitleBar: configurationRegistry.registerConfiguration<boolean>({
+		key: NotificationsSettings.NOTIFICATIONS_BUTTON, defaultValue: true, scope: ConfigurationScope.WINDOW,
+		schema: { type: 'boolean' },
+		parse(value: unknown): boolean {
+			if (typeof value === 'boolean') { return value; }
+			throw new TypeError(localize('notifications.showInTitleBar.invalid', 'Notification button visibility must be true or false.'));
+		},
+		setting: {
+			valueType: 'boolean',
+			get title() { return localize('notifications.showInTitleBar.title', 'Notifications: Show in Title Bar'); },
+			get description() { return localize('notifications.showInTitleBar.description', 'Show the Notifications button in the title bar when notifications are positioned at the top right.'); },
+		},
+	}),
+	alwaysShowHeaderActions: configurationRegistry.registerConfiguration<boolean>({
+		key: 'workbench.view.alwaysShowHeaderActions',
+		defaultValue: false,
+		scope: ConfigurationScope.WINDOW,
+		schema: { type: 'boolean' },
+		parse(value: unknown): boolean {
+			if (typeof value !== 'boolean') {
+				throw new TypeError(localize('workbench.view.alwaysShowHeaderActions.invalid', 'View header action visibility must be true or false.'));
+			}
+			return value;
+		},
+		setting: {
+			valueType: 'boolean',
+			get title() { return localize('workbench.view.alwaysShowHeaderActions.title', 'View: Always Show Header Actions'); },
+			get description() { return localize('workbench.view.alwaysShowHeaderActions.description', 'Keep view header actions visible while a view is expanded. When disabled, actions appear on hover or focus unless the view keeps them visible.'); },
+		},
+	}),
 	settingsEditor: configurationRegistry.registerConfiguration<'ui' | 'json'>({
 		key: 'workbench.settings.editor', defaultValue: 'ui', scope: ConfigurationScope.WINDOW,
 		schema: { type: 'string', enum: ['ui', 'json'] },
@@ -197,6 +248,22 @@ export const WorkbenchConfiguration = Object.freeze({
 					{ value: ActivityBarPosition.HIDDEN, label: localize('workbench.activityBar.location.hidden', 'Hidden') },
 				] as const;
 			},
+		},
+	}),
+	activityBarAutoHide: configurationRegistry.registerConfiguration<boolean>({
+		key: 'workbench.activityBar.autoHide',
+		defaultValue: false,
+		scope: ConfigurationScope.WINDOW,
+		agentsWindow: { default: false, readOnly: true },
+		schema: { type: 'boolean' },
+		parse(value: unknown): boolean {
+			if (typeof value === 'boolean') return value;
+			throw new TypeError(localize('workbench.activityBar.autoHide.invalid', 'Activity Bar auto hide must be true or false.'));
+		},
+		setting: {
+			valueType: 'boolean',
+			get title() { return localize('workbench.activityBar.autoHide.title', 'Auto Hide Activity Bar'); },
+			get description() { return localize('workbench.activityBar.autoHide.description', 'Hide each side bar view switcher when it is at the top or bottom and at most one container at that location has active views.'); },
 		},
 	}),
 	activityBarBadges: configurationRegistry.registerConfiguration<boolean>({

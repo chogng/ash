@@ -119,7 +119,7 @@ test('contributed configuration replacement updates live values atomically and p
 		changes.push({ keys: [...event.affectedKeys].sort(), source: event.source, valueAffected: event.affectsConfiguration('contributed.value', { resource: URI.file('/project/main.ts') }), sectionAffected: event.affectsConfiguration('contributed', { overrideIdentifier: 'typescript' }) });
 	});
 	const first = { properties: { 'contributed.value': { type: 'string' as const, default: 'default', scope: 5 }, 'contributed.count': { type: 'integer' as const, default: 7, minimum: 1 } } };
-	assert.equal(service.getValue('contributed.value'), undefined);
+	assert.equal(service.getValue('contributed.value'), 'saved');
 	registry.updateConfigurations({ add: [first], remove: [] });
 	assert.deepEqual({ value: service.getValue('contributed.value'), typed: service.getValue('contributed.value', { overrideIdentifier: 'typescript' }), count: service.getValue('contributed.count') }, { value: 'saved', typed: 'typed', count: 7 });
 	const invalid = { properties: { 'contributed.count': { type: 'integer' as const, default: 'invalid' } } };
@@ -130,9 +130,9 @@ test('contributed configuration replacement updates live values atomically and p
 	registry.updateConfigurations({ add: [second], remove: [first] });
 	assert.deepEqual({ value: service.getValue('contributed.value'), count: service.getValue('contributed.count') }, { value: 'saved', count: 9 });
 	registry.updateConfigurations({ add: [], remove: [second] });
-	assert.equal(service.getValue('contributed.value'), undefined);
-	assert.equal(service.getConfigurationData().userLocal.keys.includes('contributed.value'), false);
-	assert.deepEqual(changes, Array.from({ length: 3 }, (_, index) => ({ keys: ['contributed.count', 'contributed.value'], source: ConfigurationTarget.DEFAULT, valueAffected: index !== 1, sectionAffected: true })));
+	assert.equal(service.getValue('contributed.value'), 'saved');
+	assert.equal(service.getConfigurationData().userLocal.keys.includes('contributed.value'), true);
+	assert.deepEqual(changes, Array.from({ length: 3 }, () => ({ keys: ['contributed.count', 'contributed.value'], source: ConfigurationTarget.DEFAULT, valueAffected: false, sectionAffected: true })));
 	assert.equal((await service.read()).source, source);
 });
 

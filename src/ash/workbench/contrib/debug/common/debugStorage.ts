@@ -70,8 +70,10 @@ export class DebugStorage extends Disposable {
 		this._register(lifecycle.onWillShutdown(event => {
 			if ([...this.contexts].some(context => context.pending > 0)) event.join(() => this.flush(), localize('debug.workspaceSave', 'Save debug workspace definitions'), () => [...this.contexts].every(context => context.pending === 0));
 		}));
-		const poll = setInterval(() => { void this.reload().catch(error => this.report(error)); }, 1000);
-		this._register(toDisposable(() => clearInterval(poll)));
+		if (backend) {
+			const poll = setInterval(() => { void this.reload().catch(error => this.report(error)); }, 1000);
+			this._register(toDisposable(() => clearInterval(poll)));
+		}
 	}
 
 	get state(): PersistedDebugState { return this.current.state; }
@@ -81,6 +83,7 @@ export class DebugStorage extends Disposable {
 		const current = this.current;
 		const edits = [...changes(domainState(current.state), domainState(state)), ...commands];
 		if (!edits.length) return;
+		if (!this.backend) throw new Error(localize('debug.workspaceUnavailable', 'Debug workspace storage is unavailable.'));
 		if (current.blocked) throw new Error(localize('debug.workspaceBlocked', 'Resolve the debug workspace storage conflict before editing.'));
 		current.state = state;
 		const version = ++current.edits;
@@ -133,9 +136,11 @@ export class DebugStorage extends Disposable {
 		const decoded: unknown = legacy === undefined ? undefined : JSON.parse(legacy);
 		const state = decoded === undefined || decoded && typeof decoded === "object" && !Array.isArray(decoded) && Object.keys(decoded).length === 0 ? EMPTY_STATE : parsePersistedDebugState(decoded);
 		const current: WorkspaceRead = { id, state, snapshot: undefined, queue: Promise.resolve(), edits: 0, blocked: false, pending: 0 };
+		// An explicitly unavailable host may display legacy values, but cannot
+		// migrate them or own pending writes to the backend document.
+		if (!this.backend) return current;
 		current.queue = Promise.resolve().then(async () => {
-			if (!this.backend) throw new Error(localize('debug.workspaceUnavailable', 'Debug workspace storage is unavailable.'));
-			const result = await this.backend.readWorkspaceState(id, legacy === undefined ? undefined : domainState(state));
+			const result = await this.backend!.readWorkspaceState(id, legacy === undefined ? undefined : domainState(state));
 			if (result.status === 'conflict') { current.blocked = true; throw new Error(localize('debug.workspaceMigrationConflict', 'Existing debug workspace definitions conflict with legacy data. Both copies were retained.')); }
 			current.snapshot = result.snapshot;
 			// Cleanup belongs to the captured storage scope and exact source.

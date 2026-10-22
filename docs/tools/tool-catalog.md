@@ -93,7 +93,7 @@ ToolSet：`execution`（目标）。
 ToolSet：`tasks`（目标）。
 
 定义：[App Tools](../../crates/ext/app-tools/src/tool.rs)；路由：
-[App Host 操作](../../crates/app-server/src/server/app_tools_operations.rs)。
+[App Host 操作](../../crates/app-server/src/server/request_processors/app_tools.rs)。
 这些工具调用发起窗口的现有 TaskService，运行记录不属于任意其他窗口。
 
 这是待实现的独立集合。当前代码把五个工具放在旧执行集合；迁移后使用 `tasks`，按发起客户端实际提供的 Tasks 能力装配。Code 默认及显式选择规则见[默认启用与可选组合](tools.md#默认启用与可选组合)。
@@ -208,7 +208,7 @@ ToolSet：`skills`（目标）。
 
 ToolSet：`instructions`（目标）。
 
-定义：[Instruction reader](../../crates/app-server/src/server/instruction_operations.rs)。
+定义：[Instruction reader](../../crates/app-server/src/server/request_processors/instructions.rs)。
 
 | 工具               | 用途／主要操作               | ToolSet（目标） | 执行归属与条件                                                          |
 | ------------------ | ---------------------------- | --------------- | ----------------------------------------------------------------------- |
@@ -293,7 +293,7 @@ ToolSet：`permissions`（目标）。
 
 ToolSet：`sessions`（目标）。
 
-定义：[App Tools](../../crates/ext/app-tools/src/tool.rs)；执行分发：[共享服务与窗口路由](../../crates/app-server/src/server/app_tools_operations.rs)。
+定义：[App Tools](../../crates/ext/app-tools/src/tool.rs)；执行分发：[共享服务与窗口路由](../../crates/app-server/src/server/request_processors/app_tools.rs)。
 共享会话业务由后端服务持有，导航和侧栏行为通过精确客户端绑定执行。
 
 | 工具                             | 用途／主要操作                                    | ToolSet（目标） | 执行归属与条件                                           |
@@ -315,7 +315,7 @@ ToolSet：`sessions`（目标）。
 
 ToolSet：`projects`（目标）。
 
-定义：[App Tools](../../crates/ext/app-tools/src/tool.rs)；执行分发：[共享服务与窗口路由](../../crates/app-server/src/server/app_tools_operations.rs)。
+定义：[App Tools](../../crates/ext/app-tools/src/tool.rs)；执行分发：[共享服务与窗口路由](../../crates/app-server/src/server/request_processors/app_tools.rs)。
 项目数据由共享项目服务持有。
 
 | 工具            | 用途／主要操作 | ToolSet（目标） | 执行归属与条件 |
@@ -326,7 +326,7 @@ ToolSet：`projects`（目标）。
 
 ToolSet：`automations`（目标）。
 
-定义：[App Tools](../../crates/ext/app-tools/src/tool.rs)；执行分发：[共享服务与窗口路由](../../crates/app-server/src/server/app_tools_operations.rs)。
+定义：[App Tools](../../crates/ext/app-tools/src/tool.rs)；执行分发：[共享服务与窗口路由](../../crates/app-server/src/server/request_processors/app_tools.rs)。
 自动化状态由共享服务持有；动作副作用和授权按具体操作裁决。
 
 | 工具                | 用途／主要操作                            | ToolSet（目标） | 执行归属与条件                                                     |
@@ -337,7 +337,7 @@ ToolSet：`automations`（目标）。
 
 ToolSet：`workbench`（目标）。
 
-定义：[App Tools](../../crates/ext/app-tools/src/tool.rs)；执行分发：[共享服务与窗口路由](../../crates/app-server/src/server/app_tools_operations.rs)。
+定义：[App Tools](../../crates/ext/app-tools/src/tool.rs)；执行分发：[共享服务与窗口路由](../../crates/app-server/src/server/request_processors/app_tools.rs)。
 展示操作绑定本轮选定 IDE 或发起窗口，不取得被展示资源的读取或执行权限。
 
 | 工具          | 用途／主要操作                         | ToolSet（目标） | 执行归属与条件                                                  |
@@ -348,7 +348,7 @@ ToolSet：`workbench`（目标）。
 
 ToolSet：`application`（目标）。
 
-定义：[App Tools](../../crates/ext/app-tools/src/tool.rs)；执行分发：[共享服务与窗口路由](../../crates/app-server/src/server/app_tools_operations.rs)。
+定义：[App Tools](../../crates/ext/app-tools/src/tool.rs)；执行分发：[共享服务与窗口路由](../../crates/app-server/src/server/request_processors/app_tools.rs)。
 按发起客户端的实际应用能力提供。
 
 | 工具               | 用途／主要操作         | ToolSet（目标） | 执行归属与条件                                             |

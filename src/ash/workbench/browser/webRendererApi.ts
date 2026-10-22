@@ -1,3 +1,4 @@
+import { AppServerProjectService } from '../../platform/projects/browser/appServerProjectService.js';
 import { DisposableStore } from '../../base/common/lifecycle.js';
 import type { AppServerFrameDecoder } from '../../platform/agentHost/browser/appServerFrameDecoder.js';
 import { AgentHostResourceService } from '../services/agentHost/common/agentHostResourceService.js';
@@ -140,6 +141,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 			contentSearchConfiguration: createAppServerContentSearchConfigurationApi(connection),
 			terminal: new AppServerTerminalProcessService(connection, appServer),
 			assets: new AppServerAssetService(connection),
+			projects: new AppServerProjectService(connection),
 			testing: new AppServerTestExecutionService(connection),
 			...capabilities,
 			events: createAppServerServerEventApi(connection),

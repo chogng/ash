@@ -9,10 +9,6 @@
       "max_bytes": 8388608,
       "reason": "This dated reference preserves the captured tool definitions for source comparisons. New captures require their own review."
     },
-    "src/ash/editor/api-alignment-status.md": {
-      "max_bytes": 2097152,
-      "reason": "The editor alignment inventory records the checked VS Code API surface and migration status."
-    },
     "third_party/tgrep/source.tar.gz": {
       "max_bytes": 2097152,
       "reason": "The locked search program's vendored source archive supports reproducible packaging."

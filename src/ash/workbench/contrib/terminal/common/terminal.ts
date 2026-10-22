@@ -50,6 +50,7 @@ export const enum TerminalCommandId {
 	Kill = 'workbench.action.terminal.kill',
 	Clear = 'workbench.action.terminal.clear',
 	Focus = 'workbench.action.terminal.focus',
+	FocusHover = 'workbench.action.terminal.focusHover',
 	ScrollToPreviousCommand = 'workbench.action.terminal.scrollToPreviousCommand',
 	ScrollToNextCommand = 'workbench.action.terminal.scrollToNextCommand',
 	ScrollDownLine = 'workbench.action.terminal.scrollDown',
@@ -80,6 +81,15 @@ export interface ITerminalStatus {
 	readonly id: string;
 	readonly severity: Severity;
 	readonly tooltip: string;
+	readonly detailedTooltip?: string;
+	readonly hoverActions?: readonly ITerminalStatusHoverAction[];
+}
+
+/** Actions retain their instance context at the status owner, independently of active selection. */
+export interface ITerminalStatusHoverAction {
+	readonly label: string;
+	readonly commandId: string;
+	readonly run: () => void;
 }
 
 export interface ITerminalContributionService extends IDisposable {

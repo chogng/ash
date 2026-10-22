@@ -9,7 +9,7 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { URI } from '../../../../base/common/uri.js';
-import { CancellationToken } from '../../../../base/common/cancellation.js';
+import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import type { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { ExtensionHostFleetSnapshot, IExtensionHostApi, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { SCMService } from '../../../contrib/scm/common/scmService.js';
@@ -18,6 +18,9 @@ import { QuickDiffService } from '../../../contrib/scm/common/quickDiffService.j
 import type { IDecorationsProvider, IDecorationsService } from '../../../services/decorations/common/decorations.js';
 import { MultiDiffSourceResolverService } from '../../../contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { MainThreadSCM } from '../../browser/mainThreadSCM.js';
+import { TimelineService } from '../../../contrib/timeline/common/timelineService.js';
+import { NullLoggerService } from '../../../../platform/log/common/log.js';
+import type { IViewsService } from '../../../services/views/common/viewsService.js';
 
 const source = { extensionId: 'ash.git', activationGeneration: 1, incarnation: 1 };
 const provider = (value = 'draft', inputRevision = 0): JsonValue => ({ id: 'repo', providerId: 'git', label: 'Repository', rootUri: 'file:///workspace', selected: true, groups: [], input: { value, enabled: true, canAccept: true, placeholder: 'Message', buttonLabel: 'Commit', buttonTooltip: 'Commit changes' }, inputRevision, statusBarCommands: [], activeRepositoryName: 'main', statusMessage: '', isBusy: false, historyRevision: 1, hasHistory: false, hasMerge: false, multiDiff: null });
@@ -32,10 +35,180 @@ function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[], r
 	const decorations = { registerDecorationsProvider(value: IDecorationsProvider) { decorationProviders.add(value); return { dispose: () => decorationProviders.delete(value) }; } } as unknown as IDecorationsService;
 	const contexts = lifetime.add(new ContextKeyService());
 	const commands = new CommandRegistry();
-	const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(error), commands, { invoke, reconcile } as IExtensionHostApi, scm, view, {} as ICommandService, resolvers, quickDiff, decorations, contexts));
+	const timeline = lifetime.add(new TimelineService(contexts, {} as IViewsService, new NullLoggerService()));
+	const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(error), commands, { invoke, reconcile } as IExtensionHostApi, scm, view, {} as ICommandService, resolvers, quickDiff, decorations, contexts, timeline));
 	bridge.update(fleet(providers));
-	return { lifetime, scm, view, bridge, decorationProviders, errors, contexts, commands };
+	return { lifetime, scm, view, bridge, decorationProviders, errors, contexts, commands, timeline };
 }
+
+test('SCM file timeline bridges scoped history, paging, open commands and meaningful changes', async () => {
+	const calls: JsonValue[] = [];
+	const snapshot: Record<string, JsonValue> = { ...provider() as Record<string, JsonValue>, hasHistory: true, timeline: { label: 'Git History', resetKey: 'committed' } };
+	const value = fixture(async (request): Promise<JsonValue> => {
+		calls.push(JSON.parse(JSON.stringify(request.payload)));
+		if ((request.payload as Record<string, JsonValue>).methodName === 'provide') {
+			return {
+				items: [
+					{ historyItem: { id: 'commit-id', parentIds: [], subject: 'Rename file', message: 'Rename file' }, id: 'commit-id', handle: 'commit:old-name', label: 'Rename file', description: 'Author, yesterday', timestamp: 1000, icon: 'git-commit' },
+					{ handle: 'changes', label: 'Uncommitted changes', timestamp: 2000, tooltip: 'Working tree' },
+				], cursor: 'commit:old-name'
+			};
+		}
+		if ((request.payload as Record<string, JsonValue>).methodName === 'resolveHistoryItemDetails') return { authorName: 'Author', authorEmail: '', timestamp: 1000, message: 'Rename file', statistics: { files: 1, additions: 1, deletions: 0 } };
+		return null;
+	}, [snapshot]);
+	using cleanup = value.lifetime;
+	const id = 'scm:ash.git:repo';
+	const uri = URI.file('/workspace/new-name.txt');
+	assert.deepEqual(value.timeline.getSources(), [{ id, label: 'Git History' }]);
+	using token = new CancellationTokenSource();
+	const result = await value.timeline.getTimeline(id, uri, { limit: 1 }, token)!.result;
+	assert.equal(result?.items[0]?.label, 'Rename file');
+	assert.equal(result?.items[0]?.icon?.id, 'git-commit');
+	assert.equal(result?.items[0]?.sourceControl?.repositoryId, 'repo');
+	assert.equal(result?.items[0]?.sourceControl?.historyItem.id, 'commit-id');
+	assert.equal(result?.items[0]?.sourceControl?.historyItem.tooltip?.authorName, 'Author');
+	assert.equal(result?.items[1]?.sourceControl, undefined, 'Uncommitted entries keep their ordinary tooltip');
+	assert.equal(result?.items[1]?.tooltip, 'Working tree');
+	assert.equal(calls.filter(call => (call as Record<string, JsonValue>).methodName === 'resolveHistoryItemDetails').length, 1, 'The item is published with its tooltip already prepared');
+	assert.equal(calls.filter(call => (call as Record<string, JsonValue>).methodName === 'provideHistoryItems').length, 0, 'Timeline summaries do not need per-item graph queries');
+	assert.equal(result?.paging?.cursor, 'commit:old-name');
+	assert.deepEqual(calls.find(call => (call as Record<string, JsonValue>).methodName === 'provide'), { method: 'timeline', providerId: 'repo', methodName: 'provide', resource: uri.toString(), options: { limit: 1 } });
+	const command = result!.items[0]!.command!;
+	await value.commands.getCommand(command.id)!({} as ServicesAccessor, ...command.arguments!);
+	assert.deepEqual(calls.at(-1), { method: 'timeline', providerId: 'repo', methodName: 'open', resource: uri.toString(), handle: 'commit:old-name' });
+	const count = calls.length;
+	assert.equal(await value.timeline.getTimeline(id, URI.file('/other/file.txt'), {}, token)!.result, undefined);
+	assert.equal(calls.length, count, 'Out-of-scope resources never enter the extension');
+	let changes = 0;
+	using listener = value.timeline.onDidChangeTimeline(() => changes++);
+	value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, inputRevision: 1, input: { ...(snapshot.input as Record<string, JsonValue>), value: 'typing' } }]);
+	assert.equal(changes, 0, 'Commit drafts and blame updates do not reload file history');
+	value.bridge.set(source, 'ash.scm', 3, [{ ...snapshot, historyRevision: 2 }]);
+	assert.equal(changes, 1);
+	value.bridge.set(source, 'ash.scm', 4, [{ ...snapshot, historyRevision: 2, timeline: { label: 'Git History', resetKey: 'authored' } }]);
+	assert.equal(changes, 2, 'Timeline policy changes invalidate the visible history');
+	value.bridge.set(source, 'ash.scm', 5, []);
+	assert.deepEqual(value.timeline.getSources(), []);
+	assert.equal(value.commands.getCommand(command.id), undefined, 'A retired entry loses its command');
+	value.bridge.set(source, 'ash.scm', 6, [snapshot]);
+	assert.equal(value.commands.getCommand(command.id), undefined, 'Reusing a repository ID cannot restore a stale entry');
+});
+
+test('SCM retiring a timeline provider cancels its in-flight extension request', async () => {
+	const started = new DeferredPromise<void>();
+	const pending = new DeferredPromise<JsonValue>();
+	let signal: AbortSignal | undefined;
+	const snapshot: Record<string, JsonValue> = { ...provider() as Record<string, JsonValue>, timeline: { label: 'Git History' } };
+	const value = fixture(async (request, requestSignal) => {
+		if ((request.payload as Record<string, JsonValue>).methodName === 'provide') {
+			signal = requestSignal;
+			started.complete();
+			return pending.p;
+		}
+		return null;
+	}, [snapshot]);
+	using cleanup = value.lifetime;
+	using token = new CancellationTokenSource();
+	const request = value.timeline.getTimeline('scm:ash.git:repo', URI.file('/workspace/file.txt'), {}, token)!;
+	await started.p;
+	value.bridge.set(source, 'ash.scm', 2, []);
+	assert.equal(signal?.aborted, true);
+	assert.equal(await request.result, undefined);
+	pending.complete({ items: [{ handle: 'late', label: 'Stale', timestamp: 1 }] });
+});
+
+test('SCM graph and timeline publish complete tooltips before the first hover and share preparation', async () => {
+	const item = { id: 'commit-id', subject: 'Shared commit', message: 'Shared commit', parentIds: [], references: [] };
+	const details = { authorName: 'Author', authorEmail: 'author@example.invalid', timestamp: 1000, message: 'Shared commit\n\nBody', statistics: { files: 1, additions: 2, deletions: 1 } };
+	const pending = new DeferredPromise<JsonValue>();
+	const detailStarted = new DeferredPromise<void>();
+	let detailReads = 0;
+	const snapshot: Record<string, JsonValue> = { ...provider() as Record<string, JsonValue>, hasHistory: true, timeline: { label: 'Git History' } };
+	const value = fixture(async (request): Promise<JsonValue> => {
+		const payload = request.payload as Record<string, JsonValue>;
+		if (payload.methodName === 'provideHistoryItems') return [item];
+		if (payload.methodName === 'provide') return { items: [{ id: item.id, handle: 'commit:file', label: item.subject, timestamp: 1000, historyItem: item }] };
+		if (payload.methodName === 'resolveHistoryItemDetails') { detailReads++; detailStarted.complete(); return pending.p; }
+		return null;
+	}, [snapshot]);
+	using cleanup = value.lifetime;
+	const history = value.scm.getRepository('repo')!.provider.historyProvider!;
+	let graphPublished = false;
+	let timelinePublished = false;
+	const graphPage = history.provideHistoryItems({ limit: 25 }).then(items => { graphPublished = true; return items; });
+	using token = new CancellationTokenSource();
+	const timelinePage = value.timeline.getTimeline('scm:ash.git:repo', URI.file('/workspace/file.txt'), {}, token)!.result
+		.then(items => { timelinePublished = true; return items; });
+	await detailStarted.p;
+	assert.equal(graphPublished, false);
+	assert.equal(timelinePublished, false);
+	pending.complete(details);
+	const [graph, timeline] = await Promise.all([graphPage, timelinePage]);
+	assert.deepEqual(graph?.[0].tooltip, details);
+	assert.equal(timeline?.items[0].sourceControl?.historyItem.tooltip, graph?.[0].tooltip);
+	assert.equal(detailReads, 1, 'Both producers share the same preparation request');
+	assert.deepEqual((await history.provideHistoryItems({ limit: 25 }))?.[0].tooltip, details);
+	assert.equal(detailReads, 1, 'Refreshing metadata reuses immutable tooltip data');
+});
+
+test('SCM page preparation bounds detail reads and publishes no partial items', async () => {
+	const items = Array.from({ length: 40 }, (_, index) => ({ id: `commit-${index}`, parentIds: [], subject: `Commit ${index}`, message: `Commit ${index}` }));
+	const gates = items.map(() => new DeferredPromise<JsonValue>());
+	const admitted = new DeferredPromise<void>();
+	let active = 0;
+	let peak = 0;
+	let reads = 0;
+	let published = false;
+	const snapshot: Record<string, JsonValue> = { ...provider() as Record<string, JsonValue>, hasHistory: true };
+	const value = fixture(async (request): Promise<JsonValue> => {
+		const payload = request.payload as Record<string, JsonValue>;
+		if (payload.methodName === 'provideHistoryItems') return items;
+		if (payload.methodName !== 'resolveHistoryItemDetails') return null;
+		const index = Number((payload.arguments as string[])[0].slice('commit-'.length));
+		reads++;
+		peak = Math.max(peak, ++active);
+		if (active === 4) admitted.complete();
+		try { return await gates[index].p; } finally { active--; }
+	}, [snapshot]);
+	using cleanup = value.lifetime;
+	const reading = value.scm.getRepository('repo')!.provider.historyProvider!.provideHistoryItems({ limit: 40 })
+		.then(page => { published = true; return page; });
+	await admitted.p;
+	assert.equal(reads, 4);
+	assert.equal(published, false);
+	for (const [index, gate] of gates.entries()) gate.complete({ authorName: 'Author', authorEmail: '', timestamp: 1000, message: `Commit ${index}`, statistics: { files: 1, additions: 1, deletions: 0 } });
+	const page = await reading;
+	assert.equal(page?.length, 40);
+	assert.ok(page?.every((item, index) => item.tooltip?.message === `Commit ${index}`));
+	assert.equal(peak, 4);
+	assert.equal(reads, 40);
+});
+
+test('SCM eager tooltip preparation retries failures and releases a retired repository cache', async () => {
+	const item = { id: 'commit-id', parentIds: [], subject: 'Commit', message: 'Commit' };
+	const details = { authorName: 'Author', authorEmail: '', timestamp: 1000, message: 'Body', statistics: { files: 1, additions: 1, deletions: 0 } };
+	let reads = 0;
+	const snapshot: Record<string, JsonValue> = { ...provider() as Record<string, JsonValue>, hasHistory: true };
+	const value = fixture(async (request): Promise<JsonValue> => {
+		const payload = request.payload as Record<string, JsonValue>;
+		if (payload.methodName === 'provideHistoryItems') return [item];
+		if (payload.methodName === 'resolveHistoryItemDetails') {
+			if (++reads === 1) throw new Error('Fixture detail read failed');
+			return details;
+		}
+		return null;
+	}, [snapshot]);
+	using cleanup = value.lifetime;
+	const history = value.scm.getRepository('repo')!.provider.historyProvider!;
+	await assert.rejects(history.provideHistoryItems({}), /Fixture detail read failed/);
+	assert.deepEqual((await history.provideHistoryItems({}))?.[0].tooltip, details);
+	assert.equal(reads, 2);
+	value.bridge.set(source, 'ash.scm', 2, []);
+	value.bridge.set(source, 'ash.scm', 3, [snapshot]);
+	assert.deepEqual((await value.scm.getRepository('repo')!.provider.historyProvider!.provideHistoryItems({}))?.[0].tooltip, details);
+	assert.equal(reads, 3);
+});
 
 test('SCM resource groups survive input-only snapshots and retire changed resources', () => {
 	const snapshot: Record<string, JsonValue> = { ...(provider() as Record<string, JsonValue>), groups: [{ id: 'changes', label: 'Changes', actions: [], resources: [] }] };
@@ -306,18 +479,23 @@ test('SCM bridges advertised reference filters, upstream changes and immutable b
 });
 
 
-test('SCM status command availability survives the extension bridge', async () => {
+test('SCM status command availability and placement survive the extension bridge', async () => {
 	const calls: JsonValue[] = [];
-	const command = { id: 'git.sync', text: '3↓ 0↑', ariaLabel: 'Sync', tooltip: 'Sync', priority: 800, enabled: false };
+	const command = { id: 'git.blame', text: 'Author (1 day ago)', ariaLabel: 'Line author', tooltip: 'Open commit', alignment: 'right', priority: 30, enabled: false };
 	const snapshot = { ...(provider() as Record<string, JsonValue>), statusBarCommands: [command] };
 	const value = fixture(async request => { calls.push(request.payload); return null; }, [snapshot]);
 	using cleanup = value.lifetime;
 	const repository = value.scm.getRepository('repo')!;
 	const statusCommands = () => repository.provider.statusBarCommands;
 	assert.equal(statusCommands()[0]?.run, undefined);
+	assert.equal(statusCommands()[0]?.alignment, 'right');
+	assert.throws(() => value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, statusBarCommands: [{ ...command, alignment: 'center' }] }]), /Invalid SCM status command alignment/u);
 	value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, statusBarCommands: [{ ...command, enabled: true }] }]);
 	await statusCommands()[0]?.run?.();
-	assert.ok(calls.some(call => typeof call === 'object' && call !== null && 'method' in call && call.method === 'statusBar' && call.commandId === 'git.sync'));
+	assert.ok(calls.some(call => typeof call === 'object' && call !== null && 'method' in call && call.method === 'statusBar' && call.commandId === 'git.blame'));
+	const { alignment: _alignment, ...defaultCommand } = command;
+	value.bridge.set(source, 'ash.scm', 3, [{ ...snapshot, statusBarCommands: [defaultCommand] }]);
+	assert.equal(statusCommands()[0]?.alignment, 'left');
 });
 
 const settleCallbacks = (): Promise<void> => new Promise(resolve => setImmediate(resolve));
@@ -397,7 +575,7 @@ test('SCM history reads wait for repository initialization before crossing the e
 		initialized.complete(null);
 		assert.deepEqual(await reading, []);
 		assert.deepEqual(calls, ['initialize', 'history']);
-	} finally { initialized.complete(null); await reading.catch(() => undefined); }
+	} finally { initialized.complete(null); await Promise.resolve(reading).catch(() => undefined); }
 });
 
 test('retiring SCM cancels reads waiting for initialization without admitting another request', async () => {
@@ -411,7 +589,7 @@ test('retiring SCM cancels reads waiting for initialization without admitting an
 	using cleanup = value.lifetime;
 	const reading = value.scm.getRepository('repo')!.provider.historyProvider!.provideHistoryItems({ skip: 0, limit: 1 });
 	value.bridge.update({ generation: 2, extensions: [] });
-	try { await assert.rejects(reading, /cancel|abort|retired/iu); }
+	try { await assert.rejects(Promise.resolve(reading), /cancel|abort|retired/iu); }
 	finally { initialized.complete(null); }
 	assert.deepEqual(calls, ['initialize']);
 });

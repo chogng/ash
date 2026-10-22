@@ -45,7 +45,7 @@ The LSP client and server lifecycle live below the Renderer in
 service owns only the frontend adapters in `browser/appServerLanguageProviders.ts`
 and `browser/appServerLanguageDiagnosticsService.ts`. The provider adapter exposes
 hover, completion, cross-file navigation, call/type hierarchy, workspace symbols,
-rename, code actions, document/range formatting, parameter hints, inlay hints,
+rename, code actions, document/range/on-type formatting, parameter hints, inlay hints,
 and linked editing through
 editor-owned contracts. The diagnostics adapter
 reference-counts open models, debounces authoritative document synchronization,
@@ -67,14 +67,45 @@ editor input before commit so every synchronized change is one atomic undo step.
 Regardless of origin, revision gates, application semantics, and DOM projection
 stay editor-owned.
 
+On-type formatting registers each directory/language's negotiated first and additional
+trigger characters, including newline. Requests carry the post-input position, character,
+formatting options, and authoritative document revision through `language/formatOnType`.
+Dynamic capability changes replace the registrations and abort pending requests; cancellation
+reaches the LSP request, and stale edits never apply to a newer editor snapshot. The existing
+editor transaction groups formatting with the triggering input for undo and redo.
+
 Language-server log and show-message notifications are adapted by the Workbench
 language status service. Each server owns a channel registered through the
 canonical [`OutputService`](../output/README.md); the generic Output panel owns
-channel selection and clearing. User-visible messages use the shared dialog
-service. It adapts each work-done token to a Promise passed to
+channel selection and clearing. The persistent Language Services status entry opens
+one shared menu, grouped by workspace folder. Each server offers View Logs,
+Restart, and Stop; folder and window batch actions affect already-started servers.
+The backend owns process state and controls; stopping retains configuration and
+blocks automatic resumption by background language requests. Restart replays open
+documents. Discovery reads never install or launch unused servers.
+
+Warnings and complete error details stay in Output. Explicit server errors and
+terminal lifecycle failures offer concise, deduplicated notifications with View
+Logs and Restart actions. Routine progress and automatic retry never notify. The
+menu supports keyboard submenus, accessibility help and an accessible status view,
+using `accessibility.verbosity.languageServers` for its hint.
+
+Managed server acquisition reports download progress only when the package store
+actually needs an HTTP request. Local executable probes, waiting for the install
+lock, and validated cache reuse are silent; download completion or failure clears
+that progress.
+
+The service adapts each work-done token to a Promise passed to
 `IProgressService.withProgress`, reports `IProgressStep` messages, and completes
 that Promise on the server's end notification or adapter disposal. Server names
-are task titles, while the operation and reported percentage form the message.
+are task titles. Progress messages show the operation and optional percentage
+first, followed by server-reported details such as scanned counts or the current
+directory. Absolute LSP percentages are also adapted to the shared numeric
+progress contract, so a task at 100% leaves the status display and cannot hide
+another unfinished task.
+Reports that omit a detail retain its previous value; an empty detail clears it.
+Reaching 100% does not complete an operation. End, stop, terminal failure, or
+adapter disposal completes it; concurrent tasks include the remaining task count.
 Each running operation registers a temporary Output command consumed through
 `IProgressWindowOptions.command`; the registration ends with the task.
 

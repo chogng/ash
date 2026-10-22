@@ -1,51 +1,92 @@
-.ash-view-filter {
+.ash-view-pane > .ash-pane-view-content.welcome > :not(.ash-view-welcome) {
+	display: none;
+}
+
+.ash-view-welcome {
+	display: flex;
+	flex: 1 1 auto;
+	min-height: 0;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-body1);
+	line-height: 1.5;
+}
+
+.ash-view-welcome-viewport {
+	flex: 1 1 auto;
+	min-height: 0;
+	min-width: 0;
+}
+
+.ash-view-welcome-content {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--ash-spacing-size120);
+	min-height: 0;
+	min-width: 0;
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size200);
+}
+
+.ash-view-welcome.hidden {
+	display: none;
+}
+
+.ash-view-welcome-content > p {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-custom-tree-view {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.ash-custom-tree-viewport {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+}
+
+.ash-custom-tree-status:empty {
+	display: none;
+}
+
+.ash-custom-tree-row {
 	display: flex;
 	align-items: center;
 	gap: var(--ash-spacing-size80);
 	min-width: 0;
-	box-sizing: border-box;
+	width: 100%;
 }
 
-.ash-view-pane-filter-container {
-	display: flex;
-	align-items: center;
-	flex: 0 0 44px;
-	min-width: 0;
-	box-sizing: border-box;
-	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
-}
-
-.ash-view-pane-filter-container[hidden] {
-	display: none;
-}
-
-.ash-view-pane-filter-container > .ash-view-filter {
-	flex: 1;
-}
-
-.ash-view-filter-in-header {
-	flex: 1 1 240px;
-	width: 240px;
-}
-
-.ash-filter-view-pane
-	> .ash-pane-view-header
-	> .ash-pane-view-header-actions:has(.ash-view-filter-in-header) {
-	visibility: visible;
-	min-width: 0;
-}
-
-.ash-view-filter > .ash-input-box {
-	flex: 1;
-	min-width: 0;
-}
-
-.ash-view-filter-badge {
-	flex: 0 1 auto;
+.ash-custom-tree-label,
+.ash-custom-tree-description {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.ash-custom-tree-description {
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label2);
+}
+
+.ash-custom-tree-row:has(> .ash-inline-edit-input) > .ash-custom-tree-label,
+.ash-custom-tree-row:has(> .ash-inline-edit-input)
+	> .ash-custom-tree-description {
+	display: none;
+}
+
+.ash-inline-edit-input {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-tree-item-checkbox[hidden] {
+	display: none;
 }

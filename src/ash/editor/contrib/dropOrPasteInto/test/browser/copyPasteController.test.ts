@@ -1,3 +1,4 @@
+import { Event } from '../../../../../base/common/event.js';
 import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
 import { after as afterCodeFeatures } from 'mocha';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
@@ -6,7 +7,7 @@ import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
-import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { INotificationService, NotificationsFilter } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { registerWindow } from '../../../../../base/browser/window.js';
@@ -812,6 +813,7 @@ test('command Paste As ends quietly when its clipboard read returns empty', asyn
 	services.registerInstance(IClipboardService, clipboard);
 	const unexpectedNotification = (): never => assert.fail('An empty clipboard must not produce a notification');
 	services.registerInstance(INotificationService, {
+		onDidChangeFilter: Event.None, setFilter: unexpectedNotification, getFilter: () => NotificationsFilter.OFF, getFilters: () => [], removeFilter: () => { }, status: () => ({ close() { } }),
 		notify: unexpectedNotification, info: unexpectedNotification, warn: unexpectedNotification, error: unexpectedNotification,
 	});
 	registerCodeEditorServices(services);

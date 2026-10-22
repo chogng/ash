@@ -102,6 +102,9 @@
           "textDiff": {
             "route": "git/textDiff"
           },
+          "changesSummary": {
+            "route": "git/changesSummary"
+          },
           "changeFile": {
             "route": "git/changeFile"
           },
@@ -978,7 +981,7 @@
         {
           "command": "git.openFile",
           "group": "navigation",
-          "when": "resourceScheme == git-change"
+          "when": "activeEditor == stanza.editor.diff"
         }
       ],
       "diffEditor/hunkToolbar": [
@@ -991,11 +994,6 @@
           "command": "git.diff.unstageHunk",
           "group": "primary",
           "when": "diffEditorOriginalUri =~ /^git-change:\\/staged\\// && diffEditorModifiedUri =~ /^git-change:\\/staged\\//"
-        },
-        {
-          "command": "git.diff.revertHunk",
-          "group": "primary",
-          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\//"
         }
       ],
       "diffEditor/selectionToolbar": [
@@ -1008,11 +1006,6 @@
           "command": "git.diff.unstageSelection",
           "group": "primary",
           "when": "diffEditorOriginalUri =~ /^git-change:\\/staged\\// && diffEditorModifiedUri =~ /^git-change:\\/staged\\//"
-        },
-        {
-          "command": "git.diff.revertSelection",
-          "group": "primary",
-          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\//"
         }
       ],
       "git.commitMenu": [

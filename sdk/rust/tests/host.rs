@@ -139,6 +139,37 @@ fn independent_sdk_program_registers_invokes_and_emits_output_through_the_real_h
     assert!(running.host.snapshot().output_events.iter().any(|entry| matches!(&entry.event.operation, HostOutputOperation::Append { text, .. } if text == "echo\n")));
 }
 
+#[cfg(windows)]
+#[test]
+fn unrepresentable_deadline_is_rejected_without_stopping_the_sdk_process() {
+    let running = start();
+    let mut request = invocation(
+        "review.echo",
+        "execute",
+        json!({"arguments": ["must not run"]}),
+    );
+    request.deadline_unix_millis = NonZeroU64::new(u64::MAX).unwrap();
+    assert!(matches!(
+        running.host.invoke(request),
+        Err(ExtensionHostError::HostRejected {
+            code: HostErrorCode::InvalidRequest,
+            ..
+        })
+    ));
+    assert!(!running.host.snapshot().output_events.iter().any(|entry| matches!(&entry.event.operation, HostOutputOperation::Append { text, .. } if text == "echo\n")));
+    assert_eq!(running.host.snapshot().status, ExtensionHostStatus::Ready);
+
+    let result = running
+        .host
+        .invoke(invocation(
+            "review.echo",
+            "execute",
+            json!({"arguments": ["still alive"]}),
+        ))
+        .unwrap();
+    assert_eq!(result.payload, json!(["still alive"]));
+}
+
 #[test]
 fn independent_rust_sdk_uses_simple_profile_state_and_private_secrets() {
     use external_ext_sdk::services::CoreServiceRequest;

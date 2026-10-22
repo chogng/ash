@@ -42,6 +42,7 @@ ash-utils-image = { workspace = true }
 ash-utils-stream-parser = { workspace = true }
 
 [dev-dependencies]
+allocation-counter = { workspace = true }
 ash-rollout-trace = { workspace = true }
 attachment-store = { workspace = true }
 tempfile = { workspace = true }

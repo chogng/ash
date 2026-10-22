@@ -134,7 +134,7 @@ pub fn snapshot(
         {
             continue;
         }
-        let actions = match group {
+        let mut actions = match group {
             "staged" => vec![action(
                 api,
                 "unstageAll",
@@ -166,6 +166,18 @@ pub fn snapshot(
                 ),
             ],
         };
+        if let Some(id) = match group {
+            "staged" => Some("viewStagedChanges"),
+            "changes" => Some("viewChanges"),
+            "untracked" => Some("viewUntrackedChanges"),
+            _ => None,
+        } {
+            let label = api.text("git.viewAll", &[&api.text(key, &[])]);
+            actions.insert(
+                0,
+                json!({"id":id,"label":label,"tooltip":label,"icon":"diff-multiple-1","enabled":!repository.is_busy() && !resources.is_empty()}),
+            );
+        }
         groups.push(
             json!({"id":group,"label":api.text(key,&[]),"resources":resources,"actions":actions}),
         );
@@ -299,7 +311,8 @@ pub fn snapshot(
     }
     if let Some(blame) = &repository.blame {
         if configuration.boolean("blame.statusBarItem.enabled", true) {
-            statusbar.push(json!({"id":"git.blame","text":blame.label,"ariaLabel":blame.label,"tooltip":blame.details,"priority":800,"enabled":true}));
+            // Right-side entries grow inward as priority decreases; cursor position uses 40.
+            statusbar.push(json!({"id":"git.blame","icon":"git-commit","text":blame.label,"ariaLabel":blame.label,"tooltip":blame.details,"alignment":"right","priority":30,"enabled":true}));
         }
     }
     let label = api.text(
@@ -344,6 +357,7 @@ pub fn snapshot(
         "input":{"visible":configuration.boolean("showCommitInput",true),"buttonVisible":configuration.value("showActionButton").get(primary).and_then(Value::as_bool).unwrap_or(true),"value":repository.draft,
             "validationMessage":input_validation,"placeholder":api.text("git.commitMessageOnBranch",&[if cfg!(target_os="macos") {"Cmd+Enter"} else {"Ctrl+Enter"},branch.unwrap_or("HEAD")]),"enabled":true,"canAccept":primary!="commit" || !changes.iter().any(|change|change.conflicted) && (staged || smart && !changes.is_empty()),"buttonLabel":label,"buttonTooltip":label},
         "activeRepositoryName":branch,"statusMessage":status_message,"isBusy":repository.is_busy(),"statusBarCommands":statusbar,
+        "timeline":{"label":api.text("git.timelineHistory",&[]),"resetKey":format!("{}:{}:{}",configuration.text("timeline.date","committed"),configuration.boolean("timeline.showAuthor",true),configuration.boolean("timeline.showUncommitted",false))},
         "hasHistory":true,"hasHistoryItemRefs":true,"hasHistoryMergeBase":true,"historyRef":history_ref,"historyRemoteRef":remote_ref,
         "historyRevision":repository.status.as_ref().map(|status|status.history_revision).unwrap_or(0),"historyRefsRevision":0,"historyRefsItems":[],"hasMerge":true,"inputRevision":repository.input_revision,
         "multiDiff":{"resourcePrefix":source_uri,"sourceActions":[

@@ -70,8 +70,8 @@ class TestSessionsPart extends Part {
 		return this.id === "sidebar" || this.id === "auxiliarybar" ? 640 : Number.POSITIVE_INFINITY;
 	}
 
-	override get minimumHeight(): number { return this.id === "titlebar" ? WorkbenchWindowBarHeight : 0; }
-	override get maximumHeight(): number { return this.id === "titlebar" ? WorkbenchWindowBarHeight : Number.POSITIVE_INFINITY; }
+	override get minimumHeight(): number { return this.id === "banner" ? 32 : this.id === "titlebar" ? WorkbenchWindowBarHeight : 0; }
+	override get maximumHeight(): number { return this.id === "banner" ? 32 : this.id === "titlebar" ? WorkbenchWindowBarHeight : Number.POSITIVE_INFINITY; }
 }
 
 function createParts(ownerDocument: Document): Map<SessionsPartId, WorkbenchPartInstance> {
@@ -643,3 +643,23 @@ function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId,
 	}
 	return layout;
 }
+
+test('Sessions banner stays above conversation and panel compositions without entering saved state', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_600, 1_000) });
+		layout.layout(new Dimension(1_600, 1_000));
+		assert.equal(layout.isPartVisible('banner'), false);
+		layout.showPart('banner');
+		assert.equal(layout.mainContainerOffset.top, WorkbenchWindowBarHeight + 32);
+		layout.setPanelPosition(Position.RIGHT);
+		assert.equal(layout.isPartVisible('banner'), true);
+		assert.equal(layout.getPartSize('banner').height, 32);
+		layout.toggleMaximizedPanel();
+		assert.equal(layout.isPartVisible('banner'), true);
+		layout.hidePart('banner');
+		assert.equal(layout.mainContainerOffset.top, WorkbenchWindowBarHeight);
+		assert.equal('banner' in layout.state, false);
+	} finally { for (const part of parts.values()) part.dispose(); dom.window.close(); }
+});

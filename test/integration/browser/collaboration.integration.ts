@@ -37,7 +37,7 @@ import { CHANNELS_VIEW_ID } from '../../../src/ash/workbench/contrib/collaborati
 import { CallViewPane } from '../../../src/ash/workbench/contrib/call/browser/callViewPane.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { emptyEditorServiceState } from '../../../src/ash/workbench/test/common/testEditorService.js';
 import { bindTestColorTheme } from './themeFixture.js';
@@ -61,7 +61,7 @@ services.registerInstance(IThemeService, theme);
 resources.add(bindTestColorTheme(theme, root));
 const commands = resources.add(new CommandService(services));
 const contextView = resources.add(new BrowserContextViewService(root));
-const notifications = resources.add(new NotificationService());
+const notifications = resources.add(new TestNotificationService());
 const menus = resources.add(new BrowserContextMenuService(new MenuService(commands, context), context,
 	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService, contextView, notifications));
 services.registerInstance(IContextMenuService, menus);

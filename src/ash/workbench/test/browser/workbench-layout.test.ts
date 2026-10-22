@@ -1,3 +1,4 @@
+import { TestViewDescriptorService } from './workbenchTestServices.js';
 import { MutableDisposable } from '../../../base/common/lifecycle.js';
 import { ActivityService } from '../../services/activity/browser/activityService.js';
 import { IActivityService, NumberBadge } from '../../services/activity/common/activity.js';
@@ -18,6 +19,8 @@ import type { IViewPaneOptions, PartTitleProjection } from "../../../workbench/b
 import { ContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { h } from "../../../base/browser/dom.js";
 import type { ILocalizationService } from "../../../workbench/services/localization/common/localizationService.js";
+import { HoverService, IHoverService } from '../../../platform/hover/browser/hoverService.js';
+import { BrowserContextViewService } from '../../../platform/contextview/browser/contextViewService.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -88,7 +91,7 @@ const { AuxiliaryBarPart } = await import(
 	"../../../workbench/browser/parts/auxiliarybar/auxiliaryBarPart.js"
 );
 const { PaneComposite } = await import(
-	"../../../workbench/browser/parts/views/paneComposite.js"
+	"../../browser/panecomposite.js"
 );
 const { ViewPane } = await import(
 	"../../../workbench/browser/parts/views/viewPane.js"
@@ -161,6 +164,7 @@ class TestPart extends Part {
 	}
 
 	override get minimumHeight(): number {
+		if (this.id === "banner") return 32;
 		if (this.id === "titlebar") return 35;
 		if (this.id === "statusbar") return 35;
 		if (this.id === "editor") return 84;
@@ -169,6 +173,7 @@ class TestPart extends Part {
 	}
 
 	override get maximumHeight(): number {
+		if (this.id === "banner") return 32;
 		if (this.id === "titlebar") return 35;
 		if (this.id === "statusbar") return 35;
 		return Number.POSITIVE_INFINITY;
@@ -394,7 +399,7 @@ test('Activity Bar badge setting applies on startup and preserves per-icon choic
 			disposables.add(registry.registerViewContainer({ id, title: id, location: ViewContainerLocation.Sidebar }));
 		}
 		const contextKeys = disposables.add(new ContextKeyService());
-		const views = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
+		const views = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 		const activity = disposables.add(new ActivityService(views));
 		const bar = disposables.add(new CompositeBar(harness.container, {
 			openComposite: async () => null,
@@ -903,7 +908,7 @@ test("Git sidebar uses its preferred reset width and merges a lone view into the
 		{ id: "test.graph", title: "Graph", ctorDescriptor: new SyncDescriptor(GitTestView) },
 	]));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 	const descriptor = viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar);
 	assert.ok(descriptor);
 	const model = viewDescriptors.getViewContainerModel(descriptor.id);
@@ -914,8 +919,6 @@ test("Git sidebar uses its preferred reset width and merges a lone view into the
 	const composite = registerContainerServices(componentServices).createInstance(SCMViewPaneContainer, host, {
 		viewContainer: descriptor,
 		model,
-		instantiationService: disposables.add(new InstantiationService()),
-		contextKeyService: contextKeys,
 	});
 	sidebar.addComposite(composite);
 	sidebar.showComposite(descriptor.id);
@@ -1283,7 +1286,7 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 		order: 3,
 	}));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({
 		registry,
 	}, contextKeys));
 	const sidebar = disposables.add(registerContainerServices(componentServices).createInstance(SidebarPart, dom.window.document.body, {
@@ -1422,7 +1425,6 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 	assert.deepEqual(selections, ["ash.explorer", "ash.search"]);
 	assert.equal(compositeBar.activeCompositeId, "ash.explorer");
 
-	const instantiationService = new InstantiationService();
 	const explorerContainer = viewDescriptors.getViewContainers(
 		ViewContainerLocation.Sidebar,
 	)[0];
@@ -1432,14 +1434,10 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 	const explorerComposite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 		viewContainer: explorerContainer,
 		model: viewDescriptors.getViewContainerModel(explorerContainer.id),
-		instantiationService,
-		contextKeyService: contextKeys,
 	});
 	const searchComposite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 		viewContainer: searchContainer,
 		model: viewDescriptors.getViewContainerModel(searchContainer.id),
-		instantiationService,
-		contextKeyService: contextKeys,
 	});
 	sidebar.addComposite(explorerComposite);
 	sidebar.addComposite(searchComposite);
@@ -1484,7 +1482,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 		location: ViewContainerLocation.Sidebar,
 	}));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({
 		registry,
 	}, contextKeys));
 	const createStorage = (workspaceId: string) => new BrowserStorageService({
@@ -1501,8 +1499,6 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 		return registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 			viewContainer: descriptor,
 			model: viewDescriptors.getViewContainerModel(descriptor.id),
-			instantiationService: new InstantiationService(),
-			contextKeyService: contextKeys,
 		});
 	};
 
@@ -1512,7 +1508,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 		getSideBarPosition: () => Position.LEFT,
 	} as import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService);
 	firstServices.registerInstance(IViewDescriptorService, viewDescriptors);
-	const first = firstServices.createInstance(SidebarPart, dom.window.document.body, {
+	const first = registerContainerServices(firstServices).createInstance(SidebarPart, dom.window.document.body, {
 		openComposite: async () => null,
 		viewDescriptorService: viewDescriptors,
 	});
@@ -1529,7 +1525,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 		getSideBarPosition: () => Position.LEFT,
 	} as import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService);
 	restoredServices.registerInstance(IViewDescriptorService, viewDescriptors);
-	const restored = restoredServices.createInstance(SidebarPart, dom.window.document.body, {
+	const restored = registerContainerServices(restoredServices).createInstance(SidebarPart, dom.window.document.body, {
 		openComposite: async () => null,
 		viewDescriptorService: viewDescriptors,
 	});
@@ -1550,7 +1546,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 		getSideBarPosition: () => Position.LEFT,
 	} as import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService);
 	fallbackServices.registerInstance(IViewDescriptorService, viewDescriptors);
-	const fallback = fallbackServices.createInstance(SidebarPart, dom.window.document.body, {
+	const fallback = registerContainerServices(fallbackServices).createInstance(SidebarPart, dom.window.document.body, {
 		openComposite: async () => null,
 		viewDescriptorService: viewDescriptors,
 	});
@@ -1572,7 +1568,7 @@ test("Sidebar can host Agent Sidebar composites", () => {
 		isDefault: true,
 	}));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({
 		registry,
 	}, contextKeys));
 	const agentSidebar = disposables.add(registerContainerServices(componentServices).createInstance(SidebarPart, dom.window.document.body, {
@@ -1600,8 +1596,6 @@ test("Sidebar can host Agent Sidebar composites", () => {
 	const composite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 		viewContainer: descriptor,
 		model: viewDescriptors.getViewContainerModel(descriptor.id),
-		instantiationService: new InstantiationService(),
-		contextKeyService: contextKeys,
 	});
 	agentSidebar.addComposite(composite);
 	agentSidebar.showComposite(composite.id);
@@ -1639,7 +1633,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	const commands = disposables.add(new CommandService(new InstantiationService()));
 	const menuService = new MenuService(commands, contextKeys);
 	const contextMenuProvider: IContextMenuProvider = { showContextMenu() { } };
-	const viewDescriptors = disposables.add(new ViewDescriptorService({
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({
 		registry,
 	}, contextKeys));
 	const panelServices = disposables.add(new InstantiationService());
@@ -1677,8 +1671,6 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	const terminal = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 		viewContainer: terminalDescriptor,
 		model: viewDescriptors.getViewContainerModel(terminalDescriptor.id),
-		instantiationService: new InstantiationService(),
-		contextKeyService: contextKeys,
 		paneHeaders: "hidden",
 		paneLayout: "fill",
 	});
@@ -1703,8 +1695,6 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 		const composite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 			viewContainer: descriptor,
 			model: viewDescriptors.getViewContainerModel(descriptor.id),
-			instantiationService: new InstantiationService(),
-			contextKeyService: contextKeys,
 			paneHeaders: "hidden",
 			paneLayout: "fill",
 		});
@@ -1718,6 +1708,44 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 
 	disposables.dispose();
 	dom.window.close();
+});
+
+test('Transient view navigation follows its active session and ignores stale restoration', async () => {
+	const { StorageTarget } = await import('../../../platform/storage/common/storage.js');
+	using resources = new DisposableStore();
+	const registry = resources.add(new WorkbenchViewRegistry());
+	registry.registerStaticViewContainer({ id: 'test.output', title: 'Output', location: ViewContainerLocation.Panel, isDefault: true });
+	const previewId = 'test.preview';
+	registry.registerStaticViewContainer({ id: previewId, title: 'Preview', location: ViewContainerLocation.Panel, hideIfEmpty: true });
+	registry.registerStaticViews(previewId, [{ id: 'test.preview.view', title: 'Preview', when: ContextKeyExpr.has('test.preview.enabled'), ctorDescriptor: new SyncDescriptor(TestRuntimeView) }]);
+	const context = resources.add(new ContextKeyService());
+	const enabled = context.createKey<boolean>('test.preview.enabled', false);
+	const descriptors = resources.add(new TestViewDescriptorService({ registry }, context));
+	const services = resources.add(createTestComponentServices());
+	services.registerInstance(IContextKeyService, context);
+	services.registerInstance(IViewDescriptorService, descriptors);
+	services.registerInstance(PanelLocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
+	const commands = resources.add(new CommandService(services));
+	services.registerInstance(IMenuService, new MenuService(commands, context));
+	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: BaseEvent.None, onDidHideContextMenu: BaseEvent.None });
+	const panel = resources.add(services.createInstance(PanelPart, browserEnvironment.window.document.body));
+	const tabs = () => [...panel.compositeBar.domNode.querySelectorAll<HTMLElement>('[role="tab"]')].map(tab => tab.dataset.actionId);
+	const model = descriptors.getViewContainerModel(previewId);
+	const baseTabs = tabs();
+	const fallback = panel.getCompositeIdToRestore();
+	const activeTabs = descriptors.getViewContainers(ViewContainerLocation.Panel).map(container => container.id);
+	assert.equal(baseTabs.includes(previewId), false);
+	services.get(IStorageService).store('workbench.panel.activeViewContainer', previewId, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	assert.deepEqual({ tabs: tabs(), restore: panel.getCompositeIdToRestore() }, { tabs: baseTabs, restore: fallback });
+	for (let session = 0; session < 2; session++) {
+		enabled.set(true);
+		assert.deepEqual({ tabs: tabs(), visible: model.visibleViewDescriptors.map(view => view.id), restore: panel.getCompositeIdToRestore() }, {
+			tabs: activeTabs, visible: ['test.preview.view'], restore: previewId,
+		});
+		panel.compositeBar.setActiveComposite(previewId);
+		enabled.set(false);
+		assert.deepEqual({ tabs: tabs(), restore: panel.getCompositeIdToRestore() }, { tabs: baseTabs, restore: fallback });
+	}
 });
 
 test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
@@ -1737,7 +1765,7 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
 		}));
 	}
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({
 		registry,
 	}, contextKeys));
 	const selections: string[] = [];
@@ -1813,7 +1841,7 @@ for (const activeId of ['search', 'explorer']) {
 				disposables.add(registry.registerViewContainer({ id, title: id, location: ViewContainerLocation.Sidebar, isDefault: id === 'explorer' }));
 			}
 			const contextKeys = disposables.add(new ContextKeyService());
-			const views = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
+			const views = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 			const opened: { id: string; preserveFocus: boolean | undefined; }[] = [];
 			let actions: readonly IAction[] = [];
 			const bar = disposables.add(new CompositeBar(dom.window.document.body, {
@@ -1863,7 +1891,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 		disposables.add(registry.registerViewContainer({ id, title, location: ViewContainerLocation.Sidebar }));
 	}
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 	const storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', backend: dom.window.localStorage, flushInterval: 0 });
 	const firstBar = new DisposableStore();
 	let actions: readonly IAction[] = [];
@@ -1927,7 +1955,7 @@ test("CompositeBar retains the startup language of View Container labels", () =>
 		location: ViewContainerLocation.Panel,
 	}));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 	const localeChanges = new Emitter<string>();
 	let locale = "en";
 	const localization = {
@@ -1952,7 +1980,7 @@ test("CompositeBar retains the startup language of View Container labels", () =>
 	dom.window.close();
 });
 
-test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => {
+test("Auxiliary Bar retains its View and exposes container selection as a standard Pane Composite", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const disposables = new DisposableStore();
 	const registry = new WorkbenchViewRegistry();
@@ -1966,19 +1994,16 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 		{ id: "ash.chat.test", title: "Chat", ctorDescriptor: new SyncDescriptor(TestPanelView) },
 	]));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({
 		registry,
 	}, contextKeys));
 	const descriptor = viewDescriptors.getDefaultViewContainer(
 		ViewContainerLocation.AuxiliaryBar,
 	);
 	assert.ok(descriptor);
-	const instantiationService = new InstantiationService();
 	const composite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 		viewContainer: descriptor,
 		model: viewDescriptors.getViewContainerModel(descriptor.id),
-		instantiationService,
-		contextKeyService: contextKeys,
 		paneHeaders: "hidden",
 		paneLayout: "fill",
 	});
@@ -1989,6 +2014,8 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 	const commands = disposables.add(new CommandService(auxiliaryServices));
 	auxiliaryServices.registerInstance(IMenuService, new MenuService(commands, contextKeys));
 	auxiliaryServices.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: BaseEvent.None, onDidHideContextMenu: BaseEvent.None });
+	const contextViews = disposables.add(new BrowserContextViewService(dom.window.document.body));
+	auxiliaryServices.registerInstance(IHoverService, disposables.add(new HoverService(auxiliaryServices.get(IConfigurationService), contextViews, auxiliaryServices.get(IContextMenuService))));
 	const auxiliarybar = disposables.add(auxiliaryServices.createInstance(AuxiliaryBarPart, dom.window.document.body));
 	auxiliarybar.addComposite(composite);
 	auxiliarybar.showComposite(descriptor.id);
@@ -2002,7 +2029,7 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 	assert.equal(contextKeys.getValue('activeAuxiliary'), descriptor.id);
 	const compositeBar = auxiliarybar.domNode.querySelector<HTMLElement>(".ash-composite-bar");
 	assert.ok(compositeBar);
-	assert.equal(compositeBar.hidden, true);
+	assert.equal(compositeBar.hidden, false);
 	const action = auxiliarybar.domNode.querySelector<HTMLButtonElement>(".ash-pane-composite-title-view-actions button");
 	assert.ok(action);
 	action.focus();
@@ -2074,7 +2101,7 @@ test("PaneComposite rejects ambiguous title projections from multiple Views", ()
 		{ id: "ash.test.actions", title: "Actions", ctorDescriptor: new SyncDescriptor(ActionsProjectionView) },
 	]));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({
 		registry,
 	}, contextKeys));
 	const descriptor = viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Panel);
@@ -2082,8 +2109,6 @@ test("PaneComposite rejects ambiguous title projections from multiple Views", ()
 	const composite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 		viewContainer: descriptor,
 		model: viewDescriptors.getViewContainerModel(descriptor.id),
-		instantiationService: new InstantiationService(),
-		contextKeyService: contextKeys,
 	});
 
 	assert.throws(
@@ -2108,7 +2133,7 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
 		disposables.add(registry.registerViewContainer({ id, title, order, location: ViewContainerLocation.Panel }));
 	}
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 	const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
 		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE },
@@ -2284,7 +2309,7 @@ test('Activity Bar restores user container order in a new window and keeps the a
 	const storageOptions = { ownerWindow: dom.window as unknown as Window, workspaceId: 'first', flushInterval: 0 };
 	const storage = disposables.add(new BrowserStorageService(storageOptions));
 	const contexts = disposables.add(new ContextKeyService());
-	const descriptors = disposables.add(new ViewDescriptorService({ registry }, contexts));
+	const descriptors = disposables.add(new TestViewDescriptorService({ registry }, contexts));
 	const bar = disposables.add(new CompositeBar(dom.window.document.body, {
 		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: descriptors,
@@ -2295,7 +2320,7 @@ test('Activity Bar restores user container order in a new window and keeps the a
 	assert.equal(bar.activeCompositeId, 'second');
 	await storage.flush();
 	const restoredStorage = disposables.add(new BrowserStorageService({ ...storageOptions, workspaceId: 'second' }));
-	const restoredDescriptors = disposables.add(new ViewDescriptorService({ registry }, contexts));
+	const restoredDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contexts));
 	const restored = disposables.add(new CompositeBar(dom.window.document.body, {
 		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: restoredDescriptors,
@@ -2326,13 +2351,15 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	const registry = new WorkbenchViewRegistry();
 	registry.registerStaticViewContainer({ id: 'test.panel.first', title: 'First', location: ViewContainerLocation.Panel });
 	registry.registerStaticViewContainer({ id: 'test.panel.second', title: 'Second', location: ViewContainerLocation.Panel });
+	registry.registerStaticViewContainer({ id: 'test.panel.transient', title: 'Transient', location: ViewContainerLocation.Panel, hideIfEmpty: true });
+	registry.registerStaticViews('test.panel.transient', [{ id: 'test.transient.view', title: 'Transient', when: ContextKeyExpr.has('test.transient.enabled'), ctorDescriptor: new SyncDescriptor(TestRuntimeView) }]);
 	registry.registerStaticViews('test.panel.first', [
 		{ id: 'test.panel.view', title: 'View', canToggleVisibility: true, ctorDescriptor: new SyncDescriptor(TestRuntimeView) },
 		{ id: 'test.panel.hidden', title: 'Hidden', hideByDefault: true, canToggleVisibility: true, ctorDescriptor: new SyncDescriptor(TestRuntimeView) },
 	]);
 	registry.registerStaticViews('test.panel.second', [{ id: 'test.panel.conditional', title: 'Conditional', when: ContextKeyExpr.has('test.enabled'), ctorDescriptor: new SyncDescriptor(TestRuntimeView) }]);
 	const context = resources.add(new ContextKeyService());
-	const descriptors = resources.add(new ViewDescriptorService({ registry }, context));
+	const descriptors = resources.add(new TestViewDescriptorService({ registry }, context));
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(IContextKeyService, context);
 	services.registerInstance(IViewDescriptorService, descriptors);
@@ -2356,6 +2383,7 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	const events: string[] = [];
 	resources.add(panes.onDidPaneCompositeOpen(event => events.push(`open:${event.composite.id}`)));
 	resources.add(panes.onDidPaneCompositeClose(event => events.push(`close:${event.composite.id}`)));
+	assert.equal(await panes.openPaneComposite('test.panel.transient', ViewContainerLocation.Panel), undefined);
 	const first = await panes.openPaneComposite('test.panel.first', ViewContainerLocation.Panel);
 	await panes.openPaneComposite('test.panel.first', ViewContainerLocation.Panel);
 	await panes.openPaneComposite('test.panel.second', ViewContainerLocation.Panel);
@@ -2456,6 +2484,7 @@ const titleMenuResources = new DisposableStore();
 suiteTeardown(() => titleMenuResources.dispose());
 
 function registerContainerServices(services: InstanceType<typeof InstantiationService>): InstanceType<typeof InstantiationService> {
+	if (!services.has(IConfigurationService)) services.registerInstance(IConfigurationService, titleMenuResources.add(new InMemoryConfigurationService()));
 	if (!services.has(IContextKeyService)) services.registerInstance(IContextKeyService, titleMenuResources.add(new ContextKeyService()));
 	if (!services.has(IViewDescriptorService)) services.registerInstance(IViewDescriptorService, titleMenuResources.add(services.createInstance(ViewDescriptorService, {})));
 	registerTestComponentServices(services);
@@ -2620,4 +2649,24 @@ test('Panel default setting applies to new workspaces while saved workspace posi
 			assert.equal(restored.layout.getPanelPosition(), Position.LEFT);
 		} finally { restored.disposables.dispose(); }
 	} finally { first.disposables.dispose(); dom.window.close(); }
+});
+
+test('Workbench banner occupies transient space and survives topology rebuilds', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const harness = createLayoutHarness(dom.window.document, { initialDimension: new Dimension(1_200, 800) });
+	try {
+		harness.layout.layout(new Dimension(1_200, 800));
+		const before = harness.layout.getPartSize('editor').height;
+		assert.equal(harness.layout.isPartVisible('banner'), false);
+		harness.layout.showPart('banner');
+		assert.equal(harness.layout.mainContainerOffset.top, 67);
+		assert.equal(harness.layout.getPartSize('editor').height, before - 32);
+		harness.layout.setSideBarLocation('right');
+		assert.equal(harness.layout.isPartVisible('banner'), true);
+		assert.equal(harness.layout.getPartSize('banner').height, 32);
+		harness.layout.hidePart('banner');
+		assert.equal(harness.layout.mainContainerOffset.top, 35);
+		assert.equal(harness.layout.getPartSize('editor').height, before);
+		assert.equal('banner' in harness.layout.state, false);
+	} finally { harness.disposables.dispose(); dom.window.close(); }
 });

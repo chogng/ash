@@ -41,7 +41,7 @@ import type { ICommandEvent, ICommandService } from "../../../platform/commands/
 import { IContextMenuService, IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { IChatService, type ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
 import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import type { IUntitledChatSession } from "../../services/sessions/common/session.js";
@@ -267,7 +267,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { throw new Error('Unexpected conversation navigation'); } } as unknown as IChatSessionNavigationService);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	services.registerInstance(IContextMenuService, contextMenuService);
 	services.registerInstance(IContextViewService, contextViewService);
 	const dialogs = resources.add(new DialogService());

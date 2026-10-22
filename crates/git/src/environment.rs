@@ -108,9 +108,59 @@ impl GitClient {
                 .filter(|key| !key.is_empty())
                 .all(|key| key.starts_with(b"filter."))
         {
-            ContentQueries::HistoryOnly
+            // Installing a filter (for example Git LFS in global config) does not
+            // activate it. Only attributes on files considered by status can do so.
+            if self.environment_has_filter_attributes(cwd).await == Some(false) {
+                ContentQueries::StatusAndHistory
+            } else {
+                ContentQueries::HistoryOnly
+            }
         } else {
             ContentQueries::MetadataOnly
         }
     }
+
+    async fn environment_has_filter_attributes(&self, cwd: &Path) -> Option<bool> {
+        let paths = self
+            .run_query(
+                cwd,
+                [
+                    "ls-files",
+                    "-z",
+                    "--cached",
+                    "--others",
+                    "--exclude-standard",
+                ],
+            )
+            .await
+            .ok()?;
+        if paths.stdout.is_empty() {
+            return Some(false);
+        }
+        // Attribute inspection does not execute filters. Keep the filename stream
+        // NUL-delimited so spaces, newlines and non-UTF-8 paths retain their identity.
+        let attributes = self
+            .run_query_with_stdin(cwd, ["check-attr", "-z", "--stdin", "filter"], paths.stdout)
+            .await
+            .ok()?
+            .require_success()
+            .ok()?;
+        let fields = attributes
+            .stdout
+            .strip_suffix(&[0])?
+            .split(|byte| *byte == 0)
+            .collect::<Vec<_>>();
+        if fields.len() % 3 != 0 {
+            return None;
+        }
+        Some(
+            fields
+                .chunks_exact(3)
+                .any(|record| !matches!(record[2], b"unspecified" | b"unset")),
+        )
+    }
 }
+
+#[cfg(test)]
+#[path = "environment_tests.rs"]
+mod tests;

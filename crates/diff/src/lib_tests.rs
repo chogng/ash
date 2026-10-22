@@ -311,3 +311,69 @@ fn render_side(rows: &[DiffRow], side: Side) -> String {
     }
     text
 }
+
+#[test]
+fn statistics_match_full_diff_for_line_policies_and_unicode() {
+    let inputs = [
+        "",
+        "one",
+        "one\n",
+        "one\r\n",
+        "one\rtwo",
+        "one\ntwo\n",
+        " ONE \n二\n",
+        "one\n二\nthree\n",
+    ];
+    for options in [
+        DiffOptions::default(),
+        DiffOptions::default().with_line_endings(LineEndingPolicy::Ignore),
+        DiffOptions::default()
+            .with_whitespace(WhitespacePolicy::TrimEdges)
+            .with_case_sensitivity(CaseSensitivity::Insensitive),
+    ] {
+        let engine = DiffEngine::new(options);
+        for original in inputs {
+            for modified in inputs {
+                let expected = engine.compute(original, modified).unwrap();
+                let actual = engine.statistics(original, modified).unwrap();
+                let additions = expected
+                    .rows()
+                    .iter()
+                    .filter(|row| matches!(row.kind(), DiffRowKind::Added | DiffRowKind::Modified))
+                    .count();
+                let deletions = expected
+                    .rows()
+                    .iter()
+                    .filter(|row| {
+                        matches!(row.kind(), DiffRowKind::Removed | DiffRowKind::Modified)
+                    })
+                    .count();
+                assert_eq!(
+                    (actual.additions(), actual.deletions()),
+                    (additions, deletions),
+                    "{original:?} -> {modified:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn statistics_enforce_binary_input_and_line_matching_limits() {
+    for options in [
+        DiffOptions::default(),
+        DiffOptions::default().with_limits(DiffLimits::default().with_max_input_bytes_per_side(3)),
+        DiffOptions::default().with_limits(DiffLimits::default().with_max_lines_per_side(1)),
+        DiffOptions::default().with_limits(DiffLimits::default().with_max_edit_distance(1)),
+    ] {
+        let engine = DiffEngine::new(options);
+        for (before, after) in [
+            ("one\0", "two"),
+            ("one\ntwo", "other\nlines\n"),
+            ("four", "ok"),
+        ] {
+            let expected = engine.compute(before, after).map(|_| ());
+            assert_eq!(engine.statistics(before, after).map(|_| ()), expected);
+        }
+    }
+}

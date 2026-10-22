@@ -345,3 +345,141 @@ fn client_settings_restart_only_the_owning_connections_server_and_clear_on_remov
     fixture.server.close_connection(first);
     fixture.server.close_connection(second);
 }
+
+#[test]
+fn language_server_controls_preserve_configuration_documents_and_connection_isolation() {
+    let fixture = Fixture::new();
+    let mut connection = fixture.connection();
+    fixture.configure(&mut connection, "fixture", "demo", true, "first");
+    fixture.configure(&mut connection, "other", "other", true, "second");
+    let mut peer = fixture.connection();
+    let first = fixture.hover(&mut connection, "demo", 1, "alpha");
+    let other = fixture.hover(&mut connection, "other", 1, "beta");
+    let peer_before = fixture.hover(&mut peer, "demo", 1, "peer");
+    let pid = contents(&first).rsplit('|').next().unwrap();
+    let control = |connection: &mut crate::ConnectionState, action: &str, server: Option<&str>| {
+        let mut params = json!({"action": action});
+        if let Some(server) = server {
+            params["serverId"] = json!(server);
+        }
+        let response = fixture.call(connection, "language/serverControl", params);
+        assert!(response.get("result").is_some(), "{response}");
+    };
+
+    control(&mut connection, "stop", Some("fixture"));
+    assert!(
+        !std::process::Command::new("/bin/kill")
+            .args(["-0", pid])
+            .output()
+            .unwrap()
+            .status
+            .success(),
+        "stop acknowledges after reap"
+    );
+    let stopped = fixture.call(&mut connection, "language/servers", json!({}));
+    assert!(
+        stopped["result"]["servers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|server| server["id"] == "fixture" && server["state"]["type"] == "stopped"),
+        "{stopped}"
+    );
+    let retry = fixture.hover(&mut connection, "demo", 2, "changed");
+    assert!(
+        retry.get("error").is_some(),
+        "a background request must not resume a stopped server: {retry}"
+    );
+    assert_eq!(
+        contents(&fixture.hover(&mut peer, "demo", 2, "peer")),
+        contents(&peer_before)
+    );
+    assert_eq!(
+        contents(&fixture.hover(&mut connection, "other", 2, "beta")),
+        contents(&other)
+    );
+
+    control(&mut connection, "restart", Some("fixture"));
+    let restarted = fixture.hover(&mut connection, "demo", 3, "changed");
+    assert!(
+        contents(&restarted).starts_with("changed||"),
+        "current document is replayed: {restarted}"
+    );
+    assert_ne!(contents(&restarted).rsplit('|').next().unwrap(), pid);
+    control(&mut connection, "stop", None);
+    assert!(
+        fixture
+            .hover(&mut connection, "demo", 4, "changed")
+            .get("error")
+            .is_some()
+    );
+    assert!(
+        fixture
+            .hover(&mut connection, "other", 3, "beta")
+            .get("error")
+            .is_some()
+    );
+    control(&mut connection, "restart", None);
+    assert!(
+        contents(&fixture.hover(&mut connection, "demo", 5, "changed")).starts_with("changed||")
+    );
+    assert!(contents(&fixture.hover(&mut connection, "other", 4, "beta")).starts_with("beta||"));
+    let config = fixture.call(&mut connection, "config/read", json!({}));
+    assert_eq!(
+        config["result"]["revision"], 2,
+        "process controls never mutate persistent configuration"
+    );
+    let unknown = fixture.call(
+        &mut connection,
+        "language/serverControl",
+        json!({"action":"restart", "serverId":"unknown"}),
+    );
+    assert!(unknown.get("error").is_some(), "{unknown}");
+}
+
+#[test]
+fn language_server_discovery_and_batch_restart_leave_idle_servers_unstarted() {
+    let fixture = Fixture::new();
+    let mut connection = fixture.connection();
+    fixture.configure(&mut connection, "fixture", "demo", true, "first");
+    fixture.configure(&mut connection, "other", "other", true, "second");
+    let response = fixture.call(&mut connection, "language/servers", json!({}));
+    assert!(
+        response["result"]["servers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|server| server.get("state").is_none())
+    );
+    let response = fixture.call(
+        &mut connection,
+        "language/serverControl",
+        json!({"action":"restart"}),
+    );
+    assert!(response.get("result").is_some(), "{response}");
+    assert_eq!(
+        std::fs::read_dir(fixture.root.path().join("logs"))
+            .unwrap()
+            .count(),
+        0
+    );
+    let response = fixture.call(
+        &mut connection,
+        "language/serverControl",
+        json!({"action":"restart", "serverId":"fixture"}),
+    );
+    assert!(response.get("result").is_some(), "{response}");
+    let first = fixture.hover(&mut connection, "demo", 1, "alpha");
+    assert_eq!(
+        std::fs::read_dir(fixture.root.path().join("logs"))
+            .unwrap()
+            .count(),
+        1,
+        "single-server restart does not start an unrelated idle declaration"
+    );
+    assert!(contents(&fixture.hover(&mut connection, "other", 1, "beta")).starts_with("beta||"));
+    assert_eq!(
+        contents(&fixture.hover(&mut connection, "demo", 2, "alpha")),
+        contents(&first)
+    );
+}

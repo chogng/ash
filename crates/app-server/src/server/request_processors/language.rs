@@ -52,6 +52,7 @@ use ash_app_server_protocol::protocol::language::LanguageLocationDto;
 use ash_app_server_protocol::protocol::language::LanguageLocationKindDto;
 use ash_app_server_protocol::protocol::language::LanguageLocationsParams;
 use ash_app_server_protocol::protocol::language::LanguageLocationsResult;
+use ash_app_server_protocol::protocol::language::LanguageOnTypeFormattingParams;
 use ash_app_server_protocol::protocol::language::LanguageOperationParams;
 use ash_app_server_protocol::protocol::language::LanguageParameterInformationDto;
 use ash_app_server_protocol::protocol::language::LanguagePositionDto;
@@ -66,6 +67,8 @@ use ash_app_server_protocol::protocol::language::LanguageResolveCompletionParams
 use ash_app_server_protocol::protocol::language::LanguageSemanticTokenDto;
 use ash_app_server_protocol::protocol::language::LanguageSemanticTokensParams;
 use ash_app_server_protocol::protocol::language::LanguageSemanticTokensResult;
+use ash_app_server_protocol::protocol::language::LanguageServerControlActionDto;
+use ash_app_server_protocol::protocol::language::LanguageServerControlParams;
 use ash_app_server_protocol::protocol::language::LanguageServerDescriptorDto;
 use ash_app_server_protocol::protocol::language::LanguageServersParams;
 use ash_app_server_protocol::protocol::language::LanguageServersResult;
@@ -112,6 +115,15 @@ use super::decode;
 use super::result;
 
 const MAX_LANGUAGE_TARGET_BYTES: usize = 10 * 1024 * 1024;
+
+enum FormattingRequest {
+    Document,
+    Range(LanguageTextRange),
+    OnType {
+        position: LanguageDocumentPosition,
+        character: String,
+    },
+}
 
 pub(super) fn diagnostic_to_dto(
     text: &str,
@@ -266,11 +278,15 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let definitions = runtime
             .definitions(dir.canonical_path(), &snapshot.values.language_servers)
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let states = runtime.server_states(dir.canonical_path());
         let mut servers: Vec<_> = definitions
             .iter()
             .map(|definition| LanguageServerDescriptorDto {
                 id: definition.name().as_str().to_owned(),
                 language_ids: definition.language_ids().map(str::to_owned).collect(),
+                state: states
+                    .get(definition.name().as_str())
+                    .map(super::language_runtime::language_server_state_to_dto),
             })
             .collect();
         servers.extend(
@@ -279,9 +295,86 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
                 .map(|server| LanguageServerDescriptorDto {
                     id: server.id.clone(),
                     language_ids: server.languages.clone(),
+                    state: states
+                        .get(&server.id)
+                        .map(super::language_runtime::language_server_state_to_dto),
                 }),
         );
+        servers.sort_by(|left, right| left.id.cmp(&right.id));
+        servers.dedup_by(|left, right| left.id == right.id);
         result(&LanguageServersResult { servers })
+    }
+
+    pub(super) fn language_server_control(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageServerControlParams = decode(params)?;
+        if params
+            .server_id
+            .as_ref()
+            .is_some_and(|id| id.is_empty() || id.len() > 128)
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let dir = self
+            .context
+            .language_dir_root_for(params.dir_id.as_deref(), params.session_directory.as_ref())?;
+        let snapshot = self
+            .config
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
+            .read_snapshot()
+            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let mut runtime = self.runtime()?;
+        let definitions = runtime
+            .definitions(dir.canonical_path(), &snapshot.values.language_servers)
+            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let languages: std::collections::BTreeMap<_, _> = definitions
+            .iter()
+            .map(|definition| {
+                (
+                    definition.name().as_str().to_owned(),
+                    definition
+                        .language_ids()
+                        .next()
+                        .unwrap_or_default()
+                        .to_owned(),
+                )
+            })
+            .chain(
+                runtime
+                    .acquisitions(&snapshot.values.language_servers)
+                    .map(|server| (server.id.clone(), server.languages[0].clone())),
+            )
+            .collect();
+        let target = params
+            .server_id
+            .as_ref()
+            .map(|id| {
+                languages
+                    .get(id)
+                    .map(|language| (id.as_str(), language.as_str()))
+                    .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))
+            })
+            .transpose()?;
+        let action = match params.action {
+            LanguageServerControlActionDto::Restart => {
+                ash_lsp_manager::LanguageServerControl::Restart
+            }
+            LanguageServerControlActionDto::Stop => ash_lsp_manager::LanguageServerControl::Stop,
+        };
+        runtime
+            .control_servers(
+                dir.canonical_path(),
+                params.dir_id.as_deref(),
+                snapshot.generation.get(),
+                &snapshot.values.language_servers,
+                target,
+                action,
+            )
+            .map_err(|error| {
+                log::error!("language server control failed: {error}");
+                language_error(AppServerErrorName::LanguageRequestFailed)
+            })?;
+        result(&())
     }
 
     pub(super) fn language_synchronize(
@@ -707,7 +800,12 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageDocumentFormattingParams = decode_language_operation(params)?;
-        self.language_formatting(&params.document, None, params.options, cancellation)
+        self.language_formatting(
+            &params.document,
+            FormattingRequest::Document,
+            params.options,
+            cancellation,
+        )
     }
 
     pub(super) fn language_range_formatting(
@@ -719,13 +817,40 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let range = utf8_byte_range(&params.document.text, params.range)
             .map(LanguageTextRange::new)
             .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        self.language_formatting(&params.document, Some(range), params.options, cancellation)
+        self.language_formatting(
+            &params.document,
+            FormattingRequest::Range(range),
+            params.options,
+            cancellation,
+        )
+    }
+
+    pub(super) fn language_on_type_formatting(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        let params: LanguageOnTypeFormattingParams = decode_language_operation(params)?;
+        if params.character.chars().count() != 1 || params.character.contains('\0') {
+            return Err(language_error(AppServerErrorName::LanguageRequestFailed));
+        }
+        let position = utf8_position(&params.document.text, params.position)
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        self.language_formatting(
+            &params.document,
+            FormattingRequest::OnType {
+                position,
+                character: params.character,
+            },
+            params.options,
+            cancellation,
+        )
     }
 
     fn language_formatting(
         &self,
         document: &ash_app_server_protocol::protocol::language::LanguageDocumentDto,
-        range: Option<LanguageTextRange>,
+        request: FormattingRequest,
         options: LanguageFormattingOptionsDto,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
@@ -746,9 +871,23 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             insert_spaces: options.insert_spaces,
             trim_trailing_whitespace: options.trim_trailing_whitespace,
         };
-        let request_id = match range {
-            Some(range) => service.request_range_formatting(&source_path, revision, range, options),
-            None => service.request_document_formatting(&source_path, revision, options),
+        let request_id = match request {
+            FormattingRequest::Range(range) => {
+                service.request_range_formatting(&source_path, revision, range, options)
+            }
+            FormattingRequest::Document => {
+                service.request_document_formatting(&source_path, revision, options)
+            }
+            FormattingRequest::OnType {
+                position,
+                character,
+            } => service.request_on_type_formatting(
+                &source_path,
+                revision,
+                position,
+                character,
+                options,
+            ),
         }
         .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime

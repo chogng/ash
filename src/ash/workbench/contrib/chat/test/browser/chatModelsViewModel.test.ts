@@ -5,7 +5,7 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import type { CustomModelProvider } from '../../../../../platform/agentHost/common/agentModels.js';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
@@ -13,7 +13,7 @@ import { ChatModelsViewModel } from '../../browser/chatManagement/chatModelsView
 
 function fixture(provider: CustomModelProvider) {
 	const resources = new DisposableStore();
-	const notifications = resources.add(new NotificationService());
+	const notifications = resources.add(new TestNotificationService());
 	const services = resources.add(new InstantiationService());
 	const enabled = new Set<string>();
 	let discoveryCalls = 0;

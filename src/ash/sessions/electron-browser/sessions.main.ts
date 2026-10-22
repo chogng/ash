@@ -162,6 +162,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
 			} : undefined,
 			contributionIds: [
+				'workbench.contrib.limitIndicator',
+				'workbench.contrib.opener',
 				'chatResponseResourceWorkbenchContribution',
 				'terminalAutoReplies',
 				'terminalTelemetry',
@@ -169,6 +171,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				'workbench.contrib.partsSplash',
 				'workbench.contrib.preferences',
 				'workbench.contrib.snippets',
+				'workbench.contrib.defaultFormatter',
 				'workbench.contrib.sessionsLayout',
 				'terminal.native',
 				'workbench.contrib.call',
@@ -185,6 +188,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				'workbench.contrib.output',
 				'workbench.contrib.logs',
 				'workbench.contrib.appServerRecovery',
+				'workbench.contrib.workspacePermissionStatus',
 				'workbench.contrib.githubLinkPresentations',
 				'workbench.contrib.url',
 				'workbench.contrib.externalUriOpener',

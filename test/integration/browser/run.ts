@@ -25,9 +25,10 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 	if (!await collectTests(run, testArgs, playwrightArgs, testEnv)) return;
 	const files = playwrightArgs.filter(argument => /\.spec\.[jt]s$/u.test(argument));
 	let gitExecutable: string | undefined;
-	if (!editorOnly && (files.length === 0 || files.some(file => /(?:gitExtension|diff)\.integration\.spec\.[jt]s$/u.test(file)))) {
+	if (files.length === 0 || files.some(file => /(?:gitExtension|diff)\.integration\.spec\.[jt]s$/u.test(file))) {
 		// A fresh checkout has no SDK executable. Use Cargo's reported artifact so
 		// custom target directories and source changes follow the same build owner.
+		// Editor-only selections also include Diff cases backed by this executable.
 		const { command, args } = pythonCommand(['-B', 'scripts/cargo.py', 'build', '-p', 'ash-git-extension', '--bin', 'ash-git-extension', '--profile', 'ci-test', '--locked', '--message-format=json-render-diagnostics']);
 		const prepared = await run.command(command, args, testEnv, true);
 		if (prepared.code !== 0) { process.exitCode = prepared.code; return; }
@@ -39,7 +40,13 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 	}
 	let backendPackageRoot: string | undefined;
 	if (files.length === 0 || files.some(file => /(?:treeSitter|tokenization|themes|textModel|markdownEditor|chatgptweb)\.integration\.spec\.[jt]s$/u.test(file))) {
-		const prepared = await run.command('pnpm', ['run', 'prepare:backend'], testEnv);
+		// Reuse the invoking package manager. A Windows command shim cannot be
+		// launched directly through spawn, and its script may live outside PATH.
+		const packageManager = environment.npm_execpath;
+		if (!packageManager) throw new Error('Run browser integration tests through the owning package script.');
+		const isScript = /\.[cm]?js$/.test(packageManager);
+		const prepared = await run.command(isScript ? process.execPath : packageManager,
+			[...(isScript ? [packageManager] : []), 'run', 'prepare:backend'], testEnv);
 		if (prepared.code !== 0) { process.exitCode = prepared.code; return; }
 		const target = `${process.arch === 'arm64' ? 'aarch64' : 'x86_64'}-${process.platform === 'darwin' ? 'apple-darwin' : process.platform === 'win32' ? 'pc-windows-msvc' : 'unknown-linux-gnu'}`;
 		const metadata = JSON.parse(readFileSync(resolve(desktopDirectory, '.build/runtime/dev/store-v1', target, 'host-provided-node/dev-small/prepare-inputs.json'), 'utf8')) as { packageRoot: string; };
@@ -61,6 +68,12 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 			runtimeDirectory = mkdtempSync(resolve(outputParent, 'editor-browser-runtime-'));
 			cpSync(backendPackageRoot, runtimeDirectory, { recursive: true, dereference: true, mode: constants.COPYFILE_FICLONE });
 			syntaxExecutable = resolve(runtimeDirectory, 'bin', `ash-app-server${process.platform === 'win32' ? '.exe' : ''}`);
+			if (process.platform === 'win32') {
+				// Loading the copied Windows image can block CreateProcess. Complete
+				// that startup work before the browser starts its bridge deadline.
+				const loaded = await run.command(syntaxExecutable, ['--version'], testEnv);
+				if (loaded.code !== 0) { process.exitCode = loaded.code; return; }
+			}
 		}
 		const build = await run.command(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'test/integration/browser/vite.config.ts', '--outDir', assetsDirectory], testEnv);
 		if (build.code !== 0) {

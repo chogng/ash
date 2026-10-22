@@ -1,0 +1,66 @@
+{
+  "name": "academy",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "displayName": "%academy.displayName%",
+  "description": "%academy.description%",
+  "engines": {
+    "ash": "*"
+  },
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "stanza.editor.document",
+        "displayName": "%academy.editor%",
+        "priority": "default",
+        "selector": [
+          {
+            "filenamePattern": "*.ash-academic",
+            "mimeType": "application/vnd.ash.academic-document+json"
+          },
+          {
+            "filenamePattern": "*.ash-paper"
+          }
+        ],
+        "documentType": "academic"
+      },
+      {
+        "viewType": "ash.editor.document",
+        "displayName": "%academy.generalEditor%",
+        "priority": "default",
+        "selector": [
+          {
+            "filenamePattern": "*.ash-doc",
+            "mimeType": "application/vnd.ash.document+json"
+          }
+        ],
+        "documentType": "general"
+      },
+      {
+        "viewType": "ash.collaboration.notes",
+        "displayName": "%academy.channelNotes%",
+        "priority": "default",
+        "selector": [
+          {
+            "mimeType": "application/vnd.ash.channel-notes+json"
+          }
+        ],
+        "documentType": "ash.collaboration.notes"
+      }
+    ]
+  },
+  "private": true,
+  "ashRuntime": {
+    "kind": "rust",
+    "entrypoint": "ash-academy",
+    "client": {
+      "apiVersion": 1,
+      "entry": "dist/editor.js",
+      "style": "dist/editor.css"
+    }
+  },
+  "activationEvents": [
+    "onDemand:dataChannel"
+  ],
+  "type": "module"
+}

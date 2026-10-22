@@ -1,6 +1,51 @@
 use super::*;
 
 #[test]
+#[cfg(windows)]
+fn approved_command_with_protected_metadata_uses_scoped_windows_authority() {
+    let temporary = tempfile::tempdir().unwrap();
+    std::fs::create_dir(temporary.path().join(".git")).unwrap();
+    let grant = ash_file_access::Grant::for_environment(
+        Dir::open_local(temporary.path()).unwrap(),
+        ash_file_access::GrantSource::HostConfiguration,
+        ash_file_access::Permissions::new([
+            DirPermission::ReadFiles,
+            DirPermission::WriteFiles,
+            DirPermission::ExecuteCommands,
+        ]),
+    );
+    let authorization = grant.authorize(DirPermission::ExecuteCommands).unwrap();
+    let files = grant.authorize(DirPermission::WriteFiles).unwrap();
+    let full = SandboxPolicy::new(FileSystemAccess::FullAccess, NetworkAccess::Allowed)
+        .with_host_acl_changes(local_acl_changes())
+        .with_file_system_isolation(local_isolation());
+    for ceiling in [None, Some(full)] {
+        let scope =
+            local_sandbox_scope(&authorization, std::slice::from_ref(&files), ceiling).unwrap();
+        for approval in [
+            ToolAuthorization::UnsandboxedGrant {
+                grant_id: ash_action_policy::GrantId::new("protected-metadata"),
+            },
+            ToolAuthorization::Sandboxed(full),
+        ] {
+            let CommandExecutionAuthority::Sandboxed(policy) =
+                local_command_authority(&approval, shell_sandbox(), Some(&scope)).unwrap()
+            else {
+                panic!("repository metadata must retain scoped execution");
+            };
+            assert_eq!(policy.file_system(), FileSystemAccess::DirectoryWrite);
+            assert_eq!(
+                policy.file_system_isolation(),
+                ash_sandboxing::FileSystemIsolation::WindowsAccount
+            );
+            let filesystem = scope.resolve_filesystem(policy.file_system()).unwrap();
+            assert!(filesystem.allows_write(&temporary.path().join("note")));
+            assert!(!filesystem.allows_write(&temporary.path().join(".git/config")));
+        }
+    }
+}
+
+#[test]
 fn sandbox_managed_ceilings_survive_approval_at_the_executor_boundary() {
     let directory = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(directory.path()).unwrap();

@@ -17,7 +17,7 @@ import { InstantiationService } from '../../../src/ash/platform/instantiation/co
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
@@ -90,7 +90,7 @@ services.registerInstance(ICommandService, commands);
 services.registerInstance(IMenuService, new MenuService(commands, contexts));
 // The fixture has no product keybinding registry; menu activation uses the real menu's keyboard handling.
 services.registerInstance(IKeybindingService, { lookupKeybinding: () => undefined } as unknown as IKeybindingService);
-services.registerInstance(INotificationService, resources.add(new NotificationService()));
+services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(document.body)));
 services.registerInstance(IContextMenuService, resources.add(services.createInstance(BrowserContextMenuService)));
 services.registerInstance(IDialogsModel, { dialogs: [], onWillShowDialog: Event.None, onDidCloseDialog: Event.None } as unknown as IDialogsModel);

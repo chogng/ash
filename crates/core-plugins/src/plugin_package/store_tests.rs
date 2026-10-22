@@ -41,6 +41,47 @@ fn local_install_promotes_an_exact_immutable_object_and_is_idempotent() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn local_snapshot_preserves_execution_without_copying_extra_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temporary = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("source");
+    package(&source, "# Review");
+    fs::create_dir(source.join("bin")).unwrap();
+    let executable = source.join("bin/mcp");
+    fs::write(&executable, "#!/bin/sh\nprintf 'installed MCP'\n").unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o6755)).unwrap();
+    fs::set_permissions(
+        source.join("skills/review/SKILL.md"),
+        fs::Permissions::from_mode(0o666),
+    )
+    .unwrap();
+    let store = PluginPackageStore::open(temporary.path().join("store")).unwrap();
+    let installed = store
+        .install_local(&LocalPluginPackage::load(&source).unwrap())
+        .unwrap();
+    let activated = store.activate(&installed).unwrap();
+    let program = activated
+        .resolve_file(&crate::PluginPath::new("bin/mcp").unwrap())
+        .unwrap();
+    let data = activated
+        .resolve_file(&crate::PluginPath::new("skills/review/SKILL.md").unwrap())
+        .unwrap();
+    assert_eq!(
+        fs::metadata(&program).unwrap().permissions().mode() & 0o7777,
+        0o700
+    );
+    assert_eq!(
+        fs::metadata(data).unwrap().permissions().mode() & 0o7777,
+        0o600
+    );
+    let output = std::process::Command::new(program).output().unwrap();
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"installed MCP");
+}
+
 #[test]
 fn source_mutation_after_discovery_installs_the_latest_stable_snapshot() {
     let temporary = tempfile::tempdir().unwrap();
