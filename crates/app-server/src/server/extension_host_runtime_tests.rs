@@ -267,7 +267,7 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
             .map(String::as_str),
         Some("ash.markdown-math")
     );
-    assert!(deployments.iter().all(|entry| entry.id != "ash.academic"));
+    assert!(deployments.iter().all(|entry| entry.id != "ash.academy"));
     assert!(deployments.iter().all(|entry| entry.id != "ash.code"));
     let math = deployments
         .iter()

@@ -24,7 +24,7 @@ applyTo: "src/ash/**/test/**/*.ts, src/ash/**/*.test.ts,test/**/*.ts"
 ## Running Tests
 
 - Unit: `pnpm test:unit`, filtered with `--grep <pattern>`, `--run src/ash/<owner>/test/<runtime>/myFile.test.ts`, or `--runGlob '**/myFile.test.js'`.
-- Editor browser integration: `pnpm test:editor:browser`.
+- Editor browser integration: `pnpm test:editor:browser` covers Stanza and its Code/file host adapters. Extension clients such as Academy, PDF Viewer and Reference Manager use `pnpm test:browser:integration <spec>`; their acceptance belongs to the extension or document host.
 - Stanza distribution: `pnpm test:stanza`; see `test/stanza/README.md` for prepared builds and diagnostics.
 - Browser integration: `pnpm test:browser:integration`.
 - Browser and Electron UI: the owning `test:smoke:*` Playwright project.

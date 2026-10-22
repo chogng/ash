@@ -14,7 +14,7 @@ pub struct AcademyExtension;
 
 impl Extension for AcademyExtension {
     fn id(&self) -> &str {
-        "ash.academic"
+        "ash.academy"
     }
 
     fn activate(&mut self, context: &mut ExtensionContext) -> Result<(), ExtensionError> {
@@ -54,21 +54,21 @@ impl Extension for AcademyExtension {
                     vec![
                         DocumentClientEditor {
                             editor_id: "stanza.editor.document".into(),
-                            display_name: label("academic.editor")?,
+                            display_name: label("academy.editor")?,
                             selectors: vec!["*.ash-academic".into(), "*.ash-paper".into()],
                             document_type: "academic".into(),
                             content_type: "application/vnd.ash.academic-document+json".into(),
                         },
                         DocumentClientEditor {
                             editor_id: "ash.editor.document".into(),
-                            display_name: label("academic.generalEditor")?,
+                            display_name: label("academy.generalEditor")?,
                             selectors: vec!["*.ash-doc".into()],
                             document_type: "general".into(),
                             content_type: "application/vnd.ash.document+json".into(),
                         },
                         DocumentClientEditor {
                             editor_id: "ash.collaboration.notes".into(),
-                            display_name: label("academic.channelNotes")?,
+                            display_name: label("academy.channelNotes")?,
                             selectors: vec![],
                             document_type: "ash.collaboration.notes".into(),
                             content_type: "application/vnd.ash.channel-notes+json".into(),

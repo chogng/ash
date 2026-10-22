@@ -1,21 +1,21 @@
-import { DocumentTextModel } from '../../../../../extensions/academic/common/model/documentTextModel.js';
+import { DocumentTextModel } from '../../../../../extensions/academy/common/model/documentTextModel.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Position } from '../../common/core/position.js';
-import { createDefaultDocumentSchema, DocumentSchema } from "../../../../../extensions/academic/common/model/documentSchema.js";
-import { createDeleteReferenceCommand, createInsertCitationCommand, createInsertReferenceCommand, createUpdateReferenceCommand } from "../../../../../extensions/academic/browser/contrib/citation/common/citationCommands.js";
-import { buildReferenceIndex, createReferenceIndexPlugin, REFERENCE_INDEX_KEY } from "../../../../../extensions/academic/browser/contrib/citation/common/references.js";
-import { createAcademicDocumentSchema, createEmptyAcademicDocument } from "../../../../../extensions/academic/browser/contrib/academic/common/schema.js";
+import { createDefaultDocumentSchema, DocumentSchema } from "../../../../../extensions/academy/common/model/documentSchema.js";
+import { createDeleteReferenceCommand, createInsertCitationCommand, createInsertReferenceCommand, createUpdateReferenceCommand } from "../../../../../extensions/academy/browser/contrib/citation/common/citationCommands.js";
+import { buildReferenceIndex, createReferenceIndexPlugin, REFERENCE_INDEX_KEY } from "../../../../../extensions/academy/browser/contrib/citation/common/references.js";
+import { createAcademicDocumentSchema, createEmptyAcademicDocument } from "../../../../../extensions/academy/browser/contrib/academic/common/schema.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { createDocumentDecoration, DocumentDecorationSet } from "../../../../../extensions/academic/common/model/documentDecoration.js";
-import { buildDocumentOutline } from "../../../../../extensions/academic/common/model/documentOutline.js";
-import { documentContentSize, documentNodeSize, documentPointToPosition } from "../../../../../extensions/academic/common/core/documentPosition.js";
-import { createDocumentPlugin, DocumentPluginKey } from "../../../../../extensions/academic/common/model/documentPlugin.js";
-import { documentSelectionToText, extractDocumentFragment, deserializeDocument, deserializeDocumentFragment, DocumentSerializationError, serializeDocument, serializeDocumentFragment } from "../../../../../extensions/academic/common/model/documentSerialization.js";
-import { allSelection, nodeSelection, textSelection } from "../../../../../extensions/academic/common/core/documentSelection.js";
-import { DocumentTransaction } from "../../../../../extensions/academic/common/model/documentTransaction.js";
-import { deserializeDocumentTransaction, serializeDocumentTransaction } from "../../../../../extensions/academic/common/model/documentTransactionSerialization.js";
-import { createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createInsertFragmentCommand, createReplaceTextCommand } from "../../../../../extensions/academic/common/commands/documentCommands.js";
+import { createDocumentDecoration, DocumentDecorationSet } from "../../../../../extensions/academy/common/model/documentDecoration.js";
+import { buildDocumentOutline } from "../../../../../extensions/academy/common/model/documentOutline.js";
+import { documentContentSize, documentNodeSize, documentPointToPosition } from "../../../../../extensions/academy/common/core/documentPosition.js";
+import { createDocumentPlugin, DocumentPluginKey } from "../../../../../extensions/academy/common/model/documentPlugin.js";
+import { documentSelectionToText, extractDocumentFragment, deserializeDocument, deserializeDocumentFragment, DocumentSerializationError, serializeDocument, serializeDocumentFragment } from "../../../../../extensions/academy/common/model/documentSerialization.js";
+import { allSelection, nodeSelection, textSelection } from "../../../../../extensions/academy/common/core/documentSelection.js";
+import { DocumentTransaction } from "../../../../../extensions/academy/common/model/documentTransaction.js";
+import { deserializeDocumentTransaction, serializeDocumentTransaction } from "../../../../../extensions/academy/common/model/documentTransactionSerialization.js";
+import { createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createInsertFragmentCommand, createReplaceTextCommand } from "../../../../../extensions/academy/common/commands/documentCommands.js";
 
 function createDocument(schema: DocumentSchema) {
 	const paragraph = schema.createNode("paragraph", {

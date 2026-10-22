@@ -3,11 +3,9 @@ import { defineConfig } from "@playwright/test";
 
 // CLI file filters are ORed together. Keep the editor scope in testMatch so a
 // user-supplied file filter narrows that scope instead of adding to it.
+// Package-owned clients remain in the full browser suite, independent of Stanza.
 const editorSpecs = [
 	"codeExtension.integration.spec.ts",
-	"academic.integration.spec.ts",
-	"pdfExtension.integration.spec.ts",
-	"referenceManager.integration.spec.ts",
 	"diff.integration.spec.ts",
 	"gpuText.integration.spec.ts",
 	"iPadShowKeyboard.integration.spec.ts",

@@ -1,6 +1,6 @@
-# Academy / Academic
+# Academy
 
-`ash.academic` is an independently installed Rust editor extension. Its
+`ash.academy` is an independently installed Rust editor extension. Its
 `ash-academy` executable registers the versioned `editor.client.v1` capability
 through the public Rust SDK and existing Host RPC. Shared Workbench integration
 projects the admitted package's live registration into the editor registry before
@@ -34,23 +34,27 @@ copies. Package declarations reserve structured routing while disabled, so a mis
 provider cannot silently expose these resources to the default text editor. Re-enabling does not resume an old view; explicit reopening can acquire
 the same working copy and history through the replacement capability.
 
-`ash.academic`, `stanza.editor.document`, the existing Academic MIME type,
-`.ash-academic`, `.ash-paper` and `stanza-academic-v1` remain compatible.
+`ash.academy` is the extension identity; package/source naming uses Academy.
+Academic names the paper profile, whose `stanza.editor.document` view type, MIME
+type, `.ash-academic` / `.ash-paper` files and `stanza-academic-v1` format remain
+compatible. The former `ash.academic` package identity is not an alias: installing
+the renamed package requires its own verified source and exact-package execution
+consent. Existing consent is not transferred by renaming.
 `ash.editor.document`, the general document MIME type, `ash.collaboration.notes`
 and the channel-note MIME type also remain compatible. Paragraph contributions
 are installed per profile/view, never through the global Code contribution registry.
 Complete product/platform acceptance and advanced Word layout remain separate roadmap
 work. The supported DOCX and page-image PDF formats are described below and in the
-[roadmap](../../docs/design/editor-roadmap.md).
+[roadmap](./design.md).
 
 Validate with `just verify ash-academy`, the MainThreadClientEditors / Academic
 profile / DocumentEditorPane unit suites, and
-`pnpm test:browser:integration academic.integration.spec.ts --project=chromium`.
+`pnpm test:browser:integration academy.integration.spec.ts --project=chromium`.
 Ash product packages omit Academy's executable, manifest and client implementation.
 Build the runtime with the repository Rust wrappers, then stage a submission:
 
 ```sh
-pnpm package:editor extensions/academic .build/academy-submission darwin-arm64=.build/cargo/ci-test/ash-academy
+pnpm package:editor extensions/academy .build/academy-submission darwin-arm64=.build/cargo/ci-test/ash-academy
 ```
 
 The command accepts additional `<target-platform>=<executable>` arguments. Its
@@ -64,7 +68,7 @@ The [independent development guide](../../sdk/docs/development.md) exports a com
 SDK and a separate Academy project, then builds, typechecks, loads/reloads and stages
 that project without referring back to Ash source. Development code requires explicit
 local-code authorization; normal package trust and execution consent still apply.
-See [distribution boundaries](../../docs/design/editor-roadmap.md#67-贡献装配与市场扩展).
+See [distribution boundaries](./design.md#67-贡献装配与市场扩展).
 
 M6 writing and styles are owned by this package. Paragraphs and headings can reference
 named document styles, retain local paragraph and character overrides, update a style
@@ -123,7 +127,7 @@ the original DOM. Text IDs, inline marks and event owners remain intact; UTF-16
 positions resolve across the split DOM Text nodes for native selection and input.
 Metric changes preserve selection and wait for composition to finish. Zoom is
 view-local and never changes wrapping or document versions. Advanced page structures
-and viewport virtualization remain outside this slice; see the [root TODO](../../TODO.md#stanza-编辑器--todo) for
+and viewport virtualization remain outside this slice; see the [root TODO](../../TODO.md#work--通用文档--todo) for
 platform acceptance work.
 
 Sections, review and file conversion remain package-owned. Root `documentSection`
@@ -144,6 +148,6 @@ PDF output is a frozen 192 dpi page-image document, with mixed page dimensions a
 running text. Text is not searchable. It shares the page view, waits for resources,
 and cleans up on completion, failure or cancellation. Limits are 256 pages and
 64 MiB; DOCX also bounds expanded ZIP data to 64 MiB and 2,000 parts. See the
-[roadmap](../../docs/design/editor-roadmap.md#64-打印与-pdf) for supported semantics
-and the [root TODO](../../TODO.md#stanza-编辑器--todo) for remaining
+[roadmap](./design.md#64-打印与-pdf) for supported semantics
+and the [root TODO](../../TODO.md#work--通用文档--todo) for remaining
 target-application/platform acceptance work.

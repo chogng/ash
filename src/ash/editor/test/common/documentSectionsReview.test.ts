@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { createDefaultDocumentSchema } from '../../../../../extensions/academic/common/model/documentSchema.js';
-import { DocumentTextModel } from '../../../../../extensions/academic/common/model/documentTextModel.js';
-import { DocumentTransaction } from '../../../../../extensions/academic/common/model/documentTransaction.js';
-import { createCommentCommand, createResolveRevisionCommand } from '../../../../../extensions/academic/common/model/documentReview.js';
-import { createDocumentSectionCommand, createRemoveSectionCommand } from '../../../../../extensions/academic/common/model/documentSections.js';
-import { textSelection } from '../../../../../extensions/academic/common/core/documentSelection.js';
-import { serializeDocument, deserializeDocument, documentToPlainText } from '../../../../../extensions/academic/common/model/documentSerialization.js';
+import { createDefaultDocumentSchema } from '../../../../../extensions/academy/common/model/documentSchema.js';
+import { DocumentTextModel } from '../../../../../extensions/academy/common/model/documentTextModel.js';
+import { DocumentTransaction } from '../../../../../extensions/academy/common/model/documentTransaction.js';
+import { createCommentCommand, createResolveRevisionCommand } from '../../../../../extensions/academy/common/model/documentReview.js';
+import { createDocumentSectionCommand, createRemoveSectionCommand } from '../../../../../extensions/academy/common/model/documentSections.js';
+import { textSelection } from '../../../../../extensions/academy/common/core/documentSelection.js';
+import { serializeDocument, deserializeDocument, documentToPlainText } from '../../../../../extensions/academy/common/model/documentSerialization.js';
 
 const schema = createDefaultDocumentSchema();
 const paragraph = (id: string, text: string) => schema.createNode('paragraph', { id, content: [schema.createText(text, { id: id + '-text' })] });
@@ -77,8 +77,8 @@ test('Academy rejects malformed review data and nested sections at the schema bo
 });
 
 test('Academy copy and replacement cross section boundaries without page-local identities', async () => {
-	const { documentSelectionToText, extractDocumentFragment } = await import('../../../../../extensions/academic/common/model/documentSerialization.js');
-	const { createReplaceTextCommand } = await import('../../../../../extensions/academic/common/commands/documentCommands.js');
+	const { documentSelectionToText, extractDocumentFragment } = await import('../../../../../extensions/academy/common/model/documentSerialization.js');
+	const { createReplaceTextCommand } = await import('../../../../../extensions/academy/common/commands/documentCommands.js');
 	const document = schema.createDocument([paragraph('a', 'Alpha'), schema.createNode('documentSection', { content: [paragraph('b', 'Beta'), paragraph('c', 'Gamma')] })]);
 	const selection = textSelection({ nodeId: 'a-text', offset: 2 }, { nodeId: 'c-text', offset: 3 });
 	assert.equal(documentSelectionToText(document, selection), 'pha\nBeta\nGam');
@@ -91,7 +91,7 @@ test('Academy copy and replacement cross section boundaries without page-local i
 });
 
 test('Academy rebases a new comment over peer typing and preserves peer edits on review acceptance', async () => {
-	const { rebaseDocumentTransaction } = await import('../../../../../extensions/academic/common/contrib/collaboration/rebase.js');
+	const { rebaseDocumentTransaction } = await import('../../../../../extensions/academy/common/contrib/collaboration/rebase.js');
 	const document = schema.createDocument([paragraph('a', 'Alpha')]);
 	const local = createCommentCommand(schema, document, 'a', textSelection({ nodeId: 'a-text', offset: 1 }, { nodeId: 'a-text', offset: 4 }), 'Peer comment', 'Reader')!.transaction;
 	const remote = new DocumentTransaction().replaceText('a-text', 0, 0, '中');
@@ -121,14 +121,14 @@ test('Academy structural revisions promote related block baselines into one reve
 });
 
 test('Academy comment positions survive marked-run replacement and restore exactly on undo', async () => {
-	const { createToggleMarkCommand } = await import('../../../../../extensions/academic/common/commands/documentCommands.js');
+	const { createToggleMarkCommand } = await import('../../../../../extensions/academy/common/commands/documentCommands.js');
 	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph('a', 'Alpha')]));
 	const selection = textSelection({ nodeId: 'a-text', offset: 1 }, { nodeId: 'a-text', offset: 4 });
 	model.dispatch(createCommentCommand(schema, model.document, 'a', selection, 'Review', 'Reader')!.transaction);
 	model.dispatch(createToggleMarkCommand(schema, model.document, 'a', 'a-text', selection, 'strong')!.transaction);
 	const comment = model.document.content.find(node => node.type === 'reviewComment')!;
 	const mapped = JSON.parse(String(comment.attrs.anchor));
-	const { documentSelectionToText } = await import('../../../../../extensions/academic/common/model/documentSerialization.js');
+	const { documentSelectionToText } = await import('../../../../../extensions/academy/common/model/documentSerialization.js');
 	assert.equal(documentSelectionToText(model.document, mapped), 'lph');
 	model.undoBlocks(); assert.deepEqual(JSON.parse(String(model.document.content[1]!.attrs.anchor)), selection);
 });
@@ -144,7 +144,7 @@ test('Academy reviews a style definition and its new references atomically', () 
 });
 
 test('Academy multiline paste across sections retains the destination section and its page intent', async () => {
-	const { createPasteTextCommand } = await import('../../../../../extensions/academic/common/commands/documentCommands.js');
+	const { createPasteTextCommand } = await import('../../../../../extensions/academy/common/commands/documentCommands.js');
 	const document = schema.createDocument([schema.createNode('documentSection', { id: 'first-section', attrs: { pageSize: 'letter' }, content: [paragraph('a', 'Alpha')] }), schema.createNode('documentSection', { content: [paragraph('b', 'Beta')] })]);
 	using model = DocumentTextModel.create(schema, document);
 	model.dispatch(createPasteTextCommand(schema, document, 'a', textSelection({ nodeId: 'a-text', offset: 2 }, { nodeId: 'b-text', offset: 2 }), 'One\nTwo')!.transaction);

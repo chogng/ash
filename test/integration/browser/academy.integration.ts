@@ -10,9 +10,9 @@ import { IThemeService } from '../../../src/ash/platform/theme/common/themeServi
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import type { IDocumentCollaborationApi } from '../../../src/ash/platform/collaboration/common/documentCollaborationApi.js';
-import { generalProfile, createEditorProfileConfiguration } from '../../../extensions/academic/browser/generalProfile.js';
-import { documentContributions } from '../../../extensions/academic/browser/documentContributions.js';
-import { DocumentTextModel } from '../../../extensions/academic/common/model/documentTextModel.js';
+import { generalProfile, createEditorProfileConfiguration } from '../../../extensions/academy/browser/generalProfile.js';
+import { documentContributions } from '../../../extensions/academy/browser/documentContributions.js';
+import { DocumentTextModel } from '../../../extensions/academy/common/model/documentTextModel.js';
 import { MainThreadClientEditors } from '../../../src/ash/workbench/api/browser/mainThreadClientEditors.js';
 import { loadExtensionEditorModule } from '../../../src/ash/workbench/services/extensions/browser/extensionEditorModules.js';
 import { IExtensionApi, normalizeExtensionCatalog } from '../../../src/ash/platform/extensions/common/extensionApi.js';
@@ -33,24 +33,24 @@ import { Disposable, DisposableStore } from "../../../src/ash/base/common/lifecy
 import '../../../src/ash/base/browser/ui/dialog/dialog.css';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
-import { createDefaultDocumentSchema } from "../../../extensions/academic/common/model/documentSchema.js";
-import { createTextNode } from "../../../extensions/academic/common/model/document.js";
+import { createDefaultDocumentSchema } from "../../../extensions/academy/common/model/documentSchema.js";
+import { createTextNode } from "../../../extensions/academy/common/model/document.js";
 
 import { DocumentEditorPane } from "../../../src/ash/workbench/contrib/documentEditor/browser/documentEditorPane.js";
-import type { DocumentNode } from "../../../extensions/academic/common/model/document.js";
-import { documentFromPlainText, serializeDocument } from "../../../extensions/academic/common/model/documentSerialization.js";
-import type { DocumentSchema } from "../../../extensions/academic/common/model/documentSchema.js";
+import type { DocumentNode } from "../../../extensions/academy/common/model/document.js";
+import { documentFromPlainText, serializeDocument } from "../../../extensions/academy/common/model/documentSerialization.js";
+import type { DocumentSchema } from "../../../extensions/academy/common/model/documentSchema.js";
 import type { DocumentCollaborationRoom } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
 import type { DocumentCollaborationInvite } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
 import type { DocumentCollaborationMember } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
 import type { DocumentCollaborationOpenInput } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
-import type { DocumentCollaborationPresence } from "../../../extensions/academic/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationPresence } from "../../../extensions/academy/common/services/documentCollaborationService.js";
 import type { DocumentCollaborationRoomRole } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
-import type { DocumentSelection } from "../../../extensions/academic/common/core/documentSelection.js";
-import type { DocumentCollaborationSnapshot } from "../../../extensions/academic/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../../extensions/academic/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationEnvelope } from "../../../extensions/academic/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationSubmitOutcome } from "../../../extensions/academic/common/services/documentCollaborationService.js";
+import type { DocumentSelection } from "../../../extensions/academy/common/core/documentSelection.js";
+import type { DocumentCollaborationSnapshot } from "../../../extensions/academy/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRemoteEnvelope } from "../../../extensions/academy/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationEnvelope } from "../../../extensions/academy/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationSubmitOutcome } from "../../../extensions/academy/common/services/documentCollaborationService.js";
 import type { IDocumentCollaborationService } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
@@ -85,7 +85,7 @@ import { IConfigurationService } from '../../../src/ash/platform/configuration/c
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { GENERAL_DOCUMENT_EDITOR_ID } from '../../../src/ash/workbench/contrib/documentEditor/browser/documentEditorInput.js';
 
-interface AcademicIntegrationHarness {
+interface AcademyIntegrationHarness {
 	getCallDocumentState(): { documents: readonly CallDocument[]; originalDirty: boolean; joinedResource: string | undefined; joinedTexts: readonly string[]; };
 	readonly apiDocumentType: string;
 	getBundleIds(): readonly string[];
@@ -98,9 +98,9 @@ interface AcademicIntegrationHarness {
 	getOpenedLinks(): readonly string[];
 	saveCodeBlock(): Promise<void>;
 	getSavedCodeBlock(): string;
-	setAcademicEnabled(enabled: boolean): Promise<void>;
+	setAcademyEnabled(enabled: boolean): Promise<void>;
 	replaceAcademicPackage(): Promise<void>;
-	getAcademicRegistration(): { name: string | undefined; routed: boolean; };
+	getAcademyRegistration(): { name: string | undefined; routed: boolean; };
 	saveStructured(): Promise<void>;
 	getSavedStructured(): string;
 	setExternalStructured(text: string): Promise<void>;
@@ -117,7 +117,7 @@ interface AcademicIntegrationHarness {
 
 declare global {
 	interface Window {
-		ashAcademicIntegration: AcademicIntegrationHarness;
+		ashAcademyIntegration: AcademyIntegrationHarness;
 	}
 }
 
@@ -257,7 +257,7 @@ const structuredDocument = pageRule ? pageRuleDocument : new URLSearchParams(loc
 			? schema.createDocument(['Title', 'Body'].map(text => schema.createNode('paragraph', { content: [schema.createText(text, { marks: [{ type: 'strong', attrs: {} }] })] })))
 			: documentFromPlainText(schema, "Title\nBody");
 // Extension scenarios open a legacy Academic file and must save it as typed v2.
-const structuredText = new URLSearchParams(location.search).has('academicExtension')
+const structuredText = new URLSearchParams(location.search).has('academyExtension')
 	? JSON.stringify({ format: 'ash.document', version: 1, document: structuredDocument })
 	: serializeDocument(structuredDocument, schema);
 const structuredFiles = new MemoryTextFiles(structuredResource, structuredText);
@@ -298,10 +298,10 @@ if (new URLSearchParams(location.search).has('m6Document') || new URLSearchParam
 registerTestComponentServices(services);
 if (new URLSearchParams(location.search).has('m6Document') || new URLSearchParams(location.search).has('m6Pages') || new URLSearchParams(location.search).has('m6ComplexPages') || !!pageRule) disposables.add(bindTestColorTheme(services.get(IThemeService), document.documentElement));
 const codeBlockPane = disposables.add(services.createInstance(DocumentEditorPane, { ...createEditorProfileConfiguration(schema, { outlineNavigator: false, contributions: documentContributions }), contentType: 'application/vnd.ash.document+json' }));
-let academicExtensionService: MainThreadClientEditors | undefined;
-let academicSnapshot: ExtensionHostFleetSnapshot | undefined;
-let academicEnablement: GlobalExtensionEnablementService | undefined;
-if (new URLSearchParams(location.search).has('academicExtension') || generalDocument) {
+let academyExtensionService: MainThreadClientEditors | undefined;
+let academySnapshot: ExtensionHostFleetSnapshot | undefined;
+let academyEnablement: GlobalExtensionEnablementService | undefined;
+if (new URLSearchParams(location.search).has('academyExtension') || generalDocument) {
 	const fixture: IExtensionApi = {
 		list: async () => {
 			const response = await fetch('/__academy_catalog');
@@ -314,14 +314,14 @@ if (new URLSearchParams(location.search).has('academicExtension') || generalDocu
 			return new Uint8Array(await response.arrayBuffer());
 		}),
 	};
-	academicEnablement = disposables.add(services.createInstance(GlobalExtensionEnablementService));
+	academyEnablement = disposables.add(services.createInstance(GlobalExtensionEnablementService));
 	const api = withEnabledBuiltInExtensions({
 		list: async () => {
 			const catalog = await fixture.list('cached');
-			return { ...catalog, extensions: catalog.extensions.filter(entry => entry.id === 'ash.academic') };
+			return { ...catalog, extensions: catalog.extensions.filter(entry => entry.id === 'ash.academy') };
 		},
 		resources: fixture.resources,
-	}, academicEnablement);
+	}, academyEnablement);
 	const locale = new URLSearchParams(location.search).get('locale') ?? 'en';
 	services.registerInstance(IExtensionService, { getExtensionPointContributions: () => [] } as unknown as IExtensionService);
 	services.registerInstance(IExtensionApi, api);
@@ -332,13 +332,13 @@ if (new URLSearchParams(location.search).has('academicExtension') || generalDocu
 			return response.json();
 		},
 	} as IExtensionHostApi);
-	academicExtensionService = disposables.add(services.createInstance(MainThreadClientEditors, 30_000, loadExtensionEditorModule));
+	academyExtensionService = disposables.add(services.createInstance(MainThreadClientEditors, 30_000, loadExtensionEditorModule));
 	const response = await fetch(`/__academy_extension?locale=${locale}`);
 	if (!response.ok) throw new Error('Academy provider unavailable');
-	academicSnapshot = await response.json();
-	await academicExtensionService.update(academicSnapshot!);
+	academySnapshot = await response.json();
+	await academyExtensionService.update(academySnapshot!);
 }
-let structuredPane = disposables.add(academicExtensionService
+let structuredPane = disposables.add(academyExtensionService
 	? await EditorPanes.getEditorPane({ resource: structuredResource })!.create({ input: { resource: structuredResource }, instantiationService: services, documentCollaborationApi, serverEvents }) as DocumentEditorPane
 	: generalDocument
 		? EditorPanes.getEditorPane({ resource: structuredResource }, { preferredEditorId: GENERAL_DOCUMENT_EDITOR_ID })!.create({ input: { resource: structuredResource }, instantiationService: services, documentCollaborationApi, serverEvents }) as DocumentEditorPane
@@ -419,7 +419,7 @@ if (new URLSearchParams(location.search).has('callDocuments')) {
 	callPane.layout(400, 0, 900);
 }
 
-window.ashAcademicIntegration = {
+window.ashAcademyIntegration = {
 	getCallDocumentState: () => ({ documents: callDocuments, originalDirty: structuredPane.isDirty, joinedResource: joinedDocumentPane?.workingCopy?.resource.scheme, joinedTexts: joinedDocumentPane?.getDocument().content.map(block => block.content.find(child => child.text !== undefined)?.text ?? '') ?? [] }),
 	apiDocumentType: apiModel.document.type,
 	getBundleIds: () => EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id),
@@ -432,25 +432,25 @@ window.ashAcademicIntegration = {
 	getOpenedLinks: () => openedLinks,
 	saveCodeBlock: () => codeBlockPane.save(),
 	getSavedCodeBlock: () => codeBlockFiles.read(codeBlockResource),
-	setAcademicEnabled: async enabled => {
-		if (!academicExtensionService || !academicEnablement) throw new Error('Academic extension fixture is not enabled');
-		if (enabled) await academicEnablement.enableExtension({ id: 'ash.academic' });
-		else await academicEnablement.disableExtension({ id: 'ash.academic' });
+	setAcademyEnabled: async enabled => {
+		if (!academyExtensionService || !academyEnablement) throw new Error('Academy extension fixture is not enabled');
+		if (enabled) await academyEnablement.enableExtension({ id: 'ash.academy' });
+		else await academyEnablement.disableExtension({ id: 'ash.academy' });
 		const locale = new URLSearchParams(location.search).get('locale') ?? 'en';
 		const response = await fetch(`/__academy_extension?locale=${locale}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) });
 		if (!response.ok) throw new Error('Academy provider lifecycle failed');
-		academicSnapshot = await response.json();
-		await academicExtensionService.update(academicSnapshot!);
+		academySnapshot = await response.json();
+		await academyExtensionService.update(academySnapshot!);
 	},
 	replaceAcademicPackage: async () => {
-		if (!academicExtensionService) throw new Error('Academic extension fixture is not enabled');
+		if (!academyExtensionService) throw new Error('Academy extension fixture is not enabled');
 		const locale = new URLSearchParams(location.search).get('locale') ?? 'en';
 		const response = await fetch(`/__academy_extension?locale=${locale}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: true, replace: true }) });
 		if (!response.ok) throw new Error('Academy package replacement failed');
-		academicSnapshot = await response.json();
-		await academicExtensionService.update(academicSnapshot!);
+		academySnapshot = await response.json();
+		await academyExtensionService.update(academySnapshot!);
 	},
-	getAcademicRegistration: () => ({
+	getAcademyRegistration: () => ({
 		name: EditorPanes.getEditorPanes().find(pane => pane.id === (generalDocument ? GENERAL_DOCUMENT_EDITOR_ID : 'stanza.editor.document'))?.name,
 		routed: DocumentTypes.find({ resource: structuredResource }) !== undefined,
 	}),
@@ -459,7 +459,7 @@ window.ashAcademicIntegration = {
 	setExternalStructured: async text => { await structuredFiles.save({ resource: structuredResource, text }, new AbortController().signal); },
 	revertStructured: () => structuredPane.revert(),
 	reopenStructured: async () => {
-		if (academicExtensionService) {
+		if (academyExtensionService) {
 			const previous = structuredPane;
 			const next = await EditorPanes.getEditorPane({ resource: structuredResource })!.create({ input: { resource: structuredResource }, instantiationService: services, documentCollaborationApi, serverEvents }) as DocumentEditorPane;
 			try {

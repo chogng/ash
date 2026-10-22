@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { FormattingContribution } from '../../../../../extensions/academic/browser/contrib/formatting/formattingContribution.js';
+import { FormattingContribution } from '../../../../../extensions/academy/browser/contrib/formatting/formattingContribution.js';
 
 test('Document formatting contribution releases select listeners with its toolbar', () => {
 	const environment = new JSDOM('<!doctype html><body></body>');

@@ -1,15 +1,15 @@
-import { getDocumentParagraphStyles, resolveDocumentParagraphAttributes } from '../../../../../extensions/academic/common/model/documentParagraph.js';
-import { createReplaceDocumentMatchesCommand, findDocumentText, getDocumentFindMatchIndex } from '../../../../../extensions/academic/common/commands/documentFindCommands.js';
-import { DocumentTextModel } from '../../../../../extensions/academic/common/model/documentTextModel.js';
+import { getDocumentParagraphStyles, resolveDocumentParagraphAttributes } from '../../../../../extensions/academy/common/model/documentParagraph.js';
+import { createReplaceDocumentMatchesCommand, findDocumentText, getDocumentFindMatchIndex } from '../../../../../extensions/academy/common/commands/documentFindCommands.js';
+import { DocumentTextModel } from '../../../../../extensions/academy/common/model/documentTextModel.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { allSelection, textSelection } from '../../../../../extensions/academic/common/core/documentSelection.js';
-import { createApplyParagraphStyleCommand, createClearParagraphOverridesCommand, createDefineParagraphStyleCommand, createDeleteParagraphStyleCommand, createSetListNumberingCommand, getDocumentList, createSetParagraphFormatCommand, createSetParagraphStyleCommand, getSelectedDocumentParagraphs } from '../../../../../extensions/academic/common/commands/documentParagraphCommands.js';
-import { createSplitBlockCommand, createInsertFragmentCommand, createSetBlockTypeCommand } from '../../../../../extensions/academic/common/commands/documentCommands.js';
-import { createDefaultDocumentSchema } from '../../../../../extensions/academic/common/model/documentSchema.js';
+import { allSelection, textSelection } from '../../../../../extensions/academy/common/core/documentSelection.js';
+import { createApplyParagraphStyleCommand, createClearParagraphOverridesCommand, createDefineParagraphStyleCommand, createDeleteParagraphStyleCommand, createSetListNumberingCommand, getDocumentList, createSetParagraphFormatCommand, createSetParagraphStyleCommand, getSelectedDocumentParagraphs } from '../../../../../extensions/academy/common/commands/documentParagraphCommands.js';
+import { createSplitBlockCommand, createInsertFragmentCommand, createSetBlockTypeCommand } from '../../../../../extensions/academy/common/commands/documentCommands.js';
+import { createDefaultDocumentSchema } from '../../../../../extensions/academy/common/model/documentSchema.js';
 import { TextModel } from '../../common/model/textModel.js';
-import { deserializeDocument, serializeDocument, extractDocumentFragment, serializeDocumentFragment, deserializeDocumentFragment } from '../../../../../extensions/academic/common/model/documentSerialization.js';
-import { createAcademicDocumentSchema, createEmptyAcademicDocument } from '../../../../../extensions/academic/browser/contrib/academic/common/schema.js';
+import { deserializeDocument, serializeDocument, extractDocumentFragment, serializeDocumentFragment, deserializeDocumentFragment } from '../../../../../extensions/academy/common/model/documentSerialization.js';
+import { createAcademicDocumentSchema, createEmptyAcademicDocument } from '../../../../../extensions/academy/browser/contrib/academic/common/schema.js';
 
 test('Paragraph formatting is one reversible transaction with shared line semantics and durable measurements', () => {
 	const schema = createDefaultDocumentSchema();

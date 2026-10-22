@@ -2,11 +2,11 @@
 
 本文件自 2026-10-20 起冻结，仅保留历史设计与验证证据；下文“当前”、待处理表及数量均为当时记录，不代表现状。未完成事项统一见 [Stanza 编辑器 TODO](../../../TODO.md#stanza-编辑器--todo)，不再向本文件追加批次、完成表或统计。
 
-2026-10-20 所有权修正：通用 Code contrib、模型分析、语言编辑策略及视图实现归 `src/ash/editor`，由客户端入口直接装配，不依赖 Rust Provider。Academy 富文档实现仍位于 `extensions/academic`，通过独立扩展接入；基础文本、版本、撤销、dirty 与保存的 owner 保持不变。下文历史验证结果不代表本次迁移已经重新验收。
+2026-10-20 所有权修正：通用 Code contrib、模型分析、语言编辑策略及视图实现归 `src/ash/editor`，由客户端入口直接装配，不依赖 Rust Provider。Academy 富文档实现仍位于 `extensions/academy`，通过独立扩展接入；基础文本、版本、撤销、dirty 与保存的 owner 保持不变。下文历史验证结果不代表本次迁移已经重新验收。
 
 ## 2026-10-19：Academy 能力迁移
 
-富文档能力已归 `extensions/academic`；下节的原段落路径对应迁移前实现。Schema、段落命令／属性、投影和事务在包的 `common/`；Widget、格式／段落贡献和共享控件在包的 `browser/`。`browser/documentContributions.ts` 由 profile 按视图装配，不再使用 Editor 的全局贡献注册。普通文档与频道笔记也通过独立 Rust 能力注册消费这些 profile。基础 `TextModel` 只提供通用扩展快照／版本提交，`DocumentTextModel`、富文档历史和 codec 由包拥有；宿主保留唯一资源工作副本及 dirty／备份。
+富文档能力已归 `extensions/academy`；下节的原段落路径对应迁移前实现。Schema、段落命令／属性、投影和事务在包的 `common/`；Widget、格式／段落贡献和共享控件在包的 `browser/`。`browser/documentContributions.ts` 由 profile 按视图装配，不再使用 Editor 的全局贡献注册。普通文档与频道笔记也通过独立 Rust 能力注册消费这些 profile。基础 `TextModel` 只提供通用扩展快照／版本提交，`DocumentTextModel`、富文档历史和 codec 由包拥有；宿主保留唯一资源工作副本及 dirty／备份。
 
 ## 2026-10-18：Academy 段落样式与排版
 
@@ -22,7 +22,7 @@
 
 本节记录迁移前行为；当前契约由包内 `browser/documentContributions.ts` 拥有。文档上下文的单一 `setFormattingContribution` 迁为 `addFormattingContribution`，由 Widget 统一挂载、更新与释放多个控件。`runDocumentCommand` 在调用时取得当前模型及选区，并检查只读、组合输入和释放状态；贡献只返回领域命令，不持有另一份模型。旧 setter 及其调用已退出，代码编辑器分支不参与这些文档控件。
 
-当前仅实现内建正文／标题语义选择及局部段落排版；自定义样式定义、引用与覆盖关系、缩进和 Word 式分页继续按[路线图](../../../docs/design/editor-roadmap.md#61-写作样式与文档语义)推进。既有文档省略新增属性时沿用连续正文默认值，版本化包络及协作标识未更名；schema transaction、line facet 和现有序列化共同携带这些可选属性。
+当前仅实现内建正文／标题语义选择及局部段落排版；自定义样式定义、引用与覆盖关系、缩进和 Word 式分页继续按[路线图](../../../extensions/academy/design.md#61-写作样式与文档语义)推进。既有文档省略新增属性时沿用连续正文默认值，版本化包络及协作标识未更名；schema transaction、line facet 和现有序列化共同携带这些可选属性。
 
 ## 2026-10-06：右键菜单基座续批
 
@@ -166,7 +166,7 @@ Ash 文档宿主按修改来源的 Thread／Turn 标识等待回复完成；多�
 
 ## Academic 文档贡献归属（2026-10-03）
 
-Academic 已退出顶层工作台模式。共享文档 Pane 仍由 Workbench 承载。2026-10-19 起，`extensions/academic` 的独立 Rust executable 经 `editor.client.v1` 能力注册 editor 和文件路由，通用桥校验精确版本与客户端源码摘要后装载包内 profile；旧静态 factory 已移除。Academic Schema、引用、profile 和内容类型现归 `extensions/academic/browser`；通用类型注册、唯一模型与工作副本仍归 Workbench 原服务。普通富文档 Schema／Widget 等内核业务尚待后续迁移。这些职责是 Ash 专属文档能力，不计为 VS Code API 对齐。
+Academic 已退出顶层工作台模式。共享文档 Pane 仍由 Workbench 承载。2026-10-19 起，`extensions/academy` 的独立 Rust executable 经 `editor.client.v1` 能力注册 editor 和文件路由，通用桥校验精确版本与客户端源码摘要后装载包内 profile；旧静态 factory 已移除。Academic Schema、引用、profile 和内容类型现归 `extensions/academy/browser`；通用类型注册、唯一模型与工作副本仍归 Workbench 原服务。普通富文档 Schema／Widget 等内核业务尚待后续迁移。这些职责是 Ash 专属文档能力，不计为 VS Code API 对齐。
 
 用户已确认删除以下无上游对应的旧模式文件，调用方同批迁移，Git 保留历史：
 

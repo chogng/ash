@@ -143,7 +143,7 @@ Markdown 识别行内、块级公式和 `math` 围栏，按文档顺序一次提
 
 Academy 使用中立 `editor` 市场包，`editor/` 的标准扩展 manifest 和资源由包拥有，Rust executable 仍经公共 SDK／Host RPC 注册。Manager 的安装、来源校验、精确执行授权与租约保持唯一 owner。产品固定来源可用 `productRuntimePublishers` 选择可信发布者；此权限依据 pinned root 和已验证 publisher delegation，用户新增来源或包自报标识不能获得。
 
-已安装的精确包获准后，App Server 才投影 `rendererClient`；Renderer 在校验同代资源、摘要、API 版本及当前准入后运行独立模块工厂。模块只取得有限宿主机制，Schema、codec 与视图语义留在包内；宿主拥有模型资源、dirty、历史与恢复。该路径在 Renderer 执行可信第一方代码，不作为任意第三方客户端隔离机制，也不扩大普通 Rust executable 的生产执行权限。构建、升级与客户端接入的设计边界见[编辑器设计 6.7](design/editor-roadmap.md#67-贡献装配与市场扩展)。
+已安装的精确包获准后，App Server 才投影 `rendererClient`；Renderer 在校验同代资源、摘要、API 版本及当前准入后运行独立模块工厂。模块只取得有限宿主机制，Schema、codec 与视图语义留在包内；宿主拥有模型资源、dirty、历史与恢复。该路径在 Renderer 执行可信第一方代码，不作为任意第三方客户端隔离机制，也不扩大普通 Rust executable 的生产执行权限。构建、升级与客户端接入的设计边界见[Academy 设计 6.7](../extensions/academy/design.md#67-贡献装配与市场扩展)。
 
 ### 可选文献管理与 PDF 资源编辑器
 
@@ -460,7 +460,7 @@ flowchart TD
 
 Ash JS API 提供已有命令、文档事件与快照、诊断集合、语言 Provider、Tasks/Debug 和 workspace/configuration 能力。`workspace.fs.readFile/stat/readDirectory` 对应 typed `readResourceFile/statResource/readResourceDirectory`，Rust SDK 提供同一组操作；Workbench 文件服务拥有资源 provider，App Server 验证调用窗口、工作区授权与身份。`stat.ctime` 当前无来源而为 0，写入与完整文件系统 API 仍不支持。打开的 dirty model 始终先于磁盘，改动保留版本、原文前置条件和已有撤销 owner。
 
-可选安装的 `ash.academic` 经声明式 `customEditors` 和 `editor.client.v1` 选择包内 Stanza Academic profile。扩展启用及精确授权决定新 editor 注册；停用后已打开 tab 保留模型、撤销与未保存内容并冻结编辑。schema、引用视图、分页和 DOCX／PDF 输出均由包拥有；共享宿主提供文档与生命周期机制，不向任意第三方开放内部 DOM/model API。PDF 阅读另由可选 `ash.pdf-viewer` 的资源 pane 提供，详见上面的独立能力边界。
+可选安装的 `ash.academy` 经声明式 `customEditors` 和 `editor.client.v1` 选择包内 Stanza Academic profile。扩展启用及精确授权决定新 editor 注册；停用后已打开 tab 保留模型、撤销与未保存内容并冻结编辑。schema、引用视图、分页和 DOCX／PDF 输出均由包拥有；共享宿主提供文档与生命周期机制，不向任意第三方开放内部 DOM/model API。PDF 阅读另由可选 `ash.pdf-viewer` 的资源 pane 提供，详见上面的独立能力边界。
 
 文本自定义编辑器通过 `customTextEditor` 注册，包声明决定 viewType、显示名称和 selector；provider 的标准 `resolveCustomTextEditor` 经统一 invocation 返回 HTML。Workbench 保留模型、readonly、撤销和消息路由。可信 Worker 的库资产沿有界对象 URL 传递，窗口在停用和关闭时回收；该路径只提供已实现的文本自定义编辑器能力。
 

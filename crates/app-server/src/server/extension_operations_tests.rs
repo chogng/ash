@@ -54,8 +54,8 @@ fn renderer_admission_is_projected_from_the_catalog_proof_and_omitted_after_revo
     use ash_external_ext::packages::ExtensionSourceKind;
     let digest = format!("sha256:{}", "a".repeat(64));
     let mut descriptor = ExtensionDescriptor {
-        id: "ash.academic".into(),
-        name: "academic".into(),
+        id: "ash.academy".into(),
+        name: "academy".into(),
         publisher: "ash".into(),
         version: "1.0.0".into(),
         display_name: "Academy".into(),
@@ -66,7 +66,7 @@ fn renderer_admission_is_projected_from_the_catalog_proof_and_omitted_after_revo
         package_sha256: digest.clone(),
         runtime_binding: None,
         renderer_client: Some(ExtensionRendererClient {
-            runtime_id: "ash.academic".into(),
+            runtime_id: "ash.academy".into(),
             api_version: 1,
             entry: "dist/editor.js".into(),
             digest: digest.clone(),
@@ -76,12 +76,12 @@ fn renderer_admission_is_projected_from_the_catalog_proof_and_omitted_after_revo
         }),
     };
     let admitted = serde_json::to_value(super::extension_descriptor(descriptor.clone())).unwrap();
-    assert_eq!(admitted["rendererClient"]["runtimeId"], "ash.academic");
+    assert_eq!(admitted["rendererClient"]["runtimeId"], "ash.academy");
     assert_eq!(admitted["rendererClient"]["apiVersion"], 1);
     assert_eq!(admitted["packageSha256"], descriptor.package_sha256);
     let wire: ash_app_server_protocol::protocol::extensions::ExtensionDto =
         serde_json::from_value(admitted).unwrap();
-    assert_eq!(wire.renderer_client.unwrap().runtime_id, "ash.academic");
+    assert_eq!(wire.renderer_client.unwrap().runtime_id, "ash.academy");
     descriptor.renderer_client = None;
     let revoked = serde_json::to_value(super::extension_descriptor(descriptor)).unwrap();
     assert!(revoked.get("rendererClient").is_none());
@@ -125,8 +125,9 @@ fn extension_catalog_exposes_its_authorized_package_location_and_execution_platf
         .unwrap();
     let extension = &catalog["extensions"][0];
     let location = url::Url::parse(extension["extensionLocation"].as_str().unwrap()).unwrap();
+    // File URLs omit Windows' extended-path prefix; compare the filesystem identities.
     assert_eq!(
-        location.to_file_path().unwrap(),
+        std::fs::canonicalize(location.to_file_path().unwrap()).unwrap(),
         std::fs::canonicalize(&package).unwrap()
     );
     let expected_os = match std::env::consts::OS {

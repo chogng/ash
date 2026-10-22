@@ -1,11 +1,11 @@
-import { documentCodec, bindDocumentCodec } from '../../../../../../../extensions/academic/common/model/documentCodec.js';
+import { documentCodec, bindDocumentCodec } from '../../../../../../../extensions/academy/common/model/documentCodec.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import type { DocumentNode } from "../../../../../../../extensions/academic/common/model/document.js";
-import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../../../extensions/academic/common/model/documentSchema.js";
-import { serializeDocument } from "../../../../../../../extensions/academic/common/model/documentSerialization.js";
-import { DocumentTransaction } from "../../../../../../../extensions/academic/common/model/documentTransaction.js";
-import { serializeDocumentTransaction } from "../../../../../../../extensions/academic/common/model/documentTransactionSerialization.js";
+import type { DocumentNode } from "../../../../../../../extensions/academy/common/model/document.js";
+import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../../../extensions/academy/common/model/documentSchema.js";
+import { serializeDocument } from "../../../../../../../extensions/academy/common/model/documentSerialization.js";
+import { DocumentTransaction } from "../../../../../../../extensions/academy/common/model/documentTransaction.js";
+import { serializeDocumentTransaction } from "../../../../../../../extensions/academy/common/model/documentTransactionSerialization.js";
 import { RemoteDocumentCollaborationService } from "../../browser/remoteDocumentCollaborationService.js";
 
 const TOKEN = "0123456789abcdef0123456789abcdef";

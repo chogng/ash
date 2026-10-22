@@ -43,12 +43,12 @@ fn independent_provider_registers_localized_editors_and_rejects_unknown_requests
         let initialized = runtime.request(
             1,
             "initialize",
-            json!({"extensionId":"ash.academic","runtimeApiVersion":1}),
+            json!({"extensionId":"ash.academy","runtimeApiVersion":1}),
         );
         assert_eq!(initialized["status"], "success");
         let activated = runtime.request(2, "activate", json!({
-            "extensionId":"ash.academic", "runtimeApiVersion":1,
-            "package":{"packageId":"ash.academic@1.0.0","packageDigest":format!("sha256:{}", "a".repeat(64)),"entrypoint":"ash-academy"},
+            "extensionId":"ash.academy", "runtimeApiVersion":1,
+            "package":{"packageId":"ash.academy@1.0.0","packageDigest":format!("sha256:{}", "a".repeat(64)),"entrypoint":"ash-academy"},
             "activationEvents":["onStartupFinished"],"capabilities":["dataChannel"],
             "initialization":{"language":language,"workspaceFolders":[],"workspaceName":null,"workspaceFile":null,"configurationValues":{},"configurationData":{}}
         }));
@@ -59,7 +59,14 @@ fn independent_provider_registers_localized_editors_and_rejects_unknown_requests
                 "registrationId":"editor.client.v1", "kind":"dataChannel", "channelId":"editor.client.v1"
             }])
         );
-        let invoke = |payload| json!({"extensionId":"ash.academic","registrationId":"editor.client.v1","operation":"receiveData","payload":payload,"deadlineUnixMillis":u64::MAX});
+        let invoke = |payload| {
+            let deadline = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock after epoch")
+                .as_millis()
+                + 60_000;
+            json!({"extensionId":"ash.academy","registrationId":"editor.client.v1","operation":"receiveData","payload":payload,"deadlineUnixMillis":deadline})
+        };
         let described = runtime.request(
             3,
             "invoke",

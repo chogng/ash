@@ -8,7 +8,7 @@ use super::validate_manifest;
 fn editor_family_maps_only_its_editor_asset_to_the_existing_editor_extension_capability() {
     let value = serde_json::json!({
         "schemaVersion": 2, "packageType": "editor", "source": "official",
-        "id": "ash/academic", "version": "1.0.0", "displayName": "Academy",
+        "id": "ash/academy", "version": "1.0.0", "displayName": "Academy",
         "description": "A document editor.", "license": "MIT",
         "capabilities": [
             { "kind": "asset", "id": "editor-resources", "path": "editor" },

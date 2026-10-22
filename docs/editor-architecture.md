@@ -1,6 +1,6 @@
 # Stanza：单一文本内核、可装配能力与产品边界
 
-> 本文说明 editor、文档扩展、Workbench、文件服务与 App Server 之间的系统边界。目录与装配入口见 [`src/ash/editor/README.md`](../src/ash/editor/README.md)，行式编辑与富文档的机制契约分别见 [`text-engine.md`](../src/ash/editor/text-engine.md) 和 [`document-engine.md`](../src/ash/editor/document-engine.md)。当前工作见[根 TODO](../TODO.md#stanza-编辑器--todo)，演进依赖见[编辑器设计](design/editor-roadmap.md)。
+> 本文说明 editor、文档扩展、Workbench、文件服务与 App Server 之间的系统边界。目录与装配入口见 [`src/ash/editor/README.md`](../src/ash/editor/README.md)，行式编辑与富文档的机制契约分别见 [`text-engine.md`](../src/ash/editor/text-engine.md) 和 [Academy 扩展规范](../extensions/academy/document-engine.md)。当前工作见[根 TODO](../TODO.md#stanza-编辑器--todo)，演进依赖见[编辑器设计](design/editor-roadmap.md)。
 
 ## 核心模型与产品装配
 
@@ -13,11 +13,11 @@ Code 使用行式文本能力。Academy 的 `DocumentTextModel` 扩展同一个�
 | 基础文本宿主                                     | `editor.all.ts`                                       | 仅装配基础文本命令                                                                           |
 | 客户端 Code                                      | `editor.code.all.ts` + `workbench/contrib/codeEditor` | 客户端装配模型分析、通用编辑功能和 Widget；Workbench 注册 text/diff Pane，另行装配 MultiDiff |
 | Standalone                                       | `editor.main.ts` / `editor.api.ts`                    | 独立宿主服务、公开 `editor` 与 `languages` API；文件持久化由调用方提供                       |
-| Agent Window 的普通文档、Academic 论文与频道笔记 | 独立 `ash.academic` 扩展 + 共享客户端编辑器桥         | Academy 提供 Schema、结构事务、视图、分页和 codec；Workbench 提供资源与工作副本生命周期      |
+| Agent Window 的普通文档、Academic 论文与频道笔记 | 独立 `ash.academy` 扩展 + 共享客户端编辑器桥          | Academy 提供 Schema、结构事务、视图、分页和 codec；Workbench 提供资源与工作副本生命周期      |
 
 `editor.api.ts` 包含浏览器宿主 API，不能作为 DOM-free 入口使用。无 DOM 的调用方应直接消费 `editor/common` 中所需的领域契约。
 
-Academy 的客户端模块与样式绑定精确包版本和摘要，通过公共 SDK／Host RPC 接入共享宿主。产品包不内置 Academy 实现；安装、执行授权、版本准入和撤权遵循[扩展架构](editor-extensions.md)与[包契约](../extensions/academic/README.md)。停用会移除新路由并冻结已有视图，保留工作副本与未保存内容；重新启用后由显式重开获取替代能力。
+Academy 的客户端模块与样式绑定精确包版本和摘要，通过公共 SDK／Host RPC 接入共享宿主。产品包不内置 Academy 实现；安装、执行授权、版本准入和撤权遵循[扩展架构](editor-extensions.md)与[包契约](../extensions/academy/README.md)。停用会移除新路由并冻结已有视图，保留工作副本与未保存内容；重新启用后由显式重开获取替代能力。
 
 独立 [Reference Manager](../extensions/reference-manager/README.md) 拥有 RIS 与 `.ash-library` 文献库，经带文档版本和 Pane／Provider 生命周期的调用句柄向 Academy 提交引用操作；正文、事务和历史仍归 Academy。PDF 渲染与批注归可选 [PDF Viewer](../extensions/pdf-viewer/README.md)，Chat 附件通过通用资源编辑器注册表取得只读预览。
 
@@ -160,4 +160,6 @@ Rename、Code Action 和 WorkspaceEdit 使用同一 `IBulkEditService`。预览�
 
 构建来源、精确命令、首败与复验保留在原产物中：macOS 的 `.build/local-editor-acceptance/`、`.build/local-widget-acceptance/`、`.build/local-acceptance-20261021/` 与 `/tmp/ash-stanza-*.log`；Windows 的 `.build/local-todo-windows-20261022/validation.json`；Linux 的 `.build/wsl-linux-code-20261022/validation.json`。这些是历史证据路径，部分产物不在本机。Windows 终端宿主启动修复及 Stanza 在真实 App Server 下的编辑、写盘、关闭重开与退出后恢复，另见本机 `.build/stanza-windows-host/validation.json`；受控 Chromium 中文组合输入验证见 `.build/stanza-ime-selection/validation.json`。Windows 真实微软拼音的候选窗、提交／取消、选区方向、撤销重做及保存重开，连同 Native／textarea 首败与复验，见 `.build/stanza-windows-ime/validation.json` 及同目录证据清单。
 
-真实扩展签名包的多窗口／远端组合、其他平台／输入法、屏幕阅读器、跨页输入与目标 Word 往返仍以[根 TODO](../TODO.md#stanza-编辑器--todo)为准。本文不维护实施批次、通过数量或完成清单；后续实现变化直接修正所属正文，具体未完成工作只在根 TODO 维护。
+2026-10-22 的本机补验覆盖当前构建的 Stanza 独立包、无障碍帮助／焦点、高对比度，以及 Native／textarea 的 Windows 原生中文正文和选区读取、后续编辑、保存与关闭重开。此前记录见 `.build/stanza-local-acceptance-20261022/validation.json`；本轮使用 Playwright 完成 Chromium／本机 Chrome GPU 全套与 textarea 真实 Desktop 场景，构建来源、查询客户端的首败及复验见 `.build/stanza-sdk-followup-20261022/validation.json`。原生接口的内容暴露不等于屏幕阅读器实际朗读；本轮没有执行 Computer Use。
+
+Stanza 的其他平台／输入法与真实屏幕阅读器验收见[Stanza TODO](../TODO.md#stanza-编辑器--todo)；扩展签名包、多窗口／远端组合、Academy 跨页输入与目标 Word 往返由[Work／通用文档 TODO](../TODO.md#work--通用文档--todo)单独维护。本文不维护实施批次、通过数量或完成清单；后续实现变化直接修正所属正文，具体未完成工作只在根 TODO 维护。

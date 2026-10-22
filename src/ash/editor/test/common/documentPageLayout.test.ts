@@ -1,14 +1,14 @@
-import { documentPageDimensions } from '../../../../../extensions/academic/common/model/documentPageLayout.js';
-import { createSplitBlockCommand, createSplitListItemCommand } from '../../../../../extensions/academic/common/commands/documentCommands.js';
-import { serializeDocumentTransaction, deserializeDocumentTransaction } from '../../../../../extensions/academic/common/model/documentTransactionSerialization.js';
-import type { DocumentAttributes } from '../../../../../extensions/academic/common/model/document.js';
+import { documentPageDimensions } from '../../../../../extensions/academy/common/model/documentPageLayout.js';
+import { createSplitBlockCommand, createSplitListItemCommand } from '../../../../../extensions/academy/common/commands/documentCommands.js';
+import { serializeDocumentTransaction, deserializeDocumentTransaction } from '../../../../../extensions/academy/common/model/documentTransactionSerialization.js';
+import type { DocumentAttributes } from '../../../../../extensions/academy/common/model/document.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { createDefaultDocumentSchema } from '../../../../../extensions/academic/common/model/documentSchema.js';
-import { DocumentTextModel } from '../../../../../extensions/academic/common/model/documentTextModel.js';
-import { DocumentTransaction } from '../../../../../extensions/academic/common/model/documentTransaction.js';
-import { serializeDocument, deserializeDocument } from '../../../../../extensions/academic/common/model/documentSerialization.js';
-import { createAcademicDocumentSchema, createEmptyAcademicDocument } from '../../../../../extensions/academic/browser/contrib/academic/common/schema.js';
+import { createDefaultDocumentSchema } from '../../../../../extensions/academy/common/model/documentSchema.js';
+import { DocumentTextModel } from '../../../../../extensions/academy/common/model/documentTextModel.js';
+import { DocumentTransaction } from '../../../../../extensions/academy/common/model/documentTransaction.js';
+import { serializeDocument, deserializeDocument } from '../../../../../extensions/academy/common/model/documentSerialization.js';
+import { createAcademicDocumentSchema, createEmptyAcademicDocument } from '../../../../../extensions/academy/browser/contrib/academic/common/schema.js';
 
 for (const academic of [false, true]) {
 	test(`Page settings validate, persist and undo atomically in ${academic ? 'Academic' : 'general'} documents`, () => {

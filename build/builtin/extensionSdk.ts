@@ -105,7 +105,7 @@ export async function exportExtensionSdk(sdk: string, project: string, devHost: 
 			await mkdir(dirname(destination), { recursive: true });
 			await writeFile(destination, `${api.modules[key]?.length ? `export { ${api.modules[key].join(', ')} } from '${internal}';\n` : ''}${names.length ? `export type { ${names.join(', ')} } from '${internal}';\n` : ''}`);
 		}
-		const academy = resolve(repository, 'extensions/academic');
+		const academy = resolve(repository, 'extensions/academy');
 		for (const name of ['src', 'browser', 'common', 'tests', 'build.rs', 'package.json', 'package.nls.json', 'package.nls.zh-CN.json', 'README.md']) await cp(resolve(academy, name), resolve(projectStage, name), { recursive: true });
 		await copyFile(resolve(repository, 'LICENSE'), resolve(projectStage, 'LICENSE'));
 		const pkg = metadata.packages.find(pkg => pkg.name === 'ash-academy')!;

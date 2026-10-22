@@ -55,7 +55,7 @@ members = [
     "extensions/github-authentication",
     "extensions/github",
     "extensions/remote-ssh",
-    "extensions/academic",
+    "extensions/academy",
     "extensions/pdf-viewer",
     "extensions/reference-manager",
     "crates/utils/editor-client-build",

@@ -1,11 +1,11 @@
-import { DocumentTextModel } from '../../../../../extensions/academic/common/model/documentTextModel.js';
+import { DocumentTextModel } from '../../../../../extensions/academy/common/model/documentTextModel.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { createDefaultDocumentSchema } from '../../../../../extensions/academic/common/model/documentSchema.js';
+import { createDefaultDocumentSchema } from '../../../../../extensions/academy/common/model/documentSchema.js';
 import { TextModel } from '../../common/model/textModel.js';
-import { deserializeDocument, serializeDocument } from '../../../../../extensions/academic/common/model/documentSerialization.js';
-import { nodeSelection, textSelection } from '../../../../../extensions/academic/common/core/documentSelection.js';
-import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createPasteTextCommand, createRemoveMarkCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSetTextStyleCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext } from '../../../../../extensions/academic/common/commands/documentCommands.js';
+import { deserializeDocument, serializeDocument } from '../../../../../extensions/academy/common/model/documentSerialization.js';
+import { nodeSelection, textSelection } from '../../../../../extensions/academy/common/core/documentSelection.js';
+import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createPasteTextCommand, createRemoveMarkCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSetTextStyleCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext } from '../../../../../extensions/academy/common/commands/documentCommands.js';
 
 test('Academy code block deletion and selection replacement retain one text identity', () => {
 	const schema = createDefaultDocumentSchema();

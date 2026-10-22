@@ -1,12 +1,12 @@
-import { createDefineParagraphStyleCommand } from '../../../../../extensions/academic/common/commands/documentParagraphCommands.js';
-import { createReplaceDocumentMatchesCommand, findDocumentText } from '../../../../../extensions/academic/common/commands/documentFindCommands.js';
-import { getDocumentParagraphStyles } from '../../../../../extensions/academic/common/model/documentParagraph.js';
+import { createDefineParagraphStyleCommand } from '../../../../../extensions/academy/common/commands/documentParagraphCommands.js';
+import { createReplaceDocumentMatchesCommand, findDocumentText } from '../../../../../extensions/academy/common/commands/documentFindCommands.js';
+import { getDocumentParagraphStyles } from '../../../../../extensions/academy/common/model/documentParagraph.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../extensions/academic/common/model/documentSchema.js";
-import { textSelection } from "../../../../../extensions/academic/common/core/documentSelection.js";
-import { DocumentTransaction } from "../../../../../extensions/academic/common/model/documentTransaction.js";
-import { DocumentCollaborationSynchronizer, DocumentCollaborationError } from "../../../../../extensions/academic/common/contrib/collaboration/synchronizer.js";
+import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../extensions/academy/common/model/documentSchema.js";
+import { textSelection } from "../../../../../extensions/academy/common/core/documentSelection.js";
+import { DocumentTransaction } from "../../../../../extensions/academy/common/model/documentTransaction.js";
+import { DocumentCollaborationSynchronizer, DocumentCollaborationError } from "../../../../../extensions/academy/common/contrib/collaboration/synchronizer.js";
 
 function createDocument(schema: DocumentSchema) {
 	return schema.createDocument([schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] })], "document-1");

@@ -1,8 +1,8 @@
-import { documentCodec, bindDocumentCodec } from '../../../../../../../extensions/academic/common/model/documentCodec.js';
+import { documentCodec, bindDocumentCodec } from '../../../../../../../extensions/academy/common/model/documentCodec.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
-import { createDefaultDocumentSchema } from "../../../../../../../extensions/academic/common/model/documentSchema.js";
+import { createDefaultDocumentSchema } from "../../../../../../../extensions/academy/common/model/documentSchema.js";
 import { DialogResult, IDialogService } from "../../../../../platform/dialogs/common/dialogs.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import type { DocumentCollaborationOpenInput, IDocumentCollaborationService } from '../../common/documentCollaborationService.js';

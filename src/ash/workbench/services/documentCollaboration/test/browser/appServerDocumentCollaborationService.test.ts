@@ -1,4 +1,4 @@
-import { documentCodec, bindDocumentCodec } from '../../../../../../../extensions/academic/common/model/documentCodec.js';
+import { documentCodec, bindDocumentCodec } from '../../../../../../../extensions/academy/common/model/documentCodec.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import type { DocumentCollaborationOpenParams } from "../../../../../../../.build/protocol/typescript/index.js";
@@ -10,11 +10,11 @@ import type { DocumentCollaborationSubmitParams } from "../../../../../../../.bu
 import type { DocumentCollaborationSubmitResult } from "../../../../../../../.build/protocol/typescript/index.js";
 import type { DocumentCollaborationUpdate } from "../../../../../../../.build/protocol/typescript/index.js";
 import type { ServerNotification } from "../../../../../../../.build/protocol/typescript/index.js";
-import { textSelection } from "../../../../../../../extensions/academic/common/core/documentSelection.js";
-import type { DocumentNode } from "../../../../../../../extensions/academic/common/model/document.js";
-import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../../../extensions/academic/common/model/documentSchema.js";
-import { applyDocumentTransaction, DocumentTransaction } from "../../../../../../../extensions/academic/common/model/documentTransaction.js";
-import { serializeDocumentTransaction } from "../../../../../../../extensions/academic/common/model/documentTransactionSerialization.js";
+import { textSelection } from "../../../../../../../extensions/academy/common/core/documentSelection.js";
+import type { DocumentNode } from "../../../../../../../extensions/academy/common/model/document.js";
+import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../../../extensions/academy/common/model/documentSchema.js";
+import { applyDocumentTransaction, DocumentTransaction } from "../../../../../../../extensions/academy/common/model/documentTransaction.js";
+import { serializeDocumentTransaction } from "../../../../../../../extensions/academy/common/model/documentTransactionSerialization.js";
 import type { DocumentCollaborationRemoteEnvelope } from '../../common/documentCollaborationService.js';
 import type { IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import type { IDocumentCollaborationApi } from "../../../../../platform/collaboration/common/documentCollaborationApi.js";

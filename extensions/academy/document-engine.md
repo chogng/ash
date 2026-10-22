@@ -1,16 +1,16 @@
-# Stanza Rich Document Engine
+# Academy Rich Document Engine
 
-> 本文是富文档功能实现的 canonical 设计规范，拥有 line-first 内容模型、schema compatibility、transaction、selection、history、browser projection、profile、collaboration、当前状态和修改契约。Editor 总体目录与模式装配见 [`README.md`](./README.md)，跨 Workbench、持久化与服务端的系统边界见 [`docs/editor-architecture.md`](../../../docs/editor-architecture.md)，浏览器实现细节见 [`browser/README.md`](./browser/README.md)。
+> 本文是 Academy 扩展的富文档设计规范，拥有 line-first 内容模型、schema compatibility、transaction、selection、history、browser projection、profile、collaboration、当前状态和修改契约。包归属与接入见 [`README.md`](./README.md)，通用文本机制见 [`Stanza Text Engine`](../../src/ash/editor/text-engine.md)，宿主边界见 [`docs/editor-architecture.md`](../../docs/editor-architecture.md)。
 >
-> 状态：Current + Proposed。状态表明确区分已实现内核、兼容路径与后续迁移。
+> 当前支持范围与限制见[包说明](./README.md)，未完成动作见[Work／通用文档 TODO](../../TODO.md#work--通用文档--todo)。本文维护模型与修改契约，不维护完成表。
 
 ## 当前实现归属（2026-10-19）
 
-本文描述的富文档实现已经迁到 [`extensions/academic`](../../../extensions/academic/README.md)。Schema／命令／事务／历史／行投影／codec 位于包的 `common/`，富文本 Widget、段落贡献和格式控件位于包的 `browser/`；正文、论文与频道笔记通过相同 Rust 能力注册链选择 profile。`DocumentTextModel` 扩展唯一的基础 `TextModel`，通过通用快照提交更新同一文本 buffer 与版本；基础模型及公开入口不再导入具体富文档实现。下文的语义和行为约束继续有效，迁移前相对路径按包内对应目录阅读。
+Schema／命令／事务／历史／行投影／codec 位于本包的 `common/`，富文本 Widget、段落贡献和格式控件位于 `browser/`；正文、论文与频道笔记通过相同 Rust 能力注册链选择 profile。`DocumentTextModel` 扩展 Stanza 的基础 `TextModel`，通过通用快照提交更新同一文本 buffer 与版本。宿主注入有限机制，包拥有结构语义与投影；具体业务和验收不归 Stanza。
 
 ## 快速理解
 
-Stanza 以有序逻辑行为唯一内容主轴。Code 与 Academic 共用 `TextModel`、`LineId`、UTF-16 offset、version 和 history；富文档把文字样式、原子对象、行语义、连续区域与对象关系附着到行上，不再为代码文件或论文制造 BlockTree。
+Academy 复用 Stanza 的有序逻辑行作为内容主轴。Code 与 Academic 共用 `TextModel`、`LineId`、UTF-16 offset、version 和 history；富文档把文字样式、原子对象、行语义、连续区域与对象关系附着到行上，不再为代码文件或论文制造 BlockTree。
 
 | 场景                     | 当前模型                                                       | 明确边界                                                                            |
 | ------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -126,7 +126,7 @@ Academic `codeBlock` 当前投影为父 `TextModel` 中的连续 code region。�
 
 ## Profile、codec 与持久化
 
-Workbench `EditorProfile` 组合 schema/semantic vocabulary、empty document factory、node/atom views、toolbar actions、plugins 与 collaboration schema identity。Profile 在 pane 生命周期内固定。Academic 的文件关联、编辑器名称和 profile 由独立 Rust 扩展 `ash.academic` 经共享宿主注入；Schema、NodeView 和引用实现位于 `extensions/academic/browser`。客户端组件须与 executable 声明的源码摘要匹配。停用时撤下注册与路由并冻结旧视图，原 tab 保留工作副本；显式重开经新注册取得同一模型与历史。扩展不创建第二份 TextModel 或 history。
+Workbench `EditorProfile` 组合 schema/semantic vocabulary、empty document factory、node/atom views、toolbar actions、plugins 与 collaboration schema identity。Profile 在 pane 生命周期内固定。Academic 的文件关联、编辑器名称和 profile 由独立 Rust 扩展 `ash.academy` 经共享宿主注入；Schema、NodeView 和引用实现位于 `extensions/academy/browser`。客户端组件须与 executable 声明的源码摘要匹配。停用时撤下注册与路由并冻结旧视图，原 tab 保留工作副本；显式重开经新注册取得同一模型与历史。扩展不创建第二份 TextModel 或 history。
 
 协作边界与 VS Code 的 Editor/Workbench 分层一致：Editor 定义文档事务、快照、远端选区和同步连接契约；Workbench 定义房间输入、邀请、成员角色与凭证管理。DocumentEditorPane 创建房间工具栏并选择连接方式，将已打开的连接交给 Widget；切换文档时取消房间请求并释放连接。
 
@@ -159,37 +159,21 @@ Collaboration 使用 server-ordered transaction stream，不让 `TextModel` 自�
 
 Invalid schema、selection、step、plugin state 或 line snapshot 在 commit 前失败。Model reference、widget、pane、working copy 和 collaboration connection 分别释放自己创建的资源，不跨 owner dispose。
 
-## 当前状态与限制
-
-| Area                                                    | Status          | Boundary                                                                                                                                         |
-| ------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 有序逻辑行、稳定 LineId、UTF-16 LinePoint               | ✅ Current      | 普通 TextModel edit、split/join、undo/redo 已接入                                                                                                |
-| Range/Point/Facet/Region/Relation store 与 validation   | ✅ Current      | immutable `LineDocumentSnapshot`                                                                                                                 |
-| 普通代码受限 profile，无 source Group/全文 Block        | ✅ Current      | mark/atom/facet/region/relation 为空                                                                                                             |
-| Schema document → line semantics projection             | ✅ Current      | mark、inline/block atom、ancestor facet、code region、caption relation                                                                           |
-| Table schema、行列命令、单元格导航与 browser editing    | ✅ Current      | 嵌套 table/row/cell 仍投影为同一 `TextModel` 的逻辑行                                                                                            |
-| Built-in paragraph styles 与 paragraph formatting       | ✅ Current      | 正文／标题级别及 textAlign、lineSpacing、spaceBefore／spaceAfter 已接入独立贡献；间距以 pt 持久化，随事务投影为 line facet，未提供自定义样式定义 |
-| Citation 与 bibliography UI                             | ✅ Current      | citation/reference schema、reference-index plugin、toolbar action 和 node view 已接入 Academic profile                                           |
-| Academic browser 直接使用 LinePoint command             | Proposed        | 当前仍使用 DocumentPoint compatibility commands                                                                                                  |
-| 直接 `LineDocumentTransaction` 与 line-first rich codec | Proposed        | 当前 schema transaction/serialization 是兼容输入                                                                                                 |
-| Math 与 cross-reference UI                              | Extension point | store contract 已能表达；profile command/view 尚未提供                                                                                           |
-| Footnote、pagination、floating object                   | Potential       | 专门结构或页面布局问题，不改变行主轴                                                                                                             |
-
 ## 关键实现入口
 
-| Symbol/file                                                                 | Responsibility                                                          | 修改时同步检查                                            |
-| --------------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------- |
-| `common/model/lineDocument.ts`                                              | LineId、五类 store、snapshot freeze 与 validation                       | codec、projection、atom/region/relation tests             |
-| `extensions/academic/common/model/lineDocumentProjection.ts`                | schema compatibility value → line semantics                             | schema、serialization、Academic model tests               |
-| `common/model/textModel.ts`                                                 | TextBuffer、LineId mapping、version、history 与唯一 mutation boundary   | cursor、worker mirror、language version gate、model tests |
-| `extensions/academic/common/model/textModelBlockState.ts`                   | schema transaction compatibility、selection、plugin 与 document history | transaction、collaboration、atomic commit tests           |
-| `extensions/academic/common/model/documentTransaction.ts`                   | compatibility steps、mapping 与 metadata                                | selection、decoration、rebase、serialization              |
-| `extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.ts` | Academic compatibility projection 与 input                              | DOM selection、IME、clipboard、node views                 |
-| `browser/widget/codeEditor/codeEditorWidget.ts`                             | Code profile browser surface                                            | input、viewport、accessibility、contributions             |
+| Symbol/file                                                                | Responsibility                                                          | 修改时同步检查                                            |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------- |
+| `src/ash/editor/common/model/lineDocument.ts`                              | LineId、五类 store、snapshot freeze 与 validation                       | codec、projection、atom/region/relation tests             |
+| `extensions/academy/common/model/lineDocumentProjection.ts`                | schema compatibility value → line semantics                             | schema、serialization、Academic model tests               |
+| `src/ash/editor/common/model/textModel.ts`                                 | TextBuffer、LineId mapping、version、history 与唯一 mutation boundary   | cursor、worker mirror、language version gate、model tests |
+| `extensions/academy/common/model/textModelBlockState.ts`                   | schema transaction compatibility、selection、plugin 与 document history | transaction、collaboration、atomic commit tests           |
+| `extensions/academy/common/model/documentTransaction.ts`                   | compatibility steps、mapping 与 metadata                                | selection、decoration、rebase、serialization              |
+| `extensions/academy/browser/widget/richTextEditor/richTextEditorWidget.ts` | Academic compatibility projection 与 input                              | DOM selection、IME、clipboard、node views                 |
+| `src/ash/editor/browser/widget/codeEditor/codeEditorWidget.ts`             | Code profile browser surface                                            | input、viewport、accessibility、contributions             |
 
 ## 验证与修改影响
 
-- 修改 line identity、store validation、transaction、selection、history、plugin 或 serialization：运行 `pnpm run test:editor:unit`。
-- 修改 `RichTextEditorWidget`、clipboard、IME、atom view 或 pane integration：运行 unit suite 和 `pnpm run test:editor:browser`。
+- 修改包内 transaction、selection、history、plugin 或 serialization：运行对应扩展单测；改动 Stanza 的通用 line identity／store contract 时另运行 `pnpm test:editor:unit`。
+- 修改 `RichTextEditorWidget`、clipboard、IME、atom view 或 pane integration：运行所属 unit suite 和 `pnpm test:browser:integration academy.integration.spec.ts --project=chromium`。
 - 修改 dependency direction、profile composition 或 codec boundary：运行 editor architecture tests、Renderer typecheck 和 stale-reference scan。
 - 所有改动运行 `git diff --check`。

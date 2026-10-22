@@ -14,7 +14,7 @@ import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/
 import { createTestComponentServices, registerTestComponentServices, createTestEditorServices, createTestTextFileService, createTestFileService } from '../../../../../test/common/testEditorServices.js';
 import { MemoryFileService } from '../../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { createDocumentEditorPane } from '../../../../../contrib/documentEditor/browser/editorProfile.js';
-import { academicProfile } from '../../../../../../../../extensions/academic/browser/editorProfile.js';
+import { academicProfile } from '../../../../../../../../extensions/academy/browser/editorProfile.js';
 import { DocumentEditorTextModelService } from '../../../../../services/documentEditor/browser/documentEditorTextModelService.js';
 import { IDocumentEditorTextModelService } from '../../../../../services/documentEditor/common/documentTypes.js';
 import { IWorkingCopyService } from '../../../../../services/workingCopy/common/workingCopyService.js';
@@ -4133,10 +4133,10 @@ test('general document commands preserve dirty source text, create a backed-up d
 		const { MainThreadClientEditors } = await import('../../../../../api/browser/mainThreadClientEditors.js');
 		const { readFile } = await import('node:fs/promises');
 		const entry: ExtensionDescriptor = {
-			id: 'ash.academic', name: 'academic', publisher: 'ash', version: '1.0.0', displayName: 'Academy', sourceKind: 'registry',
-			manifestJson: await readFile('extensions/academic/package.json', 'utf8'), manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'a'.repeat(64)}`,
+			id: 'ash.academy', name: 'academy', publisher: 'ash', version: '1.0.0', displayName: 'Academy', sourceKind: 'registry',
+			manifestJson: await readFile('extensions/academy/package.json', 'utf8'), manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'a'.repeat(64)}`,
 			rendererClient: {
-				runtimeId: 'ash.academic', apiVersion: 1, entry: 'dist/editor.js', digest: `sha256:${'b'.repeat(64)}`,
+				runtimeId: 'ash.academy', apiVersion: 1, entry: 'dist/editor.js', digest: `sha256:${'b'.repeat(64)}`,
 				style: 'dist/editor.css', styleDigest: `sha256:${'c'.repeat(64)}`, sourceDigest: `sha256:${'d'.repeat(64)}`,
 			},
 		};
@@ -4147,11 +4147,11 @@ test('general document commands preserve dirty source text, create a backed-up d
 		using bridge = new MainThreadClientEditors(30_000, async () => {
 			moduleRequested.complete();
 			await allowModule.p;
-			return import('../../../../../../../../extensions/academic/browser/editor.js');
+			return import('../../../../../../../../extensions/academy/browser/editor.js');
 		}, {
 			invoke: (request, signal) => provider.invoke(request.registrationId, request.operation, request.payload, signal),
 		} as IExtensionHostApi, { list: async () => ({ generation: 1, extensions: [entry], diagnostics: [] }) } as unknown as IExtensionApi, emptyEditorDeclarations);
-		await bridge.update({ generation: 1, extensions: [{ id: 'ash.academic', version: '1.0.0', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1, activationGeneration: 1, incarnation: 1, lifecycle: 'ready', failure: undefined, stderr: '', outputEvents: [], registrations: provider.registrations }] });
+		await bridge.update({ generation: 1, extensions: [{ id: 'ash.academy', version: '1.0.0', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1, activationGeneration: 1, incarnation: 1, lifecycle: 'ready', failure: undefined, stderr: '', outputEvents: [], registrations: provider.registrations }] });
 		const documentPane = EditorPanes.getEditorPane({ resource: target })!;
 		registry.registerEditorPane({ ...documentPane, documentType: undefined });
 		registry.registerEditorPane({ id: 'test.source', name: 'Text', canOpen: input => input.resource.path.endsWith('.ash-doc') ? EditorPaneMatch.None : EditorPaneMatch.Default, create: () => new TestEditorPane('test.source') });

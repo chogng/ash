@@ -1,5 +1,5 @@
 import type { IExtensionService } from '../../../services/extensions/common/extensionService.js';
-import { generalProfile } from '../../../../../../extensions/academic/browser/generalProfile.js';
+import { generalProfile } from '../../../../../../extensions/academy/browser/generalProfile.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -16,7 +16,7 @@ import { DocumentTypes } from '../../../services/documentEditor/common/documentT
 import { type ExtensionEditorModuleLoader } from '../../../services/extensions/browser/extensionEditor.js';
 import { MainThreadClientEditors } from '../../browser/mainThreadClientEditors.js';
 
-const owner = { id: 'ash.academic', name: 'academic', publisher: 'ash', version: '1.0.0', sourceKind: 'builtIn', packageSha256: 'a'.repeat(64) } as ExtensionDescriptor;
+const owner = { id: 'ash.academy', name: 'academy', publisher: 'ash', version: '1.0.0', sourceKind: 'builtIn', packageSha256: 'a'.repeat(64) } as ExtensionDescriptor;
 const declaration: { readonly [key: string]: JsonValue; } = {
 	version: 1, clientModule: 'dist/editor.js', clientDigest: `sha256:${'a'.repeat(64)}`, editors: [{
 		editorId: 'stanza.editor.document', displayName: 'Academic Document', selectors: ['*.ash-academic', '*.ash-paper'],
@@ -43,7 +43,7 @@ for (const [language, title] of [['en', 'Academic Document'], ['zh-CN', '学术�
 			const packages = { list: async () => ({ generation: 1, extensions: enabled ? [owner] : [], diagnostics: [] }) } as unknown as IExtensionApi;
 			const load: ExtensionEditorModuleLoader = async ({ package: packageOwner, entry }) => {
 				loads++;
-				assert.equal(packageOwner.name, 'academic'); assert.equal(entry, 'dist/editor.js');
+				assert.equal(packageOwner.name, 'academy'); assert.equal(entry, 'dist/editor.js');
 				return {
 					packageId: owner.id, packageVersion: owner.version,
 					getEditorProfile: id => {
@@ -220,7 +220,7 @@ test('temporary client resource failures can retry within the same live capabili
 
 test('disabled installed declarations protect document routing and uninstall removes their reservation', async () => {
 	const manifestJson = JSON.stringify({
-		name: 'academic', publisher: 'ash', version: '1.0.0', ashRuntime: { kind: 'rust' },
+		name: 'academy', publisher: 'ash', version: '1.0.0', ashRuntime: { kind: 'rust' },
 		contributes: { customEditors: [{ viewType: 'stanza.editor.document', displayName: 'Academic', priority: 'default', selector: [{ filenamePattern: '*.ash-protected', mimeType: 'application/vnd.ash.academic-document+json' }] }] },
 	});
 	let entries = [{ ...owner, sourceKind: 'registry', manifestJson, manifestSha256: `sha256:${'a'.repeat(64)}` }];
@@ -300,7 +300,7 @@ test('an installed document editor declares restore and creation routes before s
 	const installed = {
 		...owner, sourceKind: 'registry' as const, packageSha256: runtime.packageDigest, manifestSha256: `sha256:${'b'.repeat(64)}`,
 		rendererClient: { runtimeId: 'marketplace:lazy-academic:editor', apiVersion: 1 as const, entry: 'dist/editor.js', digest: `sha256:${'c'.repeat(64)}`, style: 'dist/editor.css', styleDigest: `sha256:${'d'.repeat(64)}`, sourceDigest: declaration.clientDigest as string },
-		manifestJson: JSON.stringify({ name: 'academic', publisher: 'ash', version: '1.0.0', engines: { ash: '*' }, ashRuntime: { kind: 'rust' }, contributes: { customEditors: [{ viewType: 'stanza.editor.document', displayName: 'Academic Document', priority: 'default', documentType: 'academic', selector: [{ filenamePattern: '*.ash-paper', mimeType: 'application/vnd.ash.academic-document+json' }] }] } }),
+		manifestJson: JSON.stringify({ name: 'academy', publisher: 'ash', version: '1.0.0', engines: { ash: '*' }, ashRuntime: { kind: 'rust' }, contributes: { customEditors: [{ viewType: 'stanza.editor.document', displayName: 'Academic Document', priority: 'default', documentType: 'academic', selector: [{ filenamePattern: '*.ash-paper', mimeType: 'application/vnd.ash.academic-document+json' }] }] } }),
 	};
 	const ready = { ...runtime, id: installed.rendererClient.runtimeId };
 	const dormant = { ...ready, lifecycle: 'dormant' as const, incarnation: undefined, registrations: [], activation: { events: ['onDemand:dataChannel'], commands: [] } };

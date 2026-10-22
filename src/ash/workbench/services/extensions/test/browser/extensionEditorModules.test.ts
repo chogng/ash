@@ -8,11 +8,11 @@ import { loadExtensionEditorModule } from '../../browser/extensionEditorModules.
 import type { ExtensionEditorModuleRequest } from '../../browser/extensionEditor.js';
 
 const admission: ExtensionRendererClient = {
-	runtimeId: 'ash.academic', apiVersion: 1, entry: 'dist/editor.js',
+	runtimeId: 'ash.academy', apiVersion: 1, entry: 'dist/editor.js',
 	digest: `sha256:${'a'.repeat(64)}`, style: 'dist/editor.css',
 	styleDigest: `sha256:${'b'.repeat(64)}`, sourceDigest: `sha256:${'c'.repeat(64)}`,
 };
-const owner = { id: 'ash.academic', name: 'academic', publisher: 'ash', version: '1.0.0', sourceKind: 'registry', rendererClient: admission } as ExtensionDescriptor;
+const owner = { id: 'ash.academy', name: 'academy', publisher: 'ash', version: '1.0.0', sourceKind: 'registry', rendererClient: admission } as ExtensionDescriptor;
 
 function request(read: (path: string) => Promise<Uint8Array>): ExtensionEditorModuleRequest {
 	return {

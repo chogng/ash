@@ -631,7 +631,7 @@ class PackageTests(unittest.TestCase):
             self.assertFalse(
                 (output / "ash-resources/extensions/reference-manager").exists()
             )
-            self.assertFalse((output / "ash-resources/extensions/academic").exists())
+            self.assertFalse((output / "ash-resources/extensions/academy").exists())
             self.assertEqual(
                 b"markdown-extension",
                 (output / "bin" / "ash-markdown-language-features").read_bytes(),

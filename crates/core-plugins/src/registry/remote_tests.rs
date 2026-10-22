@@ -72,12 +72,12 @@ fn product_runtime_trust_requires_explicit_publisher_and_pinned_root() {
         root.path(),
     )
     .unwrap();
-    assert!(config.product_runtime_authority("ash.academic").is_none());
+    assert!(config.product_runtime_authority("ash.academy").is_none());
     let trusted = config
         .clone()
         .with_product_runtime_publishers(["ash".into()])
         .unwrap();
-    assert!(trusted.product_runtime_authority("ash.academic").is_some());
+    assert!(trusted.product_runtime_authority("ash.academy").is_some());
     assert!(
         trusted
             .product_runtime_authority("other.academic")
@@ -109,7 +109,7 @@ fn product_runtime_trust_requires_explicit_publisher_and_pinned_root() {
     .with_product_runtime_publishers(["ash".into()])
     .unwrap();
     assert_ne!(
-        trusted.product_runtime_authority("ash.academic"),
-        other_root.product_runtime_authority("ash.academic")
+        trusted.product_runtime_authority("ash.academy"),
+        other_root.product_runtime_authority("ash.academy")
     );
 }

@@ -229,9 +229,9 @@ test('language extension syntax follows backend enablement, including revocation
 });
 
 test('renderer admission preserves exact backend identity and rejects unsafe resources or unsupported APIs', () => {
-	const owner = packageSnapshot(1, 'ash.academic').extensions[0];
+	const owner = packageSnapshot(1, 'ash.academy').extensions[0];
 	const admission = {
-		runtimeId: 'marketplace:ash.academic:editor-extension:editor', apiVersion: 1,
+		runtimeId: 'marketplace:ash.academy:editor-extension:editor', apiVersion: 1,
 		entry: 'dist/editor.js', digest: `sha256:${'c'.repeat(64)}`,
 		style: 'dist/editor.css', styleDigest: `sha256:${'d'.repeat(64)}`,
 		sourceDigest: `sha256:${'e'.repeat(64)}`,

@@ -7,5 +7,5 @@ export function prepareAcademyExtension(): void {
 
 /** The fixture supplies transport only; declarations come from the real Rust SDK executable. */
 export function startAcademyExtension(language = 'en') {
-	return startClientEditorExtension('ash-academy', 'ash.academic', language, process.env.ASH_ACADEMY_DEVELOPMENT_PROJECT ? resolve(process.env.ASH_ACADEMY_DEVELOPMENT_PROJECT, 'target/debug') : undefined);
+	return startClientEditorExtension('ash-academy', 'ash.academy', language, process.env.ASH_ACADEMY_DEVELOPMENT_PROJECT ? resolve(process.env.ASH_ACADEMY_DEVELOPMENT_PROJECT, 'target/debug') : undefined);
 }

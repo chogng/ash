@@ -11,7 +11,7 @@ const enabled = !!sdk && !!project;
 test('real independent Academy development host gates local code, describes, reloads and stops', { skip: !enabled }, async () => {
 	const cwd = resolve(project!);
 	const binary = resolve(sdk!, 'bin', process.platform === 'win32' ? 'editor_dev.exe' : 'editor_dev');
-	const refused = spawnSync(binary, [cwd, 'target/debug/ash-academy', 'ash.academic'], { cwd, encoding: 'utf8', timeout: 20_000 });
+	const refused = spawnSync(binary, [cwd, 'target/debug/ash-academy', 'ash.academy'], { cwd, encoding: 'utf8', timeout: 20_000 });
 	assert.notEqual(refused.status, 0);
 	assert.match(refused.stderr, /allow-local-code/u);
 	const result = spawnSync(process.execPath, [resolve(sdk!, 'dev.mjs'), 'debug', cwd, '--allow-local-code'], { cwd, input: 'status\ndescribe zh-CN\nreload\nquit\n', encoding: 'utf8', timeout: 20_000 });

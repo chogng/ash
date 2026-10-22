@@ -1,6 +1,6 @@
 # Agent Window 文档工作区与 Code IDE 边界
 
-> 状态：产品范围已确定，Academy 的独立入口仍是候选方案。先完善 Stanza 基础；Academy 从插件侧载入，仅在 Agent Window 中使用。已有独立包与共享编辑器桥不等于宿主范围已经收敛，本文不宣称独立界面或 IDE 旧接线退出已经完成。当前实现见 [Stanza](../../src/ash/editor/README.md)、[Academy](../../extensions/academic/README.md) 与 [Workbench](../workbench.md)；具体剩余动作见[根 TODO](../../TODO.md#work--通用文档--todo)。
+> 状态：产品范围已确定，Academy 的独立入口仍是候选方案。先完善 Stanza 基础；Academy 从插件侧载入，仅在 Agent Window 中使用。已有独立包与共享编辑器桥不等于宿主范围已经收敛，本文不宣称独立界面或 IDE 旧接线退出已经完成。当前实现见 [Stanza](../../src/ash/editor/README.md)、[Academy](../../extensions/academy/README.md) 与 [Workbench](../workbench.md)；具体剩余动作见[根 TODO](../../TODO.md#work--通用文档--todo)。
 
 ## 产品范围
 
@@ -55,6 +55,6 @@ Agent 结构化编辑是独立的后续能力，不作为本轮 Stanza 基础或
 
 ## 验证边界
 
-Stanza 的基础改动先运行受影响模型、输入和宿主回归，并通过 Ash 自身验证实际编辑、保存与恢复。Academy 的能力加载另验收精确包、停用、重开、资源释放和 dirty 恢复，实际支持范围见[包说明](../../extensions/academic/README.md)。
+Stanza 的基础改动先运行受影响模型、输入和宿主回归，并通过 Ash 自身验证实际编辑、保存与恢复。Academy 的能力加载另验收精确包、停用、重开、资源释放和 dirty 恢复，实际支持范围见[包说明](../../extensions/academy/README.md)。
 
 后续宿主范围改动须证明：Agent Window 可消费已授权插件；IDE 不创建 Academy 产品入口或自动装配其能力；已有资源与备份有安全退出和恢复路径。入口方案选定后再验证选中状态、焦点、文档／会话保留及窄窗口行为。物理输入法、屏幕阅读器、多窗口／远端组合与目标 Word 往返不能由普通单测或静态文档替代。

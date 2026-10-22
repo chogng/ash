@@ -1,9 +1,9 @@
 {
-  "name": "academic",
+  "name": "academy",
   "publisher": "ash",
   "version": "1.0.0",
-  "displayName": "%academic.displayName%",
-  "description": "%academic.description%",
+  "displayName": "%academy.displayName%",
+  "description": "%academy.description%",
   "engines": {
     "ash": "*"
   },
@@ -11,7 +11,7 @@
     "customEditors": [
       {
         "viewType": "stanza.editor.document",
-        "displayName": "%academic.editor%",
+        "displayName": "%academy.editor%",
         "priority": "default",
         "selector": [
           {
@@ -26,7 +26,7 @@
       },
       {
         "viewType": "ash.editor.document",
-        "displayName": "%academic.generalEditor%",
+        "displayName": "%academy.generalEditor%",
         "priority": "default",
         "selector": [
           {
@@ -38,7 +38,7 @@
       },
       {
         "viewType": "ash.collaboration.notes",
-        "displayName": "%academic.channelNotes%",
+        "displayName": "%academy.channelNotes%",
         "priority": "default",
         "selector": [
           {

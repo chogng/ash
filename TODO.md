@@ -8,7 +8,6 @@
 
 - [ ] **历史现场复核** · 2026-10-21 用户随后确认点击已正常；实际开发窗口的只读检查也显示主线程响应、无活动动画、Connectors 读取已结束。隔离 Desktop 中全折叠后展开／键盘切换通过，尚未建立原先整窗无响应的故障链。潜在的状态通知请求放大已单独复现并修复：25 次通知在读取进行中不再追加 25 组读取，只在结束后补读一次；保留最新状态、隐藏时撤销待补读，显式导航及可物理取消的市场查询仍可抢占。原始故障仅在再次出现时采集实际 Renderer／Main 栈继续归因，不把这一防护称为历史根因修复；证据与运行限制见 `.build/ash-playwright-mcp/connectors-validation.json`。
 
-
 ## macOS 系统内存耗尽 · 历史现场复核
 
 - [ ] **复核** · 2026-10-21 截图中的 203.48 GB 尚无故障进程 footprint／分配栈，应用已经退出，不能确认分配 owner。文件监听的无界入口、路径积压和重复重扫防护已完成，并通过有界突发、慢消费者及真实 Ash 验证；实现契约见 [file-watcher](crates/file-watcher/README.md#事件风暴的预算与恢复)，原始现场及验证证据见 [.build/investigations/macos-memory-20261021](.build/investigations/macos-memory-20261021)。后续若再次发生，需采集当时 PID、footprint、监听丢事件日志及触发操作；不能用已修复的风险反推历史根因。
@@ -110,13 +109,15 @@
 
 ## Stanza 编辑器 · TODO
 
-当前 Editor 待办统一维护于本节，完成后移除；架构与已有证据范围见[编辑器架构](docs/editor-architecture.md#验证范围)。先闭合 Stanza 的文本、事务、历史、选区、输入、几何与模型生命周期，以及共享宿主的保存／恢复链；Academy 从插件侧载入，业务功能和产品入口不作为基础编辑器的完成条件。具体功能契约由对应实现文档维护，不按上游成员数量建立补齐清单。
+本节只维护 Stanza 通用文本机制与 Code／普通文件宿主的未完成工作，完成后移除；架构与证据范围见[编辑器架构](docs/editor-architecture.md#验证范围)。扩展业务、装载组合和产品入口由所属扩展／宿主单独验收。具体契约由实现文档维护，不按上游成员数量建立补齐清单。
 
-- [ ] **验收 · 编辑器扩展平台组合**：在真实 Electron 多窗口／远端环境验收 Academy、可选 Reference Manager／PDF Viewer 外置签名包的装载、版本匹配、dirty／恢复及释放，以及客户端内置 Code 与共享宿主生命周期；其他平台／输入法、屏幕阅读器、跨页输入及目标 Word 打开／编辑／再次保存的互通仍需对应环境。PDF 查看器独立包迁移及本机验证见[扩展说明](extensions/pdf-viewer/README.md)，文献管理见 [Reference Manager](extensions/reference-manager/README.md)，Academy 已有支持范围见 [包说明](extensions/academic/README.md)；不重复列为功能待办。
+- [ ] **验收 · 输入法与辅助技术环境**：已具备 Windows 微软拼音的 Native／textarea 真实验收。其他平台／输入法、真实屏幕阅读器的文本朗读、选区、候选和帮助焦点仍需对应环境与可复核输出；自动化 ARIA、无障碍树或 Electron 的支持开关不替代实际朗读。2026-10-22 本机仅配置微软拼音，未安装 NVDA；系统讲述人存在，实际朗读证据尚未取得。中英文帮助／焦点、高对比度、Native／textarea Windows 原生正文与选区暴露、屏幕阅读器模式的编辑／写盘／关闭重开均已有通过证据；此前记录见 `.build/stanza-local-acceptance-20261022/validation.json`，本轮 Playwright 完整浏览器／GPU 与 textarea 补验见 `.build/stanza-sdk-followup-20261022/validation.json`。实际朗读及未配置的平台／输入法继续保留，不由自动化结果消项。
 
 设计边界与功能依赖见[编辑器设计与演进](docs/design/editor-roadmap.md)；具体工作仅维护于本清单，不把整篇设计当作一个未完成任务。
 
 ## Work / 通用文档 · TODO
+
+- [ ] **验收 · 文档扩展与共享宿主**：独立验收 Academy、可选 Reference Manager／PDF Viewer 外置签名包在真实 Electron 多窗口／远端环境的装载、版本匹配、dirty／恢复及释放；Academy 的物理输入法跨页输入、扩展视图的屏幕阅读器及目标 Word 打开／编辑／再次保存的互通均归此项。客户端 Code 与普通文件宿主按 Stanza 自身契约验收，扩展组合不作为 Stanza 完成条件。已有范围见 [Academy](extensions/academy/README.md)、[Reference Manager](extensions/reference-manager/README.md) 和 [PDF Viewer](extensions/pdf-viewer/README.md)；本机已安装 Word，不能将未执行的 Word 往返记作缺少 Word 环境。真实签名包、远端及对应输入法／辅助技术覆盖仍需逐项取证。
 
 产品范围与约束见 [Agent Window 文档工作区设计](docs/design/work-code-workbench.md)。
 

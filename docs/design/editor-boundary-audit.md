@@ -6,7 +6,7 @@
 
 ## 迁移状态（2026-10-19）
 
-Academy 的富文档实现位于独立能力包，见 [Academy 包说明](../../extensions/academic/README.md)。通用 Code contrib、模型分析、语言编辑策略及 Minimap／缩进引导归客户端编辑器，见 [编辑器所有权与入口](../../src/ash/editor/README.md)。Code 不依赖扩展进程；正文、dirty、保存与撤销仍由原模型／宿主持有。以下文件清单和 A01–A22 保留历史审计用途，当前验证范围以本轮结果为准。
+Academy 的富文档实现位于独立能力包，见 [Academy 包说明](../../extensions/academy/README.md)。2026-10-22 已将扩展身份统一为 `ash.academy`；下表中的 `ash.academic` 及保持该身份的要求仅记录迁移当时的事实与约束，当前论文 profile、MIME 和文件格式继续保留 Academic 语义。通用 Code contrib、模型分析、语言编辑策略及 Minimap／缩进引导归客户端编辑器，见 [编辑器所有权与入口](../../src/ash/editor/README.md)。Code 不依赖扩展进程；正文、dirty、保存与撤销仍由原模型／宿主持有。以下文件清单和 A01–A22 保留历史审计用途，当前验证范围以本轮结果为准。
 
 ## 审计范围与证据口径
 
@@ -14,7 +14,7 @@ Academy 的富文档实现位于独立能力包，见 [Academy 包说明](../../
 
 对模型、事务、Schema、投影、输入、视图、注册、扩展装载、资源模型、工作副本、协作、Sessions／IDE 入口及测试调用方检查关键实现；其余按目录与静态依赖归组。本审计不是对 649 个文件的逐方法行为验收。静态引用包括类型引用，不能据此判定构建产物是否实际包含某个模块；M5 仍须检查实际加载集合。
 
-外围范围覆盖 `workbench/contrib/{codeEditor,documentEditor,academic,collaboration}`、`workbench/services/{documentEditor,documentCollaboration,textmodelResolver,extensions}`、编辑器 Pane／注册、`extensions/academic`、Sessions 公共／桌面／Web 入口及其服务装配、Creator 入口参照、Chat 输入和 Changes 消费者，以及既有架构、单测、浏览器和 smoke 测试入口。Rust 及传输层只核对调用边界，不据本报告声称后端实现已经完成审计。
+外围范围覆盖 `workbench/contrib/{codeEditor,documentEditor,academic,collaboration}`、`workbench/services/{documentEditor,documentCollaboration,textmodelResolver,extensions}`、编辑器 Pane／注册、`extensions/academy`、Sessions 公共／桌面／Web 入口及其服务装配、Creator 入口参照、Chat 输入和 Changes 消费者，以及既有架构、单测、浏览器和 smoke 测试入口。Rust 及传输层只核对调用边界，不据本报告声称后端实现已经完成审计。
 
 ## 产品宿主与依赖方向
 
@@ -44,7 +44,7 @@ Sessions 中是否设独立 Academy 入口或从已有文档入口进入，属�
 | IDE 启动              | [workbench.common.main.ts](../../src/ash/workbench/workbench.common.main.ts) 导入 `editor.code.all`、Academic 和普通文档贡献                                                                                                                                                  | 现有文档功能与 IDE 静态接线耦合；本次只列迁移债务，后续退出旧入口，不为 Academy 扩展 IDE 适配范围。               |
 | 编辑器默认 bundle     | [editor.code.all.ts](../../src/ash/editor/editor.code.all.ts) 继续导入 [editor.all.ts](../../src/ash/editor/editor.all.ts)，后者同时注册 Code 功能与 `documentEditor.contribution`；`editor.main` 又装配完整 bundle                                                           | 当前无已经验收的纯文本独立装载闭包；更名 bundle 不会解除耦合。                                                    |
 | 普通文档              | [documentEditor.contribution.ts](../../src/ash/workbench/contrib/documentEditor/browser/documentEditor.contribution.ts) 直接注册 `.ash-doc` Pane、创建／转换／导出命令及 IDE 文件菜单；`generalProfile` 选择默认富文档 Schema                                                 | 普通富文档也归 Academy；能力命令由扩展注册，通用桥投影到客户端，Sessions 仅消费产品入口及菜单。                   |
-| Academic 包           | [package.json](../../extensions/academic/package.json) 只声明 `customEditors`，没有可执行 `main`／`browser` 入口；`academicEditor.contribution.ts`（旧入口，现已移除） 提前注册 `ash.academic` 内置 factory                                                                   | 包声明负责路由，实际实现仍随产品编译；尚未证明功能由外部包提供。扩展 ID 和旧文件身份不因 Academy 产品名自动改名。 |
+| Academic 包           | [package.json](../../extensions/academy/package.json) 只声明 `customEditors`，没有可执行 `main`／`browser` 入口；`academicEditor.contribution.ts`（旧入口，现已移除） 提前注册 `ash.academic` 内置 factory                                                                    | 包声明负责路由，实际实现仍随产品编译；尚未证明功能由外部包提供。扩展 ID 和旧文件身份不因 Academy 产品名自动改名。 |
 | customEditors 装载    | [appServerExtensionService.ts](../../src/ash/workbench/services/extensions/browser/appServerExtensionService.ts) 仅为 `builtIn` 包查找 `getBuiltinEditorPaneFactory`，没有 factory 时跳过；[editor.ts](../../src/ash/workbench/browser/editor.ts) 保存静态 factory 表         | 现有路径不能直接承诺任意外部包注入 Renderer 视图，也不能把缺少实现静默跳过作为新能力失败策略。                    |
 
 检查 Sessions 公共入口的静态引用闭包（含类型引用），没有到两个 Workbench `academicEditor.contribution.ts`／`documentEditor.contribution.ts` 注册入口的路径；却能到富文档类型／实现引用。**服务可达、类型可达与 Pane 已注册是不同事实。** 本轮未运行 Sessions 打开文档场景，不据此断言界面一定能打开或一定不能打开某种文件。
@@ -78,7 +78,7 @@ Sessions 中是否设独立 Academy 入口或从已有文档入口进入，属�
 | A21 `standalone/*`、`common/services/*`、`browser/services/*`                                                                                   | 独立宿主、模型服务、worker、语言／marker／格式化／默认粘贴 provider 统一装配                                                 | Standalone 是单独宿主适配；模型引用／通用 Worker 端口可共享；通用 Code／formatter 交互归客户端，语言专属 Provider 可来自扩展包 | M1 契约与调用清单，M4 拆服务，M5 收敛公开入口。Standalone 当前直接引用 contrib，不能当成纯内核已存在的证据。                                                                                    |
 | A22 Sessions／Workbench composition root 与全部测试／构建入口                                                                                   | 静态全功能导入；测试直接构建旧 Pane／内置 factory，并断言 rich 实现必须在 editor 目录                                        | 共享扩展宿主注入 Academy，Sessions 消费注册；Code 保留真实消费者；测试验证 owner 与行为而非冻结旧目录                          | M2 增真实包链验证，M3／M4 转移测试，M5 最后退出旧导入与断言；本轮不修改测试去伪造通过。                                                                                                         |
 
-重点源文件：[TextModel](../../src/ash/editor/common/model/textModel.ts)、[Schema](../../extensions/academic/common/model/documentSchema.ts)、[行投影](../../extensions/academic/common/model/lineDocumentProjection.ts)、[扩展上下文](../../src/ash/editor/browser/editorExtensions.ts)、[富文档 Widget](../../extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.ts)、[模型服务](../../src/ash/workbench/services/documentEditor/browser/documentEditorTextModelService.ts)、[工作副本](../../src/ash/workbench/services/documentEditor/browser/documentWorkingCopy.ts)。表中短路径以 `src/ash/editor` 为根，明确标注 `workbench`／Sessions 的除外。
+重点源文件：[TextModel](../../src/ash/editor/common/model/textModel.ts)、[Schema](../../extensions/academy/common/model/documentSchema.ts)、[行投影](../../extensions/academy/common/model/lineDocumentProjection.ts)、[扩展上下文](../../src/ash/editor/browser/editorExtensions.ts)、[富文档 Widget](../../extensions/academy/browser/widget/richTextEditor/richTextEditorWidget.ts)、[模型服务](../../src/ash/workbench/services/documentEditor/browser/documentEditorTextModelService.ts)、[工作副本](../../src/ash/workbench/services/documentEditor/browser/documentWorkingCopy.ts)。表中短路径以 `src/ash/editor` 为根，明确标注 `workbench`／Sessions 的除外。
 
 ## 全量目录覆盖
 
@@ -183,7 +183,7 @@ M2a／M2b 是同一门禁的两个切片，不要求 Code 全迁完才开始 Aca
 | [editor-document-architecture.test.ts](../../test/architecture/editor-document-architecture.test.ts)、[editor-public-entrypoints.test.ts](../../test/architecture/editor-public-entrypoints.test.ts) | 现有断言要求 rich 文件和文档贡献在默认 editor bundle，属于旧边界。随真实迁移改为核心禁止业务依赖、包拥有实现、基础组合不装载两类功能；保留唯一模型、无反向宿主 import 等有效约束。 |
 | [editor-architecture.test.ts](../../test/architecture/editor-architecture.test.ts)、[layer-boundaries.test.ts](../../test/architecture/layer-boundaries.test.ts)、DOM／测试布局检查                  | 保留文本行为与分层；增量核对 Sessions→Workbench 单向依赖和三种组合，不靠放宽全局排除来通过。                                                                                       |
 | Editor 相关 owner 单测、Workbench documentEditor／Academic 测试                                                                                                                                      | 跟随 owner 转移，保持事务、坐标、Schema 校验、引用、保存／冲突、协作行为；基础文本必须在未装载两类能力时能独立验证。                                                               |
-| [academic.integration.ts](../../test/integration/browser/academic.integration.ts)／spec                                                                                                              | 当前直接 import 贡献／Pane／Schema 和测试注入服务，仍可作为旧行为基线；增加真实 Rust 程序经共享宿主注册／注入编辑器的场景及 Sessions 消费场景，不能把测试手动注册当成生产注入。    |
+| [academy.integration.ts](../../test/integration/browser/academy.integration.ts)／spec                                                                                                                | 当前直接 import 贡献／Pane／Schema 和测试注入服务，仍可作为旧行为基线；增加真实 Rust 程序经共享宿主注册／注入编辑器的场景及 Sessions 消费场景，不能把测试手动注册当成生产注入。    |
 | [test/automation/editor.ts](../../test/automation/editor.ts)、[editors.ts](../../test/automation/editors.ts)、Editor／Academic smoke                                                                 | 分清通用自动化、Code 行为与旧 IDE Academic 路径；保留可复用助手，新 Academy 产品场景移到 Sessions。旧测试退场以对应行为和恢复覆盖转移为条件。                                      |
 | Sessions editor-history、Chat／Cowork 输入、Changes、Creator                                                                                                                                         | 验证保存／恢复／并排、会话切换／草稿、Diff 和现有产品回归；不把 Creator 模型改造成 Academy 模型。                                                                                  |
 | Editor README、text-engine、document-engine、根 TODO；`docs/editor-{architecture,extensions}.md`；[旧 Work / Code 设计](work-code-workbench.md)；Sessions 说明                                       | 随实现更新当前事实与目标边界；旧 Work 产品入口不能作为 Academy 必须适配 IDE 的依据。历史行为记录保持为历史，不自动升级为新边界验收。                                               |

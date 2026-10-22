@@ -1417,7 +1417,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.getByRole('dialog', { name: install, exact: true }).getByRole('button', { name: install, exact: true }).click();
 		const authorize = locale === 'en' ? 'Authorize execution' : '授权执行';
 		await editor.getByRole('button', { name: authorize, exact: true }).press('Enter');
-		const review = page.getByRole('dialog', { name: 'ash.academic@ash', exact: true });
+		const review = page.getByRole('dialog', { name: 'ash.academy@ash', exact: true });
 		await expect(review).toContainText(locale === 'en' ? 'native program and trusted editor client' : '原生程序和可信编辑器客户端');
 		await expect(review).toContainText(locale === 'en' ? 'unsaved text' : '未保存文本');
 		await expect(review).not.toContainText('Node');

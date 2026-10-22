@@ -18,7 +18,7 @@ import { IDocumentEditorTextModelService } from '../../../src/ash/workbench/serv
 import { DocumentEditorTextModelService } from '../../../src/ash/workbench/services/documentEditor/browser/documentEditorTextModelService.js';
 import type { DocumentEditorPane } from '../../../src/ash/workbench/contrib/documentEditor/browser/documentEditorPane.js';
 import type { TextModelWorkingCopyReference } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
-import type { DocumentTextModel as AcademyTextModel } from '../../../extensions/academic/common/model/documentTextModel.js';
+import type { DocumentTextModel as AcademyTextModel } from '../../../extensions/academy/common/model/documentTextModel.js';
 import type { ReferenceLibraryEditor } from '../../../extensions/reference-manager/browser/referenceLibraryEditor.js';
 import { MainThreadClientEditors } from '../../../src/ash/workbench/api/browser/mainThreadClientEditors.js';
 import { loadExtensionEditorModule } from '../../../src/ash/workbench/services/extensions/browser/extensionEditorModules.js';
