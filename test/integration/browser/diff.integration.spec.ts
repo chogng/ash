@@ -1223,8 +1223,8 @@ test('diff feature selection reverts only the selected character change', async 
 
 test('Git diff center gutter preserves BOM encoding while staging and reverting', async ({ page }) => {
 	await openDiffPage(page);
-	await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git', 'unstaged', 'utf8bom'));
-	const gutter = page.locator('#title-comparison .stanza-multi-diff-editor-section').first().locator('.ash-diff-gutter');
+	await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git', 'unstaged', 'utf8bom', true));
+	const gutter = page.locator('#title-comparison .ash-diff-gutter');
 	await gutter.getByRole('button', { name: 'Stage change', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.gitGutterCalls)).toEqual([{
 		path: 'src/first.ts', comparison: 'unstaged', repositoryId: 'repo',
@@ -1232,9 +1232,9 @@ test('Git diff center gutter preserves BOM encoding while staging and reverting'
 		selection: { kind: 'lines', start: 1, end: 1 },
 	}]);
 	await gutter.getByRole('button', { name: 'Revert change', exact: true }).click();
-	await page.getByRole('dialog').getByRole('button', { name: 'Revert changes', exact: true }).click();
-	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.gitGutterCalls.length)).toBe(2);
-	expect(await page.evaluate(() => (window.ashDiffIntegration.gitGutterCalls[1] as { save: { text: string; encoding: string; }; }).save)).toMatchObject({ text: 'before\nshared', encoding: 'utf8bom' });
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified)).toBe('before\nshared');
+	await page.evaluate(() => window.ashDiffIntegration.saveTitleFiles());
+	expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence())).toMatchObject({ dirty: false, writes: [{ resource: '/workspace/src/first.ts', text: 'before\nshared', encoding: 'utf8bom' }] });
 });
 
 test('diff feature gutter menus receive hunk and selection edits and follow scroll', async ({ page }) => {
@@ -1439,7 +1439,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		const stage = gutter.getByRole('button', { name: localized(locale, 'Stage change', '暂存更改'), exact: true });
 		const revert = gutter.getByRole('button', { name: localized(locale, 'Revert change', '还原更改'), exact: true });
 		await expect(stage).toBeVisible();
-		await expect(revert).toBeVisible();
+		await expect(revert).toHaveCount(0);
 		const bounds = await first.evaluate(node => {
 			const original = node.querySelector('.stanza-diff-editor-side.original')!.getBoundingClientRect();
 			const modified = node.querySelector('.stanza-diff-editor-side.modified')!.getBoundingClientRect();
@@ -1466,21 +1466,37 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		});
 	});
 
-	test(`Git diff center gutter reverts only the reviewed block after confirmation (${locale})`, async ({ page }) => {
+	test(`Git working-tree gutter has one undoable revert for blocks and selections (${locale})`, async ({ page }) => {
 		await openDiffPage(page, locale);
-		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git'));
-		const revert = page.locator('#title-comparison .stanza-multi-diff-editor-section').first().locator('.ash-diff-gutter').getByRole('button', { name: localized(locale, 'Revert change', '还原更改'), exact: true });
-		await revert.click();
-		const dialog = page.getByRole('dialog');
-		await dialog.getByRole('button', { name: localized(locale, 'Cancel', '取消'), exact: true }).click();
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git', 'unstaged', 'utf8', true));
+		const host = page.locator('#title-comparison');
+		const gutter = host.locator('.ash-diff-gutter');
+		const revert = gutter.getByRole('button', { name: localized(locale, 'Revert change', '还原更改'), exact: true });
+		await expect(gutter.getByRole('button')).toHaveCount(2);
+		await expect(revert).toHaveCount(1);
+		await expect(gutter.getByRole('button', { name: localized(locale, 'Stage change', '暂存更改'), exact: true })).toBeVisible();
+		const modified = await page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified);
+		await page.evaluate(() => window.ashDiffIntegration.selectTitleModified([1, 1, 1, 27]));
+		await expect(gutter.getByRole('button')).toHaveCount(2);
+		await expect(gutter.getByRole('button', { name: localized(locale, 'Stage selected lines', '暂存选中行'), exact: true })).toBeVisible();
+		const selectionRevert = gutter.getByRole('button', { name: localized(locale, 'Revert selected changes', '还原选中的更改'), exact: true });
+		await expect(selectionRevert).toHaveCount(1);
+		await selectionRevert.focus();
+		await page.keyboard.press('Space');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified)).toBe('before\nshared');
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence())).toMatchObject({ dirty: true, writes: [] });
+		const input = host.locator('.modified .stanza-editor-input');
+		await input.press('ControlOrMeta+z');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified)).toBe(modified);
+		await page.evaluate(() => window.ashDiffIntegration.selectTitleModified([1, 1, 1, 1]));
+		await expect(revert).toHaveCount(1);
+		await revert.focus();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readTitleComparison().modified)).toBe('before\nshared');
+		await page.evaluate(() => window.ashDiffIntegration.saveTitleFiles());
+		expect(await page.evaluate(() => window.ashDiffIntegration.readTitlePersistence())).toMatchObject({ dirty: false, writes: [{ resource: '/workspace/src/first.ts', text: 'before\nshared' }] });
 		expect(await page.evaluate(() => window.ashDiffIntegration.gitGutterCalls)).toEqual([]);
-		await revert.click();
-		await dialog.getByRole('button', { name: localized(locale, 'Revert changes', '还原更改'), exact: true }).click();
-		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.gitGutterCalls.length)).toBe(1);
-		expect(await page.evaluate(() => {
-			const call = window.ashDiffIntegration.gitGutterCalls[0] as { save: { text: string; encoding: string; expectedRevision: string; resource: { path: string; }; }; };
-			return { text: call.save.text, encoding: call.save.encoding, expectedRevision: call.save.expectedRevision, path: call.save.resource.path };
-		})).toEqual({ text: 'before\nshared', encoding: 'utf8', expectedRevision: 'file-revision', path: '/workspace/src/first.ts' });
 	});
 
 	test(`Git diff center gutter unstages selected lines with per-editor menus (${locale})`, async ({ page }) => {

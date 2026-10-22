@@ -994,11 +994,6 @@
           "command": "git.diff.unstageHunk",
           "group": "primary",
           "when": "diffEditorOriginalUri =~ /^git-change:\\/staged\\// && diffEditorModifiedUri =~ /^git-change:\\/staged\\//"
-        },
-        {
-          "command": "git.diff.revertHunk",
-          "group": "primary",
-          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\//"
         }
       ],
       "diffEditor/selectionToolbar": [
@@ -1011,11 +1006,6 @@
           "command": "git.diff.unstageSelection",
           "group": "primary",
           "when": "diffEditorOriginalUri =~ /^git-change:\\/staged\\// && diffEditorModifiedUri =~ /^git-change:\\/staged\\//"
-        },
-        {
-          "command": "git.diff.revertSelection",
-          "group": "primary",
-          "when": "diffEditorOriginalUri =~ /^git-change:\\/unstaged\\//"
         }
       ],
       "git.commitMenu": [
