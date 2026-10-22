@@ -1114,6 +1114,10 @@ fn language_diagnostics_and_capabilities_are_delivered_only_to_the_owning_connec
             dir_id: None,
             server: "custom".into(),
             language_ids: vec!["rust".into()],
+            features: vec![
+                ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::DocumentColors,
+                ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::CodeActions,
+            ],
             completion_trigger_characters: vec!["=".into()],
             signature_help_trigger_characters: Vec::new(),
             signature_help_retrigger_characters: Vec::new(),

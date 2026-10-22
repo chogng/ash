@@ -17,6 +17,63 @@ use crate::protocol::{
     DEFAULT_MAX_HEADER_BYTES, DEFAULT_MAX_MESSAGE_BYTES, read_frame, write_frame,
 };
 
+#[tokio::test]
+async fn initialize_preserves_static_type_hierarchy_without_assuming_support() {
+    for (value, supported) in [
+        (json!({}), Some(false)),
+        (json!({"typeHierarchyProvider": false}), Some(false)),
+        (json!({"typeHierarchyProvider": true}), Some(true)),
+        (
+            json!({"typeHierarchyProvider": {"workDoneProgress": true}}),
+            Some(true),
+        ),
+        (
+            json!({"typeHierarchyProvider": {"id": "types", "documentSelector": null}}),
+            Some(true),
+        ),
+        (json!({"typeHierarchyProvider": "invalid"}), None),
+    ] {
+        let (client_stream, server_stream) = tokio::io::duplex(16 * 1024);
+        let (client_reader, client_writer) = tokio::io::split(client_stream);
+        let (server_reader, mut writer) = tokio::io::split(server_stream);
+        let server = tokio::spawn(async move {
+            let mut reader = BufReader::new(server_reader);
+            let initialize = read_json(&mut reader).await;
+            respond(
+                &mut writer,
+                initialize["id"].clone(),
+                json!({ "capabilities": value }),
+            )
+            .await;
+            if supported.is_none() {
+                return;
+            }
+            assert_eq!(read_json(&mut reader).await["method"], "initialized");
+            let shutdown = read_json(&mut reader).await;
+            assert_eq!(shutdown["method"], "shutdown");
+            respond(&mut writer, shutdown["id"].clone(), Value::Null).await;
+            assert_eq!(read_json(&mut reader).await["method"], "exit");
+        });
+        let client = LanguageServerClient::connect(
+            BufReader::new(client_reader),
+            client_writer,
+            LanguageServerOptions::new("ash-lsp-test", "0"),
+        )
+        .await;
+        if let Some(supported) = supported {
+            let client = client.expect("valid initialize response");
+            assert_eq!(client.initialization().type_hierarchy, supported);
+            client.shutdown().await.expect("shutdown");
+        } else {
+            assert!(matches!(
+                client,
+                Err(LanguageServerError::InvalidResult { .. })
+            ));
+        }
+        server.await.expect("peer");
+    }
+}
+
 #[derive(Default)]
 struct RecordingHost {
     events: Mutex<Vec<LanguageServerEvent>>,

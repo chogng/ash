@@ -23,7 +23,16 @@ import { acquireJsonLanguageDiagnostics } from '../common/jsonLanguageDiagnostic
 
 const MAX_LANGUAGE_DOCUMENT_BYTES = 10 * 1024 * 1024;
 const SYNCHRONIZE_DELAY_MS = 150;
-const UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES: ReadonlySet<AppServerErrorName> = new Set(["LanguageRequestFailed", "LanguageServiceUnavailable", "PermissionRequired"]);
+const UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES: ReadonlySet<AppServerErrorName> = new Set(["LanguageServiceUnavailable", "PermissionRequired"]);
+
+interface PullDiagnosticCapabilities {
+	readonly server: string;
+	readonly supported: boolean;
+}
+
+interface ServerDiagnosticSnapshot extends LanguageDiagnosticSnapshot {
+	readonly pullCapabilities?: PullDiagnosticCapabilities;
+}
 
 interface LanguageDocumentEntry {
 	readonly resource: URI;
@@ -38,6 +47,7 @@ interface LanguageDocumentEntry {
 	queue: Promise<void>;
 	languageSynchronized: boolean;
 	codeIntelligenceSynchronized: boolean;
+	pullRequest: AbortController | undefined;
 }
 
 interface PublishedDiagnostics {
@@ -48,7 +58,8 @@ interface PublishedDiagnostics {
 /** Synchronizes open Code models and aggregates current diagnostics by revision. */
 export class AppServerLanguageDiagnosticsService extends Disposable implements ILanguageDiagnosticsService {
 	private readonly entries = new Map<string, LanguageDocumentEntry>();
-	private readonly serverSnapshots = new Map<string, LanguageDiagnosticSnapshot>();
+	private readonly serverSnapshots = new Map<string, ServerDiagnosticSnapshot>();
+	private readonly pullCapabilities = new Map<string, PullDiagnosticCapabilities>();
 	private readonly workspaceServerKeys = new Set<string>();
 	private readonly publishedDiagnostics = new Map<number, PublishedDiagnostics>();
 	private readonly changeEmitter = this._register(new Emitter<URI>());
@@ -83,6 +94,17 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		}));
 		const subscription = events.subscribe(event => {
 			if (event.method === "language/diagnostics") this.acceptDiagnostics(event.params);
+			if (event.method === 'language/serverCapabilities') {
+				const dirId = event.params.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
+				if (dirId) for (const languageId of event.params.languageIds) this.updatePullCapabilities(`${dirId}:${languageId}`, { server: event.params.server, supported: event.params.features.includes('pullDiagnostics') });
+			}
+			if (event.method === 'language/serverState' && event.params.state.type !== 'ready') {
+				const dirId = event.params.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
+				for (const [key, capabilities] of this.pullCapabilities) {
+					if (key.startsWith(`${dirId}:`) && capabilities.server === event.params.server) this.updatePullCapabilities(key, undefined);
+				}
+			}
+			if (event.method === 'extensions/changed') this.clearPullCapabilities();
 			if (event.method === "extensions/changed" || event.method === "config/changed") this.queuePermissionRefresh();
 		});
 		this._register(toDisposable(() => subscription.dispose()));
@@ -91,9 +113,11 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		}));
 		if (checkWorkspaceTrust) this._register(workspaceTrust.onDidChangeTrust(() => this.queuePermissionRefresh()));
 		this._register(workspace.onDidChangeWorkspace(() => {
+			this.clearPullCapabilities();
 			this.languageAllowed = false;
 			this.support = new AppServerLanguageSupport();
 			for (const entry of this.entries.values()) {
+				entry.pullRequest?.abort();
 				if (entry.timer !== undefined) clearTimeout(entry.timer);
 				entry.timer = undefined;
 				// Drain the old binding before changing its relative path. A backend
@@ -113,6 +137,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		}));
 		this._register(toDisposable(() => {
 			this.alive = false;
+			this.clearPullCapabilities();
 			for (const entry of this.entries.values()) {
 				if (entry.timer !== undefined) clearTimeout(entry.timer);
 				entry.modelListener.dispose();
@@ -159,6 +184,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			queue: Promise.resolve(),
 			languageSynchronized: false,
 			codeIntelligenceSynchronized: false,
+			pullRequest: undefined,
 		};
 		entry.modelListener = model.onDidChangeContent(() => this.schedule(entry, false));
 		this.workspaceServerKeys.delete(key);
@@ -248,12 +274,20 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			if (savedText !== undefined) {
 				await this.api.save({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, text: savedText });
 			}
-			try {
-				const report = await this.api.documentDiagnostics({ document });
-				if (generation !== this.permissionRefreshGeneration) return;
-				if (report.kind === "full") this.acceptDiagnostics({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, revision: report.revision, diagnostics: report.diagnostics });
-			} catch (error) {
-				if (!isUnsupportedDiagnosticPull(error)) throw error;
+			const key = `${entry.dirId}:${entry.languageId}`;
+			const capabilities = this.pullCapabilities.get(key);
+			// Synchronization and push diagnostics work even when pull is absent.
+			if (capabilities?.supported) {
+				const request = entry.pullRequest = new AbortController();
+				try {
+					const report = await this.api.documentDiagnostics({ document }, { signal: request.signal });
+					if (!this.alive || request.signal.aborted || generation !== this.permissionRefreshGeneration || entry.references === 0 || this.pullCapabilities.get(key) !== capabilities) return;
+					if (report.kind === "full") this.acceptDiagnostics({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, revision: report.revision, diagnostics: report.diagnostics }, capabilities);
+				} catch (error) {
+					if (!request.signal.aborted && !isUnsupportedDiagnosticPull(error)) throw error;
+				} finally {
+					if (entry.pullRequest === request) entry.pullRequest = undefined;
+				}
 			}
 			this.queueWorkspaceDiagnostics();
 		}).catch(error => { if (this.alive) reportLanguageSynchronizationError(error); });
@@ -266,6 +300,27 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			this.workspaceDiagnosticsQueued = false;
 			if (this.alive) void this.refreshWorkspaceDiagnostics();
 		});
+	}
+
+	private updatePullCapabilities(key: string, next: PullDiagnosticCapabilities | undefined): void {
+		const previous = this.pullCapabilities.get(key);
+		if (previous?.server === next?.server && previous?.supported === next?.supported) return;
+		if (next) this.pullCapabilities.set(key, next);
+		else this.pullCapabilities.delete(key);
+		for (const entry of this.entries.values()) {
+			if (`${entry.dirId}:${entry.languageId}` !== key) continue;
+			entry.pullRequest?.abort();
+			const resourceKey = entry.resource.toString();
+			if (this.serverSnapshots.get(resourceKey)?.pullCapabilities) {
+				this.serverSnapshots.delete(resourceKey);
+				this.changeEmitter.fire(entry.resource);
+			}
+			if (next?.supported && entry.languageSynchronized) this.schedule(entry, true);
+		}
+	}
+
+	private clearPullCapabilities(): void {
+		for (const key of this.pullCapabilities.keys()) this.updatePullCapabilities(key, undefined);
 	}
 
 	private async refreshWorkspaceDiagnostics(): Promise<void> {
@@ -322,6 +377,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		if (!this.alive || !this.started) return;
 		this.permissionRefreshGeneration += 1;
 		this.languageAllowed = false;
+		for (const entry of this.entries.values()) entry.pullRequest?.abort();
 		this.support = new AppServerLanguageSupport();
 		this.clearServerDiagnostics();
 		if (this.permissionRefreshQueued) return;
@@ -366,6 +422,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		if (this.entries.get(key) !== entry || entry.references === 0) return;
 		entry.references -= 1;
 		if (entry.references > 0) return;
+		entry.pullRequest?.abort();
 		if (entry.timer !== undefined) {
 			clearTimeout(entry.timer);
 			entry.timer = undefined;
@@ -382,7 +439,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		}).catch(error => { if (this.alive) reportLanguageSynchronizationError(error); });
 	}
 
-	private acceptDiagnostics(notification: LanguageDiagnosticsNotification): void {
+	private acceptDiagnostics(notification: LanguageDiagnosticsNotification, pullCapabilities?: PullDiagnosticCapabilities): void {
 		if (!this.alive || !this.languageAllowed) return;
 		const folders = this.workspace.getWorkspace().folders;
 		const folder = notification.dirId
@@ -398,8 +455,12 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		const current = this.serverSnapshots.get(key);
 		if (current && current.revision > notification.revision) return;
 		const diagnostics = notification.diagnostics.flatMap(diagnostic => entry ? projectDiagnostic(diagnostic, entry.model) : projectWorkspaceDiagnostic(diagnostic));
-		if (current?.revision === notification.revision && equalDiagnostics(current.diagnostics, diagnostics)) return;
-		this.serverSnapshots.set(key, Object.freeze({ resource, revision: notification.revision, diagnostics: Object.freeze(diagnostics) }));
+		if (current?.revision === notification.revision && equalDiagnostics(current.diagnostics, diagnostics)) {
+			// An identical push takes ownership so withdrawing pull cannot clear it.
+			if (!pullCapabilities && current.pullCapabilities) this.serverSnapshots.set(key, Object.freeze({ resource, revision: notification.revision, diagnostics: current.diagnostics }));
+			return;
+		}
+		this.serverSnapshots.set(key, Object.freeze({ resource, revision: notification.revision, diagnostics: Object.freeze(diagnostics), ...(pullCapabilities ? { pullCapabilities } : {}) }));
 		this.workspaceServerKeys.delete(key);
 		this.changeEmitter.fire(resource);
 	}

@@ -22,7 +22,7 @@ import { TestWorkspaceService } from "../../../configuration/test/common/testSer
 import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentService } from "../../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { AppServerLanguageDiagnosticsService } from "../../browser/appServerLanguageDiagnosticsService.js";
 
-function createDiagnosticsService(api: ILanguageApi, events: IServerEventApi, workspace: TestWorkspaceService, documents?: ICodeIntelligenceDocumentService, trust?: IWorkspaceTrustManagementService, saves: Event<ITextFileSaveEvent> = Event.None): AppServerLanguageDiagnosticsService {
+function createDiagnosticsService(api: FakeLanguageApi, events: FakeServerEvents, workspace: TestWorkspaceService, documents?: ICodeIntelligenceDocumentService, trust?: IWorkspaceTrustManagementService, saves: Event<ITextFileSaveEvent> = Event.None): AppServerLanguageDiagnosticsService {
 	using services = new InstantiationService();
 	services.registerInstance(IServerEventApi, events);
 	services.registerInstance(ITextFileService, { onDidSave: saves, onDidChangeFiles: Event.None, resolve: async () => { throw new Error('unexpected resolve'); }, save: async () => { throw new Error('unexpected save'); } });
@@ -34,6 +34,17 @@ function createDiagnosticsService(api: ILanguageApi, events: IServerEventApi, wo
 		getWorkspaceTrustInfo: async () => undefined,
 	});
 	const service = services.createInstance(AppServerLanguageDiagnosticsService, api, documents, !!trust);
+	api.onServers = params => {
+		if (!api.negotiateCapabilities) return;
+		const dirId = params.dirId ?? workspace.getWorkspace().folders[0]?.id;
+		for (const server of api.availableServers) events.fire({
+			method: 'language/serverCapabilities', params: {
+				...(dirId ? { dirId } : {}), server: server.id, languageIds: server.languageIds,
+				features: api.pullSupported ? ['pullDiagnostics'] : [],
+				completionTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
+			}
+		});
+	};
 	service.start();
 	return service;
 }
@@ -237,6 +248,9 @@ class FakeCodeIntelligenceDocuments implements ICodeIntelligenceDocumentService 
 }
 
 class FakeLanguageApi implements ILanguageApi {
+	negotiateCapabilities = true;
+	pullSupported = true;
+	onServers: (params: Parameters<ILanguageApi['servers']>[0]) => void = () => { };
 	async save(_params: Parameters<ILanguageApi['save']>[0]): Promise<void> { }
 
 	availableServers = [
@@ -248,6 +262,7 @@ class FakeLanguageApi implements ILanguageApi {
 	readonly serverReads: Parameters<ILanguageApi['servers']>[0][] = [];
 	async servers(params: Parameters<ILanguageApi['servers']>[0]): ReturnType<ILanguageApi["servers"]> {
 		this.serverReads.push(params);
+		this.onServers(params);
 		return { servers: this.availableServers };
 	}
 
@@ -264,7 +279,7 @@ class FakeLanguageApi implements ILanguageApi {
 	completions(): ReturnType<ILanguageApi["completions"]> { throw new Error("unused"); }
 	resolveCompletion(): ReturnType<ILanguageApi["resolveCompletion"]> { throw new Error("unused"); }
 	executeCommand(): ReturnType<ILanguageApi["executeCommand"]> { throw new Error("unused"); }
-	async documentDiagnostics(params: Parameters<ILanguageApi["documentDiagnostics"]>[0]): ReturnType<ILanguageApi["documentDiagnostics"]> { this.diagnosticPulls.push(params); if (this.documentDiagnosticsError) throw this.documentDiagnosticsError; return { revision: params.document.revision, kind: "unchanged", diagnostics: [] }; }
+	async documentDiagnostics(params: Parameters<ILanguageApi["documentDiagnostics"]>[0], _options?: Parameters<ILanguageApi['documentDiagnostics']>[1]): ReturnType<ILanguageApi["documentDiagnostics"]> { this.diagnosticPulls.push(params); if (this.documentDiagnosticsError) throw this.documentDiagnosticsError; return { revision: params.document.revision, kind: "unchanged", diagnostics: [] }; }
 	async directoryDiagnostics(): ReturnType<ILanguageApi["directoryDiagnostics"]> { this.workspaceDiagnosticPulls += 1; if (this.directoryDiagnosticsError) throw this.directoryDiagnosticsError; return this.workspaceReport; }
 	formatDocument(): ReturnType<ILanguageApi["formatDocument"]> { throw new Error("unused"); }
 	formatRange(): ReturnType<ILanguageApi["formatRange"]> { throw new Error("unused"); }
@@ -291,6 +306,104 @@ class FakeLanguageApi implements ILanguageApi {
 
 async function tick(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
 
+function notifyPull(events: FakeServerEvents, supported: boolean, dirId?: string): void {
+	events.fire({
+		method: 'language/serverCapabilities', params: {
+			...(dirId ? { dirId } : {}), server: 'rust', languageIds: ['rust'],
+			features: supported ? ['pullDiagnostics'] : [],
+			completionTriggerCharacters: [], signatureHelpTriggerCharacters: [], signatureHelpRetriggerCharacters: [],
+		}
+	});
+}
+
+const pullDiagnostic = { range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 1 } }, severity: 'warning' as const, message: 'negotiated diagnostic', code: null, source: 'rust' };
+
+test('document diagnostics wait for negotiated pull support while synchronization and push remain active', async () => {
+	const api = new FakeLanguageApi();
+	api.negotiateCapabilities = false;
+	const events = new FakeServerEvents();
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	using service = createDiagnosticsService(api, events, workspace);
+	using model = new TextModel('fn main() {}');
+	const resource = URI.file('/project/main.rs');
+	using acquisition = service.acquire(resource, 'rust', model);
+	await tick();
+	assert.equal(api.synchronized.length, 1);
+	assert.equal(api.diagnosticPulls.length, 0);
+	notifyPull(events, false);
+	events.fire({ method: 'language/diagnostics', params: { path: 'main.rs', revision: 1, diagnostics: [pullDiagnostic] } });
+	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, pullDiagnostic.message);
+	assert.ok(api.workspaceDiagnosticPulls > 0, 'workspace bootstrap must still initialize servers');
+	notifyPull(events, true);
+	await tick();
+	assert.equal(api.diagnosticPulls.length, 1);
+	notifyPull(events, true);
+	await tick();
+	assert.equal(api.diagnosticPulls.length, 1, 'identical capability notifications do not repull');
+	events.fire({ method: 'language/serverState', params: { server: 'rust', state: { type: 'starting' } } });
+	events.fire({ method: 'language/serverState', params: { server: 'rust', state: { type: 'ready' } } });
+	await tick();
+	assert.equal(api.diagnosticPulls.length, 1, 'ready alone does not restore stale pull support');
+	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, pullDiagnostic.message);
+});
+
+for (const pushed of [false, true]) test(`retiring pull support cancels pending work and preserves push ownership=${pushed}`, async () => {
+	const api = new FakeLanguageApi();
+	api.negotiateCapabilities = false;
+	let complete!: (value: Awaited<ReturnType<ILanguageApi['documentDiagnostics']>>) => void;
+	let signal: AbortSignal | undefined;
+	api.documentDiagnostics = (params, options) => {
+		api.diagnosticPulls.push(params);
+		signal = options?.signal;
+		return new Promise(resolve => { complete = resolve; });
+	};
+	const events = new FakeServerEvents();
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	using service = createDiagnosticsService(api, events, workspace);
+	using model = new TextModel('fn main() {}');
+	const resource = URI.file('/project/main.rs');
+	using acquisition = service.acquire(resource, 'rust', model);
+	await tick();
+	notifyPull(events, true);
+	await tick();
+	complete({ revision: 1, kind: 'full', diagnostics: [pullDiagnostic] });
+	await tick();
+	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, pullDiagnostic.message);
+	if (pushed) events.fire({ method: 'language/diagnostics', params: { path: 'main.rs', revision: 1, diagnostics: [pullDiagnostic] } });
+	notifyPull(events, false);
+	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, pushed ? pullDiagnostic.message : undefined);
+	notifyPull(events, true);
+	await tick();
+	assert.equal(signal?.aborted, false);
+	notifyPull(events, false);
+	assert.equal(signal?.aborted, true);
+	complete({ revision: 1, kind: 'full', diagnostics: [{ ...pullDiagnostic, message: 'late response' }] });
+	await tick();
+	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, pushed ? pullDiagnostic.message : undefined);
+});
+
+test('pull capability is scoped to each directory for the same language', async () => {
+	const api = new FakeLanguageApi();
+	api.negotiateCapabilities = false;
+	const events = new FakeServerEvents();
+	using workspace = new TestWorkspaceService({
+		id: 'team', folders: [
+			{ id: 'one', name: 'one', uri: URI.file('/one'), index: 0 },
+			{ id: 'two', name: 'two', uri: URI.file('/two'), index: 1 },
+		]
+	});
+	using service = createDiagnosticsService(api, events, workspace);
+	using first = new TextModel('fn main() {}');
+	using second = new TextModel('fn main() {}');
+	using a = service.acquire(URI.file('/one/main.rs'), 'rust', first);
+	using b = service.acquire(URI.file('/two/main.rs'), 'rust', second);
+	await tick();
+	notifyPull(events, true, 'one');
+	notifyPull(events, false, 'two');
+	await tick();
+	assert.deepEqual(api.diagnosticPulls.map(request => request.document.dirId), ['one']);
+});
+
 test("App Server diagnostics service includes unopened workspace reports", async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
@@ -310,7 +423,7 @@ test("App Server diagnostics service includes unopened workspace reports", async
 	assert.equal(service.getDiagnostics(resource), undefined);
 });
 
-test("App Server diagnostics service treats typed unavailable pulls as unsupported", async () => {
+test("App Server diagnostics reports real pull failures while retaining typed availability handling", async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	api.documentDiagnosticsError = new AppServerRemoteError(-32000, "Language request failed", { kind: "LanguageRequestFailed" });
@@ -328,7 +441,7 @@ test("App Server diagnostics service treats typed unavailable pulls as unsupport
 
 		assert.equal(api.diagnosticPulls.length, 1);
 		assert.ok(api.workspaceDiagnosticPulls > 0);
-		assert.deepEqual(reported, []);
+		assert.deepEqual(reported, [['App Server language document synchronization failed', api.documentDiagnosticsError]]);
 	} finally {
 		console.error = originalConsoleError;
 	}

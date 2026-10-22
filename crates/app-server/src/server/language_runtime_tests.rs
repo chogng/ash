@@ -601,6 +601,7 @@ fn connection_sessions_keep_independent_revisions_saved_text_and_process_lifetim
         capabilities["params"]["completionTriggerCharacters"],
         serde_json::json!(["="])
     );
+    assert_eq!(capabilities["params"]["features"], serde_json::json!([]));
     request(
         &mut first,
         "language/close",

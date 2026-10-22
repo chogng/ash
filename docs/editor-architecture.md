@@ -44,6 +44,10 @@ Academy 的独立 Activity Bar 图标和工作界面仍是入口候选；若采�
 | `ITextFileService` / `IFileService` | 文本解码与编码请求、文件传输、条件写入、取消和变更通知                                                    | 不拥有 selection、undo 或审核基线                |
 | 语言与语法 adapter                  | 将扩展、Worker、Rust／LSP 能力注册到 editor contract                                                      | 后台只持有分析镜像，结果按模型与版本应用         |
 
+App Server 的语言 Provider 均按当前服务器协商能力注册，而非仅凭已配置的语言路由。`language/serverCapabilities.features` 从 LSP manager 的权威快照投影，覆盖悬停、补全、跳转、调用／类型层级、符号、重命名、代码操作、格式化、签名、内联提示、关联编辑、语义高亮、CodeLens、链接、颜色与折叠；补全／代码操作／CodeLens／链接的 resolve、补全命令与 rename prepare 分别检查独立能力。仅支持 rename 的服务器使用当前模型单词作为默认范围，不发送 prepare；类型层级读取标准 `typeHierarchyProvider` 或动态注册，不默认支持。
+
+能力按目录隔离；动态撤销、退出和重启会更新注册，保留的旧 adapter 仍在请求前检查当前能力。可取消的语言操作关联该能力快照的生命周期，撤销会取消在途请求并丢弃晚回复；补全延迟解析数据另携带可克隆的代次标记。工作区符号查询也按目录与能力过滤，真实错误不再被通用 catch 隐藏。文档诊断只在协商了 `PullDiagnostics` 时拉取；文档同步、推送诊断与工作区诊断的启动不依赖该能力。撤销拉取会清理仅来自拉取的快照，保留推送诊断；`LanguageRequestFailed` 等真实请求错误继续报告。
+
 事件、生命周期、取消和通用几何优先复用 `base`；scroll clamp、可见行、overscan、editor ARIA 和语言 lane 等领域语义不能下沉。TypeScript 服务通过所属宿主的实例化容器构造并注册，窗口与实例的释放责任随作用域确定。
 
 ## 资源打开、保存与恢复

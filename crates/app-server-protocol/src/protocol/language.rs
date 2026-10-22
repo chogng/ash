@@ -1010,7 +1010,44 @@ pub struct LanguageResolveCodeActionParams {
     pub provider_data: Value,
 }
 
-/// Trigger metadata negotiated by this connection's exact server incarnation.
+/// Negotiated operations supported by one language-server incarnation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LanguageServerFeatureDto {
+    Hover,
+    Completion,
+    CompletionResolve,
+    ExecuteCommand,
+    Declaration,
+    Definition,
+    Implementation,
+    TypeDefinition,
+    References,
+    CallHierarchy,
+    TypeHierarchy,
+    WorkspaceSymbols,
+    Rename,
+    RenamePrepare,
+    CodeActions,
+    CodeActionResolve,
+    DocumentFormatting,
+    RangeFormatting,
+    SignatureHelp,
+    InlayHints,
+    LinkedEditingRanges,
+    SemanticTokens,
+    DocumentSymbols,
+    CodeLens,
+    CodeLensResolve,
+    DocumentLinks,
+    DocumentLinkResolve,
+    DocumentColors,
+    FoldingRanges,
+    PullDiagnostics,
+    WorkspaceDiagnostics,
+}
+
+/// Capabilities negotiated by this connection's exact server incarnation.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LanguageServerCapabilitiesNotification {
@@ -1019,6 +1056,7 @@ pub struct LanguageServerCapabilitiesNotification {
     pub dir_id: Option<String>,
     pub server: String,
     pub language_ids: Vec<String>,
+    pub features: Vec<LanguageServerFeatureDto>,
     pub completion_trigger_characters: Vec<String>,
     pub signature_help_trigger_characters: Vec<String>,
     pub signature_help_retrigger_characters: Vec<String>,

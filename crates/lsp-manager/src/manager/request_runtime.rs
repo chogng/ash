@@ -1378,7 +1378,7 @@ async fn execute_request(
             diagnostics,
             only,
         } => {
-            let can_resolve = matches!(client.initialization().capabilities.code_action_provider, Some(CodeActionProviderCapability::Options(ref options)) if options.resolve_provider == Some(true));
+            let can_resolve = supports_request(&client, LanguageRequestKind::ResolveCodeAction);
             let response = client
                 .request::<CodeActionRequest>(CodeActionParams {
                     text_document: TextDocumentIdentifier::new(uri),
@@ -2078,6 +2078,10 @@ pub(super) fn capability_snapshot(
             LanguageRequestKind::CodeActions,
         ),
         (
+            LanguageServerFeature::CodeActionResolve,
+            LanguageRequestKind::ResolveCodeAction,
+        ),
+        (
             LanguageServerFeature::DocumentFormatting,
             LanguageRequestKind::DocumentFormatting,
         ),
@@ -2128,6 +2132,26 @@ pub(super) fn capability_snapshot(
         (
             LanguageServerFeature::WorkspaceDiagnostics,
             LanguageRequestKind::WorkspaceDiagnostics,
+        ),
+        (
+            LanguageServerFeature::CompletionResolve,
+            LanguageRequestKind::ResolveCompletion,
+        ),
+        (
+            LanguageServerFeature::ExecuteCommand,
+            LanguageRequestKind::ExecuteCommand,
+        ),
+        (
+            LanguageServerFeature::RenamePrepare,
+            LanguageRequestKind::PrepareRename,
+        ),
+        (
+            LanguageServerFeature::CodeLensResolve,
+            LanguageRequestKind::ResolveCodeLens,
+        ),
+        (
+            LanguageServerFeature::DocumentLinkResolve,
+            LanguageRequestKind::ResolveDocumentLink,
         ),
     ];
     let features = candidates
@@ -2248,12 +2272,16 @@ pub(super) fn supports_request(client: &LanguageServerClient, kind: LanguageRequ
         ),
         LanguageRequestKind::PrepareTypeHierarchy
         | LanguageRequestKind::Supertypes
-        | LanguageRequestKind::Subtypes => true,
+        | LanguageRequestKind::Subtypes => client.initialization().type_hierarchy,
         LanguageRequestKind::WorkspaceSymbols => matches!(
             capabilities.workspace_symbol_provider,
             Some(OneOf::Left(true)) | Some(OneOf::Right(_))
         ),
-        LanguageRequestKind::PrepareRename | LanguageRequestKind::Rename => matches!(
+        LanguageRequestKind::PrepareRename => matches!(
+            capabilities.rename_provider,
+            Some(OneOf::Right(ref options)) if options.prepare_provider == Some(true)
+        ),
+        LanguageRequestKind::Rename => matches!(
             capabilities.rename_provider,
             Some(OneOf::Left(true)) | Some(OneOf::Right(_))
         ),
@@ -2348,22 +2376,13 @@ fn dynamically_supports_request(client: &LanguageServerClient, kind: LanguageReq
         | LanguageRequestKind::Supertypes
         | LanguageRequestKind::Subtypes => "textDocument/prepareTypeHierarchy",
         LanguageRequestKind::WorkspaceSymbols => "workspace/symbol",
-        LanguageRequestKind::PrepareRename | LanguageRequestKind::Rename => "textDocument/rename",
+        LanguageRequestKind::PrepareRename => {
+            return dynamic_provider_option(client, "textDocument/rename", "prepareProvider");
+        }
+        LanguageRequestKind::Rename => "textDocument/rename",
         LanguageRequestKind::CodeActions => "textDocument/codeAction",
         LanguageRequestKind::ResolveCodeAction => {
-            return client
-                .dynamic_capabilities()
-                .registrations
-                .iter()
-                .any(|registration| {
-                    registration.method == "textDocument/codeAction"
-                        && registration
-                            .register_options
-                            .as_ref()
-                            .and_then(|options| options.get("resolveProvider"))
-                            .and_then(serde_json::Value::as_bool)
-                            == Some(true)
-                });
+            return dynamic_resolve_provider(client, "textDocument/codeAction");
         }
         LanguageRequestKind::DocumentFormatting => "textDocument/formatting",
         LanguageRequestKind::RangeFormatting => "textDocument/rangeFormatting",
@@ -2426,6 +2445,10 @@ pub(super) fn workspace_diagnostics_supported(
 }
 
 fn dynamic_resolve_provider(client: &LanguageServerClient, method: &str) -> bool {
+    dynamic_provider_option(client, method, "resolveProvider")
+}
+
+fn dynamic_provider_option(client: &LanguageServerClient, method: &str, property: &str) -> bool {
     client
         .dynamic_capabilities()
         .registrations
@@ -2435,7 +2458,7 @@ fn dynamic_resolve_provider(client: &LanguageServerClient, method: &str) -> bool
                 && registration
                     .register_options
                     .as_ref()
-                    .and_then(|options| options.get("resolveProvider"))
+                    .and_then(|options| options.get(property))
                     .and_then(serde_json::Value::as_bool)
                     == Some(true)
         })

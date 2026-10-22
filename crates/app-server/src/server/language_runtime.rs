@@ -13,6 +13,7 @@ use ash_config::LanguageServersConfig;
 use ash_install_context::InstallContext;
 use ash_lsp_manager::LanguageRequestId;
 use ash_lsp_manager::LanguageRequestMetric;
+use ash_lsp_manager::LanguageServerFeature;
 use ash_lsp_manager::LanguageServerMessageSeverity;
 use ash_lsp_manager::LanguageServerMessageSource;
 use ash_lsp_manager::LanguageServerState;
@@ -269,6 +270,39 @@ impl LspManagerEventSink for AppServerLanguageEventSink {
                 ash_app_server_protocol::protocol::language::LanguageServerCapabilitiesNotification {
                     dir_id: self.diagnostics.dir_id.clone(), server: server.clone(),
                     language_ids: self.routes.read().unwrap_or_else(std::sync::PoisonError::into_inner).get(server).cloned().unwrap_or_default(),
+                    features: capabilities.features.iter().map(|feature| match feature {
+                        LanguageServerFeature::Hover => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::Hover,
+                        LanguageServerFeature::Completion => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::Completion,
+                        LanguageServerFeature::CompletionResolve => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::CompletionResolve,
+                        LanguageServerFeature::ExecuteCommand => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::ExecuteCommand,
+                        LanguageServerFeature::Declaration => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::Declaration,
+                        LanguageServerFeature::Definition => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::Definition,
+                        LanguageServerFeature::Implementation => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::Implementation,
+                        LanguageServerFeature::TypeDefinition => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::TypeDefinition,
+                        LanguageServerFeature::References => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::References,
+                        LanguageServerFeature::CallHierarchy => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::CallHierarchy,
+                        LanguageServerFeature::TypeHierarchy => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::TypeHierarchy,
+                        LanguageServerFeature::WorkspaceSymbols => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::WorkspaceSymbols,
+                        LanguageServerFeature::Rename => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::Rename,
+                        LanguageServerFeature::RenamePrepare => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::RenamePrepare,
+                        LanguageServerFeature::CodeActions => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::CodeActions,
+                        LanguageServerFeature::CodeActionResolve => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::CodeActionResolve,
+                        LanguageServerFeature::DocumentFormatting => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::DocumentFormatting,
+                        LanguageServerFeature::RangeFormatting => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::RangeFormatting,
+                        LanguageServerFeature::SignatureHelp => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::SignatureHelp,
+                        LanguageServerFeature::InlayHints => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::InlayHints,
+                        LanguageServerFeature::LinkedEditingRanges => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::LinkedEditingRanges,
+                        LanguageServerFeature::SemanticTokens => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::SemanticTokens,
+                        LanguageServerFeature::DocumentSymbols => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::DocumentSymbols,
+                        LanguageServerFeature::CodeLens => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::CodeLens,
+                        LanguageServerFeature::CodeLensResolve => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::CodeLensResolve,
+                        LanguageServerFeature::DocumentLinks => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::DocumentLinks,
+                        LanguageServerFeature::DocumentLinkResolve => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::DocumentLinkResolve,
+                        LanguageServerFeature::DocumentColors => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::DocumentColors,
+                        LanguageServerFeature::FoldingRanges => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::FoldingRanges,
+                        LanguageServerFeature::PullDiagnostics => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::PullDiagnostics,
+                        LanguageServerFeature::WorkspaceDiagnostics => ash_app_server_protocol::protocol::language::LanguageServerFeatureDto::WorkspaceDiagnostics,
+                    }).collect(),
                     completion_trigger_characters: capabilities.completion_trigger_characters.clone(),
                     signature_help_trigger_characters: capabilities.signature_help_trigger_characters.clone(),
                     signature_help_retrigger_characters: capabilities.signature_help_retrigger_characters.clone(),
