@@ -37,9 +37,13 @@ import { IContextMenuService } from "../../../../../platform/contextview/browser
 import type { ITerminalInstance } from "../../browser/terminal.js";
 import { AppServerAvailableContext } from '../../../../common/contextkeys.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
+import { TestConfigurationService, TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../../common/terminalContextKey.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
+import { IHoverService, HoverService } from '../../../../../platform/hover/browser/hoverService.js';
+import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
+import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
@@ -134,6 +138,13 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	registryOwner.registerInstance(IContextKeyService, contextKeyService);
 	using configuration = new TestConfigurationService();
 	registryOwner.registerInstance(IConfigurationService, configuration);
+	registerTestComponentServices(registryOwner, ownerDocument);
+	using workspace = new TestWorkspaceService({ id: 'terminal-title-test', folders: [] });
+	registryOwner.registerInstance(IWorkspaceContextService, workspace);
+	using hoverContext = new BrowserContextViewService(ownerDocument.body);
+	using hoverService = new HoverService(configuration, hoverContext, contextMenuService);
+	registryOwner.registerInstance(IHoverService, hoverService);
+	registryOwner.registerSingleton(IEnvironmentVariableService, () => registryOwner.createInstance(EnvironmentVariableService));
 	registryOwner.registerInstance(IKeybindingService, { onDidUpdateKeybindings: Event.None, lookupKeybinding: () => undefined } as unknown as IKeybindingService);
 	using titleActions = registryOwner.createInstance(TerminalTitleActions, ownerDocument.body);
 	assert.equal(contextKeyService.getValue(TerminalHasActiveInstanceContext.key), true, 'An empty toolbar cannot clear the window-active editor terminal');
@@ -180,6 +191,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 		title: "Backend shell",
 		profile: commandPromptProfile,
 		state: "running",
+		onDidChangeState: Event.None,
 	} as ITerminalInstance;
 	titleActions.setActiveInstance(activeInstance, "title");
 	const activeTerminal = toolbar.querySelector<HTMLButtonElement>(".ash-terminal-active-action .ash-action-label");
@@ -241,6 +253,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 		title: "Backend shell",
 		profile: commandPromptProfile,
 		state: "exited",
+		onDidChangeState: Event.None,
 	} as ITerminalInstance, "list");
 	assert.equal(toolbar.textContent?.includes("Relaunch Terminal"), false, 'Relaunch is available in the overflow menu');
 	titleActions.setActiveInstance(activeInstance, "title");

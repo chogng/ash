@@ -459,6 +459,11 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		let release: (() => void) | undefined;
 		let pending: Promise<void> = Promise.resolve();
 		let instances: readonly ITerminalInstance[] = new URLSearchParams(location.search).has('existing') ? [paneInstance] : [];
+		let integration = new URLSearchParams(location.search).get('shellIntegration');
+		let metadataSequence = 0;
+		let metadataCwd = '/backend/workspace';
+		let metadataPrompt: string | undefined;
+		const hoverOutput: { sequence: number; data: Uint8Array; shellIntegration?: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent; }[] = [];
 		let activeInstance = instances.at(-1);
 		const workspace = { id: 'workspace', folders: [{ id: 'workspace', uri: URI.file('/workspace'), name: 'Workspace', index: 0 }] };
 		const setPanel = (value: boolean): void => {
@@ -535,13 +540,26 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 				createdProfiles.push(profile.profileId);
 				launches.push({ profile: selection, env: options.env, cwd: options.cwd });
 				const terminalId = `pane-${creates}`;
-				return { terminalId, ready: { pid: 1234 + creates, cwd: '/backend/workspace' }, profile, connectionPersistence: 'connectionOwned' };
+				const hoverLaunch = new URLSearchParams(location.search).get('hoverLaunch');
+				const launch = hoverLaunch ? {
+					executable: hoverLaunch === 'windows' ? 'C:\\Program Files\\Fixture Shell\\bin\\pwsh.exe' : '/opt/fixture/a/long/path/to/a/shell/bin/bash',
+					args: hoverLaunch === 'windows' ? '-NoExit -Command ". fixture.ps1"' : ['--rcfile', '/private/fixture bashrc', ''],
+					usedShellIntegrationInjection: true,
+				} : undefined;
+				return { terminalId, ready: { pid: 1234 + creates, cwd: '/backend/workspace', shellType: integration ? PosixShellType.Bash : undefined, launch }, profile, connectionPersistence: 'connectionOwned' };
 			},
 			read: async options => {
 				await new Promise(resolve => setTimeout(resolve, 10));
-				return { terminalId: options.terminalId, chunks: [], nextSequence: 0, outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: new URLSearchParams(location.search).has('exited'), exitCode: undefined };
+				return {
+					terminalId: options.terminalId, chunks: hoverOutput.filter(chunk => chunk.sequence > options.afterSequence), nextSequence: metadataSequence, outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: new URLSearchParams(location.search).has('exited'), exitCode: undefined,
+					cwd: integration ? { value: metadataCwd, isTrusted: true, afterOutputSequence: metadataSequence } : undefined,
+					shellIntegration: integration ? { commandDetection: integration !== 'none', cwdDetection: true, hasRichCommandDetection: integration === 'rich', commandStorageDisabled: false, commands: [], promptType: metadataPrompt, afterOutputSequence: metadataSequence } : undefined
+				};
 			},
-			write: async options => { if (typeof options.data === 'string' && !options.data.startsWith('\x1b[?')) writes.push(options.data); },
+			write: async options => {
+				if (new URLSearchParams(location.search).has('rejectInput') && options.data === 'hover-input') throw new Error('Synthetic input failure');
+				if (typeof options.data === 'string' && !options.data.startsWith('\x1b[?')) writes.push(options.data);
+			},
 			resize: async () => { }, setAutoReplies: async () => { }, sendSignal: async () => { },
 			close: async options => { closed.push(Number(options.terminalId.slice(5))); },
 		});
@@ -648,6 +666,8 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		return {
 			configure: (key, value) => services.get(IConfigurationService).updateValue(key, value),
 			theme: setTerminalTestTheme,
+			metadata: (level, cwd, prompt) => { integration = level; metadataCwd = cwd; metadataPrompt = prompt; hoverOutput.push({ sequence: ++metadataSequence, data: new Uint8Array() }); },
+			sequence: (event, text = '') => { hoverOutput.push({ sequence: ++metadataSequence, data: new TextEncoder().encode(text), shellIntegration: event }); },
 			environment: enabled => enabled ? services.get(IEnvironmentVariableService).set('acme.environment', { persistent: false, map: new Map([['MODE', { variable: 'MODE', type: 1, value: 'extension' }]]) }) : services.get(IEnvironmentVariableService).delete('acme.environment'),
 			newWindowState: () => ({ parts: editorParts?.parts.length, editors: editorParts?.editorsMru.map(editor => editor.input.resource.toString()), input: writes.join('') }),
 			menuEffects: async () => ({ ...menuEffects, configuration: menuEffects.editors.length ? (await services.get(IFileService).readFile(URI.parse(menuEffects.editors.at(-1)!))).content : undefined }),
@@ -705,6 +725,8 @@ declare global {
 		}[];
 		ashTerminalPaneIntegration: {
 			configure(key: string, value: unknown): Promise<void>;
+			metadata(level: 'none' | 'basic' | 'rich', cwd: string, prompt?: string): void;
+			sequence(event: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent, text?: string): void;
 			theme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight', overrides?: Readonly<Record<string, string>>): void;
 			environment(enabled: boolean): void;
 			newWindowState(): { parts?: number; editors?: readonly string[]; input: string; };

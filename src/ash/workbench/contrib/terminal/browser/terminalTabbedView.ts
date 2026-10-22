@@ -8,7 +8,8 @@ import { localize } from '../../../../nls.js';
 import { ITerminalService, ITerminalGroupService, TerminalDataTransfers } from './terminal.js';
 import { SplitView, type ISplitViewView } from "../../../../base/browser/ui/splitview/splitview.js";
 import { h, addDisposableListener } from "../../../../base/browser/dom.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { TerminalInstanceHover } from './terminalTooltip.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { TerminalContextKeys } from '../common/terminalContextKey.js';
 import { IWorkbenchLayoutService, isHorizontal } from '../../../services/layout/browser/layoutService.js';
@@ -22,6 +23,7 @@ export class TerminalTabbedView extends Disposable {
 	readonly element: HTMLElement;
 	private readonly splitView: SplitView;
 	private readonly tabList: TerminalTabList;
+	private readonly keyboardHover = this._register(new MutableDisposable<DisposableStore>());
 	readonly onDidFocusInstance: Event<void>;
 	readonly terminalContainer: HTMLDivElement;
 	private snapping = false;
@@ -31,7 +33,7 @@ export class TerminalTabbedView extends Disposable {
 	constructor(
 		parentElement: HTMLElement,
 		@ITerminalService private readonly terminalService: ITerminalService,
-		@IInstantiationService instantiation: IInstantiationService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IStorageService private readonly storage: IStorageService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@ITerminalGroupService private readonly groups: ITerminalGroupService,
@@ -88,6 +90,28 @@ export class TerminalTabbedView extends Disposable {
 		if (width <= 0 || height <= 0) return;
 		this.splitView.layout(width, height);
 		this.updateTabsWidth();
+	}
+
+	focusHover(): void {
+		if (this.splitView.isViewVisible(TABS_VIEW_INDEX)) {
+			this.tabList.focusHover();
+			return;
+		}
+		const instance = this.groups.activeGroup?.activeInstance;
+		if (!instance) return;
+		// A single terminal can have neither a visible row nor a title button.
+		// This command-only card lives until it is hidden, then removes its listeners.
+		this.keyboardHover.clear();
+		const lifetime = new DisposableStore();
+		this.keyboardHover.value = lifetime;
+		const document = this.terminalContainer.ownerDocument;
+		const focusSource = document.activeElement as HTMLElement | null;
+		const card = lifetime.add(this.instantiation.createInstance(TerminalInstanceHover, this.terminalContainer, instance));
+		lifetime.add(card.onDidHide(() => {
+			this.keyboardHover.clear();
+			if (document.activeElement === document.body && focusSource?.isConnected) focusSource.focus();
+		}));
+		card.focus();
 	}
 
 	private updateVisibility(): void {

@@ -2370,6 +2370,8 @@ use crate::protocol::terminal::TerminalProcessInfo;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalProcessInfoParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalProcessLaunch;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalProcessReady;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalProfile;
@@ -7627,6 +7629,7 @@ typescript_bindings! {
     TerminalWriteParams,
     TerminalWriteBinaryParams,
     TerminalProcessReady,
+    TerminalProcessLaunch,
     TerminalProcessInfo,
     TerminalProcessInfoParams,
     TerminalSignal,

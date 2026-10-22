@@ -213,9 +213,13 @@ suite('reconnectable terminal operations after retirement', () => {
 test('a replacement renderer attaches the original process and rotates its handoff credential', async () => {
 	const supervisor = new TestSupervisor();
 	supervisor.shellType = 'pwsh';
+	supervisor.launch = { executable: 'C:\\Program Files\\PowerShell\\pwsh.exe', args: ['-NoExit', '-Command', '. fixture.ps1'], usedShellIntegrationInjection: true };
 	const original = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
 	const created = await original.create({ dirId: 'folder', rows: 24, cols: 80, profile: { type: 'default' } });
 	assert.equal(created.ready.shellType, GeneralShellType.PowerShell);
+	assert.deepEqual(created.ready.launch, supervisor.launch);
+	assert.ok(Object.isFrozen(created.ready.launch));
+	assert.ok(Object.isFrozen(created.ready.launch!.args));
 	const credential = await original.getReconnectLease(created.terminalId);
 	assert.ok(credential);
 	original.prepareForReload();
@@ -533,6 +537,7 @@ interface RecordedRequest {
 
 class TestSupervisor {
 	shellType: 'pwsh' | undefined;
+	launch: { executable: string; args: string | string[]; usedShellIntegrationInjection: boolean; } | undefined;
 	operatingSystem: OperatingSystem | undefined = OperatingSystem.Linux;
 	state: AppServerConnectionState = "ready";
 	generation = 1;
@@ -575,7 +580,7 @@ class TestSupervisor {
 				await this.createReply;
 				return {
 					terminalId: "terminal-1",
-					ready: { pid: 1234, cwd: '/backend/workspace', shellType: this.shellType },
+					ready: { pid: 1234, cwd: '/backend/workspace', shellType: this.shellType, launch: this.launch },
 					profile: { profileId: "shell", title: "Shell", isDefault: true },
 					reconnect: this.invalidCreateLease
 						? { reconnectToken: "secret", reconnectGracePeriodMillis: this.reconnectGracePeriodMillis }
@@ -585,7 +590,7 @@ class TestSupervisor {
 				return null;
 			case APP_SERVER_METHODS['terminal/processInfo'].method:
 				await this.processInfoReply;
-				return { ready: { pid: 1234, cwd: '/backend/workspace', shellType: this.shellType }, cwd: '/backend/current', rows: 40, cols: 120 };
+				return { ready: { pid: 1234, cwd: '/backend/workspace', shellType: this.shellType, launch: this.launch }, cwd: '/backend/current', rows: 40, cols: 120 };
 			case APP_SERVER_METHODS['terminal/detach'].method:
 				return { reconnectToken: THIRD_TOKEN, reconnectGracePeriodMillis: this.reconnectGracePeriodMillis };
 			case APP_SERVER_METHODS["terminal/attach"].method:
@@ -598,7 +603,7 @@ class TestSupervisor {
 				this.successfulAttachments += 1;
 				return {
 					terminalId: "terminal-1",
-					ready: { pid: 1234, cwd: '/backend/workspace', shellType: this.shellType },
+					ready: { pid: 1234, cwd: '/backend/workspace', shellType: this.shellType, launch: this.launch },
 					reconnect: {
 						reconnectToken: this.successfulAttachments === 1 ? SECOND_TOKEN : THIRD_TOKEN,
 						reconnectGracePeriodMillis: this.reconnectGracePeriodMillis,

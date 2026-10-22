@@ -2680,10 +2680,269 @@ for (const locale of ['en', 'zh-CN']) {
 		const tabs = page.locator('.ash-terminal-tabs [role="tab"]');
 		await expect(tabs).toHaveCount(2);
 		await page.evaluate(() => window.ashTerminalPaneIntegration.environment(true));
-		const label = locale === 'zh-CN' ? '以下扩展为新终端配置环境变量：acme.environment' : 'Extensions configure the environment for new terminals: acme.environment';
-		await expect(tabs.first()).toHaveAttribute('title', new RegExp(label));
+		await tabs.first().hover();
+		const card = page.locator('.ash-terminal-instance-hover');
+		await card.getByRole('button', { name: locale === 'zh-CN' ? '显示详细信息' : 'Show Details', exact: true }).click();
+		const label = locale === 'zh-CN' ? '扩展更改了此终端的环境贡献' : 'Extensions changed this terminal’s environment contributions';
+		await expect(card).toContainText(label);
+		await page.keyboard.press('Escape');
 		await page.evaluate(() => window.ashTerminalPaneIntegration.environment(false));
-		await expect(tabs.first()).not.toHaveAttribute('title', /acme\.environment/);
+		await page.mouse.move(0, 0);
+		await tabs.first().hover();
+		await expect(card).toBeVisible();
+		await expect(card).not.toContainText(label);
+		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`terminal instance hover shares process details across title and rows in ${locale}`, async ({ page }, testInfo) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/terminal.html?pane&profiles&browser&workbench&shellIntegration=rich&locale=${locale}`);
+		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+		const title = page.locator('.ash-terminal-active-action button');
+		await title.hover();
+		const card = page.locator('.ash-terminal-instance-hover');
+		await expect(card).toContainText(locale === 'zh-CN' ? '进程 ID（PID）：1235' : 'Process ID (PID): 1235');
+		await expect(card).toContainText(locale === 'zh-CN' ? '命令行：/bin/sh' : 'Command line: /bin/sh');
+		await expect(card).toContainText(locale === 'zh-CN' ? 'Shell 集成：丰富' : 'Shell integration: Rich');
+		await expect(card).not.toContainText('/backend/workspace');
+		const show = locale === 'zh-CN' ? '显示详细信息' : 'Show Details';
+		const hide = locale === 'zh-CN' ? '隐藏详细信息' : 'Hide Details';
+		await card.getByRole('button', { name: show, exact: true }).click();
+		await expect(card).toContainText('/backend/workspace');
+		await expect(card.getByRole('button', { name: hide, exact: true })).toHaveAttribute('aria-expanded', 'true');
+		await page.screenshot({ path: testInfo.outputPath(`terminal-instance-hover-${locale}.png`) });
+		await page.keyboard.press('Escape');
+		await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
+		const row = page.locator('.ash-terminal-tabs [role="tab"]').first();
+		await row.focus();
+		await row.press('Alt+ArrowDown');
+		await expect(card).toContainText(locale === 'zh-CN' ? '进程 ID（PID）：1235' : 'Process ID (PID): 1235');
+		await expect(card.getByRole('button').first()).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(card.getByRole('button', { name: hide, exact: true })).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(card.getByRole('button', { name: show, exact: true })).toBeFocused();
+		await expect(card).not.toContainText('/backend/workspace');
+		await page.keyboard.press('Escape');
+		await expect(row).toBeFocused();
+		await expect(card).toHaveCount(0);
+		await page.reload();
+		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+		await title.focus();
+		await title.press('Alt+ArrowDown');
+		await expect(card.getByRole('button', { name: show, exact: true })).toHaveAttribute('aria-expanded', 'false');
+		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+		await expect(card).toHaveCount(0);
+		expect(errors).toEqual([]);
+	});
+
+	test(`terminal instance hover focus command reaches a hidden-title terminal and the focused row in ${locale}`, async ({ page }) => {
+		await page.goto(`/terminal.html?pane&profiles&browser&workbench&locale=${locale}`);
+		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+		await page.evaluate(async () => {
+			await window.ashTerminalPaneIntegration.panel(true);
+			await window.ashTerminalPaneIntegration.configure('terminal.integrated.tabs.showActiveTerminal', 'never');
+		});
+		await expect(page.locator('.ash-terminal-active-action')).toHaveCount(0);
+		const input = page.locator('.xterm-helper-textarea').first();
+		await input.focus();
+		await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.focusHover'));
+		const card = page.locator('.ash-terminal-instance-hover');
+		await expect(card.getByRole('button').first()).toBeFocused();
+		await page.keyboard.press('Shift+Tab');
+		await expect(card.getByRole('button').last()).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(card.getByRole('button').first()).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(card).toHaveCount(0);
+		await expect(input).toBeFocused();
+		await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
+		const first = page.locator('.ash-terminal-tabs [role="tab"]').first();
+		await first.focus();
+		const active = await page.evaluate(() => window.ashTerminalPaneIntegration.activeId());
+		await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.focusHover'));
+		await expect(card).toContainText('1235');
+		await expect(card.getByRole('button').first()).toBeFocused();
+		expect(await page.evaluate(() => window.ashTerminalPaneIntegration.activeId())).toBe(active);
+		await page.keyboard.press('Escape');
+		await expect(first).toBeFocused();
+		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+	});
+
+	for (const host of ['posix', 'windows']) {
+		test(`terminal instance hover shows actual ${host} launch arguments and expands a long path in ${locale}`, async ({ page }) => {
+			await page.goto(`/terminal.html?pane&profiles&browser&workbench&hoverLaunch=${host}&shellIntegration=none&locale=${locale}`);
+			await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+			await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+			await page.locator('.ash-terminal-active-action button').hover();
+			const card = page.locator('.ash-terminal-instance-hover');
+			await expect(card).toContainText(host === 'windows' ? '…\\pwsh.exe -NoExit -Command ". fixture.ps1"' : '…/bash --rcfile "/private/fixture bashrc" ""');
+			await expect(card).not.toContainText(host === 'windows' ? 'C:\\Program Files' : '/opt/fixture');
+			await expect(card).toContainText(locale === 'zh-CN' ? '注入未能激活' : 'Injection failed to activate');
+			await card.getByRole('button', { name: locale === 'zh-CN' ? '显示详细信息' : 'Show Details', exact: true }).click();
+			await expect(card).toContainText(host === 'windows' ? 'C:\\Program Files\\Fixture Shell\\bin\\pwsh.exe' : '/opt/fixture/a/long/path/to/a/shell/bin/bash');
+			await page.evaluate(() => window.ashTerminalPaneIntegration.metadata('rich', '/workspace'));
+			await expect(card).toContainText(locale === 'zh-CN' ? 'Shell 集成：丰富' : 'Shell integration: Rich');
+			await expect(card).not.toContainText(locale === 'zh-CN' ? '注入未能激活' : 'Injection failed to activate');
+			await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+		});
+	}
+
+	test(`terminal instance hover updates received sequences and prompt input from the parsed screen in ${locale}`, async ({ page }) => {
+		await page.goto(`/terminal.html?pane&profiles&browser&workbench&shellIntegration=rich&locale=${locale}`);
+		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+		const title = page.locator('.ash-terminal-active-action button');
+		await title.focus();
+		await title.press('Alt+ArrowDown');
+		const card = page.locator('.ash-terminal-instance-hover');
+		await card.getByRole('button', { name: locale === 'zh-CN' ? '显示详细信息' : 'Show Details', exact: true }).click();
+		await page.evaluate(() => {
+			window.ashTerminalPaneIntegration.sequence({ type: 'promptStart' }, '\r\nfixture> ');
+			window.ashTerminalPaneIntegration.sequence({ type: 'commandStart' });
+			window.ashTerminalPaneIntegration.sequence({ type: 'commandLine', value: 'echo fixture', isTrusted: true }, 'echo fixture');
+		});
+		await expect(card).toContainText(locale === 'zh-CN' ? '已接收的序列：promptStart, commandStart, commandLine' : 'Seen sequences: promptStart, commandStart, commandLine');
+		await expect(card).toContainText(locale === 'zh-CN' ? '提示符输入：echo fixture|' : 'Prompt input: echo fixture|');
+		await expect(card.getByRole('button', { name: locale === 'zh-CN' ? '隐藏详细信息' : 'Hide Details', exact: true })).toBeFocused();
+		await page.evaluate(() => window.ashTerminalPaneIntegration.sequence({ type: 'processReady', isWindowsPty: false }));
+		await expect(card).not.toContainText('commandLine');
+		await expect(card).not.toContainText('echo fixture');
+		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+	});
+}
+
+for (const [level, label] of [['none', 'None'], ['basic', 'Basic'], ['rich', 'Rich']] as const) {
+	test(`terminal instance hover reflects ${level} shell integration in themed cards`, async ({ page }) => {
+		await page.goto(`/terminal.html?pane&profiles&browser&workbench&shellIntegration=${level}`);
+		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+		const title = page.locator('.ash-terminal-active-action button');
+		await title.focus();
+		await title.press('Alt+ArrowDown');
+		const card = page.locator('.ash-terminal-instance-hover');
+		await expect(card).toContainText(`Shell integration: ${label}`);
+		for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
+			await page.evaluate(theme => window.ashTerminalPaneIntegration.theme(theme), theme);
+			const styles = await card.evaluate(element => {
+				const hover = getComputedStyle(element.closest('.ash-hover')!);
+				const button = getComputedStyle(element.querySelector('button')!);
+				return { background: hover.backgroundColor, foreground: hover.color, outline: button.outlineColor, outlineStyle: button.outlineStyle };
+			});
+			expect(styles.foreground).not.toBe(styles.background);
+			expect(styles.outline).not.toBe(styles.background);
+			expect(styles.outlineStyle).toBe('solid');
+		}
+		await page.keyboard.press('Escape');
+		await expect(title).toBeFocused();
+		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`terminal instance hover updates live integration details and preserves action focus in ${locale}`, async ({ page }) => {
+		await page.goto(`/terminal.html?pane&profiles&browser&workbench&shellIntegration=basic&locale=${locale}`);
+		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+		const title = page.locator('.ash-terminal-active-action button');
+		await title.focus();
+		await title.press('Alt+ArrowDown');
+		const card = page.locator('.ash-terminal-instance-hover');
+		await expect(card).toContainText(locale === 'zh-CN' ? 'Shell 集成：基本' : 'Shell integration: Basic');
+		const show = locale === 'zh-CN' ? '显示详细信息' : 'Show Details';
+		const hide = locale === 'zh-CN' ? '隐藏详细信息' : 'Hide Details';
+		await page.keyboard.press('Tab');
+		await expect(card.getByRole('button', { name: show, exact: true })).toBeFocused();
+		await page.evaluate(() => window.ashTerminalPaneIntegration.metadata('rich', '/workspace/hover-next', 'fixture-prompt'));
+		await expect(card).toContainText(locale === 'zh-CN' ? 'Shell 集成：丰富' : 'Shell integration: Rich');
+		await expect(card.getByRole('button', { name: show, exact: true })).toBeFocused();
+		await page.evaluate(() => window.ashTerminalPaneIntegration.environment(true));
+		await expect(card.locator('[data-severity="warning"]')).toContainText(locale === 'zh-CN' ? '扩展更改了此终端的环境贡献' : 'Extensions changed this terminal’s environment contributions');
+		await expect(card.getByRole('button', { name: show, exact: true })).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(card).toContainText(locale === 'zh-CN' ? 'Shell 类型：bash' : 'Shell type: bash');
+		await expect(card).toContainText('/workspace/hover-next');
+		await expect(card).toContainText(locale === 'zh-CN' ? '提示符类型：fixture-prompt' : 'Prompt type: fixture-prompt');
+		await page.evaluate(() => window.ashTerminalPaneIntegration.metadata('none', '/workspace/hover-final'));
+		await expect(card).toContainText(locale === 'zh-CN' ? 'Shell 集成：无' : 'Shell integration: None');
+		await expect(card).toContainText('/workspace/hover-final');
+		await expect(card).not.toContainText('fixture-prompt');
+		await expect(card).not.toContainText('/workspace/hover-next');
+		await expect(card.getByRole('button', { name: hide, exact: true })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(title).toBeFocused();
+		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+		await expect(card).toHaveCount(0);
+	});
+
+	test(`terminal instance hover keeps process errors and secondary warnings visible without details in ${locale}`, async ({ page }, testInfo) => {
+		await page.goto(`/terminal.html?pane&profiles&browser&workbench&rejectInput&locale=${locale}`);
+		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+		const failure = await page.evaluate(async () => {
+			try {
+				await window.ashTerminalPaneIntegration.command('workbench.action.terminal.sendSequence', { text: 'hover-input' });
+				return '';
+			} catch (error) {
+				return (error as Error).message;
+			}
+		});
+		expect(failure).toBe('Synthetic input failure');
+		const title = page.locator('.ash-terminal-active-action button');
+		await title.focus();
+		await title.press('Alt+ArrowDown');
+		const card = page.locator('.ash-terminal-instance-hover');
+		const show = locale === 'zh-CN' ? '显示详细信息' : 'Show Details';
+		await expect(card.getByRole('button', { name: show, exact: true })).toBeVisible();
+		await expect(card.locator('[data-severity="error"]')).toContainText('Synthetic input failure');
+		await page.evaluate(() => window.ashTerminalPaneIntegration.environment(true));
+		await expect(card.locator('[data-severity="warning"]')).toBeVisible();
+		await expect(card.locator('[data-severity="error"]')).toContainText('Synthetic input failure');
+		await page.screenshot({ path: testInfo.outputPath(`terminal-hover-warning-${locale}.png`), animations: 'disabled' });
+		for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
+			await page.evaluate(theme => window.ashTerminalPaneIntegration.theme(theme), theme);
+			const colors = await card.evaluate(element => ({
+				background: getComputedStyle(element.closest('.ash-hover')!).backgroundColor,
+				error: getComputedStyle(element.querySelector('[data-severity="error"]')!).color,
+				warning: getComputedStyle(element.querySelector('[data-severity="warning"]')!).color,
+			}));
+			expect(colors.error).not.toBe(colors.background);
+			expect(colors.warning).not.toBe(colors.background);
+		}
+		await card.getByRole('button', { name: show, exact: true }).click();
+		await expect(card.locator('[data-severity="warning"]')).toContainText(locale === 'zh-CN' ? '显示环境贡献' : 'Show Environment Contributions');
+		await page.evaluate(() => window.ashTerminalPaneIntegration.environment(false));
+		await expect(card.locator('[data-severity="warning"]')).toHaveCount(0);
+		await expect(card.locator('[data-severity="error"]')).toContainText('Synthetic input failure');
+		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+	});
+
+	test(`terminal instance hover relaunches its warning target while another terminal is active in ${locale}`, async ({ page }) => {
+		await page.goto(`/terminal.html?pane&profiles&browser&workbench&locale=${locale}`);
+		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+		await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
+		const ids = await page.evaluate(() => window.ashTerminalPaneIntegration.ids());
+		await page.evaluate(() => window.ashTerminalPaneIntegration.environment(true));
+		const row = page.locator('.ash-terminal-tabs [role="tab"]').first();
+		await row.focus();
+		await row.press('Alt+ArrowDown');
+		const card = page.locator('.ash-terminal-instance-hover');
+		await expect(card).toContainText(locale === 'zh-CN' ? '进程 ID（PID）：1235' : 'Process ID (PID): 1235');
+		await card.getByRole('button', { name: locale === 'zh-CN' ? '重新启动终端' : 'Relaunch Terminal', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(3);
+		expect(await page.evaluate(() => window.ashTerminalPaneIntegration.operations().closed)).toEqual([1]);
+		expect(await page.evaluate(() => window.ashTerminalPaneIntegration.activeId())).toBe(ids[1]);
+		await row.focus();
+		await row.press('Alt+ArrowDown');
+		await expect(card).toContainText(locale === 'zh-CN' ? '进程 ID（PID）：1237' : 'Process ID (PID): 1237');
+		await expect(card.getByRole('button', { name: locale === 'zh-CN' ? '重新启动终端' : 'Relaunch Terminal', exact: true })).toHaveCount(0);
+		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
 	});
 }
 

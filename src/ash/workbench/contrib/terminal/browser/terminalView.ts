@@ -21,10 +21,12 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
 import { InstanceContext } from './terminalContextMenu.js';
-import { getShellProcessTooltip } from './terminalTooltip.js';
+import { TerminalInstanceHover } from './terminalTooltip.js';
+import type { IManagedHover } from '../../../../platform/hover/browser/hoverService.js';
 import { ActionViewItem, LabelActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { TerminalVoiceSession } from '../../terminalContrib/voice/browser/terminalVoice.js';
 import { Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
 import { IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
@@ -143,6 +145,10 @@ export class TerminalViewPane extends ViewPane {
 		if (!item || this.isDisposed || signal.aborted) { return undefined; }
 		const content = await item.widget.getBufferText(maxCharacters, signal);
 		return this.items.get(instance) === item && !signal.aborted ? content : undefined;
+	}
+
+	public focusHover(): void {
+		this.tabsLayout.focusHover();
 	}
 
 	override focus(): void {
@@ -340,6 +346,7 @@ class TerminalViewItem extends Disposable {
 
 /** Owns the terminal title toolbar and its window-scoped enablement state. */
 export class TerminalTitleActions extends Disposable {
+	private readonly instantiation: IInstantiationService;
 	readonly element: HTMLElement;
 	private readonly toolbar: MenuWorkbenchToolBar;
 	private readonly creatingContext: IContextKey<boolean>;
@@ -361,11 +368,13 @@ export class TerminalTitleActions extends Disposable {
 		@ICommandService commandService: ICommandService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IKeybindingService private readonly keybindings: IKeybindingService,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
 		// Toolbar projections describe its panel instance, independently of the
 		// window-active editor terminal used by command palette preconditions.
 		const contextKeyService = this.contextKeyService = this._register(parentContext.createScoped(container));
+		this.instantiation = this._register(instantiation.createChild(new ServiceCollection([IContextKeyService, contextKeyService])));
 		this.commandService = commandService;
 		this.creatingContext = TerminalCreatingContext.bindTo(contextKeyService);
 		this.hasActiveInstanceContext = TerminalHasActiveInstanceContext.bindTo(contextKeyService);
@@ -442,7 +451,7 @@ export class TerminalTitleActions extends Disposable {
 		switch (action.id) {
 			case TerminalCommandId.Focus:
 				if (!this.activeInstance) return undefined;
-				return new ActiveTerminalActionViewItem(action, this.activeInstance, this.menuService, contextMenuService, this.commandService, this.contextKeyService);
+				return this.instantiation.createInstance(ActiveTerminalActionViewItem, action, this.activeInstance);
 			case TerminalCommandId.New:
 				return new NewTerminalActionViewItem(
 					action,
@@ -502,7 +511,15 @@ class NewTerminalActionViewItem extends DropdownWithPrimaryActionViewItem {
 }
 
 class ActiveTerminalActionViewItem extends LabelActionViewItem {
-	constructor(action: IAction, private readonly instance: ITerminalInstance, private readonly menuService: IMenuService, private readonly menus: IContextMenuService, private readonly commands: ICommandService, private readonly contextKeyService: IContextKeyService) {
+	constructor(
+		action: IAction,
+		private readonly instance: ITerminalInstance,
+		@IMenuService private readonly menuService: IMenuService,
+		@IContextMenuService private readonly menus: IContextMenuService,
+		@ICommandService private readonly commands: ICommandService,
+		@IContextKeyService private readonly contextKeyService: IContextKeyService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+	) {
 		const tooltip = instance.title === instance.profile.title
 			? localize('terminal.title.active', 'Active terminal: {0}', instance.title)
 			: localize('terminal.title.activeProfile', 'Active terminal: {0} ({1})', instance.title, instance.profile.title);
@@ -510,8 +527,11 @@ class ActiveTerminalActionViewItem extends LabelActionViewItem {
 			label: instance.title,
 			icon: terminalProfileIcon(instance.profile),
 			ariaLabel: tooltip,
-			tooltip: tooltip + getShellProcessTooltip(instance, true),
 		});
+	}
+
+	protected override setupHover(target: HTMLElement): IManagedHover {
+		return this._register(this.instantiation.createInstance(TerminalInstanceHover, target, this.instance)).hover;
 	}
 
 	override render(container: HTMLElement): void {

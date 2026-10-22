@@ -1139,6 +1139,10 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
         TerminalShellType::Zsh
     };
     assert_eq!(created.ready.shell_type, Some(expected_shell));
+    let launch = created.ready.launch.as_ref().unwrap();
+    assert!(launch.used_shell_integration_injection);
+    assert!(std::path::Path::new(&launch.executable).is_absolute());
+    assert!(matches!(&launch.args, TerminalArguments::Argv(args) if !args.is_empty()));
     assert!(read_shell_boundaries(&service, id).iter().any(|event| matches!(
         event,
         TerminalShellIntegrationEvent::ProcessReady { shell_type: Some(shell), .. } if *shell == expected_shell

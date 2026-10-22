@@ -11,7 +11,7 @@ import type { IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IProcessDataEvent, IShellLaunchConfig, TerminalProcessExecution, TerminalProcessProfileSelection, TerminalLocation, ProcessPropertyType, IProcessPropertyMap } from '../../../../platform/terminal/common/terminal.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
-import type { ITerminalStatus } from '../common/terminal.js';
+import type { ITerminalStatusList } from './terminalStatusList.js';
 import type { ITerminalCapabilityStore, ITerminalCommand } from '../../../../platform/terminal/common/capabilities/capabilities.js';
 import type { ITerminalSerializedState } from '../../../services/terminal/common/terminal.js';
 import type { ITerminalProcessCreation, ITerminalReconnectLease } from '../../../../platform/terminal/common/terminal.js';
@@ -94,6 +94,8 @@ export type ITerminalProfileSelection = TerminalProcessProfileSelection;
 
 /** Complete caller-facing input for creating one terminal. */
 export type ITerminalCreateOptions = {
+	/** UI-resolved launch metadata; native profile selection still belongs to the execution host. */
+	readonly resolvedShellLaunchConfig?: Readonly<Pick<IShellLaunchConfig, 'executable' | 'args'>>;
 	readonly environmentVariableCollections?: import('../../../../platform/terminal/common/environmentVariable.js').ISerializableEnvironmentVariableCollections;
 	readonly environmentVariableCollectionsPersistable?: boolean;
 	readonly dirId?: string;
@@ -161,6 +163,7 @@ export interface ITerminalInstance extends IDisposable {
 	readonly initialCwd: string;
 	readonly cwd?: string;
 	readonly shellIntegration?: ITerminalShellIntegration;
+	readonly injectedArgs?: import('../../../../platform/terminal/common/terminal.js').TerminalArguments;
 	readonly shellType?: import('../../../../platform/terminal/common/terminal.js').TerminalShellType;
 	readonly capabilities?: ITerminalCapabilityStore;
 	readonly title: string;
@@ -200,6 +203,7 @@ export interface ITerminalInstance extends IDisposable {
 
 /** Browser screen operations shared by terminal views and instance contributions. */
 export interface IXtermTerminal extends IDisposable {
+	readonly shellIntegration: import('../../../../platform/terminal/common/terminal.js').IShellIntegration;
 	readonly element: HTMLDivElement;
 	readonly raw: Terminal;
 	readonly isDisposed: boolean;
@@ -228,6 +232,7 @@ export interface ITerminalContribution extends IDisposable {
 
 /** Reads the retained terminal screen without changing the active terminal or focus. */
 export interface ITerminalView extends IView {
+	focusHover(): void;
 	getTerminalOutput(instance: ITerminalInstance, maxCharacters: number, signal: AbortSignal): Promise<string | undefined>;
 }
 
@@ -284,21 +289,13 @@ export interface ITerminalGroupService extends IDisposable {
 	instanceIsSplit(instance: ITerminalInstance): boolean;
 	setActiveInstanceByIndex(index: number): void;
 	showPanel(focus?: boolean): Promise<void>;
+	focusHover(): Promise<void>;
 }
 
 export const ITerminalGroupService = createServiceIdentifier<ITerminalGroupService>('terminalGroupService');
 
 export const enum TerminalDataTransfers {
 	Terminals = 'Terminals',
-}
-
-/** Display messages are independent of the instance's process and connection state. */
-export interface ITerminalStatusList {
-	readonly primary: ITerminalStatus | undefined;
-	readonly statuses: readonly ITerminalStatus[];
-	readonly onDidChangePrimaryStatus: Event<ITerminalStatus | undefined>;
-	add(status: ITerminalStatus): void;
-	remove(status: ITerminalStatus | string): void;
 }
 
 /** Editor operations for the same window-owned terminal instances. */

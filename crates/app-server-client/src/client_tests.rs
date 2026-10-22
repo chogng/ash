@@ -357,6 +357,7 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
 
     let created = client
         .terminal_create(TerminalCreateParams {
+            lifetime_token: None,
             auto_replies: None,
             dir_id: None,
             rows: 24,
@@ -374,10 +375,12 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
         pid: 1234,
         cwd: "/workspace".into(),
         shell_type: None,
+        launch: None,
     };
     assert_eq!(created.ready, ready);
     let attached = client
         .terminal_attach(TerminalAttachParams {
+            lifetime_token: None,
             dir_id: None,
             terminal_id: created.terminal_id.clone(),
             reconnect_token: created.reconnect.unwrap().reconnect_token,

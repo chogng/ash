@@ -13,6 +13,58 @@
 	max-width: 170px;
 }
 
+.ash-terminal-instance-hover {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-terminal-instance-hover-title {
+	font-weight: var(--ash-fontWeight-semiBold);
+	overflow-wrap: anywhere;
+}
+
+.ash-terminal-instance-hover-section {
+	border-top: var(--ash-strokeThickness) solid var(--ash-hover-border);
+	padding-top: var(--ash-spacing-size80);
+	white-space: pre-wrap;
+}
+
+.ash-terminal-instance-hover-section[data-severity="error"] {
+	color: var(--ash-error-foreground);
+}
+
+.ash-terminal-instance-hover-section[data-severity="warning"] {
+	color: var(--ash-warning-foreground);
+}
+
+.ash-terminal-instance-hover-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	border-top: var(--ash-strokeThickness) solid var(--ash-hover-border);
+	padding-top: var(--ash-spacing-size80);
+}
+
+.ash-terminal-instance-hover-actions button {
+	border: 0;
+	padding: 0;
+	background: transparent;
+	color: var(--ash-link-foreground);
+	font: inherit;
+	text-align: start;
+	cursor: pointer;
+}
+
+.ash-terminal-instance-hover-actions button:hover {
+	text-decoration: underline;
+}
+
+.ash-terminal-instance-hover-actions button:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: 2px;
+}
+
 .ash-terminal-status {
 	flex: 0 0 auto;
 	padding: 4px 8px;

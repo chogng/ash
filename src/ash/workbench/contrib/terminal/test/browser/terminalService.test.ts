@@ -58,12 +58,45 @@ import { AhpTerminalCommandSource } from '../../browser/ahpTerminalCommandSource
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
+import { TerminalStatus } from '../../browser/terminalStatusList.js';
 
 const DEFAULT_PROFILE = {
 	profileId: "command-prompt",
 	title: "Command Prompt",
 	isDefault: true,
 } as const;
+
+test('resolved hover launch metadata is immutable and stays out of native process requests after relaunch', async () => {
+	const processes = new TestTerminalProcessService([]);
+	const create = processes.create.bind(processes);
+	processes.create = async options => {
+		const created = await create(options);
+		return { ...created, ready: { ...created.ready, launch: { executable: 'cmd.exe', args: ['/d', 'backend argument'], usedShellIntegrationInjection: false } } };
+	};
+	using workspace = folderWorkspaceContext();
+	using services = terminalServices(processes, workspace);
+	const terminals = services.get(ITerminalService);
+	const args = ['literal argument', ';$HOME'];
+	const instance = await terminals.createTerminal({
+		profile: { type: 'profile', profileId: DEFAULT_PROFILE.profileId },
+		resolvedShellLaunchConfig: { executable: 'cmd.exe', args },
+		deferStart: true,
+	});
+	args[0] = 'changed by caller';
+	assert.equal(instance.shellLaunchConfig?.executable, 'cmd.exe');
+	assert.deepEqual(instance.shellLaunchConfig?.args, ['literal argument', ';$HOME']);
+	assert.deepEqual(instance.injectedArgs, ['/d', 'backend argument']);
+	assert.equal(Object.isFrozen(instance.shellLaunchConfig?.args), true);
+	await terminals.relaunchTerminal(instance, { rows: 30, cols: 100 });
+	for (const request of processes.createCalls) {
+		assert.deepEqual(request.profile, { type: 'profile', profileId: DEFAULT_PROFILE.profileId });
+		assert.equal('executable' in request, false);
+		assert.equal('args' in request, false);
+	}
+	assert.equal(processes.createCalls.length, 2);
+	assert.deepEqual(instance.shellLaunchConfig?.args, ['literal argument', ';$HOME']);
+	await instance.close();
+});
 
 test('creating an editor terminal with preserveFocus never changes the selected input target', async () => {
 	const processes = new TestTerminalProcessService([]);
@@ -2444,9 +2477,35 @@ test('Terminal process failure retains its display reason and relaunch clears th
 	assert.equal(instance.statusList?.primary?.tooltip, 'Terminal process failed: execution host refused input');
 	await terminals.relaunchTerminal(instance, { rows: 24, cols: 80 });
 	assert.equal(instance.state, 'running');
-	assert.deepEqual(instance.statusList?.statuses, []);
+	assert.deepEqual(instance.statusList?.statuses.map(status => status.id), [TerminalStatus.ShellIntegrationInfo]);
 });
 
+
+test('committed shell integration snapshots can withdraw a previously detected prompt type', () => {
+	using source = new AhpTerminalCommandSource();
+	const integration = { commandDetection: true, cwdDetection: true, hasRichCommandDetection: true, commandStorageDisabled: false, commands: [], afterOutputSequence: 0 };
+	source.receive({ commandEvents: [], shellIntegration: { ...integration, promptType: 'starship' } });
+	source.commitThrough(0, CancellationToken.None);
+	assert.equal(source.shellIntegration?.promptType, 'starship');
+	source.receive({ commandEvents: [], shellIntegration: { ...integration, afterOutputSequence: 1 } });
+	source.commitThrough(0, CancellationToken.None);
+	assert.equal(source.shellIntegration?.promptType, 'starship', 'Uncommitted metadata cannot replace the visible prompt');
+	source.commitThrough(1, CancellationToken.None);
+	assert.equal(source.shellIntegration?.promptType, undefined);
+});
+
+test('terminal output read failure retains its reason in the same process-error status', async () => {
+	using workspace = folderWorkspaceContext();
+	const processes = new TestTerminalProcessService([]);
+	const reading = deferred<ITerminalProcessReadResult>();
+	processes.queueRead(reading.promise);
+	using services = terminalServices(processes, workspace);
+	const instance = await services.get(ITerminalService).createTerminal({ profile: { type: 'default' } });
+	reading.reject(new Error('execution host refused output'));
+	await waitFor(() => instance.state === 'error');
+	assert.equal(instance.statusList?.primary?.tooltip, 'Terminal process failed: execution host refused output');
+	await instance.close();
+});
 
 test('detected shell titles use executable casing while custom terminal names retain their casing', async () => {
 	const processes = new TestTerminalProcessService([]);

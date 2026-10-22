@@ -114,7 +114,7 @@ Send Sequence 由 `terminalContrib/sendSequence` 的单一 contribution 入口�
 
 `terminalGroupService.ts` 拥有 panel 组成员，活动组从唯一 TerminalService 派生；`terminalGroup.ts` 使用现有 SplitView，顶部／底部 Panel 横向排列，左侧／右侧纵向排列。Split 创建独立 Shell，继承原实例的启动 profile/argv/env 与当前 cwd；当前不拆分扩展自供 PTY。Focus Next/Previous Pane 与 focusAtIndex1–9 使用原实例选择，Unsplit 保留原进程和屏幕。组布局按容器内容尺寸更新字符网格，键盘 sash 使用原 SplitView，移动屏幕不复制输出。关闭一侧后聚焦剩余窗格，最后一个实例关闭才隐藏 panel。Panel 位置变化保留相对尺寸和焦点，reload 保留组成员和比例。
 
-`terminalStatusList.ts` 只保存进程错误的 UI 消息，Shell/连接状态仍归原实例与进程管理器；`terminalTooltip.ts` 将 profile、PID、cwd、退出码与当前消息提供给列表。Relaunch 清除旧进程错误。`terminalIcons.ts` 给菜单与列表提供语义图标，仍使用产品 icon registry/主题解析。Search addon 构造由 `xtermAddonImporter.ts` 加载，addon 实例仍归原屏幕；`terminalFontRendering.ts` 消费 fontRendering 设置，在 macOS 切换灰度字体平滑并刷新字形缓存，保留原屏幕和内容。
+`terminalStatusList.ts` 拥有进程错误、环境贡献和 Shell 集成的显示状态；状态增删事件覆盖被高优先级消息遮盖的次要变化，Shell/连接事实仍归原实例与进程管理器。`terminalTooltip.ts` 为标题与列表行提供共享信息卡片，显示 profile、PID、执行端实际启动命令和全部状态摘要，错误与环境警告不受详情开关影响。长可执行文件路径在摘要中折叠，详情展开完整路径；实际注入后的 argv 独立于用于 split/relaunch 的原始参数。注入尝试由执行端明确报告，未生效时显示失败诊断。详情包含 Shell 类型、cwd、已接收的集成序列、已检测到的提示符类型、当前提示符输入、退出码及明确标记为新终端配置的环境贡献；实例只在元数据的显示内容变化时更新 Shell 状态，完整快照撤回提示符类型后不保留旧名称。创建与重连共用执行端保留的不可变启动事实；旧后端缺省字段时使用已知的解析快照，不推测注入结果，也不改变后端的原生 profile 选择。详情开关通过应用级 Workbench 状态记忆；环境变更的重启动作使用提示所属实例，查看环境贡献按卡片所属终端的 URI 查找。Focus Hover 命令和 Ctrl/Cmd+K、Ctrl/Cmd+I 和弦从终端输入或列表聚焦卡片；标题与行还可使用 Alt+向下箭头，Escape 返回原入口；更新打开的卡片会保留操作焦点。Relaunch 清除旧进程错误，输入与输出读取失败使用同一错误状态。`terminalIcons.ts` 给菜单与列表提供语义图标，仍使用产品 icon registry/主题解析。Search addon 构造由 `xtermAddonImporter.ts` 加载，addon 实例仍归原屏幕；`terminalFontRendering.ts` 消费 fontRendering 设置，在 macOS 切换灰度字体平滑并刷新字形缓存，保留原屏幕和内容。
 
 ## 编辑区与元数据
 

@@ -131,6 +131,12 @@ export interface ITerminalProcessReady {
 	readonly cwd: string;
 	/** Execution-owner identification, including after process reattachment. */
 	readonly shellType?: TerminalShellType;
+	/** Immutable execution-owner facts; absent when an older backend cannot report them. */
+	readonly launch?: {
+		readonly executable: string;
+		readonly args: TerminalArguments;
+		readonly usedShellIntegrationInjection: boolean;
+	};
 }
 
 /** Current properties queried from the execution owner; unavailable cwd stays distinct from launch cwd. */

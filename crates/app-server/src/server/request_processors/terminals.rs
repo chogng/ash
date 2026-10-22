@@ -510,6 +510,18 @@ fn ready_to_dto(value: exec_server::terminal::TerminalProcessReady) -> wire::Ter
         pid: value.pid,
         cwd: value.cwd,
         shell_type: value.shell_type.map(terminal_shell_type),
+        launch: value.launch.map(|launch| wire::TerminalProcessLaunch {
+            executable: launch.executable,
+            args: match launch.args {
+                exec_server::terminal::TerminalArguments::Argv(args) => {
+                    wire::TerminalArguments::Argv(args)
+                }
+                exec_server::terminal::TerminalArguments::CommandLine(args) => {
+                    wire::TerminalArguments::CommandLine(args)
+                }
+            },
+            used_shell_integration_injection: launch.used_shell_integration_injection,
+        }),
     }
 }
 
