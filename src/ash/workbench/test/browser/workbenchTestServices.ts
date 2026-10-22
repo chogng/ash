@@ -203,7 +203,8 @@ export class TestViewDescriptorService extends ViewDescriptorService {
 			storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'views-test', flushInterval: 0 }));
 		}
 		services.registerInstance(IStorageService, storage);
-		super(options, services);
+		try { super(options, services, storage); }
+		catch (error) { resources.dispose(); throw error; }
 		this._register(resources);
 	}
 }

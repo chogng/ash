@@ -185,6 +185,7 @@ import { BrowserHostService } from '../services/host/browser/browserHostService.
 import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
 import { IViewDescriptorService } from "../common/views.js";
 import { ViewDescriptorService } from "../services/views/browser/viewDescriptorService.js";
+import { ViewDragAndDropController } from './dnd.js';
 import { IViewsService } from "../services/views/common/viewsService.js";
 import { ViewsService } from "../services/views/browser/viewsService.js";
 import {
@@ -1265,6 +1266,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(instantiationService.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
+		this._register(services.createInstance(ViewDragAndDropController, workbenchRoot));
 		// Extension adapters require the completed editor and view service graph.
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		performance.mark('ash.workbench.services-ready');

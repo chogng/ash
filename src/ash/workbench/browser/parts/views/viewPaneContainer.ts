@@ -61,6 +61,7 @@ export class ViewPaneContainer extends Composite {
 	private dimension: IDimension | undefined;
 	private readonly headersVisible: boolean;
 	private mountedPanes: ViewPane[] = [];
+	private readonly viewContextIds = new Set<string>();
 	private syncing = false;
 	private didLayout = false;
 	private readonly titleMenu: IMenu;
@@ -224,6 +225,16 @@ export class ViewPaneContainer extends Composite {
 		this.syncing = true;
 		try {
 			const desired = this.model.visibleViewDescriptors;
+			const owned = new Set(this.model.allViewDescriptors.map(view => view.id));
+			for (const id of this.viewContextIds) {
+				if (!owned.has(id)) this.scopedContextKeyService.removeContext(`viewContainer.${id}`);
+			}
+			this.viewContextIds.clear();
+			for (const id of owned) {
+				this.viewContextIds.add(id);
+				this.scopedContextKeyService.setContext(`viewContainer.${id}`, true);
+			}
+			this.scopedContextKeyService.setContext('viewContainer.visibleViewCount', desired.length);
 			const desiredIds = new Set(desired.map(view => view.id));
 			const registeredIds = new Set(this.model.allViewDescriptors.map(view => view.id));
 			let focusRemoved = false;
@@ -271,6 +282,11 @@ export class ViewPaneContainer extends Composite {
 			for (const descriptor of desired) {
 				const pane = this._panes.get(descriptor.id)?.pane;
 				if (!pane) continue;
+				// Fill hosts hide a single title; grouped views need their own drag and collapse handles.
+				if (!this.headersVisible) {
+					pane.setHeaderVisible(desired.length > 1);
+					if (desired.length === 1) pane.setExpanded(true);
+				}
 				const currentIndex = this.mountedPanes.indexOf(pane);
 				if (currentIndex < 0) {
 					this.paneView.addPane(pane, this._panes.get(pane.id)!.size, index);
@@ -328,6 +344,7 @@ export class ViewPaneContainer extends Composite {
 			this.element,
 			{
 				id: descriptor.id,
+				canMoveView: descriptor.canMoveView,
 				title: localize(this.localizationService, descriptor.localizationKey, descriptor.title),
 				collapsed: this.storageService.getBoolean(this.stateKey(descriptor.id, "collapsed"), this.stateScope) ?? descriptor.collapsed,
 			},

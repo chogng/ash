@@ -299,7 +299,8 @@ pub fn snapshot(
     }
     if let Some(blame) = &repository.blame {
         if configuration.boolean("blame.statusBarItem.enabled", true) {
-            statusbar.push(json!({"id":"git.blame","text":blame.label,"ariaLabel":blame.label,"tooltip":blame.details,"priority":800,"enabled":true}));
+            // Right-side entries grow inward as priority decreases; cursor position uses 40.
+            statusbar.push(json!({"id":"git.blame","text":blame.label,"ariaLabel":blame.label,"tooltip":blame.details,"alignment":"right","priority":30,"enabled":true}));
         }
     }
     let label = api.text(

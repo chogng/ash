@@ -124,7 +124,7 @@ registerAction2(class ExportOutputAction extends Action2 {
 /** Each window selects its view registry; importing shared services must not register another host's view commands. */
 export function registerOutputView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
 	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Output, title: 'Output', localizationKey: { bundle: 'ash.views', key: 'output' }, location: ViewContainerLocation.Panel, order: 2 });
-	registry.registerStaticViews(WorkbenchViewContainerId.Output, [{ id: OUTPUT_VIEW_ID, title: 'Output', localizationKey: { bundle: 'ash.views', key: 'output' }, order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(OutputViewPane) }]);
+	registry.registerStaticViews(WorkbenchViewContainerId.Output, [{ id: OUTPUT_VIEW_ID, title: 'Output', localizationKey: { bundle: 'ash.views', key: 'output' }, order: 1, canToggleVisibility: false, canMoveView: true, ctorDescriptor: new SyncDescriptor(OutputViewPane) }]);
 }
 AccessibleViewRegistry.register(new OutputAccessibilityHelp());
 

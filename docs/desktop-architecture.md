@@ -920,6 +920,18 @@ Workbench Mode session profile defaults
   → scoped Storage Service
 ```
 
+视图声明的默认容器由静态 `ViewsRegistry` 拥有；每个窗口的 `ViewDescriptorService` 在其上
+投影视图实际归属，不修改其他窗口的声明。标记 `canMoveView` 的 pane 可通过标题拖动或
+“移动视图”命令进入其他容器，也可在 Primary Side Bar、Secondary Side Bar 或 Panel
+生成独立入口。`browser/dnd.ts` 只路由本窗口的原生拖放，容器内入口排序仍由 `CompositeBar`
+负责。迁移先移除源 model 的成员，再加入目标 model；宿主销毁旧 pane 并通过同一领域服务
+重新创建，避免同一视图的可见性上下文存在多个写入者。
+
+单视图归属和自动生成入口的位置保存在 Profile/User 的 `views.customizations`；整组容器位置、
+入口顺序以及 pane 尺寸和折叠状态沿用各自的布局存储 owner。恢复时先校验完整记录，尚未注册的
+视图保留其归属以等待 contribution 加载。空的自动入口会移除。“恢复视图位置”还原默认归属、
+容器位置与入口顺序，并清除这份自定义记录；标题菜单还可单独恢复一个 pane 的位置。
+
 `platform/storage/common/storage.ts` 定义 Renderer 通用存储契约，包括 Application、
 Profile、Workspace scope，User/Machine target，值变更事件和 will-save lifecycle。
 Web 的 `workbench/services/storage/browser/storageService.ts` 以产品、profile 和

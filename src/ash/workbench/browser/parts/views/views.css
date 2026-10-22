@@ -65,3 +65,7 @@
 	margin: 0;
 	overflow-wrap: anywhere;
 }
+.ash-view-drop-target {
+	outline: var(--ash-strokeThickness) dashed var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}

@@ -45,6 +45,8 @@ export interface IViewContainerDescriptor {
 	readonly isDefault?: boolean;
 	/** Omit the container from navigation while none of its views are active. */
 	readonly hideIfEmpty?: boolean;
+	/** Specialized containers may reject views contributed elsewhere. */
+	readonly rejectAddedViews?: boolean;
 }
 
 /** Static declaration of one view contributed to a container. */
@@ -64,6 +66,8 @@ export interface IViewDescriptor {
 	readonly collapsed?: boolean;
 	readonly hideByDefault?: boolean;
 	readonly canToggleVisibility?: boolean;
+	readonly canMoveView?: boolean;
+	readonly containerIcon?: Icon;
 }
 
 /** Text and command links contributed to a view's welcome state. */
@@ -379,15 +383,16 @@ export class WorkbenchViewRegistry extends Disposable {
 						title: view.localizationKey ? localize2(view.localizationKey, view.title) : view.title,
 						toggled: visible,
 						precondition: view.canToggleVisibility === false ? ContextKeyExpr.false() : ContextKeyExpr.and(view.when, ContextKeyExpr.or(
-							ContextKeyExpr.not(getVisibleViewContextKey(view.id)), ...views.filter(other => other.id !== view.id).map(other => ContextKeyExpr.has(getVisibleViewContextKey(other.id))),
+							ContextKeyExpr.not(getVisibleViewContextKey(view.id)), ContextKeyExpr.greater('viewContainer.visibleViewCount', 1),
 						)),
-						menu: [MenuId.for('ViewsSubMenu'), MenuId.ViewContainerTitleContext].map(id => ({ id, group: '1_views', order: view.order, when: ContextKeyExpr.and(ContextKeyExpr.equals('viewContainer', container.id), view.when) })),
+						menu: [MenuId.for('ViewsSubMenu'), MenuId.ViewContainerTitleContext].map(id => ({ id, group: '1_views', order: view.order, when: ContextKeyExpr.and(ContextKeyExpr.has(`viewContainer.${view.id}`), view.when) })),
 					});
 				}
 				override run(accessor: ServicesAccessor): void {
 					const service = accessor.get(IViewDescriptorService);
-					if (service.getViewContainerForView(view.id)?.id !== container.id || view.canToggleVisibility === false) return;
-					const model = service.getViewContainerModel(container.id);
+					const current = service.getViewContainerForView(view.id);
+					if (!current || view.canToggleVisibility === false) return;
+					const model = service.getViewContainerModel(current.id);
 					if (!model.activeViewDescriptors.some(active => active.id === view.id)) return;
 					const isVisible = model.isVisible(view.id);
 					if (isVisible && model.visibleViewDescriptors.length <= 1) return;
@@ -515,6 +520,10 @@ export interface IViewDescriptorService {
 	getDefaultViewContainerLocation(container: IViewContainerDescriptor): ViewContainerLocation | null;
 	getViewContainerLocation(container: IViewContainerDescriptor): ViewContainerLocation | null;
 	moveViewContainerToLocation(container: IViewContainerDescriptor, location: ViewContainerLocation, requestedIndex?: number, reason?: string): void;
+	moveViewsToContainer(views: readonly IViewDescriptor[], container: IViewContainerDescriptor): void;
+	moveViewToLocation(view: IViewDescriptor, location: ViewContainerLocation, reason?: string): void;
+	getDefaultContainerById(viewId: string): IViewContainerDescriptor | null;
+	reset(): void;
 
 	getViewContainers(
 		location: ViewContainerLocation,

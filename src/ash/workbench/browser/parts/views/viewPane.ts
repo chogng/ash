@@ -31,6 +31,7 @@ export enum ViewPaneShowActions {
 /** Runtime inputs supplied by a browser view container to every pane. */
 export interface IViewPaneOptions extends IPaneOptions {
 	readonly showActions?: ViewPaneShowActions;
+	readonly canMoveView?: boolean;
 }
 
 export interface IFilterViewPaneOptions extends IViewPaneOptions {
@@ -132,6 +133,8 @@ export abstract class ViewPane extends Pane implements IView {
 		// Pane owns collapse visibility; this variant bypasses its hover/focus reveal.
 		this.element.classList.toggle('show-actions', options.showActions === ViewPaneShowActions.WhenExpanded || options.showActions === ViewPaneShowActions.Always);
 		this.element.dataset.viewId = options.id;
+		this.headerElement.draggable = options.canMoveView === true;
+		if (options.canMoveView) this.headerElement.querySelector('button')?.setAttribute('aria-description', localize('views.moveViewHint', 'Drag to move this view, or use Move View in the Command Palette.'));
 		this.element.hidden = true;
 	}
 

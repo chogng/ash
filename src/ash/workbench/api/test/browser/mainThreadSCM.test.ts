@@ -306,18 +306,23 @@ test('SCM bridges advertised reference filters, upstream changes and immutable b
 });
 
 
-test('SCM status command availability survives the extension bridge', async () => {
+test('SCM status command availability and placement survive the extension bridge', async () => {
 	const calls: JsonValue[] = [];
-	const command = { id: 'git.sync', text: '3↓ 0↑', ariaLabel: 'Sync', tooltip: 'Sync', priority: 800, enabled: false };
+	const command = { id: 'git.blame', text: 'Author (1 day ago)', ariaLabel: 'Line author', tooltip: 'Open commit', alignment: 'right', priority: 30, enabled: false };
 	const snapshot = { ...(provider() as Record<string, JsonValue>), statusBarCommands: [command] };
 	const value = fixture(async request => { calls.push(request.payload); return null; }, [snapshot]);
 	using cleanup = value.lifetime;
 	const repository = value.scm.getRepository('repo')!;
 	const statusCommands = () => repository.provider.statusBarCommands;
 	assert.equal(statusCommands()[0]?.run, undefined);
+	assert.equal(statusCommands()[0]?.alignment, 'right');
+	assert.throws(() => value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, statusBarCommands: [{ ...command, alignment: 'center' }] }]), /Invalid SCM status command alignment/u);
 	value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, statusBarCommands: [{ ...command, enabled: true }] }]);
 	await statusCommands()[0]?.run?.();
-	assert.ok(calls.some(call => typeof call === 'object' && call !== null && 'method' in call && call.method === 'statusBar' && call.commandId === 'git.sync'));
+	assert.ok(calls.some(call => typeof call === 'object' && call !== null && 'method' in call && call.method === 'statusBar' && call.commandId === 'git.blame'));
+	const { alignment: _alignment, ...defaultCommand } = command;
+	value.bridge.set(source, 'ash.scm', 3, [{ ...snapshot, statusBarCommands: [defaultCommand] }]);
+	assert.equal(statusCommands()[0]?.alignment, 'left');
 });
 
 const settleCallbacks = (): Promise<void> => new Promise(resolve => setImmediate(resolve));

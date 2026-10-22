@@ -166,14 +166,14 @@ export function registerDebugView(registry: WorkbenchViewRegistry = ViewsRegistr
 	const inspection = CONTEXT_DEBUG_UX.isEqualTo('default');
 	registry.registerStaticViews(WorkbenchViewContainerId.Debug, [
 		{ id: WelcomeView.ID, title: 'Run', localizationKey: { bundle: 'ash', key: 'debug.run' }, order: 1, when: CONTEXT_DEBUG_UX.isEqualTo('simple'), canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(WelcomeView) },
-		{ id: VARIABLES_VIEW_ID, title: 'Variables', localizationKey: { bundle: 'ash', key: 'debug.variables' }, order: 10, when: inspection, ctorDescriptor: new SyncDescriptor(VariablesView) },
-		{ id: WATCH_VIEW_ID, title: 'Watch', localizationKey: { bundle: 'ash', key: 'debug.watch' }, order: 20, when: inspection, ctorDescriptor: new SyncDescriptor(WatchExpressionsView) },
-		{ id: CALLSTACK_VIEW_ID, title: 'Call Stack', localizationKey: { bundle: 'ash', key: 'debug.callStack' }, order: 30, when: inspection, ctorDescriptor: new SyncDescriptor(CallStackView) },
-		{ id: LOADED_SCRIPTS_VIEW_ID, title: 'Loaded Scripts', localizationKey: { bundle: 'ash', key: 'debug.loadedSources' }, order: 50, when: inspection, hideByDefault: true, ctorDescriptor: new SyncDescriptor(LoadedScriptsView) },
-		{ id: BREAKPOINTS_VIEW_ID, title: 'Breakpoints', localizationKey: { bundle: 'ash', key: 'debug.breakpoints' }, order: 40, when: ContextKeyExpr.or(inspection, CONTEXT_BREAKPOINTS_EXIST.isEqualTo(true)), ctorDescriptor: new SyncDescriptor(BreakpointsView) },
+		{ id: VARIABLES_VIEW_ID, title: 'Variables', localizationKey: { bundle: 'ash', key: 'debug.variables' }, order: 10, when: inspection, canMoveView: true, ctorDescriptor: new SyncDescriptor(VariablesView) },
+		{ id: WATCH_VIEW_ID, title: 'Watch', localizationKey: { bundle: 'ash', key: 'debug.watch' }, order: 20, when: inspection, canMoveView: true, ctorDescriptor: new SyncDescriptor(WatchExpressionsView) },
+		{ id: CALLSTACK_VIEW_ID, title: 'Call Stack', localizationKey: { bundle: 'ash', key: 'debug.callStack' }, order: 30, when: inspection, canMoveView: true, ctorDescriptor: new SyncDescriptor(CallStackView) },
+		{ id: LOADED_SCRIPTS_VIEW_ID, title: 'Loaded Scripts', localizationKey: { bundle: 'ash', key: 'debug.loadedSources' }, order: 50, when: inspection, hideByDefault: true, canMoveView: true, ctorDescriptor: new SyncDescriptor(LoadedScriptsView) },
+		{ id: BREAKPOINTS_VIEW_ID, title: 'Breakpoints', localizationKey: { bundle: 'ash', key: 'debug.breakpoints' }, order: 40, when: ContextKeyExpr.or(inspection, CONTEXT_BREAKPOINTS_EXIST.isEqualTo(true)), canMoveView: true, ctorDescriptor: new SyncDescriptor(BreakpointsView) },
 	]);
 	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.DebugConsole, title: "Debug Console", localizationKey: { bundle: "ash.views", key: "debugConsole" }, location: ViewContainerLocation.Panel, order: 2.75 });
-	registry.registerStaticViews(WorkbenchViewContainerId.DebugConsole, [{ id: DEBUG_CONSOLE_VIEW_ID, title: "Debug Console", localizationKey: { bundle: "ash.views", key: "debugConsole" }, order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(Repl) }]);
+	registry.registerStaticViews(WorkbenchViewContainerId.DebugConsole, [{ id: DEBUG_CONSOLE_VIEW_ID, title: "Debug Console", localizationKey: { bundle: "ash.views", key: "debugConsole" }, order: 1, canToggleVisibility: false, canMoveView: true, ctorDescriptor: new SyncDescriptor(Repl) }]);
 }
 
 registerDebugView();

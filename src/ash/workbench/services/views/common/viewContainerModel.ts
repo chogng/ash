@@ -4,10 +4,9 @@ import { IContextKeyService } from '../../../../platform/contextkey/common/conte
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import type { ContextKeyChangeEvent, IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { getVisibleViewContextKey } from '../../../common/contextkeys.js';
-import type { IViewContainerDescriptor, IViewContainerModel, IViewDescriptor, IViewDescriptorsChangeEvent, WorkbenchViewRegistry } from '../../../common/views.js';
+import type { IViewContainerDescriptor, IViewContainerModel, IViewDescriptor, IViewDescriptorsChangeEvent } from '../../../common/views.js';
 
 export class ViewContainerModel extends Disposable implements IViewContainerModel {
-	private readonly registry: WorkbenchViewRegistry;
 	private readonly stateKey: string;
 	private readonly visibility = new Map<string, boolean>();
 	private readonly visibilityContextKeys =
@@ -31,24 +30,18 @@ export class ViewContainerModel extends Disposable implements IViewContainerMode
 
 	constructor(
 		public readonly viewContainer: IViewContainerDescriptor,
-		registry: WorkbenchViewRegistry,
+		views: readonly IViewDescriptor[],
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IStorageService private readonly storage: IStorageService,
 	) {
 		super();
-		this.registry = registry;
+		this._allViewDescriptors = views;
 		this.stateKey = `${viewContainer.id}.state.hidden`;
 		this.restoreVisibility();
 		this._register(storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && event.key === this.stateKey) {
 				if (this.restoreVisibility()) this.recompute();
 			}
-		}));
-		this._register(this.registry.onDidRegisterViews((event) => {
-			if (event.container.id === this.viewContainer.id) { this.recompute(); }
-		}));
-		this._register(this.registry.onDidDeregisterViews((event) => {
-			if (event.container.id === this.viewContainer.id) { this.recompute(); }
 		}));
 		this._register(this.contextKeyService.onDidChangeContext((event) => {
 			if (this.affectsActiveViews(event)) { this.recompute(); }
@@ -63,6 +56,16 @@ export class ViewContainerModel extends Disposable implements IViewContainerMode
 
 	public get allViewDescriptors(): readonly IViewDescriptor[] {
 		return this._allViewDescriptors;
+	}
+
+	/** Membership is supplied by the window's descriptor owner, independently of default declarations. */
+	public add(views: readonly IViewDescriptor[]): void {
+		this.recompute([...this._allViewDescriptors, ...views].sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER)));
+	}
+
+	public remove(views: readonly IViewDescriptor[]): void {
+		const ids = new Set(views.map(view => view.id));
+		this.recompute(this._allViewDescriptors.filter(view => !ids.has(view.id)));
 	}
 
 	public get activeViewDescriptors(): readonly IViewDescriptor[] {
@@ -119,11 +122,10 @@ export class ViewContainerModel extends Disposable implements IViewContainerMode
 		);
 	}
 
-	private recompute(): void {
+	private recompute(all: readonly IViewDescriptor[] = this._allViewDescriptors): void {
 		const previousAll = this._allViewDescriptors;
 		const previousActive = this._activeViewDescriptors;
 		const previousVisible = this._visibleViewDescriptors;
-		const all = this.registry.getViews(this.viewContainer.id);
 		const active = all.filter((view) =>
 			this.contextKeyService.contextMatchesRules(view.when)
 		);
@@ -192,6 +194,6 @@ function fireDescriptorChanges(
 	const nextIds = new Set(next.map((view) => view.id));
 	const added = next.filter((view) => !previousIds.has(view.id));
 	const removed = previous.filter((view) => !nextIds.has(view.id));
-	if (added.length === 0 && removed.length === 0) { return; }
+	if (added.length === 0 && removed.length === 0 && previous.every((view, index) => view === next[index])) { return; }
 	emitter.fire({ added, removed });
 }

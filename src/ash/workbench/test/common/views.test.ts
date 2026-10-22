@@ -131,6 +131,116 @@ test("view descriptor models project registry and context visibility", () => {
 	]);
 });
 
+test('individual views detach into persisted window projections and return without changing default declarations', () => {
+	const browser = new JSDOM('', { url: 'https://movable-views.test' });
+	using owner = toDisposable(() => browser.window.close());
+	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'movable-views', flushInterval: 0 });
+	using registry = new WorkbenchViewRegistry();
+	registry.registerStaticViewContainer({ id: 'test.explorer', title: 'Explorer', location: ViewContainerLocation.Sidebar });
+	registry.registerStaticViewContainer({ id: 'test.output', title: 'Output', location: ViewContainerLocation.Panel });
+	registry.registerStaticViewContainer({ id: 'test.search', title: 'Search', location: ViewContainerLocation.Sidebar });
+	registry.registerStaticViews('test.explorer', [testView('test.outline', 'Outline', { canMoveView: true, order: 1 }), testView('test.timeline', 'Timeline', { canMoveView: true, order: 2 }), testView('test.fixed', 'Fixed')]);
+	using context = new ContextKeyService();
+	using otherContext = new ContextKeyService();
+	using service = new TestViewDescriptorService({ registry }, context, storage);
+	using independent = new TestViewDescriptorService({ registry }, otherContext);
+	const timeline = service.getViewDescriptorById('test.timeline')!;
+	service.moveViewToLocation(timeline, ViewContainerLocation.AuxiliaryBar);
+	const generated = service.getViewContainerForView(timeline.id)!;
+	assert.equal(generated.location, ViewContainerLocation.AuxiliaryBar);
+	assert.equal(generated.title, 'Timeline');
+	assert.deepEqual(service.getViewContainerModel('test.explorer').allViewDescriptors.map(view => view.id), ['test.outline', 'test.fixed']);
+	assert.deepEqual(service.getViewContainerModel(generated.id).visibleViewDescriptors.map(view => view.id), ['test.timeline']);
+	assert.equal(context.getValue('view.test.timeline.visible'), true);
+	assert.equal(registry.getViewContainerForView(timeline.id)?.id, 'test.explorer');
+	assert.equal(independent.getViewContainerForView(timeline.id)?.id, 'test.explorer');
+	using restoredContext = new ContextKeyService();
+	using restored = new TestViewDescriptorService({ registry }, restoredContext, storage);
+	assert.equal(restored.getViewContainerForView(timeline.id)?.id, generated.id);
+	restored.moveViewContainerToLocation(generated, ViewContainerLocation.Panel);
+	using movedContext = new ContextKeyService();
+	using moved = new TestViewDescriptorService({ registry }, movedContext, storage);
+	assert.equal(moved.getViewContainerForView(timeline.id)?.location, ViewContainerLocation.Panel);
+	restored.moveViewsToContainer([timeline], restored.getViewContainerById('test.output')!);
+	assert.equal(restored.getViewContainerForView(timeline.id)?.id, 'test.output');
+	assert.equal(restored.getViewContainerById(generated.id), null);
+	restored.moveViewsToContainer([timeline], restored.getDefaultContainerById(timeline.id)!);
+	assert.equal(restored.getViewContainerForView(timeline.id)?.id, 'test.explorer');
+	restored.moveViewToLocation(restored.getViewDescriptorById('test.fixed')!, ViewContainerLocation.Panel);
+	assert.equal(restored.getViewContainerForView('test.fixed')?.id, 'test.explorer');
+	restored.moveViewToLocation(timeline, ViewContainerLocation.Panel);
+	restored.moveViewContainerToLocation(restored.getViewContainerById('test.output')!, ViewContainerLocation.Sidebar);
+	restored.moveViewContainer(ViewContainerLocation.Sidebar, 'test.search', 'test.explorer', 'before');
+	assert.deepEqual(restored.getViewContainers(ViewContainerLocation.Sidebar).map(container => container.id), ['test.search', 'test.explorer', 'test.output']);
+	restored.reset();
+	assert.deepEqual(restored.viewContainers.map(container => [container.id, container.location]), [['test.explorer', 'sidebar'], ['test.output', 'panel'], ['test.search', 'sidebar']]);
+	assert.deepEqual(restored.getViewContainers(ViewContainerLocation.Sidebar).map(container => container.id), ['test.explorer', 'test.search']);
+	assert.deepEqual(restored.getViewContainerModel('test.explorer').allViewDescriptors.map(view => view.id), ['test.outline', 'test.timeline', 'test.fixed']);
+	assert.equal(storage.get('views.customizations', StorageScope.PROFILE), undefined);
+});
+
+test('view customizations restore late contributions and reject malformed complete state', () => {
+	const browser = new JSDOM('', { url: 'https://late-views.test' });
+	using owner = toDisposable(() => browser.window.close());
+	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'late-views', flushInterval: 0 });
+	using registry = new WorkbenchViewRegistry();
+	const generatedId = 'workbench.views.service.test';
+	storage.store('views.customizations', JSON.stringify({ viewLocations: { 'test.late': generatedId }, generatedViewContainerLocations: { [generatedId]: 'auxiliarybar' } }), StorageScope.PROFILE, StorageTarget.USER);
+	using contexts = new ContextKeyService();
+	using service = new TestViewDescriptorService({ registry }, contexts, storage);
+	registry.registerStaticViewContainer({ id: 'test.late.container', title: 'Late', location: ViewContainerLocation.Sidebar });
+	using registration = registry.registerViews('test.late.container', [testView('test.late', 'Late', { canMoveView: true })]);
+	assert.equal(service.getViewContainerForView('test.late')?.id, generatedId);
+	registration.dispose();
+	assert.equal(service.getViewContainerById(generatedId), null);
+	using replacement = registry.registerViews('test.late.container', [testView('test.late', 'Returned', { canMoveView: true })]);
+	assert.equal(service.getViewContainerForView('test.late')?.id, generatedId);
+	assert.equal(service.getViewContainerById(generatedId)?.title, 'Returned');
+	for (const invalid of ['null', '{', JSON.stringify({ viewLocations: [], generatedViewContainerLocations: {} }), JSON.stringify({ viewLocations: {}, generatedViewContainerLocations: { [generatedId]: 'editor' } })]) {
+		storage.store('views.customizations', invalid, StorageScope.PROFILE, StorageTarget.USER);
+		assert.throws(() => new TestViewDescriptorService({ registry }, contexts, storage), /Saved view locations are invalid/u);
+	}
+});
+
+test('view ownership follows external profile changes without affecting another profile', () => {
+	const browser = new JSDOM('', { url: 'https://shared-views.test' });
+	using owner = toDisposable(() => browser.window.close());
+	const options = { ownerWindow: browser.window as unknown as Window, workspaceId: 'shared-views', flushInterval: 0 };
+	using firstStorage = new BrowserStorageService(options);
+	using secondStorage = new BrowserStorageService(options);
+	using otherStorage = new BrowserStorageService({ ...options, profileId: 'other' });
+	using registry = new WorkbenchViewRegistry();
+	registry.registerStaticViewContainer({ id: 'test.shared', title: 'Shared', location: ViewContainerLocation.Sidebar });
+	registry.registerStaticViews('test.shared', [testView('test.shared.view', 'View', { canMoveView: true })]);
+	using firstContext = new ContextKeyService();
+	using secondContext = new ContextKeyService();
+	using otherContext = new ContextKeyService();
+	using first = new TestViewDescriptorService({ registry }, firstContext, firstStorage);
+	using second = new TestViewDescriptorService({ registry }, secondContext, secondStorage);
+	using other = new TestViewDescriptorService({ registry }, otherContext, otherStorage);
+	let profileKey: string | undefined;
+	const broadcast = () => {
+		profileKey ??= Object.keys(browser.window.localStorage).find(key => key.endsWith('.profile.default'));
+		assert.ok(profileKey);
+		browser.window.dispatchEvent(new browser.window.StorageEvent('storage', { key: profileKey, newValue: browser.window.localStorage.getItem(profileKey) }));
+	};
+	first.moveViewToLocation(first.getViewDescriptorById('test.shared.view')!, ViewContainerLocation.AuxiliaryBar);
+	const generated = first.getViewContainerForView('test.shared.view')!;
+	broadcast();
+	assert.equal(second.getViewContainerForView('test.shared.view')?.id, generated.id);
+	assert.deepEqual(second.getViewContainerModel('test.shared').allViewDescriptors, []);
+	assert.equal(secondContext.getValue('view.test.shared.view.visible'), true);
+	assert.equal(other.getViewContainerForView('test.shared.view')?.id, 'test.shared');
+	first.moveViewContainerToLocation(generated, ViewContainerLocation.Panel);
+	broadcast();
+	assert.equal(second.getViewContainerForView('test.shared.view')?.location, ViewContainerLocation.Panel);
+	first.reset();
+	broadcast();
+	assert.equal(second.getViewContainerForView('test.shared.view')?.id, 'test.shared');
+	assert.equal(second.getViewContainerById(generated.id), null);
+	assert.equal(secondContext.getValue('view.test.shared.view.visible'), true);
+});
+
 test("view descriptor service resolves default containers by location", () => {
 	using contextKeys = new ContextKeyService();
 	using registry = new WorkbenchViewRegistry();
@@ -255,7 +365,12 @@ test('view visibility menus execute in the invoking window and expire with decla
 	using commands = new CommandService(services);
 	firstContext.setContext('activeViewlet', 'test.visibility');
 	const menus = new MenuService(commands, firstContext);
-	const items = () => menus.getMenuActions(MenuId.ViewContainerTitleContext, undefined, containerContext).flatMap(([, actions]) => actions).filter(action => action.id.startsWith('test.visibility.'));
+	const items = () => {
+		const model = first.getViewContainerModel('test.visibility');
+		for (const view of model.allViewDescriptors) containerContext.setContext(`viewContainer.${view.id}`, containerContext.getValue('viewContainer') === 'test.visibility');
+		containerContext.setContext('viewContainer.visibleViewCount', model.visibleViewDescriptors.length);
+		return menus.getMenuActions(MenuId.ViewContainerTitleContext, undefined, containerContext).flatMap(([, actions]) => actions).filter(action => action.id.startsWith('test.visibility.'));
+	};
 	assert.deepEqual(items().map(action => [action.label, action.checked, action.enabled]), [['First', true, true], ['Second', true, true]]);
 	await items().find(action => action.label === 'Second')!.run();
 	assert.equal(first.getViewContainerModel('test.visibility').isVisible('test.visibility.second'), false);

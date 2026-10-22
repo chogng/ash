@@ -1,4 +1,5 @@
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize, localize2 } from '../../../../nls.js';
@@ -17,7 +18,7 @@ import { TimelinePane, TimelineFocusedContext } from './timelinePane.js';
 export function registerTimelineView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
 	registry.registerStaticViews(WorkbenchViewContainerId.Sidebar, [{
 		id: TimelinePaneId, title: 'Timeline', localizationKey: { bundle: 'ash.views', key: 'timeline' },
-		order: 4, collapsed: true, canToggleVisibility: true, when: TimelineHasProviderContext.isEqualTo(true),
+		order: 4, collapsed: true, canToggleVisibility: true, canMoveView: true, containerIcon: Lxicon.history, when: TimelineHasProviderContext.isEqualTo(true),
 		ctorDescriptor: new SyncDescriptor(TimelinePane),
 	}]);
 }
@@ -48,7 +49,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			if (!(view instanceof TimelinePane)) return undefined;
 			const focused = view.element.ownerDocument.activeElement;
 			return new AccessibleContentProvider(AccessibleViewProviderId.Timeline, { type },
-				() => type === AccessibleViewType.Help ? localize('timeline.help', 'Timeline\nUse the arrow keys to move through file history. Press Enter to open an entry or load more entries. Local history entries compare the saved version with the current file. Use the view actions to refresh, pin the current file, or choose sources. Press Alt+F2 to read the history.') : view.getAccessibleContent(),
+				() => type === AccessibleViewType.Help ? localize('timeline.help', 'Timeline\nUse the arrow keys to move through file history. Press Enter to open an entry or load more entries. Local history entries compare the saved version with the current file. Use the view actions to refresh, pin the current file, or choose sources. Press Alt+F2 to read the history. Use Move View in the Command Palette to move this view, and Reset View Locations to restore the default layout.') : view.getAccessibleContent(),
 				() => { if (focused instanceof HTMLElement && focused.isConnected) focused.focus(); else view.focus(); },
 				AccessibilityVerbositySettingId.Timeline);
 		},

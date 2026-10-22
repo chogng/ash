@@ -79,6 +79,7 @@ export function registerTerminalView(registry: WorkbenchViewRegistry = ViewsRegi
 		localizationKey: { bundle: "ash.views", key: "terminal" },
 		order: 1,
 		canToggleVisibility: false,
+		canMoveView: true,
 		ctorDescriptor: new SyncDescriptor(TerminalViewPane),
 	}]);
 }

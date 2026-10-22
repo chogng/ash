@@ -523,6 +523,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		return this.snapshot.statusBarCommands.map(entry => ({
 			id: string(entry.id), text: string(entry.text), ariaLabel: string(entry.ariaLabel),
 			tooltip: string(entry.tooltip), priority: number(entry.priority), compactGroup: optionalString(entry.compactGroup),
+			alignment: entry.alignment === 'right' ? 'right' : 'left',
 			icon: entry.icon ? Icon.fromId(string(entry.icon)) : undefined,
 			showProgress: entry.showProgress === true,
 			run: entry.enabled === false ? undefined : () => this.call('statusBar', { commandId: entry.id }).catch(this.reportError),
@@ -642,6 +643,9 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 	for (const command of statusBarCommands) {
 		string(command.id); string(command.text); string(command.ariaLabel); string(command.tooltip);
 		number(command.priority); optionalString(command.icon); optionalString(command.compactGroup);
+		if (command.alignment !== undefined && command.alignment !== 'left' && command.alignment !== 'right') {
+			throw new TypeError('Invalid SCM status command alignment');
+		}
 		if (command.enabled !== undefined && typeof command.enabled !== 'boolean') {
 			throw new TypeError('Invalid SCM status command availability');
 		}
