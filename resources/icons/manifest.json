@@ -1007,6 +1007,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "plug",
+      "file": "plug.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "preview",
       "file": "preview.svg",
       "rendering": "symbolic"
