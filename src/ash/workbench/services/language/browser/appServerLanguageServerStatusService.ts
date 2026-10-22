@@ -33,12 +33,14 @@ interface Server {
 }
 interface LanguageServerTask {
 	readonly server: Server;
-	readonly installing: boolean;
+	readonly downloading: boolean;
 	readonly completion: DeferredPromise<void>;
 	progress?: IProgress<IProgressStep>;
 	title: string;
 	message?: string;
 	percentage?: number;
+	/** Last absolute percentage delivered to the incremental progress contract. */
+	reportedPercentage?: number;
 }
 
 /** Projects connection-local lifecycle events into a shared Workbench management surface. */
@@ -259,21 +261,21 @@ export class AppServerLanguageServerStatusService extends Disposable implements 
 			if (task) void task.completion.complete(undefined);
 			this.progress.delete(token);
 		} else {
-			const installing = update.token === 'ash.language-server.install';
-			const title = installing ? localize('languageServer.installing', 'Installing {0}…', update.server) : update.title?.trim();
+			const downloading = update.token === 'ash.language-server.download';
+			const title = downloading ? localize('languageServer.downloading', 'Downloading {0}…', update.server) : update.title?.trim();
 			if (!task) {
-				task = { server, installing, completion: new DeferredPromise<void>(), title: title || localize('languageServer.operation', 'Language server operation'), message: update.message?.trim(), percentage: update.percentage ?? undefined };
+				task = { server, downloading, completion: new DeferredPromise<void>(), title: title || localize('languageServer.operation', 'Language server operation'), message: update.message?.trim(), percentage: update.percentage ?? undefined };
 				this.progress.set(token, task);
-				if (installing) {
+				if (downloading) {
 					status(task.title);
-					this.ensureChannel(server).appendLine({ severity: 'information', category: 'installation', text: task.title });
+					this.ensureChannel(server).appendLine({ severity: 'information', category: 'download', text: task.title });
 				}
 				const commandId = `ash.languageServers.showOutput.${++nextOutputCommand}`;
 				const command = CommandsRegistry.register(commandId, () => this.ensureChannel(server).show());
 				const current = task;
-				void this.progressService.withProgress({ location: ProgressLocation.Window, title: installing ? task.title : this.serverLabel(server), command: commandId }, progress => {
+				void this.progressService.withProgress({ location: ProgressLocation.Window, title: downloading ? task.title : this.serverLabel(server), command: commandId }, progress => {
 					current.progress = progress;
-					progress.report({ message: progressMessage(current, this.progress.size) });
+					this.reportProgress(current);
 					return current.completion.p;
 				}).finally(() => command.dispose()).catch(onUnexpectedError);
 			}
@@ -282,8 +284,17 @@ export class AppServerLanguageServerStatusService extends Disposable implements 
 			if (update.message != null) task.message = update.message.trim();
 			if (update.percentage != null) task.percentage = update.percentage;
 		}
-		for (const task of this.progress.values()) task.progress?.report({ message: progressMessage(task, this.progress.size) });
+		for (const task of this.progress.values()) this.reportProgress(task);
 		this.updateStatus();
+	}
+
+	private reportProgress(task: LanguageServerTask): void {
+		if (!task.progress) return;
+		task.progress.report({
+			message: progressMessage(task, this.progress.size),
+			...(task.percentage === undefined ? {} : { total: 100, increment: task.percentage - (task.reportedPercentage ?? 0) }),
+		});
+		task.reportedPercentage = task.percentage;
 	}
 
 	private updateStatus(): void {
@@ -332,7 +343,7 @@ function key(server: Pick<Server, 'id' | 'dirId'>): string { return `${server.di
 function summary(text: string, limit = 180): string { const first = text.trim().split(/[\r\n]/, 1)[0]; return first.length > limit ? `${first.slice(0, limit - 1)}…` : first; }
 function progressMessage(task: LanguageServerTask, count: number): string {
 	let message: string;
-	if (task.installing) {
+	if (task.downloading) {
 		const percentage = task.percentage === undefined ? '' : ` ${task.percentage}%`;
 		message = `${task.message ?? ''}${percentage}`.trim();
 	} else {

@@ -1566,19 +1566,8 @@ impl AppServerLanguageRuntime {
                 let home = self.home.as_deref().ok_or_else(|| {
                     ManagedLanguageServerError::Installation("Ash home is unavailable".into())
                 })?;
-                self.updates.publish_language_server_progress(
-                    self.connection_id,
-                    LanguageServerProgressNotification {
-                        dir_id: self.dir_state.dir_id.clone(),
-                        server: server.id.clone(),
-                        token: "ash.language-server.install".into(),
-                        title: Some(server.id.clone()),
-                        message: None,
-                        percentage: None,
-                        done: false,
-                    },
-                );
-                let install = || {
+                let mut downloading = false;
+                let result = (|| {
                     use ash_http_client::HttpClientConfig;
                     use ash_http_client::OutboundNetworkSnapshot;
                     use ash_http_client::RedirectPolicy;
@@ -1602,21 +1591,36 @@ impl AppServerLanguageRuntime {
                     let http = ReqwestHttpClient::with_network(network).map_err(|error| {
                         ManagedLanguageServerError::Installation(error.to_string())
                     })?;
-                    server.install(home, &http)
-                };
-                let result = install();
-                self.updates.publish_language_server_progress(
-                    self.connection_id,
-                    LanguageServerProgressNotification {
-                        dir_id: self.dir_state.dir_id.clone(),
-                        server: server.id.clone(),
-                        token: "ash.language-server.install".into(),
-                        title: None,
-                        message: None,
-                        percentage: None,
-                        done: true,
-                    },
-                );
+                    server.install(home, &http, || {
+                        downloading = true;
+                        self.updates.publish_language_server_progress(
+                            self.connection_id,
+                            LanguageServerProgressNotification {
+                                dir_id: self.dir_state.dir_id.clone(),
+                                server: server.id.clone(),
+                                token: "ash.language-server.download".into(),
+                                title: Some(server.id.clone()),
+                                message: None,
+                                percentage: None,
+                                done: false,
+                            },
+                        );
+                    })
+                })();
+                if downloading {
+                    self.updates.publish_language_server_progress(
+                        self.connection_id,
+                        LanguageServerProgressNotification {
+                            dir_id: self.dir_state.dir_id.clone(),
+                            server: server.id.clone(),
+                            token: "ash.language-server.download".into(),
+                            title: None,
+                            message: None,
+                            percentage: None,
+                            done: true,
+                        },
+                    );
+                }
                 result
             },
         );

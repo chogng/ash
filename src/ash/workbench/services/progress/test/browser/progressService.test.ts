@@ -88,6 +88,42 @@ test("window progress activates its command and resumes earlier work after the l
 	assert.deepEqual(fixture.statusbar.getEntries(StatusbarAlignment.Left), []);
 });
 
+test('a task at its numeric total cannot hide unfinished window progress while its producer is pending', async () => {
+	using fixture = new ProgressFixture();
+	const indexing = new DeferredPromise<void>();
+	const scanning = new DeferredPromise<void>();
+	let scan!: IProgress<IProgressStep>;
+	let index!: IProgress<IProgressStep>;
+	let indexingSettled = false;
+	let scanningSettled = false;
+	const first = fixture.progress.withProgress({ location: ProgressLocation.Window, title: 'Indexing', command: 'test.log', total: 100 }, progress => {
+		index = progress;
+		progress.report({ message: 'crate-a', increment: 20 });
+		return indexing.p;
+	});
+	const second = fixture.progress.withProgress({ location: ProgressLocation.Window, title: 'Roots Scanned', command: 'test.log', total: 100 }, progress => {
+		scan = progress;
+		progress.report({ message: '1/2', increment: 50 });
+		return scanning.p;
+	});
+	void first.then(() => { indexingSettled = true; });
+	void second.then(() => { scanningSettled = true; });
+	assert.equal(fixture.statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'Roots Scanned: 1/2');
+	scan.report({ message: '2/2', increment: 50 });
+	assert.equal(fixture.statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'Indexing: crate-a');
+	assert.equal(indexingSettled, false);
+	assert.equal(scanningSettled, false);
+	await scanning.complete(undefined);
+	await second;
+	assert.equal(fixture.statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'Indexing: crate-a');
+	index.report({ increment: 80 });
+	assert.deepEqual(fixture.statusbar.getEntries(StatusbarAlignment.Left), []);
+	assert.equal(indexingSettled, false);
+	await indexing.complete(undefined);
+	await first;
+	assert.deepEqual(fixture.statusbar.getEntries(StatusbarAlignment.Left), []);
+});
+
 test("silent notification progress retains history and exposes a window entry", async () => {
 	using fixture = new ProgressFixture();
 	const completion = new DeferredPromise<void>();

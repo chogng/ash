@@ -25,7 +25,7 @@ import { INotificationService, Severity } from '../../../../../platform/notifica
 import { NotificationService } from '../../../notification/common/notificationService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
-test('managed Rust installation status is localized and clears when acquisition finishes', async () => {
+test('managed Rust download status is localized and clears when acquisition finishes', async () => {
 	setARIAContainer(browserEnvironment.window.document.body);
 	const events = new FakeServerEvents();
 	using resources = new DisposableStore();
@@ -35,10 +35,10 @@ test('managed Rust installation status is localized and clears when acquisition 
 	using service = createService(services, events);
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 	try {
-		events.fire({ method: 'language/serverProgress', params: { server: 'rust-analyzer', token: 'ash.language-server.install', title: 'rust-analyzer', message: null, percentage: null, done: false } });
-		assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, '正在安装 rust-analyzer…');
-		assert.match(output.activeChannel?.getText() ?? '', /正在安装 rust-analyzer/);
-		events.fire({ method: 'language/serverProgress', params: { server: 'rust-analyzer', token: 'ash.language-server.install', title: null, message: null, percentage: null, done: true } });
+		events.fire({ method: 'language/serverProgress', params: { server: 'rust-analyzer', token: 'ash.language-server.download', title: 'rust-analyzer', message: null, percentage: null, done: false } });
+		assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, '正在下载 rust-analyzer…');
+		assert.match(output.activeChannel?.getText() ?? '', /正在下载 rust-analyzer/);
+		events.fire({ method: 'language/serverProgress', params: { server: 'rust-analyzer', token: 'ash.language-server.download', title: null, message: null, percentage: null, done: true } });
 		await Promise.resolve();
 		assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left), []);
 	} finally { resetNlsResolver(); }
@@ -138,8 +138,36 @@ test('root scanning retains counts and current paths until the server ends the o
 	progress('', null);
 	assert.equal(text(), 'rust-analyzer: Roots Scanned (90%)');
 	progress('10/10', 100);
-	assert.equal(text(), 'rust-analyzer: Roots Scanned (100%): 10/10');
+	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left), []);
 	progress(null, null, null, true);
+	await Promise.resolve();
+	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left), []);
+});
+
+test('completed scanning yields to indexing and checking before its end notification', async () => {
+	const events = new FakeServerEvents();
+	using resources = new DisposableStore();
+	const services = workbenchInstantiationService(resources);
+	const statusbar = services.get(IStatusbarService);
+	using service = createService(services, events);
+	const progress = (token: string, title: string | null, message: string | null, percentage: number | null, done = false): void => events.fire({ method: 'language/serverProgress', params: { server: 'rust-analyzer', token, title, message, percentage, done } });
+	const text = (): string | undefined => statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text;
+	progress('index', 'Indexing', 'crate-a', 20);
+	progress('roots', 'Roots Scanned', '1/2', 50);
+	assert.equal(text(), 'rust-analyzer: Roots Scanned (50%): 1/2 +1 more');
+	progress('roots', null, '2/2', 100);
+	assert.equal(text(), 'rust-analyzer: Indexing (20%): crate-a +1 more');
+	progress('index', null, 'crate-b', 30);
+	assert.equal(text(), 'rust-analyzer: Indexing (30%): crate-b +1 more');
+	progress('check', 'cargo check', 'workspace (bin)', null);
+	assert.equal(text(), 'rust-analyzer: cargo check: workspace (bin) +2 more');
+	progress('roots', null, null, null, true);
+	await Promise.resolve();
+	assert.equal(text(), 'rust-analyzer: cargo check: workspace (bin) +1 more');
+	progress('check', null, null, null, true);
+	await Promise.resolve();
+	assert.equal(text(), 'rust-analyzer: Indexing (30%): crate-b');
+	progress('index', null, null, null, true);
 	await Promise.resolve();
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left), []);
 });

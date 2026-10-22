@@ -2204,7 +2204,7 @@
     "prompt.skill.allowedTools": "可选。以空格分隔的工具名称。工具执行仍遵循当前权限与工具目录。",
     "prompt.skill.field": "Skill 字段",
     "terminal.profile.duplicate": "终端配置已注册：{0}",
-    "languageServer.installing": "正在安装 {0}…",
+    "languageServer.downloading": "正在下载 {0}…",
     "progress.sourceTooltip": "[{0}] {1}",
     "progress.titleMessage": "{0}：{1}",
     "progress.running": "正在处理…",

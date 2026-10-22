@@ -83,12 +83,19 @@ Logs and Restart actions. Routine progress and automatic retry never notify. The
 menu supports keyboard submenus, accessibility help and an accessible status view,
 using `accessibility.verbosity.languageServers` for its hint.
 
+Managed server acquisition reports download progress only when the package store
+actually needs an HTTP request. Local executable probes, waiting for the install
+lock, and validated cache reuse are silent; download completion or failure clears
+that progress.
+
 The service adapts each work-done token to a Promise passed to
 `IProgressService.withProgress`, reports `IProgressStep` messages, and completes
 that Promise on the server's end notification or adapter disposal. Server names
 are task titles. Progress messages show the operation and optional percentage
 first, followed by server-reported details such as scanned counts or the current
-directory.
+directory. Absolute LSP percentages are also adapted to the shared numeric
+progress contract, so a task at 100% leaves the status display and cannot hide
+another unfinished task.
 Reports that omit a detail retain its previous value; an empty detail clears it.
 Reaching 100% does not complete an operation. End, stop, terminal failure, or
 adapter disposal completes it; concurrent tasks include the remaining task count.

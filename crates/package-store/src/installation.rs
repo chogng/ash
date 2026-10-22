@@ -44,12 +44,14 @@ pub struct InstalledExecutable {
 
 /// Installs a pinned upstream executable through the capability store. Failed downloads do not
 /// change selection; concurrent processes share the lock and reuse the validated generation.
+/// Calls `on_download` only before an HTTP request, after locked cache validation and reuse.
 pub fn install_executable(
     home: &Path,
     kind: &str,
     binary: &str,
     release: &ExecutableRelease,
     http: &dyn HttpClient,
+    on_download: impl FnOnce(),
 ) -> Result<InstalledExecutable, CapabilityInstallError> {
     let valid_name = |name: &str| {
         !name.is_empty()
@@ -101,6 +103,7 @@ pub fn install_executable(
     }
     let request = HttpRequest::new(HttpMethod::Get, &release.url, Vec::new(), Vec::new())
         .map_err(|_| CapabilityInstallError::Invalid)?;
+    on_download();
     let response = http
         .execute(&request)
         .map_err(|_| CapabilityInstallError::Connection)?;

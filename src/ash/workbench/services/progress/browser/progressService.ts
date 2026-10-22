@@ -159,8 +159,9 @@ export class ProgressService extends Disposable implements IProgressService {
 		if (this.isDisposed) return;
 		const active = [...this.tasks].filter(record => !record.cancelled && !!this.taskText(record)
 			&& ((record.options.location === ProgressLocation.Window && !!(record.options as IProgressWindowOptions).command) || (!!record.notification && record.notificationHidden)));
-		// Completing the most recent task reveals the previous operation.
-		const record = active.at(-1);
+		// A producer can reach its numeric total before settling its Promise. Keep
+		// that lifetime intact, but only show work that still reports as unfinished.
+		const record = active.filter(record => record.total === undefined || record.worked < record.total).at(-1);
 		if (!record) { this.windowStatus.clear(); return; }
 		const text = this.taskText(record);
 		const source = typeof record.options.source === 'string' ? record.options.source : record.options.source?.label;
