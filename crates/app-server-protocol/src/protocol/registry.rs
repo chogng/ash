@@ -1164,14 +1164,14 @@ use crate::protocol::git::GitBranchListResult;
 use crate::protocol::git::GitBranchSwitchParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCatalogResult;
-#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeFileComparisonDto;
-#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeFileParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeFileResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeStatusDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitChangesSummaryResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitCheckIgnoreCancelParams;
 #[cfg(any(test, feature = "export"))]
@@ -3150,6 +3150,8 @@ pub enum SerializationScopeDefinition {
     GlobalExclusive,
     GlobalSharedRead,
     RepositoryExclusive,
+    RepositorySharedRead,
+    RepositoryChangeFile,
     HostedAccountExclusive,
     HostedAccountSharedRead,
     HostedRepositoryExclusive,
@@ -3251,7 +3253,24 @@ impl ClientMethodDefinition {
                     }
                 })
             }
-            SerializationScopeDefinition::RepositoryExclusive => {
+            SerializationScopeDefinition::RepositoryChangeFile => {
+                let params: GitChangeFileParams = serde_json::from_value(params.clone())
+                    .map_err(|_| SerializationScopeResolutionError)?;
+                if params.repository_id.as_ref().is_some_and(String::is_empty) {
+                    return Err(SerializationScopeResolutionError);
+                }
+                Some(ClientRequestSerializationScope::Repository {
+                    repository_id: params.repository_id,
+                    // Staged reads retain ordering against earlier publication and later reads.
+                    // Unstaged rename/copy dependencies are additionally guarded by the owner.
+                    access: match params.comparison {
+                        GitChangeFileComparisonDto::Staged => SerializationAccess::Exclusive,
+                        GitChangeFileComparisonDto::Unstaged => SerializationAccess::SharedRead,
+                    },
+                })
+            }
+            SerializationScopeDefinition::RepositoryExclusive
+            | SerializationScopeDefinition::RepositorySharedRead => {
                 let params = params
                     .as_object()
                     .ok_or(SerializationScopeResolutionError)?;
@@ -3262,7 +3281,13 @@ impl ClientMethodDefinition {
                 };
                 Some(ClientRequestSerializationScope::Repository {
                     repository_id,
-                    access: SerializationAccess::Exclusive,
+                    access: if self.serialization
+                        == SerializationScopeDefinition::RepositoryExclusive
+                    {
+                        SerializationAccess::Exclusive
+                    } else {
+                        SerializationAccess::SharedRead
+                    },
                 })
             }
 
@@ -5276,6 +5301,11 @@ client_methods! {
         response: GitCheckIgnoreCancelResult,
         serialization: None,
     },
+    GitChangesSummary => "git/changesSummary" {
+        params: GitRepositoryParams,
+        response: GitChangesSummaryResult,
+        serialization: RepositorySharedRead,
+    },
     GitTextDiff => "git/textDiff" {
         params: GitTextDiffParams,
         response: GitTextDiffResult,
@@ -5329,7 +5359,7 @@ client_methods! {
     GitChangeFile => "git/changeFile" {
         params: GitChangeFileParams,
         response: GitChangeFileResult,
-        serialization: RepositoryExclusive,
+        serialization: RepositoryChangeFile,
     },
     GitConflictFile => "git/conflictFile" {
         params: GitConflictFileParams,
@@ -7560,6 +7590,7 @@ typescript_bindings! {
     GitTextDiffProjectionDto,
     GitDiffStatisticsDto,
     GitTextDiffResult,
+    GitChangesSummaryResult,
     GitAIEditorEvidenceDto,
     GitAIContributionParams,
     GitAIContributionResult,

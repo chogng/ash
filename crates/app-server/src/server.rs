@@ -4366,6 +4366,9 @@ impl AppServer {
             Some(ClientMethod::GitCheckIgnoreCancel) => self
                 .git_processor()
                 .git_check_ignore_cancel(connection, &request.params),
+            Some(ClientMethod::GitChangesSummary) => {
+                self.git_processor().git_changes_summary(&request.params)
+            }
             Some(ClientMethod::GitTextDiff) => self.git_processor().git_text_diff(&request.params),
             Some(ClientMethod::GitBranchList) => {
                 self.git_processor().git_branch_list(&request.params)

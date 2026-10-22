@@ -102,6 +102,9 @@
           "textDiff": {
             "route": "git/textDiff"
           },
+          "changesSummary": {
+            "route": "git/changesSummary"
+          },
           "changeFile": {
             "route": "git/changeFile"
           },

@@ -9,6 +9,7 @@ fn process_contender() {
     let lock = RepositoryOperationLock {
         repository: PathBuf::from(&root),
         local: RwLock::new(()),
+        writers: Mutex::new(VecDeque::new()),
     };
     let result = match if std::env::var_os("ASH_TEST_READ_LOCK").is_some() {
         lock.try_read().map(drop)
@@ -29,6 +30,7 @@ fn observations_overlap_but_exclude_writers_in_other_processes() {
     let lock = RepositoryOperationLock {
         repository: path.clone(),
         local: RwLock::new(()),
+        writers: Mutex::new(VecDeque::new()),
     };
     let contender = |read: bool| {
         let mut command = Command::new(std::env::current_exe().unwrap());
@@ -62,6 +64,7 @@ fn operations_coordinate_across_processes_without_repository_metadata() {
     let lock = RepositoryOperationLock {
         repository: path.clone(),
         local: RwLock::new(()),
+        writers: Mutex::new(VecDeque::new()),
     };
     let contender = || {
         let output = Command::new(std::env::current_exe().unwrap())
@@ -82,4 +85,42 @@ fn operations_coordinate_across_processes_without_repository_metadata() {
     drop(held);
     assert_eq!(contender(), "acquired");
     assert_eq!(std::fs::read_dir(&path).unwrap().count(), 1);
+}
+
+#[test]
+fn queued_writers_precede_later_readers_and_cancelled_waiters_release_admission() {
+    let root = tempfile::tempdir().unwrap();
+    let lock = RepositoryOperationLock {
+        repository: dunce::canonicalize(root.path()).unwrap(),
+        local: RwLock::new(()),
+        writers: Mutex::new(VecDeque::new()),
+    };
+    let reader = lock.try_read().unwrap();
+    let cancelled = lock.queue_write().unwrap();
+    let first = lock.queue_write().unwrap();
+    let second = lock.queue_write().unwrap();
+    for _ in 0..1000 {
+        assert_eq!(
+            lock.try_read().err().unwrap().kind(),
+            io::ErrorKind::WouldBlock
+        );
+        assert_eq!(
+            first.try_lock().err().unwrap().kind(),
+            io::ErrorKind::WouldBlock
+        );
+    }
+    drop((reader, cancelled));
+    assert_eq!(
+        second.try_lock().err().unwrap().kind(),
+        io::ErrorKind::WouldBlock
+    );
+    let writer = first.try_lock().unwrap();
+    assert_eq!(
+        lock.try_read().err().unwrap().kind(),
+        io::ErrorKind::WouldBlock
+    );
+    drop((writer, first));
+    let writer = second.try_lock().unwrap();
+    drop((writer, second));
+    assert!(lock.try_read().is_ok());
 }

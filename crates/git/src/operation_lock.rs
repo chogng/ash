@@ -2,6 +2,7 @@ use crate::GitRepository;
 use fs2::FileExt;
 use sha2::Digest;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io;
@@ -21,6 +22,14 @@ static REPOSITORY_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Weak<RepositoryOperatio
 pub struct RepositoryOperationLock {
     repository: PathBuf,
     local: RwLock<()>,
+    writers: Mutex<VecDeque<Arc<()>>>,
+}
+
+/// Retains FIFO admission while a cancellable writer polls the OS lock. Dropping
+/// the waiter cancels admission; subsequent readers cannot overtake queued writers.
+pub struct RepositoryOperationWaiter<'a> {
+    lock: &'a RepositoryOperationLock,
+    ticket: Arc<()>,
 }
 
 /// Holds both the local queue and OS lock until the complete operation finishes.
@@ -39,19 +48,38 @@ pub struct RepositoryReadGuard<'a> {
 
 impl RepositoryOperationLock {
     pub fn lock(&self) -> io::Result<RepositoryOperationGuard<'_>> {
-        let local = self
-            .local
-            .write()
-            .map_err(|_| io::Error::other("repository lock poisoned"))?;
-        let file = self.open()?;
-        file.lock_exclusive()?;
-        Ok(RepositoryOperationGuard {
-            file,
-            _local: local,
-        })
+        let waiter = self.queue_write()?;
+        loop {
+            match waiter.try_lock() {
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                result => return result,
+            }
+        }
     }
 
     pub fn try_lock(&self) -> io::Result<RepositoryOperationGuard<'_>> {
+        let writers = self
+            .writers
+            .lock()
+            .map_err(|_| io::Error::other("repository queue poisoned"))?;
+        if !writers.is_empty() {
+            return Err(io::ErrorKind::WouldBlock.into());
+        }
+        self.try_write()
+    }
+
+    pub fn queue_write(&self) -> io::Result<RepositoryOperationWaiter<'_>> {
+        let ticket = Arc::new(());
+        self.writers
+            .lock()
+            .map_err(|_| io::Error::other("repository queue poisoned"))?
+            .push_back(ticket.clone());
+        Ok(RepositoryOperationWaiter { lock: self, ticket })
+    }
+
+    fn try_write(&self) -> io::Result<RepositoryOperationGuard<'_>> {
         let local = self.local.try_write().map_err(|error| match error {
             std::sync::TryLockError::WouldBlock => io::Error::from(io::ErrorKind::WouldBlock),
             std::sync::TryLockError::Poisoned(_) => io::Error::other("repository lock poisoned"),
@@ -75,6 +103,15 @@ impl RepositoryOperationLock {
 
     /// Acquires a shared observation lease without waiting for an active mutation.
     pub fn try_read(&self) -> io::Result<RepositoryReadGuard<'_>> {
+        // Serialize admission with writer registration, not the observation itself.
+        // The outer request queue cannot protect background watcher reads here.
+        let writers = self
+            .writers
+            .lock()
+            .map_err(|_| io::Error::other("repository queue poisoned"))?;
+        if !writers.is_empty() {
+            return Err(io::ErrorKind::WouldBlock.into());
+        }
         let local = self.local.try_read().map_err(|error| match error {
             std::sync::TryLockError::WouldBlock => io::Error::from(io::ErrorKind::WouldBlock),
             std::sync::TryLockError::Poisoned(_) => io::Error::other("repository lock poisoned"),
@@ -111,6 +148,33 @@ impl RepositoryOperationLock {
     }
 }
 
+impl<'a> RepositoryOperationWaiter<'a> {
+    pub fn try_lock(&self) -> io::Result<RepositoryOperationGuard<'a>> {
+        let writers = self
+            .lock
+            .writers
+            .lock()
+            .map_err(|_| io::Error::other("repository queue poisoned"))?;
+        if !writers
+            .front()
+            .is_some_and(|ticket| Arc::ptr_eq(ticket, &self.ticket))
+        {
+            return Err(io::ErrorKind::WouldBlock.into());
+        }
+        self.lock.try_write()
+    }
+}
+
+impl Drop for RepositoryOperationWaiter<'_> {
+    fn drop(&mut self) {
+        self.lock
+            .writers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|ticket| !Arc::ptr_eq(ticket, &self.ticket));
+    }
+}
+
 impl Drop for RepositoryOperationGuard<'_> {
     fn drop(&mut self) {
         let _ = FileExt::unlock(&self.file);
@@ -137,6 +201,7 @@ pub fn repository_operation_lock(repository: &GitRepository) -> Arc<RepositoryOp
     let lock = Arc::new(RepositoryOperationLock {
         repository: key.clone(),
         local: RwLock::new(()),
+        writers: Mutex::new(VecDeque::new()),
     });
     locks.insert(key, Arc::downgrade(&lock));
     lock

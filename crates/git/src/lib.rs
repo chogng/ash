@@ -50,6 +50,7 @@ pub use objects::GitTreeId;
 pub use objects::GitTreeTextDiff;
 pub use operation_lock::RepositoryOperationGuard;
 pub use operation_lock::RepositoryOperationLock;
+pub use operation_lock::RepositoryOperationWaiter;
 pub use operation_lock::RepositoryReadGuard;
 pub use operation_lock::repository_operation_lock;
 pub use references::GitBranch;

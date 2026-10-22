@@ -816,6 +816,17 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         )
     }
 
+    pub(super) fn git_changes_summary(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitRepositoryParams = decode(value)?;
+        result(
+            &self
+                .context
+                .git_runtime_service()?
+                .changes_summary_for(params.repository_id.as_deref())
+                .map_err(git_error)?,
+        )
+    }
+
     pub(super) fn git_text_diff(&self, value: &Value) -> Result<Value, RpcError> {
         let params: GitTextDiffParams = decode(value)?;
         let runtime = self.context.git_runtime_service()?;

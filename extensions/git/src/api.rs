@@ -354,16 +354,12 @@ impl Api {
     ) -> Result<model::ChangesSummary, ExtensionError> {
         #[derive(serde::Deserialize)]
         struct Response {
-            status: Status,
+            files: usize,
             statistics: model::CommitStatistics,
         }
-        let response: Response = decode(self.repository_request(
-            repository,
-            "textDiff",
-            json!({"projection":"statistics"}),
-            token,
-        )?)?;
-        let files = response.status.changes.len();
+        let response: Response =
+            decode(self.repository_request(repository, "changesSummary", json!({}), token)?)?;
+        let files = response.files;
         Ok(model::ChangesSummary {
             files,
             additions: response.statistics.additions,

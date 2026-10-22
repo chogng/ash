@@ -986,3 +986,65 @@ fn git_installation_distinguishes_missing_supported_and_upgrade_required() {
         .is_err()
     );
 }
+
+#[test]
+fn git_observations_share_admission_but_status_publication_and_writes_remain_exclusive() {
+    for (method, access) in [
+        ("git/changesSummary", SerializationAccess::SharedRead),
+        ("git/status", SerializationAccess::Exclusive),
+        ("git/textDiff", SerializationAccess::Exclusive),
+        ("git/stage", SerializationAccess::Exclusive),
+    ] {
+        let definition = super::client_method_definition(method).unwrap();
+        assert_eq!(
+            definition
+                .serialization_scope(&serde_json::json!({"repositoryId":"repo"}))
+                .unwrap(),
+            Some(ClientRequestSerializationScope::Repository {
+                repository_id: Some("repo".into()),
+                access
+            })
+        );
+        assert_eq!(
+            definition
+                .serialization_scope(&serde_json::json!({}))
+                .unwrap(),
+            Some(ClientRequestSerializationScope::Repository {
+                repository_id: None,
+                access
+            })
+        );
+        for invalid in [
+            serde_json::json!({"repositoryId":""}),
+            serde_json::json!({"repositoryId":4}),
+        ] {
+            assert!(definition.serialization_scope(&invalid).is_err());
+        }
+    }
+}
+
+#[test]
+fn git_file_admission_keeps_staged_order_and_rejects_invalid_comparisons() {
+    let definition = super::client_method_definition("git/changeFile").unwrap();
+    for (comparison, access) in [
+        ("unstaged", SerializationAccess::SharedRead),
+        ("staged", SerializationAccess::Exclusive),
+    ] {
+        assert_eq!(
+            definition
+                .serialization_scope(&serde_json::json!({"path":"a.txt", "comparison":comparison}))
+                .unwrap(),
+            Some(ClientRequestSerializationScope::Repository {
+                repository_id: None,
+                access
+            })
+        );
+    }
+    for invalid in [
+        serde_json::json!({"path":"a.txt"}),
+        serde_json::json!({"path":"a.txt","comparison":"unknown"}),
+        serde_json::json!({"path":"a.txt","comparison":"unstaged","repositoryId":""}),
+    ] {
+        assert!(definition.serialization_scope(&invalid).is_err());
+    }
+}

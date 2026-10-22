@@ -822,7 +822,7 @@ test('stale documents reject the entire transaction and consume its snapshots', 
 	assert.equal(host.models.getModel(first), null);
 });
 
-test('repeated reads replace leases and connection close releases them', async () => {
+test('repeated reads retain independent leases and connection close releases them', async () => {
 	using host = await fixture();
 	const resource = URI.file('c:/workspace/one.txt');
 	host.files.contents.set(resource.toString(), 'original');
@@ -833,6 +833,41 @@ test('repeated reads replace leases and connection close releases them', async (
 	assert.notEqual(host.models.getModel(resource), null);
 	host.client.disconnect();
 	assert.equal(host.models.getModel(resource), null);
+});
+
+test('concurrent agents reject stale writes and can reread to preserve both edits', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/shared.txt');
+	host.files.contents.set(resource.toString(), 'original');
+	const first = await snapshot(host.transport, resource);
+	const second = await snapshot(host.transport, resource);
+	const apply = (threadId: string, id: string, text: string) => host.transport.call('textDocument/apply', {
+		threadId, turnId: 'turn', changes: [{ kind: 'update', snapshot: id, text }],
+	});
+	assert.deepEqual(await apply('first', first, 'original\nfirst'), { kind: 'applied' });
+	assert.deepEqual(await apply('second', second, 'original\nsecond'), { kind: 'conflict' });
+	assert.equal(host.files.contents.get(resource.toString()), 'original\nfirst');
+	const reread = await host.transport.call('textDocument/read', { path: resource.fsPath, readAccess: 'test-read-access' });
+	assert.equal(reread.kind, 'document');
+	if (reread.kind !== 'document') throw new Error('Expected document');
+	assert.deepEqual(await apply('second', reread.snapshot, reread.text + '\nsecond'), { kind: 'applied' });
+	assert.equal(host.files.contents.get(resource.toString()), 'original\nfirst\nsecond');
+});
+
+test('reads cannot starve a writer and snapshot capacity never evicts its baseline', async () => {
+	using host = await fixture();
+	const resource = URI.file('c:/workspace/shared.txt');
+	host.files.contents.set(resource.toString(), 'original');
+	const writer = await snapshot(host.transport, resource);
+	const readers = await Promise.all(Array.from({ length: 127 }, () => snapshot(host.transport, resource)));
+	assert.equal((await host.transport.call('textDocument/read', { path: resource.fsPath, readAccess: 'test-read-access' })).kind, 'failed');
+	assert.deepEqual(await host.transport.call('textDocument/apply', {
+		threadId: 'writer', turnId: 'turn', changes: [{ kind: 'update', snapshot: writer, text: 'written' }],
+	}), { kind: 'applied' });
+	assert.equal(host.files.contents.get(resource.toString()), 'written');
+	await host.transport.call('textDocument/release', { snapshots: readers });
+	const fresh = await snapshot(host.transport, resource);
+	await host.transport.call('textDocument/release', { snapshots: [fresh] });
 });
 
 test('new file contents retain exact LF and BOM and roll back on a later move failure', async () => {

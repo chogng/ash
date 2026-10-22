@@ -149,10 +149,14 @@ Idle waits renew after 20 seconds, below the SDK deadline; renewals skip configu
 discovery when the workspace is unchanged. State waits run outside the discovery lock and
 are cancelled before shutdown joins the monitor.
 
-Workspace line totals request the `statistics` projection of `git/textDiff`; the backend
-returns fresh status and readable-file counts without original/modified text or inline ranges.
-Content consumers retain the default full projection. HEAD objects are resolved in bounded
-batches per operation, without caching mutable index or worktree contents between requests.
+Workspace line totals use `git/changesSummary`, a fresh directory-scoped observation that
+returns total changed-file and readable-text line counts. It does not publish status, change
+history revisions, or refresh refs/remotes/stashes. The RPC and repository operation leases
+allow it to overlap ordinary index/worktree reads and watcher observations, while excluding
+writes. Staged and rename/copy-dependent file reads retain their publication ordering.
+`git/textDiff` retains its authoritative status and content/statistics projection contract.
+HEAD objects are resolved in bounded batches per operation, without caching mutable index
+or worktree contents between requests.
 
 Use **Manage built-in editor extensions** to disable `ash.git` for the current profile.
 Other SCM providers, editors, undo and saving retain their lifetimes. Shared Rust Git and

@@ -931,6 +931,15 @@ pub struct GitDiffStatisticsDto {
     pub deletions: usize,
 }
 
+/// Fresh directory-scoped counts without publishing a repository status or history revision.
+/// `files` includes non-text changes; `statistics.files` counts only readable text comparisons.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitChangesSummaryResult {
+    pub files: usize,
+    pub statistics: GitDiffStatisticsDto,
+}
+
 /// One authoritative status and line totals; `diffs` is empty for statistics projection.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

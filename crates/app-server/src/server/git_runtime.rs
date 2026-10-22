@@ -7,6 +7,7 @@ use ash_app_server_protocol::protocol::git::GitBranchDto;
 use ash_app_server_protocol::protocol::git::GitChangeFileComparisonDto;
 use ash_app_server_protocol::protocol::git::GitChangeFileResult;
 use ash_app_server_protocol::protocol::git::GitChangeStatusDto;
+use ash_app_server_protocol::protocol::git::GitChangesSummaryResult;
 use ash_app_server_protocol::protocol::git::GitCommitChangeDto;
 use ash_app_server_protocol::protocol::git::GitCommitChangesResult;
 use ash_app_server_protocol::protocol::git::GitCommitFileContentDto;
@@ -144,10 +145,47 @@ struct GitRepositoryRuntime {
     ignore_watch_paths: Mutex<Vec<PathBuf>>,
     ignore_cache: Mutex<IgnoreCache>,
     status_watchers: Mutex<Vec<(CancellationToken, Authorization)>>,
+    watcher_refresh: Mutex<WatcherRefresh>,
+    watcher_scan: Mutex<()>,
     state: Mutex<GitRuntimeState>,
     graph_sessions: Mutex<HashMap<u64, GraphSession>>,
     next_graph_token: AtomicU64,
     updates: Arc<UpdateBroker>,
+}
+
+#[derive(Default)]
+struct WatcherRefresh {
+    requested: u64,
+    completed: u64,
+    pending: Option<FileWatcherEvent>,
+}
+
+impl WatcherRefresh {
+    fn merge(&mut self, event: FileWatcherEvent) {
+        self.pending = Some(match (self.pending.take(), event) {
+            (None, event) => event,
+            (
+                Some(FileWatcherEvent::PathsChanged { mut paths }),
+                FileWatcherEvent::PathsChanged { paths: next },
+            ) => {
+                paths.extend(next);
+                paths.sort();
+                paths.dedup();
+                if paths.len() <= 256 {
+                    FileWatcherEvent::PathsChanged { paths }
+                } else {
+                    FileWatcherEvent::RescanRequired {
+                        watched_paths: Vec::new(),
+                    }
+                }
+            }
+            // This accumulator belongs to status scanning, after ignore-watch handling.
+            // A full scan subsumes every path; it does not need the watch registrations.
+            _ => FileWatcherEvent::RescanRequired {
+                watched_paths: Vec::new(),
+            },
+        });
+    }
 }
 
 #[derive(Default)]
@@ -848,6 +886,42 @@ impl GitRuntime {
         self.graph_for(None, connection_id, limit, cursor, None)
     }
 
+    /// Observes fresh counts without replacing the status owner's published snapshot.
+    pub(super) fn changes_summary_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<GitChangesSummaryResult, GitRuntimeError> {
+        let repository = self.repository(repository_id)?;
+        // Summary computation never publishes status/rename mappings. Like an ordinary
+        // index/worktree read, it can overlap watcher observation but must exclude writes.
+        let _operation = lock_repository_read(
+            &repository.operation,
+            crate::git_service::invocation_cancellation().as_ref(),
+        )
+        .map_err(GitRuntimeError::Service)?;
+        let (identity, snapshot, statistics) = repository
+            .service
+            .text_diff_summary()
+            .map_err(GitRuntimeError::Service)?;
+        let prefix = repository
+            .service
+            .dir_root()
+            .strip_prefix(identity.worktree_root())
+            .map_err(|_| GitRuntimeError::Boundary)?;
+        Ok(GitChangesSummaryResult {
+            files: snapshot
+                .changes()
+                .iter()
+                .filter(|change| change.path().starts_with(prefix))
+                .count(),
+            statistics: GitDiffStatisticsDto {
+                files: statistics.files(),
+                additions: statistics.additions(),
+                deletions: statistics.deletions(),
+            },
+        })
+    }
+
     pub(super) fn text_diff_summary_for(
         &self,
         repository_id: Option<&str>,
@@ -1396,6 +1470,8 @@ impl GitRepositoryRuntime {
             ignore_watch_paths: Mutex::new(ignore_watch_paths),
             ignore_cache: Mutex::new(IgnoreCache::default()),
             status_watchers: Mutex::new(Vec::new()),
+            watcher_refresh: Mutex::new(WatcherRefresh::default()),
+            watcher_scan: Mutex::new(()),
             service,
             descriptor,
             stream_instance_id: new_stream_instance_id()?,
@@ -2281,6 +2357,64 @@ impl GitRepositoryRuntime {
     }
 
     fn refresh_from_watcher_for_request(
+        &self,
+        event: &FileWatcherEvent,
+        cancellation: &CancellationToken,
+    ) -> Result<(), GitRuntimeError> {
+        let generation = {
+            let mut refresh = self
+                .watcher_refresh
+                .lock()
+                .map_err(|_| GitRuntimeError::Boundary)?;
+            refresh.requested = refresh
+                .requested
+                .checked_add(1)
+                .ok_or(GitRuntimeError::Boundary)?;
+            refresh.merge(event.clone());
+            refresh.requested
+        };
+        // Multiple client watchers share this repository owner. Keep one running scan
+        // and one union of pending paths, rather than queuing a scan per subscriber.
+        let _scan = loop {
+            cancellation
+                .check()
+                .map_err(|_| GitRuntimeError::Service(GitServiceError::Cancelled))?;
+            match self.watcher_scan.try_lock() {
+                Ok(scan) => break scan,
+                Err(std::sync::TryLockError::WouldBlock) => {
+                    std::thread::sleep(Duration::from_millis(10))
+                }
+                Err(std::sync::TryLockError::Poisoned(_)) => return Err(GitRuntimeError::Boundary),
+            }
+        };
+        let (through, event) = {
+            let mut refresh = self
+                .watcher_refresh
+                .lock()
+                .map_err(|_| GitRuntimeError::Boundary)?;
+            if refresh.completed >= generation {
+                return Ok(());
+            }
+            (
+                refresh.requested,
+                refresh.pending.take().ok_or(GitRuntimeError::Boundary)?,
+            )
+        };
+        let result = self.refresh_watcher_status(&event, cancellation);
+        let mut refresh = self
+            .watcher_refresh
+            .lock()
+            .map_err(|_| GitRuntimeError::Boundary)?;
+        if result.is_ok() {
+            refresh.completed = through;
+        } else {
+            // Cancellation or failure cannot acknowledge another watcher's hints.
+            refresh.merge(event);
+        }
+        result
+    }
+
+    fn refresh_watcher_status(
         &self,
         event: &FileWatcherEvent,
         cancellation: &CancellationToken,
@@ -3503,11 +3637,12 @@ fn lock_operation_for_request<'a>(
     cancellation: &CancellationToken,
 ) -> Result<ash_git::RepositoryOperationGuard<'a>, GitServiceError> {
     ash_otel::measure_current("git.repository_lock", || {
+        let waiter = lock.queue_write().map_err(|_| GitServiceError::Runtime)?;
         loop {
             cancellation
                 .check()
                 .map_err(|_| GitServiceError::Cancelled)?;
-            match lock.try_lock() {
+            match waiter.try_lock() {
                 Ok(guard) => return Ok(guard),
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                     std::thread::sleep(Duration::from_millis(10));
@@ -3523,9 +3658,10 @@ fn lock_current_operation(
 ) -> Result<ash_git::RepositoryOperationGuard<'_>, GitServiceError> {
     ash_otel::measure_current("git.repository_lock", || {
         if let Some(token) = crate::git_service::invocation_cancellation() {
+            let waiter = lock.queue_write().map_err(|_| GitServiceError::Runtime)?;
             loop {
                 token.check().map_err(|_| GitServiceError::Cancelled)?;
-                let result = lock.try_lock();
+                let result = waiter.try_lock();
                 match result {
                     Ok(guard) => return Ok(guard),
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {

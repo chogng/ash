@@ -199,9 +199,9 @@ impl Client {
                     "historyRefs" => {
                         json!({"status":self.status(),"references":[{"kind":"localBranch","name":"main","objectId":"abc","current":true},{"kind":"remoteBranch","name":"origin/main","objectId":"abc","current":false},{"kind":"tag","name":"v1","objectId":"abc","current":false}],"branches":[],"remotes":[],"graphRevision":1})
                     }
-                    "textDiff" => {
+                    "changesSummary" => {
                         assert!(self.binary_comparison.load(Ordering::Acquire));
-                        json!({"status":self.status(),"diffs":[],"statistics":{"files":0,"additions":0,"deletions":0}})
+                        json!({"files":1,"statistics":{"files":0,"additions":0,"deletions":0}})
                     }
                     "conflictFile" => {
                         assert!(self.conflict_comparison.load(Ordering::Acquire));
@@ -1005,17 +1005,13 @@ fn verify_binary_comparisons(supervisor: &host::ExtensionHostSupervisor, client:
         summary,
         json!({"files":1,"additions":0,"deletions":0,"partial":true})
     );
-    assert_eq!(
+    assert!(
         client
             .requests
             .lock()
             .unwrap()
             .iter()
-            .rev()
-            .find(|(method, _)| method == "textDiff")
-            .unwrap()
-            .1["projection"],
-        "statistics"
+            .any(|(method, _)| method == "changesSummary")
     );
 
     execute(
