@@ -1,4 +1,6 @@
 import { isFiniteNumber } from '../../../../base/common/numbers.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { isCodeEditorViewState, type CodeEditorViewState } from '../codeEditor/codeEditorWidget.js';
 import { type DiffEditorItemViewState } from './diffEditorItemTemplate.js';
 
@@ -19,7 +21,9 @@ export interface MultiDiffEditorViewState {
 }
 
 /** Keeps file state independent from the lifetime of visible DOM templates. */
-export class MultiDiffEditorViewModel {
+export class MultiDiffEditorViewModel extends Disposable {
+	private readonly collapseStateChanged = this._register(new Emitter<void>());
+	public readonly onDidChangeCollapseState = this.collapseStateChanged.event;
 	private itemIds: ReadonlySet<string>;
 	private readonly collapsedItemIds = new Set<string>();
 	private readonly itemViewStates = new Map<string, DiffEditorItemViewState>();
@@ -27,7 +31,12 @@ export class MultiDiffEditorViewModel {
 	public activeItemId: string | undefined;
 
 	constructor(items: readonly { readonly id: string; }[]) {
+		super();
 		this.itemIds = new Set(items.map(item => item.id));
+	}
+
+	public get allCollapsed(): boolean {
+		return this.itemIds.size > 0 && this.collapsedItemIds.size === this.itemIds.size;
 	}
 
 	public setItems(items: readonly { readonly id: string; }[]): void {
@@ -36,6 +45,7 @@ export class MultiDiffEditorViewModel {
 		for (const id of this.itemViewStates.keys()) if (!this.itemIds.has(id)) this.itemViewStates.delete(id);
 		if (this.selectedChange && !this.itemIds.has(this.selectedChange.itemId)) this.selectedChange = undefined;
 		if (this.activeItemId && !this.itemIds.has(this.activeItemId)) this.activeItemId = undefined;
+		this.collapseStateChanged.fire();
 	}
 
 	public get activeChange(): MultiDiffEditorLocation | undefined {
@@ -54,22 +64,27 @@ export class MultiDiffEditorViewModel {
 		if (!this.itemIds.has(itemId)) throw new RangeError(`Unknown multi-diff item '${itemId}'`);
 		if (this.collapsedItemIds.has(itemId)) this.collapsedItemIds.delete(itemId);
 		else this.collapsedItemIds.add(itemId);
+		this.collapseStateChanged.fire();
 		return this.collapsedItemIds.has(itemId);
 	}
 
 	public expand(itemId: string): boolean {
-		return this.collapsedItemIds.delete(itemId);
+		const changed = this.collapsedItemIds.delete(itemId);
+		if (changed) { this.collapseStateChanged.fire(); }
+		return changed;
 	}
 
 	public collapseAll(): boolean {
 		const changed = this.collapsedItemIds.size !== this.itemIds.size;
 		for (const id of this.itemIds) this.collapsedItemIds.add(id);
+		if (changed) { this.collapseStateChanged.fire(); }
 		return changed;
 	}
 
 	public expandAll(): boolean {
 		if (this.collapsedItemIds.size === 0) return false;
 		this.collapsedItemIds.clear();
+		this.collapseStateChanged.fire();
 		return true;
 	}
 
@@ -101,6 +116,7 @@ export class MultiDiffEditorViewModel {
 		}
 		this.selectedChange = undefined;
 		this.activeItemId = value.activeItemId && this.itemIds.has(value.activeItemId) ? value.activeItemId : undefined;
+		this.collapseStateChanged.fire();
 		return value.scrollTop;
 	}
 }

@@ -8,7 +8,7 @@ import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
-import { MultiDiffEditor } from './multiDiffEditor.js';
+import { MultiDiffEditor, MultiDiffEditorAllCollapsed } from './multiDiffEditor.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 
@@ -16,6 +16,7 @@ export const MultiDiffGoToNextChangeCommandId = 'multiDiffEditor.goToNextChange'
 export const MultiDiffGoToPreviousChangeCommandId = 'multiDiffEditor.goToPreviousChange';
 export const MultiDiffCollapseAllCommandId = 'multiDiffEditor.collapseAll';
 export const MultiDiffExpandAllCommandId = 'multiDiffEditor.expandAll';
+export const MultiDiffToggleCollapseAllCommandId = 'multiDiffEditor.toggleCollapseAll';
 export const MultiDiffGoToFileCommandId = 'multiDiffEditor.goToFile';
 export const MultiDiffToggleCollapseUnchangedRegionsCommandId = 'multiDiffEditor.toggleCollapseUnchangedRegions';
 
@@ -28,7 +29,7 @@ export class MultiDiffGoToFileAction extends Action2 {
 			title: localize2({ bundle: 'ash.workbench', key: 'command.MultiDiffGoToFileAction' }, 'Open File'),
 			icon: Lxicon.goToFile,
 			precondition: MultiDiffEditorActive,
-			menu: [MenuId.MultiDiffEditorFileToolbar, MenuId.EditorTitle].map(id => ({ id, when: MultiDiffEditorActive, group: 'navigation', order: 22 })),
+			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: MultiDiffEditorActive, group: 'navigation', order: 22 },
 		});
 	}
 
@@ -92,7 +93,6 @@ export class MultiDiffCollapseAllAction extends Action2 {
 			title: localize2({ bundle: 'ash.workbench', key: 'command.MultiDiffCollapseAllAction' }, 'Collapse All Diffs'),
 			icon: Lxicon.fold,
 			precondition: MultiDiffEditorActive,
-			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: 'navigation', order: 100 },
 			f1: true,
 		});
 	}
@@ -109,7 +109,6 @@ export class MultiDiffExpandAllAction extends Action2 {
 			title: localize2({ bundle: 'ash.workbench', key: 'command.MultiDiffExpandAllAction' }, 'Expand All Diffs'),
 			icon: Lxicon.unfold,
 			precondition: MultiDiffEditorActive,
-			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: 'navigation', order: 101 },
 			f1: true,
 		});
 	}
@@ -127,12 +126,32 @@ export class MultiDiffToggleCollapseUnchangedRegionsAction extends Action2 {
 			icon: Lxicon.map,
 			precondition: MultiDiffEditorActive,
 			toggled: ContextKeyExpr.equals('config.diffEditor.hideUnchangedRegions.enabled', true),
-			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: 'navigation', order: 21 },
+			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: '1_diff', order: 21 },
 		});
 	}
 
 	public override run(accessor: ServicesAccessor, context?: unknown): Promise<void> | undefined {
 		return activeMultiDiffPane(accessor, context)?.toggleCollapseUnchangedRegions();
+	}
+}
+
+export class MultiDiffToggleCollapseAllAction extends Action2 {
+	constructor() {
+		super({
+			id: MultiDiffToggleCollapseAllCommandId,
+			title: localize2({ bundle: 'ash.workbench', key: 'command.MultiDiffCollapseAllAction' }, 'Collapse All Diffs'),
+			icon: Lxicon.fold,
+			precondition: MultiDiffEditorActive,
+			toggled: {
+				condition: MultiDiffEditorAllCollapsed.isEqualTo(true),
+				tooltip: localize2({ bundle: 'ash.workbench', key: 'command.MultiDiffExpandAllAction' }, 'Expand All Diffs'),
+			},
+			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: 'navigation', order: 20 },
+		});
+	}
+
+	public override run(accessor: ServicesAccessor, context?: unknown): void {
+		activeMultiDiffPane(accessor, context)?.toggleCollapseAll();
 	}
 }
 

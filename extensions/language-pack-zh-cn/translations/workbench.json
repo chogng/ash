@@ -2144,7 +2144,6 @@
     "status.editor.convertSpaces": "将缩进转换为空格",
     "multiDiff.collapseAll": "全部折叠",
     "multiDiff.collapseAllTooltip": "折叠所有差异",
-    "multiDiff.expandAll": "全部展开",
     "multiDiff.expandAllTooltip": "展开所有差异",
     "files.unsupportedEncoding": "不支持的文件编码：{0}",
     "files.invalidTextEncoding": "该文件无法以所选编码作为文本读取。",

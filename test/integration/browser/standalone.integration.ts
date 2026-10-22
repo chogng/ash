@@ -75,7 +75,8 @@ import { MemoryFileService, MemoryResourceStore, TestDialogService } from '../..
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { Event as EventUtils } from '../../../src/ash/base/common/event.js';
 import { bindTestColorTheme } from './themeFixture.js';
-import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import { IThemeService, noFileIconTheme } from '../../../src/ash/platform/theme/common/themeService.js';
+import { IResourceIconRenderer } from '../../../src/ash/workbench/browser/labels.js';
 if (new URLSearchParams(location.search).has('workbenchStyles')) {
 	await import('../../../src/ash/workbench/browser/media/style.css');
 	await import('../../../src/ash/workbench/contrib/modernUI/browser/media/roundedCorners.css');
@@ -2974,6 +2975,7 @@ window.ashStandaloneIntegration = {
 			onModelAdded: EventUtils.None,
 		});
 		services.registerInstance(IWorkingCopyService, actionPreviewResources.add(uriIdentityServices.createInstance(BrowserWorkingCopyService)));
+		services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: EventUtils.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 		services.registerSingleton(IFileService, () => createTestFileService(new MemoryFileService([[callerModel.uri, 'value']]), [callerModel.uri.scheme]));
 		services.registerInstance(IDialogService, new TestDialogService());
 		services.registerInstance(IEditorService, {

@@ -3,6 +3,7 @@ import './colors.js';
 import { addDisposableListener, getClientArea, getWindow, h, stopEvent } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import type { Event } from '../../../../base/common/event.js';
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/common/numbers.js';
 import { formatNlsMessage, localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -63,6 +64,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private readonly itemListeners = this._register(new DisposableStore());
 	private readonly sections: VirtualizedItemManager<DiffEditorItemTemplate>;
 	private readonly viewModel: MultiDiffEditorViewModel;
+	public readonly onDidChangeCollapseState: Event<void>;
 	private readonly layouts: MultiDiffSectionLayout[] = [];
 	private readonly measuredHeights = new Map<string, number>();
 	private editorOptions: Pick<DiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'showLineNumbers' | 'showInlineChanges' | 'loopChanges' | 'wordWrapColumn'>;
@@ -98,7 +100,8 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		validateMultiDiffEditorOptions(options);
 		this.items = options.model.items;
 		this._register(toDisposable(() => this.navigationAbortController.abort()));
-		this.viewModel = new MultiDiffEditorViewModel(this.items);
+		this.viewModel = this._register(new MultiDiffEditorViewModel(this.items));
+		this.onDidChangeCollapseState = this.viewModel.onDidChangeCollapseState;
 		this.workbenchUIElementFactory = options.workbenchUIElementFactory;
 		const rawLineHeight = options.lineHeight ?? DEFAULT_LINE_HEIGHT;
 		this.overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
@@ -343,6 +346,18 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		if (!this.viewModel.collapseAll()) return;
 		for (const section of this.sections.values()) section.setCollapsed(true);
 		this.refreshLayout();
+	}
+
+	public get allCollapsed(): boolean {
+		return this.viewModel.allCollapsed;
+	}
+
+	public toggleCollapseAll(): void {
+		if (this.allCollapsed) {
+			this.expandAll();
+		} else {
+			this.collapseAll();
+		}
 	}
 
 	public expandAll(): void {

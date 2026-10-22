@@ -116,10 +116,12 @@
 }
 
 .stanza-multi-diff-editor-title {
+	display: inline-flex;
 	min-width: 0;
 	overflow: hidden;
 	font-weight: var(--ash-fontWeight-semiBold);
 	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .stanza-multi-diff-editor-labels {
@@ -133,12 +135,127 @@
 }
 
 .stanza-multi-diff-editor-file-actions {
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 0;
 	display: flex;
 	flex: none;
 	align-items: center;
 	box-sizing: border-box;
 	height: 100%;
 	padding-right: 4px;
+	background: var(--ash-multiDiffEditor-headerBackground);
+	border-start-end-radius: inherit;
+	border-end-end-radius: inherit;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--ash-animation-durationFast) ease-out;
+}
+
+.stanza-multi-diff-editor-file-actions::before {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: 100%;
+	width: var(--ash-spacing-size320);
+	background: linear-gradient(
+		to right,
+		transparent 0%,
+		color-mix(
+				in srgb,
+				var(--ash-multiDiffEditor-headerBackground) 16%,
+				transparent
+			)
+			25%,
+		color-mix(
+				in srgb,
+				var(--ash-multiDiffEditor-headerBackground) 50%,
+				transparent
+			)
+			50%,
+		color-mix(
+				in srgb,
+				var(--ash-multiDiffEditor-headerBackground) 84%,
+				transparent
+			)
+			75%,
+		var(--ash-multiDiffEditor-headerBackground) 100%
+	);
+	content: "";
+	pointer-events: none;
+}
+
+.stanza-multi-diff-editor-section:hover .stanza-multi-diff-editor-file-actions,
+.stanza-multi-diff-editor-section:focus-within
+	.stanza-multi-diff-editor-file-actions {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.stanza-multi-diff-editor-section:focus-within
+	.stanza-multi-diff-editor-file-actions {
+	transition: none;
+}
+
+.stanza-multi-diff-editor-header:hover .stanza-multi-diff-editor-file-actions {
+	background: var(--ash-toolbar-hoverBackground);
+}
+
+.stanza-multi-diff-editor-header:hover
+	.stanza-multi-diff-editor-file-actions::before {
+	background: linear-gradient(
+		to right,
+		transparent 0%,
+		color-mix(in srgb, var(--ash-toolbar-hoverBackground) 16%, transparent)
+			25%,
+		color-mix(in srgb, var(--ash-toolbar-hoverBackground) 50%, transparent)
+			50%,
+		color-mix(in srgb, var(--ash-toolbar-hoverBackground) 84%, transparent)
+			75%,
+		var(--ash-toolbar-hoverBackground) 100%
+	);
+}
+
+/* Loading and error messages keep their own space beside the actions. */
+.stanza-multi-diff-editor-header:has(
+		.stanza-multi-diff-editor-incomplete-status:not(:empty)
+	)
+	.stanza-multi-diff-editor-file-actions {
+	position: relative;
+}
+
+.hc-black
+	.stanza-multi-diff-editor-header
+	.stanza-multi-diff-editor-file-actions::before,
+.hc-light
+	.stanza-multi-diff-editor-header
+	.stanza-multi-diff-editor-file-actions::before {
+	background: inherit;
+}
+
+[dir="rtl"] .stanza-multi-diff-editor-file-actions {
+	right: auto;
+	left: 0;
+}
+
+[dir="rtl"] .stanza-multi-diff-editor-file-actions::before {
+	right: auto;
+	left: 100%;
+	transform: scaleX(-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.stanza-multi-diff-editor-file-actions {
+		transition: none;
+	}
+}
+
+@media (hover: none) {
+	.stanza-multi-diff-editor-file-actions {
+		opacity: 1;
+		pointer-events: auto;
+	}
 }
 
 .stanza-multi-diff-editor-incomplete-status:not(:empty) {

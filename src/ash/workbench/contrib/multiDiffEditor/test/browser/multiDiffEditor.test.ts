@@ -7,6 +7,8 @@ import { IStorageService } from '../../../../../platform/storage/common/storage.
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
+import { IResourceIconRenderer } from '../../../../browser/labels.js';
+import { noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import type { IViewsService } from '../../../../services/views/common/viewsService.js';
@@ -71,13 +73,14 @@ const { createCodeEditorServices } = await import('../../../../../editor/test/br
 const { BrowserTextModelService } = await import('../../../../services/textmodelResolver/browser/browserTextModelService.js');
 const { BrowserTextResourceStore } = await import('../../../codeEditor/browser/browserTextResourceStore.js');
 const { createMultiDiffEditorInput } = await import('../../browser/multiDiffEditorInput.js');
-const { MultiDiffEditor } = await import('../../browser/multiDiffEditor.js');
+const { MultiDiffEditor, MultiDiffEditorAllCollapsed } = await import('../../browser/multiDiffEditor.js');
 await import('../../../codeEditor/browser/toggleWordWrap.js');
 await import('../../../../../editor/browser/widget/diffEditor/commands.js');
 await import('../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js');
 const { MultiDiffGoToFileAction } = await import('../../browser/multiDiffEditorActions.js');
 
 function registerMultiDiffTestServices(services: InstantiationService): InstantiationService {
+	if (!services.has(IResourceIconRenderer)) services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 	if (!services.has(ICommandService)) services.registerSingleton(ICommandService, () => new CommandService(services));
 	if (!services.has(IUriIdentityService)) services.registerInstance(IUriIdentityService, uriIdentityServices.get(IUriIdentityService));
 	if (!services.has(IWorkingCopyService)) services.registerSingleton(IWorkingCopyService, () => uriIdentityServices.createInstance(BrowserWorkingCopyService));
@@ -230,7 +233,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	requiredElement<HTMLButtonElement>(parent, '.stanza-multi-diff-editor-repository-toolbar .ash-toolbar-more-actions button').click();
 	assert.deepEqual(contextMenus, [
 		['Current Turn', 'Current Turn and Earlier', 'Previous Turn'],
-		['Collapse All', 'Expand All'],
+		['Collapse All'],
 	]);
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-repository-toolbar .ash-toolbar-more-actions').length, 1);
 	requiredElement<HTMLButtonElement>(dom.window.document, 'button[aria-label="Commit"]').click();
@@ -240,7 +243,23 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	assert.equal(requiredElement<HTMLElement>(parent, '.stanza-multi-diff-editor').contains(dom.window.document.activeElement), true);
 	assert.equal(pane.viewStateTypeId, 'ash.multiDiffEditor');
 	const paneViewState: unknown = validateJsonValue(pane.saveViewState());
-	pane.collapseAll();
+	assert.equal(contexts.getValue(MultiDiffEditorAllCollapsed.key), false);
+	pane.toggleCollapseAll();
+	assert.equal(contexts.getValue(MultiDiffEditorAllCollapsed.key), true);
+	const collapsedState = pane.saveViewState();
+	requiredElement<HTMLButtonElement>(parent, '.stanza-multi-diff-editor-header-toggle').click();
+	assert.equal(contexts.getValue(MultiDiffEditorAllCollapsed.key), false);
+	pane.toggleCollapseAll();
+	assert.equal(contexts.getValue(MultiDiffEditorAllCollapsed.key), true);
+	pane.toggleCollapseAll();
+	assert.equal(contexts.getValue(MultiDiffEditorAllCollapsed.key), false);
+	pane.restoreViewState(collapsedState);
+	assert.equal(contexts.getValue(MultiDiffEditorAllCollapsed.key), true);
+	pane.setVisible(false);
+	pane.expandAll();
+	assert.equal(contexts.getValue(MultiDiffEditorAllCollapsed.key), true, 'A retained hidden pane must not change title context');
+	pane.setVisible(true);
+	assert.equal(contexts.getValue(MultiDiffEditorAllCollapsed.key), false);
 	pane.restoreViewState(paneViewState);
 	assert.ok([...parent.querySelectorAll('.stanza-multi-diff-editor-header-toggle')].every(header => header.getAttribute('aria-expanded') === 'true'));
 	requiredElement<HTMLButtonElement>(dom.window.document, 'button[aria-label="Open File"]').click();

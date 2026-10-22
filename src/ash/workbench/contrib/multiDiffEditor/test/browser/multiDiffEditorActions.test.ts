@@ -31,6 +31,8 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 			MultiDiffCollapseAllCommandId,
 			MultiDiffExpandAllAction,
 			MultiDiffExpandAllCommandId,
+			MultiDiffToggleCollapseAllAction,
+			MultiDiffToggleCollapseAllCommandId,
 			MultiDiffGoToFileAction,
 			MultiDiffGoToFileCommandId,
 			MultiDiffGoToNextChangeAction,
@@ -83,6 +85,10 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 				this.calls.push('expand');
 			}
 
+			public override toggleCollapseAll(): void {
+				this.calls.push('toggleCollapse');
+			}
+
 			public override async toggleCollapseUnchangedRegions(): Promise<void> {
 				this.calls.push('toggleUnchanged');
 			}
@@ -93,6 +99,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		registrations.add(registerAction2(MultiDiffGoToPreviousChangeAction));
 		registrations.add(registerAction2(MultiDiffCollapseAllAction));
 		registrations.add(registerAction2(MultiDiffExpandAllAction));
+		registrations.add(registerAction2(MultiDiffToggleCollapseAllAction));
 		registrations.add(registerAction2(MultiDiffGoToFileAction));
 		registrations.add(registerAction2(MultiDiffToggleCollapseUnchangedRegionsAction));
 		const services = registrations.add(createTestComponentServices(undefined, undefined, browser.window.document));
@@ -114,9 +121,19 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		assert.deepEqual(
 			menus.getMenuActions(MenuId.EditorTitle).map(([group, actions]) => [group, actions.map((action) => action.id)]),
 			[
-				['navigation', [MultiDiffGoToPreviousChangeCommandId, MultiDiffGoToNextChangeCommandId, MultiDiffToggleCollapseUnchangedRegionsCommandId, MultiDiffGoToFileCommandId, MultiDiffCollapseAllCommandId, MultiDiffExpandAllCommandId]],
+				['navigation', [MultiDiffGoToPreviousChangeCommandId, MultiDiffGoToNextChangeCommandId, MultiDiffToggleCollapseAllCommandId]],
+				['1_diff', [MultiDiffToggleCollapseUnchangedRegionsCommandId]],
 			],
 		);
+		const { MultiDiffEditorAllCollapsed } = await import('../../browser/multiDiffEditor.js');
+		let toggle = menus.getMenuActions(MenuId.EditorTitle)[0]![1][2]!;
+		assert.equal(toggle.checked, false);
+		assert.equal(toggle.tooltip, 'Collapse All Diffs');
+		contexts.setContext(MultiDiffEditorAllCollapsed.key, true);
+		toggle = menus.getMenuActions(MenuId.EditorTitle)[0]![1][2]!;
+		assert.equal(toggle.checked, true);
+		assert.equal(toggle.tooltip, 'Expand All Diffs');
+		assert.equal(toggle.icon, new MultiDiffToggleCollapseAllAction().desc.icon);
 		const targetInput = { resource: URI.parse('file:///workspace/src/first.ts') };
 		const fileActions = menus.getMenuActions(MenuId.MultiDiffEditorFileToolbar, { arg: targetInput });
 		assert.deepEqual(fileActions.map(([group, actions]) => [group, actions.map((action) => action.id)]), [
@@ -129,13 +146,18 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		await commands.executeCommand(MultiDiffGoToPreviousChangeCommandId);
 		await commands.executeCommand(MultiDiffCollapseAllCommandId);
 		await commands.executeCommand(MultiDiffExpandAllCommandId);
+		await commands.executeCommand(MultiDiffToggleCollapseAllCommandId);
 		await commands.executeCommand(MultiDiffToggleCollapseUnchangedRegionsCommandId);
-		assert.deepEqual(pane.calls, ['next', 'previous', 'collapse', 'expand', 'toggleUnchanged']);
+		assert.deepEqual(pane.calls, ['next', 'previous', 'collapse', 'expand', 'toggleCollapse', 'toggleUnchanged']);
 		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsMessages(chinese.locale, chinese.bundles);
 		assert.deepEqual([
 			new MultiDiffCollapseAllAction(), new MultiDiffExpandAllAction(), new MultiDiffToggleCollapseUnchangedRegionsAction(),
 		].map(action => commandActionLabel(action.desc.title)), ['折叠所有差异', '展开所有差异', '切换折叠未变更区域']);
+		const chineseToggle = new MultiDiffToggleCollapseAllAction().desc;
+		assert.equal(commandActionLabel(chineseToggle.title), '折叠所有差异');
+		assert.ok(chineseToggle.toggled && 'condition' in chineseToggle.toggled);
+		assert.equal(commandActionLabel(chineseToggle.toggled.tooltip!), '展开所有差异');
 	} finally {
 		resetNlsResolver();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);

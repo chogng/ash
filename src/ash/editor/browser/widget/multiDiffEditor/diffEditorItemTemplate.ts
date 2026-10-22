@@ -66,7 +66,11 @@ export class DiffEditorItemTemplate extends Disposable {
 		appendIcon(Lxicon.chevronDown, expandedIconDomNode);
 		const titleDomNode = h(ownerDocument, 'span');
 		titleDomNode.className = 'stanza-multi-diff-editor-title';
-		titleDomNode.textContent = item.label;
+		if (workbenchUIElementFactory?.createResourceLabel) {
+			this._register(workbenchUIElementFactory.createResourceLabel(titleDomNode, item));
+		} else {
+			titleDomNode.textContent = item.label;
+		}
 		const labelsDomNode = h(ownerDocument, 'span');
 		labelsDomNode.className = 'stanza-multi-diff-editor-labels';
 		labelsDomNode.textContent = [item.originalLabel, item.modifiedLabel].filter(label => label !== undefined).join(' ↔ ');
