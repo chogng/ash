@@ -392,6 +392,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "debug-pause",
+      "file": "debug-pause.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "debug-start",
       "file": "debug-start.svg",
       "rendering": "symbolic"
