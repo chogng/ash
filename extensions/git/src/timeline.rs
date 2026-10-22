@@ -107,12 +107,16 @@ impl GitRuntime {
                         _ => true,
                     };
                     items.extend(history.items.iter().map(|item| {
-                        let timestamp = if authored { item.author_time } else { item.commit_time };
+                        let timestamp = if authored {
+                            item.author_time
+                        } else {
+                            item.commit_time
+                        };
                         json!({
                             "handle":json!([item.object_id,item.path]).to_string(),
+                            "id":item.object_id,
                             "label":item.subject,"timestamp":timestamp.saturating_mul(1000),
                             "description":if show_author {item.author_name.as_str()} else {""},
-                            "tooltip":format!("{}\n{}\n{}",item.subject,item.author_name,item.object_id),
                             "icon":"git-commit"
                         })
                     }));
@@ -122,6 +126,30 @@ impl GitRuntime {
                     }
                 }
                 let mut page = items;
+                if page.iter().any(|item| item["id"].is_string()) {
+                    let catalog = json!(self.api.history_refs(repository, Some(token))?);
+                    let references = catalog["references"]
+                        .as_array()
+                        .cloned()
+                        .unwrap_or_default();
+                    for item in &mut page {
+                        if !item["id"].is_string() {
+                            continue;
+                        }
+                        // File entries omit graph topology; opening changes resolves the first parent.
+                        // Both presentations use the same commit summary and remote actions.
+                        item["historyItem"] = crate::history::history_item(
+                            &json!({
+                                "objectId":item["id"], "parentObjectIds":[],
+                                "subject":item["label"],
+                                "timestampSeconds":item["timestamp"].as_i64().unwrap_or(0) / 1000
+                            }),
+                            &references,
+                            &catalog["remotes"],
+                            repository.configuration.number("commitShortHashLength", 7) as usize,
+                        );
+                    }
+                }
                 if !page.is_empty() {
                     let dates = self.api.editor(
                         json!({"method":"formatTimestamps","timestamps":page.iter().map(|item|item["timestamp"].clone()).collect::<Vec<_>>()}),

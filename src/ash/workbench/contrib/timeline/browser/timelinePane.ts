@@ -1,6 +1,6 @@
 import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import './media/timelinePane.css';
-import { h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { observeIntersection } from '../../../../base/browser/observer.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
@@ -13,11 +13,13 @@ import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
+import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { IHoverService, type IManagedHover } from '../../../../platform/hover/browser/hoverService.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -26,6 +28,9 @@ import { EditorResourceAccessor, SideBySideEditor } from '../../../common/editor
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { ITimelineService, type Timeline, type TimelineItem } from '../common/timeline.js';
+import { setupHistoryItemHover, toHistoryItemHoverContent } from '../../scm/browser/scmHistory.js';
+import { ISCMService } from '../../scm/common/scm.js';
+import type { SCMHistoryItemViewModelTreeElement } from '../../scm/common/history.js';
 
 export const TimelineFocusedContext = new RawContextKey<boolean>('timelineFocused', false);
 
@@ -40,6 +45,7 @@ export class TimelinePane extends ViewPane {
 	private readonly tree: WorkbenchObjectTree<TimelineRow>;
 	private readonly messageDomNode: HTMLDivElement;
 	private readonly rows = this._register(new DisposableStore());
+	private readonly itemHovers = new Map<string, { readonly hover: IManagedHover; readonly focus: () => void; }>();
 	private readonly pending = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly timelines = new Map<string, Timeline>();
 	private readonly failedSources = new Set<string>();
@@ -56,13 +62,17 @@ export class TimelinePane extends ViewPane {
 		@IEditorService private readonly editors: IEditorService,
 		@IFileService private readonly files: IFileService,
 		@ICommandService private readonly commands: ICommandService,
-		@IContextKeyService context: IContextKeyService,
+		@IContextKeyService private readonly context: IContextKeyService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 		@IHoverService private readonly hover: IHoverService,
-		@IContextMenuService menus: IContextMenuService,
+		@IContextMenuService private readonly menus: IContextMenuService,
 		@ILogService private readonly log: ILogService,
 		@IStorageService private readonly storage: IStorageService,
+		@ISCMService private readonly scm: ISCMService,
+		@IContextViewService private readonly contextView: IContextViewService,
+		@IClipboardService private readonly clipboard: IClipboardService,
+		@IOpenerService private readonly opener: IOpenerService,
 	) {
 		super(container, { ...options, headerActionsVisibility: 'whenExpanded' });
 		this.restoreSources();
@@ -79,12 +89,22 @@ export class TimelinePane extends ViewPane {
 			// History is flat; reserving a collapse arrow would indent every entry.
 			twistieAdditionalCssClass: () => 'ash-tree-twistie-hidden',
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: row => row.item?.label ?? this.loadMoreLabel(row.source) },
-			onWillRender: () => this.rows.clear(),
+			onWillRender: () => { this.rows.clear(); this.itemHovers.clear(); },
 			renderElement: row => this.renderRow(row),
 		}));
 		this.tree.element.classList.add('ash-timeline-tree');
 		TimelineFocusedContext.bindTo(this._register(context.createScoped(this.contentElement))).set(true);
 		this.toolbar = this._register(new WorkbenchToolBar(this.headerActionsElement, menus, { ariaLabel: localize('timeline.actions', 'Timeline Actions') }));
+		this._register(addDisposableListener(this.tree.element, 'keydown', event => {
+			if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key === 'ArrowDown') {
+				const focused = this.tree.focus;
+				const details = focused && this.itemHovers.get(focused.id);
+				if (!details) return;
+				event.preventDefault();
+				details.hover.show();
+				details.focus();
+			}
+		}, true));
 		this._register(this.tree.onDidOpen(({ element, browserEvent }) => {
 			if ('key' in browserEvent && browserEvent.key !== 'Enter' && browserEvent.key !== ' ') return;
 			if (!element.item) { void this.load(element.source, true); return; }
@@ -240,7 +260,9 @@ export class TimelinePane extends ViewPane {
 		description.className = 'ash-timeline-description';
 		description.textContent = row.item?.description ?? this.timeline.getSources().find(source => source.id === row.source)?.label ?? '';
 		content.append(description);
-		this.rows.add(this.hover.setupDelayedHover(content, { content: row.item?.tooltip ?? [label.textContent, description.textContent].join(' — ') }));
+		if (!row.item || !this.setupHistoryHover(content, row.id, row.item)) {
+			this.rows.add(this.hover.setupDelayedHover(content, { content: row.item?.tooltip ?? [label.textContent, description.textContent].join(' — ') }));
+		}
 		if (!row.item && !this.pending.has(row.source) && !this.failedSources.has(row.source)) {
 			const generation = this.generation;
 			this.rows.add(observeIntersection(content, entry => {
@@ -250,6 +272,29 @@ export class TimelinePane extends ViewPane {
 			}, { root: this.tree.element }));
 		}
 		return content;
+	}
+
+	private setupHistoryHover(target: HTMLElement, rowId: string, item: TimelineItem): boolean {
+		const repository = item.sourceControl && this.scm.getRepository(item.sourceControl.repositoryId);
+		if (!repository || !item.sourceControl) return false;
+		// The shared hover restores focus to its target after Escape.
+		target.tabIndex = -1;
+		const historyItem = item.sourceControl.historyItem;
+		const scope = this.rows.add(this.context.createScoped(target));
+		const menuTarget: SCMHistoryItemViewModelTreeElement = {
+			type: 'historyItemViewModel', repository,
+			historyItemViewModel: { historyItem, kind: 'node', inputSwimlanes: [], outputSwimlanes: [] },
+		};
+		const details = setupHistoryItemHover({
+			resources: this.rows,
+			target,
+			render: (resources, layout) => toHistoryItemHoverContent({
+				resources, target, historyItem, references: historyItem.references ?? [], scope, layout,
+				openChanges: () => this.commands.executeCommand('workbench.scm.action.graph.viewChanges', menuTarget),
+			}, this.menus, this.clipboard, this.opener, this.accessibleView),
+		}, this.hover, this.contextView);
+		this.itemHovers.set(rowId, details);
+		return true;
 	}
 
 	private loadMoreLabel(source: string): string {

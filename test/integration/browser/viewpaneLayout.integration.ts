@@ -1,3 +1,6 @@
+import { ISCMService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
+import { SCMService } from '../../../src/ash/workbench/contrib/scm/common/scmService.js';
+import { IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
 import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/descriptors.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
@@ -5,7 +8,7 @@ import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
 import { IUriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentity.js';
 import { UriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentityService.js';
-import type { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
@@ -176,6 +179,7 @@ function createTimelinePane(): TimelinePane {
 	const contextViews = resources.add(new BrowserContextViewService(root));
 	const scope = resources.add(changesServices.createChild(new ServiceCollection(
 		[IConfigurationService, configuration], [IEditorService, editors],
+		[ISCMService, resources.add(new SCMService())], [IContextViewService, contextViews], [IClipboardService, clipboard],
 		[IFileService, resources.add(new FileService())], [IContextMenuService, contextMenus],
 		[IHoverService, resources.add(new HoverService(configuration, contextViews, contextMenus))],
 		[IAccessibleViewService, replScope.get(IAccessibleViewService)], [ILogService, log],

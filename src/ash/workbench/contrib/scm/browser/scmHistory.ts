@@ -1,10 +1,27 @@
+import './media/scm.css';
+import { getWindow, h, svg as createSvgElement } from '../../../../base/browser/dom.js';
+import { observeResize } from '../../../../base/browser/observer.js';
+import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
+import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from '../../../../base/browser/ui/contextview/contextview.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
+import type { IAction } from '../../../../base/common/actions.js';
+import { DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
+import type { IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextMenuService, type IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import type { IHoverService, IManagedHover } from '../../../../platform/hover/browser/hoverService.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { listRowHeight } from '../../../../base/common/uiSizes.js';
-import { localize } from '../../../../nls.js';
-import { svg as createSvgElement } from "../../../../base/browser/dom.js";
+import { localize, getNLSLanguage } from '../../../../nls.js';
 import { findLastIdx } from "../../../../base/common/arraysFind.js";
 import { registerColor } from '../../../../platform/theme/common/colorUtils.js';
 import { chartsBlue, chartsPurple } from '../../../../platform/theme/common/colors/chartsColors.js';
-import { SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId, type ISCMHistoryItem, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel } from '../common/history.js';
+import { SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId, type ISCMHistoryItemDetails, type ISCMHistoryItem, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel } from '../common/history.js';
 import '../../../common/theme.js';
 
 registerColor('scmGraph.historyItemRefColor', {
@@ -220,4 +237,186 @@ function appendCircle(svg: SVGSVGElement, index: number, radius: number, part: "
 	circle.setAttribute("cy", `${LaneHeight / 2}`);
 	circle.setAttribute("r", `${radius}`);
 	svg.append(circle);
+}
+
+interface HistoryItemHoverContent {
+	readonly domNode: HTMLDivElement;
+	readonly toolbar: WorkbenchToolBar;
+}
+
+/** Shared pointer, keyboard and resource lifetime for commit cards in either history presentation. */
+export function setupHistoryItemHover(
+	options: {
+		readonly resources: DisposableStore;
+		readonly target: HTMLElement;
+		readonly render: (resources: DisposableStore, layout: () => void) => HistoryItemHoverContent;
+	},
+	hoverService: IHoverService,
+	contextViewService: IContextViewService,
+): { readonly hover: IManagedHover; readonly focus: () => void; } {
+	const lifetime = options.resources.add(new MutableDisposable<DisposableStore>());
+	let toolbar: WorkbenchToolBar | undefined;
+	const hover = options.resources.add(hoverService.setupHover({
+		target: options.target,
+		content: () => {
+			const resources = new DisposableStore();
+			lifetime.value = resources;
+			const layout = () => { if (hover.visible) contextViewService.layout(); };
+			const card = options.render(resources, layout);
+			toolbar = card.toolbar;
+			return card.domNode;
+		},
+		groupId: 'scm.history.items',
+		trapFocus: true,
+		persistence: 'transient',
+		anchorAlignment: AnchorAlignment.Left,
+		anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+		anchorPosition: AnchorPosition.Below,
+		gap: 8,
+		onDidHide: () => { lifetime.clear(); toolbar = undefined; },
+	}));
+	return { hover, focus: () => toolbar?.focus() };
+}
+
+interface SCMHistoryItemHoverOptions {
+	readonly resources: DisposableStore;
+	readonly target: HTMLElement;
+	readonly historyItem: ISCMHistoryItem;
+	readonly references: readonly ISCMHistoryItemRef[];
+	readonly scope: IScopedContextKeyService;
+	readonly layout: () => void;
+	readonly openChanges: () => unknown;
+}
+
+/** The graph and file timeline render the same card; the caller owns its hover lifetime. */
+export function toHistoryItemHoverContent(
+	options: SCMHistoryItemHoverOptions,
+	contextMenuService: IContextMenuService,
+	clipboardService: IClipboardService,
+	openerService: IOpenerService,
+	accessibleView: IAccessibleViewService,
+): { domNode: HTMLDivElement; toolbar: WorkbenchToolBar; } {
+	const resources = options.resources;
+	const historyItem = options.historyItem;
+	const document = options.target.ownerDocument;
+	const hover = h(document, 'div');
+	hover.className = 'ash-scm-graph-hover';
+	const hoverScope = resources.add(options.scope.createScoped(hover));
+	hoverScope.setContext('scmHistoryDetailsFocused', true);
+	const hint = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.ScmHistoryDetails);
+	if (hint) hover.setAttribute('aria-description', hint);
+	const details = h(document, 'div');
+	details.className = 'ash-scm-graph-hover-details';
+	details.setAttribute('aria-busy', 'false');
+	if (historyItem.tooltip) {
+		renderCommitDetails(details, historyItem.subject, historyItem.tooltip, resources, options.layout);
+	} else {
+		// Providers without rich tooltip content still expose their complete message synchronously.
+		details.textContent = historyItem.message || historyItem.subject;
+	} const footer = h(document, 'div');
+	footer.className = 'ash-scm-graph-hover-footer';
+	const hash = h(document, 'div');
+	hash.className = 'ash-scm-graph-hover-hash';
+	hash.title = historyItem.id;
+	const openLabel = localize('scm.history.openCommit', 'Open Commit {0}', historyItem.displayId ?? historyItem.id);
+	const hashToolbar = resources.add(new WorkbenchToolBar(hash, contextMenuService, {
+		ariaLabel: openLabel,
+		actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, ariaLabel: openLabel, tooltip: '' }),
+	}));
+	hashToolbar.setActions([{ id: 'workbench.scm.action.graph.viewChanges', label: historyItem.displayId ?? historyItem.id, tooltip: openLabel, enabled: true, run: () => options.openChanges() }]);
+	const actions = h(document, 'div');
+	actions.className = 'ash-scm-graph-hover-actions';
+	const toolbar = resources.add(new WorkbenchToolBar(actions, contextMenuService, {
+		ariaLabel: localize('scm.history.commitActions', 'Commit actions'),
+		// Action tooltips share the ContextView and would replace their own details card.
+		actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, ariaLabel: action.tooltip, tooltip: '' }),
+	}));
+	const copyLabel = localize('scm.history.copyHash', 'Copy Commit Hash');
+	const hoverActions: IAction[] = [{
+		id: 'scm.history.copyHash', label: '', tooltip: copyLabel, icon: Lxicon.copy, enabled: true,
+		run: () => clipboardService.writeText(historyItem.id),
+	}];
+	const hostingNames: Readonly<Record<string, string>> = { 'github.com': 'GitHub', 'gitlab.com': 'GitLab', 'bitbucket.org': 'Bitbucket' };
+	for (const [index, link] of (historyItem.remoteLinks ?? []).entries()) {
+		const label = localize('scm.history.openRemote', 'Open on {0}', hostingNames[link.uri.authority] ?? link.name);
+		hoverActions.push({
+			id: `scm.history.openRemote.${index}`, label, tooltip: label, icon: Lxicon.linkExternal, enabled: true,
+			run: () => openerService.open(link.uri, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true }),
+		});
+	}
+	toolbar.setActions(hoverActions);
+	if (hint) toolbar.element.setAttribute('aria-description', hint);
+	footer.append(hash, actions);
+	hover.append(details);
+	const references = options.references;
+	if (references.length > 0) {
+		const labels = h(document, 'div');
+		labels.className = 'ash-scm-graph-hover-references';
+		labels.setAttribute('role', 'group');
+		labels.setAttribute('aria-label', localize('scm.history.references', 'History references'));
+		for (const reference of references) {
+			const label = h(document, 'span');
+			label.className = 'ash-scm-graph-label';
+			appendIcon(reference.category === 'tag' ? Lxicon.tag : reference.category === 'remoteBranch' ? Lxicon.cloud : Lxicon.gitBranch, label);
+			label.append(document.createTextNode(reference.name));
+			labels.append(label);
+		}
+		hover.append(labels);
+	}
+	hover.append(footer);
+	return { domNode: hover, toolbar };
+}
+
+function renderCommitDetails(container: HTMLElement, subjectText: string, details: ISCMHistoryItemDetails, resources: DisposableStore, layout: () => void): void {
+	const document = container.ownerDocument;
+	const author = h(document, 'div');
+	author.className = 'ash-scm-graph-hover-author';
+	appendIcon(Lxicon.account, author);
+	const name = h(document, 'span');
+	name.textContent = details.authorName;
+	name.title = details.authorEmail;
+	const time = h(document, 'time');
+	time.className = 'ash-scm-graph-hover-time';
+	const date = new Date(details.timestamp);
+	time.dateTime = date.toISOString();
+	const seconds = Math.round((details.timestamp - Date.now()) / 1000);
+	const units = [{ unit: 'year', seconds: 31_536_000 }, { unit: 'month', seconds: 2_592_000 }, { unit: 'day', seconds: 86_400 }, { unit: 'hour', seconds: 3_600 }, { unit: 'minute', seconds: 60 }, { unit: 'second', seconds: 1 }] as const;
+	const unit = units.find(candidate => Math.abs(seconds) >= candidate.seconds) ?? units.at(-1)!;
+	const relative = new Intl.RelativeTimeFormat(getNLSLanguage(), { numeric: 'auto' }).format(Math.round(seconds / unit.seconds), unit.unit);
+	time.textContent = localize('scm.history.commitTime', '{0} ({1})', relative, date.toLocaleString(getNLSLanguage()));
+	author.append(name, time);
+	const subject = h(document, 'div');
+	subject.className = 'ash-scm-graph-hover-subject';
+	subject.textContent = subjectText;
+	const message = h(document, 'div');
+	message.className = 'ash-scm-graph-hover-message';
+	message.textContent = details.message.startsWith(subjectText) ? details.message.slice(subjectText.length).replace(/^\n+/, '') : details.message;
+	const statistics = h(document, 'div');
+	statistics.className = 'ash-scm-graph-hover-statistics';
+	const files = h(document, 'span');
+	files.textContent = localize('scm.history.filesChanged', '{0} files changed', details.statistics.files);
+	const additions = h(document, 'span');
+	additions.className = 'ash-scm-graph-hover-additions';
+	additions.textContent = localize('scm.history.additions', '{0} insertions(+)', details.statistics.additions);
+	const deletions = h(document, 'span');
+	deletions.className = 'ash-scm-graph-hover-deletions';
+	deletions.textContent = localize('scm.history.deletions', '{0} deletions(-)', details.statistics.deletions);
+	statistics.append(files, additions, deletions);
+	container.replaceChildren(author, subject);
+	if (message.textContent) {
+		const scrollable = resources.add(new ScrollableElement(container, { direction: 'vertical', ariaLabel: localize('scm.history.message', 'Commit message') }));
+		scrollable.element.classList.add('ash-scm-graph-hover-message-scroll');
+		scrollable.setContent(message);
+		// A hover relayout may resize the observed message; leave the observer delivery before writing geometry.
+		const resize = resources.add(new AnimationFrameScheduler(getWindow(message), () => {
+			const height = Math.min(180, message.scrollHeight);
+			if (scrollable.element.style.height !== `${height}px`) {
+				scrollable.element.style.height = `${height}px`;
+				layout();
+			}
+			scrollable.layout();
+		}));
+		resources.add(observeResize(message, () => resize.schedule()));
+	}
+	container.append(statistics);
 }

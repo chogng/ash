@@ -12,11 +12,12 @@ import { observableValue } from '../../../base/common/observable.js';
 import { URI } from '../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../../base/common/resources.js';
 import { Icon } from '../../../base/common/icon.js';
+import { LRUCache } from '../../../base/common/map.js';
 import type { IAction } from '../../../base/common/actions.js';
 import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { ISCMService, ISCMViewService, type ISCMProvider, type ISCMResourceGroup, type ISCMConflictFile, type ISCMConflictResolution } from '../../contrib/scm/common/scm.js';
-import type { ISCMHistoryProvider, ISCMHistoryItem, ISCMHistoryItemRef, ISCMHistoryItemChange, ISCMHistoryItemDetails, ISCMHistoryItemChangeContents } from '../../contrib/scm/common/history.js';
+import type { ISCMHistoryProvider, ISCMHistoryItem, ISCMHistoryOptions, ISCMHistoryItemRef, ISCMHistoryItemChange, ISCMHistoryItemDetails, ISCMHistoryItemChangeContents } from '../../contrib/scm/common/history.js';
 import { IQuickDiffService } from '../../contrib/scm/common/quickDiff.js';
 import { IDecorationsService } from '../../services/decorations/common/decorations.js';
 import { ITimelineService } from '../../contrib/timeline/common/timeline.js';
@@ -243,16 +244,21 @@ export class MainThreadSCM extends Disposable {
 							const result = object(response);
 							return {
 								source: id,
-								items: array(result.items).map(value => {
+								items: await Promise.all(array(result.items).map(async value => {
 									const item = object(value);
 									const handle = string(item.handle);
+									const historyItemId = optionalString(item.id);
+									const historyItem = item.historyItem == null || !currentProvider.historyProvider
+										? undefined : await currentProvider.prepareHistoryItem(parseHistoryItem(item.historyItem));
+									controller.signal.throwIfAborted();
 									return {
-										source: id, handle, label: string(item.label), timestamp: number(item.timestamp),
+										source: id, handle, id: historyItemId, label: string(item.label), timestamp: number(item.timestamp),
 										description: optionalString(item.description), tooltip: optionalString(item.tooltip),
+										sourceControl: historyItem ? { repositoryId: currentProvider.id, historyItem } : undefined,
 										icon: item.icon == null ? undefined : Icon.fromId(string(item.icon)),
 										command: { id: openCommand, title: string(item.label), arguments: [resource.toString(), handle] },
 									};
-								}),
+								})),
 								paging: { cursor: optionalString(result.cursor) },
 							};
 						},
@@ -469,10 +475,18 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	private draftRevision = 0;
 	private syncedDraftRevision = 0;
 	private resourceGroups: readonly ISCMResourceGroup[] | undefined;
+	// Both presentations read the same repository owner. Bound retained commit messages and requests.
+	private readonly historyDetails = new LRUCache<string, ISCMHistoryItemDetails | Promise<ISCMHistoryItemDetails>>(128);
+	private readonly detailQueues = Array.from({ length: 4 }, () => new TaskQueue());
+	private nextDetailQueue = 0;
 	public readonly historyProvider: ISCMHistoryProvider | undefined;
 	public readonly mergeProvider;
 	constructor(private snapshot: ProviderSnapshot, public readonly call: (method: string, payload: Record<string, unknown>, signal?: AbortSignal) => Promise<JsonValue>, private readonly reportError: (error: unknown) => void) {
 		super();
+		this._register(toDisposable(() => {
+			this.historyDetails.clear();
+			for (const queue of this.detailQueues) queue.clearPending();
+		}));
 		this.draft = string(snapshot.input.value);
 		this.historyRef.set(snapshot.historyRef);
 		this.historyRemoteRef.set(snapshot.historyRemoteRef);
@@ -484,8 +498,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 				...(snapshot.hasHistoryMergeBase ? { resolveHistoryItemRefsCommonAncestor: async (refs: readonly string[]) => optionalString(await this.call('history', { methodName: 'resolveHistoryItemRefsCommonAncestor', arguments: [refs] })) } : {}),
 				onDidChangeHistoryItemRefs: this.historyRefsChanged.event,
 				refresh: () => { void this.call('history', { methodName: 'refresh', arguments: [] }).catch(this.reportError); },
-				provideHistoryItems: async (options) => array(await this.call('history', { methodName: 'provideHistoryItems', arguments: [options] })).map(parseHistoryItem),
-				resolveHistoryItemDetails: async (id) => parseDetails(await this.call('history', { methodName: 'resolveHistoryItemDetails', arguments: [id] })),
+				provideHistoryItems: options => this.provideHistoryItems(options),
 				provideHistoryItemChanges: async (id, parent) => array(await this.call('history', { methodName: 'provideHistoryItemChanges', arguments: [id, parent ?? null] })).map(parseHistoryChange),
 				resolveHistoryItemChangeContents: async (id, change) => parseContents(await this.call('history', { methodName: 'resolveHistoryItemChangeContents', arguments: [id, encodeChange(change)] })),
 				resolveHistoryItemChatContext: async (id) => optionalString(await this.call('history', { methodName: 'resolveHistoryItemChatContext', arguments: [id] }), 512 * 1024),
@@ -497,6 +510,40 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 			complete: async (path: string, stageIds: readonly (string | null)[], objectId: string | null, resolution: ISCMConflictResolution): Promise<void> => { await this.call('merge', { methodName: 'complete', arguments: [path, stageIds, objectId, resolution] }); },
 			errorMessage: (error: unknown): string => String(error),
 		} : undefined;
+	}
+
+	private async provideHistoryItems(options: ISCMHistoryOptions): Promise<readonly ISCMHistoryItem[]> {
+		const items = array(await this.call('history', { methodName: 'provideHistoryItems', arguments: [options] })).map(parseHistoryItem);
+		return Promise.all(items.map(item => this.prepareHistoryItem(item)));
+	}
+
+	/** Both list providers publish an item only after its complete tooltip is available. */
+	public async prepareHistoryItem(item: ISCMHistoryItem): Promise<ISCMHistoryItem> {
+		if (item.tooltip) {
+			this.historyDetails.set(item.id, item.tooltip);
+			return item;
+		}
+		const tooltip = await this.prepareHistoryItemDetails(item.id);
+		return { ...item, tooltip };
+	}
+
+	private prepareHistoryItemDetails(id: string): ISCMHistoryItemDetails | Promise<ISCMHistoryItemDetails> {
+		const cached = this.historyDetails.get(id);
+		if (cached) return cached;
+		// Preparing a page must not exhaust extension invocation slots needed by the rest of the UI.
+		const queue = this.detailQueues[this.nextDetailQueue++ % this.detailQueues.length]!;
+		const request = queue.schedule(() => {
+			this.assertNotDisposed();
+			return this.call('history', { methodName: 'resolveHistoryItemDetails', arguments: [id] });
+		}).then(parseDetails).then(details => {
+			if (!this.isDisposed) this.historyDetails.set(id, details);
+			return details;
+		}, error => {
+			if (this.historyDetails.peek(id) === request) this.historyDetails.delete(id);
+			throw error;
+		});
+		this.historyDetails.set(id, request);
+		return request;
 	}
 	public add(value: {
 		dispose(): void;
@@ -708,7 +755,7 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 	const timeline = entry.timeline == null ? undefined : object(entry.timeline);
 	return { timeline: timeline ? { label: string(timeline.label), resetKey: optionalString(timeline.resetKey) } : undefined, count: entry.count == null ? undefined : number(entry.count), id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, selectionRevision, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRemoteRef: entry.historyRemoteRef == null ? undefined : parseRef(entry.historyRemoteRef), historyBaseRef: entry.historyBaseRef == null ? undefined : parseRef(entry.historyBaseRef), hasHistoryItemRefs: entry.hasHistoryItemRefs === true, hasHistoryMergeBase: entry.hasHistoryMergeBase === true, historyRevision: number(entry.historyRevision), historyRefsRevision, historyRefsItems, hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
 }
-function parseHistoryItem(value: JsonValue): ISCMHistoryItem { const entry = object(value); return { id: string(entry.id), parentIds: array(entry.parentIds).map(value => string(value)), subject: string(entry.subject), message: string(entry.message, 512 * 1024), displayId: optionalString(entry.displayId), timestamp: entry.timestamp == null ? undefined : number(entry.timestamp), references: array(entry.references ?? []).map(parseRef), remoteLinks: array(entry.remoteLinks ?? []).map(value => { const link = object(value); return { name: string(link.name), uri: URI.parse(string(link.uri)) }; }) }; }
+function parseHistoryItem(value: JsonValue): ISCMHistoryItem { const entry = object(value); return { id: string(entry.id), parentIds: array(entry.parentIds).map(value => string(value)), subject: string(entry.subject), message: string(entry.message, 512 * 1024), displayId: optionalString(entry.displayId), timestamp: entry.timestamp == null ? undefined : number(entry.timestamp), tooltip: entry.tooltip == null ? undefined : parseDetails(entry.tooltip), references: array(entry.references ?? []).map(parseRef), remoteLinks: array(entry.remoteLinks ?? []).map(value => { const link = object(value); return { name: string(link.name), uri: URI.parse(string(link.uri)) }; }) }; }
 function parseHistoryChange(value: JsonValue): ISCMHistoryItemChange { const entry = object(value); return { uri: URI.parse(string(entry.uri)), originalUri: entry.originalUri == null ? undefined : URI.parse(string(entry.originalUri)), modifiedUri: entry.modifiedUri == null ? undefined : URI.parse(string(entry.modifiedUri)), path: string(entry.path), originalPath: optionalString(entry.originalPath), status: string(entry.status), parentId: optionalString(entry.parentId) }; }
 function encodeChange(change: ISCMHistoryItemChange): Record<string, unknown> { return { ...change, uri: change.uri.toString(), originalUri: change.originalUri?.toString(), modifiedUri: change.modifiedUri?.toString() }; }
 function parseDetails(value: JsonValue): ISCMHistoryItemDetails { const entry = object(value); const stats = object(entry.statistics); return { authorName: string(entry.authorName), authorEmail: string(entry.authorEmail), timestamp: number(entry.timestamp), message: string(entry.message, 512 * 1024), statistics: { files: number(stats.files), additions: number(stats.additions), deletions: number(stats.deletions) } }; }

@@ -27,7 +27,7 @@ import assert from "node:assert/strict";
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { observableValue } from '../../../../../base/common/observable.js';
-import type { ISCMHistoryItemRef, ISCMHistoryProvider } from '../../common/history.js';
+import type { ISCMHistoryItem, ISCMHistoryItemRef, ISCMHistoryProvider } from '../../common/history.js';
 import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
 import { suite, test } from "mocha";
@@ -189,7 +189,7 @@ test('SCM history title operations keep refresh and busy state with their starti
 			historyItemRef: observableValue('historyRef', undefined),
 			refresh: () => { refreshed.push(id); },
 			provideHistoryItems: async () => { loaded.push(id); return []; },
-			resolveHistoryItemDetails: async () => { throw new Error('Unexpected details request'); },
+
 			provideHistoryItemChanges: async () => [],
 			resolveHistoryItemChangeContents: async () => { throw new Error('Unexpected content request'); },
 			resolveHistoryItemChatContext: async () => undefined,
@@ -277,13 +277,15 @@ test('SCM history details expose copy and remote actions without extension menu 
 		const openedEditors: Parameters<typeof testEditorService>[0] = [];
 		services.registerInstance(IEditorService, testEditorService(openedEditors));
 		let requestedLimit: number | undefined;
+		let reads = 0;
+		using referenceChanges = new Emitter<readonly ISCMHistoryItem[]>();
 		const provider: ISCMHistoryProvider = {
-			onDidChange: Event.None, historyItemRef: observableValue('hoverHead', undefined), refresh() { },
+			onDidChange: Event.None, onDidChangeHistoryItemRefs: referenceChanges.event, historyItemRef: observableValue('hoverHead', undefined), refresh() { },
 			provideHistoryItems: async options => {
 				requestedLimit = options.limit;
-				return [{ id, displayId: 'abcdef0', parentIds: [], subject: 'Details', message: 'Details', remoteLinks: [{ name: 'origin', uri }], references: [{ id: 'tag:v1', name: 'v1', category: 'tag' }, { id: 'localBranch:topic', name: 'topic', category: 'localBranch' }] }];
+				reads++;
+				return [{ id, displayId: 'abcdef0', parentIds: [], subject: 'Details', message: 'Details', tooltip: { authorName: 'Author', authorEmail: 'author@example.invalid', timestamp: 1700000000000, message: 'Details\n\nFull message', statistics: { files: 1, additions: 2, deletions: 0 } }, remoteLinks: [{ name: 'origin', uri }], references: [{ id: 'tag:v1', name: 'v1', category: 'tag' }, { id: 'localBranch:topic', name: 'topic', category: 'localBranch' }] }];
 			},
-			resolveHistoryItemDetails: async () => ({ authorName: 'Author', authorEmail: 'author@example.invalid', timestamp: 1700000000000, message: 'Details\n\nFull message', statistics: { files: 1, additions: 2, deletions: 0 } }),
 			provideHistoryItemChanges: async () => [{ uri: URI.file('/workspace/file.txt'), path: 'file.txt', status: 'added' }],
 			resolveHistoryItemChangeContents: async () => ({ parentId: undefined, original: { kind: 'missing' }, modified: { kind: 'text', text: 'Committed contents' } }),
 			resolveHistoryItemChatContext: async () => undefined,
@@ -315,6 +317,8 @@ test('SCM history details expose copy and remote actions without extension menu 
 		assert.ok(typeof content === 'function');
 		const card = content(CancellationToken.None);
 		assert.ok(card instanceof browser.window.HTMLElement);
+		assert.equal(card.querySelector('.ash-scm-graph-hover-status'), null, 'First-hover details are rendered synchronously from the item');
+		assert.equal(card.querySelector('.ash-scm-graph-hover-details')?.getAttribute('aria-busy'), 'false');
 		browser.window.document.body.append(card);
 		await waitFor(() => card.querySelector('.ash-scm-graph-hover-message') !== null);
 		const buttons = [...card.querySelectorAll<HTMLButtonElement>('.ash-scm-graph-hover-actions button')];
@@ -336,6 +340,21 @@ test('SCM history details expose copy and remote actions without extension menu 
 		await waitFor(() => openedEditors.length === 1);
 		assert.ok(isMultiDiffEditorInput(openedEditors[0].input));
 		assert.equal(openedEditors[0].input.resource.path, `/scm-history/hover/parent/${id}`);
+		hoverOptions!.onDidHide?.();
+		const repeated = content(CancellationToken.None);
+		assert.ok(repeated instanceof browser.window.HTMLElement);
+		assert.equal(repeated.querySelector('.ash-scm-graph-hover-status'), null, 'Reopening the shared hover never inserts a loading status for warm data');
+		assert.equal(repeated.querySelector('.ash-scm-graph-hover-message')?.textContent, 'Full message');
+		assert.equal(reads, 1, 'Neither the first nor the repeated hover reads history');
+		hoverOptions!.onDidHide?.();
+		referenceChanges.fire([{ id, parentIds: [], subject: 'Details', message: 'Details', references: [{ id: 'tag:v2', name: 'v2', category: 'tag' }] }]);
+		const updatedContent = hoverOptions!.content;
+		assert.ok(typeof updatedContent === 'function');
+		const updated = updatedContent(CancellationToken.None);
+		assert.ok(updated instanceof browser.window.HTMLElement);
+		assert.equal(updated.querySelector('.ash-scm-graph-hover-message')?.textContent, 'Full message', 'Reference-only updates retain the prepared tooltip');
+		assert.deepEqual([...updated.querySelectorAll('.ash-scm-graph-hover-references > span')].map(label => label.textContent), ['v2']);
+		assert.equal(reads, 1);
 	} finally {
 		browser.window.close();
 		for (const name of globals) Reflect.deleteProperty(globalThis, name);
@@ -365,7 +384,7 @@ test('SCM history restores a late HEAD and moves its marker without reloading or
 				];
 			},
 			provideHistoryItemChanges: async () => [],
-			resolveHistoryItemDetails: async () => { throw new Error('Unexpected details'); },
+
 			resolveHistoryItemChangeContents: async () => { throw new Error('Unexpected contents'); },
 			resolveHistoryItemChatContext: async () => undefined,
 			resolveHistoryItemChangeRangeChatContext: async () => undefined,
@@ -588,7 +607,7 @@ test('SCM history refresh retains loaded identities and folder focus and bounds 
 			},
 			resolveHistoryItemRefsCommonAncestor: async refs => reachable ? refs[0] : undefined,
 			provideHistoryItemChanges: async () => [{ uri: URI.parse('git:/src/history.txt'), path: 'src/history.txt', status: 'modified' }],
-			resolveHistoryItemDetails: async () => { throw new Error('Unexpected details'); },
+
 			resolveHistoryItemChangeContents: async () => { throw new Error('Unexpected contents'); },
 			resolveHistoryItemChatContext: async () => undefined,
 			resolveHistoryItemChangeRangeChatContext: async () => undefined,
@@ -2011,7 +2030,7 @@ interface HistoryFixtureData {
 function historyProviderFixture(overrides: Partial<ISCMHistoryProvider> = {}): ISCMHistoryProvider {
 	return {
 		onDidChange: Event.None, historyItemRef: observableValue<ISCMHistoryItemRef | undefined>('test.head', undefined), refresh() { },
-		provideHistoryItems: async () => [], resolveHistoryItemDetails: async () => { throw new Error('Unexpected details request'); },
+		provideHistoryItems: async () => [],
 		provideHistoryItemChanges: async () => [], resolveHistoryItemChangeContents: async () => { throw new Error('Unexpected contents request'); },
 		resolveHistoryItemChatContext: async () => undefined, resolveHistoryItemChangeRangeChatContext: async () => undefined, ...overrides
 	};

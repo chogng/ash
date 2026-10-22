@@ -80,7 +80,7 @@ test('SCM history attachments preserve the captured commit and file when delegat
 function historyFixture(overrides: Partial<ISCMHistoryProvider>): ISCMHistoryProvider {
 	return {
 		onDidChange: Event.None, historyItemRef: observableValue('test.head', undefined), refresh() { }, provideHistoryItems: async () => [],
-		resolveHistoryItemDetails: async () => { throw new Error('Unexpected details'); }, provideHistoryItemChanges: async () => [],
+		provideHistoryItemChanges: async () => [],
 		resolveHistoryItemChangeContents: async () => { throw new Error('Unexpected contents'); }, resolveHistoryItemChatContext: async () => undefined,
 		resolveHistoryItemChangeRangeChatContext: async () => undefined, ...overrides
 	};

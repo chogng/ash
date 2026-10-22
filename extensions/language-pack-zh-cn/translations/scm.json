@@ -28,8 +28,6 @@
     "scm.history.empty": "暂无提交。",
     "scm.history.retry": "重试",
     "scm.history.retryGraph": "重试读取提交图",
-    "scm.history.loadingDetails": "正在读取提交详情…",
-    "scm.history.detailsFailed": "无法读取提交详情。",
     "scm.history.commitTime": "{0}（{1}）",
     "scm.history.filesChanged": "修改了 {0} 个文件",
     "scm.history.additions": "新增 {0} 行（+）",

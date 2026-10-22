@@ -34,6 +34,8 @@ export interface ISCMHistoryItem {
 	readonly message: string;
 	readonly displayId?: string;
 	readonly timestamp?: number;
+	/** Complete tooltip data is prepared with the item; displaying it never starts a read. */
+	readonly tooltip?: ISCMHistoryItemDetails;
 	readonly references?: readonly ISCMHistoryItemRef[];
 	/** A graph summary compares two captured revisions rather than one commit with its parent. */
 	readonly comparison?: { readonly revision: string; readonly baseRevision: string; };
@@ -111,7 +113,6 @@ export interface ISCMHistoryProvider {
 	readonly historyItemBaseRef?: IObservable<ISCMHistoryItemRef | undefined>;
 	refresh(): void;
 	provideHistoryItems(options: ISCMHistoryOptions): Promise<readonly ISCMHistoryItem[] | undefined>;
-	resolveHistoryItemDetails(historyItemId: string): Promise<ISCMHistoryItemDetails>;
 	provideHistoryItemChanges(historyItemId: string, historyItemParentId: string | undefined): Promise<readonly ISCMHistoryItemChange[] | undefined>;
 	resolveHistoryItemChangeContents(historyItemId: string, change: ISCMHistoryItemChange): Promise<ISCMHistoryItemChangeContents>;
 	resolveHistoryItemChatContext(historyItemId: string): Promise<string | undefined>;

@@ -450,7 +450,7 @@ fn reference_id(reference: &Value) -> String {
 fn history_ref(reference: &Value) -> Value {
     json!({"id":reference_id(reference),"name":reference["name"],"revision":reference["objectId"],"category":reference["kind"],"description":reference["name"],"canDelete":reference["kind"]=="tag" || reference["current"]!=true})
 }
-fn history_item(commit: &Value, refs: &[Value], remotes: &Value, short: usize) -> Value {
+pub(crate) fn history_item(commit: &Value, refs: &[Value], remotes: &Value, short: usize) -> Value {
     let id = commit["objectId"].as_str().unwrap_or_default();
     let links: Vec<_> = remotes
         .as_array()

@@ -43,12 +43,18 @@ function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[], r
 
 test('SCM file timeline bridges scoped history, paging, open commands and meaningful changes', async () => {
 	const calls: JsonValue[] = [];
-	const snapshot: Record<string, JsonValue> = { ...provider() as Record<string, JsonValue>, timeline: { label: 'Git History', resetKey: 'committed' } };
-	const value = fixture(async request => {
+	const snapshot: Record<string, JsonValue> = { ...provider() as Record<string, JsonValue>, hasHistory: true, timeline: { label: 'Git History', resetKey: 'committed' } };
+	const value = fixture(async (request): Promise<JsonValue> => {
 		calls.push(JSON.parse(JSON.stringify(request.payload)));
 		if ((request.payload as Record<string, JsonValue>).methodName === 'provide') {
-			return { items: [{ handle: 'commit:old-name', label: 'Rename file', description: 'Author, yesterday', timestamp: 1000, icon: 'git-commit' }], cursor: 'commit:old-name' };
+			return {
+				items: [
+					{ historyItem: { id: 'commit-id', parentIds: [], subject: 'Rename file', message: 'Rename file' }, id: 'commit-id', handle: 'commit:old-name', label: 'Rename file', description: 'Author, yesterday', timestamp: 1000, icon: 'git-commit' },
+					{ handle: 'changes', label: 'Uncommitted changes', timestamp: 2000, tooltip: 'Working tree' },
+				], cursor: 'commit:old-name'
+			};
 		}
+		if ((request.payload as Record<string, JsonValue>).methodName === 'resolveHistoryItemDetails') return { authorName: 'Author', authorEmail: '', timestamp: 1000, message: 'Rename file', statistics: { files: 1, additions: 1, deletions: 0 } };
 		return null;
 	}, [snapshot]);
 	using cleanup = value.lifetime;
@@ -59,8 +65,15 @@ test('SCM file timeline bridges scoped history, paging, open commands and meanin
 	const result = await value.timeline.getTimeline(id, uri, { limit: 1 }, token)!.result;
 	assert.equal(result?.items[0]?.label, 'Rename file');
 	assert.equal(result?.items[0]?.icon?.id, 'git-commit');
+	assert.equal(result?.items[0]?.sourceControl?.repositoryId, 'repo');
+	assert.equal(result?.items[0]?.sourceControl?.historyItem.id, 'commit-id');
+	assert.equal(result?.items[0]?.sourceControl?.historyItem.tooltip?.authorName, 'Author');
+	assert.equal(result?.items[1]?.sourceControl, undefined, 'Uncommitted entries keep their ordinary tooltip');
+	assert.equal(result?.items[1]?.tooltip, 'Working tree');
+	assert.equal(calls.filter(call => (call as Record<string, JsonValue>).methodName === 'resolveHistoryItemDetails').length, 1, 'The item is published with its tooltip already prepared');
+	assert.equal(calls.filter(call => (call as Record<string, JsonValue>).methodName === 'provideHistoryItems').length, 0, 'Timeline summaries do not need per-item graph queries');
 	assert.equal(result?.paging?.cursor, 'commit:old-name');
-	assert.deepEqual(calls.at(-1), { method: 'timeline', providerId: 'repo', methodName: 'provide', resource: uri.toString(), options: { limit: 1 } });
+	assert.deepEqual(calls.find(call => (call as Record<string, JsonValue>).methodName === 'provide'), { method: 'timeline', providerId: 'repo', methodName: 'provide', resource: uri.toString(), options: { limit: 1 } });
 	const command = result!.items[0]!.command!;
 	await value.commands.getCommand(command.id)!({} as ServicesAccessor, ...command.arguments!);
 	assert.deepEqual(calls.at(-1), { method: 'timeline', providerId: 'repo', methodName: 'open', resource: uri.toString(), handle: 'commit:old-name' });
@@ -103,6 +116,98 @@ test('SCM retiring a timeline provider cancels its in-flight extension request',
 	assert.equal(signal?.aborted, true);
 	assert.equal(await request.result, undefined);
 	pending.complete({ items: [{ handle: 'late', label: 'Stale', timestamp: 1 }] });
+});
+
+test('SCM graph and timeline publish complete tooltips before the first hover and share preparation', async () => {
+	const item = { id: 'commit-id', subject: 'Shared commit', message: 'Shared commit', parentIds: [], references: [] };
+	const details = { authorName: 'Author', authorEmail: 'author@example.invalid', timestamp: 1000, message: 'Shared commit\n\nBody', statistics: { files: 1, additions: 2, deletions: 1 } };
+	const pending = new DeferredPromise<JsonValue>();
+	const detailStarted = new DeferredPromise<void>();
+	let detailReads = 0;
+	const snapshot: Record<string, JsonValue> = { ...provider() as Record<string, JsonValue>, hasHistory: true, timeline: { label: 'Git History' } };
+	const value = fixture(async (request): Promise<JsonValue> => {
+		const payload = request.payload as Record<string, JsonValue>;
+		if (payload.methodName === 'provideHistoryItems') return [item];
+		if (payload.methodName === 'provide') return { items: [{ id: item.id, handle: 'commit:file', label: item.subject, timestamp: 1000, historyItem: item }] };
+		if (payload.methodName === 'resolveHistoryItemDetails') { detailReads++; detailStarted.complete(); return pending.p; }
+		return null;
+	}, [snapshot]);
+	using cleanup = value.lifetime;
+	const history = value.scm.getRepository('repo')!.provider.historyProvider!;
+	let graphPublished = false;
+	let timelinePublished = false;
+	const graphPage = history.provideHistoryItems({ limit: 25 }).then(items => { graphPublished = true; return items; });
+	using token = new CancellationTokenSource();
+	const timelinePage = value.timeline.getTimeline('scm:ash.git:repo', URI.file('/workspace/file.txt'), {}, token)!.result
+		.then(items => { timelinePublished = true; return items; });
+	await detailStarted.p;
+	assert.equal(graphPublished, false);
+	assert.equal(timelinePublished, false);
+	pending.complete(details);
+	const [graph, timeline] = await Promise.all([graphPage, timelinePage]);
+	assert.deepEqual(graph?.[0].tooltip, details);
+	assert.equal(timeline?.items[0].sourceControl?.historyItem.tooltip, graph?.[0].tooltip);
+	assert.equal(detailReads, 1, 'Both producers share the same preparation request');
+	assert.deepEqual((await history.provideHistoryItems({ limit: 25 }))?.[0].tooltip, details);
+	assert.equal(detailReads, 1, 'Refreshing metadata reuses immutable tooltip data');
+});
+
+test('SCM page preparation bounds detail reads and publishes no partial items', async () => {
+	const items = Array.from({ length: 40 }, (_, index) => ({ id: `commit-${index}`, parentIds: [], subject: `Commit ${index}`, message: `Commit ${index}` }));
+	const gates = items.map(() => new DeferredPromise<JsonValue>());
+	const admitted = new DeferredPromise<void>();
+	let active = 0;
+	let peak = 0;
+	let reads = 0;
+	let published = false;
+	const snapshot: Record<string, JsonValue> = { ...provider() as Record<string, JsonValue>, hasHistory: true };
+	const value = fixture(async (request): Promise<JsonValue> => {
+		const payload = request.payload as Record<string, JsonValue>;
+		if (payload.methodName === 'provideHistoryItems') return items;
+		if (payload.methodName !== 'resolveHistoryItemDetails') return null;
+		const index = Number((payload.arguments as string[])[0].slice('commit-'.length));
+		reads++;
+		peak = Math.max(peak, ++active);
+		if (active === 4) admitted.complete();
+		try { return await gates[index].p; } finally { active--; }
+	}, [snapshot]);
+	using cleanup = value.lifetime;
+	const reading = value.scm.getRepository('repo')!.provider.historyProvider!.provideHistoryItems({ limit: 40 })
+		.then(page => { published = true; return page; });
+	await admitted.p;
+	assert.equal(reads, 4);
+	assert.equal(published, false);
+	for (const [index, gate] of gates.entries()) gate.complete({ authorName: 'Author', authorEmail: '', timestamp: 1000, message: `Commit ${index}`, statistics: { files: 1, additions: 1, deletions: 0 } });
+	const page = await reading;
+	assert.equal(page?.length, 40);
+	assert.ok(page?.every((item, index) => item.tooltip?.message === `Commit ${index}`));
+	assert.equal(peak, 4);
+	assert.equal(reads, 40);
+});
+
+test('SCM eager tooltip preparation retries failures and releases a retired repository cache', async () => {
+	const item = { id: 'commit-id', parentIds: [], subject: 'Commit', message: 'Commit' };
+	const details = { authorName: 'Author', authorEmail: '', timestamp: 1000, message: 'Body', statistics: { files: 1, additions: 1, deletions: 0 } };
+	let reads = 0;
+	const snapshot: Record<string, JsonValue> = { ...provider() as Record<string, JsonValue>, hasHistory: true };
+	const value = fixture(async (request): Promise<JsonValue> => {
+		const payload = request.payload as Record<string, JsonValue>;
+		if (payload.methodName === 'provideHistoryItems') return [item];
+		if (payload.methodName === 'resolveHistoryItemDetails') {
+			if (++reads === 1) throw new Error('Fixture detail read failed');
+			return details;
+		}
+		return null;
+	}, [snapshot]);
+	using cleanup = value.lifetime;
+	const history = value.scm.getRepository('repo')!.provider.historyProvider!;
+	await assert.rejects(history.provideHistoryItems({}), /Fixture detail read failed/);
+	assert.deepEqual((await history.provideHistoryItems({}))?.[0].tooltip, details);
+	assert.equal(reads, 2);
+	value.bridge.set(source, 'ash.scm', 2, []);
+	value.bridge.set(source, 'ash.scm', 3, [snapshot]);
+	assert.deepEqual((await value.scm.getRepository('repo')!.provider.historyProvider!.provideHistoryItems({}))?.[0].tooltip, details);
+	assert.equal(reads, 3);
 });
 
 test('SCM resource groups survive input-only snapshots and retire changed resources', () => {
@@ -470,7 +575,7 @@ test('SCM history reads wait for repository initialization before crossing the e
 		initialized.complete(null);
 		assert.deepEqual(await reading, []);
 		assert.deepEqual(calls, ['initialize', 'history']);
-	} finally { initialized.complete(null); await reading.catch(() => undefined); }
+	} finally { initialized.complete(null); await Promise.resolve(reading).catch(() => undefined); }
 });
 
 test('retiring SCM cancels reads waiting for initialization without admitting another request', async () => {
@@ -484,7 +589,7 @@ test('retiring SCM cancels reads waiting for initialization without admitting an
 	using cleanup = value.lifetime;
 	const reading = value.scm.getRepository('repo')!.provider.historyProvider!.provideHistoryItems({ skip: 0, limit: 1 });
 	value.bridge.update({ generation: 2, extensions: [] });
-	try { await assert.rejects(reading, /cancel|abort|retired/iu); }
+	try { await assert.rejects(Promise.resolve(reading), /cancel|abort|retired/iu); }
 	finally { initialized.complete(null); }
 	assert.deepEqual(calls, ['initialize']);
 });
