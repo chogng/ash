@@ -60,6 +60,8 @@
     "test:editor:unit": "node test/unit/prepare.ts tsconfig.test.json && tsc -p tsconfig.test.json && node test/unit/editor.ts",
     "test:editor:unit:no-compile": "node test/unit/editor.ts",
     "test:editor": "node test/editor.ts",
+    "test:stanza": "bun check -p test/stanza/tsconfig.json --all && node test/stanza/run.ts",
+    "test:stanza:no-compile": "bun check -p test/stanza/tsconfig.json --all && node test/stanza/run.ts --no-compile",
     "pretest:editor:browser:build": "pnpm run prepare:generated",
     "test:editor:browser:build": "vite build --config test/integration/browser/vite.config.ts",
     "pretest:editor:browser": "pnpm run prepare:generated",

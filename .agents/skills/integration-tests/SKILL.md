@@ -13,11 +13,11 @@ Browser integration tests live in `test/integration/browser/`. They test editors
 | ------------------------------------- | -------------------------------- |
 | All browser integration specs         | `pnpm test:browser:integration`  |
 | Editor browser specs                  | `pnpm test:editor:browser`       |
-| Editor units plus browser integration | `pnpm test:editor`               |
+| Editor units, browser integration and Stanza distribution | `pnpm test:editor`               |
 
 The browser commands typecheck and collect the selection before building pages or starting a server. Unknown options, empty grep patterns, misplaced separators, and zero matches fail before execution. With `--list`, they only typecheck and list tests.
 
-`test:editor` intentionally runs both complete editor targets and accepts no filters. Use `test:editor:unit` or `test:editor:browser` for targeted validation; the combined command rejects arguments before either target starts.
+`test:editor` runs the complete editor unit, browser integration and Stanza distribution suites and accepts no filters. Use `test:editor:unit`, `test:editor:browser` or `test:stanza` for targeted validation; the combined command rejects arguments before any suite starts.
 
 ## Common options
 

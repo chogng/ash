@@ -11,6 +11,7 @@ applyTo: "src/ash/**/test/**/*.ts, src/ash/**/*.test.ts,test/**/*.ts"
 | --- | --- | --- | --- |
 | Unit tests | `.test.ts` | `src/ash/**/test/` | Mocha in Node/jsdom |
 | Browser integration tests | `.integration.spec.ts` | `test/integration/browser/` | Chromium via Playwright |
+| Stanza distribution tests | `.spec.ts` | `test/stanza/` | Chromium and Firefox against the standalone build |
 | Smoke tests | `.spec.ts` | `test/smoke/areas/` | Browser or Electron via Playwright |
 
 ## Test scope
@@ -24,6 +25,7 @@ applyTo: "src/ash/**/test/**/*.ts, src/ash/**/*.test.ts,test/**/*.ts"
 
 - Unit: `pnpm test:unit`, filtered with `--grep <pattern>`, `--run src/ash/<owner>/test/<runtime>/myFile.test.ts`, or `--runGlob '**/myFile.test.js'`.
 - Editor browser integration: `pnpm test:editor:browser`.
+- Stanza distribution: `pnpm test:stanza`; see `test/stanza/README.md` for prepared builds and diagnostics.
 - Browser integration: `pnpm test:browser:integration`.
 - Browser and Electron UI: the owning `test:smoke:*` Playwright project.
 
