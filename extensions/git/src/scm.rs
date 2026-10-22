@@ -134,7 +134,7 @@ pub fn snapshot(
         {
             continue;
         }
-        let actions = match group {
+        let mut actions = match group {
             "staged" => vec![action(
                 api,
                 "unstageAll",
@@ -166,6 +166,18 @@ pub fn snapshot(
                 ),
             ],
         };
+        if let Some(id) = match group {
+            "staged" => Some("viewStagedChanges"),
+            "changes" => Some("viewChanges"),
+            "untracked" => Some("viewUntrackedChanges"),
+            _ => None,
+        } {
+            let label = api.text("git.viewAll", &[&api.text(key, &[])]);
+            actions.insert(
+                0,
+                json!({"id":id,"label":label,"tooltip":label,"icon":"diff-multiple-1","enabled":!repository.is_busy() && !resources.is_empty()}),
+            );
+        }
         groups.push(
             json!({"id":group,"label":api.text(key,&[]),"resources":resources,"actions":actions}),
         );

@@ -207,7 +207,10 @@ impl GitRuntime {
         scope: &str,
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
-        if !matches!(scope, "staged" | "unstaged" | "uncommitted") {
+        if !matches!(
+            scope,
+            "staged" | "unstaged" | "uncommitted" | "changes" | "untracked"
+        ) {
             return Err(invalid("Invalid Git change scope"));
         }
         let status = self.api.status(repository, Some(token))?;
@@ -216,8 +219,16 @@ impl GitRuntime {
             !change.conflicted
                 && (scope != "staged" || change.index_status != "unmodified")
                 && (scope != "unstaged" || change.worktree_status != "unmodified")
+                // Group actions follow the SCM grouping preference; the existing
+                // unstaged command still compares all changes outside the index.
+                && (scope != "changes"
+                    || change.worktree_status != "unmodified"
+                        && (change.worktree_status != "untracked"
+                            || repository.configuration.text("untrackedChanges", "mixed") == "mixed"))
+                && (scope != "untracked" || change.worktree_status == "untracked")
         }) {
-            let staged = change.index_status != "unmodified";
+            let staged = matches!(scope, "staged" | "uncommitted")
+                && change.index_status != "unmodified";
             let unstaged = change.worktree_status != "unmodified";
             let (mut original, modified) = self.change_inputs(
                 repository,
@@ -248,7 +259,8 @@ impl GitRuntime {
         let label = self.api.text(
             match scope {
                 "staged" => "git.stagedChanges",
-                "unstaged" => "git.changes",
+                "unstaged" | "changes" => "git.changes",
+                "untracked" => "git.untrackedChanges",
                 _ => "git.uncommittedChanges",
             },
             &[],

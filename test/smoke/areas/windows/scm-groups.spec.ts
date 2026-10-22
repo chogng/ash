@@ -3,7 +3,7 @@ import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { parseJsonc } from '../../../../src/ash/base/common/jsonc.js';
-import { readUserSettings } from '../../../automation/settings.js';
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 import type { Workbench } from '../../../automation/workbench.js';
 
@@ -913,6 +913,66 @@ test.describe('SCM editor groups', () => {
 		});
 	}
 
+	for (const locale of ['en', 'zh-CN']) {
+		test(`SCM resource group actions open their own Multi Diff in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, restartWorkbench, reloadWorkbench }, testInfo) => {
+			const stagedFile = join(testWorkspace.directory, 'staged.ts');
+			await writeFile(stagedFile, 'export const staged = 1;\n');
+			await run('git', ['add', '--', 'staged.ts'], { cwd: testWorkspace.directory });
+			await run('git', ['commit', '-m', 'Prepare SCM group comparisons'], { cwd: testWorkspace.directory });
+			await writeFile(stagedFile, 'export const staged = 2;\n');
+			await run('git', ['add', '--', 'staged.ts'], { cwd: testWorkspace.directory });
+			await writeFile(stagedFile, 'export const staged = 3;\n');
+			await writeFile(join(testWorkspace.directory, 'untracked.txt'), 'Only in the untracked group.\n');
+			const settings = await readUserSettings(workbench.page);
+			await writeUserSettings(workbench.page, JSON.stringify({
+				...parseJsonc(settings.content) as Record<string, unknown>,
+				'git.untrackedChanges': 'separate',
+				'git.alwaysShowStagedChangesResourceGroup': true,
+			}), settings.revision);
+			if (locale === 'zh-CN') {
+				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+				const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+				await picker.getByRole('combobox').fill('简体中文');
+				await picker.getByRole('combobox').press('Enter');
+				({ workbench } = await restartWorkbench());
+			} else {
+				({ workbench } = await reloadWorkbench());
+			}
+			const page = workbench.page;
+			await page.getByRole('tab', { name: locale === 'zh-CN' ? /^源代码管理(?:,|$)/u : /^Source Control(?:,|$)/u }).click();
+			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
+			await expect(tree).toHaveAttribute('aria-description', locale === 'zh-CN' ? /多文件差异编辑器/u : /multi-file diff editor/u);
+			const comparison = workbench.editors.groupAt(0).content.locator('.stanza-multi-diff-editor:visible');
+			for (const [label, files, original, modified, row] of [
+				[locale === 'zh-CN' ? '查看所有暂存的更改' : 'View All Staged Changes', ['staged.ts'], 'staged = 1', 'staged = 2', 0],
+				[locale === 'zh-CN' ? '查看所有更改' : 'View All Changes', ['main.ts', 'staged.ts'], 'value = 1', 'value = 2', 2],
+				[locale === 'zh-CN' ? '查看所有未跟踪的更改' : 'View All Untracked Changes', ['untracked.txt'], '', 'Only in the untracked group.', 5],
+			] as const) {
+				// Group actions are revealed by keyboard focus as well as pointer hover.
+				await tree.focus();
+				await tree.press('Home');
+				for (let index = 0; index < row; index++) {
+					await tree.press('ArrowDown');
+				}
+				const button = tree.getByRole('button', { name: label, exact: true });
+				await expect(button).toBeEnabled();
+				await expect(button.locator('svg')).toHaveAttribute('data-ash-icon-id', 'diff-multiple-1');
+				await button.focus();
+				await expect(button).toBeFocused();
+				await button.press('Enter');
+				await expect(comparison).toBeVisible();
+				await expect.poll(() => comparison.locator('.stanza-multi-diff-editor-section').evaluateAll(sections => sections.map(section => section.getAttribute('aria-label')))).toEqual([...files]);
+				const first = comparison.locator('.stanza-multi-diff-editor-section').first();
+				await expect(first.locator('.stanza-diff-editor-side.original')).toContainText(original);
+				await expect(first.locator('.stanza-diff-editor-side.modified')).toContainText(modified);
+			}
+			await tree.locator('.ash-scm-section-heading').filter({ has: page.getByText(locale === 'zh-CN' ? '更改' : 'Changes', { exact: true }) }).hover();
+			await tree.getByRole('button', { name: locale === 'zh-CN' ? '查看所有更改' : 'View All Changes', exact: true }).click();
+			await expect.poll(() => comparison.locator('.stanza-multi-diff-editor-section').evaluateAll(sections => sections.map(section => section.getAttribute('aria-label')))).toEqual(['main.ts', 'staged.ts']);
+			await testInfo.attach(`scm-group-multi-diff-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
+		});
+	}
+
 	test('SCM diff synchronizes both sides and keeps its scroll when leaving inline view', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, reloadWorkbench, runningApplication }) => {
 		const lines = Array.from({ length: 120 }, (_, index) => `const line${index + 1} = ${index + 1};`);
 		await writeFile(testWorkspace.file, `${lines.slice(0, 8).join('\n')}\n`);
@@ -954,6 +1014,11 @@ test.describe('SCM editor groups', () => {
 			({ workbench } = await reloadWorkbench());
 			const page = workbench.page;
 			await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+			if (multiDiff) {
+				const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
+				await tree.focus();
+				await tree.press('Home');
+			}
 			await page.getByRole('button', { name: multiDiff ? 'View All Changes' : 'Open main.ts for Changes', exact: true }).click();
 			await runningApplication.driver.setWindowSize({ width: 1600, height: 1000 });
 			await workbench.quickaccess.runCommand('workbench.action.toggleSideBar');

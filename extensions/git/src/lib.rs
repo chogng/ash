@@ -824,6 +824,15 @@ impl GitRuntime {
                 let kind = segments.next().unwrap_or_default();
                 let _group = segments.next();
                 let path = segments.next();
+                let scope = match kind {
+                    "viewStagedChanges" => Some("staged"),
+                    "viewChanges" => Some("changes"),
+                    "viewUntrackedChanges" => Some("untracked"),
+                    _ => None,
+                };
+                if let Some(scope) = scope {
+                    return self.show_multi_diff(&repository, scope, token);
+                }
                 if kind == "openFile" {
                     let path = path.ok_or_else(|| invalid("Missing Git file path"))?;
                     return self.api.editor(json!({"method":"open","input":{"resource":file_uri(&repository.root_uri,&paths::RepoPath::parse(path)?)?},"options":{"pinned":false}}),Some(token));

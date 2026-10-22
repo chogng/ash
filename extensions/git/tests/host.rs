@@ -970,6 +970,61 @@ fn verify_workspace_comparisons(
                 assert_eq!(input["modified"]["preferredResource"], resource);
                 assert_eq!(input["modified"]["readOnly"], true);
             }
+            drop(requests);
+            let action = client.snapshots.lock().unwrap().last().unwrap()[0]["groups"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|entry| entry["id"] == group)
+                .unwrap()["actions"][0]
+                .clone();
+            assert_eq!(action["icon"], "diff-multiple-1");
+            assert_eq!(action["enabled"], true);
+            assert_eq!(
+                action["label"],
+                match (group, language) {
+                    ("staged", "zh-CN") => "查看所有暂存的更改",
+                    ("changes", "zh-CN") => "查看所有更改",
+                    ("staged", _) => "View All Staged Changes",
+                    ("changes", _) => "View All Changes",
+                    _ => unreachable!(),
+                }
+            );
+            execute(
+                supervisor,
+                client,
+                invocation(
+                    "ash.scm",
+                    "scm",
+                    json!({"method":"action","providerId":"root","actionId":action["id"]}),
+                ),
+            );
+            let requests = client.editor_requests.lock().unwrap();
+            let request = requests
+                .iter()
+                .rev()
+                .find(|request| request["method"] == "open")
+                .unwrap();
+            let input = &request["input"];
+            assert_eq!(input["kind"], "multiDiff");
+            assert_eq!(request["options"]["pinned"], true);
+            assert_eq!(input["items"].as_array().unwrap().len(), 1);
+            assert_eq!(
+                input["items"][0]["original"]["initialText"],
+                if group == "changes" && modify_again {
+                    "workspace only"
+                } else {
+                    &original
+                }
+            );
+            assert_eq!(
+                input["items"][0]["modified"]["initialText"],
+                if group == "staged" {
+                    "workspace only"
+                } else {
+                    expected
+                }
+            );
         }
         execute(
             supervisor,
