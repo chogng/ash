@@ -1,4 +1,5 @@
 import { createUuid } from '../../../../../base/common/uuid.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, MenuId } from '../../../../../platform/actions/common/actions.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
@@ -19,6 +20,7 @@ export class ForkConversationAction extends Action2 {
 		super({
 			id: ForkConversationActionId,
 			title: localize2('chat.forkConversation.label', 'Fork Conversation'),
+			icon: Lxicon.fork,
 			precondition: ChatContextKeys.enabled.isEqualTo(true),
 			f1: true,
 			menu: { id: MenuId.ChatTitle, group: '2_conversation', order: 2 },
