@@ -538,3 +538,17 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		get description() { return localize('debug.sidebarVerbosityDescription', 'Announce how to open accessibility help when Run and Debug receives focus.'); },
 	},
 });
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.TreeView,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError('Tree view accessibility verbosity must be boolean');
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize('treeView.verbosityTitle', 'Extension tree accessibility help'),
+		description: localize('treeView.verbosityDescription', 'Announce how to open accessibility help when an extension tree receives focus.'),
+	},
+});

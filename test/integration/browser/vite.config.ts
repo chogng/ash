@@ -68,6 +68,7 @@ export default defineConfig({
 				aiCustomization: resolve(import.meta.dirname, 'aiCustomization.html'),
 				dataChannel: resolve(import.meta.dirname, 'dataChannel.html'),
 				extensionHost: resolve(import.meta.dirname, 'extensionHost.html'),
+				treeView: resolve(import.meta.dirname, 'treeView.html'),
 				gitExtension: resolve(import.meta.dirname, 'gitExtension.html'),
 				remoteAuthorityResolver: resolve(import.meta.dirname, 'remoteAuthorityResolver.html'),
 				github: resolve(import.meta.dirname, 'github.html'),

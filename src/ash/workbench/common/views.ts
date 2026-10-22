@@ -15,6 +15,45 @@ import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../platform/
 import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { getVisibleViewContextKey } from './contextkeys.js';
 import { IViewsService } from '../services/views/common/viewsService.js';
+import type Severity from '../../base/common/severity.js';
+
+export enum TreeItemCollapsibleState {
+	None = 0,
+	Collapsed = 1,
+	Expanded = 2,
+}
+
+export interface ITreeItemCheckboxState {
+	isChecked: boolean;
+	tooltip?: string;
+	accessibilityInformation?: { readonly label: string; };
+}
+
+export interface ITreeItem {
+	handle: string;
+	parentHandle?: string;
+	parent?: ITreeItem;
+	collapsibleState: TreeItemCollapsibleState;
+	label?: { readonly label: string; };
+	description?: string;
+	tooltip?: string;
+	checkbox?: ITreeItemCheckboxState;
+	editable?: boolean;
+	command?: { readonly id: string; readonly arguments?: readonly unknown[]; };
+}
+
+/** The consumer owns the edit operation; disposing its input never submits it. */
+export interface IEditableData {
+	validationMessage(value: string): { readonly content: string; readonly severity: Severity; } | null;
+	placeholder?: string | null;
+	startingValue?: string | null;
+	onFinish(value: string, success: boolean): Promise<void>;
+}
+
+export interface ITreeViewDataProvider {
+	getChildren(element?: ITreeItem, signal?: AbortSignal): Promise<readonly ITreeItem[] | undefined>;
+	getEditableData?(element: ITreeItem): IEditableData;
+}
 
 MenusRegistry.appendMenuItem(MenuId.ViewContainerTitle, {
 	title: localize2('views', 'Views'),
@@ -127,6 +166,8 @@ export interface IViewPaneContainer {
  * Browser containers consume `visibleViewDescriptors` to create actual panes.
  */
 export interface IViewContainerModel {
+	/** A temporary presentation filter; it never changes persisted visibility preferences. */
+	setFilter(filter: ((view: IViewDescriptor) => boolean) | undefined): void;
 	readonly viewContainer: IViewContainerDescriptor;
 	readonly allViewDescriptors: readonly IViewDescriptor[];
 	readonly activeViewDescriptors: readonly IViewDescriptor[];
@@ -513,6 +554,7 @@ export interface IViewContainersChangeEvent {
  * per-window visibility state.
  */
 export interface IViewDescriptorService {
+	registerViews(containerId: string, views: readonly IViewDescriptor[]): IDisposable;
 	readonly viewContainers: readonly IViewContainerDescriptor[];
 	readonly onDidChangeViewContainers: Event<IViewContainersChangeEvent>;
 	readonly onDidChangeViewContainerOrder: Event<ViewContainerLocation>;

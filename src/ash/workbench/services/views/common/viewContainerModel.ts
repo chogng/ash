@@ -7,6 +7,12 @@ import { getVisibleViewContextKey } from '../../../common/contextkeys.js';
 import type { IViewContainerDescriptor, IViewContainerModel, IViewDescriptor, IViewDescriptorsChangeEvent } from '../../../common/views.js';
 
 export class ViewContainerModel extends Disposable implements IViewContainerModel {
+	private filter: ((view: IViewDescriptor) => boolean) | undefined;
+
+	public setFilter(filter: ((view: IViewDescriptor) => boolean) | undefined): void {
+		this.filter = filter;
+		this.recompute();
+	}
 	private readonly stateKey: string;
 	private readonly visibility = new Map<string, boolean>();
 	private readonly visibilityContextKeys =
@@ -127,7 +133,7 @@ export class ViewContainerModel extends Disposable implements IViewContainerMode
 		const previousActive = this._activeViewDescriptors;
 		const previousVisible = this._visibleViewDescriptors;
 		const active = all.filter((view) =>
-			this.contextKeyService.contextMatchesRules(view.when)
+			this.contextKeyService.contextMatchesRules(view.when) && (this.filter?.(view) ?? true)
 		);
 		const visible = active.filter((view) =>
 			this.preferredVisibility(view)

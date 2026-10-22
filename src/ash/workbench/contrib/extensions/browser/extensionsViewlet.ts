@@ -13,18 +13,20 @@ import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
-import { PaneComposite, type PaneCompositeOptions } from '../../../browser/parts/views/paneComposite.js';
+import { type PaneCompositeOptions } from '../../../browser/panecomposite.js';
+import { FilterViewPaneContainer } from '../../../browser/parts/views/viewsViewlet.js';
+import { Emitter } from '../../../../base/common/event.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { Action2, IMenuService, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type ExtensionsOpenOptions } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import { ViewContainerLocation, type WorkbenchViewRegistry } from '../../../common/views.js';
+import { ViewContainerLocation, type IViewDescriptor, type WorkbenchViewRegistry } from '../../../common/views.js';
 import { ExtensionsListView, SkillsViewPane, McpServersViewPane, RecommendedExtensionsView } from './extensionsViews.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import './media/extensionsViewlet.css';
@@ -36,7 +38,8 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 });
 
 /** Owns the single search input and refresh action; panes retain their domain projections. */
-export class ExtensionsViewPaneContainer extends PaneComposite {
+export class ExtensionsViewPaneContainer extends FilterViewPaneContainer {
+	private readonly filterChanged: Emitter<string[]>;
 	private readonly searchRegion: HTMLElement;
 	private readonly search: InputBox;
 	private readonly searchActions: ActionBar;
@@ -52,8 +55,12 @@ export class ExtensionsViewPaneContainer extends PaneComposite {
 		@IThemeService theme: IThemeService,
 		@IMenuService menus: IMenuService,
 		@IContextMenuService contextMenus: IContextMenuService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, { ...options, mergeViewWithContainerWhenSingleView: false }, storage, theme, menus, configuration);
+		const filterChanged = new Emitter<string[]>();
+		super(container, { ...options, mergeViewWithContainerWhenSingleView: false }, filterChanged.event, storage, theme, menus, configuration, instantiationService, contextKeys);
+		this.filterChanged = this._register(filterChanged);
+		filterChanged.fire(['skills', 'plugins', 'mcp', 'recommended']);
 		this.element.classList.add('ash-extensions-view-container');
 		this.searchRegion = h(container.ownerDocument, 'div');
 		this.searchRegion.className = 'extensions-global-search';
@@ -203,10 +210,9 @@ export class ExtensionsViewPaneContainer extends PaneComposite {
 		const marketplace = !installed && !builtIn && (raw.length > 0 || this.searchOptions.mode === 'browse' || !!this.searchOptions.capabilityKind || !!this.searchOptions.languageId);
 		const category = marketplace && (this.searchOptions.view === 'skills' || this.searchOptions.view === 'mcp') ? this.searchOptions.view : 'view';
 		this.contextKeys.bufferChangeEvents(() => {
-			this.contextKeys.setContext('extensionsSearchCategory', category);
-			this.contextKeys.setContext('extensionsInstalledCategory', installedCategory);
 			this.contextKeys.setContext('extensionsMarketplaceVisible', marketplace);
 		});
+		this.filterChanged.fire(marketplace ? [category] : installedCategory === 'all' ? ['skills', 'plugins', 'mcp', 'recommended'] : [installedCategory]);
 		if (marketplace) {
 			const pane = this.getView(`ash.extensions.${category}`);
 			if (pane instanceof ExtensionsListView || pane instanceof SkillsViewPane || pane instanceof McpServersViewPane) { await pane.open({ ...this.searchOptions, mode: 'browse', query }); }
@@ -218,6 +224,16 @@ export class ExtensionsViewPaneContainer extends PaneComposite {
 			if (builtIn && target instanceof ExtensionsListView) { await target.open({ mode: 'builtIn', query }); }
 			else if (target && (this.searchOptions.view || this.searchOptions.mode === 'installed' || installedCategory !== 'all' || !raw)) { target.setExpanded(true); }
 		}
+	}
+
+	protected override getFilterOn(viewDescriptor: IViewDescriptor): string | undefined {
+		return viewDescriptor.id.startsWith('ash.extensions.') ? viewDescriptor.id.slice('ash.extensions.'.length) : undefined;
+	}
+
+	protected override setFilter(viewDescriptor: IViewDescriptor): void {
+		const category = this.getFilterOn(viewDescriptor);
+		if (category === 'view') { void this.open({ mode: 'browse' }); }
+		else if (category) { void this.open({ mode: 'installed', view: category as ExtensionsOpenOptions['view'] }); }
 	}
 }
 
@@ -244,16 +260,12 @@ export function registerExtensionsViewContainer(registry: WorkbenchViewRegistry,
 		}
 	}));
 	registrations.add(registry.registerViewContainer({ id: 'ash.extensions', title: localize({ bundle: 'ash.extensions', key: 'extensionList' }, 'Extensions'), location, icon: Lxicon.extensions, order: 8, ctorDescriptor: new SyncDescriptor(ExtensionsViewPaneContainer) }));
-	const installedCategory = (category: string) => ContextKeyExpr.and(
-		ContextKeyExpr.not('extensionsMarketplaceVisible'),
-		ContextKeyExpr.or(ContextKeyExpr.not('extensionsInstalledCategory'), ContextKeyExpr.equals('extensionsInstalledCategory', 'all'), ContextKeyExpr.equals('extensionsInstalledCategory', category)),
-	);
 	registrations.add(registry.registerViews('ash.extensions', [
-		{ id: 'ash.extensions.view', title: localize({ bundle: 'ash.extensions', key: 'marketplacePane' }, 'Marketplace'), when: ContextKeyExpr.and(ContextKeyExpr.has('extensionsMarketplaceVisible'), ContextKeyExpr.notEquals('extensionsSearchCategory', 'skills'), ContextKeyExpr.notEquals('extensionsSearchCategory', 'mcp')), canToggleVisibility: false, order: 0, ctorDescriptor: new SyncDescriptor(ExtensionsListView) },
-		{ id: 'ash.extensions.skills', title: localize({ bundle: 'ash.extensions', key: 'filterSkills' }, 'Skills'), collapsed: true, when: ContextKeyExpr.or(installedCategory('skills'), ContextKeyExpr.equals('extensionsSearchCategory', 'skills')), canToggleVisibility: false, order: 1, ctorDescriptor: new SyncDescriptor(SkillsViewPane) },
-		{ id: 'ash.extensions.plugins', title: localize({ bundle: 'ash.extensions', key: 'installedPlugins' }, 'Plugins'), when: installedCategory('plugins'), canToggleVisibility: false, order: 2, ctorDescriptor: new SyncDescriptor(ExtensionsListView) },
-		{ id: 'ash.extensions.mcp', title: localize({ bundle: 'ash.extensions', key: 'installedConnectors' }, 'Connections'), collapsed: true, when: ContextKeyExpr.or(installedCategory('mcp'), ContextKeyExpr.equals('extensionsSearchCategory', 'mcp')), canToggleVisibility: false, order: 3, ctorDescriptor: new SyncDescriptor(McpServersViewPane) },
-		{ id: 'ash.extensions.recommended', title: localize({ bundle: 'ash.extensions', key: 'recommendedPane' }, 'Recommended'), when: installedCategory('recommended'), canToggleVisibility: false, order: 4, collapsed: true, ctorDescriptor: new SyncDescriptor(RecommendedExtensionsView) },
+		{ id: 'ash.extensions.view', title: localize({ bundle: 'ash.extensions', key: 'marketplacePane' }, 'Marketplace'), canToggleVisibility: false, order: 0, ctorDescriptor: new SyncDescriptor(ExtensionsListView) },
+		{ id: 'ash.extensions.skills', title: localize({ bundle: 'ash.extensions', key: 'filterSkills' }, 'Skills'), collapsed: true, canToggleVisibility: false, order: 1, ctorDescriptor: new SyncDescriptor(SkillsViewPane) },
+		{ id: 'ash.extensions.plugins', title: localize({ bundle: 'ash.extensions', key: 'installedPlugins' }, 'Plugins'), canToggleVisibility: false, order: 2, ctorDescriptor: new SyncDescriptor(ExtensionsListView) },
+		{ id: 'ash.extensions.mcp', title: localize({ bundle: 'ash.extensions', key: 'installedConnectors' }, 'Connections'), collapsed: true, canToggleVisibility: false, order: 3, ctorDescriptor: new SyncDescriptor(McpServersViewPane) },
+		{ id: 'ash.extensions.recommended', title: localize({ bundle: 'ash.extensions', key: 'recommendedPane' }, 'Recommended'), canToggleVisibility: false, order: 4, collapsed: true, ctorDescriptor: new SyncDescriptor(RecommendedExtensionsView) },
 	]));
 	return registrations;
 }

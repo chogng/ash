@@ -124,6 +124,16 @@ test('Timeline records saves, compares a snapshot, and follows the selected file
 		await page.keyboard.press('ControlOrMeta+s');
 		await expect(timeline.getByRole('treeitem')).toHaveCount(index + 1);
 	}
+	const retainedEntry = await timeline.getByRole('treeitem').first().elementHandle();
+	const timelineHeader = timeline.locator('.ash-pane-view-header-button');
+	for (let cycle = 0; cycle < 3; cycle++) {
+		await timelineHeader.press('ArrowLeft');
+		await expect(timeline.getByRole('tree')).toBeHidden();
+		await timelineHeader.press('ArrowRight');
+		await expect(timeline.getByRole('treeitem')).toHaveCount(2);
+		expect(await retainedEntry!.evaluate(element => element.isConnected)).toBe(true);
+	}
+	await retainedEntry!.dispose();
 	await timeline.getByRole('tree').focus();
 	await timeline.getByRole('tree').press('ArrowDown');
 	await expect(page.getByRole('region', { name: 'Diff editor: Original and Modified', exact: true })).toHaveCount(0);
@@ -136,7 +146,7 @@ test('Timeline records saves, compares a snapshot, and follows the selected file
 	await expect(diff).toBeVisible();
 	await expect(diff).toContainText('const first = 1;');
 	await expect(diff).toContainText('const second = 2;');
-	await expect(breadcrumbs.locator('.ash-breadcrumb-item').last()).toHaveText('main.ts');
+	await expect(breadcrumbs.locator('.ash-breadcrumb-item').last().locator('.ash-icon-label-text')).toHaveText('main.ts');
 	await expect(breadcrumbs).toHaveAttribute('title', modifiedResource!);
 	await breadcrumbs.locator('.ash-breadcrumb-item').last().focus();
 	await page.keyboard.press('Enter');
@@ -145,20 +155,22 @@ test('Timeline records saves, compares a snapshot, and follows the selected file
 	await breadcrumbPicker.getByRole('combobox').fill('other.ts');
 	await page.keyboard.press('Enter');
 	await expect(breadcrumbPicker).toHaveCount(0);
-	await expect(breadcrumbs.locator('.ash-breadcrumb-item').last()).toHaveText('other.ts');
+	await expect(breadcrumbs.locator('.ash-breadcrumb-item').last().locator('.ash-icon-label-text')).toHaveText('other.ts');
 	await workbench.editors.groupAt(0).element.getByRole('tab', { name: 'main.ts', exact: true }).click();
-	await expect(timeline.locator('.ash-timeline-resource')).toHaveText('main.ts');
+	await expect(timeline.locator('.ash-pane-view-header .ash-view-pane-header-description')).toHaveText('main.ts');
 	const other = page.locator('.ash-explorer').getByRole('treeitem', { name: 'other.ts', exact: true });
 	await other.dblclick();
-	await expect(timeline.locator('.ash-timeline-resource')).toHaveText('other.ts');
+	await expect(timeline.locator('.ash-pane-view-header .ash-view-pane-header-description')).toHaveText('other.ts');
 	await expect(timeline.getByRole('treeitem')).toHaveCount(0);
 	await workbench.editors.groupAt(0).element.getByRole('tab', { name: 'main.ts', exact: true }).click();
 	await expect(timeline.getByRole('treeitem')).toHaveCount(2);
 	const actions = timeline.getByRole('button', { name: 'More Actions', exact: true });
+	await timeline.hover();
 	await workbench.menus.select(application, () => actions.click(), ['Pin Current File']);
 	await other.dblclick();
-	await expect(timeline.locator('.ash-timeline-resource')).toHaveText('main.ts');
+	await expect(timeline.locator('.ash-pane-view-header .ash-view-pane-header-description')).toHaveText('main.ts');
 	await expect(timeline.getByRole('treeitem')).toHaveCount(2);
+	await timeline.hover();
 	await workbench.menus.select(application, () => actions.click(), ['Local History']);
 	await expect(timeline.getByRole('treeitem')).toHaveCount(0);
 	await expect(timeline.getByRole('status')).toHaveText('No timeline information was provided.');
@@ -170,6 +182,7 @@ test('Timeline records saves, compares a snapshot, and follows the selected file
 	if (await header.getAttribute('aria-expanded') !== 'true') await header.click();
 	await expect(restored.getByRole('treeitem')).toHaveCount(0);
 	await expect(restored.getByRole('status')).toHaveText('No timeline information was provided.');
+	await restored.hover();
 	await workbench.menus.select(application, () => restored.getByRole('button', { name: 'More Actions', exact: true }).click(), ['Local History']);
 	await expect(restored.getByRole('treeitem')).toHaveCount(2);
 });

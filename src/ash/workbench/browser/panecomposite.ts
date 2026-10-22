@@ -1,22 +1,24 @@
-import { IThemeService } from '../../../../platform/theme/common/themeService.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { compositePanelId, compositeTabId } from "../compositeBar.js";
-import { localize } from "../../../services/localization/common/localizationService.js";
-import { ViewPaneContainer, type ViewPaneContainerOptions } from "./viewPaneContainer.js";
-import type { PartTitleProjection, ViewPane } from "./viewPane.js";
-import { IStorageService } from "../../../../platform/storage/common/storage.js";
-import type { IPaneComposite } from "../../../common/panecomposite.js";
-import { IMenuService, MenuId, SubmenuItemAction } from '../../../../platform/actions/common/actions.js';
-import { Separator, type IAction } from '../../../../base/common/actions.js';
+import { IThemeService } from '../../platform/theme/common/themeService.js';
+import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
+import { compositePanelId, compositeTabId } from "./parts/compositeBar.js";
+import { localize } from "../services/localization/common/localizationService.js";
+import { ViewPaneContainer, type IViewPaneContainerOptions } from "./parts/views/viewPaneContainer.js";
+import type { PartTitleProjection, ViewPane } from "./parts/views/viewPane.js";
+import { IStorageService } from "../../platform/storage/common/storage.js";
+import type { IPaneComposite } from "../common/panecomposite.js";
+import { IMenuService, MenuId, SubmenuItemAction } from '../../platform/actions/common/actions.js';
+import { Separator, type IAction } from '../../base/common/actions.js';
+import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
+import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
 
-export interface PaneCompositeOptions extends ViewPaneContainerOptions {
+export interface PaneCompositeOptions extends IViewPaneContainerOptions {
 	readonly paneHeaders?: PaneHeaderVisibility;
 	readonly paneLayout?: PaneLayout;
 	readonly mergeViewWithContainerWhenSingleView?: boolean;
 }
 
 export type PaneHeaderVisibility = "visible" | "hidden";
-export type PaneLayout = NonNullable<ViewPaneContainerOptions['paneLayout']>;
+export type PaneLayout = NonNullable<IViewPaneContainerOptions['paneLayout']>;
 
 /**
  * Activatable Composite whose content is assembled from registered ViewPanes.
@@ -36,8 +38,10 @@ export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 		@IThemeService themeService: IThemeService,
 		@IMenuService menuService: IMenuService,
 		@IConfigurationService configurationService: IConfigurationService,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
-		super(container, options, storageService, themeService, menuService, configurationService);
+		super(container, options, storageService, themeService, menuService, configurationService, instantiationService, contextKeyService);
 		this.title = localize(options.localizationService, options.viewContainer.localizationKey, options.viewContainer.title);
 		this.element.classList.add("ash-pane-composite");
 		this.element.classList.toggle("ash-pane-composite-pane-headers-hidden", options.paneHeaders === "hidden");

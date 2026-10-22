@@ -1,5 +1,5 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import "./views.css";
+import './media/paneviewlet.css';
 import './media/views.css';
 import { Emitter } from "../../../../base/common/event.js";
 import { Pane, type IPaneOptions } from "../../../../base/browser/ui/splitview/paneview.js";
@@ -46,6 +46,7 @@ export interface PartTitleProjection {
 
 /** A titled, independently managed view hosted inside a workbench view container. */
 export abstract class ViewPane extends Pane implements IView {
+	private titleDescriptionElement: HTMLSpanElement | undefined;
 	private readonly constraintsChanged = this._register(new Emitter<void>());
 	readonly onDidChangeConstraints = this.constraintsChanged.event;
 
@@ -64,6 +65,21 @@ export abstract class ViewPane extends Pane implements IView {
 
 	protected updateTitleArea(): void {
 		this.titleAreaUpdate.fire();
+	}
+
+	/** Keeps secondary context beside the title, inside the pane's collapse button. */
+	protected updateTitleDescription(description?: string): void {
+		if (!this.titleDescriptionElement && !description) { return; }
+		if (!this.titleDescriptionElement) {
+			this.titleDescriptionElement = h(this.element.ownerDocument, 'span');
+			this.titleDescriptionElement.className = 'ash-view-pane-header-description';
+			this.titleElement.after(this.titleDescriptionElement);
+		}
+		if (this.titleDescriptionElement.textContent === (description ?? '')) { return; }
+		this.titleDescriptionElement.textContent = description ?? '';
+		this.titleDescriptionElement.hidden = !description;
+		this.titleElement.classList.toggle('ash-view-pane-header-title-with-description', !!description);
+		this.updateTitleArea();
 	}
 
 	/** Includes fixed controls in the body constraint while retaining an independent content viewport. */

@@ -1248,3 +1248,25 @@ test('serialized profile replies retain late cancellation only until first resou
 		await new Promise(resolve => setTimeout(resolve, 10));
 	}
 });
+
+test('tree providers publish dynamic registrations and reject retired handles', { timeout: 15000 }, async t => {
+	const h = await host(t, `const ash = require('@ash/sdk'); let tree;
+exports.activate = context => context.subscriptions.push(ash.commands.register('test.node', action => {
+ if (action === 'install') tree = ash.views.registerTreeDataProvider({
+  getChildren: () => ['one'], getTreeItem: value => ({ id: value, label: value })
+ }, { id: 'test.tree', title: 'Tree', containerId: 'test.sidebar' });
+ if (action === 'retire') tree.dispose();
+}));`, 'extension.cjs', ['command', 'treeView']);
+	await h.invoke('test.node', ['install']).result;
+	const registration = (await h.registrationEvent(1)).treeProviders[0];
+	assert.deepEqual(registration, { registrationId: 'ash.tree.1', kind: 'treeDataProvider', viewId: 'test.tree', title: 'Tree', containerId: 'test.sidebar' });
+	const read = () => h.request('invoke', {
+		extensionId: 'test.node', registrationId: registration.registrationId,
+		operation: 'tree', payload: { method: 'children' }, deadlineUnixMillis: Date.now() + 5000
+	}).result;
+	assert.deepEqual((await read()).body.body.payload, [{ handle: 'one', label: 'one', collapsibleState: 0, editable: false }]);
+	await h.invoke('test.node', ['retire']).result;
+	assert.deepEqual((await h.registrationEvent(2)).treeProviders, []);
+	assert.equal((await read()).status, 'failure');
+	await h.request('shutdown').result;
+});

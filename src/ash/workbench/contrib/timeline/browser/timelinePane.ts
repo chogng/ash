@@ -39,7 +39,6 @@ interface TimelineRow {
 export class TimelinePane extends ViewPane {
 	private readonly tree: WorkbenchObjectTree<TimelineRow>;
 	private readonly messageDomNode: HTMLDivElement;
-	private readonly resourceDomNode: HTMLDivElement;
 	private readonly rows = this._register(new DisposableStore());
 	private readonly pending = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly timelines = new Map<string, Timeline>();
@@ -68,17 +67,17 @@ export class TimelinePane extends ViewPane {
 		super(container, { ...options, headerActionsVisibility: 'whenExpanded' });
 		this.restoreSources();
 		this.contentElement.classList.add('ash-timeline');
-		this.resourceDomNode = h(container.ownerDocument, 'div');
-		this.resourceDomNode.className = 'ash-timeline-resource';
 		this.messageDomNode = h(container.ownerDocument, 'div');
 		this.messageDomNode.className = 'ash-timeline-message';
 		this.messageDomNode.setAttribute('role', 'status');
 		this.messageDomNode.tabIndex = 0;
-		this.contentElement.append(this.resourceDomNode, this.messageDomNode);
-		this._register(hover.setupDelayedHover(this.resourceDomNode, () => ({ content: this.uri?.toString() ?? '' })));
+		this.contentElement.append(this.messageDomNode);
+		this._register(hover.setupDelayedHover(this.headerElement, () => ({ content: this.uri?.toString() ?? '' })));
 		this.tree = this._register(new WorkbenchObjectTree<TimelineRow>(this.contentElement, {
 			configurationService: configuration,
 			modelOptions: { identityProvider: { getId: row => row.id } },
+			// History is flat; reserving a collapse arrow would indent every entry.
+			twistieAdditionalCssClass: () => 'ash-tree-twistie-hidden',
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: row => row.item?.label ?? this.loadMoreLabel(row.source) },
 			onWillRender: () => this.rows.clear(),
 			renderElement: row => this.renderRow(row),
@@ -92,7 +91,14 @@ export class TimelinePane extends ViewPane {
 			const command = element.item.command;
 			if (command) void this.commands.executeCommand(command.id, ...(command.arguments ?? [])).catch(error => this.log.error('timeline', 'Could not open timeline entry', error));
 		}));
-		this._register(this.onDidChangeBodyVisibility(() => this.refresh()));
+		this._register(this.onDidChangeBodyVisibility(visible => {
+			if (!visible) { return; }
+			if (!this.pinned && !extUri.isEqual(this.activeUri(), this.uri)) {
+				this.refresh();
+			} else {
+				this.loadMissingSources();
+			}
+		}));
 		this._register(editors.onDidActiveEditorChange(() => {
 			if (this.pinned) return;
 			const uri = this.activeUri();
@@ -131,11 +137,7 @@ export class TimelinePane extends ViewPane {
 		this.failedSources.clear();
 		this.tree.scrollTop = 0;
 		if (!this.pinned) this.uri = this.activeUri();
-		if (this.isBodyVisible() && this.uri) {
-			for (const source of this.timeline.getSources()) {
-				if (!this.excludedSources.has(source.id)) void this.load(source.id, false);
-			}
-		}
+		this.loadMissingSources();
 		this.render();
 	}
 
@@ -148,6 +150,15 @@ export class TimelinePane extends ViewPane {
 		const uri = EditorResourceAccessor.getOriginalUri(this.editors.activeEditor, { supportSideBySide: SideBySideEditor.PRIMARY });
 		// Product pages have internal URIs but do not represent files with a history.
 		return uri && this.files.hasProvider(uri) ? uri : undefined;
+	}
+
+	private loadMissingSources(): void {
+		if (!this.isBodyVisible() || !this.uri) { return; }
+		for (const source of this.timeline.getSources()) {
+			if (!this.excludedSources.has(source.id) && !this.timelines.has(source.id)) {
+				void this.load(source.id, false);
+			}
+		}
 	}
 
 	private async load(source: string, append: boolean): Promise<void> {
@@ -177,6 +188,9 @@ export class TimelinePane extends ViewPane {
 				this.timelines.set(source, { ...result, items: [...items.values()] });
 			} else if (append) {
 				this.failedSources.add(source);
+			} else {
+				// An empty or unsupported source is a completed query too; reopening does not invalidate it.
+				this.timelines.set(source, { source, items: [] });
 			}
 		} catch (error) {
 			if (generation === this.generation && !token.token.isCancellationRequested && !isCancellationError(error)) {
@@ -207,7 +221,7 @@ export class TimelinePane extends ViewPane {
 		this.tree.element.hidden = entries.length + more.length === 0;
 		this.tree.element.setAttribute('aria-busy', String(this.pending.size > 0));
 		this.messageDomNode.hidden = !this.tree.element.hidden;
-		this.resourceDomNode.textContent = this.uri ? basename(this.uri) : '';
+		this.updateTitleDescription(this.uri ? basename(this.uri) : undefined);
 		if (this.pending.size > 0) this.messageDomNode.textContent = localize('timeline.loading', 'Loading timeline…');
 		else if (!this.uri) this.messageDomNode.textContent = localize('timeline.noFile', 'Select a file to view its timeline.');
 		else if (this.failedSources.size > 0) this.messageDomNode.textContent = localize('timeline.failed', 'Could not load timeline entries.');

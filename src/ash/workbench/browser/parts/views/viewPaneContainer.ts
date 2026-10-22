@@ -1,9 +1,11 @@
+import './media/paneviewlet.css';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter } from "../../../../base/common/event.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import type { IViewContainerDescriptor, IViewContainerModel, IViewDescriptor } from "../../../common/views.js";
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
@@ -14,18 +16,16 @@ import { observeElementSize } from "../../../../base/browser/observer.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import { IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import { Composite } from '../../composite.js';
-import { IMenuService, MenuId, type IMenu, SubmenuItemAction } from '../../../../platform/actions/common/actions.js';
-import { getActionBarActions, getFlatContextMenuActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import { IMenuService, MenuId, SubmenuItemAction } from '../../../../platform/actions/common/actions.js';
+import { ViewMenuActions } from './viewMenuActions.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 
 /** Construction inputs for one browser view container. */
-export interface ViewPaneContainerOptions {
+export interface IViewPaneContainerOptions {
 	readonly viewContainer: IViewContainerDescriptor;
 	readonly localizationService?: ILocalizationService;
 	readonly model: IViewContainerModel;
-	readonly instantiationService: IInstantiationService;
-	readonly contextKeyService: IContextKeyService;
 	readonly paneHeaders?: "visible" | "hidden";
 	/** Content layout uses each pane's minimum size in one scrolling viewport; other layouts retain resizable allocations. */
 	readonly paneLayout?: "stack" | "fill" | "content";
@@ -46,7 +46,6 @@ export class ViewPaneContainer extends Composite {
 	readonly id: string;
 	readonly viewContainer: IViewContainerDescriptor;
 	private readonly model: IViewContainerModel;
-	private readonly instantiationService: IInstantiationService;
 	private readonly localizationService: ILocalizationService | undefined;
 	private readonly onDidFailCreateView: (
 		error: unknown,
@@ -64,8 +63,7 @@ export class ViewPaneContainer extends Composite {
 	private readonly viewContextIds = new Set<string>();
 	private syncing = false;
 	private didLayout = false;
-	private readonly titleMenu: IMenu;
-	private readonly titleContextMenu: IMenu;
+	private readonly menuActions: ViewMenuActions;
 	private readonly viewsAdded = this._register(new Emitter<readonly ViewPane[]>());
 	private readonly viewsRemoved = this._register(new Emitter<readonly ViewPane[]>());
 	private readonly viewVisibility = this._register(new Emitter<{ view: ViewPane; visible: boolean; }>());
@@ -79,11 +77,13 @@ export class ViewPaneContainer extends Composite {
 
 	constructor(
 		container: HTMLElement,
-		options: ViewPaneContainerOptions,
+		options: IViewPaneContainerOptions,
 		@IStorageService private readonly storageService: IStorageService,
 		@IThemeService themeService: IThemeService,
 		@IMenuService menuService: IMenuService,
 		@IConfigurationService configurationService: IConfigurationService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
 		super(options.viewContainer.id, themeService, storageService);
 		const ownerDocument = container.ownerDocument;
@@ -104,13 +104,15 @@ export class ViewPaneContainer extends Composite {
 		super.create(element);
 		this.id = options.viewContainer.id;
 		this.viewContainer = options.viewContainer;
-		const menuContext = this.scopedContextKeyService = this._register(options.contextKeyService.createScoped(element));
+		const menuContext = this.scopedContextKeyService = this._register(contextKeyService.createScoped(element));
 		menuContext.setContext('viewContainer', this.id);
 		menuContext.setContext('viewContainerLocation', this.viewContainer.location);
-		this.titleMenu = this._register(menuService.createMenu(MenuId.ViewContainerTitle, menuContext));
-		this.titleContextMenu = this._register(menuService.createMenu(MenuId.ViewContainerTitleContext, menuContext));
-		this._register(this.titleMenu.onDidChange(() => this.updateTitleArea()));
-		this._register(this.titleContextMenu.onDidChange(() => this.updateTitleArea()));
+		const menuServices = this._register(instantiationService.createChild(new ServiceCollection(
+			[IContextKeyService, menuContext],
+			[IMenuService, menuService],
+		)));
+		this.menuActions = this._register(menuServices.createInstance(ViewMenuActions, MenuId.ViewContainerTitle, MenuId.ViewContainerTitleContext, { arg: this.id }, undefined));
+		this._register(this.menuActions.onDidChange(() => this.updateTitleArea()));
 		this.headersVisible = options.paneHeaders !== "hidden";
 		this.contentSized = options.paneLayout === 'content';
 		this.stateScope = options.stateScope ?? StorageScope.WORKSPACE;
@@ -121,7 +123,6 @@ export class ViewPaneContainer extends Composite {
 		}
 		this.paneView = this._register(new PaneView(this.scrollable?.contentElement ?? element));
 		this.model = options.model;
-		this.instantiationService = options.instantiationService;
 		this.localizationService = options.localizationService;
 		this.onDidFailCreateView = options.onDidFailCreateView ??
 			((error, viewId) => {
@@ -208,17 +209,17 @@ export class ViewPaneContainer extends Composite {
 	}
 
 	public override getActions(): readonly IAction[] {
-		return getActionBarActions(this.titleMenu.getActions(), 'navigation').primary;
+		return this.menuActions.getPrimaryActions();
 	}
 
 	public override getSecondaryActions(): readonly IAction[] {
-		return getActionBarActions(this.titleMenu.getActions(), 'navigation').secondary.filter(action =>
+		return this.menuActions.getSecondaryActions().filter(action =>
 			!(action instanceof SubmenuItemAction && action.item.submenu === MenuId.for('ViewsSubMenu') && !action.actions.some(item => item.enabled)),
 		);
 	}
 
 	public override getContextMenuActions(): readonly IAction[] {
-		return getFlatContextMenuActions(this.titleContextMenu.getActions({ arg: this.id }));
+		return this.menuActions.getContextMenuActions();
 	}
 
 	private syncPanes(): void {

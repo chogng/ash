@@ -147,6 +147,7 @@ pub enum EditorExtensionCapability {
     StatusBar,
     Command,
     SourceControl,
+    TreeView,
     LanguageProvider,
     CustomTextEditor,
     DebugAdapter,

@@ -39,3 +39,10 @@ another extension namespace or a backend.
 Calls retain cancellation, deadline and exact-instance admission; retirement suppresses late
 results and never replays writes. UTF-8 values are limited to 64 KiB and keys to 256 bytes.
 Standalone Worker secrets require an authorized backend and are currently unavailable.
+
+The admitted `treeView` capability binds `views.registerTreeDataProvider` to the
+existing registration and invocation lifecycle. Node and V8 hosts publish dynamic
+tree registrations through the shared registration event. Tree refresh notifications
+use the existing client-operation channel and are checked against the exact extension
+incarnation and registration in the receiving window. The provider owns data and
+callbacks; the renderer owns mounting, input, accessibility and node projections.

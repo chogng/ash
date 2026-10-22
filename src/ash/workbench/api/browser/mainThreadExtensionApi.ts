@@ -1,3 +1,4 @@
+import { MainThreadTreeViews } from './mainThreadTreeViews.js';
 import { IViewsService } from '../../services/views/common/viewsService.js';
 import { canLog, isLogLevel, log, LogLevel } from '../../../platform/log/common/log.js';
 import { LogService } from '../../../platform/log/common/logServiceImpl.js';
@@ -139,6 +140,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly taskApi: MainThreadTask;
 	private readonly terminalApi: MainThreadTerminalService;
 	private readonly speechApi: MainThreadSpeech;
+	private treeViews: MainThreadTreeViews | undefined;
 	private readonly debugApi: MainThreadDebugService;
 	private readonly remoteSources = new Map<string, ExtensionHostRuntime>();
 
@@ -213,7 +215,7 @@ export class MainThreadExtensionApi extends Disposable {
 			case 'scmUpdate': this.scmApi.set(source, operation.registrationId, operation.revision, operation.providers); return { result: 'done' };
 			case 'backendRequest': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, operation.method, operation.params, 0, signal, operation.progress) };
 			case 'backendState': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, undefined, {}, operation.after, signal, undefined, operation.waitForChange === true) };
-			case 'editorOperation': return { result: 'value', value: this.handleOutput(source, operation.payload) ? null : await (this.editorsApi ??= this._register(this.instantiation.createInstance(MainThreadEditors))).handle(operation.payload, signal, source) };
+			case 'editorOperation': return { result: 'value', value: (this.treeViews?.handleChange(operation.payload, source) || this.handleOutput(source, operation.payload)) ? null : await (this.editorsApi ??= this._register(this.instantiation.createInstance(MainThreadEditors))).handle(operation.payload, signal, source) };
 			case 'addDebugBreakpoints':
 			case 'removeDebugBreakpoints':
 			case 'getDebugProtocolBreakpoint':
@@ -381,6 +383,9 @@ export class MainThreadExtensionApi extends Disposable {
 		this.debugApi.update(snapshot);
 		this.statusbar.update(snapshot);
 		this.scmApi.update(snapshot);
+		if (this.treeViews || snapshot.extensions.some(runtime => runtime.registrations.some(registration => registration.kind === 'treeDataProvider'))) {
+			(this.treeViews ??= this._register(this.instantiation.createInstance(MainThreadTreeViews, this.invocationTimeoutMillis))).update(snapshot);
+		}
 		this.editorsApi?.updateSources(snapshot);
 		return this.activeContributions?.issues ?? [];
 	}
@@ -408,6 +413,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.statusbar.clear();
 		this.editorsApi?.clearAnnotations();
 		this.scmApi.clear();
+		this.treeViews?.clear();
 		for (const key of this.namedOutputChannels.keys()) {
 			this.namedOutputChannels.deleteAndDispose(key);
 		}
@@ -1034,7 +1040,7 @@ function ownsExecutableContribution(registration: ExtensionHostRegistration): re
 		case 'outputEvents': case 'remoteAuthorityResolver': case 'workspaceEvents': case 'statusBar':
 		case 'sourceControl': case 'textDocumentEvents': case 'taskEvents': case 'debugEvents':
 		case 'customTextEditor': case 'dataChannel': case 'speechProvider': case 'linkPresentationProvider': case 'externalUriOpener':
-		case 'terminalPty':
+		case 'terminalPty': case 'treeDataProvider':
 			return false;
 	}
 }

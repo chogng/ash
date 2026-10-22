@@ -8,7 +8,9 @@ import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
-import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
@@ -38,6 +40,9 @@ test('Sessions Files selects one view from the current folder state and creates 
 	assert.deepEqual(visibleIds(), [SESSIONS_FILES_VIEW_ID]);
 	folders.set(0);
 	using services = new InstantiationService();
+	services.registerInstance(IContextKeyService, contexts);
+	using configuration = new InMemoryConfigurationService();
+	services.registerInstance(IConfigurationService, configuration);
 	const storageEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'https://ash-files.test' });
 	using storageOwner = toDisposable(() => storageEnvironment.window.close());
 	using storage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'empty', backend: storageEnvironment.window.localStorage, flushInterval: 0 });
@@ -47,8 +52,6 @@ test('Sessions Files selects one view from the current folder state and creates 
 	using host = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
 		viewContainer: model.viewContainer,
 		model,
-		instantiationService: services,
-		contextKeyService: contexts,
 		onDidFailCreateView: (error: unknown) => { throw error; },
 	});
 	const message = host.element.querySelector('[role="status"]');
@@ -58,7 +61,7 @@ test('Sessions Files selects one view from the current folder state and creates 
 		setNlsResolver((bundle, key, original) => catalog.bundles[bundle]?.[key] ?? original);
 		assert.equal(message?.textContent, 'Folders and files will appear here.');
 		using translated = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
-			viewContainer: model.viewContainer, model, instantiationService: services, contextKeyService: contexts,
+			viewContainer: model.viewContainer, model,
 			onDidFailCreateView: (error: unknown) => { throw error; },
 		});
 		assert.equal(translated.element.querySelector('[role="status"]')?.textContent, '文件夹和文件将在这里显示。');

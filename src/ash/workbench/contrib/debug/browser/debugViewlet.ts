@@ -7,13 +7,14 @@ import { DisposableStore, MutableDisposable, toDisposable } from '../../../../ba
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { PaneComposite, type PaneCompositeOptions } from '../../../browser/parts/views/paneComposite.js';
+import { PaneComposite, type PaneCompositeOptions } from '../../../browser/panecomposite.js';
 import { localize } from '../../../../nls.js';
 import { IDebugService, START_DEBUG_COMMAND_ID, CONTEXT_DEBUG_UX, CONTEXT_BREAKPOINTS_EXIST } from '../common/debug.js';
 import { DEBUG_CONFIGURE_COMMAND_ID } from './debugCommands.js';
@@ -44,20 +45,21 @@ export class DebugViewPaneContainer extends PaneComposite {
 		@INotificationService private readonly notifications: INotificationService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		// Publish presentation conditions before the framework constructs active views.
-		const ux = CONTEXT_DEBUG_UX.bindTo(options.contextKeyService);
-		const breakpoints = CONTEXT_BREAKPOINTS_EXIST.bindTo(options.contextKeyService);
+		const ux = CONTEXT_DEBUG_UX.bindTo(contextKeys);
+		const breakpoints = CONTEXT_BREAKPOINTS_EXIST.bindTo(contextKeys);
 		let hasDebugged = debug.session !== undefined;
 		const updateConditions = (): void => {
 			hasDebugged ||= debug.session !== undefined;
-			options.contextKeyService.bufferChangeEvents(() => {
+			contextKeys.bufferChangeEvents(() => {
 				ux.set(hasDebugged || debug.configurations.length + debug.compounds.length > 0 ? 'default' : 'simple');
 				breakpoints.set(debug.breakpoints.length + debug.functionBreakpoints.length + debug.dataBreakpoints.length + debug.instructionBreakpoints.length > 0);
 			});
 		};
 		updateConditions();
-		super(container, { ...options, mergeViewWithContainerWhenSingleView: true }, storage, theme, menus, configuration);
+		super(container, { ...options, mergeViewWithContainerWhenSingleView: true }, storage, theme, menus, configuration, instantiation, contextKeys);
 		this.resetConditions = () => { ux.reset(); breakpoints.reset(); };
 		this._register(debug.onDidChangeConfigurations(updateConditions));
 		this._register(debug.onDidChangeSession(updateConditions));

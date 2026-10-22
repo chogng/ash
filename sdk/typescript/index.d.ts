@@ -164,7 +164,7 @@ export namespace env { const language: string; }
 export namespace l10n { const bundle: Readonly<Record<string, string>> | undefined; const uri: Uri | undefined; function t(message: string, ...args: (string | number | boolean)[]): string; function t(options: { message: string; args?: Record<string, string | number | boolean>; comment?: string | string[] }): string; }
 export enum TreeItemCollapsibleState { None = 0, Collapsed = 1, Expanded = 2 }
 export enum TreeItemCheckboxState { Unchecked = 0, Checked = 1 }
-export class TreeItem { constructor(label: string | { label: string; highlights?: [number, number][] } | Uri, collapsibleState?: TreeItemCollapsibleState); label?: string | { label: string; highlights?: [number, number][] }; resourceUri?: Uri; collapsibleState: TreeItemCollapsibleState; description?: string | boolean; tooltip?: string | MarkdownString; iconPath?: Uri | { light: Uri; dark: Uri } | { id: string }; contextValue?: string; command?: Command; checkboxState?: TreeItemCheckboxState; }
+export class TreeItem { id?: string; editable?: boolean; constructor(label: string | { label: string; highlights?: [number, number][] } | Uri, collapsibleState?: TreeItemCollapsibleState); label?: string | { label: string; highlights?: [number, number][] }; resourceUri?: Uri; collapsibleState: TreeItemCollapsibleState; description?: string | boolean; tooltip?: string | MarkdownString; iconPath?: Uri | { light: Uri; dark: Uri } | { id: string }; contextValue?: string; command?: Command; checkboxState?: TreeItemCheckboxState; }
 export interface Terminal { readonly name: string; readonly processId: Promise<number | undefined>; }
 export interface TerminalDimensions { columns: number; rows: number; }
 export interface Pseudoterminal { readonly onDidWrite: Event<string>; readonly onDidClose?: Event<void | number>; readonly onDidChangeName?: Event<string>; readonly onDidOverrideDimensions?: Event<TerminalDimensions | undefined>; open(dimensions?: TerminalDimensions): void; close(): void; handleInput?(text: string): void; setDimensions?(dimensions: TerminalDimensions): void; }
@@ -257,3 +257,15 @@ export interface SCMProvider { id: string; providerId: string; label: string; ro
 export interface SCMReadSignal { readonly aborted: boolean; addEventListener(type: 'abort', listener: () => void, options?: { once?: boolean }): void; removeEventListener(type: 'abort', listener: () => void): void; }
 export interface SCMProviderOptions { parseUri(value: string): Uri; decorations?: { readonly onDidChange?: Event<unknown>; provideDecorations(uri: Uri, token: CancellationToken): ProviderResult<unknown> }; quickDiff?: { provideOriginalResource(uri: Uri, signal: SCMReadSignal): ProviderResult<{ originalResource: string; label: string; text?: string; revision?: number } | null> }; multiDiff?: { metadata: unknown; resolve(resource: Uri): ProviderResult<unknown> }; }
 export namespace scm { function initialize(): void; function registerSCMProvider(provider: SCMProvider, options: SCMProviderOptions): Disposable; function selectRepository(id: string | undefined): void; }
+
+/** Tree nodes remain in the provider; the Workbench owns navigation and transient UI. */
+export interface TreeDataProvider<T> {
+	onDidChangeTreeData?: Event<T | undefined | void>;
+	getChildren(element: T | undefined, token: CancellationToken): ProviderResult<readonly T[]>;
+	getTreeItem(element: T, token: CancellationToken): ProviderResult<TreeItem>;
+	setCheckboxState?(element: T, state: TreeItemCheckboxState, token: CancellationToken): ProviderResult<void>;
+	rename?(element: T, value: string, token: CancellationToken): ProviderResult<void>;
+	onDidChangeSelection?(element: T): ProviderResult<void>;
+}
+export interface TreeViewOptions { readonly id: string; readonly title: string; readonly containerId?: string; }
+export namespace views { function registerTreeDataProvider<T>(provider: TreeDataProvider<T>, options: TreeViewOptions): Disposable; }

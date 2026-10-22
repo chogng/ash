@@ -36,6 +36,7 @@ export function createApi(configuration, initialization) {
 	let environmentPersistent = true;
 	let environmentAdmitted = false;
 	let speechAdmitted = false;
+	let treeAdmitted = false;
 	let terminalLinksAdmitted = false;
 	let terminalCompletionsAdmitted = false;
 	let terminalQuickFixesAdmitted = false;
@@ -1361,6 +1362,103 @@ export function createApi(configuration, initialization) {
 			})
 		};
 	}
+	function registerTreeDataProvider(provider, options) {
+		if (!treeAdmitted) throw new Error('Tree views require the admitted treeView capability');
+		if (!options || typeof options.id !== 'string' || !/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(options.id) || typeof options.title !== 'string' || !options.title || options.title.length > 512 || typeof provider?.getChildren !== 'function' || typeof provider?.getTreeItem !== 'function') throw new TypeError('Invalid tree provider or view options');
+		if (options.containerId !== undefined && (typeof options.containerId !== 'string' || !/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(options.containerId))) throw new TypeError('Invalid tree container ID');
+		const registrationId = `ash.tree.${++providerSequence}`;
+		const nodes = new Map();
+		const identities = new Map();
+		const children = new Map();
+		let sequence = 0;
+		let disposed = false;
+		const retire = handle => {
+			for (const child of children.get(handle) ?? []) retire(child);
+			children.delete(handle);
+			const node = nodes.get(handle);
+			if (node) identities.delete(node.element);
+			nodes.delete(handle);
+		};
+		const registration = ashRuntime.registerContribution({ kind: 'treeDataProvider', registrationId, viewId: options.id, title: options.title, ...(options.containerId === undefined ? {} : { containerId: options.containerId }) }, 'tree', (call, payload) => invoke(async () => {
+			if (disposed) throw new Error('Tree provider was disposed');
+			const node = payload.handle === undefined ? undefined : nodes.get(payload.handle);
+			if (payload.handle !== undefined && !node) throw new Error('Tree item has retired');
+			const token = call.cancellationToken;
+			if (payload.method === 'children') {
+				const elements = await provider.getChildren(node?.element, token) ?? [];
+				if (!Array.isArray(elements) || elements.length > 10000) throw new TypeError('Tree children must be a bounded array');
+				const result = [];
+				const handles = new Set();
+				const pendingNodes = new Map();
+				const pendingIdentities = new Map();
+				for (const element of elements) {
+					const item = await provider.getTreeItem(element, token);
+					if (disposed || token.isCancellationRequested) throw new Error('Tree request was cancelled');
+					if (!item || typeof item !== 'object') throw new TypeError('Invalid tree item');
+					const label = (typeof item.label === 'string' ? item.label : item.label?.label) ?? item.resourceUri?.path?.split('/').pop();
+					if (typeof label !== 'string' || label.length > 4096) throw new TypeError('Tree item requires a bounded label');
+					const handle = item.id ?? identities.get(element) ?? pendingIdentities.get(element) ?? `node.${++sequence}`;
+					if (typeof handle !== 'string' || !handle || handle.length > 1024 || handles.has(handle) || handle === payload.handle) throw new TypeError('Invalid or duplicate tree item ID');
+					const previous = nodes.get(handle);
+					if (previous && previous.parent !== payload.handle) throw new TypeError('A tree item must have one parent');
+					const collapsibleState = item.collapsibleState ?? 0;
+					if (![0, 1, 2].includes(collapsibleState)) throw new TypeError('Invalid tree collapse state');
+					const description = item.description === true ? item.resourceUri?.path : item.description === false ? undefined : item.description;
+					const tooltip = typeof item.tooltip === 'string' ? item.tooltip : undefined;
+					for (const text of [description, tooltip]) {
+						if (text !== undefined && (typeof text !== 'string' || text.length > 4096)) throw new TypeError('Invalid tree description or tooltip');
+					}
+					if (item.checkboxState !== undefined && (![0, 1].includes(item.checkboxState) || typeof provider.setCheckboxState !== 'function')) throw new TypeError('Tree checkboxes require a state and callback');
+					let command;
+					if (item.command) {
+						if (typeof item.command.command !== 'string' || !item.command.command || item.command.command.length > 256 || item.command.arguments !== undefined && (!Array.isArray(item.command.arguments) || item.command.arguments.length > 1024)) throw new TypeError('Invalid tree command');
+						command = { id: item.command.command, arguments: item.command.arguments ?? [] };
+					}
+					pendingNodes.set(handle, { element, parent: payload.handle });
+					pendingIdentities.set(element, handle);
+					handles.add(handle);
+					result.push({
+						handle, label, collapsibleState,
+						...(description === undefined ? {} : { description }), ...(tooltip === undefined ? {} : { tooltip }),
+						...(item.checkboxState === undefined ? {} : { checkboxState: item.checkboxState }),
+						editable: item.editable === true && typeof provider.rename === 'function', ...(command ? { command } : {})
+					});
+				}
+				// Validate the complete read before changing handle ownership or retiring old nodes.
+				const removed = new Set();
+				const collectRemoved = handle => {
+					removed.add(handle);
+					for (const child of children.get(handle) ?? []) collectRemoved(child);
+				};
+				for (const handle of children.get(payload.handle) ?? []) if (!handles.has(handle)) collectRemoved(handle);
+				if (nodes.size - removed.size + [...handles].filter(handle => !nodes.has(handle)).length > 10000) throw new RangeError('Tree node quota exceeded');
+				for (const handle of children.get(payload.handle) ?? []) if (!handles.has(handle)) retire(handle);
+				for (const [handle, next] of pendingNodes) {
+					const previous = nodes.get(handle);
+					if (previous) identities.delete(previous.element);
+					identities.set(next.element, handle);
+					nodes.set(handle, next);
+				}
+				children.set(payload.handle, handles);
+				return result;
+			}
+			if (!node) throw new Error('Tree operation requires an item');
+			if (payload.method === 'checkbox' && typeof provider.setCheckboxState === 'function' && typeof payload.isChecked === 'boolean') { await provider.setCheckboxState(node.element, payload.isChecked ? 1 : 0, token); return null; }
+			if (payload.method === 'rename' && typeof provider.rename === 'function' && typeof payload.value === 'string' && payload.value.length <= 32768) { await provider.rename(node.element, payload.value, token); return null; }
+			if (payload.method === 'selection') { await provider.onDidChangeSelection?.(node.element); return null; }
+			throw new TypeError('Unsupported tree operation');
+		}));
+		let queued = false;
+		const changed = provider.onDidChangeTreeData?.(() => {
+			if (disposed || queued) return;
+			queued = true;
+			const update = Promise.resolve().then(() => { queued = false; if (!disposed) return request({ operation: 'editorOperation', payload: { method: 'treeViewChanged', registrationId } }, 'value'); });
+			update.catch(error => { if (!disposed) console.error('Tree refresh failed', error); });
+		});
+		const lifetime = new Disposable(() => { disposed = true; changed?.dispose(); registration.dispose(); nodes.clear(); identities.clear(); children.clear(); });
+		subscriptions.push(lifetime);
+		return lifetime;
+	}
 	class SnippetString { constructor(value = '') { this.value = value; } }
 	class TreeItem {
 		constructor(labelOrResource, collapsibleState = 0) {
@@ -1474,6 +1572,7 @@ export function createApi(configuration, initialization) {
 	}
 
 	const api = contract('ash', {
+		views: Object.freeze({ registerTreeDataProvider }),
 		LogLevel,
 		SpeechToTextStatus: Object.freeze({ Started: 1, Recognizing: 2, Recognized: 3, Stopped: 4, Error: 5 }),
 		TextToSpeechStatus: Object.freeze({ Started: 1, Stopped: 2, Error: 3 }),
@@ -1938,6 +2037,7 @@ export function createApi(configuration, initialization) {
 			terminalCompletionsAdmitted = capabilities.includes('terminalCompletionProvider');
 			terminalQuickFixesAdmitted = capabilities.includes('terminalQuickFixProvider');
 			speechAdmitted = capabilities.includes('speechProvider');
+			treeAdmitted = capabilities.includes('treeView');
 			if (environmentAdmitted) subscriptions.push(ashTerminals.registerEnvironmentVariableCollection('ash.terminalEnvironment', snapshotEnvironment));
 			if (initialization) subscriptions.push(ensureWorkspaceEvents());
 			// The supervisor supplies the admitted ceiling. Optional API observers must
@@ -1948,6 +2048,7 @@ export function createApi(configuration, initialization) {
 			subscriptions.push(new Disposable(() => {
 				environmentAdmitted = false;
 				speechAdmitted = false;
+				treeAdmitted = false;
 				environmentMutators.clear();
 				scmBridge.dispose();
 				statusDisposed = true;

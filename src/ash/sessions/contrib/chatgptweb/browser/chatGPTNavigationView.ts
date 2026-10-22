@@ -7,9 +7,11 @@ import { autorun } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
-import { PaneComposite, type PaneCompositeOptions } from '../../../../workbench/browser/parts/views/paneComposite.js';
+import { PaneComposite, type PaneCompositeOptions } from '../../../../workbench/browser/panecomposite.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { SubmenuAction, type IAction } from '../../../../base/common/actions.js';
@@ -56,8 +58,10 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 		@IStorageService storage: IStorageService,
 		@IThemeService theme: IThemeService,
 		@IMenuService menus: IMenuService,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
-		super(parent, { ...options, paneHeaders: 'visible', paneLayout: 'content', stateScope: StorageScope.PROFILE, mergeViewWithContainerWhenSingleView: false }, storage, theme, menus, configuration);
+		super(parent, { ...options, paneHeaders: 'visible', paneLayout: 'content', stateScope: StorageScope.PROFILE, mergeViewWithContainerWhenSingleView: false }, storage, theme, menus, configuration, instantiationService, contextKeys);
 		const root = this.element;
 		const document = root.ownerDocument;
 		root.classList.add('ash-chatgpt-navigation');
@@ -158,7 +162,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 				if (!entry) {
 					const id = `${chatGPTNavigationContainerId}.${group.key}`;
 					const context = `sessions.chatgpt.groupVisible.${group.key}`;
-					const visible = options.contextKeyService.createKey<boolean>(context, false);
+					const visible = contextKeys.createKey<boolean>(context, false);
 					visible.set(matches);
 					const registration = SessionsViewRegistry.registerViews(this.id, [{
 						id, title: group.title, order: group.order, when: ContextKeyExpr.has(context), canToggleVisibility: false,

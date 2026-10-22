@@ -96,7 +96,6 @@ if (new URLSearchParams(location.search).has('headerActions')) {
 const descriptors = resources.add(services.createInstance(ViewDescriptorService, { registry }));
 const panes = resources.add(services.createInstance(ViewPaneContainer, root, {
 	viewContainer, model: descriptors.getViewContainerModel(viewContainer.id)!,
-	instantiationService: services, contextKeyService: services.get(IContextKeyService),
 }));
 panes.layout({ height: 600, width: 560 });
 panes.setVisible(true);

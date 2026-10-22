@@ -33,7 +33,7 @@ import { AuxiliaryBarPart } from '../../../src/ash/workbench/browser/parts/auxil
 import { Grid } from '../../../src/ash/base/browser/ui/grid/grid.js';
 import { WorkbenchPartView } from '../../../src/ash/workbench/browser/workbenchPartView.js';
 import { Part } from '../../../src/ash/workbench/browser/part.js';
-import { PaneComposite } from '../../../src/ash/workbench/browser/parts/views/paneComposite.js';
+import { PaneComposite } from '../../../src/ash/workbench/browser/panecomposite.js';
 import type { PartTitleProjection } from '../../../src/ash/workbench/browser/parts/views/viewPane.js';
 import { ChatViewTitleControl } from '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewTitleControl.js';
 import { CopyChatSessionLinkAction } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatCopyActions.js';
@@ -378,7 +378,6 @@ if (new URLSearchParams(location.search).has('partWidth')) {
 	const composite = resources.add(services.createInstance(PaneComposite, part.domNode, {
 		viewContainer: descriptor,
 		model: services.get(IViewDescriptorService).getViewContainerModel(descriptor.id)!,
-		instantiationService: services, contextKeyService: contexts,
 		paneHeaders: 'hidden', paneLayout: 'fill',
 	}));
 	part.addComposite(composite);

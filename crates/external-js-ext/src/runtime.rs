@@ -614,6 +614,7 @@ fn run_engine(
                             || !matches!(
                                 params.operation.as_str(),
                                 "execute"
+                                    | "tree"
                                     | "hover"
                                     | "completion"
                                     | "definition"
@@ -1064,7 +1065,7 @@ fn dispatch_client(
                 | external_ext_protocol::services::CoreServiceRequest::SecretStore { .. }
                 | external_ext_protocol::services::CoreServiceRequest::SecretDelete { .. }
         }
-    ) && !matches!(&operation, ExtensionClientOperation::EditorOperation { payload } if payload.get("method").and_then(Value::as_str) == Some("output"))
+    ) && !matches!(&operation, ExtensionClientOperation::EditorOperation { payload } if matches!(payload.get("method").and_then(Value::as_str), Some("output" | "treeViewChanged")))
     {
         return Err("operation is outside JavaScript host contract v1".into());
     }

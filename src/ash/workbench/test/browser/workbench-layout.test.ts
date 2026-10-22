@@ -91,7 +91,7 @@ const { AuxiliaryBarPart } = await import(
 	"../../../workbench/browser/parts/auxiliarybar/auxiliaryBarPart.js"
 );
 const { PaneComposite } = await import(
-	"../../../workbench/browser/parts/views/paneComposite.js"
+	"../../browser/panecomposite.js"
 );
 const { ViewPane } = await import(
 	"../../../workbench/browser/parts/views/viewPane.js"
@@ -919,8 +919,6 @@ test("Git sidebar uses its preferred reset width and merges a lone view into the
 	const composite = registerContainerServices(componentServices).createInstance(SCMViewPaneContainer, host, {
 		viewContainer: descriptor,
 		model,
-		instantiationService: disposables.add(new InstantiationService()),
-		contextKeyService: contextKeys,
 	});
 	sidebar.addComposite(composite);
 	sidebar.showComposite(descriptor.id);
@@ -1427,7 +1425,6 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 	assert.deepEqual(selections, ["ash.explorer", "ash.search"]);
 	assert.equal(compositeBar.activeCompositeId, "ash.explorer");
 
-	const instantiationService = new InstantiationService();
 	const explorerContainer = viewDescriptors.getViewContainers(
 		ViewContainerLocation.Sidebar,
 	)[0];
@@ -1437,14 +1434,10 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 	const explorerComposite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 		viewContainer: explorerContainer,
 		model: viewDescriptors.getViewContainerModel(explorerContainer.id),
-		instantiationService,
-		contextKeyService: contextKeys,
 	});
 	const searchComposite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 		viewContainer: searchContainer,
 		model: viewDescriptors.getViewContainerModel(searchContainer.id),
-		instantiationService,
-		contextKeyService: contextKeys,
 	});
 	sidebar.addComposite(explorerComposite);
 	sidebar.addComposite(searchComposite);
@@ -1506,8 +1499,6 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 		return registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 			viewContainer: descriptor,
 			model: viewDescriptors.getViewContainerModel(descriptor.id),
-			instantiationService: new InstantiationService(),
-			contextKeyService: contextKeys,
 		});
 	};
 
@@ -1605,8 +1596,6 @@ test("Sidebar can host Agent Sidebar composites", () => {
 	const composite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 		viewContainer: descriptor,
 		model: viewDescriptors.getViewContainerModel(descriptor.id),
-		instantiationService: new InstantiationService(),
-		contextKeyService: contextKeys,
 	});
 	agentSidebar.addComposite(composite);
 	agentSidebar.showComposite(composite.id);
@@ -1682,8 +1671,6 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	const terminal = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 		viewContainer: terminalDescriptor,
 		model: viewDescriptors.getViewContainerModel(terminalDescriptor.id),
-		instantiationService: new InstantiationService(),
-		contextKeyService: contextKeys,
 		paneHeaders: "hidden",
 		paneLayout: "fill",
 	});
@@ -1708,8 +1695,6 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 		const composite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 			viewContainer: descriptor,
 			model: viewDescriptors.getViewContainerModel(descriptor.id),
-			instantiationService: new InstantiationService(),
-			contextKeyService: contextKeys,
 			paneHeaders: "hidden",
 			paneLayout: "fill",
 		});
@@ -2016,12 +2001,9 @@ test("Auxiliary Bar retains its View and exposes container selection as a standa
 		ViewContainerLocation.AuxiliaryBar,
 	);
 	assert.ok(descriptor);
-	const instantiationService = new InstantiationService();
 	const composite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 		viewContainer: descriptor,
 		model: viewDescriptors.getViewContainerModel(descriptor.id),
-		instantiationService,
-		contextKeyService: contextKeys,
 		paneHeaders: "hidden",
 		paneLayout: "fill",
 	});
@@ -2127,8 +2109,6 @@ test("PaneComposite rejects ambiguous title projections from multiple Views", ()
 	const composite = registerContainerServices(componentServices).createInstance(PaneComposite, dom.window.document.body, {
 		viewContainer: descriptor,
 		model: viewDescriptors.getViewContainerModel(descriptor.id),
-		instantiationService: new InstantiationService(),
-		contextKeyService: contextKeys,
 	});
 
 	assert.throws(

@@ -332,7 +332,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	const { WorkbenchViewRegistry, IViewDescriptorService, ViewContainerLocation } = await import('../../../../common/views.js');
 	const { ViewDescriptorService } = await import('../../../../services/views/browser/viewDescriptorService.js');
 	const { SyncDescriptor } = await import('../../../../../platform/instantiation/common/descriptors.js');
-	const { PaneComposite } = await import('../../../../browser/parts/views/paneComposite.js');
+	const { PaneComposite } = await import('../../../../browser/panecomposite.js');
 	const { PanelPart } = await import('../../../../browser/parts/panel/panelPart.js');
 	const { ILocalizationService } = await import('../../../../services/localization/common/localizationService.js');
 	using resources = new DisposableStore();
@@ -399,8 +399,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	if (!services.has(IActivityService)) services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 	const panel = resources.add(services.createInstance(PanelPart, browserEnvironment.window.document.body));
 	const create = (descriptor: typeof terminal) => services.createInstance(PaneComposite, panel.domNode, {
-		viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id), instantiationService: services,
-		contextKeyService: context, paneHeaders: 'hidden', paneLayout: 'fill',
+		viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id), paneHeaders: 'hidden', paneLayout: 'fill',
 	});
 	const composite = create(terminal);
 	panel.addComposite(composite);

@@ -83,7 +83,7 @@ struct SupervisorState {
     registrations: Vec<RegistrationDescriptor>,
     registration_revision: u64,
     speech_registration_generation: u64,
-    terminal_registration_ids: BTreeSet<String>,
+    dynamic_registration_ids: BTreeSet<String>,
     pending_registrations: Option<crate::ExtensionHostRegistrationEvent>,
     invocation_leases: BTreeMap<u64, Box<dyn ActivationLease>>,
     restart: RestartTracker,
@@ -142,7 +142,7 @@ impl ExtensionHostSupervisor {
                     registrations: Vec::new(),
                     registration_revision: 0,
                     speech_registration_generation: 0,
-                    terminal_registration_ids: BTreeSet::new(),
+                    dynamic_registration_ids: BTreeSet::new(),
                     pending_registrations: None,
                     invocation_leases: BTreeMap::new(),
                     restart,
@@ -441,7 +441,7 @@ impl ExtensionHostSupervisor {
             state.registrations.clear();
             state.registration_revision = 0;
             state.speech_registration_generation = 0;
-            state.terminal_registration_ids.clear();
+            state.dynamic_registration_ids.clear();
             state.pending_registrations = None;
             state.incarnation
         };
@@ -509,10 +509,11 @@ impl ExtensionHostSupervisor {
                     terminate_confirmed(&process)?;
                     return Err(ExtensionHostError::HostRestarted);
                 }
-                state.terminal_registration_ids.extend(
+                state.dynamic_registration_ids.extend(
                     registrations.iter().filter(|registration| {
                         matches!(registration.kind,
-                            external_ext_protocol::RegistrationKind::TerminalProfileProvider { .. }
+                            external_ext_protocol::RegistrationKind::TreeDataProvider { .. }
+                            | external_ext_protocol::RegistrationKind::TerminalProfileProvider { .. }
                             | external_ext_protocol::RegistrationKind::TerminalPty {}
                             | external_ext_protocol::RegistrationKind::TerminalLinkProvider {}
                             | external_ext_protocol::RegistrationKind::TerminalCompletionProvider { .. }
@@ -820,7 +821,7 @@ impl SupervisorInner {
         Ok(())
     }
 
-    fn admit_terminal_handles(
+    fn admit_dynamic_handles(
         &self,
         state: &mut SupervisorState,
         event: &crate::ExtensionHostRegistrationEvent,
@@ -828,19 +829,25 @@ impl SupervisorInner {
         let previous = state
             .pending_registrations
             .as_ref()
-            .map(|event| event.terminal_providers.as_slice())
-            .unwrap_or(&state.registrations);
+            .map(|event| {
+                event
+                    .terminal_providers
+                    .iter()
+                    .chain(&event.tree_providers)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_else(|| state.registrations.iter().collect());
         let mut added = Vec::new();
-        for registration in &event.terminal_providers {
-            if previous.contains(registration) {
+        for registration in event.terminal_providers.iter().chain(&event.tree_providers) {
+            if previous.contains(&registration) {
                 continue;
             }
             if state
-                .terminal_registration_ids
+                .dynamic_registration_ids
                 .contains(&registration.registration_id)
             {
                 return Err(ExtensionHostError::InvalidProtocol(
-                    "terminal provider handle was reused".into(),
+                    "dynamic provider handle was reused".into(),
                 ));
             }
             added.push(registration.registration_id.clone());
@@ -848,16 +855,16 @@ impl SupervisorInner {
         // Old callback handles must never revive within an incarnation. Bound this
         // tombstone set so a rapidly rotating provider cannot retain memory forever.
         if state
-            .terminal_registration_ids
+            .dynamic_registration_ids
             .len()
             .saturating_add(added.len())
             > self.limits.maximum_registrations.saturating_mul(64)
         {
             return Err(ExtensionHostError::QuotaExceeded(
-                "terminal provider handles",
+                "dynamic provider handles",
             ));
         }
-        state.terminal_registration_ids.extend(added);
+        state.dynamic_registration_ids.extend(added);
         Ok(())
     }
 
@@ -872,7 +879,8 @@ impl SupervisorInner {
             .filter(|registration| {
                 !matches!(
                     registration.kind,
-                    external_ext_protocol::RegistrationKind::SpeechProvider { .. }
+                    external_ext_protocol::RegistrationKind::TreeDataProvider { .. }
+                        | external_ext_protocol::RegistrationKind::SpeechProvider { .. }
                         | external_ext_protocol::RegistrationKind::TerminalProfileProvider { .. }
                         | external_ext_protocol::RegistrationKind::TerminalPty {}
                         | external_ext_protocol::RegistrationKind::TerminalLinkProvider {}
@@ -884,6 +892,7 @@ impl SupervisorInner {
             .collect::<Vec<_>>();
         registrations.extend(event.speech_providers.iter().cloned());
         registrations.extend(event.terminal_providers.iter().cloned());
+        registrations.extend(event.tree_providers.iter().cloned());
         let snapshot = ActivateResult { registrations };
         snapshot
             .validate(
@@ -923,6 +932,7 @@ impl SupervisorInner {
                 .speech_providers
                 .iter()
                 .chain(&event.terminal_providers)
+                .chain(&event.tree_providers)
                 .cloned()
                 .collect(),
         }
@@ -932,7 +942,7 @@ impl SupervisorInner {
         )
         .map_err(|error| ExtensionHostError::InvalidProtocol(error.to_string()))?;
         self.admit_speech_generations(&mut state, &event)?;
-        self.admit_terminal_handles(&mut state, &event)?;
+        self.admit_dynamic_handles(&mut state, &event)?;
         state.registration_revision = event.revision;
         if state.status == ExtensionHostStatus::Starting {
             state.pending_registrations = Some(event);

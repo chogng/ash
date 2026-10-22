@@ -40,7 +40,7 @@ export class Pane extends Disposable implements ISplitViewView {
 	protected readonly headerActionsElement: HTMLDivElement;
 	protected readonly contentElement: HTMLDivElement;
 	private readonly headerButton: HTMLButtonElement;
-	private readonly titleElement: HTMLHeadingElement;
+	protected readonly titleElement: HTMLHeadingElement;
 	private focused = false;
 	private readonly focusedEmitter = this._register(new Emitter<void>());
 	private readonly blurredEmitter = this._register(new Emitter<void>());

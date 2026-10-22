@@ -548,18 +548,18 @@ const classification = new URLSearchParams(location.search).has('classification'
 const descriptor = ViewsRegistry.getViewContainer('ash.extensions')!;
 const componentViews = ViewsRegistry.getViews(descriptor.id).map(view => ({ ...view, collapsed: view.id === 'ash.extensions.view' ? false : true }));
 const model: IViewContainerModel = classification
-	? disposables.add(services.createInstance(ViewContainerModel, descriptor, ViewsRegistry))
+	? disposables.add(services.createInstance(ViewContainerModel, descriptor, ViewsRegistry.getViews(descriptor.id)))
 	: {
 		viewContainer: descriptor, allViewDescriptors: componentViews, activeViewDescriptors: componentViews, visibleViewDescriptors: componentViews,
 		onDidChangeAllViewDescriptors: Event.None, onDidChangeActiveViewDescriptors: Event.None, onDidChangeVisibleViewDescriptors: Event.None,
-		isVisible: () => true, setVisible: () => { },
+		isVisible: () => true, setVisible: () => { }, setFilter: () => { },
 	};
 services.registerInstance(IMenuService, new MenuService(services.get(ICommandService), services.get(IContextKeyService)));
 const titleMenus = disposables.add(new BrowserContextMenuService(services.get(IMenuService), services.get(IContextKeyService),
 	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService, services.get(IContextViewService), disposables.add(new TestNotificationService())));
 services.registerInstance(IContextMenuService, titleMenus);
 const extensionsContainer = disposables.add(services.createInstance(ExtensionsViewPaneContainer, host, {
-	viewContainer: descriptor, model, instantiationService: services, contextKeyService: services.get(IContextKeyService),
+	viewContainer: descriptor, model,
 }));
 host.classList.add('ash-workbench-part');
 host.dataset.activeComposite = descriptor.id;

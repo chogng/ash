@@ -1,5 +1,14 @@
 {
   "ash": {
+    "treeView.empty": "没有项目。",
+    "treeView.checked": "已选中",
+    "treeView.unchecked": "未选中",
+    "treeView.rename": "重命名 {0}",
+    "treeView.failed": "无法加载项目：{0}",
+    "treeView.invalidName": "名称过长或包含空字符。",
+    "treeView.help": "使用上下方向键选择项目，左右方向键展开或折叠，Enter 运行项目命令，Tab 和空格更改复选框，F2 重命名可编辑项目。在重命名框中，Enter 保存，Escape 取消。使用 <keybinding:editor.action.accessibleView> 打开无障碍视图。",
+    "treeView.verbosityTitle": "扩展树无障碍帮助",
+    "treeView.verbosityDescription": "扩展树获得焦点时播报如何打开无障碍帮助。",
     "views.invalidCustomizations": "已保存的视图位置无效。",
     "views.moveViewHint": "拖动可移动此视图，也可使用命令面板中的“移动视图”。",
     "views.moveView": "移动视图...",

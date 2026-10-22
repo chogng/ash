@@ -19,10 +19,11 @@ import type { ISessionChangesService } from '../../../src/ash/sessions/contrib/c
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
 import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
-import { Event } from '../../../src/ash/base/common/event.js';
+import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { observableValue } from '../../../src/ash/base/common/observable.js';
-import { setNlsMessages } from '../../../src/ash/nls.js';
+import { localize, setNlsMessages } from '../../../src/ash/nls.js';
+import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { type IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
@@ -72,7 +73,7 @@ import { IConfigurationService } from '../../../src/ash/platform/configuration/c
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
-import { ITimelineService } from '../../../src/ash/workbench/contrib/timeline/common/timeline.js';
+import { ITimelineService, type TimelineChangeEvent } from '../../../src/ash/workbench/contrib/timeline/common/timeline.js';
 import { TimelineService } from '../../../src/ash/workbench/contrib/timeline/common/timelineService.js';
 import { TimelinePane } from '../../../src/ash/workbench/contrib/timeline/browser/timelinePane.js';
 import '../../../src/ash/workbench/contrib/timeline/browser/timeline.contribution.js';
@@ -166,6 +167,7 @@ const replScope = resources.add(replServices.createChild(new ServiceCollection(
 )));
 const timelineRequests: { cursor: number; uri: string; }[] = [];
 const heldTimelineRequests: DeferredPromise<void>[] = [];
+const timelineChanges = resources.add(new Emitter<TimelineChangeEvent>());
 let timelineMode: 'normal' | 'hold' | 'fail' | 'stall' = 'normal';
 let timelineService: TimelineService | undefined;
 function createTimelinePane(): TimelinePane {
@@ -184,11 +186,13 @@ function createTimelinePane(): TimelinePane {
 	scope.registerInstance(ITimelineService, timelineService);
 	resources.add(timelineService.registerTimelineProvider({
 		...Disposable.None, id: 'fixture', label: 'Fixture History', scheme: 'file',
+		onDidChange: timelineChanges.event,
 		async provideTimeline(uri, options) {
 			const offset = Number(options.cursor ?? 0);
 			const mode = timelineMode;
 			timelineMode = 'normal';
 			timelineRequests.push({ cursor: offset, uri: uri.path });
+			if (params.has('emptyTimeline')) return undefined;
 			if (mode === 'hold') {
 				const pending = new DeferredPromise<void>();
 				heldTimelineRequests.push(pending);
@@ -201,7 +205,7 @@ function createTimelinePane(): TimelinePane {
 				source: 'fixture',
 				items: Array.from({ length: count }, (_, index) => ({
 					handle: String(offset + index), source: 'fixture', label: `${uri.path} Entry ${offset + index}`,
-					timestamp: 1000 - offset - index, command: { id: 'fixture.open', title: 'Open Entry' },
+					timestamp: 1000 - offset - index, icon: Lxicon.gitCommit, command: { id: 'fixture.open', title: 'Open Entry' },
 				})),
 				paging: { cursor: offset + count < 25 ? String(offset + count) : undefined },
 			};
@@ -210,7 +214,7 @@ function createTimelinePane(): TimelinePane {
 	resources.add(toDisposable(() => {
 		for (const pending of heldTimelineRequests.splice(0)) pending.complete();
 	}));
-	return scope.createInstance(TimelinePane, root, { id: 'fixture.timeline', title: 'Timeline' });
+	return scope.createInstance(TimelinePane, root, { id: 'fixture.timeline', title: localize('timeline.title', 'Timeline') });
 }
 const pane = resources.add(view === 'timeline' ? createTimelinePane() : view === 'empty'
 	? new EmptyView(root, { id: 'fixture.empty', title: 'Files' }, {
@@ -254,6 +258,7 @@ window.viewpaneLayoutIntegration = {
 		setMode: mode => { timelineMode = mode; },
 		release: () => { for (const pending of heldTimelineRequests.splice(0)) pending.complete(); },
 		setFile: path => timelineService!.setUri(URI.file(path)),
+		invalidate: path => timelineChanges.fire({ id: 'fixture', uri: URI.file(path), reset: true }),
 		content: () => (pane as TimelinePane).getAccessibleContent(),
 	},
 };
@@ -273,6 +278,7 @@ declare global {
 				setMode(mode: 'normal' | 'hold' | 'fail' | 'stall'): void;
 				release(): void;
 				setFile(path: string): void;
+				invalidate(path: string): void;
 				content(): string;
 			};
 		};

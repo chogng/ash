@@ -181,6 +181,39 @@ test('Problems distinguishes an empty window from a project without diagnostics'
 });
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`Timeline keeps the filename in its header and entries at the pane edge (${locale})`, async ({ page }, testInfo) => {
+		for (const theme of ['', 'dark', 'hc', 'hcLight']) {
+			await page.goto(`/viewpaneLayout.html?view=timeline&locale=${locale}&${theme}`);
+			const pane = page.locator('[data-view-id="fixture.timeline"]');
+			const header = pane.locator('.ash-pane-view-header');
+			const filename = header.locator('.ash-view-pane-header-description');
+			const tree = pane.getByRole('tree');
+			await expect(filename).toHaveText('file.txt');
+			await expect(header.getByRole('button', { name: `${locale === 'en' ? 'Timeline' : '时间线'} file.txt`, exact: true })).toBeVisible();
+			await expect(tree.getByRole('treeitem').first()).toBeVisible();
+			const headerBounds = (await header.boundingBox())!;
+			const treeBounds = (await tree.boundingBox())!;
+			const firstRow = tree.getByRole('treeitem').first();
+			const iconBounds = (await firstRow.locator('.ash-timeline-row > .ash-icon').boundingBox())!;
+			expect(treeBounds.y).toBeCloseTo(headerBounds.y + headerBounds.height);
+			expect(iconBounds.x - treeBounds.x).toBe(12);
+			await expect(firstRow.locator('.ash-tree-twistie')).toHaveCSS('width', '0px');
+			await tree.focus();
+			await tree.press('Home');
+			await tree.press('Enter');
+			await expect.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.commands)).toEqual(['fixture.open']);
+			await testInfo.attach(`timeline-${locale}-${theme || 'light'}`, { body: await pane.screenshot(), contentType: 'image/png' });
+			const longName = 'a-very-long-filename-that-must-not-push-the-view-title-out-of-the-header.txt';
+			await page.evaluate(name => window.viewpaneLayoutIntegration.timeline.setFile(`/fixture/${name}`), longName);
+			await expect(filename).toHaveText(longName);
+			await expect(filename).toHaveCSS('text-overflow', 'ellipsis');
+			expect(await filename.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+			expect(await header.locator('h3').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+			await filename.hover();
+			await expect(page.getByRole('tooltip')).toContainText(`/fixture/${longName}`);
+		}
+	});
+
 	test(`Timeline loads the next page when scrolled to the end (${locale})`, async ({ page }) => {
 		await page.goto(`/viewpaneLayout.html?view=timeline&locale=${locale}`);
 		const tree = page.locator('.ash-timeline-tree');
@@ -263,7 +296,7 @@ test('Timeline discards an automatic continuation when the selected file changes
 	await page.mouse.wheel(0, 1000);
 	await expect(tree).toHaveAttribute('aria-busy', 'true');
 	await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.setFile('/fixture/other.txt'));
-	await expect(page.locator('.ash-timeline-resource')).toHaveText('other.txt');
+	await expect(page.locator('.ash-view-pane-header-description')).toHaveText('other.txt');
 	await expect(tree).toHaveAttribute('aria-busy', 'false');
 	await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.release());
 	await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '9');
@@ -277,7 +310,7 @@ test('Timeline discards an automatic continuation when the selected file changes
 	]);
 });
 
-test('Timeline cancels automatic loading when collapsed and refreshes on reopening', async ({ page }) => {
+test('Timeline keeps an in-flight continuation when collapsed without reloading the first page', async ({ page }) => {
 	await page.goto('/viewpaneLayout.html?view=timeline');
 	const tree = page.locator('.ash-timeline-tree');
 	await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '9');
@@ -289,8 +322,69 @@ test('Timeline cancels automatic loading when collapsed and refreshes on reopeni
 	await header.click();
 	await expect(tree).toBeHidden();
 	await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.release());
+	await expect(tree).toHaveAttribute('aria-busy', 'false');
 	expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0, 8]);
 	await header.click();
+	await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '17');
+	expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0, 8]);
+});
+
+test('Timeline retains loaded pages, scroll and selection across repeated collapse and expand', async ({ page }) => {
+	await page.goto('/viewpaneLayout.html?view=timeline');
+	const tree = page.locator('.ash-timeline-tree');
 	await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '9');
-	expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0, 8, 0]);
+	await tree.hover();
+	await page.mouse.wheel(0, 1000);
+	await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '17');
+	await tree.getByRole('treeitem').nth(8).click();
+	const selected = await tree.locator('.selected').textContent();
+	const scrollTop = await tree.evaluate(element => element.scrollTop);
+	expect(scrollTop).toBeGreaterThan(0);
+	const requests = await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests);
+	const header = page.locator('[data-view-id="fixture.timeline"] .ash-pane-view-header-button');
+	for (let cycle = 0; cycle < 3; cycle++) {
+		await header.press('ArrowLeft');
+		await expect(tree).toBeHidden();
+		await header.press('ArrowRight');
+		await expect(tree).toBeVisible();
+		await expect(tree).toHaveAttribute('aria-busy', 'false');
+		await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '17');
+		await expect(tree.locator('.selected')).toHaveText(selected!);
+		expect(await tree.evaluate(element => element.scrollTop)).toBe(scrollTop);
+		expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests)).toEqual(requests);
+	}
+});
+
+test('Timeline defers an invalidated history until reopening and still supports explicit refresh', async ({ page }) => {
+	await page.goto('/viewpaneLayout.html?view=timeline');
+	const tree = page.locator('.ash-timeline-tree');
+	await expect(tree).toHaveAttribute('aria-busy', 'false');
+	await expect(tree.getByRole('treeitem').first()).toBeVisible();
+	const header = page.locator('[data-view-id="fixture.timeline"] .ash-pane-view-header-button');
+	await header.press('ArrowLeft');
+	await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.invalidate('/fixture/file.txt'));
+	expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0]);
+	await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.setMode('hold'));
+	await header.press('ArrowRight');
+	await expect(tree).toHaveAttribute('aria-busy', 'true');
+	await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.release());
+	await expect(tree).toHaveAttribute('aria-busy', 'false');
+	await expect(tree.getByRole('treeitem').first()).toBeVisible();
+	expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0, 0]);
+	await header.hover();
+	await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+	await expect(tree).toHaveAttribute('aria-busy', 'false');
+	expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0, 0, 0]);
+});
+
+test('Timeline caches an empty source across collapse and expand', async ({ page }) => {
+	await page.goto('/viewpaneLayout.html?view=timeline&emptyTimeline');
+	await expect(page.getByRole('status')).toHaveText('No timeline information was provided.');
+	const header = page.locator('[data-view-id="fixture.timeline"] .ash-pane-view-header-button');
+	for (let cycle = 0; cycle < 3; cycle++) {
+		await header.press('ArrowLeft');
+		await header.press('ArrowRight');
+		await expect(page.getByRole('status')).toHaveText('No timeline information was provided.');
+	}
+	expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0]);
 });

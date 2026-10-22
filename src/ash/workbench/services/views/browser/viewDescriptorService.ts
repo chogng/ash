@@ -1,5 +1,5 @@
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IViewDescriptorService, ViewsRegistry, type IViewContainerDescriptor, type IViewContainerModel, type IViewDescriptor, type IViewContainersChangeEvent, type ViewContainerLocation, type WorkbenchViewRegistry } from '../../../common/views.js';
 import { ViewContainerModel } from '../common/viewContainerModel.js';
@@ -26,6 +26,9 @@ interface ViewDescriptorServiceOptions {
  * Owns the runtime models for all view containers in one workbench window.
  */
 export class ViewDescriptorService extends Disposable implements IViewDescriptorService {
+	public registerViews(containerId: string, views: readonly IViewDescriptor[]): IDisposable {
+		return this.registry.registerViews(containerId, views);
+	}
 	private readonly registry: WorkbenchViewRegistry;
 	private readonly models = this._register(new DisposableMap<string, ViewContainerModel>());
 	private readonly containerOrders = new Map<ViewContainerLocation, string[]>();

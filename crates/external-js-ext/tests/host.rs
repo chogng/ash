@@ -4205,3 +4205,123 @@ fn ash_terminal_completions_use_public_context_and_retire_with_the_original_runt
         Err(ExtensionHostError::RegistrationNotFound)
     ));
 }
+
+#[test]
+fn ash_tree_provider_reads_updates_refreshes_and_retires_handles() {
+    let running = start_ash_with_files_and_capabilities(r#"
+        const ash = require('@ash/sdk');
+        const changes = new ash.EventEmitter();
+        const root = { label: 'Root', checked: 0 }, child = { label: 'Child', checked: 1 };
+        let registration, selected;
+        exports.activate = context => {
+            registration = ash.views.registerTreeDataProvider({
+                onDidChangeTreeData: changes.event,
+                getChildren: element => element === root ? [child] : element ? [] : [root],
+                getTreeItem: element => ({ id: element === root ? 'root' : 'child', label: element.label,
+                    collapsibleState: element === root ? 1 : 0, checkboxState: element.checked, editable: true }),
+                setCheckboxState(element, state) { element.checked = state; changes.fire(element); },
+                rename(element, value) { element.label = value; changes.fire(element); },
+                onDidChangeSelection(element) { selected = element.label; }
+            }, { id: 'example.tree', title: 'Example Tree' });
+            context.subscriptions.push(registration, changes, ash.commands.register('example.probe', action => {
+                if (action === 'remove') { registration.dispose(); }
+                return selected ?? null;
+            }));
+        };
+    "#, &[], vec![ExtensionCapability::TreeView, ExtensionCapability::Command]).unwrap();
+    let descriptor = running
+        .supervisor
+        .snapshot()
+        .registrations
+        .into_iter()
+        .find(|value| {
+            matches!(
+                value.kind,
+                external_ext_protocol::RegistrationKind::TreeDataProvider { .. }
+            )
+        })
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&descriptor).unwrap(),
+        json!({"registrationId":"ash.tree.1","kind":"treeDataProvider","viewId":"example.tree","title":"Example Tree"})
+    );
+    let mut request = invocation("unused", json!([]), Duration::from_secs(5));
+    request.registration_id = descriptor.registration_id.clone();
+    request.operation = "tree".into();
+    request.payload = json!({"method":"children"});
+    let root = running.supervisor.invoke(request.clone()).unwrap().payload;
+    assert_eq!(root[0]["label"], "Root");
+    request.payload = json!({"method":"children","handle":"root"});
+    assert_eq!(
+        running.supervisor.invoke(request.clone()).unwrap().payload[0]["handle"],
+        "child"
+    );
+    for payload in [
+        json!({"method":"checkbox","handle":"child","isChecked":false}),
+        json!({"method":"rename","handle":"child","value":"新名称"}),
+    ] {
+        request.payload = payload;
+        let mut changes = Vec::new();
+        running
+            .supervisor
+            .begin_invoke(request.clone())
+            .unwrap()
+            .wait_with_client(|operation, _, _| {
+                let ExtensionClientOperation::EditorOperation { payload } = operation else {
+                    panic!("Expected tree refresh");
+                };
+                changes.push(payload);
+                Ok(ExtensionClientResult::Value { value: Value::Null })
+            })
+            .unwrap();
+        assert_eq!(
+            changes,
+            vec![json!({"method":"treeViewChanged","registrationId":"ash.tree.1"})]
+        );
+    }
+    request.payload = json!({"method":"children","handle":"root"});
+    let child = running.supervisor.invoke(request.clone()).unwrap().payload;
+    assert_eq!(child[0]["label"], "新名称");
+    assert_eq!(child[0]["checkboxState"], 0);
+    request.payload = json!({"method":"selection","handle":"child"});
+    running.supervisor.invoke(request.clone()).unwrap();
+    assert_eq!(
+        running
+            .supervisor
+            .invoke(invocation("probe", json!([]), Duration::from_secs(5)))
+            .unwrap()
+            .payload,
+        "新名称"
+    );
+    running
+        .supervisor
+        .invoke(invocation(
+            "probe",
+            json!(["remove"]),
+            Duration::from_secs(5),
+        ))
+        .unwrap();
+    assert!(running.supervisor.invoke(request).is_err());
+    assert!(
+        !running
+            .supervisor
+            .snapshot()
+            .registrations
+            .iter()
+            .any(|value| value.registration_id == descriptor.registration_id)
+    );
+}
+
+#[test]
+fn ash_tree_registration_requires_its_admitted_capability() {
+    let source = r#"
+        const ash = require('@ash/sdk');
+        exports.activate = () => ash.views.registerTreeDataProvider({ getChildren: () => [], getTreeItem: element => element },
+            { id: 'example.tree', title: 'Tree' });
+    "#;
+    let error =
+        start_ash_with_files_and_capabilities(source, &[], vec![ExtensionCapability::Command])
+            .err()
+            .unwrap();
+    assert!(error.to_string().contains("treeView"));
+}

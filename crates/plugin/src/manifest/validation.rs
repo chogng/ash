@@ -230,6 +230,7 @@ fn validate_editor_extension(extension: &EditorExtensionContribution) -> Result<
                 super::EditorExtensionCapability::RemoteAuthorityResolver
                     | super::EditorExtensionCapability::Command
                     | super::EditorExtensionCapability::SourceControl
+                    | super::EditorExtensionCapability::TreeView
                     | super::EditorExtensionCapability::CustomTextEditor
                     | super::EditorExtensionCapability::LanguageProvider
                     | super::EditorExtensionCapability::StatusBar

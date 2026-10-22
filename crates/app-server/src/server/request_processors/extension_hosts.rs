@@ -517,6 +517,15 @@ fn registration_dto(
     ExtensionHostRegistrationDescriptorDto {
         registration_id: registration.registration_id,
         kind: match registration.kind {
+            RegistrationKind::TreeDataProvider {
+                view_id,
+                title,
+                container_id,
+            } => ExtensionHostRegistrationKindDto::TreeDataProvider {
+                view_id,
+                title,
+                container_id,
+            },
             RegistrationKind::RemoteConnectionResolver { authority_prefix } => {
                 ExtensionHostRegistrationKindDto::RemoteConnectionResolver { authority_prefix }
             }

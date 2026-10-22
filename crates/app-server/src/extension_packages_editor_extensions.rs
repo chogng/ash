@@ -939,6 +939,7 @@ fn valid_event_selector(value: &str) -> bool {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 enum ManifestCapability {
+    TreeView,
     StatusBar,
     Command,
     LanguageProvider,
@@ -970,6 +971,7 @@ impl ManifestCapability {
             Self::TestProfileProvider => ExtensionCapability::TestProfileProvider,
             Self::DataChannel => ExtensionCapability::DataChannel,
             Self::SpeechProvider => ExtensionCapability::SpeechProvider,
+            Self::TreeView => ExtensionCapability::TreeView,
             Self::LinkPresentationProvider => ExtensionCapability::LinkPresentationProvider,
             Self::ExternalUriOpener => ExtensionCapability::ExternalUriOpener,
         }
@@ -977,6 +979,7 @@ impl ManifestCapability {
 
     fn name(self) -> &'static str {
         match self {
+            Self::TreeView => "treeView",
             Self::StatusBar => "statusBar",
             Self::Command => "command",
             Self::LanguageProvider => "languageProvider",

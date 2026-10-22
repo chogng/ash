@@ -51,6 +51,8 @@ PaneCompositePart
 
 `ViewPaneContainer` 继承 `Composite`，在自己的 `saveState()` 中保存窗格尺寸和折叠选择，仍沿用 `workbench.viewContainer.*` 键。Memento 负责对象状态的作用域、保存和重新读取，具体字段的校验由调用方负责；Workbench 全局布局和多窗口编辑器协调仍由各自原有的 owner 管理。
 
+`browser/panecomposite.ts` 拥有 retained `PaneComposite`。`parts/views/viewMenuActions.ts` 的 `ViewMenuActions` 在容器已有的 context scope 中解析标题和上下文菜单，菜单及其订阅随容器释放；实例化服务和上下文服务由构造注入，不再由 `IViewPaneContainerOptions` 传入。
+
 `CompositeBar` 通过 `openComposite` 回调打开内容，打开行为由 `IViewsService` 和区域服务执行。`CompositePart` 在内容显示、隐藏或切换时发出打开、关闭事件；打开事件携带本次是否请求聚焦。隐藏区域保留实例，再次打开使用同一实例。F6 / Shift+F6 只访问可见区域；方向导航先访问编辑器分组，再根据 Grid 的实际位置进入相邻区域。多文件 diff 的 `getControl()` 返回当前文件的 diff 控件，移走焦点后仍保留当前文件选择。
 
 Activity Bar 的首选 tooltip 方向由组件层的 `getActivityHoverPosition` 统一计算：侧栏向内、顶部向下、底部向上。Workbench 和 Sessions 的宿主各自读取所属窗口的位置配置，在 `setupDelayedHover` 的回调中取值；位置切换保留按钮和监听器。Hover 服务负责显示生命周期，底层布局负责坐标计算和空间不足时的方向调整。
@@ -153,3 +155,15 @@ Agent Sidebar 的空 `CompositeBar` root 仍是统一标题结构的一部分，
 - `src/ash/workbench/browser/workbench.ts`
 
 相关改动至少运行 Desktop TypeScript 编译，以及 Workbench layout、Chat view、toolbar/action view item 和 UI styling ownership 测试。视觉改动还需要在 Browser Workbench 中验证收起、展开、hover、拖拽与窄宽度 overflow。
+
+Extensions 分类搜索通过 `parts/views/viewsViewlet.ts` 的 `FilterViewPaneContainer`
+设置当前 ViewContainerModel 的临时过滤器。模型只改变 active/visible 投影，隐藏偏好仍由原有存储
+owner 管理；过滤器随容器释放。类别不再由第二套 `when` 条件控制。
+
+扩展树使用 `@ash/sdk.views.registerTreeDataProvider`，经已有宿主注册和 RPC 到达
+`api/browser/mainThreadTreeViews.ts`。该窗口适配器在自己的 ViewDescriptorService 注册
+`TreeViewPane`；`parts/views/treeView.ts` 持有共享异步树，`checkbox.ts` 投影复选状态，
+`inlineEditInputBox.ts` 处理 F2 编辑的验证及一次性提交/取消。F2 等待在途读取完成，编辑期间的
+Provider 刷新延后至编辑结束，保留输入和选区。扩展 Provider 是节点和持久状态的
+唯一 owner。窗格移动释放旧 DOM 再挂载，停用扩展则取消请求并注销视图；旧身份的刷新和迟到
+结果不能写入新视图。帮助与纯文本无障碍视图随窗格挂载生命周期注册。
