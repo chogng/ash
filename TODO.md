@@ -11,7 +11,7 @@
 ## SCM 普通文件点击 · 残余极端往返
 
 - [ ] **测量** · 最终独立窗口中最慢暖点击 375.6 ms：extensionHost/invoke/read（connection 1，request 2907）客户端往返 274.3 ms，同 ID 服务端处理 0.088 ms、出站 0.040 ms，Git 请求在之后才开始且仅 3.4 ms。尚未拆清 Renderer→Main→daemon 送达与返程 decode/dispatch，不能归因扩展执行或渲染。下一步补这些边界的 method/request ID 标记，保留极值复现；本轮全部原始数据和已完成实现见[报告](.build/scm-tail-v2/report.md)。
-- [ ] **RPC 调度** · git/changeFile、git/status、git/textDiff 仍是 RepositoryExclusive，最终 Git RPC p99 86.9→51.5 ms 的配对区间 [−70.0,+0.5] 跨零，资源排队 p99 仍 47 ms。评估前台观察与后台快照的调度隔离时须保留写操作、暂存和 rename/copy 发布排序，不能仅删除序列化策略。已通过的暖端到端 p95/p99 稳定规则不等于此项解决。
+- [ ] **checkIgnore 排队残余** · 统计读取与普通文件读取的两层共享读已完成；新 16 窗对照中 Git RPC p99 79.8→16.6 ms、资源排队 p99 77→0 ms，暖端到端 p95/p99 均通过预设稳定规则。仍有 1/960 暖点击等待 47 ms，前方三个独占 `git/checkIgnore` 请求依次完成；后续评估该路径须保留取消、写者顺序及仓库权限约束，不直接移除序列化。原始关联与完整结果见[报告](.build/scm-statistics-concurrency/report.md)。
 
 ## macOS 系统内存耗尽 · 历史现场复核
 
