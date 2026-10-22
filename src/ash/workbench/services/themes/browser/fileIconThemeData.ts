@@ -85,21 +85,32 @@ export class FileIconThemeData implements IWorkbenchFileIconTheme {
 	}
 
 	public resolveFileIcon(classes: readonly string[], colorScheme: ColorScheme): FileIconDefinition | undefined {
-		const specific = (associations: Associations): string | undefined => {
-			for (const className of classes) {
-				const match = associations.selectors.get(className);
-				if (match) return match;
-			}
-			return undefined;
-		};
 		const fallback = (associations: Associations): string | undefined =>
 			classes.includes('rootfolder-icon') ? associations.rootFolder ?? associations.folder :
 				classes.includes('folder-icon') ? associations.folder : associations.file;
 		const dark = isDarkColorScheme(colorScheme);
 		const contrast = colorScheme === ColorScheme.HighContrastDark || colorScheme === ColorScheme.HighContrastLight;
-		const ordinary = dark ? specific(this.normal) ?? fallback(this.normal) : specific(this.light) ?? specific(this.normal) ?? fallback(this.light) ?? fallback(this.normal);
-		const icon = contrast ? specific(this.highContrast) ?? (dark ? specific(this.normal) : specific(this.light) ?? specific(this.normal)) ?? fallback(this.highContrast) ?? ordinary : ordinary;
-		return icon === undefined ? undefined : this.icons.get(icon);
+		const variants: Associations[] = [];
+		if (contrast) variants.push(this.highContrast);
+		if (!dark) variants.push(this.light);
+		variants.push(this.normal);
+		const matches: FileIconDefinition[] = [];
+		// Match filename/compound extension precision before applying color-scheme overrides.
+		for (const className of classes) {
+			for (const variant of variants) {
+				const match = variant.selectors.get(className);
+				if (match) matches.push(this.icons.get(match)!);
+			}
+		}
+		for (const variant of variants) {
+			const match = fallback(variant);
+			if (match) matches.push(this.icons.get(match)!);
+		}
+		const icon = matches[0];
+		if (!icon || icon.color) return icon;
+		// A glyph-only association retains the color supplied by a less specific match.
+		const color = matches.find(match => match.color)?.color;
+		return color ? { ...icon, color } : icon;
 	}
 }
 
@@ -163,7 +174,7 @@ function suggestionStyles(icons: ReadonlyMap<string, FileIconDefinition>, normal
 		const common = 'display:inline-block;width:16px;height:16px;vertical-align:middle;';
 		styles.push(icon.image
 			? `${selector}::before{${common}content:"";background:url(${cssString(icon.image)}) center/contain no-repeat;}`
-			: `${selector}::before{${common}content:${cssString(icon.character)};color:${icon.color || 'inherit'};font-family:${cssString(icon.fontFamily)};font-size:${icon.fontSize};font-weight:${icon.fontWeight};font-style:${icon.fontStyle};line-height:16px;}`);
+			: `${selector}::before{${common}content:${cssString(icon.character)};${icon.color ? `color:${icon.color};` : ''}font-family:${cssString(icon.fontFamily)};font-size:${icon.fontSize};font-weight:${icon.fontWeight};font-style:${icon.fontStyle};line-height:16px;}`);
 	};
 	const base = ':where(.ash-workbench) .ash-themed-file-icon';
 	const lightBase = ':where(.ash-workbench[data-color-scheme="light"],.ash-workbench[data-color-scheme="hcLight"]) .ash-themed-file-icon';
@@ -173,21 +184,19 @@ function suggestionStyles(icons: ReadonlyMap<string, FileIconDefinition>, normal
 		add(`${prefix}.folder-icon`, associations.folder);
 		add(`${prefix}.rootfolder-icon`, associations.rootFolder ?? associations.folder);
 	};
-	const specifics = (prefix: string, associations: Associations): void => {
-		const entries = [...associations.selectors].sort(([left], [right]) => iconSelectorPriority(left) - iconSelectorPriority(right) || left.length - right.length);
-		for (const [className, iconId] of entries) {
-			const kind = className.endsWith('-folder-icon') ? className.endsWith('-root-name-folder-icon') ? 'rootfolder-icon' : 'folder-icon' : 'file-icon';
-			add(`${prefix}.${kind}[class~=${cssString(className)}]`, iconId);
-		}
-	};
-	// The zero-specificity theme root lets a filename match outrank a light default;
-	// light-specific matches then win over normal matches at the same specificity.
+	// All scheme variants share one precision order; scheme overrides break ties.
+	const entries = [
+		...[...normal.selectors].map(([className, iconId]) => ({ prefix: base, className, iconId })),
+		...[...light.selectors].map(([className, iconId]) => ({ prefix: lightBase, className, iconId })),
+		...[...highContrast.selectors].map(([className, iconId]) => ({ prefix: contrastBase, className, iconId })),
+	].sort((left, right) => iconSelectorPriority(left.className) - iconSelectorPriority(right.className) || left.className.length - right.className.length);
 	defaults(base, normal);
 	defaults(lightBase, light);
 	defaults(contrastBase, highContrast);
-	specifics(base, normal);
-	specifics(lightBase, light);
-	specifics(contrastBase, highContrast);
+	for (const { prefix, className, iconId } of entries) {
+		const kind = className.endsWith('-folder-icon') ? className.endsWith('-root-name-folder-icon') ? 'rootfolder-icon' : 'folder-icon' : 'file-icon';
+		add(`${prefix}.${kind}[class~=${cssString(className)}]`, iconId);
+	}
 	return styles;
 }
 

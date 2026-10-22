@@ -434,6 +434,35 @@ test('extension file icons load a real font and update existing labels on theme 
 	expect(errors).toEqual([]);
 });
 
+test('Seti TODO icons match between resource labels and completion CSS across color schemes', async ({ page }) => {
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await page.locator('#root').evaluate(root => {
+		root.classList.add('ash-workbench');
+		const icon = document.createElement('span');
+		icon.id = 'todo-suggestion-icon';
+		icon.className = 'ash-themed-file-icon file-icon todo.md-name-file-icon md-ext-file-icon markdown-lang-file-icon';
+		icon.setAttribute('aria-hidden', 'true');
+		root.append(icon);
+	});
+	const icon = page.locator('#todo-icon .ash-icon-label-icon');
+	const suggestion = page.locator('#todo-suggestion-icon');
+	for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(id => window.selectColorTheme(id), id);
+		await expect(icon).toHaveText('\uE096');
+		await expect(icon).toHaveAttribute('aria-hidden', 'true');
+		const expectedColor = id === 'ash-light' || id === 'ash-high-contrast-light' ? 'rgb(73, 139, 167)' : 'rgb(81, 154, 186)';
+		await expect(icon).toHaveCSS('color', expectedColor);
+		await expect(page.locator('#markdown-icon .ash-icon-label-icon')).toHaveCSS('color', expectedColor);
+		await expect.poll(() => suggestion.evaluate(element => {
+			const style = getComputedStyle(element, '::before');
+			return { content: style.content, color: style.color, font: style.fontFamily };
+		})).toEqual({ content: '"\uE096"', color: expectedColor, font: await icon.evaluate(element => getComputedStyle(element).fontFamily) });
+		await icon.evaluate(element => document.fonts.load('16px ' + getComputedStyle(element).fontFamily));
+		await test.info().attach(`seti-todo-${id}`, { body: await page.screenshot(), contentType: 'image/png' });
+	}
+});
+
 test('extension product icon themes replace mounted SVG artwork and restore built-in artwork', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
