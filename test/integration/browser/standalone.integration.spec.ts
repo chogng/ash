@@ -4344,12 +4344,15 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 			target.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
 			if (kind === 'textarea') {
 				const textArea = input as HTMLTextAreaElement;
-				textArea.value = '你';
-				textArea.setSelectionRange(1, 1);
-				target.dispatchEvent(new CompositionEvent('compositionupdate', { data: '你' }));
-				textArea.value = '你好';
-				textArea.setSelectionRange(2, 2);
-				target.dispatchEvent(new CompositionEvent('compositionupdate', { data: '你好' }));
+				const start = textArea.selectionStart;
+				let end = textArea.selectionEnd;
+				for (const text of ['你', '你好']) {
+					// Chromium announces the candidate before changing the native buffer.
+					target.dispatchEvent(new CompositionEvent('compositionupdate', { data: text }));
+					textArea.setRangeText(text, start, end, 'end');
+					end = start + text.length;
+					target.dispatchEvent(new InputEvent('input', { data: text, inputType: 'insertCompositionText', isComposing: true }));
+				}
 			} else {
 				target.dispatchEvent(Object.assign(new Event('textupdate'), {
 					text: '你',
@@ -4404,9 +4407,9 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 			target.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
 			if (kind === 'textarea') {
 				const textArea = input as HTMLTextAreaElement;
-				textArea.value = '你';
-				textArea.setSelectionRange(1, 1);
 				target.dispatchEvent(new CompositionEvent('compositionupdate', { data: '你' }));
+				textArea.setRangeText('你', textArea.selectionStart, textArea.selectionEnd, 'end');
+				target.dispatchEvent(new InputEvent('input', { data: '你', inputType: 'insertCompositionText', isComposing: true }));
 			} else {
 				target.dispatchEvent(Object.assign(new Event('textupdate'), {
 					text: '你',
@@ -4460,9 +4463,9 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 			target.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
 			if (kind === 'textarea') {
 				const textArea = input as HTMLTextAreaElement;
-				textArea.value = '你';
-				textArea.setSelectionRange(1, 1);
 				target.dispatchEvent(new CompositionEvent('compositionupdate', { data: '你' }));
+				textArea.setRangeText('你', textArea.selectionStart, textArea.selectionEnd, 'end');
+				target.dispatchEvent(new InputEvent('input', { data: '你', inputType: 'insertCompositionText', isComposing: true }));
 			} else {
 				target.dispatchEvent(Object.assign(new Event('textupdate'), {
 					text: '你',
@@ -4508,9 +4511,9 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 			if (!target) throw new Error('Composition target is unavailable');
 			if (kind === 'textarea') {
 				const textArea = input as HTMLTextAreaElement;
-				textArea.value = '迟';
-				textArea.setSelectionRange(1, 1);
 				target.dispatchEvent(new CompositionEvent('compositionupdate', { data: '迟' }));
+				textArea.setRangeText('迟', textArea.selectionStart, textArea.selectionEnd, 'end');
+				target.dispatchEvent(new InputEvent('input', { data: '迟', inputType: 'insertCompositionText', isComposing: true }));
 			} else {
 				target.dispatchEvent(Object.assign(new Event('textupdate'), {
 					text: '迟',

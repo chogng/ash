@@ -1579,6 +1579,10 @@ test('moved comparison supports keyboard exit, read-only views, wrapping and dis
 		window.ashDiffIntegration.toggleWordWrap();
 	});
 	const editor = page.locator('#single .stanza-diff-editor');
+	// Establish unequal wrapping through the same separator input as a user.
+	const separator = editor.getByRole('separator');
+	for (let step = 0; step < 10; step++) await separator.press('ArrowLeft');
+	await expect(separator).not.toHaveAttribute('aria-valuenow', '50');
 	const move = editor.locator('.ash-diff-moved-links').getByRole('button');
 	const revealMove = async () => {
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().moves)).toBe(1);
@@ -1591,10 +1595,12 @@ test('moved comparison supports keyboard exit, read-only views, wrapping and dis
 	await move.press('Enter');
 	const toolbar = editor.getByRole('toolbar', { name: 'Moved code comparison' });
 	await expect(toolbar).toBeVisible();
-	const content = await page.evaluate(() => window.ashDiffIntegration.linePositions(3, 15));
 	// Unequal column widths can wrap identical text into different line counts.
 	// The shorter side's trailing zone completes the aligned comparison row.
-	expect(content.originalBottom - content.originalTop).toBeGreaterThan(content.modifiedBottom - content.modifiedTop);
+	await expect.poll(() => page.evaluate(() => {
+		const content = window.ashDiffIntegration.linePositions(3, 15);
+		return content.originalBottom - content.originalTop - content.modifiedBottom + content.modifiedTop;
+	})).toBeGreaterThan(0);
 	await expect.poll(() => page.evaluate(() => {
 		const position = window.ashDiffIntegration.linePositions(3, 15, true);
 		return position.originalBottom - position.originalTop - position.modifiedBottom + position.modifiedTop;

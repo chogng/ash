@@ -1,4 +1,5 @@
 import { DefaultFormatter } from '../../../src/ash/workbench/contrib/format/browser/formatActionsMultiple.js';
+import '../../../src/ash/workbench/contrib/format/browser/format.contribution.js';
 import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { setNlsResolver, formatNlsMessage } from '../../../src/ash/nls.js';
