@@ -142,6 +142,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "bug",
+      "file": "bug.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "calendar",
       "file": "calendar.svg",
       "rendering": "symbolic"
