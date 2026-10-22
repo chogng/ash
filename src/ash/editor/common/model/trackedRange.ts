@@ -1,8 +1,7 @@
 import { AbstractDisposable, DisposableMap, Disposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { Position } from "../core/position.js";
 import { Range } from "../core/range.js";
-import { type TextModelContentChange } from "../core/textChange.js";
-import { TrackedRangeStickiness } from '../model.js';
+import { TrackedRangeStickiness, type IInternalModelContentChange } from '../model.js';
 
 export interface TrackedRange extends IDisposable {
 	readonly range: Range;
@@ -52,7 +51,7 @@ export class TrackedRangeCollection extends Disposable {
 	}
 
 	acceptChanges(
-		changes: readonly TextModelContentChange[],
+		changes: readonly IInternalModelContentChange[],
 	): void {
 		if (changes.length === 0) return;
 		for (const record of this.handles.keys()) {
@@ -109,7 +108,7 @@ function mapTrackedRange(
 	startOffset: number,
 	endOffset: number,
 	stickiness: TrackedRangeStickiness,
-	changes: readonly TextModelContentChange[],
+	changes: readonly IInternalModelContentChange[],
 ): {
 	readonly startOffset: number;
 	readonly endOffset: number;
@@ -191,7 +190,7 @@ function isTrackedRangeStickiness(
 function mapOffset(
 	offset: number,
 	affinity: OffsetAffinity,
-	changes: readonly TextModelContentChange[],
+	changes: readonly IInternalModelContentChange[],
 ): number {
 	let cumulativeDelta = 0;
 	for (const change of changes) {
@@ -207,7 +206,7 @@ function mapOffset(
 		if (startOffset === endOffset) {
 			return startOffset +
 				cumulativeDelta +
-				(affinity === OffsetAffinity.After
+				(change.forceMoveMarkers || affinity === OffsetAffinity.After
 					? change.text.length
 					: 0);
 		}
@@ -218,11 +217,11 @@ function mapOffset(
 			continue;
 		}
 		if (offset === startOffset) {
-			return startOffset + cumulativeDelta;
+			return startOffset + cumulativeDelta + (change.forceMoveMarkers ? change.text.length : 0);
 		}
 		return startOffset +
 			cumulativeDelta +
-			(affinity === OffsetAffinity.After
+			(change.forceMoveMarkers || affinity === OffsetAffinity.After
 				? change.text.length
 				: 0);
 	}

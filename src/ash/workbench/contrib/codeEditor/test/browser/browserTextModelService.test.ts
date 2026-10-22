@@ -174,6 +174,29 @@ test('Stanza text model service drops retained history when persisted content ch
 	reopened.dispose();
 });
 
+test('reopening a shared file reserves restored redo line identities for subsequent edits', async () => {
+	const resource = URI.file('C:\\project\\line-history.txt');
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new TestTextFileService('a')), {});
+	const first = await models.acquire({ resource }, new AbortController().signal);
+	const original = first.model;
+	try {
+		original.applyOperations([{ range: new Range(1, 2, 1, 2), text: '\n' }]);
+		original.undo();
+	} finally {
+		first.dispose();
+	}
+	using reopened = await models.acquire({ resource }, new AbortController().signal);
+	assert.notEqual(reopened.model, original);
+	assert.equal(original.isDisposed(), true);
+	assert.equal(reopened.model.canRedo(), true);
+	reopened.model.redo();
+	reopened.model.applyOperations([{ range: new Range(2, 1, 2, 1), text: '\n' }]);
+	const ids = [0, 1, 2].map(index => reopened.model.getLineId(index));
+	assert.equal(new Set(ids).size, 3);
+	assert.deepEqual(ids.map(id => reopened.model.getLineIndex(id)), [0, 1, 2]);
+	assert.equal(reopened.model.lineDocument.getText(), 'a\n\n');
+});
+
 test("Stanza text model references track dirty content, save snapshots, and explicitly revert", async () => {
 	const textFiles = new TestTextFileService("from disk");
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});

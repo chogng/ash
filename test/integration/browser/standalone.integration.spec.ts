@@ -2,6 +2,28 @@ import { expect, test, type Page } from '@playwright/test';
 import { Editor } from '../../automation/editor.js';
 import { ShowLightbulbIconMode } from '../../../src/ash/editor/common/config/editorOptions.js';
 
+for (const backend of ['native', 'textarea'] as const) {
+	test(`cursor navigation separates typing undo groups with ${backend} input`, async ({ page }) => {
+		if (backend === 'textarea') await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		await page.goto('/standalone.html');
+		try {
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('base', [[1, 5, 1, 5]]));
+			await page.locator('#caller .stanza-editor-input').focus();
+			await page.keyboard.type('abc');
+			await page.keyboard.press('Home');
+			await page.keyboard.type('X');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('Xbaseabc');
+			await page.keyboard.press('ControlOrMeta+z');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toMatchObject({ value: 'baseabc', selection: '[1,1 -> 1,1]', focused: true });
+			await page.keyboard.press('ControlOrMeta+z');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('base');
+			await page.keyboard.press('ControlOrMeta+Shift+z');
+			await page.keyboard.press('ControlOrMeta+Shift+z');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('Xbaseabc');
+		} finally { await page.evaluate(() => window.ashStandaloneIntegration.dispose()); }
+	});
+}
+
 test('product format on type responds to keyboard input and undoes with its trigger', async ({ page }) => {
 	await page.goto('/standalone.html');
 	try {

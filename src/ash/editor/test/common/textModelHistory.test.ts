@@ -34,6 +34,64 @@ test("TextModel applyEdits bypasses history and returns identified inverse opera
 	assert.equal(model.canUndo(), false);
 });
 
+test('restoring history preserves current logical line identities and cached snapshots', () => {
+	using original = new TextModel('a');
+	original.applyOperations([{ range: new Range(1, 2, 1, 2), text: '\n' }]);
+	original.applyOperations([{ range: new Range(1, 2, 1, 2), text: '\n' }]);
+	const ids = [0, 1, 2].map(index => original.getLineId(index));
+	using reopened = new TextModel(original.getText());
+	void reopened.lineDocument;
+	assert.equal(reopened.restoreUndoRedoSnapshot(original.createUndoRedoSnapshot()!), true);
+	assert.deepEqual([0, 1, 2].map(index => reopened.lineDocument.lines.at(index)!.id), ids);
+	assert.deepEqual(ids.map(id => reopened.getLineIndex(id)), [0, 1, 2]);
+	reopened.undo();
+	reopened.redo();
+	assert.deepEqual([0, 1, 2].map(index => reopened.lineDocument.lines.at(index)!.id), ids);
+});
+
+test('restored line identity generation skips a large retired history without exhausting retries', () => {
+	using original = new TextModel('a');
+	original.applyOperations([{ range: new Range(1, 2, 1, 2), text: '\n'.repeat(1_100) }]);
+	const retiredId = original.getLineId(1_100);
+	original.undo();
+	using reopened = new TextModel(original.getText());
+	assert.equal(reopened.restoreUndoRedoSnapshot(original.createUndoRedoSnapshot()!), true);
+	reopened.applyOperations([{ range: new Range(1, 2, 1, 2), text: '\n' }]);
+	assert.equal(reopened.lineDocument.getText(), 'a\n');
+	assert.notEqual(reopened.getLineId(1), retiredId);
+	assert.equal(reopened.getLineIndex(reopened.getLineId(1)), 1);
+});
+
+for (const direction of ['undo', 'redo'] as const) {
+	test(`restored ${direction} history reserves line identities before new edits`, () => {
+		using original = new TextModel('a');
+		original.applyOperations([{ range: new Range(1, 2, 1, 2), text: '\n' }]);
+		original.applyOperations([{ range: new Range(2, 1, 2, 1), text: '\n' }]);
+		if (direction === 'redo') {
+			original.undo();
+			original.undo();
+		}
+		using reopened = new TextModel(original.getText());
+		assert.equal(reopened.restoreUndoRedoSnapshot(original.createUndoRedoSnapshot()!), true);
+		if (direction === 'undo') {
+			reopened.undo();
+		} else {
+			reopened.redo();
+		}
+		const retainedIds = [reopened.getLineId(0), reopened.getLineId(1)];
+		reopened.applyOperations([{ range: new Range(2, 1, 2, 1), text: '\n' }]);
+		const ids = [0, 1, 2].map(index => reopened.getLineId(index));
+		assert.equal(new Set(ids).size, 3);
+		assert.deepEqual(ids.slice(0, 2), retainedIds);
+		assert.deepEqual(ids.map(id => reopened.getLineIndex(id)), [0, 1, 2]);
+		assert.equal(reopened.lineDocument.getText(), 'a\n\n');
+		reopened.undo();
+		assert.equal(reopened.getText(), 'a\n');
+		reopened.redo();
+		assert.deepEqual([0, 1, 2].map(index => reopened.lineDocument.lines.at(index)!.id), ids);
+	});
+}
+
 test("TextModel history restores cursor state through undo, redo, and cancellation", () => {
 	using model = new TextModel("abc");
 	const before = [new Selection(1, 2, 1, 2)];

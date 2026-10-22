@@ -1028,3 +1028,62 @@ for (const scenario of [
 function configurationChange(...changed: EditorOption[]): ViewConfigurationChangedEvent {
 	return { hasChanged: option => changed.includes(option) } as ViewConfigurationChangedEvent;
 }
+
+for (const source of ['keyboard', 'mouse', 'api'] as const) {
+	test(`explicit ${source} cursor movement separates typing undo groups`, () => {
+		const dom = new JSDOM('<!doctype html><body><main></main></body>');
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		using closeWindow = toDisposable(() => dom.window.close());
+		using model = new TextModel('base');
+		using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model });
+		editor.setPosition(new Position(1, 5));
+		editor.focus();
+		editor.trigger('keyboard', 'type', { text: 'abc' });
+		if (source === 'keyboard') {
+			editor.controller.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Home' }));
+		} else if (source === 'mouse') {
+			editor.controller.dispatchMouse({
+				position: new Position(1, 1), mouseColumn: 1, revealType: NavigationCommandRevealType.None,
+				startedOnLineNumbers: false, inSelectionMode: false, mouseDownCount: 1,
+				altKey: false, ctrlKey: false, metaKey: false, shiftKey: false,
+				leftButton: true, middleButton: false, onInjectedText: false,
+			});
+		} else {
+			editor.setPosition(new Position(1, 1));
+		}
+		assert.deepEqual(editor.getPosition(), new Position(1, 1));
+		editor.trigger('keyboard', 'type', { text: 'X' });
+		assert.equal(model.getText(), 'Xbaseabc');
+		editor.controller.undo();
+		assert.deepEqual({ text: model.getText(), selection: editor.getSelection() }, {
+			text: 'baseabc', selection: new Selection(1, 1, 1, 1),
+		});
+		editor.controller.undo();
+		assert.equal(model.getText(), 'base');
+		editor.controller.redo();
+		editor.controller.redo();
+		assert.deepEqual({ text: model.getText(), selection: editor.getSelection() }, {
+			text: 'Xbaseabc', selection: new Selection(1, 2, 1, 2),
+		});
+	});
+}
+
+test('unchanged selections and a shared observer preserve one continuous typing undo group', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	using model = new TextModel('base');
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model });
+	using observer = createTestCodeEditor({ container: requiredElement(dom.window.document, 'aside'), model });
+	editor.setPosition(new Position(1, 5));
+	observer.setPosition(new Position(1, 5));
+	editor.focus();
+	editor.trigger('keyboard', 'type', { text: 'a' });
+	editor.setSelection(editor.getSelection()!);
+	editor.trigger('keyboard', 'type', { text: 'b' });
+	editor.trigger('keyboard', 'type', { text: 'c' });
+	assert.equal(model.getText(), 'baseabc');
+	assert.deepEqual(observer.getPosition(), new Position(1, 8));
+	editor.controller.undo();
+	assert.equal(model.getText(), 'base');
+});

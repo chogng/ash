@@ -77,9 +77,13 @@ flowchart LR
 
 模型历史在提交成功后记录编辑前后的选区；拒绝的编辑与空批次不改变已有撤销组。
 
+显式键盘、指针或宿主选区变化结束原有输入分组；未改变选区的同步、当前编辑和组合输入的光标更新，以及共享模型的被动位置恢复继续沿用各自事务。
+
 选区格式化的查询和交叠处理由 `contrib/format/browser/format.ts` 管理：提供者把不同选区扩展到相同内容时，合并请求范围重新查询，旧结果及其 EOL 指令一起丢弃。查询阶段不写入模型；结果确定后才经 worker 最小化，由 `FormattingEdit` 一次提交。查询期间编辑器状态改变或请求取消，不产生格式化历史记录。
 
 逻辑行 ID 的投影和新身份校验发生在 TextBuffer 写入前；提交成功后才公布新行序列。行点转换先通过 ID 定位物理行，再用该行的一基缓冲区长度检查零基 UTF-16 offset。生成身份失败时文本、版本、历史和内容事件保持原状；结构文档的行身份由同一个模型的 schema 事务投影，不另设行状态 owner。
+
+关闭重开时保留的 undo/redo 快照包含当前行身份和身份生成进度；恢复时同时预留历史可重新引入的身份，后续新行不能与当前或历史中的行重名。
 
 大文件分级只在模型创建时确定：`editor.largeFileOptimizations` 通过 `ModelService` 进入模型，仅控制分词和堆操作门槛；同步大小上限不受该设置影响。超过堆预算时，`getValue`、`getText` 和 `getLinesContent` 拒绝整份物化，`createSnapshot().read()` 仍提供顺序分块读取。设置改变后，已有模型沿用创建时的分级，新模型读取最新设置。
 
@@ -104,6 +108,8 @@ IME composition 使用受保护的 history revision。Provisional updates 可以
 ### Decoration 与语言结果
 
 `TextDecorationCollection<TMetadata>` 只拥有稳定 identity、opaque metadata 和 tracked range。CSS class、severity、hover、overview marker 和 geometry 由 browser/feature owner 解释。
+
+事务中的 `forceMoveMarkers` 经内部 buffer 变更交给 tracked range，在命中的编辑边界覆盖 stickiness，使标记移到插入文本之后；公共内容事件继续只描述文本变化。
 
 语言请求从 immutable model snapshot 开始。`LanguageRequestCoordinator`、`VersionedLanguageResultStore` 和对应 token/diagnostic index 共同执行 latest-wins、cancellation、cross-model rejection 和 stale-result rejection。Worker 或 Rust adapter 可以生产事实，但不能成为 token store、selection 或 model owner。
 

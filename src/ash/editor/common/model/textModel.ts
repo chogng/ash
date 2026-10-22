@@ -133,6 +133,8 @@ export interface TextModelUndoRedoSnapshot {
 	readonly history: TextModelHistorySnapshot;
 	readonly nextTransactionId: number;
 	readonly alternativeVersionId: number;
+	readonly lineIds: readonly LineId[] | undefined;
+	readonly nextGeneratedLineIdentity: number;
 }
 
 const DEFAULT_HISTORY_TRANSACTIONS = 1_000;
@@ -407,6 +409,8 @@ export class TextModel implements ITextModel {
 			history,
 			nextTransactionId: this.nextTransactionId,
 			alternativeVersionId: this._alternativeVersion,
+			lineIds: this.plainLineIds,
+			nextGeneratedLineIdentity: this.nextGeneratedLineIdentity,
 		});
 	}
 
@@ -419,6 +423,21 @@ export class TextModel implements ITextModel {
 		sha1.update(this.getText());
 		if (snapshot.contentSHA1 !== sha1.digest() || snapshot.eol !== this.getEndOfLineSequence() || snapshot.bom !== this.buffer.getBOM()) return false;
 		this.history.restoreSnapshot(snapshot.history);
+		// Retained history belongs to this same document, including identities
+		// that only Undo or Redo can make live again in the recreated model.
+		if (snapshot.lineIds) {
+			this.plainLineIds = snapshot.lineIds;
+			this.plainLineSnapshot = undefined;
+			this.plainLineIndex = undefined;
+		}
+		const identitySequences = new Set<readonly LineId[]>(snapshot.lineIds ? [snapshot.lineIds] : []);
+		for (const entry of [...snapshot.history.undo, ...snapshot.history.redo]) {
+			if (entry.lineIds) identitySequences.add(entry.lineIds);
+		}
+		for (const ids of identitySequences) {
+			for (const id of ids) this.issuedLineIds.add(id);
+		}
+		this.nextGeneratedLineIdentity = Math.max(this.nextGeneratedLineIdentity, snapshot.nextGeneratedLineIdentity);
 		this.nextTransactionId = Math.max(this.nextTransactionId, snapshot.nextTransactionId);
 		this._alternativeVersion = snapshot.alternativeVersionId;
 		return true;
@@ -1889,10 +1908,9 @@ export class TextModel implements ITextModel {
 			endOffset: this.buffer.getOffsetAt(operation.range.endLineNumber, operation.range.endColumn),
 			text: operation.text,
 		})).sort(compareOffsetEdits);
+		const internalChanges = bufferResult.changes.slice().sort((left, right) => left.rangeOffset - right.rangeOffset || left.rangeLength - right.rangeLength);
 		const appliedChanges = Object.freeze(
-			bufferResult.changes
-				.slice()
-				.sort((left, right) => left.rangeOffset - right.rangeOffset || left.rangeLength - right.rangeLength)
+			internalChanges
 				.map<TextModelContentChange>(change => Object.freeze({
 					range: change.range,
 					rangeOffset: change.rangeOffset,
@@ -1906,7 +1924,7 @@ export class TextModel implements ITextModel {
 			for (const lineId of reservedLineIds) this.issuedLineIds.add(lineId);
 			this.plainLineSnapshot = undefined;
 		}
-		this.trackedRanges.acceptChanges(appliedChanges);
+		this.trackedRanges.acceptChanges(internalChanges);
 		// Cursor-state callbacks can query decorations before the model version advances.
 		for (const entry of this.modelDecorations.values()) {
 			entry.cachedRange = undefined;

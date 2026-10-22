@@ -218,8 +218,16 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 			const result = await this.bulkEdits.apply(resourceEdits, { editor: this.editor, token: abort.signal });
 			if (!result.isApplied || token.isCancellationRequested) return;
 			undo = result.undo;
-			anchor = model.getDecorationRange(tracking[0]!) ?? ranges[0]!;
-			insertionStarts = tracking.map((id, index) => model.offsetAt((model.getDecorationRange(id) ?? ranges[index]!).getStartPosition()));
+			// Workspace edits force markers to the insertion end. Recover the inserted
+			// span from that tracked end, including shifts from the provider's other edits.
+			const insertedText = typeof edit.insertText === 'string' ? edit.insertText : snippet!.text;
+			const insertedLength = insertedText.replace(/\r\n|\r|\n/g, model.getEOL()).length;
+			const insertedRanges = tracking.map((id, index) => {
+				const end = (model.getDecorationRange(id) ?? ranges[index]!).getEndPosition();
+				return Range.fromPositions(model.modifyPosition(end, -insertedLength), end);
+			});
+			anchor = insertedRanges[0]!;
+			insertionStarts = insertedRanges.map(range => model.offsetAt(range.getStartPosition()));
 		} catch (error) {
 			this.notifications.error(localize('dropOrPaste.applyFailed', 'Could not apply edit: {0}', String(error)));
 			return;

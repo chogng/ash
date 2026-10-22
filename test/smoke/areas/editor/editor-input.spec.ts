@@ -2,6 +2,48 @@ import { expect, test } from '../../../automation/test.js';
 import type { ElectronApplication } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
+test('Stanza navigation undo and reopened history preserve subsequent edits in Ash', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace }, testInfo) => {
+	const page = workbench.page;
+	const file = page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true });
+	await file.dblclick();
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await page.keyboard.press('ControlOrMeta+A');
+	await page.keyboard.insertText('base');
+	await page.keyboard.type('abc');
+	await page.keyboard.press('Home');
+	await page.keyboard.type('X');
+	await editor.waitForEditorContents(text => text === 'Xbaseabc');
+	await page.keyboard.press('ControlOrMeta+z');
+	await editor.waitForEditorContents(text => text === 'baseabc');
+	await page.keyboard.press('ControlOrMeta+Shift+z');
+	await editor.waitForEditorContents(text => text === 'Xbaseabc');
+	await page.keyboard.press('ControlOrMeta+S');
+	await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('Xbaseabc');
+
+	await page.keyboard.press('ControlOrMeta+A');
+	await page.keyboard.insertText('a');
+	await page.keyboard.press('ControlOrMeta+S');
+	await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('a');
+	await page.keyboard.press('Enter');
+	await editor.waitForEditorContents(text => text === 'a\n');
+	await page.keyboard.press('ControlOrMeta+z');
+	await editor.waitForEditorContents(text => text === 'a');
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+	await file.dblclick();
+	await editor.waitForEditorFocus();
+	await page.keyboard.press('ControlOrMeta+Shift+z');
+	await editor.waitForEditorContents(text => text === 'a\n');
+	await page.keyboard.press('Enter');
+	await editor.waitForEditorContents(text => text === 'a\n\n');
+	await page.keyboard.press('ControlOrMeta+S');
+	await expect.poll(async () => (await readFile(testWorkspace.file, 'utf8')).replace(/\r\n/g, '\n')).toBe('a\n\n');
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+	await file.dblclick();
+	await editor.waitForEditorContents(text => text === 'a\n\n');
+	await page.screenshot({ path: testInfo.outputPath('stanza-restored-history.png') });
+});
+
 test('Unicode overtype preserves text and undo in Ash', { tag: ['@electron-ui', '@electron-app-server', '@browser-app-server'] }, async ({ target, workbench, testWorkspace, reloadWorkbench }, testInfo) => {
 	const page = workbench.page;
 	if (target.appServerMode === 'required') {

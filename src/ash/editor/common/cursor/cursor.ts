@@ -419,6 +419,12 @@ export class CursorsController extends Disposable {
 		const selections = this.cursors.getSelections();
 		eventsCollector.emitViewEvent(new ViewCursorStateChangedEvent(this.cursors.getViewSelections(), selections, reason));
 		if (!selectionsEqual(oldSelections, selections)) {
+			// User and host selection changes end typing. Edit, composition, and
+			// shared-model recovery keep the transaction that owns their cursor update.
+			if (this.commandVersion === undefined && !this.activeComposition && (reason === CursorChangeReason.Explicit || reason === CursorChangeReason.NotSet)) {
+				this.model.pushStackElement();
+				this.previousEditOperationType = EditOperationType.Other;
+			}
 			eventsCollector.emitOutgoingEvent(new CursorStateChangedEvent(
 				oldSelections,
 				selections,
