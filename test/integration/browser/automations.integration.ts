@@ -9,7 +9,7 @@ import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browse
 import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService } from '../../../src/ash/platform/remote/common/remoteConnectionService.js';
 import workbenchTranslations from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import type { IAction } from '../../../src/ash/base/common/actions.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
 import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
@@ -98,7 +98,7 @@ services.registerInstance(IContextKeyService, contexts);
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 
 const errors: string[] = [];
-const notificationService = resources.add(new NotificationService());
+const notificationService = resources.add(new TestNotificationService());
 const notices: { message: string; actions: readonly IAction[]; closed: boolean; }[] = [];
 const notify = (message: string, actions: readonly IAction[] = []): INotificationHandle => {
 	const item = { message, actions, closed: false };

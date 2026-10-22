@@ -30,7 +30,7 @@ import { type IViewsService } from '../../../src/ash/workbench/services/views/co
 import { type IEditorService, type EditorOpenOptions } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { TestingViewPane } from '../../../src/ash/workbench/contrib/testing/browser/testingViewPane.js';
 import { TestingEditorContribution } from '../../../src/ash/workbench/contrib/testing/browser/testingEditorContribution.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
 
 if (new URLSearchParams(location.search).get('locale') === 'zh-cn') {
@@ -100,7 +100,7 @@ if (new URLSearchParams(location.search).has('paneLayout')) {
 }
 const model = store.add(createModel('mod checks {\n #[test]\n fn passes() {}\n fn fails() {}\n}', 'rust', URI.file('/workspace/src/lib.rs')) as TextModel);
 const editor = store.add(create(document.querySelector<HTMLElement>('#editor')!, { model, glyphMargin: true, automaticLayout: true }));
-store.add(new TestingEditorContribution(editor, model, service, copies, store.add(new NotificationService())));
+store.add(new TestingEditorContribution(editor, model, service, copies, store.add(new TestNotificationService())));
 window.addEventListener('pagehide', () => store.dispose(), { once: true });
 window.ashTestingIntegration = {
 	debugLaunches: () => debug.launches,

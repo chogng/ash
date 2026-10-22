@@ -39,7 +39,7 @@ export class MainThreadMessageService extends Disposable {
 		const handle = this.notifications.notify({
 			severity,
 			message: operation.message,
-			source: label,
+			source: { id: extensionId, label },
 			actions: {
 				primary: choices.map((title, index) => ({
 					tooltip: '',

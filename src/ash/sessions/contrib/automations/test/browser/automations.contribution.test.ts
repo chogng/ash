@@ -12,7 +12,7 @@ import type { Automation, AutomationDefinition, AutomationRun, IAutomationBacken
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../../../workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../../workbench/services/notification/test/common/testNotificationService.js';
 import { IAutomationService } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
 import { SessionsProvidersService, ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import type { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
@@ -49,7 +49,7 @@ function fixture() {
 	const facade = resources.add(services.createInstance(ProviderAutomationService));
 	services.registerInstance(IAutomationService, facade);
 	const errors: string[] = [];
-	const notifications = resources.add(new NotificationService());
+	const notifications = resources.add(new TestNotificationService());
 	resources.add(notifications.model.onDidAdd(item => {
 		if (item.severity === Severity.Error) errors.push(String(item.message));
 	}));

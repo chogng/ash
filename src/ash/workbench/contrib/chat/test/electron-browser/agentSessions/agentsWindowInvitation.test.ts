@@ -21,7 +21,7 @@ import { INativeHostService } from '../../../../../common/services.js';
 import { IChatService, type Thread, type ThreadUpdateEnvelope } from '../../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../../services/chat/common/chatSessionNavigationService.js';
 import { IHostService } from '../../../../../services/host/browser/host.js';
-import { NotificationService } from '../../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../../services/notification/test/common/testNotificationService.js';
 import { AgentsWindowInvitationContribution } from '../../../electron-browser/agentSessions/agentsWindowInvitation.js';
 
 class Fixture extends Disposable {
@@ -31,7 +31,7 @@ class Fixture extends Disposable {
 	readonly updates = this._register(new Emitter<ThreadUpdateEnvelope>());
 	readonly focus = this._register(new Emitter<boolean>());
 	readonly connection = this._register(new Emitter<'ready' | 'stopped'>());
-	readonly notifications = this._register(new NotificationService());
+	readonly notifications = this._register(new TestNotificationService());
 	readonly configuration: InMemoryConfigurationService;
 	active = { sessionId: 'session', threadId: 'thread' };
 	focused = true;

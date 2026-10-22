@@ -8,7 +8,7 @@ import { InMemoryConfigurationService } from '../../../../../../platform/configu
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService, NotificationPriority, Severity } from '../../../../../../platform/notification/common/notification.js';
 import { ITerminalLogService, TerminalLocation } from '../../../../../../platform/terminal/common/terminal.js';
-import { NotificationService } from '../../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../../services/notification/test/common/testNotificationService.js';
 import { IHostService } from '../../../../../services/host/browser/host.js';
 import { ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalInstance, type IXtermTerminal } from '../../../../terminal/browser/terminal.js';
 import { TerminalExtensionsRegistry } from '../../../../terminal/browser/terminalExtensions.js';
@@ -18,7 +18,7 @@ import '../../browser/terminal.notification.contribution.js';
 import '../../../../terminal/common/terminalConfiguration.js';
 
 function fixture(owner: DisposableStore) {
-	const notifications = owner.add(new NotificationService());
+	const notifications = owner.add(new TestNotificationService());
 	const writes: string[] = [];
 	const warnings: string[] = [];
 	let enabled = true;
@@ -167,7 +167,7 @@ test('OSC 99 production contribution binds parser and replies to the emitting te
 	using owner = new DisposableStore();
 	const services = owner.add(new InstantiationService());
 	const configuration = owner.add(new InMemoryConfigurationService());
-	const notifications = owner.add(new NotificationService());
+	const notifications = owner.add(new TestNotificationService());
 	const changed = owner.add(new Emitter<ITerminalInstance['state']>());
 	const writes: string[] = [];
 	let parser: ((data: string) => boolean) | undefined;

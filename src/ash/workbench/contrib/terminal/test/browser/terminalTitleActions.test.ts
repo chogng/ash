@@ -303,7 +303,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	const { IWorkspaceContextService } = await import('../../../../../platform/workspace/common/workspace.js');
 	const { IPreferencesService } = await import('../../../../services/preferences/common/preferences.js');
 	const { INotificationService } = await import('../../../../../platform/notification/common/notification.js');
-	const { NotificationService } = await import('../../../../services/notification/common/notificationService.js');
+	const { TestNotificationService } = await import('../../../../services/notification/test/common/testNotificationService.js');
 	const { WorkbenchLayout } = await import('../../../../browser/layout.js');
 	const { Dimension } = await import('../../../../../base/browser/dom.js');
 	const { TestConfigurationService: WorkbenchConfigurationService } = await import("../../../../services/configuration/test/common/testServices.js");
@@ -354,7 +354,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	services.registerInstance(ITerminalProfileResolverService, { resolveShellLaunchConfig: async () => { throw new Error('Unexpected shell resolution'); } } as unknown as ITerminalProfileResolverService);
 	services.registerInstance(IWorkbenchLayoutService, resources.add(services.createInstance(WorkbenchLayout, browserEnvironment.window.document.body, { initialDimension: new Dimension(800, 600) })));
 	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as import('../../../../services/preferences/common/preferences.js').IPreferencesService);
-	services.registerInstance(INotificationService, resources.add(new NotificationService()));
+	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 	services.registerInstance(IAccessibleViewService, { ...toDisposable(() => { }), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { } });
 	services.registerInstance(ISpeechService, resources.add(new SpeechService(undefined)));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));

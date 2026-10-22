@@ -28,7 +28,7 @@ import { createDiffEditorInput, DIFF_EDITOR_ID, isDiffEditorInput } from '../../
 import { BrowserEditorService } from '../../../src/ash/workbench/services/editor/browser/browserEditorService.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { BrowserKeyboardLayoutService } from '../../../src/ash/workbench/services/keybinding/browser/keyboardLayoutService.js';
 import { WorkbenchKeybindingService } from '../../../src/ash/workbench/services/keybinding/browser/keybindingService.js';
 import { IStatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
@@ -48,7 +48,7 @@ const services = resources.add(createTestEditorServices());
 const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);
 services.registerInstance(IUserDataProfileService, new UserDataProfileService());
-services.registerInstance(INotificationService, resources.add(new NotificationService()));
+services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 const contexts = services.get(IContextKeyService);
 const registry = new KeybindingRegistry();
 const layouts = resources.add(new BrowserKeyboardLayoutService({ navigator }));

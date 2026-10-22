@@ -77,7 +77,7 @@ import { MenuService } from "../../../platform/actions/common/menuService.js";
 import { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
-import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { InstantiationService } from "../../../platform/instantiation/common/instantiationService.js";
 import { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../../../workbench/services/commands/common/commandService.js";
@@ -168,7 +168,7 @@ const unavailableFileService = {
 	readFileBytes: async () => { throw new Error('File read is unavailable in this test'); },
 } as unknown as IFileService;
 const unavailableAccessibleViewService = { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService;
-const notifications = new NotificationService();
+const notifications = new TestNotificationService();
 
 class SessionsManagementService extends BaseSessionsManagementService {
 	constructor(api: IRendererHost) {
@@ -904,7 +904,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		const parentServices = resources.add(createInputServices(contextView, chat));
 		const services = resources.add(parentServices.createChild());
 		const storage = resources.add(createTestStorage());
-		const notices = resources.add(new NotificationService());
+		const notices = resources.add(new TestNotificationService());
 		services.registerInstance(IStorageService, storage);
 		services.registerInstance(INotificationService, notices);
 		services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);

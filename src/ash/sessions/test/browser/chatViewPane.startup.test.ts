@@ -26,7 +26,7 @@ import { test, suiteTeardown } from "mocha";
 
 import { JSDOM } from "jsdom";
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
-import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { Emitter, Event } from "../../../base/common/event.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
@@ -83,7 +83,7 @@ test("opens a local Chat conversation before the backend session request settles
 		lookupKeybindings: () => [],
 		lookupKeybinding: () => undefined,
 	});
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, focusActiveEditor() { }, openEditor: async () => { } });

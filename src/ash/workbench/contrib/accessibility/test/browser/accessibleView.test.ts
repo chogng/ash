@@ -29,7 +29,7 @@ import { AccessibilityService } from '../../../../../platform/accessibility/brow
 import { IAccessibilityService, AccessibilitySupport } from '../../../../../platform/accessibility/common/accessibility.js';
 import { IStatusbarService, StatusbarService, StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { AccessibilityStatus } from '../../browser/accessibilityStatus.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
@@ -303,7 +303,7 @@ class AccessibleViewFixture extends Disposable {
 	public readonly keybindingChanges = this._register(new Emitter<void>());
 	public readonly codeEditors = this._register(new StandaloneCodeEditorService());
 	public readonly statusbar = this._register(new StatusbarService());
-	public readonly notifications = this._register(new NotificationService());
+	public readonly notifications = this._register(new TestNotificationService());
 	public readonly accessibility: AccessibilityService;
 	private readonly mapper = new FallbackKeyboardMapper({ dispatch: KeyboardDispatchMode.Code, mapAltGrToCtrlAlt: false }, OperatingSystem.Windows);
 	public helpKeybinding: ResolvedKeybinding | undefined = this.mapper.resolveKeybinding(Keybinding.single(logicalKey('F1', { altKey: true })))[0];

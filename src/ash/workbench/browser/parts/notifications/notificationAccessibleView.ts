@@ -15,7 +15,7 @@ AccessibleViewRegistry.register({
 	getProvider: accessor => new AccessibleContentProvider(
 		AccessibleViewProviderId.Notifications,
 		{ type: AccessibleViewType.Help },
-		() => localize('notifications.accessibilityHelp', 'Notification Center\nUse Tab and Shift+Tab to move between notifications and actions. When a notification has more actions, focus its More Actions button and press Enter or an arrow key to open the menu. Right-click a notification, or press the Context Menu key or Shift+F10, and choose Copy Text to copy its message. Press Escape to close the menu and return to the notification. Press Delete on a notification to remove it. Press Escape to close the center. When the Remove notification button in a toast has focus, press Escape to hide the toasts without removing them from history. Press <keybinding:editor.action.accessibleView> to read the notification history.') + '\n' + localize('notifications.agentsWindowInvitationHelp', 'An Agents Window invitation has a Continue in Agents Window action. Use Tab to reach it and Enter or Space to open the conversation. The unsent draft transfers only after the target window confirms receipt; a failed handoff preserves it.'),
+		() => localize('notifications.accessibilityHelp', 'Notification Center\nUse Tab and Shift+Tab to move between notifications and actions. When a notification has more actions, focus its More Actions button and press Enter or an arrow key to open the menu. Right-click a notification, or press the Context Menu key or Shift+F10, and choose Copy Text to copy its message. Press Escape to close the menu and return to the notification. Press Delete on a notification to remove it. Press Escape to close the center. When a notification toast or one of its actions has focus, press Escape to hide the toasts without removing them from history. Press <keybinding:editor.action.accessibleView> to read the notification history.') + '\n' + localize('notifications.doNotDisturbHelp', 'Use Configure Do Not Disturb to silence information and warning notifications globally or by source. Checked sources allow all notifications. Errors still appear, and all notifications remain available in the center. Opening the center marks notifications as read.') + '\n' + localize('notifications.positionProgressHelp', 'Use Configure Notifications Position to choose Bottom Right, Bottom Left, or Top Right. The top-right notification button is in the title bar. Running notifications cannot be removed with Delete or Clear All; use their Cancel action when available. Hidden progress appears in the status bar. Select it to open the notification center.') + '\n' + localize('notifications.toastLifetimeHelp', 'Ordinary notification toasts hide automatically and remain in history. Hover or focus a toast to keep it visible. Running progress, pinned notifications, and errors with primary actions stay visible until their pending state ends or you dismiss them.') + '\n' + localize('notifications.agentsWindowInvitationHelp', 'An Agents Window invitation has a Continue in Agents Window action. Use Tab to reach it and Enter or Space to open the conversation. The unsent draft transfers only after the target window confirms receipt; a failed handoff preserves it.'),
 		() => accessor.get(INotificationsCenter).show(),
 		AccessibilityVerbositySettingId.Notifications,
 	),
@@ -31,7 +31,16 @@ AccessibleViewRegistry.register({
 		const provider = new AccessibleContentProvider(
 			AccessibleViewProviderId.Notifications,
 			{ type: AccessibleViewType.View },
-			() => notifications.getNotifications().map(item => `${Severity[item.severity].toLowerCase()}: ${item.message}`).join('\n') || localize('notifications.empty', 'No notifications'),
+			() => notifications.getNotifications().map(item => {
+				const details = [`${Severity[item.severity].toLowerCase()}: ${item.message}`];
+				if (item.source) details.push(localize('notifications.source', 'Source: {0}', item.source));
+				if (item.hasActiveProgress) {
+					details.push(item.progress?.total && item.progress.total > 0
+						? localize('notifications.progressPercent', '{0}% complete', Math.round(Math.max(0, Math.min(1, (item.progress.worked ?? 0) / item.progress.total)) * 100))
+						: localize('notifications.progressDescription', 'In progress'));
+				}
+				return details.join('\n');
+			}).join('\n') || localize('notifications.empty', 'No notifications'),
 			() => accessor.get(INotificationsCenter).show(),
 			AccessibilityVerbositySettingId.Notifications,
 		);

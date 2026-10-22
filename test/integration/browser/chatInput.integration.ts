@@ -87,7 +87,7 @@ import { InstantiationService } from '../../../src/ash/platform/instantiation/co
 import { IContextViewService, IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
@@ -371,7 +371,7 @@ services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 services.registerSingleton(IScreenshotService, () => services.createInstance(BrowserScreenshotService));
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-const notifications = resources.add(new NotificationService());
+const notifications = resources.add(new TestNotificationService());
 services.registerInstance(INotificationService, notifications);
 registerTestDictationOnboarding(services);
 const quickInput = resources.add(new TestQuickInputService({ instantiationService: services, container: document.body }));

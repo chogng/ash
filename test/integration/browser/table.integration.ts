@@ -57,7 +57,7 @@ import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js'
 import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
 import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { ChatInputEditorOptions } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import type { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 
 import type { ChatInputDelegate } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
@@ -250,7 +250,7 @@ services.get(IKeybindingService);
 
 const dictationSession = resources.add(services.createInstance(DictationInput, editor, preview, () => true, async () => { }, 'chat'));
 const contextViews = services.get(IContextViewService);
-const notifications = resources.add(new NotificationService());
+const notifications = resources.add(new TestNotificationService());
 const secondInput = resources.add(services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, contextViews, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, {
 	create: (options: ChatInputEditorOptions) => services.createInstance(ChatInputEditor, options),
 }, [], { modePicker: 'visible', modelPickerPosition: 'leading' }));

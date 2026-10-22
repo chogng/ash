@@ -1,4 +1,4 @@
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
@@ -189,7 +189,7 @@ test('corrected response resources retain disclosure identity, expansion and sum
 test('correcting a linked resource cancels its original read and suppresses a retired origin failure', async () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
-	services.registerInstance(INotificationService, resources.add(new NotificationService()));
+	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 	const pending = new DeferredPromise<{ bytes: Uint8Array; mimeType: string; }>();
 	let signal: AbortSignal | undefined;
 	services.registerInstance(IAgentThreadService, { ...createDisconnectedRendererApi().thread, readToolResource: async (_source, cancellation) => { signal = cancellation; return pending.p; } });
@@ -210,7 +210,7 @@ test('correcting a linked resource cancels its original read and suppresses a re
 	await Promise.resolve();
 	assert.equal(opens, 0);
 	assert.equal(files.associated.length, 0);
-	assert.deepEqual((services.get(INotificationService) as NotificationService).model.getNotifications(), []);
+	assert.deepEqual((services.get(INotificationService) as TestNotificationService).model.getNotifications(), []);
 });
 
 

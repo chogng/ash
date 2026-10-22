@@ -38,7 +38,7 @@ import { ContextKeyService, IContextKeyService } from '../../../platform/context
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { TestQuickInputService } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
-import { NotificationService } from '../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../services/notification/test/common/testNotificationService.js';
 import { ViewsService } from '../../services/views/browser/viewsService.js';
 import { IViewsService } from '../../services/views/common/viewsService.js';
 import { WorkbenchViewRegistry } from '../../common/views.js';
@@ -125,7 +125,7 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 	owner?.add(services);
 	const resources = services.resources;
 	services.registerSingleton(ICommandService, () => new CommandService(services));
-	services.registerSingleton(INotificationService, () => new NotificationService());
+	services.registerSingleton(INotificationService, () => new TestNotificationService());
 	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	services.registerSingleton(IProgressService, () => services.createInstance(ProgressService));
 	const uriIdentityServices = resources.add(new TestUriIdentityServices());
@@ -188,7 +188,7 @@ export function registerTestWorkbenchInteractionServices(owner: DisposableStore,
 	const window = new JSDOM('', { url: 'https://ash.test' });
 	owner.add(toDisposable(() => window.window.close()));
 	services.registerInstance(IQuickInputService, owner.add(new TestQuickInputService({ container: window.window.document.body, contextKeyService: owner.add(new ContextKeyService()) })));
-	if (!services.has(INotificationService)) services.registerInstance(INotificationService, owner.add(new NotificationService()));
+	if (!services.has(INotificationService)) services.registerInstance(INotificationService, owner.add(new TestNotificationService()));
 }
 
 /** Assembles the real Views owner with isolated profile storage for non-window units. */

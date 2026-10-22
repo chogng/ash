@@ -12,7 +12,7 @@ import type { IWorkspaceContextService } from '../../../../../../platform/worksp
 import type { IChatContextPickService } from '../../../../../services/chat/common/chatContextService.js';
 import type { IChatSessionNavigationService } from '../../../../../services/chat/common/chatSessionNavigationService.js';
 import type { IEditorGroupsService } from '../../../../../services/editor/common/editorGroupsService.js';
-import { NotificationService } from '../../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../../services/notification/test/common/testNotificationService.js';
 import { AttachContextAction } from '../../../browser/actions/chatContextActions.js';
 
 for (const cancellation of ['Escape', 'toggle', 'dispose'] as const) {
@@ -26,7 +26,7 @@ for (const cancellation of ['Escape', 'toggle', 'dispose'] as const) {
 		container.append(anchor, input);
 		setARIAContainer(container);
 		const quickInput = resources.add(new TestQuickInputService({ container }));
-		const notifications = resources.add(new NotificationService());
+		const notifications = resources.add(new TestNotificationService());
 		const shown = new DeferredPromise<void>();
 		const quickAccess: IQuickAccessController = {
 			onDidChangeVisibility: Event.None,

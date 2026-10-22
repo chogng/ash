@@ -9,7 +9,7 @@ import { ILogService, NullLoggerService } from '../../../../../platform/log/comm
 import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import '../../common/commands.contribution.js';
 
 suite('runCommands', () => {
@@ -115,7 +115,7 @@ suite('runCommands', () => {
 });
 
 class CommandEnvironment extends Disposable {
-	public readonly notifications = this._register(new NotificationService());
+	public readonly notifications = this._register(new TestNotificationService());
 	public readonly commands: CommandService;
 
 	constructor() {

@@ -15,7 +15,7 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from '../../../../services/editor/common/editorService.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DebugLinkHoverBehavior, LinkDetector } from '../../browser/linkDetector.js';
@@ -188,7 +188,7 @@ function fixture(root = URI.file('/workspace')) {
 	resources.add(files.registerProvider('file', provider));
 	resources.add(files.registerProvider('ash-remote', provider));
 	const workspace = resources.add(new TestWorkspaceService({ id: 'workspace', uri: root }));
-	const notifications = resources.add(new NotificationService());
+	const notifications = resources.add(new TestNotificationService());
 	const opened: { resource: URI; options?: EditorOpenOptions; target?: EditorOpenTarget; }[] = [];
 	const editors: IEditorService = { ...emptyEditorServiceState, openEditor: async (input, options, target) => { opened.push({ resource: input.resource, options, target }); }, focusActiveEditor() { } };
 	const services = workbenchInstantiationService(resources).createChild(new ServiceCollection(

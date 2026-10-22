@@ -20,7 +20,7 @@ import { ViewPaneContainer } from '../../../../../workbench/browser/parts/views/
 import { IEditorGroupsService, type IEditorGroup } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 import { FileEditorInput } from '../../../../../workbench/contrib/files/browser/editors/fileEditorInput.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
-import { NotificationService } from '../../../../../workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../../workbench/services/notification/test/common/testNotificationService.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { SessionsViewRegistry } from '../../../../common/views.js';
@@ -78,7 +78,7 @@ test('Sessions remote download preserves selected file bytes and reports read fa
 		editors: inputs.map(input => ({ input })),
 	} as unknown as IEditorGroup;
 	using services = new InstantiationService();
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IEditorGroupsService, { getGroup: () => group } as unknown as IEditorGroupsService);
 	const reads: URI[] = [];

@@ -45,7 +45,7 @@ import { IAccessibilityService } from '../../../src/ash/platform/accessibility/c
 import { AccessibilityService } from '../../../src/ash/platform/accessibility/browser/accessibilityService.js';
 import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { CompositeBar } from '../../../src/ash/workbench/browser/parts/compositeBar.js';
 import { HoverPosition } from '../../../src/ash/base/browser/ui/hover/hoverWidget.js';
@@ -354,7 +354,7 @@ if (new URLSearchParams(location.search).has('problems')) {
 	services.registerInstance(IContextMenuService, resources.add(new BrowserContextMenuService(
 		services.get(IMenuService), contexts,
 		{ lookupKeybinding: () => undefined } as unknown as IKeybindingService,
-		resources.add(new BrowserContextViewService(document.body)), resources.add(new NotificationService()))));
+		resources.add(new BrowserContextViewService(document.body)), resources.add(new TestNotificationService()))));
 }
 const panel = resources.add(registerTestComponentServices(services).createInstance(PanelPart, document.body));
 resources.add(bindTestColorTheme(services.get(IThemeService), panel.domNode));
@@ -492,7 +492,7 @@ if (new URLSearchParams(location.search).has('editorTabs')) {
 		const menus = new MenuService(commands, editorServices.get(IContextKeyService));
 		editorServices.registerInstance(IMenuService, menus);
 		const views = resources.add(new BrowserContextViewService(document.body));
-		const notifications = resources.add(new NotificationService());
+		const notifications = resources.add(new TestNotificationService());
 		const menuKeybindings = { onDidUpdateKeybindings: Event.None, lookupKeybinding: () => undefined } as unknown as IKeybindingService;
 		editorServices.registerInstance(IContextMenuService, resources.add(new BrowserContextMenuService(menus, editorServices.get(IContextKeyService), menuKeybindings, views, notifications)));
 		editorServices.registerInstance(IAppServerApi, { connectionGeneration: 1, onConnectionState: Event.None, getConnectionState: async () => 'ready', getSlashCommands: async () => [] } as IAppServerApi);
@@ -598,7 +598,7 @@ if (editorMenu) {
 	editorServices.registerInstance(ICommandService, commands);
 	const menus = new MenuService(commands, editorServices.get(IContextKeyService));
 	const views = resources.add(new BrowserContextViewService(document.body));
-	const notifications = resources.add(new NotificationService());
+	const notifications = resources.add(new TestNotificationService());
 	editorServices.registerInstance(INotificationService, notifications);
 	editorServices.registerInstance(IUserDataProfileService, new UserDataProfileService());
 	const layouts = resources.add(new BrowserKeyboardLayoutService({ navigator }));

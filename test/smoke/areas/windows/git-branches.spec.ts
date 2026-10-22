@@ -21,7 +21,7 @@ test('Git branch picker explains occupancy and switches after the other worktree
 			await picker.getByRole('combobox').fill('occupied');
 			await expect(picker.getByRole('option', { name: 'occupied Checked out in another worktree', exact: true })).toBeVisible();
 			await picker.getByRole('combobox').press('Enter');
-			await page.getByRole('button', { name: 'Show Notification Center', exact: true }).click();
+			await page.getByRole('button', { name: /^Show Notification Center/ }).click();
 			await expect(page.getByRole('region', { name: 'Notification Center', exact: true })).toContainText('Branch occupied is checked out in another worktree.');
 			await page.keyboard.press('Escape');
 			await expect(picker).toHaveCount(0);
@@ -75,7 +75,7 @@ test('Git branch menu preserves local edits when Git rejects the switch', { tag:
 	const picker = page.locator('.ash-quick-pick');
 	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: /^topic$/ })).toBeVisible();
 	await picker.locator('.ash-quick-pick-row-label', { hasText: /^topic$/ }).click();
-	await page.getByRole('button', { name: 'Show Notification Center', exact: true }).click();
+	await page.getByRole('button', { name: /^Show Notification Center/ }).click();
 	await expect(page.getByRole('region', { name: 'Notification Center', exact: true })).toContainText('Git rejected the switch. Check local changes and worktrees.');
 	expect((await run('git', ['branch', '--show-current'], { cwd })).stdout.trim()).toBe('main');
 	expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 3;\n');

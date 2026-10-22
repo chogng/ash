@@ -59,7 +59,7 @@ import { IActivityService } from '../../../../services/activity/common/activity.
 import { ActivityService } from '../../../../services/activity/browser/activityService.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { ViewsService } from '../../../../services/views/browser/viewsService.js';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
@@ -310,7 +310,7 @@ function configuration(name: string): IDebugConfiguration { return { id: name, n
 export class DebugViewTestServices extends Disposable {
 	public readonly workspace: TestWorkspaceService;
 	public readonly documents = new Map<string, string>();
-	public readonly notifications = this._register(new NotificationService());
+	public readonly notifications = this._register(new TestNotificationService());
 	public folderOpens = 0;
 	public writes = 0;
 

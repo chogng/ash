@@ -21,7 +21,7 @@ import { BrowserKeyboardLayoutService } from '../../../../services/keybinding/br
 import { WorkbenchKeybindingService } from '../../../../services/keybinding/browser/keybindingService.js';
 import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { CodeActionsContribution } from '../../browser/codeActionsContribution.js';
 import '../../browser/codeActions.contribution.js';
 
@@ -35,7 +35,7 @@ test('Code Action registration updates settings and command argument suggestions
 	using layouts = new BrowserKeyboardLayoutService({ navigator: dom.window.navigator });
 	using services = new InstantiationService();
 	using commands = new CommandService(services);
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	using features = new LanguageFeaturesService();
 	using keybindings = new WorkbenchKeybindingService({
 		ownerDocument: dom.window.document, commandService: commands,

@@ -46,7 +46,7 @@ const { InstantiationService } = await import('../../../../../platform/instantia
 const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
 const { InMemoryConfigurationService } = await import('../../../../../platform/configuration/common/inMemoryConfigurationService.js');
 const { IKeybindingService } = await import('../../../../../platform/keybinding/common/keybinding.js');
-const { NotificationService } = await import('../../../../../workbench/services/notification/common/notificationService.js');
+const { TestNotificationService } = await import('../../../../services/notification/test/common/testNotificationService.js');
 const { KeybindingsRegistry } = await import('../../../../../platform/keybinding/common/keybindingsRegistry.js');
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { EditorPaneMatch, EditorPane } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
@@ -223,7 +223,7 @@ test('Keyboard Shortcuts reuses one modal and reconciles resource rows across ed
 		commandService: commands,
 		contextKeyService: contextKeys,
 		keyboardLayoutService: keyboardLayout,
-	}, disposables.add(new NotificationService()), resources.files, resources.profiles));
+	}, disposables.add(new TestNotificationService()), resources.files, resources.profiles));
 	const configuration = disposables.add(new InMemoryConfigurationService());
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IKeybindingService, keybindings);
@@ -827,7 +827,7 @@ async function createRecorderFixture(disposables: InstanceType<typeof Disposable
 	const commands = disposables.add(new CommandService(resources.services));
 	resources.services.registerInstance(ICommandService, commands);
 	const layout = disposables.add(new BrowserKeyboardLayoutService({ navigator: browserEnvironment.window.navigator, operatingSystem: OperatingSystem.Windows }));
-	const keybindings = disposables.add(new WorkbenchKeybindingService({ ownerDocument: document, commandService: commands, contextKeyService: contextKeys, keyboardLayoutService: layout }, disposables.add(new NotificationService()), resources.files, resources.profiles));
+	const keybindings = disposables.add(new WorkbenchKeybindingService({ ownerDocument: document, commandService: commands, contextKeyService: contextKeys, keyboardLayoutService: layout }, disposables.add(new TestNotificationService()), resources.files, resources.profiles));
 	resources.services.registerInstance(IKeybindingService, keybindings);
 	resources.services.registerInstance(IContextKeyService, contextKeys);
 	resources.services.registerInstance(IKeyboardLayoutService, layout);

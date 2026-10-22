@@ -64,7 +64,7 @@ import { IContextMenuService, IContextViewService } from '../../../platform/cont
 import { HoverService, IHoverService } from '../../../platform/hover/browser/hoverService.js';
 import { IKeybindingService, KeybindingContextKeys, type KeybindingsSchemaContribution } from '../../../platform/keybinding/common/keybinding.js';
 import { KeybindingResolver, KeybindingResolveKind } from '../../../platform/keybinding/common/keybindingResolver.js';
-import { INotificationService, Severity, type INotificationHandle, type INotification, type NotificationMessage } from '../../../platform/notification/common/notification.js';
+import { INotificationService, NotificationsFilter, Severity, type INotificationHandle, type INotification, type NotificationMessage, type INotificationSource, type INotificationSourceFilter, type IStatusHandle } from '../../../platform/notification/common/notification.js';
 import { IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
 import { AccessibilitySignalService, IAccessibilitySignalService } from '../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { AccessibilityService } from '../../../platform/accessibility/browser/accessibilityService.js';
@@ -376,6 +376,14 @@ export class StandaloneKeybindingService extends Disposable implements IKeybindi
 /** Standalone notifications are reported to the embedding page's console. */
 export class StandaloneNotificationService extends Disposable implements INotificationService {
 	private readonly handles = new Set<() => void>();
+	readonly onDidChangeFilter: Event<void> = Event.None;
+
+	// Console reporting has no transient notification presentation to suppress.
+	setFilter(_filter: NotificationsFilter | INotificationSourceFilter): void { }
+	getFilter(_source?: INotificationSource): NotificationsFilter { return NotificationsFilter.OFF; }
+	getFilters(): INotificationSourceFilter[] { return []; }
+	removeFilter(_sourceId: string): void { }
+	status(message: NotificationMessage): IStatusHandle { console.info(message); return { close() { } }; }
 
 	notify(options: INotification): INotificationHandle {
 		this.assertNotDisposed();

@@ -17,13 +17,13 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
 import { IGitHubConnectionService } from '../../../../services/accounts/common/gitHubConnectionService.js';
 import { LinkPresentationService } from '../../../../services/dataChannel/browser/dataChannelService.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { GitHubLinkPresentationContribution } from '../../browser/githubLinkPresentation.contribution.js';
 
-function setup(resources: DisposableStore, github: GitHubService): { services: InstantiationService; accounts: Emitter<AccountState>; links: LinkPresentationService; notifications: NotificationService; signIns: string[]; } {
+function setup(resources: DisposableStore, github: GitHubService): { services: InstantiationService; accounts: Emitter<AccountState>; links: LinkPresentationService; notifications: TestNotificationService; signIns: string[]; } {
 	const services = resources.add(new InstantiationService());
 	const accounts = resources.add(new Emitter<AccountState>());
-	const notifications = resources.add(new NotificationService());
+	const notifications = resources.add(new TestNotificationService());
 	const signIns: string[] = [];
 	services.registerInstance(IGitHubService, github);
 	services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Use connection service'); }, cancelLogin: async () => { }, logout: async () => { } });

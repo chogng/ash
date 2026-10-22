@@ -98,7 +98,7 @@ import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser
 import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { extUri } from '../../../src/ash/base/common/resources.js';
@@ -372,7 +372,7 @@ if (new URLSearchParams(location.search).has('shortcuts')) {
 	const commands = store.add(new CommandService(shortcutServices, registry));
 	shortcutServices.registerInstance(ICommandService, commands);
 	shortcutServices.registerInstance(ILogService, new NullLoggerService());
-	const notifications = store.add(new NotificationService());
+	const notifications = store.add(new TestNotificationService());
 	shortcutServices.registerInstance(INotificationService, notifications);
 	const profiles = new UserDataProfileService();
 	shortcutServices.registerInstance(IUserDataProfileService, profiles);
@@ -512,7 +512,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } } as unknown as IViewsService);
 		services.registerInstance(IPreferencesService, { openSettings: async (options: import('../../../src/ash/workbench/services/preferences/common/preferences.js').IOpenSettingsOptions) => { menuEffects.settings.push(options); } } as unknown as IPreferencesService);
-		services.registerInstance(INotificationService, lifetime.add(new NotificationService()));
+		services.registerInstance(INotificationService, lifetime.add(new TestNotificationService()));
 		services.registerInstance(IWorkspaceContextService, {
 			onDidChangeWorkspace: workspaceChanged.event,
 			onDidChangeWorkspaceFolders: Event.None,
@@ -1183,7 +1183,7 @@ if (new URLSearchParams(location.search).has('input')) {
 	let currentDirectory: string | undefined;
 	const workspace = store.add(new TestWorkspaceService({ id: 'input', uri: URI.file('/workspace') }));
 	const services = store.add(widgetServices.createChild(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
-	const notifications = store.add(new NotificationService());
+	const notifications = store.add(new TestNotificationService());
 	services.registerInstance(INotificationService, notifications);
 	let groupPane: import('../../../src/ash/workbench/contrib/terminal/browser/terminalView.js').TerminalViewPane | undefined;
 	if (groupFixture) {

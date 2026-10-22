@@ -627,7 +627,7 @@ export abstract class Workbench extends Disposable {
 			focus: () => sessionsPart?.focus(),
 		}));
 		services.registerInstance(IAgentWorkbenchLayoutService, layout);
-		const notificationService = this._register(new NotificationService());
+		const notificationService = this._register(services.createInstance(NotificationService));
 		services.registerInstance(INotificationService, notificationService);
 		const feedbackHost = h(ownerDocument, "div");
 		feedbackHost.className = "ash-feedback-host";

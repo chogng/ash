@@ -32,7 +32,7 @@ import { TestThemeService } from '../../../src/ash/platform/theme/test/common/te
 import { SymphonyTasksView } from '../../../src/ash/sessions/contrib/symphony/browser/symphonyViews.js';
 import { type ISymphonyService, type SymphonyViewState } from '../../../src/ash/sessions/contrib/symphony/browser/symphonyService.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
@@ -78,7 +78,7 @@ resources.add(bindTestColorTheme(resources.add(new TestThemeService(params.has('
 const contextKeys = resources.add(new ContextKeyService());
 contextKeys.setContext('openFolderWorkspaceSupport', true);
 const configuration = resources.add(new InMemoryConfigurationService());
-const notifications = resources.add(new NotificationService());
+const notifications = resources.add(new TestNotificationService());
 const changesServices = resources.add(new InstantiationService());
 changesServices.registerInstance(IContextKeyService, contextKeys);
 changesServices.registerInstance(ISessionGitHubService, { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as ISessionGitHubService);

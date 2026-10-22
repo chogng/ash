@@ -25,7 +25,7 @@ import { IntegrityService } from '../../services/integrity/electron-browser/inte
 import { ITitleService } from '../../services/title/browser/titleService.js';
 import type { ITitleProperties } from '../../browser/parts/titlebar/titlebarPart.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../services/notification/test/common/testNotificationService.js';
 import { ILogService } from '../../../platform/log/common/log.js';
 import { IEditorService } from '../../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../services/editor/common/editorGroupsService.js';
@@ -34,7 +34,7 @@ import { URI } from '../../../base/common/uri.js';
 
 test('desktop initialization reads privileges and installation proofs through injected services', async () => {
 	using services = new InstantiationService();
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	let reply: unknown = { isBuilt: false, proof: [] };
 	const requests: string[] = [];
 	services.registerInstance(IMainProcessService, {
@@ -108,7 +108,7 @@ test('desktop disposal prevents pending environment reads from updating titles',
 	services.registerInstance(INativeHostService, { isAdmin: () => new Promise<boolean>(resolve => { finish = resolve; }) } as INativeHostApi);
 	services.registerInstance(IIntegrityService, { _serviceBrand: undefined, isPure: async () => { assert.fail('Disposed window must not start an installation scan'); } });
 	services.registerInstance(ITitleService, { updateProperties: () => assert.fail('Disposed window must not update titles') } as unknown as import('../../services/title/browser/titleService.js').ITitleService);
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(ILogService, { trace() { }, debug() { }, info() { }, warn() { }, error() { } });
 	services.registerInstance(IEditorService, {} as import('../../services/editor/common/editorService.js').IEditorService);

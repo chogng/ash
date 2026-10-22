@@ -7,7 +7,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ICommandService, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { StatusbarService, IStatusbarService } from '../../../../services/statusbar/browser/statusbar.js';
 import { ProgressService } from '../../../../services/progress/browser/progressService.js';
@@ -108,7 +108,7 @@ test('Debug adapter progress owns real notification lifetime and cancellation re
 		cancelled.push(id);
 	};
 	using services = new InstantiationService();
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	using statusbar = new StatusbarService();
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IStatusbarService, statusbar);

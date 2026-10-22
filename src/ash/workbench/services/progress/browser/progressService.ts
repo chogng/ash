@@ -1,7 +1,8 @@
 import { localize } from "../../../../nls.js";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
-import { INotificationService, NotificationPriority, Severity, type INotificationHandle } from "../../../../platform/notification/common/notification.js";
+import { INotificationService, NotificationPriority, NotificationsFilter, Severity, type INotificationHandle } from "../../../../platform/notification/common/notification.js";
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ProgressLocation, type IProgress, type IProgressService, type IProgressOptions, type IProgressWindowOptions, type IProgressNotificationOptions, type IProgressStep } from "../../../../platform/progress/common/progress.js";
 import { IStatusbarService, StatusbarAlignment, type IStatusbarEntryAccessor } from "../../statusbar/browser/statusbar.js";
 
@@ -15,6 +16,9 @@ interface ProgressTask {
 	worked: number;
 	cancelled: boolean;
 	notification?: INotificationHandle;
+	notificationHidden?: boolean;
+	/** Work already delivered to the incremental notification progress API. */
+	notificationWorked?: number;
 }
 
 /** Routes producer-owned Promise lifetimes through the existing Workbench presentations. */
@@ -97,11 +101,16 @@ export class ProgressService extends Disposable implements IProgressService {
 	private showNotification(record: ProgressTask): void {
 		if (!this.tasks.has(record) || record.cancelled || this.isDisposed) return;
 		const { options } = record;
+		const filtered = this.notifications.getFilter() === NotificationsFilter.ERROR || (typeof options.source === 'object' && this.notifications.getFilter(options.source) === NotificationsFilter.ERROR);
+		const requestedPriority = (options as IProgressNotificationOptions).priority;
+		const priority = options.location === ProgressLocation.Window || (filtered && requestedPriority !== NotificationPriority.URGENT) ? NotificationPriority.SILENT : requestedPriority;
+		record.notificationHidden = priority === NotificationPriority.SILENT;
+		record.notificationWorked = record.total === undefined ? 0 : record.worked;
 		record.notification = this.notifications.notify({
 			severity: Severity.Info,
 			message: this.taskText(record) || localize('progress.running', "Working…"),
-			source: typeof options.source === 'string' ? options.source : options.source?.label,
-			priority: options.location === ProgressLocation.Window ? NotificationPriority.SILENT : (options as IProgressNotificationOptions).priority,
+			source: options.source,
+			priority,
 			progress: record.total === undefined ? { infinite: true } : { total: record.total, worked: record.worked },
 			actions: options.cancellable ? {
 				primary: [{
@@ -113,8 +122,14 @@ export class ProgressService extends Disposable implements IProgressService {
 				}]
 			} : undefined,
 		});
+		// The center can render synchronously during notify(), before the handle is returned.
+		if (record.notification.visible) record.notificationHidden = false;
 		record.resources.add(record.notification.onDidClose(() => {
 			record.notification = undefined;
+			this.updateWindowProgress();
+		}));
+		if (record.notification) record.resources.add(record.notification.onDidChangeVisibility(visible => {
+			record.notificationHidden = !visible;
 			this.updateWindowProgress();
 		}));
 		this.updateWindowProgress();
@@ -124,10 +139,12 @@ export class ProgressService extends Disposable implements IProgressService {
 		const handle = record.notification;
 		if (!handle) return;
 		handle.updateMessage(this.taskText(record) || localize('progress.running', "Working…"));
-		if (record.total === undefined) handle.progress.infinite();
+		if (record.total === undefined) { handle.progress.infinite(); record.notificationWorked = 0; }
 		else {
 			handle.progress.total(record.total);
-			handle.progress.worked(record.worked);
+			const increment = record.worked - (record.notificationWorked ?? 0);
+			if (increment !== 0) handle.progress.worked(increment);
+			record.notificationWorked = record.worked;
 		}
 	}
 
@@ -140,9 +157,8 @@ export class ProgressService extends Disposable implements IProgressService {
 
 	private updateWindowProgress(): void {
 		if (this.isDisposed) return;
-		const active = [...this.tasks].filter(record => record.options.location === ProgressLocation.Window
-			&& !record.cancelled && !!this.taskText(record)
-			&& (!!(record.options as IProgressWindowOptions).command || !!record.notification));
+		const active = [...this.tasks].filter(record => !record.cancelled && !!this.taskText(record)
+			&& ((record.options.location === ProgressLocation.Window && !!(record.options as IProgressWindowOptions).command) || (!!record.notification && record.notificationHidden)));
 		// Completing the most recent task reveals the previous operation.
 		const record = active.at(-1);
 		if (!record) { this.windowStatus.clear(); return; }
@@ -151,10 +167,11 @@ export class ProgressService extends Disposable implements IProgressService {
 		const command = (record.options as IProgressWindowOptions).command ?? 'notifications.showList';
 		const entry = {
 			text, ariaLabel: text,
+			icon: Lxicon.sync, showProgress: true,
 			tooltip: source ? localize('progress.sourceTooltip', "[{0}] {1}", source, text) : text,
 			run: () => this.commands.executeCommand(command),
 		};
 		if (this.windowStatus.value) this.windowStatus.value.update(entry);
-		else this.windowStatus.value = this.statusbar.addEntry(entry, { id: "status.progress", alignment: StatusbarAlignment.Right, priority: 20 });
+		else this.windowStatus.value = this.statusbar.addEntry(entry, { id: "status.progress", alignment: StatusbarAlignment.Left, priority: -Number.MAX_SAFE_INTEGER });
 	}
 }

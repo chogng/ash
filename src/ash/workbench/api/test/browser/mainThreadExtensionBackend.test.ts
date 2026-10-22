@@ -5,7 +5,7 @@ import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import type { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { URI } from '../../../../base/common/uri.js';
-import { NotificationService } from '../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../services/notification/test/common/testNotificationService.js';
 import { CommandService } from '../../../services/commands/common/commandService.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { ProgressService } from '../../../services/progress/browser/progressService.js';
@@ -112,7 +112,7 @@ for (const retire of [false, true]) test(`backend cancellation retains its exact
 	setNlsMessages('zh-CN', { ash: { 'progress.region': '进度', 'progress.cancel': '取消' } });
 	try {
 		using statusbar = new StatusbarService();
-		using notifications = new NotificationService();
+		using notifications = new TestNotificationService();
 		using commands = new CommandService({ get() { throw new Error('Unexpected command service request'); }, getOptional() { return undefined; } });
 		using progress = new ProgressService(statusbar, notifications, commands);
 		const value = fixture('builtIn', async (method, params) => {

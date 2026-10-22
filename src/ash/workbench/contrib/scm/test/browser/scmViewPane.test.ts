@@ -6,7 +6,7 @@ import { CancellationToken, CancellationTokenSource } from '../../../../../base/
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { EditorInputSerializers } from '../../../../services/editor/common/editorInputSerializer.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { isMultiDiffEditorInput } from '../../../multiDiffEditor/browser/multiDiffEditorInput.js';
 import { ActivityService } from '../../../../services/activity/browser/activityService.js';
 import { IActivityService } from '../../../../services/activity/common/activity.js';
@@ -1031,7 +1031,7 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 	const installedGlobals = installDomGlobals(browser);
 	using services = new InstantiationService();
 	using contextKeys = new (await import('../../../../../platform/contextkey/browser/contextKeyService.js')).ContextKeyService();
-	using notifications = new NotificationService();
+	using notifications = new TestNotificationService();
 	const { MenuService } = await import('../../../../../platform/actions/common/menuService.js');
 	const commands = new CommandService(services);
 	const menus = new MenuService(commands, contextKeys);

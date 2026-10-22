@@ -19,7 +19,7 @@ import '../../../update/common/update.config.contribution.js';
 import { mock } from 'node:test';
 import { IUpdateService } from '../../../update/common/updateService.js';
 import { INotificationService } from '../../../notification/common/notification.js';
-import { NotificationService } from '../../../../workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../workbench/services/notification/test/common/testNotificationService.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
 import '../../../../workbench/contrib/update/electron-browser/update.contribution.js';
@@ -161,7 +161,7 @@ suite('Desktop metered connection renderer', () => {
 		try {
 			using services = new InstantiationService();
 			using networkChanges = new Emitter<boolean>();
-			using notifications = new NotificationService();
+			using notifications = new TestNotificationService();
 			services.registerInstance(INotificationService, notifications);
 			services.registerInstance(IMeteredConnectionService, {
 				_serviceBrand: undefined, isConnectionMetered: true,

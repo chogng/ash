@@ -151,7 +151,7 @@ test('notification Copy Text menu Escape restores the row before center Escape r
 	const clipboard = await notificationClipboard(application, page);
 	await workbench.quickaccess.runCommand('notifications.clearAll');
 	await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
-	const origin = page.getByRole('button', { name: 'Show Notification Center', exact: true });
+	const origin = page.getByRole('button', { name: /^Show Notification Center/ });
 	await origin.focus();
 	await origin.press('Enter');
 	const center = page.locator('.ash-notifications-center');
@@ -420,7 +420,7 @@ test('notification toast Escape, Copy Text, help, and removal use the Chinese la
 	const toast = page.locator('.ash-notification-host').getByRole('button', { name: '移除通知', exact: true });
 	await expect(toast).toBeVisible();
 	const id = await toast.getAttribute('data-notification-close');
-	const origin = page.getByRole('button', { name: '显示通知中心', exact: true });
+	const origin = page.getByRole('button', { name: /^显示通知中心/ });
 	await origin.focus();
 	await toast.focus();
 	await page.keyboard.press('Escape');
@@ -437,7 +437,7 @@ test('notification toast Escape, Copy Text, help, and removal use the Chinese la
 	await expect(row).toBeVisible();
 	await workbench.quickaccess.runCommand('editor.action.accessibilityHelp');
 	const help = page.getByRole('dialog', { name: '无障碍帮助', exact: true });
-	await expect(help.getByRole('textbox')).toHaveValue(/通知弹出提示的移除通知按钮获得焦点时，按 Escape 可收起弹出提示并保留通知历史。/);
+	await expect(help.getByRole('textbox')).toHaveValue(/通知弹出提示或其中的操作获得焦点时，按 Escape 可收起弹出提示并保留通知历史。/);
 	await expect(help.getByRole('textbox')).toHaveValue(/按菜单键或 Shift\+F10，然后选择复制文本，可复制通知消息。按 Escape 可关闭菜单并返回通知。/);
 	await page.keyboard.press('Escape');
 	await expect(center).toBeVisible();
@@ -526,3 +526,105 @@ async function blockConfigurationWrite(page: Page, application: PlaywrightApplic
 		async dispose() { await application.evaluate(() => (globalThis as typeof globalThis & { restoreSettingsWrite(): void; }).restoreSettingsWrite()); },
 	};
 }
+
+test('notification status shows unread and do not disturb icons and restores the filter after restart', async ({ application, workbench, reloadWorkbench }, testInfo) => {
+	let page = workbench.page;
+	const bellSelector = '[data-statusbar-item-id="ash.status.notifications"] [role="button"]';
+	const startupGeometry = await page.locator(bellSelector).evaluate(element => {
+		const part = element.closest('[data-part="statusbar"]')!;
+		const bar = part.getBoundingClientRect();
+		const bell = element.getBoundingClientRect();
+		return {
+			direction: getComputedStyle(part).flexDirection,
+			icon: element.querySelector('svg')?.getAttribute('data-ash-icon-id'),
+			stylesheets: [...document.styleSheets].map((sheet, index) => ({ href: sheet.href, index })).filter(sheet => /(?:statusbarpart|\/media\/part)\.css/.test(sheet.href ?? '')),
+			inside: bell.top >= bar.top && bell.bottom <= bar.bottom && bell.left >= bar.left && bell.right <= bar.right,
+			hit: element.contains(document.elementFromPoint(bell.x + bell.width / 2, bell.y + bell.height / 2)),
+		};
+	});
+	await testInfo.attach('startup-statusbar-state', { body: JSON.stringify(startupGeometry), contentType: 'application/json' });
+	expect(startupGeometry).toMatchObject({ direction: 'row', icon: 'bell', inside: true, hit: true });
+	await workbench.quickaccess.runCommand('notifications.clearAll');
+	await expect(page.locator(bellSelector)).toBeVisible();
+	await expect(page.locator(bellSelector).locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell');
+	await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+	await expect(page.locator(bellSelector).locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell-dot');
+	await page.locator(bellSelector).focus();
+	await page.keyboard.press('Enter');
+	await expect(page.locator(bellSelector).locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell');
+	await workbench.menus.select(application, () => page.getByRole('button', { name: 'Configure Do Not Disturb...', exact: true }).click(), ['Enable Do Not Disturb Mode']);
+	await expect(page.locator(bellSelector).locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell-slash');
+	await page.keyboard.press('Escape');
+	await expect(page.locator(bellSelector)).toBeFocused();
+	await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+	await expect(page.locator(bellSelector).locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell-slash-dot');
+	await expect(page.locator('.ash-notification')).toHaveCount(0);
+	await page.locator(bellSelector).click();
+	await expect(page.locator('.ash-notifications-row')).toHaveCount(2);
+	({ workbench } = await reloadWorkbench());
+	page = workbench.page;
+	await expect(page.locator(bellSelector)).toBeVisible();
+	await expect(page.locator(bellSelector).locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell-slash');
+	await workbench.quickaccess.runCommand('notifications.toggleDoNotDisturbMode');
+	await expect(page.locator(bellSelector).locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell');
+});
+
+test('notification position menus move the entry between the status bar and title bar and persist after reload', async ({ application, workbench, reloadWorkbench }, testInfo) => {
+	let page = workbench.page;
+	const bell = '[data-statusbar-item-id="ash.status.notifications"] [role="button"]';
+	await workbench.quickaccess.runCommand('notifications.clearAll');
+	await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+	await page.locator(bell).click();
+	const center = () => page.getByRole('region', { name: 'Notification Center', exact: true });
+	const menu = () => page.getByRole('button', { name: 'Configure Notifications Position...', exact: true });
+	await workbench.menus.select(application, () => menu().click(), ['Bottom Left']);
+	await expect(page.locator('.ash-statusbar-items-left').locator(bell)).toBeVisible();
+	await expect(center()).toHaveAttribute('data-position', 'bottom-left');
+	await workbench.menus.select(application, () => menu().click(), ['Top Right']);
+	await expect(page.locator(bell)).toHaveCount(0);
+	const titleBell = () => page.getByRole('button', { name: 'Toggle Notifications', exact: true });
+	await expect(titleBell()).toBeVisible();
+	const bounds = await center().boundingBox();
+	const titleBounds = await page.locator('[data-part="titlebar"]').boundingBox();
+	expect(bounds!.y).toBeGreaterThanOrEqual(titleBounds!.y + titleBounds!.height);
+	await titleBell().click();
+	await expect(center()).toBeHidden();
+	await titleBell().focus();
+	await page.keyboard.press('Enter');
+	await expect(center()).toBeVisible();
+	await testInfo.attach('notification-top-right', { body: await page.screenshot(), contentType: 'image/png' });
+	const settings = await readUserSettings(page);
+	expect(JSON.parse(settings.content)['workbench.notifications.position']).toBe('top-right');
+	({ application, workbench } = await reloadWorkbench());
+	page = workbench.page;
+	await expect(titleBell()).toBeVisible();
+	await expect(page.locator(bell)).toHaveCount(0);
+	await titleBell().click();
+	await expect(center()).toHaveAttribute('data-position', 'top-right');
+	await workbench.menus.select(application, () => menu().click(), ['Bottom Right']);
+	await expect(page.locator('.ash-statusbar-items-right').locator(bell)).toBeVisible();
+	await expect(titleBell()).toHaveCount(0);
+});
+
+macFocusTest('notification ordinary toast expires into unread history in the real Workbench', async ({ application, workbench }, testInfo) => {
+	const page = workbench.page;
+	if ('windows' in application) await focusNotificationWindow(application, page);
+	else await page.bringToFront();
+	await workbench.quickaccess.runCommand('notifications.clearAll');
+	await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+	const toast = page.locator('.ash-notification');
+	await expect(toast).toBeVisible();
+	const id = await toast.getAttribute('data-notification-id');
+	const message = await toast.locator('.ash-notification-message').textContent();
+	const bell = page.locator('[data-statusbar-item-id="ash.status.notifications"] [role="button"]');
+	await page.mouse.move(0, 0);
+	await bell.focus();
+	await testInfo.attach('ordinary-toast-before-timeout', { body: await page.screenshot(), contentType: 'image/png' });
+	await expect(toast).toHaveCount(0, { timeout: 16000 });
+	await expect(bell).toBeFocused();
+	await expect(bell.locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell-dot');
+	await bell.click();
+	await expect(page.locator(`.ash-notifications-row[data-notification-id="${id}"] .ash-notification-message`)).toHaveText(message!);
+	await expect(bell.locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell');
+	await testInfo.attach('ordinary-toast-retained-history', { body: await page.screenshot(), contentType: 'image/png' });
+});

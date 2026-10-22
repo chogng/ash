@@ -36,7 +36,7 @@ import { DialogService } from '../../../src/ash/workbench/services/dialogs/commo
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import chineseMessages from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
@@ -76,7 +76,7 @@ services.registerInstance(IFileService, files);
 services.registerInstance(IUriIdentityService, resources.add(services.createInstance(UriIdentityService)));
 const storage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'url-integration', flushInterval: 0 }));
 services.registerInstance(IStorageService, storage);
-services.registerInstance(INotificationService, resources.add(new NotificationService()));
+services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 const dialogs = resources.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
 resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));

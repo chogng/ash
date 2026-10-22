@@ -1,7 +1,10 @@
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { NotificationActionRunner } from '../../../src/ash/workbench/browser/parts/notifications/notificationsCommands.js';
 import { NotificationsToasts } from '../../../src/ash/workbench/browser/parts/notifications/notificationsToasts.js';
+import { IHostService } from '../../../src/ash/workbench/services/host/browser/host.js';
+import { TestHostService } from '../../../src/ash/workbench/services/host/test/browser/testHostService.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { ViewsRegistry } from '../../../src/ash/workbench/common/views.js';
 import { ProgressService } from '../../../src/ash/workbench/services/progress/browser/progressService.js';
 import { AppServerRemoteError } from '../../../src/ash/platform/agentHost/common/appServerError.js';
@@ -99,9 +102,12 @@ for (const source of [scmChineseMessages, settingsChineseMessages]) {
 
 const lifetime = new DisposableStore();
 const services = lifetime.add(new InstantiationService());
-const backendNotifications = lifetime.add(new NotificationService());
+const backendNotifications = lifetime.add(new TestNotificationService());
 const progressCommands = lifetime.add(new CommandService(services));
 const toastServices = lifetime.add(new InstantiationService());
+toastServices.registerInstance(INotificationService, backendNotifications);
+toastServices.registerInstance(IHostService, new TestHostService());
+toastServices.registerInstance(IConfigurationService, lifetime.add(new InMemoryConfigurationService()));
 toastServices.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { throw new Error('Unexpected notification menu'); }, hideContextMenu() { } } satisfies IContextMenuService);
 lifetime.add(toastServices.createInstance(NotificationsToasts, document.body, backendNotifications.model, lifetime.add(new NotificationActionRunner(backendNotifications))));
 const workspace = lifetime.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') }));

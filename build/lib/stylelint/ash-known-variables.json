@@ -372,6 +372,7 @@
 		"--ash-menubar-action-radius",
 		"--ash-menubar-hover-background",
 		"--ash-model-picker-position",
+		"--ash-notifications-top",
 		"--ash-sash-inset-gap",
 		"--ash-scrollbar-slider-size",
 		"--ash-select-style-focus-border",

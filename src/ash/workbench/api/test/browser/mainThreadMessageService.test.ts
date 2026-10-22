@@ -8,11 +8,12 @@ import { InstantiationService } from '../../../../platform/instantiation/common/
 import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
 import { CommandService } from '../../../services/commands/common/commandService.js';
 import { NotificationService } from '../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../services/notification/test/common/testNotificationService.js';
 import { MainThreadMessageService } from '../../browser/mainThreadMessageService.js';
 
 function createServices(): InstantiationService {
 	const services = new InstantiationService();
-	services.registerSingleton(INotificationService, () => services.createInstance(NotificationService));
+	services.registerSingleton(INotificationService, () => new TestNotificationService());
 	services.registerSingleton(ICommandService, () => services.createInstance(CommandService));
 	services.registerInstance(IExtensionApi, {
 		list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'fixture.git', displayName: 'Git' }] }),
@@ -31,8 +32,8 @@ test('extension message identity comes from its authenticated caller, and second
 	const result = messages.handle({ operation: 'showMessage', message: 'Git failed', severity: 'error', items: ['Output', 'Retry'] }, 'fixture.git', new AbortController().signal);
 	await added.promise;
 	const item = notifications.model.getNotifications()[0];
-	assert.deepEqual({ source: item.source, severity: item.severity, primary: item.actions?.primary?.map(action => action.label), secondary: item.actions?.secondary?.map(action => action.label) }, {
-		source: 'Git', severity: Severity.Error, primary: ['Output', 'Retry'], secondary: ['Manage Extension'],
+	assert.deepEqual({ source: item.source, sourceId: item.sourceId, severity: item.severity, primary: item.actions?.primary?.map(action => action.label), secondary: item.actions?.secondary?.map(action => action.label) }, {
+		source: 'Git', sourceId: 'fixture.git', severity: Severity.Error, primary: ['Output', 'Retry'], secondary: ['Manage Extension'],
 	});
 	await item.actions!.secondary![0].run();
 	assert.deepEqual(managed, { query: 'fixture.git' });

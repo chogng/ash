@@ -16,7 +16,7 @@ import { BrowserMenubarControl } from '../../../src/ash/workbench/browser/parts/
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { WorkbenchKeybindingService } from '../../../src/ash/workbench/services/keybinding/browser/keybindingService.js';
 import { BrowserKeyboardLayoutService } from '../../../src/ash/workbench/services/keybinding/browser/keyboardLayoutService.js';
 import { createUSKeyboardMapping } from '../../../src/ash/workbench/services/keybinding/common/keyboardMapping.js';
@@ -90,7 +90,7 @@ const contexts = services.get(IContextKeyService);
 const commands = lifetime.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);
 services.registerInstance(IDialogService, lifetime.add(new DialogService()));
-services.registerInstance(INotificationService, lifetime.add(new NotificationService()));
+services.registerInstance(INotificationService, lifetime.add(new TestNotificationService()));
 services.registerInstance(IUserDataProfileService, profiles);
 // Playwright emits US key events; host layout discovery must not reset a shortcut between its chords.
 const keyboardLayout = lifetime.add(new BrowserKeyboardLayoutService({

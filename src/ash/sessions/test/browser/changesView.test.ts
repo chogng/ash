@@ -32,7 +32,7 @@ import { createDisconnectedRendererApi } from '../../../workbench/browser/render
 import type { TurnChangesReadResult } from '../../../../../.build/protocol/typescript/index.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
-import { NotificationService } from '../../../workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
 import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
@@ -69,7 +69,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		using changed = new Emitter<void>();
 		using config = new WorkbenchConfigurationService();
 		using contexts = new ContextKeyService();
-		using notifications = new NotificationService();
+		using notifications = new TestNotificationService();
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 		let selection = selected('old');
 		const sessions: ISessionsService = {
@@ -312,7 +312,7 @@ suite('Changes visibility lifecycle', () => {
 		using ledgerChanged = new Emitter<{ sessionId: string; threadId: string; }>();
 		using configuration = new WorkbenchConfigurationService();
 		using contexts = new ContextKeyService();
-		using notifications = new NotificationService();
+		using notifications = new TestNotificationService();
 		const pendingFile = new DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string; }>();
 		const opened: IResourceEditorInput[] = [];
 		using openedOwner = toDisposable(() => {
@@ -367,7 +367,7 @@ suite('Changes visibility lifecycle', () => {
 		using ledgerChanged = new Emitter<{ sessionId: string; threadId: string; }>();
 		using configuration = new WorkbenchConfigurationService();
 		using contexts = new ContextKeyService();
-		using notifications = new NotificationService();
+		using notifications = new TestNotificationService();
 		let selection = selected('a');
 		const pendingList = new DeferredPromise<readonly TurnChangesReadResult['summary'][]>();
 		const pendingFile = new DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string; }>();

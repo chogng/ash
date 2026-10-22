@@ -844,7 +844,7 @@ export class Workbench extends Disposable {
 		feedbackHost.style.setProperty('--ash-feedback-statusbar-height', `${StatusbarHeight}px`);
 		workbenchRoot.append(feedbackHost);
 		this._register(toDisposable(() => feedbackHost.remove()));
-		const notificationService = this._register(new NotificationService());
+		const notificationService = this._register(services.createInstance(NotificationService));
 		services.registerInstance(INotificationService, notificationService);
 		const statusbarService = this._register(new StatusbarService());
 		services.registerInstance(IStatusbarService, statusbarService);

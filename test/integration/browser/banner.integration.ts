@@ -36,7 +36,7 @@ import { WorkbenchKeybindingService } from '../../../src/ash/workbench/services/
 import { IUserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/common/userDataProfile.js';
 import { UserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { IMarkdownRendererService, MarkdownRendererService } from '../../../src/ash/platform/markdown/browser/markdownRenderer.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
@@ -93,7 +93,7 @@ services.registerInstance(IContextViewService, contextView);
 const contextMenu = { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } } as const;
 services.registerInstance(IContextMenuService, contextMenu);
 services.registerInstance(IHoverService, resources.add(new HoverService(services.get(IConfigurationService), contextView, contextMenu)));
-services.registerInstance(INotificationService, resources.add(new NotificationService()));
+services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 const profile = new UserDataProfileService();
 services.registerInstance(IUserDataProfileService, profile);
 const files = resources.add(new FileService());

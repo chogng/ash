@@ -1,7 +1,7 @@
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
@@ -34,7 +34,7 @@ const changes = store.add(new Emitter<ServerNotification>());
 const workspace = store.add(new TestWorkspaceService({ id: 'workspace', uri: stanza.URI.file('/project') }));
 const statusServices = store.add(createTestEditorServices());
 statusServices.registerSingleton(ICommandService, () => new CommandService(statusServices));
-statusServices.registerSingleton(INotificationService, () => new NotificationService());
+statusServices.registerSingleton(INotificationService, () => new TestNotificationService());
 statusServices.registerInstance(ILanguageFeaturesService, StandaloneServices.get(ILanguageFeaturesService));
 statusServices.registerInstance(IModelService, StandaloneServices.get(IModelService));
 statusServices.registerSingleton(IDialogService, () => statusServices.createInstance(DialogService));

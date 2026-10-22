@@ -81,7 +81,7 @@ import { WorkbenchKeybindingService } from '../../../src/ash/workbench/services/
 import { BrowserKeyboardLayoutService } from '../../../src/ash/workbench/services/keybinding/browser/keyboardLayoutService.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IUserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/common/userDataProfile.js';
 import { UserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/browser/userDataProfileService.js';
@@ -121,7 +121,7 @@ const menus: IContextMenuService = {
 };
 const contextView = store.add(new BrowserContextViewService(document.body));
 instantiation.registerInstance(IContextViewService, contextView);
-instantiation.registerInstance(INotificationService, store.add(new NotificationService()));
+instantiation.registerInstance(INotificationService, store.add(new TestNotificationService()));
 instantiation.registerInstance(IUserDataProfileService, new UserDataProfileService());
 instantiation.registerInstance(IFileService, { onDidChangeFiles: Event.None, readFile: async resource => ({ resource, content: '[]', revision: '1' }) } as IFileService);
 const keyboardLayout = store.add(new BrowserKeyboardLayoutService({ navigator }));

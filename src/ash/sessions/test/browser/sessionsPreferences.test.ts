@@ -169,8 +169,8 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
 	services.registerInstance(ITelemetryService, NullTelemetryService);
 	const { INotificationService } = await import('../../../platform/notification/common/notification.js');
-	const { NotificationService } = await import('../../../workbench/services/notification/common/notificationService.js');
-	using notifications = new NotificationService();
+	const { TestNotificationService } = await import('../../../workbench/services/notification/test/common/testNotificationService.js');
+	using notifications = new TestNotificationService();
 	services.registerInstance(INotificationService, notifications);
 	const { IClipboardService: ClipboardService } = await import('../../../platform/clipboard/common/clipboardService.js');
 	const { IContextMenuService: ContextMenus } = await import('../../../platform/contextview/browser/contextView.js');

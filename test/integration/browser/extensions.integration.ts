@@ -3,7 +3,7 @@ import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/bro
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
 import type { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
-import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { TestNotificationService } from './notificationFixture.js';
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { ConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
@@ -546,7 +546,7 @@ const model: IViewContainerModel = classification
 	};
 services.registerInstance(IMenuService, new MenuService(services.get(ICommandService), services.get(IContextKeyService)));
 const titleMenus = disposables.add(new BrowserContextMenuService(services.get(IMenuService), services.get(IContextKeyService),
-	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService, services.get(IContextViewService), disposables.add(new NotificationService())));
+	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService, services.get(IContextViewService), disposables.add(new TestNotificationService())));
 services.registerInstance(IContextMenuService, titleMenus);
 const extensionsContainer = disposables.add(services.createInstance(ExtensionsViewPaneContainer, host, {
 	viewContainer: descriptor, model, instantiationService: services, contextKeyService: services.get(IContextKeyService),

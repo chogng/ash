@@ -17,7 +17,7 @@ import {
 } from '../../../../../platform/menubar/electron-main/menubarMainService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { NativeMenubarControl } from '../../../../electron-browser/parts/titlebar/menubarControl.js';
-import { NotificationService } from '../../../notification/common/notificationService.js';
+import { TestNotificationService } from '../../../notification/test/common/testNotificationService.js';
 
 test('registered menubar service publishes the controller menu through Main and releases window subscriptions', async () => {
 	let template: readonly INativeMenubarMainMenuItem[] | undefined;
@@ -75,7 +75,7 @@ test('registered menubar service publishes the controller menu through Main and 
 			}),
 			getMenuActions: () => [],
 		});
-		using notifications = new NotificationService();
+		using notifications = new TestNotificationService();
 		services.registerInstance(INotificationService, notifications);
 		assert.equal(listeners.size, 0, 'The delayed service does not subscribe before a consumer exists');
 		using control = services.createInstance(NativeMenubarControl, MenuId.MenubarMainMenu);

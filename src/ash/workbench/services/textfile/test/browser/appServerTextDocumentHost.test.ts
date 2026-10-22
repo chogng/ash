@@ -40,7 +40,7 @@ import { ILifecycleService } from '../../../lifecycle/common/lifecycle.js';
 import { AbstractLifecycleService } from '../../../lifecycle/common/lifecycleService.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../notification/common/notificationService.js';
+import { TestNotificationService } from '../../../notification/test/common/testNotificationService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
@@ -191,7 +191,7 @@ async function fixture(options: { contents?: ReadonlyMap<string, string>; backen
 	services.registerInstance(ILogService, { trace() { }, debug() { }, info() { }, warn() { }, error() { } });
 	const lifecycle = lifetime.add(services.createInstance(TestLifecycleService, undefined));
 	services.registerInstance(ILifecycleService, lifecycle);
-	const notifications = lifetime.add(new NotificationService());
+	const notifications = lifetime.add(new TestNotificationService());
 	services.registerInstance(INotificationService, notifications);
 	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 	const cues: string[] = [];

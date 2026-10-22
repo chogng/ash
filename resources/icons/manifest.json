@@ -94,7 +94,7 @@
     {
       "id": "bell-dot",
       "file": "bell-dot.svg",
-      "rendering": "multicolor"
+      "rendering": "symbolic"
     },
     {
       "id": "bell-slash",
@@ -104,7 +104,7 @@
     {
       "id": "bell-slash-dot",
       "file": "bell-slash-dot.svg",
-      "rendering": "multicolor"
+      "rendering": "symbolic"
     },
     {
       "id": "bold",

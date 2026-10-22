@@ -47,7 +47,7 @@ import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/r
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { SpeechService } from '../../../speech/browser/speechService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -1520,7 +1520,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	services.registerInstance(ILocalTranscriptionService, localTranscription);
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(ChatServiceId, chat);
-	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
+	services.registerInstance(INotificationService, disposables.add(new TestNotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
 	services.registerInstance(IDialogService, {} as IDialogService);
 	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
@@ -1594,7 +1594,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkspaceService()));
-	services.registerInstance(INotificationService, resources.add(new NotificationService()));
+	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 	const content = resources.add(services.createInstance(ModelSettingsRenderer, root));
 	const loaded = new DeferredPromise<void>();
@@ -1798,7 +1798,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, hooksBackend);
-	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
+	services.registerInstance(INotificationService, disposables.add(new TestNotificationService()));
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IContextKeyService, disposables.add(new ContextKeyService()));
@@ -2733,7 +2733,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(ChatServiceId, chat);
-	services.registerInstance(INotificationService, disposables.add(new NotificationService()));
+	services.registerInstance(INotificationService, disposables.add(new TestNotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
 	services.registerInstance(IDialogService, {} as IDialogService);
 	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
@@ -2886,7 +2886,7 @@ test('Models Settings keeps checks silent and requires explicit authorization an
 	resources.add(toDisposable(() => root.remove()));
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkspaceService()));
-	services.registerInstance(INotificationService, resources.add(new NotificationService()));
+	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 	services.registerInstance(ILanguageModelsService, {
 		onDidChangeModels: Event.None,
