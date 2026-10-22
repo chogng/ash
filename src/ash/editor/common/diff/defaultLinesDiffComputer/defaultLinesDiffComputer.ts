@@ -43,35 +43,114 @@ function* diffLines(original: readonly string[], modified: readonly string[], op
 	const modifiedCompared = options.ignoreTrimWhitespace ? modified.map(line => line.trim()) : modified;
 	const matches = yield* matchingItems(originalCompared, modifiedCompared);
 	matches.push([original.length, modified.length]);
-	const changes: DetailedLineRangeMapping[] = [];
+	const spans: Span[] = [];
 	let originalIndex = 0;
 	let modifiedIndex = 0;
 	for (const [originalMatch, modifiedMatch] of matches) {
-		const originalCount = originalMatch - originalIndex;
-		const modifiedCount = modifiedMatch - modifiedIndex;
-		if (originalCount || modifiedCount) {
-			const innerChanges: RangeMapping[] = [];
-			const pairs = yield* pairChangedLines(original.slice(originalIndex, originalMatch), modified.slice(modifiedIndex, modifiedMatch));
-			for (const [left, right] of pairs) {
-				innerChanges.push(...(yield* diffCharacters(
-					original[originalIndex + left]!,
-					modified[modifiedIndex + right]!,
-					originalIndex + left + 1,
-					modifiedIndex + right + 1,
-				)));
-				yield;
-			}
-			changes.push(new DetailedLineRangeMapping(
-				new LineRange(originalIndex + 1, originalMatch + 1),
-				new LineRange(modifiedIndex + 1, modifiedMatch + 1),
-				innerChanges.length === 0 ? undefined : innerChanges,
-			));
+		if (originalMatch > originalIndex || modifiedMatch > modifiedIndex) {
+			spans.push([originalIndex, originalMatch, modifiedIndex, modifiedMatch]);
 		}
 		originalIndex = originalMatch + 1;
 		modifiedIndex = modifiedMatch + 1;
 	}
+	yield* alignLineChangeBoundaries(original, modified, spans);
+	const changes: DetailedLineRangeMapping[] = [];
+	for (const [originalStart, originalEnd, modifiedStart, modifiedEnd] of spans) {
+		const innerChanges: RangeMapping[] = [];
+		const pairs = yield* pairChangedLines(original.slice(originalStart, originalEnd), modified.slice(modifiedStart, modifiedEnd));
+		for (const [left, right] of pairs) {
+			innerChanges.push(...(yield* diffCharacters(
+				original[originalStart + left]!,
+				modified[modifiedStart + right]!,
+				originalStart + left + 1,
+				modifiedStart + right + 1,
+			)));
+			yield;
+		}
+		changes.push(new DetailedLineRangeMapping(
+			new LineRange(originalStart + 1, originalEnd + 1),
+			new LineRange(modifiedStart + 1, modifiedEnd + 1),
+			innerChanges.length === 0 ? undefined : innerChanges,
+		));
+	}
 	const moves = options.computeMoves ? yield* findMoves(changes, original, modified, options) : [];
 	return new LinesDiff(changes, moves, false);
+}
+
+/** Rotate identical edge lines to keep an insertion or deletion out of an indented block's body. */
+function* alignLineChangeBoundaries(original: readonly string[], modified: readonly string[], spans: Span[]): Generator<void> {
+	let work = 0;
+	for (let index = 0; index < spans.length; index++) {
+		if (++work % 256 === 0) {
+			yield;
+		}
+		const span = spans[index]!;
+		if (span[0] !== span[1] && span[2] !== span[3]) {
+			continue;
+		}
+		const isInsertion = span[0] === span[1];
+		const contextSide = isInsertion ? 0 : 2;
+		const editedSide = isInsertion ? 2 : 0;
+		const context = isInsertion ? original : modified;
+		const edited = isInsertion ? modified : original;
+		const contextPosition = span[contextSide];
+		const start = span[editedSide];
+		const end = span[editedSide + 1]!;
+		const previous = spans[index - 1];
+		const next = spans[index + 1];
+		// Retain an unchanged line between hunks; a boundary adjustment must not
+		// consume context belonging to an adjacent replacement or another block.
+		const minimumContext = (previous?.[contextSide + 1] ?? -1) + 1;
+		const minimumEdited = (previous?.[editedSide + 1] ?? -1) + 1;
+		const maximumContext = (next?.[contextSide] ?? context.length + 1) - 1;
+		const maximumEdited = (next?.[editedSide] ?? edited.length + 1) - 1;
+		let bestPosition = contextPosition;
+		let bestStart = start;
+		const initialCost = lineIndentation(edited[start]!) + lineIndentation(edited[end - 1]!);
+		if (initialCost === 0) {
+			continue;
+		}
+		let bestCost = initialCost;
+		for (const direction of [-1, 1]) {
+			let position = contextPosition;
+			let from = start;
+			let to = end;
+			while (position + direction >= minimumContext && position + direction <= maximumContext
+				&& from + direction >= minimumEdited && to + direction <= maximumEdited) {
+				const edgeOffset = direction < 0 ? -1 : 0;
+				const line = edited[from + edgeOffset]!;
+				// Exact equality on both documents keeps ignored whitespace from
+				// turning a visual adjustment into a different text edit.
+				if (line !== edited[to + edgeOffset] || line !== context[position + edgeOffset]) {
+					break;
+				}
+				position += direction;
+				from += direction;
+				to += direction;
+				const cost = lineIndentation(edited[from]!) + lineIndentation(edited[to - 1]!);
+				// Prefer shallower block edges, then the earlier equivalent range
+				// so a leading blank separator stays with the inserted block.
+				if (cost < bestCost || cost === bestCost && from < bestStart) {
+					bestPosition = position;
+					bestStart = from;
+					bestCost = cost;
+				}
+				if (++work % 256 === 0) {
+					yield;
+				}
+			}
+		}
+		// Blank-only edits and equally indented repeated lines need no adjustment.
+		if (bestCost < initialCost) {
+			const bestEnd = bestStart + end - start;
+			spans[index] = isInsertion ? [bestPosition, bestPosition, bestStart, bestEnd] : [bestStart, bestEnd, bestPosition, bestPosition];
+		}
+	}
+}
+
+function lineIndentation(line: string): number {
+	const indentation = line.search(/\S/u);
+	return indentation < 0 ? 0 : indentation;
 }
 
 function* diffCharacters(original: string, modified: string, originalLineNumber: number, modifiedLineNumber: number): Generator<void, RangeMapping[]> {

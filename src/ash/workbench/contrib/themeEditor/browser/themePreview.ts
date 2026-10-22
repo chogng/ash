@@ -76,12 +76,12 @@ export class ThemePreview extends Disposable {
 		let token: string;
 		const tabsHost = h(container.ownerDocument, 'div', { className: 'ash-theme-editor-preview-tabs' });
 		container.append(tabsHost);
-		const tabs = this._register(new TabList<'workbench' | 'sessions'>(tabsHost, {
+		const tabs = this._register(new TabList<'workbench' | 'diff' | 'sessions'>(tabsHost, {
 			presentation: 'inset', ariaLabel: localize('themeEditor.previewWindow', 'Preview window'),
 			onActivate: value => selectWindow(value),
 		}));
-		let selected: 'workbench' | 'sessions' | undefined;
-		const selectWindow = (value: 'workbench' | 'sessions'): void => {
+		let selected: 'workbench' | 'diff' | 'sessions' | undefined;
+		const selectWindow = (value: 'workbench' | 'diff' | 'sessions'): void => {
 			if (selected === value) return;
 			selected = value;
 			this.connection.clear();
@@ -95,9 +95,11 @@ export class ThemePreview extends Disposable {
 			const url = new URL(`browser/theme-preview/${page}.html`, root);
 			url.searchParams.set('locale', getNLSLanguage());
 			url.searchParams.set('channel', token);
+			if (value === 'diff') url.searchParams.set('sample', 'diff');
 			this.element.src = url.href;
 			tabs.setTabs([
 				{ id: 'workbench', value: 'workbench', label: localize('themeEditor.workbenchWindow', 'Workbench'), tabId: 'theme-preview-workbench' },
+				{ id: 'diff', value: 'diff', label: localize('themeEditor.diffPreview', 'Diff'), tabId: 'theme-preview-diff' },
 				{ id: 'sessions', value: 'sessions', label: localize('themeEditor.sessionsWindow', 'Agent Window'), tabId: 'theme-preview-sessions' },
 			], value);
 		};

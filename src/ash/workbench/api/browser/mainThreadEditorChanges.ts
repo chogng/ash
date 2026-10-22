@@ -57,6 +57,27 @@ export class MainThreadEditorChanges {
 			const originalRange = parseRange(entry.originalRange), modifiedRange = parseRange(entry.modifiedRange);
 			return { start: modified.getOffsetAt(modifiedRange.getStartPosition()), end: modified.getOffsetAt(modifiedRange.getEndPosition()), text: original.getValueInRange(originalRange) };
 		});
+		if (whole && !innerChanges.length) {
+			// Whole-line additions and deletions need no character refinements.
+			// At EOF their separator belongs to the preceding line, so include it
+			// when translating the line span to the extension's UTF-16 edit.
+			const atEnd = whole.modified.endLineNumberExclusive > modified.getLineCount();
+			const precedingBreak = atEnd && whole.modified.startLineNumber > 1;
+			const startLine = precedingBreak ? whole.modified.startLineNumber - 1 : whole.modified.startLineNumber;
+			const endLine = atEnd ? modified.getLineCount() : whole.modified.endLineNumberExclusive;
+			const replacement = original.getLinesContent().slice(whole.original.startLineNumber - 1, whole.original.endLineNumberExclusive - 1);
+			const eol = modified.getEOL();
+			let text = replacement.join(eol);
+			if (replacement.length) {
+				if (precedingBreak) text = eol + text;
+				else if (!atEnd) text += eol;
+			}
+			innerChanges.push({
+				start: modified.getOffsetAt({ lineNumber: startLine, column: precedingBreak ? modified.getLineMaxColumn(startLine) : 1 }),
+				end: modified.getOffsetAt({ lineNumber: endLine, column: atEnd ? modified.getLineMaxColumn(endLine) : 1 }),
+				text,
+			});
+		}
 		const lines = record(mapping.modified);
 		const lastLine = modified.getLineCount();
 		const selectedLines = selected.map(value => {

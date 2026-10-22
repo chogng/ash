@@ -2495,11 +2495,48 @@ function createDebugServiceInstance(services: InstantiationService): DebugServic
 	return services.createInstance(DebugService);
 }
 
-function debugStorageFixture(owner: DisposableStore, backend: IDebugAdapterProcessService, storage: IStorageService, workspace: IWorkspaceContextService) {
-	const services = owner.add(new InstantiationService(new ServiceCollection([IDebugAdapterProcessService, backend], [IStorageService, storage], [IWorkspaceContextService, workspace], [ILogService, new NullLoggerService()])));
+function debugStorageFixture(owner: DisposableStore, backend: IDebugAdapterProcessService | undefined, storage: IStorageService, workspace: IWorkspaceContextService, log: ILogService = new NullLoggerService()) {
+	const services = owner.add(new InstantiationService(new ServiceCollection([IDebugAdapterProcessService, backend], [IStorageService, storage], [IWorkspaceContextService, workspace], [ILogService, log])));
 	services.registerSingleton(ILifecycleService, () => services.createInstance(DebugTestLifecycle, undefined));
 	return { client: owner.add(services.createInstance(DebugStorage)), lifecycle: services.get(ILifecycleService) };
 }
+
+test('Debug storage leaves an unavailable host idle and preserves legacy data without logging an error', async () => {
+	using resources = new DisposableStore();
+	using storage = new TestStorageService();
+	const legacy = JSON.stringify({ version: 1, breakpoints: [], watchExpressions: ['saved'], exceptionBreakpoints: {} });
+	storage.store('memento/debug.workspace', legacy, StorageScope.WORKSPACE, StorageTarget.USER);
+	const errors: unknown[][] = [];
+	const log = new NullLoggerService();
+	log.error = (...args: unknown[]) => errors.push(args);
+	const { client, lifecycle } = debugStorageFixture(resources, undefined, storage, workspaceService(URI.file('/workspace')), log);
+	await client.whenReady();
+	await client.reload();
+	assert.deepEqual(client.state.watchExpressions, ['saved']);
+	assert.throws(() => client.storeState({ ...client.state, watchExpressions: ['unsaved'] }), /Debug workspace storage is unavailable/);
+	assert.deepEqual(client.state.watchExpressions, ['saved']);
+	assert.equal(storage.get('memento/debug.workspace', StorageScope.WORKSPACE), legacy);
+	await lifecycle.shutdown('quit');
+	assert.deepEqual(errors, []);
+});
+
+test('Debug storage still reports a real backend read failure and retains legacy data', async () => {
+	using resources = new DisposableStore();
+	using storage = new TestStorageService();
+	using processes = new FakeDebugAdapterProcessService();
+	const legacy = JSON.stringify({ version: 1, breakpoints: [], watchExpressions: ['saved'], exceptionBreakpoints: {} });
+	storage.store('memento/debug.workspace', legacy, StorageScope.WORKSPACE, StorageTarget.USER);
+	const failure = new Error('Backend read failed');
+	processes.readWorkspaceState = async () => { throw failure; };
+	const errors: unknown[][] = [];
+	const log = new NullLoggerService();
+	log.error = (...args: unknown[]) => errors.push(args);
+	const { client } = debugStorageFixture(resources, processes, storage, workspaceService(URI.file('/workspace')), log);
+	await assert.rejects(client.whenReady(), error => error === failure);
+	assert.equal(errors.length, 1);
+	assert.equal(errors[0]![2], failure);
+	assert.equal(storage.get('memento/debug.workspace', StorageScope.WORKSPACE), legacy);
+});
 
 test('Debug workspace shutdown waits for the Rust acknowledgement of pending edits', async () => {
 	using resources = new DisposableStore();

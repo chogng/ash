@@ -2,7 +2,7 @@ import { TerminalLinkResolver } from './terminalLinkResolver.js';
 import { isWindowsRemotePath } from '../../../../../platform/remote/common/remote.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import type { IBuffer, IBufferRange, ILink, IViewportRange } from '@xterm/xterm';
-import { onUnexpectedError } from '../../../../../base/common/errors.js';
+import { isCancellationError, onUnexpectedError } from '../../../../../base/common/errors.js';
 import { raceCancellationError, timeout } from '../../../../../base/common/async.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
@@ -161,7 +161,8 @@ export class TerminalLinkContribution extends Disposable implements ITerminalCon
 			this.activation = Promise.resolve().then(() => {
 				if (!signal.aborted) return this.extensions.activateByEvent('onTerminal', signal);
 			}).catch(error => {
-				if (!signal.aborted) this.log.error('terminal', 'Terminal link provider activation failed', error);
+				// The extension host can retire before this terminal is disposed.
+				if (!signal.aborted && !isCancellationError(error)) this.log.error('terminal', 'Terminal link provider activation failed', error);
 			}).finally(() => this.activation = undefined);
 		}
 		return this.activation;

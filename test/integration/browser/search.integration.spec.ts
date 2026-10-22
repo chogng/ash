@@ -12,8 +12,8 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(setting).toEqual({
 			title: locale === 'en' ? 'Auto Hide Activity Bar' : '自动隐藏活动栏',
 			description: locale === 'en'
-				? 'Hide the primary side bar view switcher when it is at the top or bottom and at most one container has active views.'
-				: '主侧边栏的视图切换栏位于顶部或底部，且最多只有一个容器具有可用视图时，隐藏该切换栏。',
+				? 'Hide each side bar view switcher when it is at the top or bottom and at most one container at that location has active views.'
+				: '侧边栏的视图切换栏位于顶部或底部，且该位置最多只有一个容器具有可用视图时，隐藏该切换栏。',
 			value: false,
 		});
 		const sidebar = page.locator('[data-part="sidebar"]');

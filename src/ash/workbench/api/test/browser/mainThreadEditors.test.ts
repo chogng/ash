@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+import { TextModel } from '../../../../editor/common/model/textModel.js';
+import { DetailedLineRangeMapping } from '../../../../editor/common/diff/rangeMapping.js';
+import { LineRange } from '../../../../editor/common/core/ranges/lineRange.js';
 import { Event, Emitter } from '../../../../base/common/event.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -214,4 +218,36 @@ test('active editor metadata does not serialize the working copy when contents a
 	assert.equal(document.contents, 'unsaved', 'Existing consumers retain their default full snapshot');
 	assert.equal(backups, 1);
 	await assert.rejects(api.handle({ method: 'activeEditor', includeContents: 'false' }, signal), /Invalid editor contents request/u);
+});
+
+suite('Diff hunk capture', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	for (const [name, before, after, originalLines, modifiedLines] of [
+		['inserted lines', 'head\ntail\n', 'head\ninserted\ntail\n', [2, 2], [2, 3]],
+		['inserted lines at EOF', 'head', 'head\ninserted', [2, 2], [2, 3]],
+		['removed lines', 'head\nremoved\ntail\n', 'head\ntail\n', [2, 3], [2, 2]],
+		['removed lines at EOF', 'head\nremoved', 'head', [2, 3], [2, 2]],
+		['whole document', 'original', 'changed', [1, 2], [1, 2]],
+		['empty document', 'original', '', [1, 2], [1, 2]],
+		['CRLF and UTF-16 offsets', '😀 head\r\ntail\r\n', '😀 head\r\ninserted\r\ntail\r\n', [2, 2], [2, 3]],
+	] as const) {
+		test(`whole hunk without character ranges restores ${name}`, async () => {
+			using original = new TextModel(before, { resource: URI.parse('git-change:/original/file.ts') });
+			using modified = new TextModel(after, { resource: URI.file('/file.ts') });
+			const mapping = new DetailedLineRangeMapping(new LineRange(originalLines[0], originalLines[1]), new LineRange(modifiedLines[0], modifiedLines[1]), undefined);
+			const originalEditor = { getModel: () => original };
+			const modifiedEditor = { getModel: () => modified };
+			const editor = { originalEditor, modifiedEditor, getModifiedEditor: () => modifiedEditor, isDisposed: false, diff: { changes: [mapping] } };
+			using api = bridge([], async () => ({ confirmed: true }), [], { listDiffEditors: () => [editor] });
+			const context = JSON.parse(JSON.stringify({ originalUri: original.uri.toString(), modifiedUri: modified.uri.toString(), mapping }));
+			const captured = await api.handle({ method: 'diffChange', context }, new AbortController().signal) as { edits: { start: number; end: number; text: string; }[]; };
+			assert.ok(captured);
+			assert.ok(captured.edits.length > 0, 'A valid whole-line change must produce an edit');
+			let reverted = after;
+			for (const edit of [...captured.edits].sort((left, right) => right.start - left.start)) reverted = reverted.slice(0, edit.start) + edit.text + reverted.slice(edit.end);
+			assert.equal(reverted, before);
+			context.mapping.modified.endLineNumberExclusive++;
+			assert.equal(await api.handle({ method: 'diffChange', context }, new AbortController().signal), null, 'Stale mappings still cannot authorize an edit');
+		});
+	}
 });

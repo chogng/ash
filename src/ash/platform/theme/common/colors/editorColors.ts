@@ -74,10 +74,10 @@ export const foldBackground = registerColor(
 export const foldPlaceholderForeground = color('editor.foldPlaceholderForeground', '#808080', '#808080', foreground, foreground, 'Foreground for the collapsed-range placeholder.');
 export const foldingControlForeground = alias('editorGutter.foldingControlForeground', foreground, 'Foreground for editor folding controls.');
 
-export const diffRemovedLineBackground = color("diffEditor.removedLineBackground", "#4b1818", "#ffebe9", "#400000", "#ffe6e6", "Background for removed diff lines.");
-export const diffInsertedLineBackground = color("diffEditor.insertedLineBackground", "#173d24", "#dafbe1", "#003300", "#e6ffe6", "Background for inserted diff lines.");
-export const diffRemovedTextBackground = color("diffEditor.removedTextBackground", "#7d2020", "#ffc6c2", "#550000", "#ffd6d6", "Background for removed inline diff ranges.");
-export const diffInsertedTextBackground = color("diffEditor.insertedTextBackground", "#1f6f35", "#a6ebb7", "#004400", "#c6f6c6", "Background for inserted inline diff ranges.");
+export const diffRemovedLineBackground = color("diffEditor.removedLineBackground", "#382629", "#fbefee", "#400000", "#ffe6e6", "Background for removed diff lines.");
+export const diffInsertedLineBackground = color("diffEditor.insertedLineBackground", "#213128", "#e9f3ec", "#003300", "#e6ffe6", "Background for inserted diff lines.");
+export const diffRemovedTextBackground = color("diffEditor.removedTextBackground", "#583438", "#f2cecb", "#550000", "#ffd6d6", "Background for removed inline diff ranges.");
+export const diffInsertedTextBackground = color("diffEditor.insertedTextBackground", "#2d4937", "#cde5d4", "#004400", "#c6f6c6", "Background for inserted inline diff ranges.");
 export const diffMissingLineBackground = color("diffEditor.missingLineBackground", "#202020", "#f8f8f9", "#000000", "#ffffff", "Background for a diff side without a corresponding source line.");
 export const diffDiagonalFill = color('diffEditor.diagonalFill', '#cccccc33', '#22222233', contrastBorder, contrastBorder, 'Stripe color for alignment gaps in side-by-side diff editors.');
 export const diffUnchangedRegionBackground = color("diffEditor.unchangedRegionBackground", "#1f2933", "#f1f6fc", "#000000", "#ffffff", "Background for collapsed unchanged diff regions.");
