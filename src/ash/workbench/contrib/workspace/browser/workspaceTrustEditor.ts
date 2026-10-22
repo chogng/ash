@@ -185,7 +185,7 @@ export class WorkspaceTrustEditor extends EditorPane {
 		this._register(this.saveButton.onDidClick(() => { void this.savePermissions(); }));
 		this._register(this.resetButton.onDidClick(() => { this.draft = new Set(this.saved); this.render(); }));
 		const note = h(document, 'p');
-		note.textContent = localize('workspaceTrust.ready', 'Changes apply to future operations. Running commands are not stopped.');
+		note.textContent = localize('workspaceTrust.ready', 'Changing permissions may terminate running terminal commands and debug sessions. Save any work before applying changes.');
 		advancedContent.append(note);
 
 		const footer = h(document, 'div');
@@ -207,7 +207,7 @@ export class WorkspaceTrustEditor extends EditorPane {
 				const focused = document.activeElement;
 				if (!this.active || !isHTMLElement(focused) || !this.root.contains(focused)) return undefined;
 				return new AccessibleContentProvider(AccessibleViewProviderId.WorkspaceTrust, { type }, () => type === AccessibleViewType.Help
-					? localize('workspaceTrust.help', 'Workspace Trust\nThis page shows the current folder’s effective permissions on this window’s connected host, independently of the selected Agents conversation. Use Tab to reach Trust workspace or Open read-only. Each action asks for confirmation before saving and restoring the workspace connection. For multi-folder workspaces, select the folder to manage. Expand Advanced permissions with Enter or Space to review the folder path, choose a preset or change individual permission switches. Advanced changes are a draft until Save permissions is confirmed. Discard changes restores the saved permissions. When permissions cannot be applied or read, Refresh rereads them and discards drafts. If grants, workspace or connection change, review the refreshed permissions before saving. Running commands are not stopped by revoking permissions. Hosts without management authority can only view permissions. Escape closes this help and returns focus.')
+					? localize('workspaceTrust.help', 'Workspace Trust\nThis page shows the current folder’s effective permissions on this window’s connected host, independently of the selected Agents conversation. Use Tab to reach Trust workspace or Open read-only. Each action asks for confirmation before saving and restoring the workspace connection. For multi-folder workspaces, select the folder to manage. Expand Advanced permissions with Enter or Space to review the folder path, choose a preset or change individual permission switches. Advanced changes are a draft until Save permissions is confirmed. Discard changes restores the saved permissions. When permissions cannot be applied or read, Refresh rereads them and discards drafts. If grants, workspace or connection change, review the refreshed permissions before saving. Changing permissions may terminate running terminal commands and debug sessions. Unsaved process state may be lost; review the warning before confirming. Hosts without management authority can only view permissions. Escape closes this help and returns focus.')
 					: [this.folderName.textContent, this.folderPath.textContent, this.heading.textContent, this.summary.textContent, ...[...this.draft].map(permission => this.permissionLabel(permission)), this.status.textContent].join('\n'),
 					() => { if (focused.isConnected) focused.focus(); }, AccessibilityVerbositySettingId.WorkspaceTrust);
 			},
@@ -308,7 +308,7 @@ export class WorkspaceTrustEditor extends EditorPane {
 			this.saved = snapshot.entries.find(entry => entry.dir === resolved.dir)?.permissions ?? info.permissions ?? [];
 			this.draft = new Set(this.saved); this.editable = !!this.api.recovery;
 			this.status.textContent = this.editable
-				? localize('workspaceTrust.ready', 'Changes apply to future operations. Running commands are not stopped.')
+				? localize('workspaceTrust.ready', 'Changing permissions may terminate running terminal commands and debug sessions. Save any work before applying changes.')
 				: localize('workspaceTrust.hostOnly', 'Directory permissions can only be changed by an authorized desktop host.');
 		} catch (error) {
 			if (this.current(generation)) this.status.textContent = localize('workspaceTrust.readFailed', 'Could not read workspace permissions: {0}', String(error));
@@ -337,10 +337,10 @@ export class WorkspaceTrustEditor extends EditorPane {
 						? localize('workspaceTrust.confirmReadOnly', 'Open {0} read-only?', this.folderName.textContent)
 						: localize('workspaceTrust.confirm', 'Apply directory permissions to {0}?', path),
 				detail: development
-					? localize('workspaceTrust.confirmTrustDetail', 'This allows editing files, running commands and loading workspace integrations in {0}. Only continue if you trust this project. The workspace connection will be restored.', path)
+					? localize('workspaceTrust.confirmTrustDetail', 'This allows editing files, running commands and loading workspace integrations in {0}. Only continue if you trust this project. The workspace connection will be restored. Saving these changes may terminate running terminal commands and debug sessions. Unsaved process state may be lost.', path)
 					: readOnly
-						? localize('workspaceTrust.confirmReadOnlyDetail', 'This allows browsing and searching files in {0}. Editing files, running commands and workspace integrations will be disabled. The workspace connection will be restored. Running commands are not stopped.', path)
-						: localize('workspaceTrust.confirmDetail', 'Allowed capabilities: {0}\nThis saves a directory grant on the connected host and restores the workspace connection. Running commands are not stopped.', permissions.map(permission => this.permissionLabel(permission)).join(', ') || localize('workspaceTrust.none', 'None')),
+						? localize('workspaceTrust.confirmReadOnlyDetail', 'This allows browsing and searching files in {0}. Editing files, running commands and workspace integrations will be disabled. The workspace connection will be restored. Saving these changes may terminate running terminal commands and debug sessions. Unsaved process state may be lost.', path)
+						: localize('workspaceTrust.confirmDetail', 'Allowed capabilities: {0}\nThis saves a directory grant on the connected host and restores the workspace connection. Saving these changes may terminate running terminal commands and debug sessions. Unsaved process state may be lost.', permissions.map(permission => this.permissionLabel(permission)).join(', ') || localize('workspaceTrust.none', 'None')),
 				primaryButton,
 			});
 			// Confirmation may outlive the selected workspace or connection. It authorizes only this captured target.

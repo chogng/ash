@@ -194,6 +194,7 @@ for (const locale of ['en', 'zh']) {
 		await trust.press('Enter');
 		const dialog = page.getByRole('dialog');
 		await expect(dialog).toContainText(zh ? '信任' : 'Trust');
+		await expect(dialog).toContainText(zh ? '可能终止正在运行的终端命令和调试会话' : 'may terminate running terminal commands and debug sessions');
 		await dialog.getByRole('button', { name: zh ? '取消' : 'Cancel', exact: true }).click();
 		await expect(heading).toHaveText(zh ? '只读工作区' : 'Read-only workspace');
 		expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(0);
@@ -211,6 +212,12 @@ for (const locale of ['en', 'zh']) {
 			expect(colors.foreground).not.toBe(colors.background);
 			await page.screenshot({ path: testInfo.outputPath(`trust-${locale}-theme-${index}.png`) });
 		}
+		await readOnly.click();
+		await expect(dialog).toContainText(zh ? '可能终止正在运行的终端命令和调试会话' : 'may terminate running terminal commands and debug sessions');
+		await expect(dialog).toContainText(zh ? '进程中未保存的状态可能丢失' : 'Unsaved process state may be lost');
+		await dialog.getByRole('button', { name: zh ? '取消' : 'Cancel', exact: true }).click();
+		await expect(heading).toHaveText(zh ? '已信任工作区' : 'Trusted workspace');
+		expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(1);
 		await readOnly.click();
 		await dialog.getByRole('button', { name: zh ? '以只读方式打开' : 'Open read-only', exact: true }).click();
 		await expect(heading).toHaveText(zh ? '只读工作区' : 'Read-only workspace');
@@ -259,6 +266,7 @@ for (const locale of ['en', 'zh']) {
 		await page.keyboard.press('Alt+F1');
 		const help = page.getByRole('textbox', { name: 'Accessibility Help', exact: true });
 		await expect(help).toHaveValue(zh ? /工作区信任/ : /Workspace Trust/);
+		await expect(help).toHaveValue(zh ? /可能终止正在运行的终端命令和调试会话/ : /may terminate running terminal commands and debug sessions/);
 		await help.press('Escape');
 		await expect(editor).toBeFocused();
 		const development = async () => {
@@ -285,6 +293,11 @@ for (const locale of ['en', 'zh']) {
 		await expect(write).not.toBeChecked();
 		await write.focus();
 		await write.press('Space');
+		await save.click();
+		await expect(dialog).toContainText(zh ? '可能终止正在运行的终端命令和调试会话' : 'may terminate running terminal commands and debug sessions');
+		await expect(dialog).toContainText(zh ? '进程中未保存的状态可能丢失' : 'Unsaved process state may be lost');
+		await dialog.getByRole('button', { name: zh ? '取消' : 'Cancel', exact: true }).click();
+		expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(1);
 		await save.click();
 		await dialog.getByRole('button', { name: zh ? '保存权限' : 'Save permissions', exact: true }).click();
 		await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().grantWrites)).toBe(2);
