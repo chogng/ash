@@ -1294,6 +1294,15 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(configurationRegistry.getConfiguration('workbench.tips.enabled')?.defaultValue, true);
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'layout');
 	assert.equal(findSettingCategory(layout, StartupEditorConfigurationKey), 'startup');
+	assert.equal(findSettingCategory(layout, 'window.startupWindow'), 'startup');
+	const startupWindow = defaults.get('window.startupWindow');
+	assert.equal(startupWindow.valueType, 'select');
+	assert.equal(startupWindow.configuration.defaultValue, 'default');
+	assert.equal(startupWindow.configuration.scope, ConfigurationScope.APPLICATION);
+	if (startupWindow.valueType === 'select') {
+		assert.deepEqual(startupWindow.options.map(option => option.value), ['default', 'ide', 'agents']);
+	}
+	assert.throws(() => startupWindow.configuration.parse('unknown'), /Unknown startup window/);
 	assert.equal(findSettingCategory(layout, 'window.restoreWindows'), 'startup');
 	assert.equal(findSettingCategory(layout, 'window.newWindowDimensions'), 'startup');
 	assert.equal(findSettingCategory(layout, 'window.restoreFullscreen'), 'startup');
@@ -1302,6 +1311,9 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(chinese?.bundles['ash.settings']?.['categories.startup.label'], '启动');
 	assert.equal(chinese?.bundles.ash?.['settings.workbench.startup.group.label'], '启动时的编辑器');
 	assert.equal(chinese?.bundles.ash?.['window.restoreWindows.all'], '全部窗口');
+	assert.equal(chinese?.bundles.ash?.['window.startupWindow.title'], '启动时打开');
+	assert.equal(chinese?.bundles.ash?.['window.startupWindow.default'], '沿用上次（默认）');
+	assert.equal(chinese?.bundles.ash?.['window.startupWindow.agents'], 'Agent 窗口');
 	assert.equal(chinese?.bundles.ash?.['window.newWindowDimensions.title'], '新窗口尺寸');
 	assert.equal(chinese?.bundles.ash?.['window.restoreFullscreen.title'], '恢复全屏');
 	assert.equal(chinese?.bundles.ash?.['workbench.editor.restoreEditors.title'], '恢复编辑器');

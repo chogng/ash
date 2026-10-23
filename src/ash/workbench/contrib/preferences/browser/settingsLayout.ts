@@ -175,7 +175,7 @@ export const SettingsNavigation = [
 					id: 'startup-windows',
 					label: localize('settings.workbench.startup.windows.label', 'Startup windows'),
 					description: localize('settings.workbench.startup.windows.description', 'Choose which windows Ash reopens.'),
-					settings: ['window.restoreWindows', 'window.newWindowDimensions', 'window.restoreFullscreen'],
+					settings: ['window.startupWindow', 'window.restoreWindows', 'window.newWindowDimensions', 'window.restoreFullscreen'],
 				}, {
 					id: 'startup-editor',
 					label: localize('settings.workbench.startup.group.label', 'Startup editor'),

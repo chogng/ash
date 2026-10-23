@@ -108,7 +108,10 @@ import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
 import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from "../../platform/files/common/diskFileSystemProviderClient.js";
 import { IWindowsMainService, type IOpenConfiguration } from "../../platform/windows/electron-main/windows.js";
-import { RESTORE_WINDOWS_SETTING, TitleBarSetting, parseTitleBarStyle, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
+import {
+	DEFAULT_STARTUP_WINDOW, RESTORE_WINDOWS_SETTING, STARTUP_WINDOW_SETTING, TitleBarSetting,
+	parseStartupWindow, parseTitleBarStyle, type StartupWindow, type TitleBarStyleConfiguration,
+} from "../../platform/window/common/window.js";
 import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntry, type IWindowSessionWindow } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import { WindowsMainService, windowOperationIpcRoute, workspaceContextIpcRoutes, workspaceRecoveryIpcRoute } from "../../platform/windows/electron-main/windowsMainService.js";
 import { LifecycleMainService, ILifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
@@ -736,16 +739,32 @@ export class AshApplication extends Disposable {
 			await this.openSessionsWindow(launch.workspace, await workspaces.resolveWorkspace(launch.workspace));
 			return;
 		}
-		await this.restoreWindowSession(workspaces, launch.explicit, wasUpdated);
+		// Explicit launch targets and app restarts retain their own window intent.
+		const startupWindow = launch.explicit || wasUpdated ? DEFAULT_STARTUP_WINDOW
+			: parseStartupWindow(this.services.configuration.getValue(STARTUP_WINDOW_SETTING) ?? DEFAULT_STARTUP_WINDOW);
+		await this.restoreWindowSession(workspaces, launch.explicit, wasUpdated, startupWindow);
 		if (launch.explicit) {
 			await this.openWorkspace(launch.workspace, workspaces);
 		} else if (this.windowsMainService.getWindowCount() === 0 && this.windowsMainService.managedWindowValues().length === 0) {
-			await this.openWorkspace(launch.workspace, workspaces);
+			if (startupWindow === 'agents') {
+				await this.openSessionsWindow(launch.workspace, await workspaces.resolveWorkspace(launch.workspace));
+			} else {
+				await this.openWorkspace(launch.workspace, workspaces);
+			}
 		}
 	}
 
-	private async restoreWindowSession(workspaces: WorkspacesManagementMainService, hasExplicitTarget: boolean, wasUpdated: boolean): Promise<void> {
-		const session = this.windowSessionStateHandler.readSession();
+	private async restoreWindowSession(workspaces: WorkspacesManagementMainService, hasExplicitTarget: boolean, wasUpdated: boolean, startupWindow: StartupWindow = DEFAULT_STARTUP_WINDOW): Promise<void> {
+		let session = this.windowSessionStateHandler.readSession();
+		if (session && startupWindow !== 'default') {
+			// Filter before applying restore policy so "last active" can still restore
+			// the selected window type when the other type was focused at shutdown.
+			const active = session.windows[session.active];
+			const kind = startupWindow === 'ide' ? 'workbench' : 'sessions';
+			const windows = session.windows.filter(entry => entry.kind === kind);
+			const activeIndex = active ? windows.indexOf(active) : -1;
+			session = { windows, active: activeIndex >= 0 ? activeIndex : windows.length - 1 };
+		}
 		const configuredSetting = this.services.configuration.getValue(RESTORE_WINDOWS_SETTING);
 		const selection = this.windowsMainService.selectWindowsToRestore(session, configuredSetting, hasExplicitTarget, wasUpdated);
 		using restoration = this.windowSessionStateHandler.beginRestoration();

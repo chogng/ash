@@ -483,6 +483,107 @@ test('Desktop window sizing settings expose Chinese labels and keyboard selectio
 	} finally { await session.close(); }
 });
 
+test('Desktop startup window setting is shared across IDE and Agent settings with Chinese keyboard selection', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
+	test.setTimeout(90_000);
+	const userDataDirectory = testInfo.outputPath('user-data');
+	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
+	const settingsPath = join(userDataDirectory, 'profile', 'settings.json');
+	await writeFile(settingsPath, '{"workbench.locale":"zh-CN"}');
+	let session = await launch(userDataDirectory);
+	try {
+		const page = await session.application.firstWindow();
+		const workbench = new Workbench(page);
+		await workbench.waitForReady();
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('startup');
+		const setting = workbench.settingsEditor.element.locator('[data-settings-item-id="window.startupWindow"]');
+		await expect(setting).toContainText('启动时打开');
+		const select = setting.getByRole('combobox');
+		await expect(select).toContainText('沿用上次（默认）');
+		await select.focus();
+		await select.press('Space');
+		await page.keyboard.press('End');
+		await page.keyboard.press('Enter');
+		await expect(select).toBeFocused();
+		await expect(select).toContainText('Agent 窗口');
+		await expect.poll(async () => JSON.parse(await readFile(settingsPath, 'utf8'))['window.startupWindow']).toBe('agents');
+		await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+
+		const agents = await workbench.openAgentsWindow('electron');
+		await new Workbench(agents).quickaccess.runCommand('workbench.action.openSettings');
+		const agentSettings = agents.getByRole('dialog', { name: '会话设置' });
+		await agentSettings.getByRole('navigation').getByRole('button', { name: '通用', exact: true }).click();
+		const agentSelect = agentSettings.locator('[data-settings-item-id="window.startupWindow"]').getByRole('combobox');
+		await expect(agentSelect).toContainText('Agent 窗口');
+		await agentSelect.focus();
+		await agentSelect.press('Space');
+		await agents.keyboard.press('Home');
+		await agents.keyboard.press('ArrowDown');
+		await agents.keyboard.press('Enter');
+		await expect(agentSelect).toBeFocused();
+		await expect.poll(async () => JSON.parse(await readFile(settingsPath, 'utf8'))['window.startupWindow']).toBe('ide');
+		await testInfo.attach('startup-window-setting', { body: await agents.screenshot(), contentType: 'image/png' });
+		await session.quit();
+
+		session = await launch(userDataDirectory);
+		const restored = await session.application.firstWindow();
+		await new Workbench(restored).waitForReady();
+		await expect(restored.locator('.ash-sessions-window')).toHaveCount(0);
+		expect(session.application.windows()).toHaveLength(1);
+	} finally { await session.close(); }
+});
+
+for (const startupWindow of ['default', 'ide', 'agents'] as const) {
+	test(`Desktop startup window ${startupWindow} restores the matching project and honors explicit targets`, { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
+		test.setTimeout(90_000);
+		const userDataDirectory = testInfo.outputPath('user-data');
+		const folder = testInfo.outputPath('project');
+		await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
+		await mkdir(folder, { recursive: true });
+		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), JSON.stringify({
+			'window.startupWindow': startupWindow, 'window.restoreWindows': 'one',
+		}));
+		if (startupWindow === 'agents') {
+			const fresh = await launch(userDataDirectory);
+			try {
+				await expect((await fresh.application.firstWindow()).locator('.ash-sessions-window')).toBeVisible();
+				expect(fresh.application.windows()).toHaveLength(1);
+				await fresh.quit();
+			} finally { await fresh.close(); }
+		}
+		// A project launch takes priority even when startup is configured for Agents.
+		let session = await launch(userDataDirectory, folder, undefined, { windowMode: 'active' });
+		try {
+			const page = await session.application.firstWindow();
+			const workbench = new Workbench(page);
+			await workbench.waitForReady();
+			await expect(page.locator('.ash-sessions-window')).toHaveCount(0);
+			await expect.poll(() => workspaceFolder(page)).toBe(URI.file(folder).fsPath);
+			const agents = await workbench.openAgentsWindow('electron');
+			const agentsWindow = await session.application.browserWindow(agents);
+			try {
+				await agentsWindow.evaluate(window => window.focus());
+				await expect.poll(() => agentsWindow.evaluate(window => window.isFocused())).toBe(true);
+			} finally { await agentsWindow.dispose(); }
+			await session.quit();
+			const saved = JSON.parse(await readFile(join(userDataDirectory, 'state.json'), 'utf8')) as { windowSession: { active: number; windows: { kind: string; }[]; }; };
+			expect(saved.windowSession.windows[saved.windowSession.active]?.kind).toBe('sessions');
+
+			session = await launch(userDataDirectory);
+			const restored = await session.application.firstWindow();
+			if (startupWindow === 'ide') {
+				await new Workbench(restored).waitForReady();
+				await expect(restored.locator('.ash-sessions-window')).toHaveCount(0);
+			} else {
+				await expect(restored.locator('.ash-sessions-window')).toBeVisible();
+			}
+			await expect.poll(() => workspaceFolder(restored)).toBe(URI.file(folder).fsPath);
+			expect(session.application.windows()).toHaveLength(1);
+		} finally { await session.close(); }
+	});
+}
+
 test('Desktop restores open Workbench and Agents windows and honors startup intent', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	test.setTimeout(120_000);
 	const userDataDirectory = testInfo.outputPath('user-data');
@@ -492,7 +593,8 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 	let application: ElectronApplication | undefined;
 	let session: ElectronApplicationLaunchResult | undefined;
 	try {
-		session = await launch(userDataDirectory);
+		// These checkpoints persist the last focused window, so use real visible windows.
+		session = await launch(userDataDirectory, undefined, undefined, { windowMode: 'active' });
 		application = session.application;
 		const workbench = await application.firstWindow();
 		await new Workbench(workbench).waitForReady();
@@ -500,6 +602,11 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 		await workbench.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		const agents = await opened;
 		await expect(agents.locator('.ash-sessions-window')).toBeVisible();
+		const agentsWindow = await application.browserWindow(agents);
+		try {
+			await agentsWindow.evaluate(window => window.focus());
+			await expect.poll(() => agentsWindow.evaluate(window => window.isFocused())).toBe(true);
+		} finally { await agentsWindow.dispose(); }
 		await session.quit();
 		application = undefined;
 
@@ -528,7 +635,7 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 		const updated = JSON.parse(await readFile(join(userDataDirectory, 'state.json'), 'utf8')) as typeof saved;
 		expect(updated.windowSession.windows.every(window => !('modeId' in window))).toBe(true);
 
-		session = await launch(userDataDirectory, folder);
+		session = await launch(userDataDirectory, folder, undefined, { windowMode: 'active' });
 		application = session.application;
 		await expect.poll(() => application!.windows().length).toBe(1);
 		const targeted = await application.firstWindow();
@@ -536,7 +643,13 @@ test('Desktop restores open Workbench and Agents windows and honors startup inte
 		await expect.poll(() => workspaceFolder(targeted)).toBe(URI.file(folder).fsPath);
 		const reopenedAgents = application.waitForEvent('window');
 		await targeted.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
-		await expect((await reopenedAgents).locator('.ash-sessions-window')).toBeVisible();
+		const reopenedAgentPage = await reopenedAgents;
+		await expect(reopenedAgentPage.locator('.ash-sessions-window')).toBeVisible();
+		const reopenedAgentWindow = await application.browserWindow(reopenedAgentPage);
+		try {
+			await reopenedAgentWindow.evaluate(window => window.focus());
+			await expect.poll(() => reopenedAgentWindow.evaluate(window => window.isFocused())).toBe(true);
+		} finally { await reopenedAgentWindow.dispose(); }
 		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"window.restoreWindows":"one"}\n');
 		await session.quit();
 		application = undefined;
