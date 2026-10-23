@@ -11,6 +11,7 @@
 	--ash-fontSize-label1: 14px;
 	--ash-fontSize-label2: 11px;
 	--ash-fontSize-label3: 10px;
+	--ash-lxiconFontSize: var(--ash-spacing-size160);
 	--ash-icon-font-family: "Ash UI Variable";
 	--ash-icon-font-weight: 550;
 }

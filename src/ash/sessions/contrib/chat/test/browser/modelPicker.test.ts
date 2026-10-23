@@ -9,6 +9,8 @@ suite('modelPicker browser component', () => {
 
 		await page.goto('/modelPicker.html');
 		const picker = page.locator('.ash-sessions-model-picker');
+		await expect(picker.locator('> .ash-icon')).toHaveCSS('font-size', '12px');
+		await expect(picker.locator('> .ash-icon')).toHaveCSS('width', '12px');
 		await picker.focus();
 		await picker.press('ArrowDown');
 		await expect(page.getByRole('menuitemradio', { name: 'First model' })).toBeFocused();
@@ -43,6 +45,7 @@ suite('modelPicker browser component', () => {
 		const slider = page.getByRole('slider', { name: 'Thinking level', exact: true });
 		const dialog = page.getByRole('dialog');
 		await expect(dialog).toBeFocused();
+		await expect(dialog.locator('.ash-sessions-model-picker-heading > .ash-icon')).toHaveCSS('font-size', '12px');
 		await expect(slider).not.toBeFocused();
 		await expect(slider).toHaveAttribute('aria-valuetext', 'Extra High');
 		await expect(picker).toHaveAttribute('aria-haspopup', 'dialog');

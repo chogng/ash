@@ -76,6 +76,71 @@ function createParts(ownerDocument: Document): Map<SessionsPartId, WorkbenchPart
 	return new Map(sessionsPartIds.map(partId => [partId, new TestSessionsPart(partId, ownerDocument.body)]));
 }
 
+test('Sessions sidebar clamps at its minimum, snaps closed and restores from the window edge', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
+		layout.layout(new Dimension(1_200, 800));
+		const sidebar = parts.get('sidebar')!;
+		const drag = (delta: number): void => {
+			const split = sidebar.domNode.parentElement!.parentElement!.parentElement!;
+			const sash = split.querySelector<HTMLElement>(':scope > .ash-sash')!;
+			assert.ok(sash);
+			sash.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 240 }));
+			for (const type of ['pointermove', 'pointerup']) dom.window.dispatchEvent(new dom.window.MouseEvent(type, { bubbles: true, button: 0, clientX: 240 + delta }));
+		};
+		const visibility: boolean[] = [];
+		using changes = layout.onDidChangePartVisibility(event => { if (event.partId === 'sidebar') visibility.push(event.visible); });
+		drag(sidebar.minimumWidth - layout.getPartSize('sidebar').width - 20);
+		assert.equal(layout.isPartVisible('sidebar'), true);
+		assert.equal(layout.getPartSize('sidebar').width, sidebar.minimumWidth);
+		drag(-100);
+		assert.equal(layout.isPartVisible('sidebar'), false);
+		assert.equal(layout.state.sidebar.visible, false);
+		assert.equal(parts.get('titlebar')!.domNode.style.getPropertyValue('--ash-sessions-titlebar-sidebar-width'), '0px');
+		layout.setPanelPosition(Position.RIGHT);
+		assert.equal(layout.isPartVisible('sidebar'), false, 'Rebuilding the Grid retains the snapped state');
+		drag(110);
+		assert.equal(layout.isPartVisible('sidebar'), true);
+		assert.equal(layout.state.sidebar.visible, true);
+		assert.ok(layout.getPartSize('sidebar').width >= sidebar.minimumWidth);
+		assert.deepEqual(visibility, [false, true]);
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
+test('Sessions sidebar follows changing titlebar content constraints', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	class ConstrainedTitlebar extends TestSessionsPart {
+		minimumSidebarWidth = 260;
+		setSidebarMinimumWidth(width: number): void {
+			this.minimumSidebarWidth = width;
+			this.notifyConstraintsChanged();
+		}
+	}
+	parts.get('titlebar')!.dispose();
+	const titlebar = new ConstrainedTitlebar('titlebar', dom.window.document.body);
+	parts.set('titlebar', titlebar);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
+		layout.layout(new Dimension(1_200, 800));
+		layout.resizePart('sidebar', new Dimension(180, 800));
+		assert.equal(layout.getPartSize('sidebar').width, 260);
+		titlebar.setSidebarMinimumWidth(330);
+		assert.equal(layout.getPartSize('sidebar').width, 330);
+		titlebar.setSidebarMinimumWidth(220);
+		layout.resizePart('sidebar', new Dimension(180, 800));
+		assert.equal(layout.getPartSize('sidebar').width, 220);
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
 test('Sessions moves the retained Panel to all four edges and restores normal sizes after maximize', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const parts = createParts(dom.window.document);
@@ -260,7 +325,7 @@ test("Sessions layout owns a fixed Sessions-first Part topology", () => {
 
 	assert.deepEqual(layout.getPartSize("titlebar"), new Dimension(1_200, WorkbenchWindowBarHeight));
 	assert.equal(container.querySelector('[data-part="activitybar"]'), null);
-	assert.equal(Math.abs(layout.getPartSize("sidebar").width - 240) <= 1, true);
+	assert.equal(Math.abs(layout.getPartSize("sidebar").width - 300) <= 1, true);
 	assert.equal(Math.abs(layout.getPartSize("auxiliarybar").width - 240) <= 1, true);
 	assert.equal(layout.getPartSize("sessions").height, 800 - WorkbenchWindowBarHeight);
 	assert.equal(layout.getPartSize("sessions").width > 400, true);

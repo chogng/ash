@@ -37,11 +37,18 @@
 	white-space: nowrap;
 }
 
-.ash-sessions-model-picker .ash-icon,
 .ash-sessions-model-picker-popup .ash-icon {
 	flex: 0 0 auto;
 	width: var(--ash-lxiconFontSize);
 	height: var(--ash-lxiconFontSize);
+}
+
+.ash-sessions-model-picker > .ash-icon,
+.ash-sessions-model-picker-heading > .ash-icon {
+	flex: 0 0 auto;
+	width: var(--ash-lxiconFontSize-compact);
+	height: var(--ash-lxiconFontSize-compact);
+	font-size: var(--ash-lxiconFontSize-compact);
 }
 
 .ash-sessions-model-picker-popup {

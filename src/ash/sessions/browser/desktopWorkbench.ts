@@ -1,7 +1,7 @@
 import { Dimension, getClientArea, h, type IDimension } from '../../base/browser/dom.js';
 import type { IPositionedRectangle } from '../../base/browser/geometry.js';
 import { SerializableGrid, type SerializedGridDescriptor } from '../../base/browser/ui/grid/grid.js';
-import { Emitter, type Event } from '../../base/common/event.js';
+import { Emitter, Event } from '../../base/common/event.js';
 import { MutableDisposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { BrowserLayoutService, type ILayoutOffsetInfo } from '../../platform/layout/browser/layoutService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
@@ -304,12 +304,17 @@ class SessionsWorkbenchPartView extends WorkbenchPartView<SessionsPartId> {
 		private readonly dockedMinimumWidth: () => number,
 		private readonly compositionChanged: Event<void>,
 		private readonly isPanelMaximized: () => boolean,
-	) { super(partId, part); }
+		private readonly titlebar: Part & { readonly minimumSidebarWidth?: number; },
+	) { super(partId, part, { snap: partId === 'sidebar' }); }
 	public override get minimumWidth(): number {
+		if (this.partId === 'sidebar') return Math.max(super.minimumWidth, this.titlebar.minimumSidebarWidth ?? 0);
 		if (this.partId !== 'editor') { return super.minimumWidth; }
 		return Math.max(EDITOR_PART_MINIMUM_WIDTH, super.minimumWidth, this.isEditorPrimary() ? 0 : this.dockedMinimumWidth());
 	}
-	public override get onDidChange(): Event<void> { return this.partId === 'editor' ? this.compositionChanged : super.onDidChange; }
+	public override get onDidChange(): Event<void> {
+		if (this.partId === 'sidebar') return Event.any(super.onDidChange, this.titlebar.onDidChangeConstraints);
+		return this.partId === 'editor' ? this.compositionChanged : super.onDidChange;
+	}
 	public override get preferredWidth(): number | undefined {
 		// Side-panel defaults and stored widths include the window frame insets.
 		return this.partId === 'sidebar' || this.partId === 'auxiliarybar' ? this.part.preferredWidth : super.preferredWidth;
@@ -403,7 +408,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 				const editorWidth = this.desiredVisibility.editor && !this.unavailableParts.has('editor') ? requiredPart(parts, 'editor').minimumWidth : 0;
 				const detailsWidth = this.desiredVisibility.auxiliarybar && !this.unavailableParts.has('auxiliarybar') ? requiredPart(parts, 'auxiliarybar').minimumWidth : 0;
 				return editorWidth + detailsWidth + this.layoutPolicy.getFrameMetrics(this.layoutStyle).rightEdge;
-			}, this.compositionChanged.event, () => this.panelMaximized));
+			}, this.compositionChanged.event, () => this.panelMaximized, requiredPart(parts, 'titlebar')));
 		}
 		this._register(requiredPart(parts, 'editor').onDidChangeConstraints(() => this.compositionChanged.fire()));
 		const state = this.stateModel.state;
@@ -481,6 +486,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 			this.domNode,
 			createSessionsWorkbenchGridDescriptor(this.views, dimension, state, this.primaryPart, this.desiredVisibility.banner),
 			{ fromJSON: data => this.view(parseSessionsPartId(data)) },
+			{ edgeSnapping: true },
 		);
 		this.gridHandle.value = this.grid;
 		this.dockedAuxiliaryBar = new DockedAuxiliaryBarController(
@@ -493,10 +499,14 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		this.restorePartVisibility();
 		this.gridChangeHandle.value = this.grid.onDidChange(() => {
 			if (this.partUpdateDepth === 0) {
+				// Sash snapping changes Grid visibility directly; retain it across page changes and reloads.
+				if (!this.unavailableParts.has('sidebar')) this.desiredVisibility.sidebar = this.grid.isViewVisible(this.view('sidebar'));
 				if (!this.isDocked && this.grid.isViewVisible(this.view('auxiliarybar'))) this.detailsWidth = this.grid.getViewSize(this.view('auxiliarybar')).width;
 				if (!this.isDocked && this.grid.isViewVisible(this.view('sessions')) && this.grid.isViewVisible(this.view('editor'))) this.conversationWidth = this.grid.getViewSize(this.view('sessions')).width;
 				this.capturePanelSize();
+				this.projectFrameInsets();
 				this.updateTitlebarSurface();
+				this.publishPartVisibility();
 				this.saveState();
 			}
 		});

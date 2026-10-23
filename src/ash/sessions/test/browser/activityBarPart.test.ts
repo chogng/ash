@@ -365,7 +365,7 @@ test('workspace mode controls switch retained pages and follow their owner selec
 	using codeCommand = CommandsRegistry.register('sessions.open.code', () => { opened.push('code'); active.set('code'); });
 	using chatCommand = CommandsRegistry.register('sessions.open.chat', () => { opened.push('agents'); active.set('agents'); });
 	using control = services.createInstance(WindowModeControl, ownerDocument.body, active, { agents: 'sessions.open.chat', code: 'sessions.open.code' });
-	const buttons = [...ownerDocument.querySelectorAll<HTMLButtonElement>('.ash-window-mode-button')];
+	const buttons = [...ownerDocument.querySelectorAll<HTMLButtonElement>('.ash-window-mode-control .ash-segmented-control-option')];
 	assert.equal(buttons[0]!.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'chat-1');
 	buttons[0]!.click();
 	assert.deepEqual(opened, ['agents']);
