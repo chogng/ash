@@ -43,32 +43,30 @@ test('Sessions ChatGPT sidebar opens and shares its retained EditorPane', { tag:
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/ChatGPT/);
 	await page.keyboard.press('Escape');
 	await expect(search).toBeFocused();
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
-	await expect(page.getByRole('tab', { name: 'Library', exact: true })).toBeVisible();
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
+	await expect(page.locator('.ash-projects')).toBeVisible();
 });
 
-test('Sessions restores the Library repository and its registered containers through entry startup', async ({ application, target, workbench }) => {
+test('Sessions restores the Projects entry and its pane visibility through entry startup', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	const draft = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 	await draft.waitForEditorFocus();
-	await page.keyboard.insertText('Keep the conversation when Library is restored');
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Library', exact: true }).click();
-	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-library')).toBeVisible();
-	await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+	await page.keyboard.insertText('Keep the conversation when Projects is restored');
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
+	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-projects')).toBeVisible();
 	await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
 	page = await workbench.reopenAgentsWindow(application, page);
 	const navigation = page.locator('.ash-sessions-activity-content');
-	await expect(navigation.getByRole('button', { name: 'Library', exact: true })).toHaveAttribute('aria-current', 'page');
-	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-library')).toBeVisible();
+	await expect(navigation.getByRole('button', { name: 'Projects', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-projects')).toBeVisible();
 	await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
-	await expect(page.locator('[data-part="auxiliarybar"] [data-view-id="sessions.library.details.view"]')).toBeVisible();
-	await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Show sidebar', exact: true }).click();
-	await expect(page.locator('[data-part="sidebar"] [data-view-id="sessions.library.navigation.view"]')).toBeVisible();
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
+	await expect(page.locator('.ash-projects').getByRole('button', { name: 'New project', exact: true }).first()).toBeVisible();
 	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
-	await new Editor(page.locator('.ash-sessions-chat-slot.active:visible')).waitForEditorContents(text => text === 'Keep the conversation when Library is restored');
+	await new Editor(page.locator('.ash-sessions-chat-slot.active:visible')).waitForEditorContents(text => text === 'Keep the conversation when Projects is restored');
 });
 
-test('Creator contributions share one entry container while Library categories keep the repository entry', async ({ target, workbench }) => {
+test('Creator contributions share one entry container while Projects keeps navigation inside its editor', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
@@ -96,15 +94,14 @@ test('Creator contributions share one entry container while Library categories k
 	await entries.locator('[data-view-id="sessions.creator.navigation.design"] .ash-creator-navigation').getByRole('button', { name: 'Design', exact: true }).click();
 	await expect(page.getByRole('region', { name: 'Design canvas' })).toBeVisible();
 	await expect(page.locator('[data-part="sidebar"] [data-view-container-id="workbench.sessions.sidebar.designLayers"]')).toBeVisible();
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
-	const libraryInput = await page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-library').elementHandle();
-	const libraryNavigation = page.locator('[data-view-id="sessions.library.navigation.view"]');
-	await libraryNavigation.getByRole('button', { name: 'Favorites', exact: true }).click();
-	await libraryNavigation.getByRole('button', { name: 'All', exact: true }).click();
-	await expect(navigation.getByRole('button', { name: 'Library', exact: true })).toHaveAttribute('aria-current', 'page');
-	await expect(page.locator('[data-part="sidebar"] [data-view-id]:visible')).toHaveCount(1);
-	await expect(page.locator('[data-part="auxiliarybar"] [data-view-id]:visible')).toHaveCount(1);
-	expect(await page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-library').evaluate((element, retained) => element === retained, libraryInput)).toBe(true);
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
+	const projectsInput = await page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-projects').elementHandle();
+	await page.locator('.ash-projects').getByRole('button', { name: 'Search projects', exact: true }).click();
+	await page.locator('.ash-projects').getByRole('searchbox').fill('Project search');
+	await expect(navigation.getByRole('button', { name: 'Projects', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
+	expect(await page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-projects').evaluate((element, retained) => element === retained, projectsInput)).toBe(true);
 });
 
 test('Sessions pages keep Code tabs separate and retain dirty files and Design state', async ({ target, workbench }) => {
@@ -112,7 +109,7 @@ test('Sessions pages keep Code tabs separate and retain dirty files and Design s
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const code = navigation.getByRole('button', { name: 'Code', exact: true });
 	const creator = navigation.getByRole('button', { name: 'Creator', exact: true });
-	const library = navigation.getByRole('button', { name: 'Library', exact: true });
+	const projects = navigation.getByRole('button', { name: 'Projects', exact: true });
 	await code.click();
 	await new QuickAccess(page).runCommand('workbench.action.files.newUntitledFile');
 	const codeEditor = page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid)');
@@ -136,12 +133,13 @@ test('Sessions pages keep Code tabs separate and retain dirty files and Design s
 	await expect(canvas.locator('[data-shape-id]')).toHaveCount(1);
 	await expect(page.getByRole('tab', { name: 'Untitled design', exact: true, includeHidden: true })).toHaveCount(0);
 	await expect(codeTabs).toHaveText(tabs);
-	await library.click();
-	await expect(library).toHaveAttribute('aria-current', 'page');
-	const search = page.locator('.ash-library').getByRole('searchbox');
-	await search.fill('Keep this Library search');
+	await projects.click();
+	await expect(projects).toHaveAttribute('aria-current', 'page');
+	await page.locator('.ash-projects').getByRole('button', { name: 'Search projects', exact: true }).click();
+	const search = page.locator('.ash-projects').getByRole('searchbox');
+	await search.fill('Keep this Projects search');
 	await expect(canvas).toBeHidden();
-	await expect(page.getByRole('tab', { name: 'Library', exact: true })).toBeVisible();
+	await expect(page.locator('.ash-projects').getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
 	await code.click();
 	await expect(codeEditor).toBeVisible();
 	await file.waitForEditorContents(text => text === 'Keep this unsaved Code file');
@@ -154,8 +152,8 @@ test('Sessions pages keep Code tabs separate and retain dirty files and Design s
 	await expect(canvas.locator('[data-shape-id]')).toHaveCount(1);
 	await expect(page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'X', exact: true })).toBeVisible();
 	await expect(page.getByRole('dialog')).toHaveCount(0);
-	await library.click();
-	await expect(search).toHaveValue('Keep this Library search');
+	await projects.click();
+	await expect(search).toHaveValue('Keep this Projects search');
 });
 
 test('Sessions registered pages coordinate Parts and retain drafts through drag and keyboard ordering', async ({ application, target, workbench }) => {
@@ -173,7 +171,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	const retainedChat = await chat.elementHandle();
 	await navigation.locator('[data-action-id="sessions.open.creator"]').dragTo(navigation.locator('[data-action-id="sessions.open.chat"]'), { targetPosition: { x: 8, y: 2 } });
 	await expect(items.first()).toHaveAttribute('draggable', 'true');
-	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.creator', 'sessions.open.chat', 'sessions.open.collaboration', 'sessions.open.teams', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.library', 'sessions.open.code', ...(target.appServerMode === 'required' ? ['sessionsView.manageAutomations'] : []), 'sessions.open.symphony']);
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.creator', 'sessions.open.chat', 'sessions.open.collaboration', 'sessions.open.teams', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.projects', 'sessions.open.code', ...(target.appServerMode === 'required' ? ['sessionsView.manageAutomations'] : []), 'sessions.open.symphony']);
 	await expect(chat).toHaveAttribute('aria-current', 'page');
 	expect(await chat.evaluate((element, retained) => element === retained, retainedChat)).toBe(true);
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
@@ -189,17 +187,17 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
 	await expect(page.locator('[data-part="panel"]')).toBeHidden();
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
-	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-library')).toBeVisible();
-	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
+	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-projects')).toBeVisible();
+	await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
 	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid)')).toBeVisible();
-	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
 	await chat.click();
 	await editor.waitForEditorContents(text => text === 'Retain the navigation draft');
 	await creator.focus();
 	await new Menus(page).select(application, () => page.keyboard.press('Shift+F10'), ['Move later']);
 	await expect(creator).toBeFocused();
-	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.chat', 'sessions.open.creator', 'sessions.open.collaboration', 'sessions.open.teams', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.library', 'sessions.open.code', ...(target.appServerMode === 'required' ? ['sessionsView.manageAutomations'] : []), 'sessions.open.symphony']);
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.chat', 'sessions.open.creator', 'sessions.open.collaboration', 'sessions.open.teams', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.projects', 'sessions.open.code', ...(target.appServerMode === 'required' ? ['sessionsView.manageAutomations'] : []), 'sessions.open.symphony']);
 	await expect(chat).toHaveAttribute('aria-current', 'page');
 	await page.keyboard.press('Home');
 	await expect(chat).toBeFocused();
@@ -220,7 +218,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
 	await expect(navigation.locator('.ash-sessions-navigation[role="toolbar"]')).toHaveAttribute('aria-orientation', 'horizontal');
 	await navigation.locator('[data-action-id="sessions.open.code"]').dragTo(navigation.locator('[data-action-id="sessions.open.teams"]'), { targetPosition: { x: 2, y: 8 } });
-	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.chat', 'sessions.open.creator', 'sessions.open.collaboration', 'sessions.open.code', 'sessions.open.teams', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.library', ...(target.appServerMode === 'required' ? ['sessionsView.manageAutomations'] : []), 'sessions.open.symphony']);
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.chat', 'sessions.open.creator', 'sessions.open.collaboration', 'sessions.open.code', 'sessions.open.teams', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.projects', ...(target.appServerMode === 'required' ? ['sessionsView.manageAutomations'] : []), 'sessions.open.symphony']);
 	await expect(chat).toHaveAttribute('aria-current', 'page');
 	await chat.focus();
 	await page.keyboard.press('ArrowRight');
@@ -228,7 +226,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await page.reload();
 	await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
 	await expect(chat).toHaveAttribute('aria-current', 'page');
-	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.chat', 'sessions.open.creator', 'sessions.open.collaboration', 'sessions.open.code', 'sessions.open.teams', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.library', ...(target.appServerMode === 'required' ? ['sessionsView.manageAutomations'] : []), 'sessions.open.symphony']);
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.chat', 'sessions.open.creator', 'sessions.open.collaboration', 'sessions.open.code', 'sessions.open.teams', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.projects', ...(target.appServerMode === 'required' ? ['sessionsView.manageAutomations'] : []), 'sessions.open.symphony']);
 	await editor.waitForEditorContents(text => text === 'Retain the navigation draft');
 	await new QuickAccess(page).runCommand('sessions.trace.import');
 	await expect(trace).toHaveCount(0);

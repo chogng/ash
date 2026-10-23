@@ -20,8 +20,8 @@ import { IHoverService } from '../../../../platform/hover/browser/hoverService.j
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
-import { ILibraryService, type LibraryState } from './libraryService.js';
-import './library.css';
+import { IProjectsService, type ProjectsState } from './projectsService.js';
+import './projects.css';
 
 const projectButtonStyles = {
 	...defaultButtonStyles,
@@ -32,8 +32,8 @@ const projectButtonStyles = {
 };
 
 /** Projects own the front page. Material types appear only inside an opened project. */
-export class LibraryEditorPane extends EditorPane implements IEditorPane {
-	public readonly id = 'sessions.editor.library';
+export class ProjectsEditorPane extends EditorPane implements IEditorPane {
+	public readonly id = 'sessions.editor.projects';
 	public domNode!: HTMLElement;
 	private readonly content = this._register(new DisposableStore());
 	private readonly dialog = this._register(new MutableDisposable<DisposableStore>());
@@ -48,7 +48,7 @@ export class LibraryEditorPane extends EditorPane implements IEditorPane {
 	private sort!: Button;
 
 	constructor(
-		@ILibraryService private readonly library: ILibraryService,
+		@IProjectsService private readonly projects: IProjectsService,
 		@IFileDialogService private readonly files: IFileDialogService,
 		@IEditorService private readonly editors: IEditorService,
 		@IHoverService private readonly hover: IHoverService,
@@ -56,53 +56,53 @@ export class LibraryEditorPane extends EditorPane implements IEditorPane {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
-	) { super('sessions.editor.library', themeService, storageService); }
+	) { super('sessions.editor.projects', themeService, storageService); }
 
 	public override create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
 		this.domNode = h(document, 'section', { className: 'ash-projects', attributes: { 'aria-label': localize('projects.title', 'Projects') } });
 		parent.append(this.domNode);
 		super.create(this.domNode);
-		this._register(this.contextKeys.createScoped(this.domNode)).createKey('sessionsLibraryFocused', true);
+		this._register(this.contextKeys.createScoped(this.domNode)).createKey('sessionsProjectsFocused', true);
 		const main = h(document, 'div', { className: 'ash-projects-main' });
 		this.breadcrumb = h(document, 'nav', { className: 'ash-projects-breadcrumb', attributes: { 'aria-label': localize('projects.breadcrumb', 'Project navigation') } });
-		this._register(new Button(this.breadcrumb, { ...projectButtonStyles, label: localize('projects.title', 'Projects'), icon: Lxicon.arrowLeft, onClick: () => { this.library.showProjects(); this.createButton.focus(); } }));
+		this._register(new Button(this.breadcrumb, { ...projectButtonStyles, label: localize('projects.title', 'Projects'), icon: Lxicon.arrowLeft, onClick: () => { this.projects.showProjects(); this.createButton.focus(); } }));
 		const heading = h(document, 'header', { className: 'ash-projects-heading' });
 		this.title = h(document, 'h1', { properties: { tabIndex: -1 } }, localize('projects.title', 'Projects'));
 		this.tools = h(document, 'div', { className: 'ash-projects-tools' });
 		this.search = h(document, 'input', { className: 'ash-projects-search', properties: { type: 'search', placeholder: localize('projects.search', 'Search projects'), hidden: true }, attributes: { 'aria-label': localize('projects.search', 'Search projects') } });
 		this._register(new Button(this.tools, { ...projectButtonStyles, label: localize('projects.search', 'Search projects'), icon: Lxicon.search, iconOnly: true, onClick: () => { this.search.hidden = !this.search.hidden; if (!this.search.hidden) { this.search.focus(); } } }));
-		this.sort = this._register(new Button(this.tools, { ...projectButtonStyles, label: localize('projects.sort', 'Reverse alphabetical order'), icon: Lxicon.sortPrecedence, iconOnly: true, onClick: () => this.library.toggleSort() }));
+		this.sort = this._register(new Button(this.tools, { ...projectButtonStyles, label: localize('projects.sort', 'Reverse alphabetical order'), icon: Lxicon.sortPrecedence, iconOnly: true, onClick: () => this.projects.toggleSort() }));
 		this.createButton = this._register(new Button(this.tools, { ...projectButtonStyles, label: localize('projects.new', 'New project'), presentation: 'primary', onClick: () => this.showProjectDialog() }));
 		heading.append(this.title, this.tools);
 		const feedback = h(document, 'div', { className: 'ash-projects-feedback' });
 		this.message = h(document, 'p', { attributes: { role: 'status', 'aria-live': 'polite' } });
-		this.retry = this._register(new Button(feedback, { ...projectButtonStyles, label: localize('projects.retry', 'Try again'), onClick: () => { void this.library.reload(); } }));
+		this.retry = this._register(new Button(feedback, { ...projectButtonStyles, label: localize('projects.retry', 'Try again'), onClick: () => { void this.projects.reload(); } }));
 		feedback.prepend(this.message);
 		this.body = h(document, 'div', { className: 'ash-projects-body' });
 		main.append(this.breadcrumb, heading, this.search, feedback, this.body);
 		this.domNode.append(main);
-		this._register(addDisposableListener(this.search, 'input', () => this.library.setQuery(this.search.value)));
+		this._register(addDisposableListener(this.search, 'input', () => this.projects.setQuery(this.search.value)));
 		this._register(addDisposableListener(this.body, 'keydown', event => this.navigateCards(event)));
 		this._register(addDisposableListener(this.domNode, 'focusin', event => {
-			if (!this.domNode.contains(event.relatedTarget as Node) && this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.Library)) {
+			if (!this.domNode.contains(event.relatedTarget as Node) && this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.Projects)) {
 				status(localize('projects.helpHint', 'Press Alt+F1 for Projects accessibility help.'));
 			}
 		}));
-		this._register(autorun(reader => this.render(this.library.state.read(reader))));
+		this._register(autorun(reader => this.render(this.projects.state.read(reader))));
 	}
 
 	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
 	public override clearInput(): void { }
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
-		if (visible) { void this.library.reload(); }
+		if (visible) { void this.projects.reload(); }
 		else { this.dialog.clear(); }
 	}
 	public override layout(dimension: IDimension): void { this.domNode.classList.toggle('narrow', dimension.width < 760); }
-	public override focus(): void { this.library.state.get().selectedId ? this.title.focus() : this.createButton.focus(); }
+	public override focus(): void { this.projects.state.get().selectedId ? this.title.focus() : this.createButton.focus(); }
 
-	private render(state: LibraryState): void {
+	private render(state: ProjectsState): void {
 		const focused = getActiveElement(this.domNode.ownerDocument) as HTMLElement;
 		const focusKey = this.body.contains(focused) ? focused.dataset.projectControl : undefined;
 		this.content.clear();
@@ -122,7 +122,7 @@ export class LibraryEditorPane extends EditorPane implements IEditorPane {
 		this.body.setAttribute('aria-busy', String(state.loading));
 		if (state.selected) { this.renderProject(state.selected); }
 		else if (state.selectedId && state.loading) { this.renderLoading(); }
-		else if (!state.selectedId && this.library.getProjects().length) { this.renderCards(); }
+		else if (!state.selectedId && this.projects.getProjects().length) { this.renderCards(); }
 		else if (!state.loading && !state.message) { this.renderEmpty(!!state.query); }
 		if (focusKey) {
 			(Array.from(this.body.querySelectorAll<HTMLElement>('[data-project-control]')).find(node => node.dataset.projectControl === focusKey) ?? this.title).focus();
@@ -142,20 +142,20 @@ export class LibraryEditorPane extends EditorPane implements IEditorPane {
 		empty.append(illustration,
 			h(document, 'h2', {}, searching ? localize('projects.noResults', 'No matching projects') : localize('projects.emptyTitle', 'Looking to start a project?')),
 			h(document, 'p', {}, searching ? localize('projects.searchHint', 'Try another name or clear your search.') : localize('projects.emptyDescription', 'Bring your materials and goals together in one space.')));
-		this.button(empty, { label: searching ? localize('projects.clearSearch', 'Clear search') : localize('projects.new', 'New project'), presentation: 'secondary', onClick: () => searching ? this.library.setQuery('') : this.showProjectDialog() });
+		this.button(empty, { label: searching ? localize('projects.clearSearch', 'Clear search') : localize('projects.new', 'New project'), presentation: 'secondary', onClick: () => searching ? this.projects.setQuery('') : this.showProjectDialog() });
 		this.body.append(empty);
 	}
 
 	private renderCards(): void {
 		const document = this.domNode.ownerDocument;
 		const list = h(document, 'ul', { className: 'ash-projects-grid', attributes: { 'aria-label': localize('projects.title', 'Projects') } });
-		for (const project of this.library.getProjects()) {
+		for (const project of this.projects.getProjects()) {
 			const row = h(document, 'li');
 			const card = h(document, 'button', { className: 'ash-projects-card', properties: { type: 'button' }, attributes: { 'aria-label': project.name } });
 			card.dataset.projectControl = project.id;
 			card.append(h(document, 'span', { className: 'ash-projects-card-mark', attributes: { 'aria-hidden': 'true' } }), h(document, 'span', { className: 'ash-projects-card-name' }, project.name), h(document, 'span', { className: 'ash-projects-card-caption' }, localize('projects.open', 'Open project')));
 			this.content.add(this.hover.setupDelayedHover(card, { content: project.name }));
-			this.content.add(addDisposableListener(card, 'click', () => { void this.library.openProject(project.id).then(() => this.title.focus()); }));
+			this.content.add(addDisposableListener(card, 'click', () => { void this.projects.openProject(project.id).then(() => this.title.focus()); }));
 			row.append(card); list.append(row);
 		}
 		this.body.append(list);
@@ -170,7 +170,7 @@ export class LibraryEditorPane extends EditorPane implements IEditorPane {
 		overview.append(heading, h(document, 'p', { className: 'ash-projects-description' }, project.description || localize('projects.noGoals', 'Add a description of what you want to achieve.')));
 		const materials = h(document, 'section', { className: 'ash-projects-materials', attributes: { 'aria-label': localize('projects.materials', 'Materials') } });
 		const materialsHeading = h(document, 'div', { className: 'ash-projects-section-heading' }, h(document, 'h2', {}, localize('projects.materials', 'Materials')));
-		this.button(materialsHeading, { label: localize('projects.addFiles', 'Add files'), icon: Lxicon.add, enabled: !this.library.state.get().busy, onClick: () => { void this.addMaterials(project, 'file'); } }, 'add-files');
+		this.button(materialsHeading, { label: localize('projects.addFiles', 'Add files'), icon: Lxicon.add, enabled: !this.projects.state.get().busy, onClick: () => { void this.addMaterials(project, 'file'); } }, 'add-files');
 		materials.append(materialsHeading, h(document, 'p', { className: 'ash-projects-muted' }, localize('projects.materialsDescription', 'Keep images, PDFs, documents and other files close at hand.')));
 		if (!project.materials.length) {
 			materials.append(h(document, 'p', { className: 'ash-projects-materials-empty' }, localize('projects.noMaterials', 'Add your first material to this project.')));
@@ -180,11 +180,11 @@ export class LibraryEditorPane extends EditorPane implements IEditorPane {
 			const row = h(document, 'li', { className: 'ash-projects-material' });
 			const open = this.button(row, { label: material.name, icon: material.kind === 'folder' ? Lxicon.folders : Lxicon.file, onClick: () => { void this.openMaterial(material); } }, material.resource.toString());
 			this.content.add(this.hover.setupDelayedHover(open.domNode, { content: material.resource.fsPath }));
-			this.button(row, { label: localize('projects.removeMaterial', 'Remove {0} from project', material.name), icon: Lxicon.close, iconOnly: true, enabled: !this.library.state.get().busy, onClick: () => { void this.library.update(project, project.name, project.description, project.materials.filter(item => item.resource.toString() !== material.resource.toString())); } }, `remove:${material.resource}`);
+			this.button(row, { label: localize('projects.removeMaterial', 'Remove {0} from project', material.name), icon: Lxicon.close, iconOnly: true, enabled: !this.projects.state.get().busy, onClick: () => { void this.projects.update(project, project.name, project.description, project.materials.filter(item => item.resource.toString() !== material.resource.toString())); } }, `remove:${material.resource}`);
 			list.append(row);
 		}
 		materials.append(list);
-		this.button(materials, { label: localize('projects.useFolder', 'Use a folder'), icon: Lxicon.folders, enabled: !this.library.state.get().busy, onClick: () => { void this.addMaterials(project, 'folder'); } }, 'add-folder');
+		this.button(materials, { label: localize('projects.useFolder', 'Use a folder'), icon: Lxicon.folders, enabled: !this.projects.state.get().busy, onClick: () => { void this.addMaterials(project, 'folder'); } }, 'add-folder');
 		materials.append(h(document, 'p', { className: 'ash-projects-source-note' }, localize('projects.referenceHint', 'Files stay in their original location.')));
 		layout.append(overview, materials);
 		this.body.append(layout);
@@ -204,7 +204,7 @@ export class LibraryEditorPane extends EditorPane implements IEditorPane {
 			for (const resource of resources) {
 				if (!materials.some(item => item.resource.toString() === resource.toString())) { materials.push({ resource, name: basename(resource), kind }); }
 			}
-			await this.library.update(project, project.name, project.description, materials);
+			await this.projects.update(project, project.name, project.description, materials);
 		} catch { this.showError(localize('projects.pickFailed', 'Could not add these materials. Try again.')); }
 	}
 
@@ -234,7 +234,11 @@ export class LibraryEditorPane extends EditorPane implements IEditorPane {
 		const descriptionLabel = h(document, 'label', {}, localize('projects.descriptionLabel', 'What are you trying to achieve?'));
 		const description = h(document, 'textarea', { properties: { value: project?.description ?? '', maxLength: 20000, placeholder: localize('projects.descriptionPlaceholder', 'Describe your project, goals, subject, etc…') } });
 		descriptionLabel.append(description);
-		const materials = [...(project?.materials ?? [])];
+		let materials = [...(project?.materials ?? [])];
+		let base = project;
+		let needsMerge = false;
+		const unresolved = new Set<HTMLInputElement | HTMLTextAreaElement>();
+		const mergeControls = store.add(new DisposableStore());
 		let chosenFolder: ProjectMaterial | undefined;
 		const folderRow = h(document, 'div', { className: 'ash-projects-folder-choice' });
 		const feedback = h(document, 'p', { className: 'ash-projects-form-error', attributes: { role: 'alert' } });
@@ -253,24 +257,95 @@ export class LibraryEditorPane extends EditorPane implements IEditorPane {
 			}
 		}));
 		const actions = h(document, 'footer', { className: 'ash-projects-form-actions' });
-		form.append(nameLabel, descriptionLabel, folderRow, feedback, actions);
+		const conflicts = h(document, 'div', { className: 'ash-projects-conflicts', properties: { hidden: true } });
+		form.append(nameLabel, descriptionLabel, folderRow, feedback, conflicts, actions);
 		const dialog = store.add(new Dialog(this.domNode, { title: project ? localize('projects.edit', 'Edit details') : localize('projects.createTitle', 'Create a project'), content: form, dialogStyles: defaultDialogStyles }));
 		dialog.element.classList.add('ash-projects-dialog');
 		const close = store.add(new Button(dialog.element, { ...projectButtonStyles, label: localize('projects.close', 'Close'), icon: Lxicon.close, iconOnly: true, onClick: () => dialog.close() }));
 		close.domNode.classList.add('ash-projects-dialog-close');
+		const reload = store.add(new Button(actions, { ...projectButtonStyles, label: localize('projects.reloadMerge', 'Reload and merge'), presentation: 'secondary', onClick: () => { void reloadAndMerge(); } }));
+		reload.domNode.hidden = true;
 		store.add(new Button(actions, { ...projectButtonStyles, label: localize('projects.cancel', 'Cancel'), presentation: 'secondary', onClick: () => dialog.close() }));
 		const submit = store.add(new Button(actions, { ...projectButtonStyles, label: project ? localize('projects.save', 'Save changes') : localize('projects.create', 'Create project'), presentation: 'primary', type: 'submit', enabled: !!name.value.trim() }));
-		store.add(addDisposableListener(name, 'input', () => { submit.enabled = !!name.value.trim(); }));
+		const updateSubmit = () => { submit.enabled = !!name.value.trim() && !needsMerge && unresolved.size === 0; };
+		store.add(addDisposableListener(name, 'input', updateSubmit));
+		const offerMerge = (): boolean => {
+			const latest = this.projects.state.get().selected;
+			if (!base || latest?.id !== base.id || latest.revision === base.revision) { return false; }
+			needsMerge = true;
+			feedback.textContent = localize('projects.editConflict', 'This project changed in another window. Reload and merge to keep your draft and include the saved changes.');
+			reload.domNode.hidden = false;
+			updateSubmit();
+			reload.focus();
+			return true;
+		};
+		const mergeField = (input: HTMLInputElement | HTMLTextAreaElement, previous: string, saved: string, label: string): void => {
+			let draft = input.value;
+			if (draft.trim() === previous || draft.trim() === saved) { input.value = saved; return; }
+			if (saved === previous) { return; }
+			unresolved.add(input);
+			const choiceLabel = h(document, 'label', {}, label);
+			const choice = h(document, 'select', { attributes: { 'aria-label': label } },
+				h(document, 'option', { properties: { value: '' } }, localize('projects.chooseValue', 'Choose which value to keep')),
+				h(document, 'option', { properties: { value: 'draft' } }, localize('projects.keepDraft', 'Keep draft')),
+				h(document, 'option', { properties: { value: 'saved' } }, localize('projects.useSaved', 'Use saved value')));
+			choiceLabel.append(h(document, 'span', { properties: { tabIndex: 0 } }, localize('projects.savedValue', 'Saved value: {0}', saved)), choice);
+			conflicts.append(choiceLabel);
+			mergeControls.add(addDisposableListener(input, 'input', () => {
+				draft = input.value;
+				choice.value = 'draft';
+				unresolved.delete(input);
+				updateSubmit();
+			}));
+			mergeControls.add(addDisposableListener(choice, 'change', () => {
+				if (!choice.value) { unresolved.add(input); }
+				else { input.value = choice.value === 'saved' ? saved : draft; unresolved.delete(input); }
+				updateSubmit();
+			}));
+		};
+		const reloadAndMerge = async (): Promise<void> => {
+			if (!base || this.projects.state.get().busy) { return; }
+			reload.enabled = false; name.disabled = true; description.disabled = true; folder.enabled = false;
+			await this.projects.reload();
+			if (store.isDisposed) { return; }
+			const state = this.projects.state.get();
+			const latest = state.selected;
+			if (state.message || latest?.id !== base.id) {
+				feedback.textContent = state.message ?? localize('projects.loadFailed', 'Could not load projects. Try again.');
+			} else {
+				mergeControls.clear(); conflicts.replaceChildren(); unresolved.clear();
+				mergeField(name, base.name, latest.name, localize('projects.nameConflict', 'The project name changed in both versions.'));
+				mergeField(description, base.description, latest.description, localize('projects.descriptionConflict', 'The project goals changed in both versions.'));
+				// The dialog only adds a folder. Start with the latest materials so a
+				// concurrent addition or removal cannot be undone by the old draft.
+				materials = [...latest.materials];
+				if (chosenFolder && !materials.some(item => item.resource.toString() === chosenFolder!.resource.toString())) { materials.push(chosenFolder); }
+				else { chosenFolder = undefined; }
+				base = latest;
+				needsMerge = false;
+				reload.domNode.hidden = true;
+				conflicts.hidden = unresolved.size === 0;
+				feedback.textContent = unresolved.size ? localize('projects.resolveConflict', 'Your draft is preserved. Choose which value to keep for each conflict before saving.') : localize('projects.merged', 'Saved changes and materials have been merged with your draft. Review and save the project.');
+			}
+			reload.enabled = true; name.disabled = false; description.disabled = false; folder.enabled = true;
+			updateSubmit();
+			(conflicts.querySelector('select') ?? name).focus();
+		};
 		const id = generateUuid();
 		store.add(addDisposableListener(form, 'submit', event => {
 			event.preventDefault();
-			if (!name.value.trim() || this.library.state.get().busy) { return; }
+			if (!name.value.trim() || this.projects.state.get().busy || needsMerge || unresolved.size || offerMerge()) { return; }
 			submit.enabled = false; name.disabled = true; description.disabled = true; folder.enabled = false;
-			const result = project ? this.library.update(project, name.value.trim(), description.value.trim(), materials) : this.library.create(id, name.value.trim(), description.value.trim(), materials);
+			const result = base ? this.projects.update(base, name.value.trim(), description.value.trim(), materials) : this.projects.create(id, name.value.trim(), description.value.trim(), materials);
 			void result.then(saved => {
 				if (store.isDisposed) { return; }
 				if (saved) { dialog.close('saved'); }
-				else { feedback.textContent = this.library.state.get().message ?? ''; submit.enabled = true; name.disabled = false; description.disabled = false; folder.enabled = true; }
+				else {
+					feedback.textContent = this.projects.state.get().message ?? '';
+					name.disabled = false; description.disabled = false; folder.enabled = true;
+					updateSubmit();
+					offerMerge();
+				}
 			});
 		}));
 		void dialog.show().then(result => {

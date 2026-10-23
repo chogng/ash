@@ -35,7 +35,7 @@ Projects and Creator contribute EditorPanes to the retained Sessions EditorPart.
 
 Creator aggregates independently contributed creation tools. Contributions register their Views against a shared Creator container ID; `ViewPaneContainer` owns their arrangement, expansion, sizing and focus. Creator owns workspace selection and retained workspace documents. A contribution entry registers capabilities rather than running a window-wide product-mode state machine.
 
-Projects presents the shared Project catalog through `IProjectService`. The backend owns durable project metadata and file or folder references; `LibraryService` retains only window-local search, sorting and selected-project state. Material types remain inside a project and do not register separate product entries or view containers.
+Projects presents the shared Project catalog through `IProjectService`. The backend owns durable project metadata and file or folder references; `ProjectsService` retains only window-local search, sorting and selected-project state. Material types remain inside a project and do not register separate product entries or view containers.
 
 ### Creator conversation and editor composition
 

@@ -4,7 +4,7 @@ import { localize } from '../../../../nls.js';
 import { IProjectService, type Project, type ProjectMaterial, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
-export interface LibraryState {
+export interface ProjectsState {
 	readonly projects: readonly ProjectSummary[];
 	readonly selectedId: string | undefined;
 	readonly selected: Project | undefined;
@@ -16,8 +16,8 @@ export interface LibraryState {
 }
 
 /** Window-local navigation only; IProjectService owns access to the durable project catalog. */
-export interface ILibraryService {
-	readonly state: IObservable<LibraryState>;
+export interface IProjectsService {
+	readonly state: IObservable<ProjectsState>;
 	setQuery(query: string): void;
 	toggleSort(): void;
 	openProject(id: string): Promise<void>;
@@ -29,11 +29,11 @@ export interface ILibraryService {
 	getAccessibleContent(): string;
 }
 
-export const ILibraryService = createServiceIdentifier<ILibraryService>('libraryService');
+export const IProjectsService = createServiceIdentifier<IProjectsService>('projectsService');
 
-export class LibraryService extends Disposable implements ILibraryService {
-	private readonly browsing = observableValue<LibraryState>(this, { projects: [], selectedId: undefined, selected: undefined, query: '', descending: false, loading: false, busy: false, message: undefined });
-	public readonly state: IObservable<LibraryState> = this.browsing;
+export class ProjectsService extends Disposable implements IProjectsService {
+	private readonly browsing = observableValue<ProjectsState>(this, { projects: [], selectedId: undefined, selected: undefined, query: '', descending: false, loading: false, busy: false, message: undefined });
+	public readonly state: IObservable<ProjectsState> = this.browsing;
 	private loadSequence = 0;
 	private reloadRequested = false;
 
@@ -45,7 +45,7 @@ export class LibraryService extends Disposable implements ILibraryService {
 		}));
 	}
 
-	private patch(change: Partial<LibraryState>): void { this.browsing.set({ ...this.state.get(), ...change }); }
+	private patch(change: Partial<ProjectsState>): void { this.browsing.set({ ...this.state.get(), ...change }); }
 	public setQuery(query: string): void { this.patch({ query }); }
 	public toggleSort(): void { this.patch({ descending: !this.state.get().descending }); }
 	public showProjects(): void {

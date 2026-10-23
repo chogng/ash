@@ -132,11 +132,11 @@ test('Sessions shared layout preserves user geometry across views, resize and re
 	await expect.poll(async () => Math.abs((await sidebar.boundingBox())!.width - sidebarWidth)).toBeLessThanOrEqual(1);
 	await titlebar.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
 	await expect(sidebar).toBeHidden();
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 	await page.reload({ waitUntil: 'domcontentloaded' });
-	await expect(sidebar).toBeVisible();
-	await expect(sidebar.getByRole('navigation', { name: 'Library categories' })).toBeVisible();
-	await expect(auxiliarybar).toBeVisible();
+	await expect(sidebar).toBeHidden();
+	await expect(page.locator('.ash-projects')).toBeVisible();
+	await expect(auxiliarybar).toBeHidden();
 	// Each mode keeps its visibility preference; returning to Code restores its hidden sidebar.
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(sidebar).toBeHidden();
@@ -202,7 +202,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	await expect(panes).toHaveCount(1);
 	await typeDraft('Code second draft');
 	codeReferences.push(await draftReference());
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 	// Restore an existing split arrangement; Add is ordinary navigation, not a split command.
 	const identity = { scope: StorageScope.WORKSPACE, id: 'sessions' };
 	await expect.poll(async () => Boolean((await readStorageEntries(application, page, identity))['sessions.viewState'])).toBe(true);
@@ -230,7 +230,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	for (let index = 0; index < shared.length; index++) {
 		await expect.poll(async () => Math.abs((await panes.nth(index).boundingBox())!.width - shared[index]!.width)).toBeLessThanOrEqual(1);
 	}
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
 	await expect(panes).toHaveCount(5);

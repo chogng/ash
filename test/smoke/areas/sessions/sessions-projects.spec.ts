@@ -1,5 +1,9 @@
 import { readFile, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
+import { connectProfile } from './sessionProfileFixture.js';
 import { expect, test } from '../../../automation/test.js';
 
 test('Sessions Projects replaces material categories and supports keyboard creation', async ({ target, workbench }) => {
@@ -137,3 +141,76 @@ test('Sessions Projects creation is localized in Chinese', { tag: ['@electron-ap
 	await page.screenshot({ path: testInfo.outputPath('projects-chinese.png') });
 	await page.keyboard.press('Escape');
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Sessions Projects merges a stale draft with saved materials and resolves text conflicts in ${locale}`, { tag: ['@electron-app-server'] }, async ({ application, target, workbench, restartWorkbench, webAppServer, testWorkspace }, testInfo) => {
+		test.setTimeout(120_000);
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+			await language.fill('简体中文');
+			await language.press('Enter');
+			({ application, workbench } = await restartWorkbench());
+		}
+		if (!('windows' in application)) { throw new Error('Expected Electron application'); }
+		const copy = locale === 'zh-CN'
+			? { projects: '项目', edit: '编辑详情', name: '你正在做什么？', goals: '你希望达成什么目标？', save: '保存更改', reload: '重载并合并', folder: '使用文件夹', saved: '使用已保存的值', draft: '保留草稿' }
+			: { projects: 'Projects', edit: 'Edit details', name: 'What are you working on?', goals: 'What are you trying to achieve?', save: 'Save changes', reload: 'Reload and merge', folder: 'Use a folder', saved: 'Use saved value', draft: 'Keep draft' };
+		const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
+		const original = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
+		try {
+			const directory = await realpath(testWorkspace.directory);
+			const { client } = connection;
+			const projectId = randomUUID();
+			const material = (name: string) => ({ name, kind: 'file' as const, path: pathToFileURL(join(testWorkspace.directory, name)).toString() });
+			const retained = material('retained.txt');
+			const removed = material('removed.txt');
+			const added = material('from-other-window.txt');
+			const created = (await client.request(APP_SERVER_METHODS['project/create'], { commandId: randomUUID(), projectId, name: 'Original project', description: 'Original goals', materials: [retained, removed] })).project;
+			const page = await workbench.openAgentsWindow(target.kind);
+			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.projects, exact: true }).click();
+			const projects = page.locator('.ash-projects');
+			await projects.getByRole('button', { name: 'Original project', exact: true }).click();
+			await projects.getByRole('button', { name: copy.edit, exact: true }).click();
+			const dialog = page.getByRole('dialog', { name: copy.edit });
+			const name = dialog.getByRole('textbox', { name: copy.name });
+			const goals = dialog.getByRole('textbox', { name: copy.goals });
+			await name.fill('My draft name');
+			await application.evaluate(({ dialog }, directory) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] }); }, directory);
+			await dialog.getByRole('button', { name: copy.folder, exact: true }).click();
+			await expect(dialog.locator('.ash-projects-folder-choice button')).toHaveText(directory.split('/').at(-1)!);
+			const remote = (await client.request(APP_SERVER_METHODS['project/details/update'], { commandId: randomUUID(), projectId, expectedRevision: created.revision, name: created.name, description: 'Goals from another window', materials: [retained, added] })).project;
+			await dialog.getByRole('button', { name: copy.save }).click();
+			await expect(dialog.getByRole('button', { name: copy.reload })).toBeFocused();
+			await expect(name).toHaveValue('My draft name');
+			await dialog.getByRole('button', { name: copy.reload }).press('Enter');
+			await expect(goals).toHaveValue(remote.description);
+			await expect(name).toHaveValue('My draft name');
+			await expect(dialog.getByRole('combobox')).toHaveCount(0);
+			await goals.fill('My draft goals');
+			const newer = (await client.request(APP_SERVER_METHODS['project/details/update'], { commandId: randomUUID(), projectId, expectedRevision: remote.revision, name: 'Name from another window', description: 'Newer saved goals', materials: remote.materials })).project;
+			await dialog.getByRole('button', { name: copy.save }).click();
+			await dialog.getByRole('button', { name: copy.reload }).click();
+			const choices = dialog.getByRole('combobox');
+			await expect(choices).toHaveCount(2);
+			await expect(choices.first()).toBeFocused();
+			await expect(dialog.getByRole('button', { name: copy.save })).toBeDisabled();
+			await choices.first().selectOption({ label: copy.saved });
+			await goals.fill('My revised draft goals');
+			await choices.last().selectOption({ label: copy.saved });
+			await choices.last().selectOption({ label: copy.draft });
+			await expect(name).toHaveValue(newer.name);
+			await expect(goals).toHaveValue('My revised draft goals');
+			await page.screenshot({ path: testInfo.outputPath(`projects-conflict-${locale}.png`) });
+			await dialog.getByRole('button', { name: copy.save }).click();
+			await expect(dialog).toHaveCount(0);
+			const saved = (await client.request(APP_SERVER_METHODS['project/read'], { projectId })).project;
+			expect({ name: saved.name, description: saved.description }).toEqual({ name: newer.name, description: 'My revised draft goals' });
+			expect(saved.materials).toEqual([...remote.materials, { name: directory.split('/').at(-1), kind: 'folder', path: pathToFileURL(directory).toString() }]);
+		} finally {
+			await application.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original; }, original);
+			await original.dispose();
+			await connection.close();
+		}
+	});
+}

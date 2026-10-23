@@ -244,8 +244,8 @@ suite('Workbench localization', () => {
 		assert.deepEqual([
 			localization.translate('ash', 'sessions.activity.chat', 'Chat'),
 			localization.translate('ash', 'collaboration.title', 'Collaboration'),
-			localization.translate('ash', 'sessions.activity.library', 'Library'),
-		], ['聊天', '协作', '资料库']);
+			localization.translate('ash', 'sessions.activity.projects', 'Projects'),
+		], ['聊天', '协作', '项目']);
 		assert.equal(localization.translate('ash', 'sessions.activityBar.location.title', 'Sessions Activity Bar Position'), '活动栏位置');
 		assert.equal(localization.translate('ash', 'sessions.activityBar.compact.title', 'Compact Sessions Activity Bar'), '紧凑活动栏');
 		assert.equal(localization.translate('ash', 'dialog.input', 'Input'), '输入');

@@ -259,7 +259,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 			?? (oldEditor ? URI.parse(oldEditor).scheme.replace(/^ash-/, '') : undefined);
 		const oldCommands: Readonly<Record<string, string>> = {
 			chat: 'sessions.open.chat', code: 'sessions.open.code', teams: 'sessions.open.teams', colab: 'sessions.open.teams',
-			library: 'sessions.show.library', creator: 'sessions.restore.creator', design: 'sessions.restore.creatorDesign',
+			creator: 'sessions.restore.creator', design: 'sessions.restore.creatorDesign',
 		};
 		if (!saved && oldEntry !== undefined && !Object.hasOwn(oldCommands, oldEntry)) {
 			throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));

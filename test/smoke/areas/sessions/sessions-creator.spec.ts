@@ -32,16 +32,17 @@ test('Sessions mode and page-tab activation reuse Parts while retaining the conv
 	await creatorNavigation.getByRole('button', { name: 'Design', exact: true }).press('Enter');
 	await expect(page.locator('[data-part="sidebar"]')).toContainText('Layers');
 	await expect(page.locator('[data-part="auxiliarybar"]')).toContainText('Page');
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
-	await page.locator('[data-part="editor"]').getByRole('tab', { name: 'Creator', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
 	await expect(navigation.getByRole('button', { name: 'Creator', exact: true })).toHaveAttribute('aria-current', 'page');
+	await creatorNavigation.getByRole('button', { name: 'Design', exact: true }).click();
 	await expect(page.locator('[data-part="sidebar"]')).toContainText('Layers');
-	await navigation.getByRole('button', { name: 'Library', exact: true }).focus();
-	// Creator hides its tab strip; use the entry action to reveal the retained Library page.
-	await navigation.getByRole('button', { name: 'Library', exact: true }).press('Enter');
-	await expect(navigation.getByRole('button', { name: 'Library', exact: true })).toHaveAttribute('aria-current', 'page');
-	await expect(page.locator('[data-part="sidebar"]').getByRole('navigation', { name: 'Library categories' })).toBeVisible();
-	await expect(page.locator('[data-part="auxiliarybar"]')).toContainText('Asset details');
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).focus();
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).press('Enter');
+	await expect(navigation.getByRole('button', { name: 'Projects', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('.ash-projects')).toBeVisible();
+	await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
 	for (const part of parts) {
 		try { expect(await part.evaluate(element => element.isConnected && element === element.ownerDocument!.querySelector(`[data-part="${(element as HTMLElement).dataset.part}"]`))).toBe(true); }
 		finally { await part.dispose(); }
@@ -62,7 +63,7 @@ test('Sessions Creator opens seven workspaces and retains each canvas independen
 	await expect(creator.locator('.ash-creator-mode-card')).toHaveCount(7);
 	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 	await expect(page.locator('[data-part="editor"] .ash-creator')).toBeVisible();
-	await expect(page.locator('[data-part="creator"], [data-part="library"]')).toHaveCount(0);
+	await expect(page.locator('[data-part="creator"], [data-part="projects"]')).toHaveCount(0);
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
 	const design = creator.getByRole('button', { name: 'Design', exact: true });
 	await design.focus();

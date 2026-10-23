@@ -1190,8 +1190,8 @@ test('Sessions navigation retains its own selection and hover skin while changin
 		return previous;
 	}, hoverVariables);
 	try {
-		await navigation.getByRole('button', { name: 'Library', exact: true }).hover();
-		await expect(navigation.getByRole('button', { name: 'Library', exact: true })).toHaveCSS('background-color', 'rgb(12, 34, 56)');
+		await navigation.getByRole('button', { name: 'Projects', exact: true }).hover();
+		await expect(navigation.getByRole('button', { name: 'Projects', exact: true })).toHaveCSS('background-color', 'rgb(12, 34, 56)');
 		await chat.hover();
 		await expect(chat).toHaveCSS('background-color', 'rgb(12, 34, 56)');
 	} finally {
@@ -1232,24 +1232,24 @@ test('Sessions navigation retains its own selection and hover skin while changin
 			await expect(chat).toHaveCSS('width', '24px');
 			await expect(chat).toHaveCSS('height', '24px');
 		}
-		const library = navigation.getByRole('button', { name: 'Library', exact: true });
+		const projects = navigation.getByRole('button', { name: 'Projects', exact: true });
 		await page.mouse.move(600, 400);
-		await expect(library.locator('svg')).toHaveCSS('color', 'rgb(128, 128, 128)');
-		await library.hover();
-		await expect(library).toHaveCSS('background-color', 'rgb(240, 240, 240)');
-		await expect(library.locator('svg')).toHaveCSS('color', 'rgb(0, 0, 0)');
+		await expect(projects.locator('svg')).toHaveCSS('color', 'rgb(128, 128, 128)');
+		await projects.hover();
+		await expect(projects).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+		await expect(projects.locator('svg')).toHaveCSS('color', 'rgb(0, 0, 0)');
 		await page.mouse.move(600, 400);
-		await expect(library).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await expect(library.locator('svg')).toHaveCSS('color', 'rgb(128, 128, 128)');
+		await expect(projects).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(projects.locator('svg')).toHaveCSS('color', 'rgb(128, 128, 128)');
 		await chat.focus();
 		await chat.press(position === 'Default' ? 'ArrowDown' : 'ArrowRight');
 		await expect(navigation.getByRole('button', { name: 'Collaboration', exact: true })).toBeFocused();
-		await library.focus();
-		await library.press('Enter');
-		await expect(library).toHaveAttribute('aria-current', 'page');
-		await expect(library.locator('svg')).toHaveCSS('color', 'rgb(0, 0, 0)');
-		await expect(library).toHaveCSS('background-color', 'rgb(240, 240, 240)');
-		await expect(library.locator('svg')).toHaveAttribute('data-ash-icon-id', 'projects-filled');
+		await projects.focus();
+		await projects.press('Enter');
+		await expect(projects).toHaveAttribute('aria-current', 'page');
+		await expect(projects.locator('svg')).toHaveCSS('color', 'rgb(0, 0, 0)');
+		await expect(projects).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+		await expect(projects.locator('svg')).toHaveAttribute('data-ash-icon-id', 'projects-filled');
 		await expect(navigation.locator('.ash-composite-bar-navigation-item.checked')).toHaveCount(1);
 		await expect(chat).not.toHaveAttribute('aria-current');
 		await chat.press('Enter');
@@ -1270,13 +1270,13 @@ test('Sessions navigation retains its own selection and hover skin while changin
 	await workbench.setAppearance(application, 'dark', page);
 	await expect(chat).toHaveCSS('background-color', 'rgb(48, 48, 48)');
 	await expect(chat).toHaveCSS('border-radius', '6px');
-	const library = navigation.getByRole('button', { name: 'Library', exact: true });
+	const projects = navigation.getByRole('button', { name: 'Projects', exact: true });
 	await page.mouse.move(600, 400);
 	await expect(chat.locator('svg')).toHaveCSS('color', 'rgb(255, 255, 255)');
-	await expect(library.locator('svg')).toHaveCSS('color', 'rgb(153, 153, 153)');
-	await library.hover();
-	await expect(library).toHaveCSS('background-color', 'rgb(48, 48, 48)');
-	await expect(library.locator('svg')).toHaveCSS('color', 'rgb(255, 255, 255)');
+	await expect(projects.locator('svg')).toHaveCSS('color', 'rgb(153, 153, 153)');
+	await projects.hover();
+	await expect(projects).toHaveCSS('background-color', 'rgb(48, 48, 48)');
+	await expect(projects.locator('svg')).toHaveCSS('color', 'rgb(255, 255, 255)');
 	await originalChat!.dispose();
 });
 
@@ -1415,12 +1415,12 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 		const activityNavigation = page.locator('.ash-sessions-activity-content');
 		await expectActivityIconSize(activityNavigation, 24);
 		const collaboration = page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Collaboration' });
-		const library = page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Library' });
+		const projects = page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Projects' });
 		await collaboration.click();
 		await expect(collaboration.locator('svg')).toHaveAttribute('data-ash-icon-id', 'colab-filled');
 		await expect(page.locator('.ash-sessions-list-controls')).toBeHidden();
-		await library.click();
-		await expect(library.locator('svg')).toHaveAttribute('data-ash-icon-id', 'projects-filled');
+		await projects.click();
+		await expect(projects.locator('svg')).toHaveAttribute('data-ash-icon-id', 'projects-filled');
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
 		await page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Chat', exact: true }).click();
@@ -2121,7 +2121,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 	const toggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const chat = navigation.getByRole('button', { name: 'Chat', exact: true });
-	const library = navigation.getByRole('button', { name: 'Library' });
+	const projects = navigation.getByRole('button', { name: 'Projects' });
 	const menu = page.getByRole('button', { name: 'Application menu', exact: true });
 	const hasWindowMenu = target.kind === 'browser' || process.platform !== 'darwin';
 	if (!hasWindowMenu) { await expect(menu).toHaveCount(0); }
@@ -2134,8 +2134,8 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 		expect(selectedBackground).not.toBe('rgba(0, 0, 0, 0)');
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect.poll(() => page.locator('.ash-sessions-titlebar-actions button').evaluateAll(buttons => buttons.map(button => getComputedStyle(button).borderRadius))).toEqual(Array(hasWindowMenu ? 4 : 3).fill('8px'));
-		await library.hover();
-		await expect(library).toHaveCSS('background-color', selectedBackground);
+		await projects.hover();
+		await expect(projects).toHaveCSS('background-color', selectedBackground);
 		if (hasWindowMenu) {
 			await menu.hover();
 			await expect(menu).toHaveCSS('background-color', selectedBackground);
@@ -2212,21 +2212,21 @@ test('Sessions titlebar sidebar toggle stays transparent at rest with hover and 
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', theme.endsWith('Dark') ? 'hcDark' : 'hcLight');
 		const navigation = page.locator('.ash-sessions-activity-content');
 		const chat = navigation.getByRole('button', { name: 'Chat', exact: true });
-		const library = navigation.getByRole('button', { name: 'Library' });
+		const projects = navigation.getByRole('button', { name: 'Projects' });
 		const toggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
 		await page.mouse.move(400, 180);
 		const iconColor = theme.endsWith('Dark') ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)';
 		await expect(chat.locator('svg')).toHaveCSS('color', iconColor);
-		await expect(library.locator('svg')).toHaveCSS('color', iconColor);
+		await expect(projects.locator('svg')).toHaveCSS('color', iconColor);
 		const selectedBackground = await chat.evaluate(button => getComputedStyle(button).backgroundColor);
 		await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect(toggle).toHaveCSS('outline-style', 'none');
 		await expect(chat).toHaveCSS('outline-style', 'solid');
-		await library.hover();
-		await expect(library).toHaveCSS('background-color', selectedBackground);
-		await expect(library).toHaveCSS('outline-style', 'solid');
-		await expect(library.locator('svg')).toHaveCSS('color', iconColor);
+		await projects.hover();
+		await expect(projects).toHaveCSS('background-color', selectedBackground);
+		await expect(projects).toHaveCSS('outline-style', 'solid');
+		await expect(projects.locator('svg')).toHaveCSS('color', iconColor);
 		await toggle.hover();
 		await expect(toggle).toHaveCSS('background-color', selectedBackground);
 		await expect(toggle).toHaveCSS('outline-style', 'solid');
@@ -2333,7 +2333,7 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 		}
 	};
 	await checkTooltip(chat, 'Chat', 'right');
-	for (const label of ['Collaboration', 'Library', 'Code', 'Accounts']) {
+	for (const label of ['Collaboration', 'Projects', 'Code', 'Accounts']) {
 		await checkTooltip(navigation.getByRole('button', { name: label, exact: true }), label, 'right');
 	}
 	await checkTooltip(accounts, 'Accounts', 'right', true);
@@ -2402,7 +2402,7 @@ test('Sessions Activity Bar changes layout while retaining the same session, dra
 	await expect(composer.locator('.ash-chat-code-reference')).toHaveText('context.ts');
 	const originalInput = await editor.input.elementHandle();
 	const identity = await page.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-cowork)').getAttribute('data-untitled-session-id');
-	await navigation.getByRole('button', { name: 'Library', exact: true }).focus();
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).focus();
 	await page.keyboard.press('ArrowDown');
 	await expect(navigation.getByRole('button', { name: 'Code', exact: true })).toBeFocused();
 	await page.keyboard.press('Enter');
@@ -2443,8 +2443,8 @@ test('Sessions Activity Bar changes layout while retaining the same session, dra
 	await editor.waitForEditorContents(text => text === 'Edited from Code context.ts ');
 	await expect(composer.locator('.ash-chat-code-reference')).toBeVisible();
 	const restoredInput = await editor.input.elementHandle();
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
-	await expect(page.locator('[data-part="editor"] .ash-library')).toBeVisible();
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
+	await expect(page.locator('[data-part="editor"] .ash-projects')).toBeVisible();
 	await expect(page.locator('[data-part="sessions"]')).toBeHidden();
 	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
 	expect(await editor.input.evaluate((element, original) => element === original, restoredInput)).toBe(false);

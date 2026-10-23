@@ -101,7 +101,7 @@ test('Sessions navigation icons and surface controls follow the selected compone
 	await expect(page.getByRole('button', { name: 'Hide sidebar' })).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	await expect(activityBar.locator('.ash-sessions-activity-top button svg').first()).toHaveAttribute('data-ash-icon-id', 'chat-2-filled');
 	const collaboration = activityBar.getByRole('button', { name: 'Collaboration' });
-	const library = activityBar.getByRole('button', { name: 'Library' });
+	const projects = activityBar.getByRole('button', { name: 'Projects' });
 	const chat = activityBar.getByRole('button', { name: 'Chat' });
 	await collaboration.click();
 	await expect(collaboration.locator('svg')).toHaveAttribute('data-ash-icon-id', 'colab-filled');
@@ -109,9 +109,9 @@ test('Sessions navigation icons and surface controls follow the selected compone
 	await expect(page.locator('.ash-sessions-list-controls')).toBeHidden();
 	await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 	await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
-	await library.click();
-	await expect(library.locator('svg')).toHaveAttribute('data-ash-icon-id', 'projects-filled');
-	await expect(library).toHaveAttribute('aria-current', 'page');
+	await projects.click();
+	await expect(projects.locator('svg')).toHaveAttribute('data-ash-icon-id', 'projects-filled');
+	await expect(projects).toHaveAttribute('aria-current', 'page');
 	await expect(collaboration.locator('svg')).toHaveAttribute('data-ash-icon-id', 'colab');
 	await chat.click();
 	await expect(chat).toHaveAttribute('aria-current', 'page');
@@ -126,22 +126,25 @@ test('Sessions navigation icons and surface controls follow the selected compone
 		const background = await chat.evaluate(button => getComputedStyle(button).backgroundColor);
 		await chat.hover();
 		await expect(chat).toHaveCSS('background-color', background);
-		await library.hover();
-		await expect(library).not.toHaveAttribute('aria-current');
+		await projects.hover();
+		await expect(projects).not.toHaveAttribute('aria-current');
 		await chat.focus();
 		await chat.press('ArrowDown');
 		await expect(chat).not.toBeFocused();
 		await expect(chat).toHaveAttribute('aria-current', 'page');
 		if (theme.includes('high-contrast')) {
 			await expect(chat).toHaveCSS('outline-style', 'solid');
-			await expect(library).toHaveCSS('outline-style', 'solid');
+			await expect(projects).toHaveCSS('outline-style', 'solid');
 			await expect(activityNavigation.locator('button:focus')).toHaveCSS('outline-style', 'solid');
 		}
-		await library.click();
-		const surface = page.locator('.ash-library');
+		await projects.click();
+		const surface = page.locator('.ash-projects');
 		await expect(surface).toBeVisible();
 		await expect(surface).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		expect(await surface.evaluate(element => getComputedStyle(element).color !== getComputedStyle(element).backgroundColor)).toBe(true);
+		if (!await surface.getByRole('searchbox').isVisible()) {
+			await surface.getByRole('button', { name: 'Search projects', exact: true }).click();
+		}
 		await surface.getByRole('searchbox').focus();
 		await expect(surface.getByRole('searchbox')).toHaveCSS('outline-style', 'solid');
 	}

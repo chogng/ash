@@ -365,7 +365,7 @@ function removeLegacyPageEditors(workingSet: EditorWorkingSet): EditorWorkingSet
 				const value = editor.input.value;
 				if (!isRecord(value) || typeof value.resource !== 'string') { return true; }
 				const scheme = URI.parse(value.resource).scheme;
-				return scheme !== 'ash-design' && scheme !== 'ash-library';
+				return scheme !== 'ash-design';
 			});
 			if (editors.length === group.editors.length) { return group; }
 			return { ...group, editors, activeEditorIndex: active && editors.includes(active) ? editors.indexOf(active) : editors.length - 1 };

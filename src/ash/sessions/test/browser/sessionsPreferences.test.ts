@@ -32,7 +32,7 @@ import { IGitHubService } from '../../../platform/github/common/githubService.js
 import { IAccountPolicyService } from '../../../workbench/services/policies/common/accountPolicyService.js';
 import { IGitHubConnectionService } from '../../../workbench/services/accounts/common/gitHubConnectionService.js';
 import { GitHubReviewModel, IGitHubReviewModel } from '../../../workbench/contrib/github/browser/githubReviewModel.js';
-import '../../contrib/library/browser/library.contribution.js';
+import '../../contrib/projects/browser/projects.contribution.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -304,7 +304,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const categoryButton = (id: string): HTMLButtonElement => window.document.querySelector<HTMLButtonElement>(`[data-settings-category-id="${id}"]`)!;
 	assert.equal(categoryButton('worktree'), null, 'unsupported worktree management is not offered as an empty page');
 	assert.equal(categoryButton('archived-chats'), null);
-	for (const id of ['execution-trace', 'appearance', 'browser', 'tab', 'code-intelligence', 'environment', 'keyboard-shortcuts', 'account', 'library', 'design', 'customize', 'general']) {
+	for (const id of ['execution-trace', 'appearance', 'browser', 'tab', 'code-intelligence', 'environment', 'keyboard-shortcuts', 'account', 'projects', 'design', 'customize', 'general']) {
 		await preferences.open({ section: id });
 		assert.equal(categoryButton(id).getAttribute('aria-current'), 'page', `reopening navigates to ${id}`);
 		assert.equal(categoryButton(id).getAttribute('aria-controls'), 'ash-sessions-settings-content');

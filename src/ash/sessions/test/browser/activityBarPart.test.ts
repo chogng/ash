@@ -152,7 +152,7 @@ test('Sessions Activity Bar selects Chat, Collaboration, Agent Teams, Projects, 
 		assert.deepEqual([buttons[5], buttons[6]].map(button => button?.getAttribute('aria-current')), [null, 'page']);
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
 		buttons[0]?.click();
-		assert.deepEqual(selectedActions, ['chat', 'collaboration', 'teams', 'library', 'code', 'creator', 'symphony', 'chat']);
+		assert.deepEqual(selectedActions, ['chat', 'collaboration', 'teams', 'projects', 'code', 'creator', 'symphony', 'chat']);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
 		assert.equal(buttons[5]?.getAttribute('aria-current'), null);
 		assert.equal(buttons[6]?.getAttribute('aria-current'), null);
@@ -265,9 +265,9 @@ test('navigation order survives a new window and includes new menu contributions
 	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
 	using menuServices = registerMenus(services);
-	storage.store('sessions.activityBar.actionOrder', JSON.stringify(['sessions.open.chat', 'sessions.open.teams', 'sessions.open.library', 'sessions.open.code', 'sessions.open.design']), StorageScope.PROFILE, StorageTarget.USER);
+	storage.store('sessions.activityBar.actionOrder', JSON.stringify(['sessions.open.chat', 'sessions.open.teams', 'sessions.open.projects', 'sessions.open.code', 'sessions.open.design']), StorageScope.PROFILE, StorageTarget.USER);
 	using bar = registerTestComponentServices(services).createInstance(ActivityBarPart, document.body, { showAccountMenu() { } });
-	assert.equal(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE), JSON.stringify(['sessions.open.chat', 'sessions.open.teams', 'sessions.open.library', 'sessions.open.code', 'sessions.open.creator']));
+	assert.equal(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE), JSON.stringify(['sessions.open.chat', 'sessions.open.teams', 'sessions.open.projects', 'sessions.open.code', 'sessions.open.creator']));
 	setARIAContainer(document.body);
 	const buttons = [...bar.domNode.querySelectorAll<HTMLButtonElement>('button')];
 	buttons[4]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
@@ -320,14 +320,14 @@ function registerMenus(services: InstanceType<typeof InstantiationService>): Ins
 	const commands = resources.add(new CommandService(services, registry));
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IMenuService, services.createInstance(MenuService));
-	const keys = new Map(['chat', 'collaboration', 'teams', 'library', 'code', 'creator', 'symphony'].map(id => [id, contexts.createKey<boolean>(`sessions.activity.${id}Selected`, id === 'chat')]));
+	const keys = new Map(['chat', 'collaboration', 'teams', 'projects', 'code', 'creator', 'symphony'].map(id => [id, contexts.createKey<boolean>(`sessions.activity.${id}Selected`, id === 'chat')]));
 	const select = (id: string): void => contexts.bufferChangeEvents(() => { for (const [candidate, key] of keys) { key.set(candidate === id); } });
 	for (const id of ['chat', 'collaboration', 'teams', 'code', 'symphony']) { resources.add(registry.register(`sessions.open.${id}`, () => select(id))); }
-	for (const id of ['library', 'creator']) {
+	for (const id of ['projects', 'creator']) {
 		resources.add(registry.register(`sessions.open.${id}`, CommandsRegistry.getCommand(`sessions.open.${id}`)!));
 		resources.add(registry.register(`sessions.show.${id}`, () => select(id)));
 	}
-	services.registerInstance(IEditorService, { openEditor: async (input: { resource: { scheme: string; }; }) => select(input.resource.scheme === 'ash-library' ? 'library' : 'creator') } as unknown as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
+	services.registerInstance(IEditorService, { openEditor: async (input: { resource: { scheme: string; }; }) => select(input.resource.scheme === 'ash-projects' ? 'projects' : 'creator') } as unknown as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
 	services.registerInstance(IDesignEditorService, { input: { resource: URI.parse('ash-design:/canvas') } } as unknown as import('../../contrib/creator/browser/designEditorService.js').IDesignEditorService);
 	return resources;
 }

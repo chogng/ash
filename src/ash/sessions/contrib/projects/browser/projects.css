@@ -74,7 +74,8 @@
 
 .ash-projects-search,
 .ash-projects-form input,
-.ash-projects-form textarea {
+.ash-projects-form textarea,
+.ash-projects-form select {
 	width: 100%;
 	min-width: 0;
 	box-sizing: border-box;
@@ -291,6 +292,8 @@
 .ash-projects-dialog {
 	width: 580px;
 	max-width: calc(100vw - 40px);
+	max-height: calc(100vh - 40px);
+	overflow: auto;
 	box-sizing: border-box;
 	padding: var(--ash-spacing-size320);
 }
@@ -323,6 +326,17 @@
 .ash-projects-form textarea {
 	min-height: 100px;
 	resize: vertical;
+}
+.ash-projects-conflicts:not([hidden]) {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size160);
+}
+.ash-projects-conflicts span {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	max-height: 160px;
+	overflow: auto;
 }
 .ash-projects-form-actions {
 	justify-content: flex-end;

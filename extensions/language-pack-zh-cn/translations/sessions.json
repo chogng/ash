@@ -141,7 +141,7 @@
     "cowork.defaultmodel.placeholder": "auto 或 provider/model",
     "sessions.activity.chat": "聊天",
     "sessions.activity.teams": "Agent 团队",
-    "sessions.activity.library": "项目",
+    "sessions.activity.projects": "项目",
     "sessions.activity.helpHint": "{0}。{1}",
     "sessions.activity.navigation": "导航",
     "sessions.activity.invalidOrder": "保存的导航顺序无效。",

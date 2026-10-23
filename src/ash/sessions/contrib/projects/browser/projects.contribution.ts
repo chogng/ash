@@ -13,42 +13,42 @@ import { ISessionsLayoutService } from '../../../services/layout/common/sessions
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Menus } from '../../../browser/menus.js';
-import { LibraryEditorPane } from './libraryEditor.js';
-import { ILibraryService, LibraryService } from './libraryService.js';
+import { ProjectsEditorPane } from './projectsEditor.js';
+import { IProjectsService, ProjectsService } from './projectsService.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 
-registerSingleton(ILibraryService, LibraryService, InstantiationType.Delayed);
+registerSingleton(IProjectsService, ProjectsService, InstantiationType.Delayed);
 
-CommandsRegistry.register('sessions.show.library', (accessor, source) => accessor.get(ISessionsLayoutService).openEntry({
-	id: 'library', activityContext: 'sessions.activity.librarySelected', content: 'editor',
+CommandsRegistry.register('sessions.show.projects', (accessor, source) => accessor.get(ISessionsLayoutService).openEntry({
+	id: 'projects', activityContext: 'sessions.activity.projectsSelected', content: 'editor',
 	showEditorTabs: false,
-	restoreCommand: 'sessions.show.library', focus: 'editor',
+	restoreCommand: 'sessions.show.projects', focus: 'editor',
 	editorInput: {
-		resource: URI.from({ scheme: 'ash-library', path: '/page' }), label: localize('projects.title', 'Projects'),
+		resource: URI.from({ scheme: 'ash-projects', path: '/page' }), label: localize('projects.title', 'Projects'),
 		showBreadcrumbs: false, readOnly: true, capabilities: EditorInputCapabilities.CannotClose,
 	},
 }, undefined, source === 'restore' ? { source } : undefined));
 
-registerEditorPane({ id: 'sessions.editor.library', name: localize('projects.title', 'Projects'), canOpen: input => input.resource.scheme === 'ash-library' ? EditorPaneMatch.Default : EditorPaneMatch.None, create: options => options.instantiationService!.createInstance(LibraryEditorPane) });
+registerEditorPane({ id: 'sessions.editor.projects', name: localize('projects.title', 'Projects'), canOpen: input => input.resource.scheme === 'ash-projects' ? EditorPaneMatch.Default : EditorPaneMatch.None, create: options => options.instantiationService!.createInstance(ProjectsEditorPane) });
 
-registerAction2(class OpenLibrary extends Action2 {
+registerAction2(class OpenProjects extends Action2 {
 	constructor() {
 		super({
-			id: 'sessions.open.library', title: localize2({ bundle: 'ash', key: 'sessions.activity.library' }, 'Projects'), icon: Lxicon.projects,
-			toggled: { condition: ContextKeyExpr.has('sessions.activity.librarySelected'), icon: Lxicon.projectsFilled },
+			id: 'sessions.open.projects', title: localize2({ bundle: 'ash', key: 'sessions.activity.projects' }, 'Projects'), icon: Lxicon.projects,
+			toggled: { condition: ContextKeyExpr.has('sessions.activity.projectsSelected'), icon: Lxicon.projectsFilled },
 			menu: { id: Menus.ActivityBar, group: 'navigation', order: 30 },
 		});
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(ICommandService).executeCommand('sessions.show.library');
+		await accessor.get(ICommandService).executeCommand('sessions.show.projects');
 	}
 });
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
-	key: AccessibilityVerbositySettingId.Library,
+	key: AccessibilityVerbositySettingId.Projects,
 	defaultValue: true,
 	parse(value: unknown): boolean {
 		if (typeof value !== 'boolean') { throw new TypeError(localize('projects.verbosityInvalid', 'Projects accessibility verbosity must be boolean')); }
@@ -61,17 +61,17 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	AccessibleViewRegistry.register({
 		type,
 		priority: 100,
-		name: `sessionsLibrary${type}`,
-		when: ContextKeyExpr.has('sessionsLibraryFocused'),
+		name: `sessionsProjects${type}`,
+		when: ContextKeyExpr.has('sessionsProjectsFocused'),
 		getProvider: accessor => {
 			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-			const library = accessor.get(ILibraryService);
+			const projects = accessor.get(IProjectsService);
 			return new AccessibleContentProvider(
-				AccessibleViewProviderId.Library,
+				AccessibleViewProviderId.Projects,
 				{ type },
-				() => type === AccessibleViewType.Help ? localize('projects.help', 'Projects organizes your work into named spaces. Use Tab to reach Search, Sort and New project. Use arrow keys, Home and End within the project cards. Enter opens a project. Create a project asks for a name and goals, with an optional folder. In a project, Edit details changes its name and goals. Add files accepts images, PDFs, documents and other file types. Use a folder adds a folder reference. Files stay in their original location; Remove only removes the project reference. Open a file to use its editor, or open a folder to choose a file inside it. Escape closes the creation dialog and returns focus. Projects in the breadcrumb returns to the project list. <keybinding:editor.action.accessibleView> reads the current project and material names.') : library.getAccessibleContent(),
+				() => type === AccessibleViewType.Help ? localize('projects.help', 'Projects organizes your work into named spaces. Use Tab to reach Search, Sort and New project. Use arrow keys, Home and End within the project cards. Enter opens a project. Create a project asks for a name and goals, with an optional folder. In a project, Edit details changes its name and goals. If another window changes the project, Reload and merge preserves your draft and includes saved materials. Choose which value to keep when both versions change the same field, then save. Add files accepts images, PDFs, documents and other file types. Use a folder adds a folder reference. Files stay in their original location; Remove only removes the project reference. Open a file to use its editor, or open a folder to choose a file inside it. Escape closes the creation dialog and returns focus. Projects in the breadcrumb returns to the project list. <keybinding:editor.action.accessibleView> reads the current project and material names.') : projects.getAccessibleContent(),
 				() => focused.focus(),
-				AccessibilityVerbositySettingId.Library,
+				AccessibilityVerbositySettingId.Projects,
 			);
 		},
 	});
