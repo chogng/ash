@@ -212,6 +212,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 
 /** One ordinary ViewPane per group, with content-sized rows and no custom header implementation. */
 export class ChatGPTNavigationView extends ViewPane {
+	private readonly loadingProgress = this._register(new MutableDisposable());
 	private readonly rows = this._register(new DisposableStore());
 	private conversations: readonly ChatGPTConversation[] = [];
 	private menuGeneration = 0;
@@ -242,6 +243,10 @@ export class ChatGPTNavigationView extends ViewPane {
 	public override get maximumSize(): number { return this.minimumSize; }
 
 	public render(conversations: readonly ChatGPTConversation[], state: ChatGPTState, query: string): void {
+		if (state.busy && !this.loadingProgress.value) {
+			const progress = this.getProgressIndicator().show(true, 150);
+			this.loadingProgress.value = toDisposable(() => progress.done());
+		} else if (!state.busy) this.loadingProgress.clear();
 		if (conversations.length !== this.conversations.length || conversations.some((conversation, index) => conversation !== this.conversations[index])) {
 			this.rows.clear();
 			this.conversations = conversations;

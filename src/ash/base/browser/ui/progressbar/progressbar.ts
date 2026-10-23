@@ -1,5 +1,6 @@
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import { h } from "../../dom.js";
+import './progressbar.css';
 
 export interface IProgressBarStyles {
 	readonly progressBarBackground: string | undefined;
@@ -15,7 +16,10 @@ export class ProgressBar extends Disposable {
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
 		element.className = "ash-progress-bar";
-		if (options.progressBarBackground !== undefined) element.style.accentColor = options.progressBarBackground;
+		if (options.progressBarBackground !== undefined) {
+			element.style.accentColor = options.progressBarBackground;
+			element.style.color = options.progressBarBackground;
+		}
 		element.max = 1;
 		container.append(element);
 	}

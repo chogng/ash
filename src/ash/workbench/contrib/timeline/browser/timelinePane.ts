@@ -188,6 +188,8 @@ export class TimelinePane extends ViewPane {
 		if (append && previous?.paging?.cursor === undefined) return;
 		const generation = this.generation;
 		const lifetime = new DisposableStore();
+		const progress = this.getProgressIndicator().show(true, 150);
+		lifetime.add(toDisposable(() => progress.done()));
 		const token = new CancellationTokenSource();
 		lifetime.add(toDisposable(() => token.dispose(true)));
 		this.pending.set(source, lifetime);

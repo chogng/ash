@@ -8,6 +8,28 @@ test.beforeEach(async ({ page }) => {
 	await expect.poll(async () => ({ mounted: await page.getByRole('treeitem', { name: /History metadata:/u }).count(), errors })).toEqual({ mounted: 1, errors: [] });
 });
 
+test('SCM history progress follows reads, collapse, completion and failure', async ({ page }, testInfo) => {
+	const pane = page.locator('[data-view-id="fixture.history"]');
+	const progress = pane.locator('.ash-view-pane-progress-indicator');
+	await page.evaluate(() => window.ashSCMHistoryIntegration.beginHistoryRead());
+	await expect(progress).toBeVisible();
+	const body = pane.locator(':scope > .ash-pane-view-content');
+	expect((await progress.boundingBox())!.y).toBe((await body.boundingBox())!.y);
+	await pane.locator('.ash-pane-view-header-button').press('ArrowLeft');
+	await expect(progress).toBeHidden();
+	await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
+	await expect(progress).toBeVisible();
+	await pane.screenshot({ path: testInfo.outputPath('history-progress.png') });
+	await page.evaluate(() => window.ashSCMHistoryIntegration.finishHistoryRead());
+	await expect(progress).toBeHidden();
+	await expect(pane.getByRole('treeitem', { name: /History metadata:/u })).toHaveCount(1);
+	await page.evaluate(() => window.ashSCMHistoryIntegration.beginHistoryRead());
+	await expect(progress).toBeVisible();
+	await page.evaluate(() => window.ashSCMHistoryIntegration.finishHistoryRead(true));
+	await expect(progress).toBeHidden();
+	await expect(pane.getByRole('button', { name: 'Retry loading commit graph', exact: true })).toBeVisible();
+});
+
 for (const locale of ['en', 'zh-CN']) {
 	test(`global header action visibility updates existing views and preserves explicit policies (${locale})`, async ({ page }, testInfo) => {
 		await page.goto(`/scmHistory.html?headerActions&locale=${locale}`);

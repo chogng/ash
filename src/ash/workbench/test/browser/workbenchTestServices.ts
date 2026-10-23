@@ -178,6 +178,7 @@ export function registerTestWorkbenchInteractionServices(owner: DisposableStore,
 	// Service scenarios have no UI Parts. The real view owner returns null for
 	// unregistered views; Web/Electron scenarios exercise their actual containers.
 	services.registerInstance(IViewsService, owner.add(new ViewsService(descriptors, {
+		getProgressIndicator: () => undefined,
 		onDidPaneCompositeOpen: Event.None, onDidPaneCompositeClose: Event.None,
 		getActivePaneComposite: () => undefined, getLastActivePaneCompositeId: () => undefined,
 		getPartId: () => { throw new Error('UI Parts are not registered in this service scenario'); },

@@ -3,14 +3,18 @@ import { mock } from "node:test";
 import { test } from "mocha";
 import { DeferredPromise } from "../../../../../base/common/async.js";
 import { Disposable } from "../../../../../base/common/lifecycle.js";
-import { CommandRegistry } from "../../../../../platform/commands/common/commands.js";
+import { CommandRegistry, ICommandService } from "../../../../../platform/commands/common/commands.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
-import { NotificationPriority, NotificationsFilter } from "../../../../../platform/notification/common/notification.js";
+import { INotificationService, NotificationPriority, NotificationsFilter } from "../../../../../platform/notification/common/notification.js";
 import { ProgressLocation, type IProgress, type IProgressStep } from "../../../../../platform/progress/common/progress.js";
 import { CommandService } from "../../../commands/common/commandService.js";
 import { TestNotificationService } from '../../../notification/test/common/testNotificationService.js';
-import { StatusbarAlignment, StatusbarService } from "../../../statusbar/browser/statusbar.js";
+import { IStatusbarService, StatusbarAlignment, StatusbarService } from "../../../statusbar/browser/statusbar.js";
 import { ProgressService } from "../../browser/progressService.js";
+import { IViewsService } from '../../../views/common/viewsService.js';
+import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewContainerId, type IViewContainerDescriptor } from '../../../../common/views.js';
+import { IPaneCompositePartService } from '../../../panecomposite/browser/panecomposite.js';
+import type { IProgressIndicator, IProgressRunner } from '../../../../../platform/progress/common/progress.js';
 
 class ProgressFixture extends Disposable {
 	readonly statusbar = this._register(new StatusbarService());
@@ -18,8 +22,76 @@ class ProgressFixture extends Disposable {
 	readonly registry = new CommandRegistry();
 	private readonly services = this._register(new InstantiationService());
 	readonly commands = this._register(new CommandService(this.services, this.registry));
-	readonly progress = this._register(new ProgressService(this.statusbar, this.notifications, this.commands));
+	readonly indicators = new Map<string, IProgressIndicator>();
+	readonly containers = new Map<string, IViewContainerDescriptor>();
+	readonly registeredViews = new Set<string>();
+	readonly views = { getViewProgressIndicator: (id: string) => this.indicators.get(id) } as IViewsService;
+	readonly descriptors = {
+		getViewContainerById: (id: string) => this.containers.get(id) ?? null,
+		getViewDescriptorById: (id: string) => this.registeredViews.has(id) ? { id } : null,
+	} as IViewDescriptorService;
+	readonly panes = { getProgressIndicator: (id: string) => this.indicators.get(id) } as unknown as IPaneCompositePartService;
+	readonly progress: ProgressService;
+	constructor() {
+		super();
+		this.services.registerInstance(IStatusbarService, this.statusbar);
+		this.services.registerInstance(INotificationService, this.notifications);
+		this.services.registerInstance(ICommandService, this.commands);
+		this.services.registerInstance(IViewsService, this.views);
+		this.services.registerInstance(IViewDescriptorService, this.descriptors);
+		this.services.registerInstance(IPaneCompositePartService, this.panes);
+		this.progress = this._register(this.services.createInstance(ProgressService));
+	}
 }
+
+for (const location of ['view', 'container', ProgressLocation.Explorer, ProgressLocation.Scm, ProgressLocation.Extensions]) {
+	test(`view progress routes ${location} without a notification and follows the producer`, async () => {
+		using fixture = new ProgressFixture();
+		const id = typeof location === 'string' ? location : location === ProgressLocation.Explorer ? WorkbenchViewContainerId.Sidebar : location === ProgressLocation.Scm ? WorkbenchViewContainerId.SourceControl : 'ash.extensions';
+		if (location === 'view') fixture.registeredViews.add(id);
+		else fixture.containers.set(id, { id, title: id, location: ViewContainerLocation.Sidebar });
+		const steps: unknown[] = [];
+		const runner: IProgressRunner = { total: total => steps.push({ total }), worked: worked => steps.push({ worked }), done: () => steps.push('done') };
+		fixture.indicators.set(id, { show: (total: true | number, delay?: number) => { steps.push({ show: total, delay }); return runner; } } as IProgressIndicator);
+		const completion = new DeferredPromise<string>();
+		let reporter: IProgress<IProgressStep> | undefined;
+		const pending = fixture.progress.withProgress({ location, delay: 150 }, progress => {
+			reporter = progress;
+			progress.report({ increment: 25, message: 'Reading' });
+			return completion.p;
+		});
+		assert.deepEqual(steps, [{ show: true, delay: 150 }, { total: 100 }, { worked: 25 }]);
+		assert.deepEqual(fixture.notifications.model.getNotifications(), []);
+		await completion.complete('result');
+		assert.equal(await pending, 'result');
+		reporter!.report({ increment: 10 });
+		assert.deepEqual(steps, [{ show: true, delay: 150 }, { total: 100 }, { worked: 25 }, 'done']);
+	});
+}
+
+test('unopened views run without acquiring UI; invalid locations fail before starting work', async () => {
+	using fixture = new ProgressFixture();
+	fixture.registeredViews.add('unopened');
+	assert.equal(await fixture.progress.withProgress({ location: 'unopened' }, async () => 42), 42);
+	assert.deepEqual(fixture.notifications.model.getNotifications(), []);
+	assert.throws(() => fixture.progress.withProgress({ location: 'missing' }, async () => assert.fail('Task must not start')), /Bad progress location/);
+});
+
+test('view progress cleans up on synchronous errors, rejection and service disposal', async () => {
+	using fixture = new ProgressFixture();
+	fixture.registeredViews.add('view');
+	let finished = 0;
+	fixture.indicators.set('view', { show: () => ({ done: () => { finished++; }, total() { }, worked() { } }), showWhile: async () => { } });
+	await assert.rejects(fixture.progress.withProgress({ location: 'view' }, () => { throw new Error('sync'); }), /sync/);
+	await assert.rejects(fixture.progress.withProgress({ location: 'view' }, () => Promise.reject(new Error('async'))), /async/);
+	const completion = new DeferredPromise<void>();
+	const pending = fixture.progress.withProgress({ location: 'view' }, () => completion.p);
+	fixture.progress.dispose();
+	assert.equal(finished, 3);
+	await completion.complete();
+	await pending;
+	assert.equal(finished, 3);
+});
 
 test("notification progress updates the owning model and follows task completion", async () => {
 	using fixture = new ProgressFixture();
@@ -152,6 +224,11 @@ test("task failure and service disposal release presentations without settling t
 test("progress construction requires the registered presentation owners", () => {
 	using services = new InstantiationService();
 	assert.throws(() => services.createInstance(ProgressService), /Unknown service: statusbarService/);
+	using fixture = new ProgressFixture();
+	services.registerInstance(IStatusbarService, fixture.statusbar);
+	services.registerInstance(INotificationService, fixture.notifications);
+	services.registerInstance(ICommandService, fixture.commands);
+	assert.throws(() => services.createInstance(ProgressService), /Unknown service: viewsService/);
 });
 
 test("a failing cancellation callback does not retain other progress presentations", async () => {

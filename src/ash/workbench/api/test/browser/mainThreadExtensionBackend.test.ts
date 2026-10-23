@@ -149,7 +149,7 @@ for (const retire of [false, true]) test(`backend cancellation retains its exact
 		using statusbar = new StatusbarService();
 		using notifications = new TestNotificationService();
 		using commands = new CommandService({ get() { throw new Error('Unexpected command service request'); }, getOptional() { return undefined; } });
-		using progress = new ProgressService(statusbar, notifications, commands);
+		using progress = new ProgressService(statusbar, notifications, commands, {} as never, {} as never, {} as never);
 		const value = fixture('builtIn', async (method, params) => {
 			if (method === 'git/transport') return operation.p;
 			assert.equal(method, 'git/transport/cancel');

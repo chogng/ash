@@ -10,7 +10,7 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
-import { MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -27,6 +27,7 @@ import { ISymphonyService } from './symphonyService.js';
 import './symphony.css';
 
 export class SymphonyTasksView extends ViewPane {
+	private readonly loadingProgress = this._register(new MutableDisposable());
 	private readonly source: InputBox;
 	constructor(parent: HTMLElement, options: IViewPaneOptions,
 		@ISymphonyService symphony: ISymphonyService,
@@ -138,6 +139,10 @@ export class SymphonyTasksView extends ViewPane {
 		this._register(picker.onDidSelect(updateControls));
 		this._register(autorun(reader => {
 			const state = symphony.state.read(reader);
+			if (state.loading && !this.loadingProgress.value) {
+				const progress = this.getProgressIndicator().show(true, 150);
+				this.loadingProgress.value = toDisposable(() => progress.done());
+			} else if (!state.loading) this.loadingProgress.clear();
 			const value = picker.value;
 			const options = state.workflows.map(workflow => ({ value: workflow.id, label: workflow.path, description: workflow.tracker }));
 			if (JSON.stringify(options) !== JSON.stringify(picker.options)) { picker.setOptions(options); picker.value = options.some(option => option.value === value) ? value : options[0]?.value; }

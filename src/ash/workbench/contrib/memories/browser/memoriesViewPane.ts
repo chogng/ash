@@ -120,7 +120,9 @@ export class MemoriesViewPane extends ViewPane {
 	public async openReference(reference: string): Promise<void> {
 		if (!await this.discardDraft()) { return; }
 		const generation = ++this.readGeneration;
-		const result = await this.memories.readReference(reference);
+		const loading = this.memories.readReference(reference);
+		void this.getProgressIndicator().showWhile(loading, 150);
+		const result = await loading;
 		if (this.isDisposed || generation !== this.readGeneration) { return; }
 		this.selected = undefined;
 		this.showingReference = true;
@@ -259,9 +261,10 @@ export class MemoriesViewPane extends ViewPane {
 		this.working = true;
 		this.applyEnabled();
 		this.contentElement.setAttribute('aria-busy', 'true');
+		const progress = this.getProgressIndicator().show(true, 150);
 		try { await operation(); }
 		catch (error) { if (!this.isDisposed) { this.status.textContent = error instanceof Error ? error.message : String(error); } }
-		finally { this.working = false; this.contentElement.removeAttribute('aria-busy'); if (!this.isDisposed) { this.applyEnabled(); if (previousFocus instanceof HTMLElement && previousFocus.isConnected && this.contentElement.contains(previousFocus) && !this.contentElement.contains(this.element.ownerDocument.activeElement)) { previousFocus.focus(); } } }
+		finally { progress.done(); this.working = false; this.contentElement.removeAttribute('aria-busy'); if (!this.isDisposed) { this.applyEnabled(); if (previousFocus instanceof HTMLElement && previousFocus.isConnected && this.contentElement.contains(previousFocus) && !this.contentElement.contains(this.element.ownerDocument.activeElement)) { previousFocus.focus(); } } }
 	}
 	private async showHelp(): Promise<void> {
 		this.accessibleView.show(AccessibleViewType.Help);

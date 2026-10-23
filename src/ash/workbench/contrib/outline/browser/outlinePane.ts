@@ -113,6 +113,8 @@ export class OutlinePane extends ViewPane {
 		const token = new CancellationTokenSource();
 		lifetime.add(toDisposable(() => token.dispose(true)));
 		this.emptyDomNode.textContent = localize('outline.loading', 'Loading document symbols…');
+		const progress = this.getProgressIndicator().show(true, 150);
+		lifetime.add(toDisposable(() => progress.done()));
 		try {
 			const outline = await this.outlines.createOutline(editor, OutlineTarget.OutlinePane, token.token);
 			if (this.isDisposed || generation !== this.generation || token.token.isCancellationRequested) { outline?.dispose(); return; }
@@ -150,6 +152,8 @@ export class OutlinePane extends ViewPane {
 			if (generation !== this.generation || token.token.isCancellationRequested || isCancellationError(error)) return;
 			this.emptyDomNode.textContent = localize('outline.failed', 'Could not load document symbols.');
 			this.log.error('outline', 'Could not load outline', error);
+		} finally {
+			progress.done();
 		}
 	}
 

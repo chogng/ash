@@ -774,6 +774,7 @@ function registerView(services: InstantiationService, view: SearchView): void {
 	view.setVisible(true);
 	view.element.ownerDocument.body.append(view.element);
 	services.registerInstance(IViewsService, {
+		getViewProgressIndicator: () => view.getProgressIndicator(),
 		onDidChangeViewContainerVisibility: Event.None,
 		onDidChangeViewVisibility: Event.None,
 		onDidChangeFocusedView: Event.None,

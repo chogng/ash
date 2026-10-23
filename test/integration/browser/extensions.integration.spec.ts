@@ -506,10 +506,14 @@ test('Marketplace navigation retires a late failed discovery read', async ({ pag
 	await page.evaluate(() => window.ashExtensionsIntegration.holdDiscoverySearch());
 	await page.evaluate(() => { void window.ashExtensionsIntegration.open({ view: 'skills', mode: 'browse' }); });
 	await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.discoverySearchStarted())).toBe(true);
+	const progress = pane.locator('.ash-view-pane-progress-indicator');
+	await expect(progress).toBeVisible();
 	await page.evaluate(() => window.ashExtensionsIntegration.open({ view: 'skills', mode: 'installed' }));
+	await expect(progress).toBeHidden();
 	await expect(pane.getByRole('option')).toContainText('review');
 	const status = await pane.locator('.extensions-status').textContent();
 	await page.evaluate(() => window.ashExtensionsIntegration.failHeldSearch());
+	await expect(progress).toBeHidden();
 	await expect(pane.locator('.extensions-status')).toHaveText(status!);
 	await expect(pane.getByRole('option')).not.toContainText('Web tools');
 });

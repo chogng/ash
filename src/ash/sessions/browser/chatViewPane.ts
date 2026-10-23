@@ -232,7 +232,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		void this.migrateSessionsOrientation();
 		this.ensureConversationForVisibleChat();
 		let restoringRevision = sessionService.navigationRevision;
-		void sessionService.initialize().then(async () => {
+		const restoring = sessionService.initialize().then(async () => {
 			if (this.viewDisposed) return;
 			if (restored && sessionService.navigationRevision === restoringRevision) {
 				const opening = sessionService.openThread(restored.sessionId, restored.threadId);
@@ -252,6 +252,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			this.saveViewState();
 			this.notifications.error(localize('chat.selection.restoreFailed', 'Could not restore the Chat selection: {0}', String(error)));
 		});
+		void this.getProgressIndicator().showWhile(restoring, 150);
 	}
 
 	private restoreViewState(raw: string | undefined): { readonly sessionId: string; readonly threadId: string; } | undefined {

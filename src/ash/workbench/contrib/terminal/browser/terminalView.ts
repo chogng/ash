@@ -176,6 +176,7 @@ export class TerminalViewPane extends ViewPane {
 			return;
 		}
 		this.initializing = true;
+		const progress = this.getProgressIndicator().show(true, 150);
 		try {
 			await this.terminalService.whenConnected;
 			// A transfer window may restore a visible panel before Main offers the PTY.
@@ -205,6 +206,7 @@ export class TerminalViewPane extends ViewPane {
 			this.setStatus(terminalErrorMessage(error, "Terminal is unavailable"));
 			this.updateProfiles();
 		} finally {
+			progress.done();
 			this.initializing = false;
 		}
 	}

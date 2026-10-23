@@ -356,6 +356,7 @@ export class DebugViewTestServices extends Disposable {
 		}));
 		const descriptor = descriptors.getViewContainers(ViewContainerLocation.Sidebar).find(candidate => candidate.id === WorkbenchViewContainerId.Debug)!;
 		services.registerInstance(IViewsService, this._register(new ViewsService(descriptors, {
+			getProgressIndicator: id => part.getProgressIndicator(id),
 			onDidPaneCompositeOpen: Event.map(part.onDidCompositeOpen, event => ({ composite: part.getComposite(event.composite.getId())!, viewContainerLocation: ViewContainerLocation.Sidebar })),
 			onDidPaneCompositeClose: Event.map(part.onDidCompositeClose, composite => ({ composite: part.getComposite(composite.getId())!, viewContainerLocation: ViewContainerLocation.Sidebar })),
 			getActivePaneComposite: () => part.getComposite(part.activeCompositeId ?? ''), getLastActivePaneCompositeId: () => part.activeCompositeId,

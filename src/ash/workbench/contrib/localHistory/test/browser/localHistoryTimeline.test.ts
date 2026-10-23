@@ -14,6 +14,7 @@ import type { IViewsService } from '../../../../services/views/common/viewsServi
 import '../../../localHistory/browser/localHistory.contribution.js';
 
 const views: IViewsService = {
+	getViewProgressIndicator: () => undefined,
 	onDidChangeViewContainerVisibility: Event.None, onDidChangeViewVisibility: Event.None, onDidChangeFocusedView: Event.None,
 	isViewContainerVisible: () => false, isViewContainerActive: () => false, openViewContainer: async () => null, closeViewContainer: () => { }, getVisibleViewContainer: () => null, getActiveViewPaneContainerWithId: () => null, getFocusedView: () => null, getFocusedViewName: () => '',
 	isViewVisible: () => false, openView: async () => null, closeView: () => { }, getActiveViewWithId: () => null, getViewWithId: () => null, focusView: async () => false,

@@ -369,12 +369,16 @@ export class SearchView extends ViewPane {
 	}
 
 	private async runSearch(query: IContentSearchQuery, controller: AbortController, revision: number): Promise<void> {
+		const progress = this.getProgressIndicator().show(true, 150);
 		try {
 			using cancellation = new CancellationTokenSource();
-			const cancel = (): void => cancellation.cancel();
+			const cancel = (): void => {
+				progress.done();
+				cancellation.cancel();
+			};
 			controller.signal.addEventListener('abort', cancel, { once: true });
 			using listener = toDisposable(() => controller.signal.removeEventListener('abort', cancel));
-			if (controller.signal.aborted) { cancellation.cancel(); }
+			if (controller.signal.aborted) { cancel(); }
 			const textQuery = new QueryBuilder().text({
 				pattern: query.text, isRegExp: query.patternKind === 'regex', isWordMatch: query.wholeWord,
 				isCaseSensitive: query.caseSensitivity === 'sensitive' || query.caseSensitivity === 'smart' && /\p{Lu}/u.test(query.text),
@@ -401,6 +405,7 @@ export class SearchView extends ViewPane {
 			this.searchCompletion = { limitHit: false, error: error instanceof Error ? error.message : localize("search.failed", "Workspace search failed.") };
 			this.updateSearchResultCount();
 		} finally {
+			progress.done();
 			if (!this.isDisposed && revision === this.searchRevision) {
 				this.slowSearchTimer.clear();
 				this.tree.element.setAttribute("aria-busy", "false");

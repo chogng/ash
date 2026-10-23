@@ -11,6 +11,7 @@ import { localize } from '../../../../nls.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 
 export class CallViewPane extends ViewPane {
+	private readonly connectionProgress = this._register(new MutableDisposable());
 	private readonly statusDomNode: HTMLDivElement;
 	private readonly actionsDomNode: HTMLDivElement;
 	private readonly formDomNode: HTMLFormElement;
@@ -190,6 +191,11 @@ export class CallViewPane extends ViewPane {
 			reconnecting: localize('call.reconnecting', 'Reconnecting'), ended: localize('call.ended', 'Call ended'), failed: localize('call.connectionFailed', 'Connection failed'),
 		};
 		const state = this.calls.state;
+		const connecting = state?.connection === 'connecting' || state?.connection === 'reconnecting';
+		if (connecting && !this.connectionProgress.value) {
+			const progress = this.getProgressIndicator().show(true, 150);
+			this.connectionProgress.value = toDisposable(() => progress.done());
+		} else if (!connecting) this.connectionProgress.clear();
 		const active = !!state && !['ended', 'failed'].includes(state.connection);
 		const local = this.modeDomNode.value === 'local';
 		this.urlDomNode.parentElement!.hidden = local;

@@ -8,6 +8,7 @@ import { IViewDescriptorService } from '../../common/views.js';
 import { type IPaneCompositePartService, type PaneCompositeEvent } from '../../services/panecomposite/browser/panecomposite.js';
 import type { PaneCompositePart } from './paneCompositePart.js';
 import { PaneComposite } from '../panecomposite.js';
+import type { IProgressIndicator } from '../../../platform/progress/common/progress.js';
 
 /** Parts own instances and selection; this service owns opening, focus and location routing. */
 export class PaneCompositePartService extends Disposable implements IPaneCompositePartService {
@@ -73,6 +74,10 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 			case ViewContainerLocation.AuxiliaryBar: return 'auxiliarybar';
 			case ViewContainerLocation.AgentSidebar: return 'agentSidebar';
 		}
+	}
+
+	public getProgressIndicator(id: string, location: ViewContainerLocation): IProgressIndicator | undefined {
+		return this.getPart(location).getProgressIndicator(id);
 	}
 
 	public hideActivePaneComposite(location: ViewContainerLocation): void {

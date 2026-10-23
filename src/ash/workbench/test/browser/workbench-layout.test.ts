@@ -699,6 +699,7 @@ test('Auxiliary Bar commands restore dimensions, hidden Parts and Panel maximiza
 		const context = resources.add(new ContextKeyService());
 		resources.add(createTestWorkbenchContextKeysHandler(context, { layoutService: harness.layout }));
 		harness.services.registerInstance(IPaneCompositePartService, {
+			getProgressIndicator: () => undefined,
 			onDidPaneCompositeOpen: BaseEvent.None, onDidPaneCompositeClose: BaseEvent.None,
 			getActivePaneComposite: () => undefined, getLastActivePaneCompositeId: () => undefined,
 			openPaneComposite: async () => undefined, hideActivePaneComposite() { }, getPartId: () => 'auxiliarybar',
@@ -2168,6 +2169,7 @@ test("titlebar layout commands toggle shell regions", async () => {
 	services.registerInstance(IWorkbenchLayoutService, harness.layout);
 	const openedPanels: unknown[][] = [];
 	services.registerInstance(IPaneCompositePartService, {
+		getProgressIndicator: () => undefined,
 		onDidPaneCompositeOpen: BaseEvent.None, onDidPaneCompositeClose: BaseEvent.None,
 		getLastActivePaneCompositeId: () => 'test.retained.panel',
 		openPaneComposite: async (id, location, focus) => { openedPanels.push([id, location, focus]); return undefined; },

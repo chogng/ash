@@ -633,7 +633,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(INotificationService, notificationService);
 		const feedbackHost = h(ownerDocument, "div");
 		feedbackHost.className = "ash-feedback-host";
-		services.registerInstance(IProgressService, this._register(services.createInstance(ProgressService)));
+		services.registerSingleton(IProgressService, () => services.createInstance(ProgressService), { instantiation: InstantiationType.Delayed });
 		this.domNode.append(feedbackHost);
 		this._register(toDisposable(() => feedbackHost.remove()));
 		const openerService = this._register(services.createInstance(OpenerService));
@@ -700,7 +700,6 @@ export abstract class Workbench extends Disposable {
 		this._register(setHoverDelegate(hoverService));
 		const accessibleViewService = services.get(IAccessibleViewService);
 		services.registerSingleton(ILanguageServerStatusService, () => services.createInstance(AppServerLanguageServerStatusService));
-		services.get(ILanguageServerStatusService);
 		this._register(registerExtensionManagementActions());
 		const preferences = this._register(services.createInstance(SessionsPreferences, this.domNode, async () => {
 			await commandService.executeCommand('sessions.open.code');
@@ -896,6 +895,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(services.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
+		services.get(ILanguageServerStatusService);
 		// Extension adapters require the completed editor and view service graph.
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		const customViewPart = this._register(services.createInstance(CustomViewGridPart, this.domNode));

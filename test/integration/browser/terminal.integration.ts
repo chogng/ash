@@ -175,6 +175,7 @@ function setupTerminalFixtureServices(services: import('../../../src/ash/platfor
 	services.registerInstance(IRendererHostService, { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: OperatingSystem.Linux, userHome: '/home/test' } });
 	if (!services.has(IWorkspaceContextService)) services.registerInstance(IWorkspaceContextService, lifetime.add(new TestWorkspaceService({ id: 'terminal-paths', folders: [] })));
 	if (!services.has(IViewsService)) services.registerInstance(IViewsService, {
+		getViewProgressIndicator: () => undefined,
 		onDidChangeViewContainerVisibility: Event.None, onDidChangeViewVisibility: Event.None, onDidChangeFocusedView: Event.None,
 		isViewContainerVisible: () => false, isViewContainerActive: () => false,
 		openViewContainer: async () => null, closeViewContainer: () => { },

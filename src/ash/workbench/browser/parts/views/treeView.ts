@@ -35,6 +35,8 @@ export class TreeView extends Disposable {
 	private dirty = true;
 	private initialized = false;
 	private refreshing: Promise<void> | undefined;
+	private readonly loadingChanged = this._register(new Emitter<boolean>());
+	public readonly onDidChangeLoading = this.loadingChanged.event;
 
 	constructor(
 		public readonly id: string,
@@ -87,6 +89,12 @@ export class TreeView extends Disposable {
 				if (content) { this.rows.deleteAndDispose(content); }
 			},
 			renderElement: node => this.renderRow(node),
+		}));
+		const loading = new Set<ITreeItem | undefined>();
+		mounting.add(tree.onDidChangeLoadState(event => {
+			if (event.loading) loading.add(event.element);
+			else loading.delete(event.element);
+			this.loadingChanged.fire(loading.size > 0);
 		}));
 		mounting.add(tree.onDidOpen(event => {
 			if (event.element.command) {
@@ -143,6 +151,7 @@ export class TreeView extends Disposable {
 			else { tree.element.removeAttribute('aria-description'); }
 		}));
 		mounting.add(toDisposable(() => {
+			this.loadingChanged.fire(false);
 			this.editing.clear();
 			this.rows.clearAndDisposeAll();
 			this.tree = undefined;
@@ -237,6 +246,13 @@ export class TreeView extends Disposable {
 export class TreeViewPane extends ViewPane {
 	constructor(protected readonly treeView: TreeView, container: HTMLElement, options: IViewPaneOptions) {
 		super(container, options);
+		const loading = this._register(new MutableDisposable());
+		this._register(treeView.onDidChangeLoading(active => {
+			if (active && !loading.value) {
+				const progress = this.getProgressIndicator().show(true, 150);
+				loading.value = toDisposable(() => progress.done());
+			} else if (!active) loading.clear();
+		}));
 		treeView.show(this.contentElement);
 		this._register(toDisposable(() => treeView.hide()));
 		this._register(this.onDidChangeBodyVisibility(visible => treeView.setVisibility(visible)));

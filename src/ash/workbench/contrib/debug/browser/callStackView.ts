@@ -3,7 +3,7 @@ import { ADD_INSTRUCTION_BREAKPOINT_ID } from './debugCommands.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
@@ -15,6 +15,7 @@ import { DisassemblyViewInput } from '../common/disassemblyViewInput.js';
 
 /** Displays stopped threads and frames; submits explicit frame selection to DebugService. */
 export class CallStackView extends ViewPane {
+	private readonly loadingProgress = this._register(new MutableDisposable());
 	private readonly threadsElement: HTMLSelectElement;
 	private readonly stackElement: HTMLUListElement;
 	private readonly instructionToolbar: WorkbenchToolBar;
@@ -54,13 +55,20 @@ export class CallStackView extends ViewPane {
 	}
 
 	private async refreshStoppedState(): Promise<void> {
+		this.loadingProgress.clear();
 		const session = this.debug.session;
 		const generation = ++this.refreshGeneration;
 		this.threads = []; this.frames = [];
 		this.render();
 		if (!session || session.state !== 'stopped') return;
 		try {
-			const inspection = await session.inspectStack(session.threadId);
+			const loading = session.inspectStack(session.threadId);
+			const progress = this.getProgressIndicator().show(true, 150);
+			const handle = toDisposable(() => progress.done());
+			this.loadingProgress.value = handle;
+			const finish = (): void => { if (this.loadingProgress.value === handle) this.loadingProgress.clear(); };
+			void loading.then(finish, finish);
+			const inspection = await loading;
 			if (!this.isCurrentInspection(session, generation)) return;
 			if (inspection.threadId === undefined) throw new Error(localize('debug.noThreads', 'The Debug Adapter did not report any stopped threads'));
 			session.selectThread(inspection.threadId);
@@ -78,6 +86,7 @@ export class CallStackView extends ViewPane {
 		const frame = index === undefined ? undefined : this.frames[index];
 		const session = this.debug.session;
 		if (!frame || !session || session.state !== 'stopped') return;
+		this.loadingProgress.clear();
 		const generation = ++this.refreshGeneration;
 		void this.debug.focusStackFrame(frame, this.threads.find(thread => thread.id === session.threadId)).catch(error => {
 			if (this.isCurrentInspection(session, generation)) this.notifications.error(message(error));

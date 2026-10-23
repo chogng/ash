@@ -19,7 +19,7 @@ import type { IContextKey } from '../../../../platform/contextkey/common/context
 import { registerAndCreateHistoryNavigationContext, historyNavigationVisible } from '../../../../platform/history/browser/contextScopedHistoryWidget.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import './media/repl.css';
-import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { DebugConsoleEntry } from '../../../../platform/debug/common/debugAdapterProcessService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
@@ -153,7 +153,16 @@ export class Repl extends FilterViewPane {
 			this.contentEmitter.fire();
 			if (!event.collapsed && event.element.entry.kind === 'group') void this.renderOutput();
 		}));
-		this._register(this.tree.onDidChangeLoadState(event => { if (!event.loading) this.contentEmitter.fire(); }));
+		const loading = this._register(new DisposableMap<unknown, IDisposable>());
+		this._register(this.tree.onDidChangeLoadState(event => {
+			if (event.loading) {
+				const progress = this.getProgressIndicator().show(true, 150);
+				loading.set(event.element, toDisposable(() => progress.done()));
+			} else {
+				loading.deleteAndDispose(event.element);
+				this.contentEmitter.fire();
+			}
+		}));
 		this._register(this.tree.onDidError(event => this.setStatus(message(event.error))));
 		const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.DebugConsole);
 		if (hint) this.output.setAttribute('aria-description', hint);

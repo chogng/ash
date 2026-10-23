@@ -38,6 +38,7 @@ interface VariableEdit {
 
 /** Variables owns expansion, pending assignments and their frame-scoped lifetime. */
 export class VariablesView extends ViewPane {
+	private readonly loadingProgress = this._register(new DisposableStore());
 	private readonly variablesElement: HTMLUListElement;
 	private readonly variableItems = this._register(new DisposableMap<number, DebugVariableItem>());
 	private readonly variableEditControls = this._register(new MutableDisposable<DisposableStore>());
@@ -69,6 +70,7 @@ export class VariablesView extends ViewPane {
 		this.refresh();
 	}
 	private refresh(): void {
+		this.loadingProgress.clear();
 		const generation = ++this.refreshGeneration;
 		this.saveExpansion();
 		this.renderedFrame = undefined;
@@ -102,6 +104,9 @@ export class VariablesView extends ViewPane {
 	private async loadFrameVariables(session: IDebugSession, frameId: number | undefined, generation = this.refreshGeneration): Promise<void> {
 		if (!this.isCurrentInspection(session, generation)) return;
 		if (frameId === undefined) { this.variableRows = []; return; }
+		const progress = this.getProgressIndicator().show(true, 150);
+		const handle = this.loadingProgress.add(toDisposable(() => progress.done()));
+		using progressLifetime = toDisposable(() => { this.loadingProgress.delete(handle); handle.dispose(); });
 		const scopes = await session.inspectFrame(frameId);
 		if (!this.isCurrentInspection(session, generation) || this.selectedFrameId !== frameId) return;
 		const saved = this.expandedFrames.get(session)?.get(frameId);
@@ -154,7 +159,12 @@ export class VariablesView extends ViewPane {
 			this.render();
 			return;
 		}
-		void session.variables(row.variablesReference).then(variables => {
+		const loading = session.variables(row.variablesReference);
+		const progress = this.getProgressIndicator().show(true, 150);
+		const handle = this.loadingProgress.add(toDisposable(() => progress.done()));
+		const finish = (): void => { this.loadingProgress.delete(handle); handle.dispose(); };
+		void loading.then(finish, finish);
+		void loading.then(variables => {
 			if (!this.isCurrentInspection(session, generation)) return;
 			const currentIndex = this.variableRows.findIndex(candidate => candidate.key === row.key);
 			if (currentIndex < 0 || this.variableRows[currentIndex]!.expanded) return;

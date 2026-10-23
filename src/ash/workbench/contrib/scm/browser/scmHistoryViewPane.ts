@@ -232,6 +232,7 @@ class HistoryItemRow extends Disposable {
 
 /** Paged SCM history rendered as a compact graph. */
 export class SCMHistoryViewPane extends ViewPane {
+	private readonly loadingProgress = this._register(new DisposableStore());
 	private readonly scmViewService: ISCMViewService;
 	private readonly graphLabel: string;
 	private readonly busyContext: IContextKey<boolean>;
@@ -516,6 +517,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	}
 
 	private async refresh(): Promise<void> {
+		this.loadingProgress.clear();
 		const generation = ++this.generation;
 		const repository = this.scmViewService.activeRepository;
 		this.providerIdContext.set(repository?.provider.providerId ?? '');
@@ -569,6 +571,9 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.renderGraph({ items: [], hasMore: false });
 			return;
 		}
+		const progress = this.getProgressIndicator().show(true, 100);
+		const handle = this.loadingProgress.add(toDisposable(() => progress.done()));
+		using progressLifetime = toDisposable(() => { this.loadingProgress.delete(handle); handle.dispose(); });
 		try {
 			const previousComparison = this.comparison;
 			const previousHead = this.head?.revision;
@@ -876,6 +881,9 @@ export class SCMHistoryViewPane extends ViewPane {
 		const page = this.page;
 		const provider = this.provider;
 		if (!page || !provider || !page.hasMore || this.loading || this.refreshing || this.refreshFailed) return;
+		const progress = this.getProgressIndicator().show(true, 100);
+		const handle = this.loadingProgress.add(toDisposable(() => progress.done()));
+		using progressLifetime = toDisposable(() => { this.loadingProgress.delete(handle); handle.dispose(); });
 
 		const generation = this.generation;
 		const hadLoaderFocus = this.graphElement.querySelector('.ash-scm-graph-load-more')?.contains(this.graphElement.ownerDocument.activeElement) === true;
@@ -1387,6 +1395,9 @@ export class SCMHistoryViewPane extends ViewPane {
 		const pending = { state: 'loading' } as const;
 		this.expanded.set(historyItem.id, pending);
 		this.updateCommitHeight(historyItem);
+		const progress = this.getProgressIndicator().show(true, 100);
+		const handle = this.loadingProgress.add(toDisposable(() => progress.done()));
+		using progressLifetime = toDisposable(() => { this.loadingProgress.delete(handle); handle.dispose(); });
 		try {
 			const result = await provider.provideHistoryItemChanges(historyItem.comparison?.revision ?? historyItem.id, historyItem.comparison?.baseRevision ?? historyItem.parentIds[0]);
 			if (this.isDisposed || provider !== this.provider || this.expanded.get(historyItem.id) !== pending) return;

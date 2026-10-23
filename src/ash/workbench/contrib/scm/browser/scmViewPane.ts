@@ -64,6 +64,7 @@ export class ScmViewPane extends ViewPane {
 	private readonly titleContext: IScopedContextKeyService;
 	private readonly providerContext: IContextKey<string>;
 	private readonly busyContext: IContextKey<boolean>;
+	private readonly busyProgress = this._register(new MutableDisposable());
 	private readonly canCommitContext: IContextKey<boolean>;
 	private readonly viewModeContext: IContextKey<SCMViewMode>;
 	private readonly viewSortKeyContext: IContextKey<SCMViewSortKey>;
@@ -375,6 +376,12 @@ export class ScmViewPane extends ViewPane {
 		if (this.isDisposed) return;
 		const active = this.scmViewService.activeRepository;
 		const provider = active?.provider;
+		if (provider?.isBusy && !this.busyProgress.value) {
+			const progress = this.getProgressIndicator().show(true, 250);
+			this.busyProgress.value = toDisposable(() => progress.done());
+		} else if (!provider?.isBusy) {
+			this.busyProgress.clear();
+		}
 		this.titleContext.bufferChangeEvents(() => {
 			this.providerContext.set(provider?.providerId ?? '');
 			this.busyContext.set(provider?.isBusy === true);

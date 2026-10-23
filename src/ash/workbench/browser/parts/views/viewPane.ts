@@ -1,7 +1,7 @@
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultProgressBarStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/paneviewlet.css';
 import './media/views.css';
-import { Emitter } from "../../../../base/common/event.js";
+import { Emitter, Event } from "../../../../base/common/event.js";
 import { Pane, type IPaneOptions } from "../../../../base/browser/ui/splitview/paneview.js";
 import type { IView } from "../../../common/views.js";
 import { getWindow, h } from '../../../../base/browser/dom.js';
@@ -18,6 +18,9 @@ import { localize } from '../../../../nls.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { FilterWidget, type IFilterWidgetOptions } from './viewFilter.js';
+import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
+import type { IProgressIndicator } from '../../../../platform/progress/common/progress.js';
+import { ScopedProgressIndicator } from '../../../services/progress/browser/progressIndicator.js';
 
 export enum ViewPaneShowActions {
 	/** Reveal expanded-pane actions on hover or focus. */
@@ -47,6 +50,8 @@ export interface PartTitleProjection {
 /** A titled, independently managed view hosted inside a workbench view container. */
 export abstract class ViewPane extends Pane implements IView {
 	private titleDescriptionElement: HTMLSpanElement | undefined;
+	private progressBar: ProgressBar | undefined;
+	private progressIndicator: ScopedProgressIndicator | undefined;
 	private readonly constraintsChanged = this._register(new Emitter<void>());
 	readonly onDidChangeConstraints = this.constraintsChanged.event;
 
@@ -100,7 +105,28 @@ export abstract class ViewPane extends Pane implements IView {
 	public override setTitle(title: string): void {
 		if (title === this.paneTitle) return;
 		super.setTitle(title);
+		this.progressBar?.element.setAttribute('aria-label', title);
 		this.updateTitleArea();
+	}
+
+	public getProgressIndicator(): IProgressIndicator {
+		if (!this.progressIndicator) {
+			const host = h(this.element.ownerDocument, 'div');
+			host.className = 'ash-view-pane-progress';
+			// A zero-height slot follows the actual header, including when its title is merged into a Part.
+			this.headerElement.after(host);
+			this._register(toDisposable(() => host.remove()));
+			const bar = this._register(new ProgressBar(host, defaultProgressBarStyles));
+			this.progressBar = bar;
+			bar.element.classList.add('ash-view-pane-progress-indicator', 'thin');
+			bar.element.setAttribute('aria-label', this.paneTitle);
+			const pane = this;
+			this.progressIndicator = this._register(new ScopedProgressIndicator(bar, {
+				get isActive() { return pane.isBodyVisible(); },
+				onDidChangeActive: Event.map(this.onDidChangeBodyVisibility, () => undefined),
+			}));
+		}
+		return this.progressIndicator;
 	}
 
 	public override setHeaderActionsHost(host?: HTMLElement, actions?: HTMLElement): void {

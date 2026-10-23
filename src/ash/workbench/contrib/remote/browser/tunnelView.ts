@@ -8,10 +8,12 @@ import type { RemoteAgentConnection } from "../../../../platform/remote/common/r
 import { ITunnelService, type RemoteTunnel } from "../../../../platform/tunnel/common/tunnel.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import { IAppServerRemoteAgentService } from "../../../services/remote/common/appServerRemoteAgentService.js";
+import { MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import "./media/tunnelView.css";
 
 /** Renders the Electron Main-owned SSH tunnel catalog and forwarding actions. */
 export class TunnelPanel extends ViewPane {
+	private readonly loadingProgress = this._register(new MutableDisposable());
 	private readonly formElement: HTMLFormElement;
 	private readonly portInput: HTMLInputElement;
 	private readonly forwardButton: HTMLButtonElement;
@@ -200,10 +202,17 @@ export class TunnelPanel extends ViewPane {
 	}
 
 	private refresh(): void {
+		this.loadingProgress.clear();
 		const readRevision = ++this.readRevision;
 		const tunnelRevision = this.tunnelRevision;
 		const connectionRevision = this.connectionRevision;
-		void this.tunnelService.tunnels.then(tunnels => {
+		const loading = this.tunnelService.tunnels;
+		const progress = this.getProgressIndicator().show(true, 150);
+		const handle = toDisposable(() => progress.done());
+		this.loadingProgress.value = handle;
+		const finish = (): void => { if (this.loadingProgress.value === handle) this.loadingProgress.clear(); };
+		void loading.then(finish, finish);
+		void loading.then(tunnels => {
 			if (!this.isCurrentConnection(connectionRevision) || readRevision !== this.readRevision) return;
 			if (tunnelRevision !== this.tunnelRevision) {
 				this.refresh();

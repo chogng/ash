@@ -258,7 +258,7 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 			default: throw new Error(`Unexpected domain request ${method}`);
 		}
 	}
-}, { getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), connectionGeneration: 1 } satisfies IAppServerApi, { subscribe: listener => configurationEvents.event(listener) }, workspace, configuration, lifetime.add(new ProgressService(lifetime.add(new StatusbarService()), backendNotifications, progressCommands)),
+}, { getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), connectionGeneration: 1 } satisfies IAppServerApi, { subscribe: listener => configurationEvents.event(listener) }, workspace, configuration, lifetime.add(new ProgressService(lifetime.add(new StatusbarService()), backendNotifications, progressCommands, {} as never, {} as never, {} as never)),
 	{ groups: [], onDidChangeEditors: Event.None } as unknown as IEditorPart,
 	{ listCodeEditors: () => [], onCodeEditorAdd: Event.None, onCodeEditorRemove: Event.None } as unknown as ICodeEditorService));
 const unavailable = (method: string): never => { throw new Error(`Unexpected remote host request ${method}`); };

@@ -1,7 +1,7 @@
 import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { h, addDisposableListener } from '../../../../base/browser/dom.js';
-import { DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { defaultInputBoxStyles, defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
@@ -15,6 +15,7 @@ import { getUriFromSource } from '../common/debugSource.js';
 
 /** A view-owned projection of loaded source catalogs; adapters remain their authority. */
 export class LoadedScriptsView extends ViewPane {
+	private readonly loadingProgress = this._register(new MutableDisposable());
 	private readonly sessions = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly rows = this._register(new DisposableStore());
 	private readonly search: InputBox;
@@ -61,9 +62,11 @@ export class LoadedScriptsView extends ViewPane {
 		super.setVisible(visible);
 		if (visible) this.refresh();
 		else ++this.generation;
+		if (!visible) this.loadingProgress.clear();
 	}
 
 	private refresh(): void {
+		this.loadingProgress.clear();
 		const generation = ++this.generation;
 		const current = new Set(this.debug.sessions.map((session) => session.id));
 		for (const id of this.sessions.keys()) if (!current.has(id)) this.sessions.deleteAndDispose(id);
@@ -73,7 +76,7 @@ export class LoadedScriptsView extends ViewPane {
 				const store = this.sessions.set(session.id, new DisposableStore());
 				store.add(session.onDidLoadedSource(() => this.refresh()));
 			}
-		void Promise.all(
+		const loading = Promise.all(
 			this.debug.sessions
 				.filter((session) => session.capabilities.supportsLoadedSourcesRequest)
 				.map(async (session) => {
@@ -85,7 +88,13 @@ export class LoadedScriptsView extends ViewPane {
 						return { session, sources: [] };
 					}
 				}),
-		).then(
+		);
+		const progress = this.getProgressIndicator().show(true, 150);
+		const handle = toDisposable(() => progress.done());
+		this.loadingProgress.value = handle;
+		const finish = (): void => { if (this.loadingProgress.value === handle) this.loadingProgress.clear(); };
+		void loading.then(finish, finish);
+		void loading.then(
 			(catalogs) => {
 				if (this.isDisposed || generation !== this.generation) return;
 				this.entries = catalogs.flatMap(({ session, sources }) =>

@@ -28,6 +28,7 @@ import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/vi
 
 /** One shared channel tree; only search, focus and expansion are local UI state. */
 export class CollabViewPane extends ViewPane {
+	private readonly busyProgress = this._register(new MutableDisposable());
 	private readonly tree: WorkbenchObjectTree<Channel>;
 	private readonly search: HTMLInputElement;
 	private readonly message: HTMLElement;
@@ -182,6 +183,10 @@ export class CollabViewPane extends ViewPane {
 	}
 
 	private render(): void {
+		if (this.channelService?.busy && !this.busyProgress.value) {
+			const progress = this.getProgressIndicator().show(true, 150);
+			this.busyProgress.value = toDisposable(() => progress.done());
+		} else if (!this.channelService?.busy) this.busyProgress.clear();
 		const query = this.search.value.trim().toLocaleLowerCase();
 		const build = (parentId?: string): ObjectTreeElement<Channel>[] => (this.channels ?? [])
 			.filter(channel => channel.parentId === parentId).flatMap(channel => {

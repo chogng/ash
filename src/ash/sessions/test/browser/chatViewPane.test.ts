@@ -1635,6 +1635,7 @@ test("ViewsService resolves, opens, and focuses contributed views", async () => 
 		element: h(testStorageEnvironment.window.document, "div"),
 		id: CHAT_VIEW_ID,
 		paneTitle: 'Chat',
+		getProgressIndicator: () => undefined,
 		focus: () => { focused++; view.element.focus(); },
 		hasFocus: () => view.element.contains(view.element.ownerDocument.activeElement),
 		isBodyVisible: () => true,
@@ -1682,6 +1683,7 @@ test("ViewsService resolves, opens, and focuses contributed views", async () => 
 	using enablement = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.chatEnablement']);
 	enablement.advance(WorkbenchPhase.BlockStartup);
 	services.registerInstance(IPaneCompositePartService, {
+		getProgressIndicator: () => undefined,
 		onDidPaneCompositeOpen: Event.None,
 		onDidPaneCompositeClose: Event.None,
 		openPaneComposite: async id => { assert.equal(id, CHAT_VIEW_CONTAINER_ID); return composite; },

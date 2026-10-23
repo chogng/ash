@@ -8,6 +8,8 @@ import {
 } from '../../../../platform/progress/common/progress.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IDebugService, type IDebugSession } from '../common/debug.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
+import { WorkbenchViewContainerId } from '../../../common/views.js';
 
 /** Presents adapter progress; only adapter end/session release settles its operation. */
 export class DebugProgressContribution extends Disposable {
@@ -17,6 +19,7 @@ export class DebugProgressContribution extends Disposable {
 		@IDebugService debug: IDebugService,
 		@IProgressService private readonly progress: IProgressService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IViewsService private readonly views: IViewsService,
 	) {
 		super();
 		for (const session of debug.sessions) this.bind(session);
@@ -27,6 +30,14 @@ export class DebugProgressContribution extends Disposable {
 	private bind(session: IDebugSession): void {
 		if (this.sessions.has(session.id)) return;
 		const resources = this.sessions.set(session.id, new DisposableStore());
+		const starting = session.state === 'starting' ? new DeferredPromise<void>() : undefined;
+		if (starting) {
+			resources.add(toDisposable(() => { void starting.complete(); }));
+			if (this.views.isViewContainerVisible(WorkbenchViewContainerId.Debug)) {
+				void this.progress.withProgress({ location: WorkbenchViewContainerId.Debug }, () => starting.p)
+					.catch(error => { if (!resources.isDisposed) this.notifications.error(error); });
+			}
+		}
 		const jobs = new Map<
 			string,
 			{
@@ -64,6 +75,11 @@ export class DebugProgressContribution extends Disposable {
 					message: event.message,
 				};
 				jobs.set(event.progressId, job);
+				// Adapter tasks retain their cancellable notification alongside the visible debug container.
+				if (this.views.isViewContainerVisible(WorkbenchViewContainerId.Debug)) {
+					void this.progress.withProgress({ location: WorkbenchViewContainerId.Debug }, () => job.done.p)
+						.catch(error => { if (!resources.isDisposed) this.notifications.error(error); });
+				}
 				void this.progress
 					.withProgress(
 						{
@@ -103,6 +119,7 @@ export class DebugProgressContribution extends Disposable {
 		resources.add(session.onDidProgressEnd((event) => finish(event.progressId)));
 		resources.add(
 			session.onDidChangeState((state) => {
+				if (state !== 'starting') void starting?.complete();
 				if (state === 'terminated' || state === 'error') for (const id of [...jobs.keys()]) finish(id);
 			}),
 		);

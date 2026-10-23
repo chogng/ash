@@ -2,7 +2,8 @@ import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
 import '../../../src/ash/workbench/contrib/scm/browser/scm.contribution.js';
 import { Button } from '../../../src/ash/base/browser/ui/button/button.js';
-import { Event } from '../../../src/ash/base/common/event.js';
+import { Emitter, Event } from '../../../src/ash/base/common/event.js';
+import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { observableValue } from '../../../src/ash/base/common/observable.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
@@ -63,11 +64,16 @@ const hash = 'a'.repeat(40);
 const timestamp = 1_700_000_000;
 const subject = `History metadata: a long title that uses the space previously occupied by the commit hash and date ${'long-commit-identifier'.repeat(6)}`;
 const message = Array.from({ length: 24 }, (_, index) => `    Detail ${index + 1}: the complete explanation remains available without taking space from the history title.`).join('\n');
+const historyChanged = resources.add(new Emitter<void>());
+let heldHistory: DeferredPromise<void> | undefined;
 const provider: ISCMHistoryProvider = {
-	onDidChange: Event.None,
+	onDidChange: historyChanged.event,
 	historyItemRef: observableValue('fixture.history.head', undefined),
 	refresh() { },
-	provideHistoryItems: async () => [{ id: hash, displayId: hash.slice(0, 7), parentIds: [], subject, message, tooltip: { authorName: 'History Author', authorEmail: 'history@example.invalid', timestamp: timestamp * 1000, message, statistics: { files: 2, additions: 2, deletions: 0 } }, remoteLinks: [{ name: 'origin', uri: URI.parse(`https://github.com/ash-test/history/commit/${hash}`) }], references: [{ id: 'localBranch:metadata-topic', name: 'metadata-topic', category: 'localBranch' }, { id: 'tag:metadata-v1', name: 'metadata-v1', category: 'tag' }] }],
+	provideHistoryItems: async () => {
+		await heldHistory?.p;
+		return [{ id: hash, displayId: hash.slice(0, 7), parentIds: [], subject, message, tooltip: { authorName: 'History Author', authorEmail: 'history@example.invalid', timestamp: timestamp * 1000, message, statistics: { files: 2, additions: 2, deletions: 0 } }, remoteLinks: [{ name: 'origin', uri: URI.parse(`https://github.com/ash-test/history/commit/${hash}`) }], references: [{ id: 'localBranch:metadata-topic', name: 'metadata-topic', category: 'localBranch' }, { id: 'tag:metadata-v1', name: 'metadata-v1', category: 'tag' }] }];
+	},
 	provideHistoryItemChanges: async () => [],
 	resolveHistoryItemChangeContents: async () => { throw new Error('Editor contents must be tested through the product host'); },
 	resolveHistoryItemChatContext: async () => undefined,
@@ -100,6 +106,13 @@ panes.layout({ height: 600, width: 560 });
 panes.setVisible(true);
 const fixture = {
 	hash, timestamp, subject, message,
+	beginHistoryRead(): void { heldHistory = new DeferredPromise<void>(); historyChanged.fire(); },
+	finishHistoryRead(fail = false): void {
+		const pending = heldHistory;
+		heldHistory = undefined;
+		if (fail) void pending?.error(new Error('History unavailable'));
+		else void pending?.complete();
+	},
 	resize(width: number): void { root.style.width = `${width}px`; panes.layout({ height: 600, width }); },
 	setAlwaysShowHeaderActions(value: unknown): Promise<void> { return configuration.updateValue('workbench.view.alwaysShowHeaderActions', value); },
 	addDefaultView(): void { resources.add(registry.registerViews(viewContainer.id, [{ id: 'late-default', title: 'Late default', ctorDescriptor: new SyncDescriptor(HeaderActionsPane) }])); },

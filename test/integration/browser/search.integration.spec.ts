@@ -949,11 +949,98 @@ test('Search opens each occurrence at UTF-16 columns and keeps same-path roots s
 	await expect.poll(() => page.evaluate(() => window.ashSearchIntegration.opened.at(-1))).toMatchObject({ resource: 'file:///workspace/src/main.ts', options: { selection: { startColumn: 13 } } });
 });
 
+test('Custom tree progress follows provider loading and releases its view', async ({ page }) => {
+	await page.goto('/search.html');
+	await page.waitForFunction(() => !!window.ashSearchIntegration);
+	await page.evaluate(() => window.ashSearchIntegration.openCustomTree());
+	const pane = page.locator('[data-view-id="fixture.tree"]');
+	const progress = pane.locator('progress');
+	await expect(progress).toBeVisible();
+	await page.evaluate(() => window.ashSearchIntegration.finishCustomTree());
+	await expect(pane.getByRole('treeitem')).toContainText('Loaded item');
+	await expect(progress).toBeHidden();
+	await page.evaluate(() => window.ashSearchIntegration.closeCustomTree());
+	await expect(pane).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashSearchIntegration.notificationCount())).toBe(0);
+});
+
+test('Container progress stays with its owner through switches without creating notifications', async ({ page }, testInfo) => {
+	await page.goto('/search.html');
+	await page.waitForFunction(() => !!window.ashSearchIntegration);
+	await page.evaluate(() => window.ashSearchIntegration.startContainerProgress());
+	const bar = page.locator('.ash-composite-progress progress');
+	await expect(bar).toBeVisible();
+	const title = page.locator('[data-part="sidebar"] .ash-pane-composite-title');
+	expect((await bar.boundingBox())!.y).toBe((await title.boundingBox())!.y + (await title.boundingBox())!.height);
+	await page.evaluate(() => window.ashSearchIntegration.switchSidebar('explorer'));
+	await expect(bar).toBeHidden();
+	await page.evaluate(() => window.ashSearchIntegration.switchSidebar('search'));
+	await expect(bar).toBeVisible();
+	expect(await page.evaluate(() => window.ashSearchIntegration.notificationCount())).toBe(0);
+	await page.screenshot({ path: testInfo.outputPath('container-progress.png') });
+	await page.evaluate(() => window.ashSearchIntegration.finishContainerProgress());
+	await expect(bar).toBeHidden();
+});
+
+test('Search progress stays below the title without shifting content across themes and visibility changes', async ({ page }, testInfo) => {
+	await page.clock.install();
+	await page.goto('/search.html?locale=zh-CN');
+	await page.waitForFunction(() => !!window.ashSearchIntegration);
+	await page.clock.pauseAt(new Date(Date.now() + 1_000));
+	const pane = page.locator('.ash-view-pane[data-view-id="ash.searchView"]');
+	const query = page.getByRole('textbox', { name: '搜索工作区', exact: true });
+	const bar = pane.locator('.ash-view-pane-progress-indicator');
+	const body = pane.locator(':scope > .ash-pane-view-content');
+	const original = await body.boundingBox();
+	await query.fill('slow');
+	await query.press('Enter');
+	await expect(bar).toBeHidden();
+	await page.clock.fastForward(149);
+	await expect(bar).toBeHidden();
+	await page.clock.fastForward(1);
+	await expect(bar).toBeVisible();
+	await expect(bar).toHaveAttribute('aria-label', '搜索');
+	await expect(query).toBeFocused();
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(theme => window.ashSearchIntegration.setTheme(theme), theme);
+		const geometry = await bar.evaluate(element => {
+			const bar = element.getBoundingClientRect();
+			const body = element.closest('.ash-view-pane')!.querySelector('.ash-pane-view-content')!.getBoundingClientRect();
+			const style = getComputedStyle(element);
+			return { top: bar.top - body.top, width: bar.width - body.width, height: bar.height, color: style.color, accent: style.accentColor };
+		});
+		expect(geometry).toEqual({ top: 0, width: 0, height: 2, color: geometry.accent, accent: geometry.accent });
+	}
+	expect(await body.boundingBox()).toEqual(original);
+	await page.evaluate(() => document.body.classList.add('ash-reduce-motion'));
+	await expect(bar).toHaveCSS('animation-name', 'none');
+	await expect(bar).toHaveCSS('background-position', '50% 0px');
+	await page.evaluate(() => window.ashSearchIntegration.setSecondView(true));
+	const header = pane.locator(':scope > .ash-pane-view-header');
+	await expect(header).toBeVisible();
+	expect((await bar.boundingBox())!.y).toBe((await header.boundingBox())!.y + (await header.boundingBox())!.height);
+	await pane.locator('.ash-pane-view-header-button').press('ArrowLeft');
+	await expect(bar).toBeHidden();
+	await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
+	await expect(bar).toBeVisible();
+	await page.evaluate(() => window.ashSearchIntegration.switchSidebar('explorer'));
+	await expect(bar).toBeHidden();
+	await page.evaluate(() => window.ashSearchIntegration.switchSidebar('search'));
+	await expect(bar).toBeVisible();
+	await page.screenshot({ path: testInfo.outputPath('pane-progress.png') });
+	await query.fill('needle');
+	await query.press('Enter');
+	await expect(bar).toBeHidden();
+	await page.evaluate(() => window.ashSearchIntegration.finishLateSearch());
+	await expect(bar).toBeHidden();
+});
+
 test('Search lifecycle refreshes running tasks, cancels retained results, clears twice and searches again', async ({ page }) => {
 	await page.clock.install();
 	await page.goto('/search.html');
 	const query = page.getByRole('textbox', { name: 'Search workspace', exact: true });
 	const tree = page.getByRole('tree', { name: 'Search results', exact: true });
+	const progress = page.locator('.ash-view-pane-progress-indicator');
 	const refresh = page.getByRole('button', { name: 'Refresh search', exact: true });
 	const cancel = page.getByRole('button', { name: 'Cancel Search', exact: true });
 	const clear = page.getByRole('button', { name: 'Clear search results', exact: true });
@@ -965,9 +1052,11 @@ test('Search lifecycle refreshes running tasks, cancels retained results, clears
 	await expect(tree).toHaveAttribute('aria-busy', 'true');
 	await refresh.focus();
 	await page.clock.fastForward(2_000);
+	await expect(progress).toBeVisible();
 	await expect(cancel).toBeFocused();
 	await expect(refresh).toHaveCount(0);
 	await cancel.press('Enter');
+	await expect(progress).toBeHidden();
 	await expect(query).toBeFocused();
 	await expect(page.getByRole('status')).toHaveText('Search stopped. 1 results retained.');
 	await expect(refresh).toBeEnabled();

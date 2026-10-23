@@ -1,7 +1,91 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
+import { mock } from 'node:test';
+import { DeferredPromise } from '../../../../../../base/common/async.js';
 import type { IViewPaneOptions } from "../../../../../../workbench/browser/parts/views/viewPane.js";
+
+test('ViewPane progress follows delay, body visibility, completion and disposal', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const installedGlobals = installDomGlobals(dom);
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const { ViewPane } = await import('../../viewPane.js');
+		class ProgressPane extends ViewPane {
+			constructor() { super(dom.window.document.body, { id: 'progress', title: 'Search' }); }
+		}
+		using pane = new ProgressPane();
+		pane.setVisible(true);
+		const indicator = pane.getProgressIndicator();
+		assert.equal(pane.getProgressIndicator(), indicator);
+		const bar = pane.element.querySelector<HTMLProgressElement>('progress')!;
+		const early = indicator.show(true, 150);
+		early.done();
+		mock.timers.tick(150);
+		assert.equal(bar.hidden, true);
+		const runner = indicator.show(100, 150);
+		runner.worked(25);
+		mock.timers.tick(149);
+		assert.equal(bar.hidden, true);
+		mock.timers.tick(1);
+		assert.equal(bar.hidden, false);
+		assert.equal(bar.value, 0.25);
+		pane.setExpanded(false);
+		assert.equal(bar.hidden, true);
+		runner.total(50);
+		pane.setExpanded(true);
+		assert.equal(bar.hidden, false);
+		assert.equal(bar.value, 0.5);
+		pane.setVisible(false);
+		assert.equal(bar.hidden, true);
+		pane.setVisible(true);
+		assert.equal(bar.hidden, false);
+		pane.setTitle('搜索');
+		assert.equal(bar.getAttribute('aria-label'), '搜索');
+		runner.done();
+		assert.equal(bar.hidden, true);
+		const delayed = indicator.show(true, 150);
+		pane.dispose();
+		mock.timers.tick(150);
+		delayed.done();
+		assert.equal(bar.hidden, true);
+		assert.equal(dom.window.document.querySelector('progress'), null);
+	} finally {
+		mock.timers.reset();
+		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+		dom.window.close();
+	}
+});
+
+test('ViewPane keeps progress until all overlapping promises settle, including failures', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const installedGlobals = installDomGlobals(dom);
+	try {
+		const { ViewPane } = await import('../../viewPane.js');
+		class ProgressPane extends ViewPane {
+			constructor() { super(dom.window.document.body, { id: 'progress', title: 'Search' }); }
+		}
+		using pane = new ProgressPane();
+		pane.setVisible(true);
+		const indicator = pane.getProgressIndicator();
+		const first = new DeferredPromise<void>();
+		const second = new DeferredPromise<void>();
+		const pendingFirst = indicator.showWhile(first.p);
+		const pendingSecond = indicator.showWhile(second.p);
+		const bar = pane.element.querySelector<HTMLProgressElement>('progress')!;
+		assert.equal(bar.hasAttribute('value'), false);
+		assert.equal(bar.hidden, false);
+		await second.error(new Error('Search failed'));
+		await pendingSecond;
+		assert.equal(bar.hidden, false);
+		await first.complete();
+		await pendingFirst;
+		assert.equal(bar.hidden, true);
+	} finally {
+		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+		dom.window.close();
+	}
+});
 
 test("ViewPane title chevron tracks collapsed state", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");

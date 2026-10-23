@@ -1,4 +1,5 @@
 import type { Event } from '../../../../base/common/event.js';
+import type { IProgressIndicator } from '../../../../platform/progress/common/progress.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IPaneComposite } from '../../../common/panecomposite.js';
 import type { ViewContainerLocation } from '../../../common/views.js';
@@ -15,6 +16,7 @@ export interface IPaneCompositePartService {
 	readonly onDidPaneCompositeClose: Event<PaneCompositeEvent>;
 	openPaneComposite(id: string | undefined, viewContainerLocation: ViewContainerLocation, focus?: boolean): Promise<IPaneComposite | undefined>;
 	getActivePaneComposite(viewContainerLocation: ViewContainerLocation): IPaneComposite | undefined;
+	getProgressIndicator(id: string, viewContainerLocation: ViewContainerLocation): IProgressIndicator | undefined;
 	getPartId(viewContainerLocation: ViewContainerLocation): WorkbenchPartId;
 	hideActivePaneComposite(viewContainerLocation: ViewContainerLocation): void;
 	getLastActivePaneCompositeId(viewContainerLocation: ViewContainerLocation): string | undefined;

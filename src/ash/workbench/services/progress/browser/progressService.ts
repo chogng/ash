@@ -5,6 +5,10 @@ import { INotificationService, NotificationPriority, NotificationsFilter, Severi
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ProgressLocation, type IProgress, type IProgressService, type IProgressOptions, type IProgressWindowOptions, type IProgressNotificationOptions, type IProgressStep } from "../../../../platform/progress/common/progress.js";
 import { IStatusbarService, StatusbarAlignment, type IStatusbarEntryAccessor } from "../../statusbar/browser/statusbar.js";
+import { IViewsService } from '../../views/common/viewsService.js';
+import { IViewDescriptorService, WorkbenchViewContainerId } from '../../../common/views.js';
+import { IPaneCompositePartService } from '../../panecomposite/browser/panecomposite.js';
+import type { IProgressCompositeOptions, IProgressIndicator, IProgressRunner } from '../../../../platform/progress/common/progress.js';
 
 interface ProgressTask {
 	readonly options: IProgressOptions;
@@ -30,16 +34,22 @@ export class ProgressService extends Disposable implements IProgressService {
 		@IStatusbarService private readonly statusbar: IStatusbarService,
 		@INotificationService private readonly notifications: INotificationService,
 		@ICommandService private readonly commands: ICommandService,
+		@IViewsService private readonly views: IViewsService,
+		@IViewDescriptorService private readonly descriptors: IViewDescriptorService,
+		@IPaneCompositePartService private readonly panes: IPaneCompositePartService,
 	) {
 		super();
 	}
 
 	withProgress<R>(
-		options: IProgressOptions | IProgressWindowOptions | IProgressNotificationOptions,
+		options: IProgressOptions | IProgressWindowOptions | IProgressNotificationOptions | IProgressCompositeOptions,
 		task: (progress: IProgress<IProgressStep>) => Promise<R>,
 		onDidCancel?: (choice?: number) => void,
 	): Promise<R> {
 		this.assertNotDisposed();
+		if (typeof options.location === 'string' || options.location === ProgressLocation.Explorer || options.location === ProgressLocation.Scm || options.location === ProgressLocation.Extensions) {
+			return this.withViewProgress(options as IProgressCompositeOptions, task);
+		}
 		if (options.location !== ProgressLocation.Window && options.location !== ProgressLocation.Notification) throw new Error(`Bad progress location: ${options.location}`);
 		const resources = new DisposableStore();
 		const record: ProgressTask = {
@@ -83,6 +93,45 @@ export class ProgressService extends Disposable implements IProgressService {
 			return Promise.resolve(promise).finally(record.finish);
 		} catch (error) {
 			record.finish();
+			return Promise.reject(error);
+		}
+	}
+
+	private withViewProgress<R>(options: IProgressCompositeOptions, task: (progress: IProgress<IProgressStep>) => Promise<R>): Promise<R> {
+		const id = typeof options.location === 'string' ? options.location
+			: options.location === ProgressLocation.Explorer ? WorkbenchViewContainerId.Sidebar
+				: options.location === ProgressLocation.Scm ? WorkbenchViewContainerId.SourceControl : 'ash.extensions';
+		const container = this.descriptors.getViewContainerById(id);
+		let indicator: IProgressIndicator | undefined;
+		if (container) {
+			indicator = this.panes.getProgressIndicator(id, container.location);
+		} else if (this.descriptors.getViewDescriptorById(id)) {
+			indicator = this.views.getViewProgressIndicator(id);
+		} else {
+			throw new Error(`Bad progress location: ${options.location}`);
+		}
+		// A valid unopened view does not acquire UI or turn a background read into a notification.
+		let runner: IProgressRunner | undefined;
+		let total = options.total;
+		let finished = false;
+		const lifetime = toDisposable(() => { finished = true; runner?.done(); });
+		const finish = (): void => { this._store.delete(lifetime); lifetime.dispose(); };
+		this._register(lifetime);
+		try {
+			runner = total === undefined ? indicator?.show(true, options.delay) : indicator?.show(total, options.delay);
+			const promise = task({
+				report: step => {
+					if (finished || !runner) return;
+					if (step.total !== undefined || step.increment !== undefined && total === undefined) {
+						total = step.total ?? 100;
+						runner.total(total);
+					}
+					if (step.increment !== undefined) runner.worked(step.increment);
+				}
+			});
+			return Promise.resolve(promise).finally(finish);
+		} catch (error) {
+			finish();
 			return Promise.reject(error);
 		}
 	}

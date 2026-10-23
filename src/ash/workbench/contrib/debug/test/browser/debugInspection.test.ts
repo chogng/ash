@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import type { IViewsService } from '../../../../services/views/common/viewsService.js';
+import { ViewContainerLocation, type IViewDescriptorService } from '../../../../common/views.js';
+import type { IPaneCompositePartService } from '../../../../services/panecomposite/browser/panecomposite.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { timeout } from '../../../../../base/common/async.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
@@ -113,19 +116,27 @@ test('Debug adapter progress owns real notification lifetime and cancellation re
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IStatusbarService, statusbar);
 	services.registerSingleton(ICommandService, () => new CommandService(services));
-	using progress = services.createInstance(ProgressService);
-	using contribution = new DebugProgressContribution(debug, progress, notifications);
+	let paneStarted = 0;
+	let paneFinished = 0;
+	const views = { isViewContainerVisible: () => true } as unknown as IViewsService;
+	const descriptors = { getViewContainerById: (id: string) => ({ id, location: ViewContainerLocation.Sidebar }) } as IViewDescriptorService;
+	const panes = { getProgressIndicator: () => ({ show: () => { paneStarted++; return { done: () => { paneFinished++; }, total() { }, worked() { } }; } }) } as unknown as IPaneCompositePartService;
+	using progress = new ProgressService(statusbar, notifications, services.get(ICommandService), views, descriptors, panes);
+	using contribution = new DebugProgressContribution(debug, progress, notifications, views);
 	starts.fire({ progressId: 'symbols', title: 'Loading symbols', cancellable: true });
 	updates.fire({ progressId: 'symbols', message: 'Half loaded', percentage: 50 });
+	assert.equal(paneStarted, 1);
 	await timeout(550);
 	const item = notifications.model.getNotifications()[0];
 	assert.match(item.message, /Half loaded/);
 	assert.equal(item.progress?.worked, 50);
 	await item.actions?.primary?.[0].run();
 	assert.deepEqual(cancelled, ['symbols']);
+	assert.equal(paneFinished, 0);
 	ends.fire({ progressId: 'symbols' });
 	await timeout(0);
 	assert.equal(notifications.model.getNotifications().length, 0);
+	assert.equal(paneFinished, 1);
 });
 
 test('Debug Chat picker resolves selected snapshots and retires with its contribution', async () => {

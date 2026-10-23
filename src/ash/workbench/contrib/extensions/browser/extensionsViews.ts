@@ -62,6 +62,8 @@ interface ExtensionListItem {
 
 /** The Workbench and Sessions share catalog rendering; package authority stays in the backend. */
 class ExtensionsContent extends Disposable {
+	private readonly loadingChanged = this._register(new Emitter<boolean>());
+	public readonly onDidChangeLoading = this.loadingChanged.event;
 	public readonly domNode: HTMLElement;
 	private readonly changed = this._register(new Emitter<number>());
 	public readonly onDidChange = this.changed.event;
@@ -201,6 +203,7 @@ class ExtensionsContent extends Disposable {
 
 	private async load(force = false): Promise<void> {
 		const generation = ++this.generation;
+		this.loadingChanged.fire(true);
 		const query = this.query.trim();
 		const isInstalled = this.options.mode === 'installed' || this.options.mode === undefined && !query && !this.options.capabilityKind && !this.options.languageId;
 		if (!force || !this.list.items.length) { this.status.textContent = localize({ bundle: 'ash.extensions', key: 'loading' }, 'Loading Extensions…'); }
@@ -257,7 +260,12 @@ class ExtensionsContent extends Disposable {
 			this.status.textContent = '';
 			this.changed.fire(this.list.items.length);
 		} catch (error) { if (!this.isDisposed && generation === this.generation) { throw error; } }
-		finally { if (!this.isDisposed && generation === this.generation) { this.domNode.setAttribute('aria-busy', 'false'); } }
+		finally {
+			if (!this.isDisposed && generation === this.generation) {
+				this.domNode.setAttribute('aria-busy', 'false');
+				this.loadingChanged.fire(false);
+			}
+		}
 	}
 
 	public refresh(): Promise<void> { return this.run(() => this.load(true)); }
@@ -280,6 +288,13 @@ export class ExtensionsListView extends ViewPane {
 		badge.domNode.id = `${this.id}-count`;
 		this.headerElement.setAttribute('aria-describedby', badge.domNode.id);
 		this.content = this._register(instantiation.createInstance(ExtensionsContent, this.contentElement, isPluginsPane ? { view: 'plugins', mode: 'installed' } : { mode: 'browse' }));
+		const loading = this._register(new MutableDisposable());
+		this._register(this.content.onDidChangeLoading(active => {
+			if (active && !loading.value) {
+				const progress = this.getProgressIndicator().show(true, 150);
+				loading.value = toDisposable(() => progress.done());
+			} else if (!active) loading.clear();
+		}));
 		this._register(this.content.onDidChange(count => badge.setCount(count)));
 		this._register(this.onDidChangeVisibility(visible => this.content.setVisible(visible)));
 	}
@@ -490,7 +505,8 @@ abstract class ExtensionsListViewPane extends ViewPane {
 		if (this.more) { this.more.enabled = false; }
 		const generation = ++this.generation;
 		const controller = new AbortController();
-		this.loadLifetime.value = toDisposable(() => controller.abort());
+		const progress = this.getProgressIndicator().show(true, 150);
+		this.loadLifetime.value = toDisposable(() => { progress.done(); controller.abort(); });
 		// Keep retained rows stationary during refresh; aria-busy exposes the pending state.
 		if (!this.list.items.length) { this.status.textContent = localize({ bundle: 'ash.extensions', key: 'loading' }, 'Loading Extensions…'); }
 		this.contentElement.setAttribute('aria-busy', 'true');

@@ -9,7 +9,7 @@ import { IFileSearchService } from '../../../src/ash/platform/search/common/file
 import { ISearchService } from '../../../src/ash/workbench/services/search/common/search.js';
 import { SearchService } from '../../../src/ash/workbench/services/search/common/searchService.js';
 import { IFileTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
-import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import type { IAction } from '../../../src/ash/base/common/actions.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
@@ -85,6 +85,11 @@ import { TestNotificationService } from './notificationFixture.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IUserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/common/userDataProfile.js';
 import { UserDataProfileService } from '../../../src/ash/workbench/services/userDataProfile/browser/userDataProfileService.js';
+import { DeferredPromise } from '../../../src/ash/base/common/async.js';
+import { ProgressService } from '../../../src/ash/workbench/services/progress/browser/progressService.js';
+import { TreeView, TreeViewPane } from '../../../src/ash/workbench/browser/parts/views/treeView.js';
+import { TreeItemCollapsibleState } from '../../../src/ash/workbench/common/views.js';
+import { IStatusbarService, StatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
 
 if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
@@ -123,7 +128,11 @@ const contextView = store.add(new BrowserContextViewService(document.body));
 instantiation.registerInstance(IContextViewService, contextView);
 instantiation.registerInstance(INotificationService, store.add(new TestNotificationService()));
 instantiation.registerInstance(IUserDataProfileService, new UserDataProfileService());
-instantiation.registerInstance(IFileService, { onDidChangeFiles: Event.None, readFile: async resource => ({ resource, content: '[]', revision: '1' }) } as IFileService);
+instantiation.registerInstance(IFileService, {
+	onDidChangeFiles: Event.None,
+	watch: () => Disposable.None,
+	readFile: async (resource: URI) => ({ resource, content: '[]', revision: '1' }),
+} as unknown as IFileService);
 const keyboardLayout = store.add(new BrowserKeyboardLayoutService({ navigator }));
 const keybindings = store.add(instantiation.createInstance(WorkbenchKeybindingService, { ownerDocument: document, commandService: commands, contextKeyService: instantiation.get(IContextKeyService), keyboardLayoutService: keyboardLayout }));
 await keybindings.initialize();
@@ -260,11 +269,35 @@ const panes = store.add(instantiation.createInstance(PaneCompositePartService, n
 instantiation.registerInstance(IPaneCompositePartService, panes);
 const views = store.add(instantiation.createInstance(ViewsService));
 instantiation.registerInstance(IViewsService, views);
+instantiation.registerInstance(IStatusbarService, store.add(new StatusbarService()));
+const progressService = store.add(instantiation.createInstance(ProgressService));
+let heldContainer: DeferredPromise<void> | undefined;
+let heldTree: DeferredPromise<void> | undefined;
+let customTreeRegistration: import('../../../src/ash/base/common/lifecycle.js').IDisposable | undefined;
 const pane = await views.openView<SearchView>(SEARCH_VIEW_ID);
 if (!(pane instanceof SearchView)) { throw new Error('Search registration did not create SearchView'); }
 window.addEventListener('pagehide', () => store.dispose(), { once: true });
 let secondView: import('../../../src/ash/base/common/lifecycle.js').IDisposable | undefined;
 window.ashSearchIntegration = {
+	openCustomTree: () => {
+		heldTree = new DeferredPromise<void>();
+		const tree = store.add(instantiation.createInstance(TreeView, 'fixture.tree', 'Custom tree'));
+		tree.dataProvider = {
+			getChildren: async () => {
+				await heldTree!.p;
+				return [{ handle: 'fixture', label: { label: 'Loaded item' }, collapsibleState: TreeItemCollapsibleState.None }];
+			}
+		};
+		customTreeRegistration = registry.registerViews(WorkbenchViewContainerId.Search, [{ id: tree.id, title: tree.title, ctorDescriptor: new SyncDescriptor(TreeViewPane, [tree]) }]);
+	},
+	finishCustomTree: () => { void heldTree?.complete(); },
+	closeCustomTree: () => customTreeRegistration?.dispose(),
+	startContainerProgress: () => {
+		heldContainer = new DeferredPromise<void>();
+		void progressService.withProgress({ location: WorkbenchViewContainerId.Search, delay: 150 }, () => heldContainer!.p);
+	},
+	finishContainerProgress: () => { void heldContainer?.complete(); },
+	notificationCount: () => (instantiation.get(INotificationService) as TestNotificationService).model.getNotifications().length,
 	setLineNumbers: value => configuration.updateValue('search.showLineNumbers', value),
 	selectTreeView: async () => {
 		if (!treeViewAction) { throw new Error('Search toolbar did not provide View as tree'); }
@@ -316,6 +349,12 @@ window.ashSearchIntegration = {
 declare global {
 	interface Window {
 		ashSearchIntegration: {
+			openCustomTree(): void;
+			finishCustomTree(): void;
+			closeCustomTree(): void;
+			startContainerProgress(): void;
+			finishContainerProgress(): void;
+			notificationCount(): number;
 			setLineNumbers(value: boolean): Promise<void>;
 			selectTreeView(): Promise<void>;
 			setSearchVisible(value: boolean): Promise<void>;

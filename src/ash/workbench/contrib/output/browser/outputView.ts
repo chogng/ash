@@ -41,6 +41,7 @@ const AutoScrollStorageKey = "output.autoScroll";
 
 /** Generic Output channel projection with filtering, navigation, and export. */
 export class OutputViewPane extends ViewPane {
+	private readonly loadingProgress = this._register(new MutableDisposable());
 	private readonly activeChannelListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly modelReference = this._register(new MutableDisposable<IReference<IResolvedTextEditorModel>>());
 	private readonly editor: CodeEditorWidget;
@@ -169,6 +170,7 @@ export class OutputViewPane extends ViewPane {
 	}
 
 	private async bindActiveChannel(channel: IOutputChannel | undefined): Promise<void> {
+		this.loadingProgress.clear();
 		const viewState = this.editor.saveViewState();
 		if (this.boundChannel && viewState) this.viewStates.set(this.boundChannel.id, viewState);
 		this.changeContent(() => {
@@ -190,7 +192,13 @@ export class OutputViewPane extends ViewPane {
 			return;
 		}
 		try {
-			const reference = await this.textModels.createModelReference(channel.uri);
+			const loading = this.textModels.createModelReference(channel.uri);
+			const progress = this.getProgressIndicator().show(true, 150);
+			const handle = toDisposable(() => progress.done());
+			this.loadingProgress.value = handle;
+			const finish = (): void => { if (this.loadingProgress.value === handle) this.loadingProgress.clear(); };
+			void loading.then(finish, finish);
+			const reference = await loading;
 			if (this.isDisposed || this.boundChannel !== channel) {
 				reference.dispose();
 				return;

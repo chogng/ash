@@ -852,8 +852,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(INotificationService, notificationService);
 		const statusbarService = this._register(new StatusbarService());
 		services.registerInstance(IStatusbarService, statusbarService);
-		const progressService = this._register(services.createInstance(ProgressService));
-		services.registerInstance(IProgressService, progressService);
+		services.registerSingleton(IProgressService, () => services.createInstance(ProgressService), { instantiation: InstantiationType.Delayed });
 		if (!services.has(IClipboardService)) {
 			services.registerSingleton(IClipboardService, () => services.createInstance(BrowserClipboardService), { instantiation: InstantiationType.Delayed });
 		}
@@ -1016,7 +1015,6 @@ export class Workbench extends Disposable {
 			}));
 		services.registerInstance(IAccessibilityService, accessibilityService);
 		services.registerSingleton(ILanguageServerStatusService, () => services.createInstance(AppServerLanguageServerStatusService));
-		services.get(ILanguageServerStatusService);
 		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, workbenchRoot, notificationService.model, feedbackHost, notificationActionRunner, statusbarService, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
@@ -1270,6 +1268,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(instantiationService.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
+		services.get(ILanguageServerStatusService);
 		this._register(services.createInstance(ViewDragAndDropController, workbenchRoot));
 		// Extension adapters require the completed editor and view service graph.
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });

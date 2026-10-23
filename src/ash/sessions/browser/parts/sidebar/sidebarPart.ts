@@ -3,7 +3,7 @@ import { ISessionGroupsService } from '../../../services/sessions/browser/sessio
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import "./media/sidebarPart.css";
 import { h } from '../../../../base/browser/dom.js';
-import { DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
@@ -47,6 +47,15 @@ class SessionsNavigationView extends ViewPane {
 	constructor(parent: HTMLElement, options: IViewPaneOptions, @ISessionsManagementService management: ISessionsManagementService, @ISessionsService sessions: ISessionsService, @IGitHubService github: IGitHubService, @ISessionGroupsService groups: ISessionGroupsService, @IInstantiationService instantiation: IInstantiationService) {
 		super(parent, options);
 		this.contentElement.classList.add('ash-sessions-navigation-view');
+		const loading = this._register(new MutableDisposable());
+		const updateLoading = (): void => {
+			if (management.state === 'loading' && !loading.value) {
+				const progress = this.getProgressIndicator().show(true, 150);
+				loading.value = toDisposable(() => progress.done());
+			} else if (management.state !== 'loading') loading.clear();
+		};
+		this._register(management.onDidChange(updateLoading));
+		updateLoading();
 		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), management, sessions, localize('sessions.activity.chat', 'Chat'), localize('chat.sessions.new', 'New Session'), github, groups);
 		this.list = lists.get();
 		this.contentElement.append(this.list.element);
