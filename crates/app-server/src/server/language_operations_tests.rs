@@ -11,6 +11,28 @@ use super::completion_item_to_dto;
 use super::completion_trigger;
 
 #[test]
+fn empty_document_edit_range_round_trips_through_utf16() {
+    let range = super::byte_range_to_utf16("", 0..0).unwrap();
+    assert_eq!(super::utf8_byte_range("", range), Some(0..0));
+    assert!(
+        super::utf8_byte_range(
+            "",
+            super::LanguageRangeDto {
+                start: super::LanguagePositionDto {
+                    line_index: 0,
+                    column_index: 0
+                },
+                end: super::LanguagePositionDto {
+                    line_index: 0,
+                    column_index: 1
+                },
+            },
+        )
+        .is_none()
+    );
+}
+
+#[test]
 fn on_type_formatting_processor_rejects_invalid_character_and_position_before_resolving_the_directory()
  {
     let server = crate::tests::server();

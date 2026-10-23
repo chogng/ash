@@ -33,7 +33,23 @@ while :; do
   [ -n "$id" ] || continue
   result=null
   case "$message" in
-    *'"method":"initialize"'*) result='{"capabilities":{"textDocumentSync":{"openClose":true,"change":1,"save":{"includeText":true}},"hoverProvider":true,"completionProvider":{"triggerCharacters":["="]},"signatureHelpProvider":{"triggerCharacters":["["],"retriggerCharacters":["]"]}}}';;
+    *'"method":"initialize"'*)
+      root_uri=$(printf '%s' "$message" | sed -n 's/.*"rootUri":"\([^"]*\)".*/\1/p')
+      if [ "$LSP_OPTION" = projection ]; then
+        result='{"capabilities":{"positionEncoding":"utf-8","textDocumentSync":{"openClose":true,"change":1},"definitionProvider":true,"renameProvider":true,"workspaceSymbolProvider":true,"completionProvider":{},"documentFormattingProvider":true,"documentRangeFormattingProvider":true}}'
+      else
+        result='{"capabilities":{"textDocumentSync":{"openClose":true,"change":1,"save":{"includeText":true}},"hoverProvider":true,"completionProvider":{"triggerCharacters":["="]},"signatureHelpProvider":{"triggerCharacters":["["],"retriggerCharacters":["]"]}}}'
+      fi;;
+    *'"method":"textDocument/definition"'*)
+      result="[{\"uri\":\"$root_uri/target.demo\",\"range\":{\"start\":{\"line\":0,\"character\":12},\"end\":{\"line\":0,\"character\":18}}}]";;
+    *'"method":"textDocument/rename"'*)
+      result="{\"changes\":{\"$root_uri/target.demo\":[{\"range\":{\"start\":{\"line\":0,\"character\":12},\"end\":{\"line\":0,\"character\":18}},\"newText\":\"renamed\"}]}}";;
+    *'"method":"workspace/symbol"'*)
+      result="[{\"name\":\"target\",\"kind\":12,\"location\":{\"uri\":\"$root_uri/target.demo\",\"range\":{\"start\":{\"line\":0,\"character\":12},\"end\":{\"line\":0,\"character\":18}}}}]";;
+    *'"method":"textDocument/completion"'*)
+      result='[{"label":"keyword","textEdit":{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"newText":"keyword"}}]';;
+    *'"method":"textDocument/formatting"'*|*'"method":"textDocument/rangeFormatting"'*)
+      result='[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"newText":"formatted"}]';;
     *'"method":"textDocument/hover"'*)
       if [ "$text" = slow ]; then
         : > "$LSP_LOG/blocked"
@@ -165,6 +181,131 @@ fn contents(response: &Value) -> &str {
     response["result"]["contents"]
         .as_str()
         .unwrap_or_else(|| panic!("hover failed: {response}"))
+}
+
+#[test]
+fn cross_file_results_use_the_connections_unsaved_target_text() {
+    let fixture = Fixture::new();
+    let disk = "/*a*/ fn target() {}";
+    std::fs::write(fixture.root.path().join("target.demo"), disk).unwrap();
+    let mut connection = fixture.connection();
+    fixture.configure(&mut connection, "fixture", "demo", true, "projection");
+    let dirty = "/*🦀*/ fn target() {}";
+    let opened = fixture.call(
+        &mut connection,
+        "language/synchronize",
+        json!({
+            "document":{"path":"target.demo", "languageId":"demo", "revision":1, "text":disk}
+        }),
+    );
+    assert!(opened.get("result").is_some(), "{opened}");
+    let changed = fixture.call(
+        &mut connection,
+        "language/synchronize",
+        json!({
+            "document":{"path":"target.demo", "languageId":"demo", "revision":2, "text":dirty}
+        }),
+    );
+    assert!(changed.get("result").is_some(), "{changed}");
+    // Another renderer's snapshot of the same path must not replace this connection's text.
+    let mut peer = fixture.connection();
+    let peer_opened = fixture.call(
+        &mut peer,
+        "language/synchronize",
+        json!({
+            "document":{"path":"target.demo", "languageId":"demo", "revision":1, "text":disk}
+        }),
+    );
+    assert!(peer_opened.get("result").is_some(), "{peer_opened}");
+    let document =
+        json!({"path":"same.demo", "languageId":"demo", "revision":1, "text":"target()"});
+    let position = json!({"lineIndex":0,"columnIndex":0});
+    let expected =
+        json!({"start":{"lineIndex":0,"columnIndex":10},"end":{"lineIndex":0,"columnIndex":16}});
+    let mut definition = json!({
+        "operationId":"definition", "request":{"document":document, "position":position, "kind":"definition", "includeDeclaration":false}
+    });
+    let locations = fixture.call(&mut connection, "language/locations", definition.clone());
+    assert_eq!(
+        locations["result"]["locations"][0]["range"], expected,
+        "{locations}"
+    );
+    let renamed = fixture.call(&mut connection, "language/rename", json!({
+        "operationId":"rename", "request":{"document":document, "position":position, "newName":"renamed"}
+    }));
+    let edit = &renamed["result"]["entries"][0]["document"];
+    assert_eq!(edit["expectedText"], dirty, "{renamed}");
+    assert_eq!(edit["edits"][0]["range"], expected, "{renamed}");
+    let symbols = fixture.call(
+        &mut connection,
+        "language/directorySymbols",
+        json!({
+            "operationId":"symbols", "request":{"languageId":"demo", "query":"target"}
+        }),
+    );
+    assert_eq!(
+        symbols["result"]["symbols"][0]["range"], expected,
+        "{symbols}"
+    );
+    let closed = fixture.call(
+        &mut connection,
+        "language/close",
+        json!({"path":"target.demo"}),
+    );
+    assert!(closed.get("result").is_some(), "{closed}");
+    definition["operationId"] = json!("definition-after-close");
+    let after_close = fixture.call(&mut connection, "language/locations", definition);
+    assert_eq!(
+        after_close["result"]["locations"][0]["range"],
+        json!({
+            "start":{"lineIndex":0,"columnIndex":12},"end":{"lineIndex":0,"columnIndex":18}
+        }),
+        "closed targets use disk text: {after_close}"
+    );
+    fixture.server.close_connection(peer);
+    fixture.server.close_connection(connection);
+}
+
+#[test]
+fn empty_document_completions_and_formatting_survive_the_protocol_adapter() {
+    let fixture = Fixture::new();
+    let mut connection = fixture.connection();
+    fixture.configure(&mut connection, "fixture", "demo", true, "projection");
+    let document = json!({"path":"same.demo", "languageId":"demo", "revision":1, "text":""});
+    let range =
+        json!({"start":{"lineIndex":0,"columnIndex":0},"end":{"lineIndex":0,"columnIndex":0}});
+    let completions = fixture.call(&mut connection, "language/completions", json!({
+        "operationId":"completion", "request":{"document":document, "position":{"lineIndex":0,"columnIndex":0}, "triggerKind":"invoke", "triggerCharacter":null}
+    }));
+    assert_eq!(
+        completions["result"]["items"][0]["insertText"], "keyword",
+        "{completions}"
+    );
+    assert_eq!(
+        completions["result"]["items"][0]["range"], range,
+        "{completions}"
+    );
+    for method in ["language/formatDocument", "language/formatRange"] {
+        let mut request = json!({"document":document,
+            "options":{"tabSize":4,"insertSpaces":true,"trimTrailingWhitespace":null}});
+        if method == "language/formatRange" {
+            request["range"] = range.clone();
+        }
+        let formatted = fixture.call(
+            &mut connection,
+            method,
+            json!({"operationId":method, "request":request}),
+        );
+        assert_eq!(
+            formatted["result"]["edits"][0]["range"], range,
+            "{formatted}"
+        );
+        assert_eq!(
+            formatted["result"]["edits"][0]["newText"], "formatted",
+            "{formatted}"
+        );
+    }
+    fixture.server.close_connection(connection);
 }
 
 #[test]

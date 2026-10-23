@@ -63,18 +63,13 @@ pub(super) fn byte_offset_for_position(
 
 fn line_at(text: &str, requested: usize) -> Option<(usize, &str)> {
     let mut start = 0;
-    for (index, line) in text.split_inclusive('\n').enumerate() {
-        let without_newline = line.strip_suffix('\n').unwrap_or(line);
-        let content = without_newline
-            .strip_suffix('\r')
-            .unwrap_or(without_newline);
+    // split preserves the first line of an empty document and the final empty line after LF.
+    for (index, line) in text.split('\n').enumerate() {
+        let content = line.strip_suffix('\r').unwrap_or(line);
         if index == requested {
             return Some((start, content));
         }
-        start += line.len();
-    }
-    if text.ends_with('\n') && requested == text.lines().count() {
-        return Some((text.len(), ""));
+        start += line.len() + 1;
     }
     None
 }

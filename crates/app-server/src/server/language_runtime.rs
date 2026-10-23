@@ -364,6 +364,21 @@ struct AppServerLanguageDocumentSnapshot {
     text: String,
 }
 
+/// Reads the open editor snapshots owned by one connection and directory session.
+pub(super) struct LanguageDocumentSnapshots {
+    documents: Arc<Mutex<BTreeMap<PathBuf, AppServerLanguageDocumentSnapshot>>>,
+}
+
+impl LanguageDocumentSnapshots {
+    pub(super) fn text(&self, path: &Path) -> Option<String> {
+        self.documents
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(path)
+            .map(|snapshot| snapshot.text.clone())
+    }
+}
+
 struct LanguageDiagnosticPublisher {
     documents: Arc<Mutex<BTreeMap<PathBuf, AppServerLanguageDocumentSnapshot>>>,
     updates: Arc<UpdateBroker>,
@@ -569,6 +584,12 @@ impl LanguageRuntimeGuard {
         Self {
             runtime,
             connection,
+        }
+    }
+
+    pub(super) fn document_snapshots(&self) -> LanguageDocumentSnapshots {
+        LanguageDocumentSnapshots {
+            documents: Arc::clone(&self.selected_runtime().dir_state.documents),
         }
     }
 
