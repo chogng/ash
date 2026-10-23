@@ -46,7 +46,7 @@
 	padding: 0;
 	border: 0;
 	border-radius: var(--ash-cornerRadius-large);
-	color: var(--ash-sessions-activityBar-inactiveForeground);
+	color: var(--ash-sessions-activityBar-foreground);
 	background: transparent;
 }
 
@@ -58,12 +58,10 @@
 }
 
 .ash-sessions-activity-item:not(:disabled):hover {
-	color: var(--ash-sessions-activityBar-foreground);
 	background: var(--ash-list-hoverBackground);
 }
 
 .ash-sessions-activity-item.selected:not(:disabled) {
-	color: var(--ash-sessions-activityBar-foreground);
 	background: var(--ash-sessions-selectionBackground);
 }
 
