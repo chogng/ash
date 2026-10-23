@@ -41,7 +41,7 @@ test('Sessions mode and page-tab activation reuse Parts while retaining the conv
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).press('Enter');
 	await expect(navigation.getByRole('button', { name: 'Projects', exact: true })).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-projects')).toBeVisible();
-	await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
+	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
 	for (const part of parts) {
 		try { expect(await part.evaluate(element => element.isConnected && element === element.ownerDocument!.querySelector(`[data-part="${(element as HTMLElement).dataset.part}"]`))).toBe(true); }

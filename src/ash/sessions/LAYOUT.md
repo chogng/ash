@@ -10,9 +10,9 @@ Exact dimensions, styling, action placement, and regression behavior belong in c
 
 ## Shared Parts and mode content
 
-Desktop modes that need separate navigation select a view container in the shared `SidebarPart`. Creator home and Make retain this sidebar. Projects owns navigation inside its EditorPane and omits the sidebar container, making SidebarPart unavailable while that entry is active. Each mode supplies content to the shared window Parts; a product-page name does not justify a new Part or another window grid.
+Desktop modes select view content in the shared `SidebarPart`; pages without a dedicated container use Sessions navigation. Projects keeps project navigation inside its EditorPane alongside the window sidebar. Each mode supplies content to the shared window Parts; a product-page name does not justify a new Part or another window grid.
 
-Chat and Code are workspace shells selected by the titlebar switcher. Entry descriptors declare their workspace; `ISessionsLayoutService` derives the active workspace from the selected entry and publishes its context for navigation. Code has its own Activity Bar menu and a navigation-only sidebar container; it does not reuse Chat's session list or contribute a sidebar entry for switching to Code. New creates a conversation in the current workspace. Collab, Agent Teams, Automations and Symphony belong to Code. A Custom View can declare the entry command that supplies its underlying workspace; opening and restoring that view preserves the overlay while applying the declared entry. A Custom View can keep that workspace sidebar visible; Automations uses this composition so Code navigation remains available. Navigation order is independent per workspace in the existing profile UI state store; the selected workspace is reconstructed from the restored entry rather than persisted separately.
+Chat and Code are workspace shells selected by the titlebar switcher. Entry descriptors declare their workspace; `ISessionsLayoutService` derives the active workspace from the selected entry and publishes its context for navigation. Code has its own Activity Bar menu and a navigation-only sidebar container; it does not reuse Chat's session list or contribute a sidebar entry for switching to Code. New creates a conversation in the current workspace. Collab, Agent Teams, Automations and Symphony belong to Code. A Custom View can declare the entry command that supplies its underlying workspace; opening and restoring that view preserves the overlay while applying the declared entry. Custom Views retain the workspace sidebar's current expansion state, including Code navigation beside Automations. Navigation order is independent per workspace in the existing profile UI state store; the selected workspace is reconstructed from the restored entry rather than persisted separately.
 
 | Surface                           | Shared host        | Mode-owned content                                                               |
 | --------------------------------- | ------------------ | -------------------------------------------------------------------------------- |
@@ -89,7 +89,7 @@ Feature commands own entry selection. The shared layout service stores the activ
 
 SessionsPart remains the shared Agent conversation host, including its multi-session grid. Code and Creator compositions can show SessionsPart beside EditorPart; chat surfaces do not become document editor groups. Creator and Projects enter the shared EditorPart lifecycle. Switching a mode activates retained content without closing other tabs, discarding edits, recreating chat widgets or replacing document models. Actual close and window shutdown continue to use the existing save/discard/cancel checks.
 
-Feature commands supply central content and optional sidebar and auxiliary ViewContainers together. Views consume the active document and selection; they do not maintain another document model. Creator home and Make keep their sidebar. Project navigation and materials belong to the retained central editor; Projects contributes neither sidebar nor auxiliary containers.
+Feature commands supply central content and optional sidebar and auxiliary ViewContainers together. An omitted sidebar container uses shared Sessions navigation; every entry retains the window sidebar. Views consume the active document and selection; they do not maintain another document model. Creator home and Make keep their sidebar content. Project navigation and materials belong to the retained central editor; Projects uses shared Sessions navigation and contributes no auxiliary container.
 
 Part widths, editor-group geometry and user visibility preferences belong to their layout owners and survive mode changes. Session working-set restoration applies only to session document groups; retained product-page tabs and SessionsPart must remain alive. Editor group capability stays available rather than being disabled to enforce the former window split.
 
@@ -146,8 +146,7 @@ navigation above its active view and Accounts below it. Navigation is a disposab
 component rather than a separate window Part; closing or suppressing the sidebar hides its
 navigation and Accounts together without reserving an icon rail. The titlebar
 workspace mode control follows the same sidebar visibility. The sidebar toggle
-remains available to restore navigation; on pages that omit the sidebar, it
-returns to the current workspace conversation before expanding. ActivityBar retains
+remains available to restore navigation in the current page. ActivityBar retains
 action ownership as its presentation moves between the configured hosts.
 
 Both workbenches open, hide and focus view containers through
@@ -167,7 +166,7 @@ changing the surrounding layout never creates a second conversation or composer.
 | Panel            | Terminal and other panel views                                   |
 | Custom View Grid | Full-surface contributed views that replace session content      |
 
-Creator canvas modes use `SidebarPart | EditorPart | AuxiliaryBarPart`: Layers, the retained CreatorEditorPane and Shape properties. Design can additionally show SessionsPart while retaining its editor and independent properties. Entry descriptors declare `conversation: 'optional'`; ISessionsLayoutService owns its visibility preference and conversation focus, while DesktopWorkbenchLayout independently selects the primary Part and remembers supporting conversation width. Current Creator home and Make keep the Creator navigation container and hide the canvas properties. Other workspaces still need their task-specific [Creator composition](#creator-conversation-and-editor-composition). Projects uses its retained EditorPane for the project list and project details, with both sidebars unavailable. Switching content keeps workspaces alive; the existing working-copy and shutdown services still check save/discard/cancel for hidden dirty documents. Product-page groups are excluded from per-session Code working sets.
+Creator canvas modes use `SidebarPart | EditorPart | AuxiliaryBarPart`: Layers, the retained CreatorEditorPane and Shape properties. Design can additionally show SessionsPart while retaining its editor and independent properties. Entry descriptors declare `conversation: 'optional'`; ISessionsLayoutService owns its visibility preference and conversation focus, while DesktopWorkbenchLayout independently selects the primary Part and remembers supporting conversation width. Current Creator home and Make keep the Creator navigation container and hide the canvas properties. Other workspaces still need their task-specific [Creator composition](#creator-conversation-and-editor-composition). Projects uses its retained EditorPane for the project list and project details, alongside shared Sessions navigation and without an auxiliary sidebar. Switching content keeps workspaces alive; the existing working-copy and shutdown services still check save/discard/cancel for hidden dirty documents. Product-page groups are excluded from per-session Code working sets.
 
 The Sessions Part hosts an independent instance of the shared EditorPart. Its editor groups each contain one live conversation view, independently of document groups and the chats inside an individual session.
 
@@ -239,7 +238,7 @@ visibility and explicit-open focus. The desktop Grid keeps a hidden `customview`
 leaf alongside its normal content. Custom-view visibility is transient and does
 not overwrite the underlying entry's desired visibility or saved dimensions.
 
-A custom view is an independent page, mutually exclusive with the Sidebar, Sessions Part, grid Editor, Auxiliary Bar, and Panel. The title bar and Activity Bar remain available. Covered parts retain desired visibility separately from effective grid visibility so their state can be restored when the custom view closes.
+A custom view is an independent page, mutually exclusive with Sessions Part, grid Editor, Auxiliary Bar, and Panel. The title bar and window sidebar retain their normal visibility and navigation behavior. Covered content parts retain desired visibility separately from effective grid visibility so their state can be restored when the custom view closes.
 
 Explicit session and chat open actions dismiss the active custom view. Reactive fallback opens driven by session or chat lifecycle changes preserve the custom view while reconciling the hidden Sessions grid. On phone layouts, custom views participate in mobile navigation so platform back navigation dismisses them.
 

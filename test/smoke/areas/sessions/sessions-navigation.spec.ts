@@ -83,15 +83,15 @@ test('Sessions restores the Projects entry and its pane visibility through entry
 	await page.keyboard.insertText('Keep the conversation when Projects is restored');
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
 	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-projects')).toBeVisible();
-	await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
+	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 	page = await workbench.reopenAgentsWindow(application, page);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await expect(navigation.getByRole('button', { name: 'Projects', exact: true })).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-projects')).toBeVisible();
-	await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
+	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
 	await expect(page.locator('.ash-projects').getByRole('button', { name: 'New project', exact: true }).first()).toBeVisible();
-	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await new Editor(page.locator('.ash-sessions-chat-slot.active:visible')).waitForEditorContents(text => text === 'Keep the conversation when Projects is restored');
 });
 
@@ -130,7 +130,7 @@ test('Creator contributions share one entry container while Projects keeps navig
 	await page.locator('.ash-projects').getByRole('button', { name: 'Search projects', exact: true }).click();
 	await page.locator('.ash-projects').getByRole('searchbox').fill('Project search');
 	await expect(navigation.getByRole('button', { name: 'Projects', exact: true })).toHaveAttribute('aria-current', 'page');
-	await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
+	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
 	expect(await page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-projects').evaluate((element, retained) => element === retained, projectsInput)).toBe(true);
 });
@@ -223,7 +223,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-projects')).toBeVisible();
-	await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
+	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid)')).toBeVisible();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();

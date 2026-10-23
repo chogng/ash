@@ -37,6 +37,7 @@ import { IViewsService } from '../../../../../workbench/services/views/common/vi
 import { IPaneCompositePartService } from '../../../../../workbench/services/panecomposite/browser/panecomposite.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../../browser/parts/sidebar/sidebarPart.js';
 import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 import { SessionsLayoutService, documentEntry } from '../../browser/sessionsLayoutService.js';
@@ -219,24 +220,50 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 	});
 
 	test('a remembered hidden sidebar does not take focus during entry restoration', async () => {
-		using fixture = new EntryFixture({ teams: { sidebar: false, details: false, panel: false, documents: false } });
+		using fixture = new EntryFixture({ teams: { sidebar: true, details: false, panel: false, documents: false } });
+		fixture.visible.set('sidebar', false);
 		await fixture.service.openEntry({ ...chatEntry, id: 'teams', focus: 'sidebar' });
 		assert.deepEqual(fixture.opened, [{ id: chatEntry.sidebarContainerId, focus: false }]);
 		assert.equal(fixture.visible.get('sidebar'), false);
 		assert.equal(fixture.focused, 'conversation');
 	});
 
-	test('a website entry suppresses remembered sidebars and tabs, and leaving it restores normal navigation', async () => {
-		using fixture = new EntryFixture({ website: { sidebar: true, details: false, panel: false, documents: false } });
-		await fixture.service.openEntry({ ...chatEntry, id: 'website', content: 'editor', sidebarContainerId: undefined, showEditorTabs: false, focus: 'editor' });
-		assert.equal(fixture.visible.get('sidebar'), false);
+	test('a product page without a navigation container keeps global navigation and its own selected entry', async () => {
+		using fixture = new EntryFixture({ website: { sidebar: false, details: false, panel: false, documents: false } });
+		await fixture.service.openEntry({ ...chatEntry, id: 'website', activityContext: 'sessions.activity.websiteSelected', restoreCommand: 'sessions.show.website', content: 'editor', sidebarContainerId: undefined, showEditorTabs: false, focus: 'editor' });
+		assert.equal(fixture.visible.get('sidebar'), true);
 		assert.equal(fixture.pageTitleVisible, false);
-		assert.deepEqual(fixture.opened, []);
+		assert.deepEqual(fixture.opened, [{ id: SESSIONS_NAVIGATION_CONTAINER_ID, focus: false }]);
 		assert.equal(fixture.focused, 'editor');
+		assert.equal(fixture.contextKeys.getValue('sessions.activity.websiteSelected'), true);
+		assert.equal(fixture.contextKeys.getValue(chatEntry.activityContext), undefined);
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), 'sessions.show.website');
 		await fixture.service.openEntry(chatEntry);
 		assert.equal(fixture.visible.get('sidebar'), true);
 		assert.equal(fixture.pageTitleVisible, true);
-		assert.deepEqual(fixture.opened, [{ id: chatEntry.sidebarContainerId, focus: false }]);
+		assert.deepEqual(fixture.opened, [{ id: SESSIONS_NAVIGATION_CONTAINER_ID, focus: false }, { id: chatEntry.sidebarContainerId, focus: false }]);
+	});
+
+	test('sidebar visibility follows the window across pages and is removed from legacy entry preferences', async () => {
+		using fixture = new EntryFixture({
+			chat: { sidebar: false, details: false, panel: false, documents: false },
+			website: { sidebar: true, details: false, panel: false, documents: false },
+		});
+		const page = { ...chatEntry, id: 'website', content: 'editor', sidebarContainerId: undefined, focus: 'editor' } as const;
+		await fixture.service.openEntry(chatEntry);
+		assert.equal(fixture.visible.get('sidebar'), true, 'A legacy per-entry value cannot collapse global navigation');
+		fixture.visible.set('sidebar', false);
+		await fixture.service.openEntry(page);
+		assert.equal(fixture.visible.get('sidebar'), false);
+		await fixture.service.openEntry(chatEntry);
+		assert.equal(fixture.visible.get('sidebar'), false);
+		fixture.visible.set('sidebar', true);
+		await fixture.service.openEntry(page);
+		assert.equal(fixture.visible.get('sidebar'), true);
+		assert.deepEqual(JSON.parse(fixture.storage.get('sessions.layout.entryVisibility', StorageScope.PROFILE)!), {
+			chat: { details: false, panel: false, documents: false },
+			website: { details: false, panel: false, documents: false },
+		});
 	});
 
 	test('shutdown joins entry navigation then stops periodic storage callbacks', async () => {

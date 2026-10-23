@@ -358,7 +358,6 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	readonly onDidChangePanelPosition = this.panelPositionChanged.event;
 	private primaryPart: 'sessions' | 'editor' = 'sessions';
 	private customViewVisible = false;
-	private customViewSidebarVisible = false;
 	private get isDocked(): boolean { return this.primaryPart === 'sessions'; }
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
@@ -712,10 +711,9 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	}
 
 	/** Independent pages retain their underlying layout and may keep its workspace navigation visible. */
-	public setCustomViewVisible(visible: boolean, showSidebar = false): void {
-		if (visible === this.customViewVisible && showSidebar === this.customViewSidebarVisible) return;
+	public setCustomViewVisible(visible: boolean): void {
+		if (visible === this.customViewVisible) return;
 		this.customViewVisible = visible;
-		this.customViewSidebarVisible = showSidebar;
 		if (visible) this.applyCustomViewVisibility();
 		else {
 			this.grid.setViewVisible(this.view('customview'), false);
@@ -730,7 +728,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	private applyCustomViewVisibility(): void {
 		this.grid.setViewVisible(this.view('customview'), true);
 		for (const id of ['sidebar', 'sessions', 'editor', 'auxiliarybar', 'panel'] as const) {
-			this.grid.setViewVisible(this.view(id), id === 'sidebar' && this.customViewSidebarVisible && this.desiredVisibility.sidebar && !this.unavailableParts.has('sidebar'));
+			this.grid.setViewVisible(this.view(id), id === 'sidebar' && this.desiredVisibility.sidebar && !this.unavailableParts.has('sidebar'));
 		}
 	}
 

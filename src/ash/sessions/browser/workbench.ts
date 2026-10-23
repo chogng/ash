@@ -924,7 +924,7 @@ export abstract class Workbench extends Disposable {
 		this._register(autorun(reader => {
 			const opening = customViews.activeCustomViewOpen.read(reader);
 			customViewPart.setView(opening?.descriptor);
-			layout.setCustomViewVisible(!!opening, opening?.descriptor.showSidebar);
+			layout.setCustomViewVisible(!!opening);
 			if (opening?.source === 'explicit') customViewPart.focusActiveView();
 		}));
 		this._register(this.lifecycleService.onBeforeShutdown(event => {
@@ -1031,7 +1031,7 @@ export interface IAgentWorkbenchLayoutService extends ILayoutService {
 	setLayoutStyle(style: SessionsLayoutStyle): void;
 	/** Determines which center absorbs window resizing; supporting Parts retain their user widths. */
 	setPrimaryPart(partId: 'sessions' | 'editor'): void;
-	setCustomViewVisible(visible: boolean, showSidebar?: boolean): void;
+	setCustomViewVisible(visible: boolean): void;
 	isPartVisible(partId: SessionsPartId): boolean;
 	isPartAvailable(partId: SessionsPartId): boolean;
 	setPartAvailable(partId: 'sessions' | 'sidebar' | 'auxiliarybar' | 'editor' | 'panel', available: boolean): void;

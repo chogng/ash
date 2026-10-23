@@ -5,7 +5,7 @@ import { localize2 } from '../../nls.js';
 import { Lxicon } from '../../base/common/lxicons.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { MenusRegistry, MenuId, Action2, registerAction2 } from '../../platform/actions/common/actions.js';
-import { CommandsRegistry, ICommandService } from '../../platform/commands/common/commands.js';
+import { CommandsRegistry } from '../../platform/commands/common/commands.js';
 import { RawContextKey, type IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
 import { SideBarVisibleContext, PanelVisibleContext, PanelMaximizedContext, PanelPositionContext } from '../../workbench/common/contextkeys.js';
 import { positionToString } from '../../workbench/services/layout/browser/layoutService.js';
@@ -13,7 +13,7 @@ import { Keybinding, logicalKey } from '../../base/common/keybindings.js';
 import type { ISessionsService } from '../services/sessions/browser/sessionsService.js';
 import type { IAgentWorkbenchLayoutService } from './workbench.js';
 import { Menus } from './menus.js';
-import { CanGoBackContext, CanGoForwardContext, CompactTitlebarNavigationContext, SessionsWorkspaceModeContext } from '../common/contextkeys.js';
+import { CanGoBackContext, CanGoForwardContext, CompactTitlebarNavigationContext } from '../common/contextkeys.js';
 
 const sessionTools = new RawContextKey<boolean>('sessions.toolsAvailable', false);
 
@@ -50,14 +50,10 @@ export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sess
 		panelMaximized.reset();
 		panelPosition.reset();
 	})));
-	disposables.add(CommandsRegistry.register('ash.sessions.toggleSidebar', async accessor => {
+	disposables.add(CommandsRegistry.register('ash.sessions.toggleSidebar', () => {
 		if (layout.isPartVisible('sidebar')) {
 			layout.hidePart('sidebar');
 		} else {
-			if (!layout.isPartAvailable('sidebar')) {
-				// Pages with internal navigation omit the sidebar; return to its workspace before expanding it.
-				await accessor.get(ICommandService).executeCommand(contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code' ? 'sessions.open.code' : 'sessions.open.chat');
-			}
 			layout.showPart('sidebar');
 		}
 	}));

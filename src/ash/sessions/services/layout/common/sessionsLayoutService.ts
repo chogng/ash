@@ -11,7 +11,7 @@ export interface ISessionsEntry {
 	readonly content: 'conversation' | 'documents' | 'editor';
 	/** Starts hidden on entry; user actions may reveal the shared conversation without replacing the editor or side views. */
 	readonly conversation?: 'optional';
-	/** Omit when the product page owns its navigation inside its content. */
+	/** Overrides the shared Sessions navigation content; omission preserves the window sidebar. */
 	readonly sidebarContainerId?: string;
 	readonly showEditorTabs?: boolean;
 	readonly detailsContainerId?: string;

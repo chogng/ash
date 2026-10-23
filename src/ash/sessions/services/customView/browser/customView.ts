@@ -8,7 +8,6 @@ export interface ICustomViewDescriptor {
 	readonly ctor: SyncDescriptor<AbstractCustomView>;
 	/** Restores the workspace beneath this page without dismissing the Custom View. */
 	readonly entryCommand?: string;
-	readonly showSidebar?: boolean;
 	readonly actions?: { readonly menuId: MenuId; readonly primaryActionId?: string; };
 }
 

@@ -268,11 +268,15 @@ test('Sessions navigation icons and surface controls follow the selected compone
 	await expect(projects.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'projects');
 	await projects.click();
 	await expect(activityNavigation.locator('[data-action-id="sessions.open.projects"] button')).toHaveAttribute('aria-current', 'page');
-	await expect(activityNavigation).toBeHidden();
+	await expect(activityNavigation).toBeVisible();
 	await expect(activityBar).toHaveCount(0);
 	await expect(collaboration).toHaveCount(0);
-	await expect(page.locator('.ash-window-mode-control')).toBeHidden();
+	await expect(page.locator('.ash-window-mode-control')).toBeVisible();
+	await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+	await expect(activityNavigation).toBeHidden();
 	await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
+	await expect(projects).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('.ash-projects')).toBeVisible();
 	await chat.click();
 	await expect(chat).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-sessions-list-controls')).toBeVisible();
@@ -307,8 +311,53 @@ test('Sessions navigation icons and surface controls follow the selected compone
 		}
 		await surface.getByRole('searchbox').focus();
 		await expect(surface.getByRole('searchbox')).toHaveCSS('outline-style', 'solid');
-		await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
+		await expect(activityNavigation).toBeVisible();
 	}
+});
+
+for (const locale of ['en', 'zh-CN']) test(`Projects keeps global navigation, width and window expansion state (${locale})`, async ({ page }, testInfo) => {
+	if (locale === 'zh-CN') await page.goto('/sessions.html?locale=zh-CN');
+	const chinese = locale === 'zh-CN';
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const navigation = page.locator('.ash-sessions-activity-content');
+	const projects = navigation.getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true });
+	const toggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
+	const width = (await sidebar.boundingBox())!.width;
+	await projects.click();
+	const surface = page.locator('.ash-projects');
+	await expect(surface).toBeVisible();
+	await expect(projects).toHaveAttribute('aria-current', 'page');
+	await expect(sidebar).toBeVisible();
+	expect((await sidebar.boundingBox())!.width).toBeCloseTo(width, 0);
+	await toggle.focus();
+	await page.keyboard.press('Enter');
+	await expect(sidebar).toBeHidden();
+	await expect(surface).toBeVisible();
+	await expect(toggle).toHaveAccessibleName(chinese ? '显示侧边栏' : 'Show sidebar');
+	await toggle.focus();
+	await page.keyboard.press('Space');
+	await expect(sidebar).toBeVisible();
+	await expect(projects).toHaveAttribute('aria-current', 'page');
+	await expect(surface).toBeVisible();
+	expect((await sidebar.boundingBox())!.width).toBeCloseTo(width, 0);
+	await page.keyboard.press('Enter');
+	await page.evaluate(() => window.ashSessionsIntegration.openChat());
+	await expect(surface).toBeHidden();
+	await expect(sidebar).toBeHidden();
+	await toggle.focus();
+	await page.keyboard.press('Space');
+	await expect(sidebar).toBeVisible();
+	await projects.click();
+	await expect(surface).toBeVisible();
+	await expect(projects).toHaveAttribute('aria-current', 'page');
+	expect((await sidebar.boundingBox())!.width).toBeCloseTo(width, 0);
+	await page.screenshot({ path: testInfo.outputPath(`projects-navigation-${locale}.png`) });
+	const create = surface.getByRole('button', { name: chinese ? '新建项目' : 'New project', exact: true }).first();
+	await create.focus();
+	await page.keyboard.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(chinese ? /侧栏开关可隐藏或显示全局导航/ : /sidebar toggle hides or shows global navigation without leaving Projects/);
+	await page.keyboard.press('Escape');
+	await expect(create).toBeFocused();
 });
 
 test('New navigation creates distinct sessions in Code and preserves the previous draft', async ({ page }) => {

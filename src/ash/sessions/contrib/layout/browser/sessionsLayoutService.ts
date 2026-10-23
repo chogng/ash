@@ -22,7 +22,7 @@ import { IViewsService } from '../../../../workbench/services/views/common/views
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { EditorPart as SessionsEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../services/layout/common/sessionsLayoutService.js';
-import { CODE_NAVIGATION_CONTAINER_ID } from '../../../browser/parts/sidebar/sidebarPart.js';
+import { CODE_NAVIGATION_CONTAINER_ID, SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../browser/parts/sidebar/sidebarPart.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
@@ -34,7 +34,6 @@ export const documentEntry: ISessionsEntry = {
 };
 
 interface EntryVisibility {
-	readonly sidebar: boolean;
 	readonly details: boolean;
 	readonly panel: boolean;
 	readonly documents: boolean;
@@ -83,10 +82,10 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 			const value: unknown = JSON.parse(raw);
 			if (!isRecord(value)) { throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.')); }
 			for (const [id, state] of Object.entries(value)) {
-				if (!isRecord(state) || ['sidebar', 'details', 'panel', 'documents'].some(field => typeof state[field] !== 'boolean')) {
+				if (!isRecord(state) || ['details', 'panel', 'documents'].some(field => typeof state[field] !== 'boolean')) {
 					throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 				}
-				this.visibility.set(id, { sidebar: state.sidebar, details: state.details, panel: state.panel, documents: state.documents } as EntryVisibility);
+				this.visibility.set(id, { details: state.details, panel: state.panel, documents: state.documents } as EntryVisibility);
 			}
 			storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 			storage.remove('sessions.layout.modeState', StorageScope.PROFILE);
@@ -98,7 +97,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 			}
 			if (!this.visibility.has(documentEntry.id)) {
-				this.visibility.set(documentEntry.id, { sidebar: true, details: value.details, panel: false, documents: value.editor });
+				this.visibility.set(documentEntry.id, { details: value.details, panel: false, documents: value.editor });
 			}
 			storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 			storage.remove('sessions.singlePane.sidePaneVisibility', StorageScope.WORKSPACE);
@@ -197,8 +196,11 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				if (entry.editorInput) { this.editorEntries.set(extUri.getComparisonKey(entry.editorInput.resource), entry); }
 				const productEditor = entry.content === 'editor';
 				const documents = entry.content === 'documents';
+				const sidebarContainerId = entry.sidebarContainerId ?? SESSIONS_NAVIGATION_CONTAINER_ID;
+				// Navigation visibility belongs to the window, independently of the page's side content.
+				const sidebarVisible = this.layout.isPartVisible('sidebar');
 				const state = this.visibility.get(entry.id) ?? {
-					sidebar: entry.sidebarContainerId !== undefined, details: documents || entry.detailsContainerId !== undefined,
+					details: documents || entry.detailsContainerId !== undefined,
 					panel: false, documents: documents && this.controller.hasDocumentEditors,
 				};
 				for (const group of this.editor.groups) { this.editor.setGroupVisible(group.id, (group.id === this.pageGroupId) === productEditor); }
@@ -210,18 +212,14 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 					this.layout.setPartAvailable('panel', documents);
 					// Optional conversations require a new user action on each entry, including window restoration.
 					this.layout.setPartAvailable('sessions', !productEditor);
-					this.layout.setPartAvailable('sidebar', entry.sidebarContainerId !== undefined);
 					if (productEditor) { this.layout.setPrimaryPart('editor'); }
 					this.setVisible('editor', productEditor || (documents && state.documents));
-					this.setVisible('sidebar', entry.sidebarContainerId !== undefined && state.sidebar);
 					this.setVisible('auxiliarybar', state.details);
 					this.setVisible('panel', documents && state.panel);
 				});
-				if (entry.sidebarContainerId) {
-					await this.views.openViewContainer(entry.sidebarContainerId, entry.focus === 'sidebar' && state.sidebar && !this.customViews.activeCustomView.get());
-				}
+				await this.views.openViewContainer(sidebarContainerId, entry.focus === 'sidebar' && sidebarVisible && !this.customViews.activeCustomView.get());
 				if (this.isDisposed) { return; }
-				this.setVisible('sidebar', entry.sidebarContainerId !== undefined && state.sidebar);
+				this.setVisible('sidebar', sidebarVisible);
 				if (entry.detailsContainerId) { await this.views.openViewContainer(entry.detailsContainerId); }
 				if (this.isDisposed) { return; }
 				if (documents && !this.customViews.activeCustomView.get()) { await this.controller.activate(state.details); }
@@ -231,7 +229,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				if (this.customViews.activeCustomView.get()) { return; }
 				if (entry.focus === 'conversation') { this.layout.focus(); }
 				else if (entry.focus === 'editor') { documents ? this.controller.focus() : this.editors.focusActiveEditor(); }
-				else if (!state.sidebar) { this.layout.focus(); }
+				else if (!sidebarVisible) { this.layout.focus(); }
 			} finally { this.isChangingContent = false; if (!this.isDisposed) { this.conversationChanged.fire(); } }
 		});
 	}
@@ -255,7 +253,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		const entry = this.activeEntry.get();
 		if (this.isDisposed || this.isChangingContent || !entry || this.customViews.activeCustomView.get()) { return; }
 		this.visibility.set(entry.id, {
-			sidebar: this.layout.isPartVisible('sidebar'), details: this.layout.isPartVisible('auxiliarybar'),
+			details: this.layout.isPartVisible('auxiliarybar'),
 			panel: this.layout.isPartVisible('panel'), documents: this.isDocumentContent && this.layout.isPartVisible('editor'),
 		});
 		this.storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);

@@ -93,15 +93,17 @@ test('Sessions layout commands update menu state from their owners and release w
 		assert.deepEqual(state(), [['Show sidebar', 'Show sidebar', true, false], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
 		layout.showPart('sidebar');
 		const opened: string[] = [];
-		using openChat = CommandsRegistry.register('sessions.open.chat', () => { opened.push('chat'); layout.setPartAvailable('sidebar', true); });
-		using openCode = CommandsRegistry.register('sessions.open.code', () => { opened.push('code'); layout.setPartAvailable('sidebar', true); });
+		using openChat = CommandsRegistry.register('sessions.open.chat', () => { opened.push('chat'); });
+		using openCode = CommandsRegistry.register('sessions.open.code', () => { opened.push('code'); });
+		contextKeys.setContext('sessions.activity.projectsSelected', true);
 		for (const mode of ['chat', 'code']) {
 			contextKeys.setContext(SessionsWorkspaceModeContext.key, mode);
-			layout.setPartAvailable('sidebar', false);
+			layout.hidePart('sidebar');
 			await commands.executeCommand('ash.sessions.toggleSidebar');
 			assert.equal(layout.isPartVisible('sidebar'), true);
-			assert.equal(opened.at(-1), mode, 'Expanding from a product page restores its workspace navigation');
+			assert.equal(contextKeys.getValue('sessions.activity.projectsSelected'), true);
 		}
+		assert.deepEqual(opened, [], 'Expanding navigation never opens a different page');
 		await commands.executeCommand('ash.sessions.back');
 		assert.deepEqual(navigationState(), [false, true]);
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', false, undefined], ['Forward', 'Forward', true, undefined]]);

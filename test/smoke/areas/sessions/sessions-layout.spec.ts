@@ -111,17 +111,18 @@ test('Sessions shared layout preserves user geometry across views, resize and re
 	expect(Math.abs((await auxiliarybar.boundingBox())!.width - auxiliaryWidth)).toBeLessThanOrEqual(1);
 	await page.setViewportSize({ width: 1_460, height: 900 });
 	await expect.poll(async () => Math.abs((await sidebar.boundingBox())!.width - sidebarWidth)).toBeLessThanOrEqual(1);
-	await titlebar.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
-	await expect(sidebar).toBeHidden();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
+	await expect(sidebar).toBeVisible();
+	await titlebar.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	await expect(sidebar).toBeHidden();
 	await expect(page.locator('.ash-projects')).toBeVisible();
 	await expect(auxiliarybar).toBeHidden();
-	// Each mode keeps its visibility preference; returning to Code restores its hidden sidebar.
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(sidebar).toBeHidden();
+	// The window keeps one navigation preference across pages and workspaces.
 	await titlebar.getByRole('button', { name: 'Show sidebar', exact: true }).click();
+	await expect(page.locator('.ash-projects')).toBeVisible();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(sidebar).toBeVisible();
 	expect(Math.abs((await sidebar.boundingBox())!.width - sidebarWidth)).toBeLessThanOrEqual(1);
 	await expect(auxiliarybar).toBeVisible();

@@ -13,7 +13,7 @@ test('Sessions Projects replaces material categories and supports keyboard creat
 	const projects = page.locator('.ash-projects');
 	await expect(projects).toBeVisible();
 	await expect(projects.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
-	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeHidden();
+	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Library', exact: true })).toHaveCount(0);
 	await expect(projects.getByRole('button', { name: 'Import', exact: true })).toHaveCount(0);
 	await projects.getByRole('button', { name: 'New project', exact: true }).first().click();
@@ -29,11 +29,11 @@ test('Sessions Projects replaces material categories and supports keyboard creat
 	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
 	await expect(help.getByRole('textbox')).toHaveValue(/Projects organizes your work/);
 	await page.keyboard.press('Escape');
-	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
+	await navigation.getByRole('button', { name: 'New', exact: true }).click();
 	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeVisible();
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 	await expect(projects).toBeVisible();
-	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeHidden();
+	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeVisible();
 });
 
 test('Sessions Projects persists creation and goals through a real backend and reopened window', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
@@ -70,7 +70,7 @@ test('Sessions Projects persists creation and goals through a real backend and r
 	projects = page.locator('.ash-projects');
 	await projects.getByRole('button', { name: 'Research workspace', exact: true }).click();
 	await expect(projects.getByText('Organize the final evidence.', { exact: true })).toBeVisible();
-	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeHidden();
+	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeVisible();
 	if (target.kind === 'browser') { await page.setViewportSize({ width: 720, height: 780 }); }
 	else {
 		if (!('windows' in application)) { throw new Error('Expected Electron application'); }

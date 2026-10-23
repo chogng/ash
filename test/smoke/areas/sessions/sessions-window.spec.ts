@@ -1244,7 +1244,7 @@ test('Sessions navigation retains its own selection and hover skin across naviga
 		await expect(projects.locator('.ash-icon')).toHaveCSS('color', 'rgb(128, 128, 128)');
 		await chat.focus();
 		await chat.press(position === 'Default' ? 'ArrowDown' : 'ArrowRight');
-		// Collab retains the sidebar that hosts horizontal navigation; Projects hides it.
+		// Switch workspaces before exercising Code's Collab entry.
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		const collaboration = navigation.getByRole('button', { name: 'Collab', exact: true });
 		await expect(collaboration).toBeFocused();
@@ -2432,6 +2432,13 @@ test('Sessions Activity Bar changes layout while retaining the same session, dra
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 	await expect(page.locator('[data-part="editor"] .ash-projects')).toBeVisible();
 	await expect(page.locator('[data-part="sessions"]')).toBeHidden();
+	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
+	const sidebarToggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
+	await sidebarToggle.click();
+	await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
+	await sidebarToggle.click();
+	await expect(page.locator('[data-part="editor"] .ash-projects')).toBeVisible();
+	await expect(navigation.getByRole('button', { name: 'Projects', exact: true })).toHaveAttribute('aria-current', 'page');
 	await navigation.getByRole('button', { name: 'New', exact: true }).click();
 	expect(await editor.input.evaluate((element, original) => element === original, restoredInput)).toBe(false);
 	await restoredInput?.dispose();
