@@ -90,8 +90,7 @@
 
 .ash-sessions-window
 	.ash-button-standard:where(.ash-button-primary, .ash-button-secondary) {
-	min-height: var(--ash-spacing-size360);
-	padding: var(--ash-spacing-size60) var(--ash-spacing-size160);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 }
 
 .ash-sessions-window .ash-button-standard:where(.icon-only) {

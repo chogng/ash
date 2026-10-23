@@ -454,7 +454,8 @@ suite('sessions browser component', () => {
 				await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 				await page.mouse.move(0, 0);
 				for (const button of [primary, secondary]) {
-					await expect(button).toHaveCSS('height', '36px');
+					await expect(button).toHaveCSS('padding', '4px 8px');
+					expect((await button.boundingBox())!.height).toBeLessThan(36);
 					await expect(button).toHaveCSS('border-radius', '8px');
 					await expect(button).toHaveCSS('font-size', '14px');
 				}
