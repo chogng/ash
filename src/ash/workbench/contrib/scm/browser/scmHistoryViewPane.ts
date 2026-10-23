@@ -1063,6 +1063,8 @@ export class SCMHistoryViewPane extends ViewPane {
 	}
 
 	private renderInlineActions(container: HTMLElement, menuId: MenuId, target: SCMHistoryItemViewModelTreeElement | SCMHistoryItemChangeViewModelTreeElement | undefined, scope: IScopedContextKeyService, resources: DisposableStore, ariaLabel: string): void {
+		// Toolbar keys belong to its controls, rather than the containing history tree.
+		resources.add(addDisposableListener(container, 'keydown', event => event.stopPropagation()));
 		const menu = resources.add(this.menuService.createMenu(menuId, scope));
 		const toolbar = resources.add(new WorkbenchToolBar(container, this.contextMenuService, { ariaLabel }));
 		const update = (): void => {

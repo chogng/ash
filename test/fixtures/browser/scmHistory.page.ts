@@ -31,6 +31,9 @@ import { TestConfigurationService as WorkbenchConfigurationService } from '../..
 import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
 import type { IEditorOptions } from '../../../src/ash/platform/editor/common/editor.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
+import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { IProgressService } from '../../../src/ash/platform/progress/common/progress.js';
 import { SCMHistoryViewPane } from '../../../src/ash/workbench/contrib/scm/browser/scmHistoryViewPane.js';
 import { ViewPane, ViewPaneShowActions, type IViewPaneOptions } from '../../../src/ash/workbench/browser/parts/views/viewPane.js';
 import { ViewPaneContainer } from '../../../src/ash/workbench/browser/parts/views/viewPaneContainer.js';
@@ -38,7 +41,7 @@ import { ViewContainerLocation, WorkbenchViewRegistry } from '../../../src/ash/w
 import { ViewDescriptorService } from '../../../src/ash/workbench/services/views/browser/viewDescriptorService.js';
 import { SCMViewService } from '../../../src/ash/workbench/contrib/scm/browser/scmViewService.js';
 import { SCMService } from '../../../src/ash/workbench/contrib/scm/common/scmService.js';
-import { ISCMViewService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
+import { ISCMService, ISCMViewService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
 import type { ISCMHistoryItem, ISCMHistoryProvider } from '../../../src/ash/workbench/contrib/scm/common/history.js';
 const resources = new DisposableStore();
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
@@ -51,6 +54,8 @@ const themes = services.get(IThemeService) as TestThemeService;
 themes.setColorTheme(lightColorTheme);
 resources.add(bindTestColorTheme(themes, root));
 services.registerInstance(ILayoutService, { mainContainer: root } as ILayoutService);
+services.registerInstance(ICommandService, resources.add(new CommandService(services)));
+services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
 services.registerInstance(IMenuService, services.createInstance(MenuService));
 services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
 services.registerInstance(IContextMenuService, resources.add(services.createInstance(BrowserContextMenuService)));
@@ -62,6 +67,7 @@ const opened: { resource: string; options: IEditorOptions | undefined; group: un
 services.registerInstance(IEditorService, { openEditor: async (input: IResourceEditorInput, options?: IEditorOptions, group?: unknown) => { opened.push({ resource: input.resource.toString(), options, group }); } } as unknown as IEditorService);
 const scm = resources.add(new SCMService());
 const view = resources.add(new SCMViewService(scm));
+services.registerInstance(ISCMService, scm);
 services.registerInstance(ISCMViewService, view);
 const hash = 'a'.repeat(40);
 const timestamp = 1_700_000_000;

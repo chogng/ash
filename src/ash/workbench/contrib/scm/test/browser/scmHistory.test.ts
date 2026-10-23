@@ -621,6 +621,40 @@ suite('scmHistory browser component', () => {
 		await retainedActions?.dispose();
 	});
 
+	test('history graph aligns with the pane chevron and keeps Open Changes at the trailing edge', async function () {
+		const { page } = browserTests;
+		for (const [locale, modernUI] of [['en', false], ['zh-CN', false], ['en', true], ['zh-CN', true]] as const) {
+			await page.goto(`/scmHistory.html?headerActions&locale=${locale}${modernUI ? '&modernUI' : ''}`);
+			const pane = page.locator('[data-view-id="fixture.history"]');
+			const commit = pane.getByRole('treeitem', { name: /History metadata:/u });
+			const row = commit.locator('.ash-scm-graph-row');
+			const openChanges = row.locator('[data-action-id="workbench.scm.action.graph.viewChanges"] > button');
+			for (const width of [280, 560]) {
+				await page.evaluate(width => window.ashSCMHistoryIntegration.resize(width), width);
+				await row.hover({ position: { x: 80, y: 10 } });
+				await expect(openChanges).toBeVisible();
+				const geometry = await commit.evaluate(element => {
+					const pane = element.closest('.ash-pane-view')!;
+					const chevron = pane.querySelector('.ash-pane-view-header-twisty-container')!.getBoundingClientRect();
+					const graph = element.querySelector<SVGSVGElement>('.ash-scm-graph-graph')!;
+					const point = graph.createSVGPoint();
+					point.x = Number(graph.dataset.nodeX);
+					const action = element.querySelector('[data-action-id="workbench.scm.action.graph.viewChanges"] > button')!.getBoundingClientRect();
+					const labels = element.querySelector('.ash-scm-graph-label-container')!.getBoundingClientRect();
+					return {
+						axisOffset: point.matrixTransform(graph.getScreenCTM()!).x - (chevron.left + chevron.width / 2),
+						trailingInset: element.getBoundingClientRect().right - action.right,
+						labelsBeforeAction: labels.right <= action.left,
+					};
+				});
+				expect(geometry.axisOffset).toBeCloseTo(0, 1);
+				expect(geometry.trailingInset).toBeCloseTo(8, 1);
+				expect(geometry.labelsBeforeAction).toBe(true);
+				await browserTests.info.attach(`scm-row-layout-${locale}-${modernUI ? 'modern' : 'classic'}-${width}.png`, { body: await pane.screenshot(), contentType: 'image/png' });
+			}
+		}
+	});
+
 	test('history actions reveal on hover or keyboard focus without following retained row focus', async function () {
 		const { page } = browserTests;
 		await page.goto('/scmHistory.html?changes');
@@ -664,6 +698,28 @@ suite('scmHistory browser component', () => {
 		} finally {
 			await retainedActions?.dispose();
 		}
+	});
+
+	test('Open Changes activates from the inline toolbar without toggling the commit', async function () {
+		const { page } = browserTests;
+		await page.goto('/scmHistory.html?changes');
+		const tree = page.locator('.ash-scm-graph-tree');
+		const commit = tree.getByRole('treeitem', { name: /History metadata:/u });
+		const action = commit.getByRole('button', { name: 'Open Changes', exact: true });
+		await tree.press('Home');
+		await tree.press('Tab');
+		await page.keyboard.press('Tab');
+		await page.keyboard.press('Tab');
+		await expect(action).toBeFocused();
+		await expect(commit).toHaveAttribute('aria-expanded', 'false');
+		for (const [index, key] of ['Enter', 'Space'].entries()) {
+			await action.press(key);
+			await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.opened.length)).toBe(index + 1);
+			await expect(commit).toHaveAttribute('aria-expanded', 'false');
+		}
+		await action.click();
+		await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.opened.length)).toBe(3);
+		await expect(commit).toHaveAttribute('aria-expanded', 'false');
 	});
 
 	test('floating history actions preserve the complete keyboard focus outline across themes', async function () {

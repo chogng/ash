@@ -424,6 +424,7 @@
 		"--scm-graph-lane-width",
 		"--scm-graph-node-x",
 		"--scm-graph-row-background",
+		"--scm-graph-row-inset",
 		"--sessions-accent",
 		"--sessions-accent-strong",
 		"--sessions-muted-surface",

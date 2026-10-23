@@ -63,12 +63,17 @@
 }
 
 .ash-scm-graph-tree .ash-tree-contents {
-	/* Match the pane chevron axis after the tree padding and SVG's leading swimlane. */
+	/* Match the pane chevron after the row inset, tree padding and leading swimlane. */
 	margin-inline-start: calc(
 		var(--ash-spacing-size40) + var(--ash-spacing-size20) +
 			var(--ash-lxiconFontSize) / 2 - var(--ash-spacing-size80) -
-			var(--scm-graph-lane-width)
+			var(--scm-graph-lane-width) - var(--scm-graph-row-inset, 0px)
 	);
+}
+
+.ash-workbench.modern-ui .ash-sidebar-part .ash-scm-graph-tree {
+	/* Modern UI insets sidebar list rows independently of their content padding. */
+	--scm-graph-row-inset: var(--ash-spacing-size40);
 }
 
 .ash-scm-graph-commit {
@@ -263,7 +268,8 @@
 	position: absolute;
 	z-index: 1;
 	top: 0;
-	inset-inline-end: var(--ash-spacing-size80);
+	/* The tree row already supplies the trailing gutter. */
+	inset-inline-end: 0;
 	bottom: 0;
 	display: flex;
 	align-items: center;
