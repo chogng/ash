@@ -136,7 +136,7 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 		const commands = smokeSteps.filter(step => step.startsWith('Check sources and build Desktop and Web on every platform') || step.includes(`if: matrix.surface == '${surface}'`)).flatMap(step => {
 			const run = step.match(/^        run: (.+)$/m)?.[1];
 			assert.ok(run, step);
-			return run === '|' ? [...step.matchAll(/^          ((?:pnpm |node |\.\/node_modules\/bun\/bin\/bun\.exe ).+)$/gm)].map(match => match[1]) : [run];
+			return run === '|' ? [...step.matchAll(/^          ((?:pnpm |node |\.\/node_modules\/\.bin\/bun ).+)$/gm)].map(match => match[1]) : [run];
 		});
 		let status: number | null = 0;
 		for (const command of commands) {

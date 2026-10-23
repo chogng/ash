@@ -29,7 +29,7 @@ test('Frontend acceptance waits for shared contracts and unit tests', () => {
 		assert.match(definition, /^    needs: contracts$/m);
 	}
 	const contracts = workflow.split('\n  contracts:\n')[1].split(/\n  [a-z-]+:\n/u)[0];
-	assert.match(contracts, /\.\/node_modules\/bun\/bin\/bun\.exe check -p tsconfig.renderer.json --all/u);
+	assert.match(contracts, /\.\/node_modules\/\.bin\/bun check -p tsconfig.renderer.json --all/u);
 	assert.match(contracts, /pnpm --dir test\/scenario compile/u);
 	assert.match(contracts, /pnpm --dir build run test:prepared/u);
 	assert.doesNotMatch(contracts, /node build\/protocol\/generate.ts|pnpm test:build\b/u);
