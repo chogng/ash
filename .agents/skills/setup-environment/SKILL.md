@@ -22,7 +22,7 @@ Read versions on every run; do not maintain another version list in this skill o
 | Rust | [rust-toolchain.toml](../../../rust-toolchain.toml): channel, profile, and components. Inspect `rustup toolchain list` before running a command that might implicitly install a toolchain. |
 | Node | [.nvmrc](../../../.nvmrc) for direct Node execution; `engines` and `devEngines.runtime` in root `package.json` for package-script execution. Compare them and stop on contradictions. |
 | pnpm | Root `package.json` → `packageManager`; confirm the actual executable version. Ash's preinstall rejects a different package manager/version. |
-| Bun | Root `package.json` → `devDependencies.bun`, resolved by [pnpm-lock.yaml](../../../pnpm-lock.yaml); workspace dependency used for single-run, no-emit type checking. |
+| Bun | Root `package.json` → `devDependencies.bun` uses `runtime:<version>`; pnpm installs the native runtime with platform archives and checksums in [pnpm-lock.yaml](../../../pnpm-lock.yaml), without npm postinstall scripts. |
 | TypeScript and browser tools | Root and workspace `package.json` files plus `pnpm-lock.yaml`. `@ash/typescript-compiler` supplies `tsc` for emit/watch; the `typescript` alias supplies the JavaScript compiler API. Playwright and Electron also come from workspace dependencies, not global installs. |
 | Python | [scripts/pyproject.toml](../../../scripts/pyproject.toml) → `requires-python`; execute the chosen interpreter to print `sys.executable`, its version, and import `tomllib`. On Windows, a discovered `python` command may only be an App Execution Alias. |
 | uv | [scripts/pyproject.toml](../../../scripts/pyproject.toml) → `tool.uv.required-version`; confirm `uv --version` matches. |
@@ -58,11 +58,11 @@ Install JavaScript workspace dependencies with `pnpm install --frozen-lockfile`.
 
 Node-gyp and `electron-rebuild` do not use `build/python.ts` to discover Python. If their discovery fails, pass the verified interpreter through process-local `PYTHON` for the install/rebuild command; on initialized Windows checkouts, use the absolute path to `scripts/.venv/Scripts/python.exe` instead of an App Execution Alias.
 
-After installation, verify `./node_modules/bun/bin/bun.exe --version` against the declared dependency. Use this pinned executable directly (the package uses `bun.exe` on every platform); do not install a separate global Bun. If its executable is missing, inspect pnpm's install output and the existing `allowBuilds.bun` rule before retrying installation.
+After installation, verify `./node_modules/.bin/bun --version` against the version after `runtime:` in the declared dependency. Programmatic callers execute `node_modules/bun/bun` on Unix or `node_modules/bun/bun.exe` on Windows directly; do not install a separate global Bun. Native runtimes work with `--ignore-scripts` and need no rebuild. If the executable is missing, inspect the frozen install's runtime resolution and archive/checksum diagnostics before retrying.
 
 ## TypeScript checks
 
-For single-run type checking, invoke the pinned Bun directly: `./node_modules/bun/bin/bun.exe check -p <tsconfig> --all`. Run the owning preparation command first when generated inputs are missing or stale; reuse preparation for unchanged inputs. Use `pnpm typecheck:*` only when its full lifecycle is needed, not as a forwarding layer for an already prepared check. Keep emit/watch on their owning compiler entrypoints.
+For single-run type checking, invoke the pinned Bun directly: `./node_modules/.bin/bun check -p <tsconfig> --all`. Run the owning preparation command first when generated inputs are missing or stale; reuse preparation for unchanged inputs. Use `pnpm typecheck:*` only when its full lifecycle is needed, not as a forwarding layer for an already prepared check. Keep emit/watch on their owning compiler entrypoints.
 
 When the selected build or test already prepares and checks the same inputs, let that lifecycle run once instead of preceding it with a standalone typecheck. Use direct checks for validation that no selected build or test covers.
 
@@ -74,7 +74,7 @@ If no target is specified for a headless worker, use the Frontend/Web tier. On a
 
 | Tier | Preparation and acceptance |
 | --- | --- |
-| Frontend/Web without backend | `pnpm test:smoke:browser` builds Web and checks Renderer and automation types. To reuse an existing build, check `test/automation/tsconfig.json` through `./node_modules/bun/bin/bun.exe check -p test/automation/tsconfig.json --all` if needed, then use `pnpm test:smoke:browser:no-compile`. Launch with `pnpm dev:web` only if requested. |
+| Frontend/Web without backend | `pnpm test:smoke:browser` builds Web and checks Renderer and automation types. To reuse an existing build, check `test/automation/tsconfig.json` through `./node_modules/.bin/bun check -p test/automation/tsconfig.json --all` if needed, then use `pnpm test:smoke:browser:no-compile`. Launch with `pnpm dev:web` only if requested. |
 | Backend/CLI | Run `just verify <package>` and the owning build (for Code, `just build-code`). Complete backend package preparation uses `just ash-package`. |
 | Full Web | `pnpm test:smoke:browser:full` checks frontend types, builds Web and prepares the packaged-Node backend. Launch with `pnpm dev:web:full` only if requested. |
 | Desktop | `pnpm test:smoke:desktop` prepares the backend, builds Electron and checks Renderer and automation types. Launch with `pnpm dev` only if requested. `pnpm test:smoke:ui` selects UI acceptance but still prepares the backend runtime package for startup metadata. |

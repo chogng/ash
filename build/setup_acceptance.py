@@ -247,13 +247,12 @@ def accept(output: Path, *, resume: bool = False) -> None:
         expected = {
             "node": (workspace / ".nvmrc").read_text().strip(),
             "pnpm": manifest["packageManager"].split("@", 1)[1],
-            "bun": manifest["devDependencies"]["bun"],
-            "bunx": manifest["devDependencies"]["bun"],
+            "bun": manifest["devDependencies"]["bun"].removeprefix("runtime:"),
         }
         for name, version in expected.items():
             executable = (
-                str(modules / f"bun/bin/{name}.exe")
-                if name in {"bun", "bunx"}
+                str(modules / "bun" / ("bun.exe" if os.name == "nt" else "bun"))
+                if name == "bun"
                 else pnpm
                 if name == "pnpm"
                 else shutil.which("node")

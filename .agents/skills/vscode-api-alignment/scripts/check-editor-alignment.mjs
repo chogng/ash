@@ -100,7 +100,7 @@ function runTypecheck() {
 		return false;
 	}
 	process.stdout.write(`repository script: ${command}\n`);
-	const bun = resolve(repositoryRoot, 'node_modules/bun/bin/bun.exe');
+	const bun = resolve(repositoryRoot, 'node_modules/bun', process.platform === 'win32' ? 'bun.exe' : 'bun');
 	// Keep preparation and checks at the script owner as that lifecycle evolves.
 	const result = run(bun, ['run', 'typecheck:stanza']);
 	if (result.stdout) process.stdout.write(result.stdout);

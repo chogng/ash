@@ -156,7 +156,7 @@ test-search-rust:
 test-search: check-search test-search-rust
     pnpm test:unit --run src/ash/platform/search/test/browser/searchService.test.ts --run src/ash/platform/search/test/browser/browserFileSearchService.test.ts --run src/ash/platform/app-server/test/browser/webRendererApi.test.ts --run src/ash/sessions/test/browser/sessionFileService.test.ts --run src/ash/workbench/contrib/search/test/browser/searchViewPane.test.ts
     pnpm run test:browser:integration:prepared chatContextActions.integration.spec.ts --project=chromium
-    ./node_modules/bun/bin/bun.exe check -p tsconfig.renderer.json --all
+    ./node_modules/.bin/bun check -p tsconfig.renderer.json --all
     just check-search --deny-warnings
 
 # Exercise an assembled package through real stdio RPC, using its bundled search engines.

@@ -37,8 +37,6 @@ jobs:
           node-version-file: .nvmrc
       - name: Install formatter dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Initialize the pinned Bun runtime
-        run: pnpm rebuild bun
       - name: Check TypeScript and JavaScript formatting
         if: always() && !cancelled()
         run: pnpm format:ts

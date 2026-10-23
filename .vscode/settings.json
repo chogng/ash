@@ -19,9 +19,18 @@
 		"editor.formatOnSave": true
 	},
 	"[json][jsonc][yaml][markdown][css][html]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode",
+		"editor.defaultFormatter": "jkillian.custom-local-formatters",
 		"editor.formatOnSave": true
 	},
+	"customLocalFormatters.formatters": [
+		{
+			"command": {
+				"win32": ".\\node_modules\\bun\\bun.exe fmt --ignore-path .gitignore --ignore-path .prettierignore --stdin-filepath \"${file}\"",
+				"*": "./node_modules/bun/bun fmt --ignore-path .gitignore --ignore-path .prettierignore --stdin-filepath \"${file}\""
+			},
+			"languages": ["json", "jsonc", "yaml", "markdown", "css", "html"]
+		}
+	],
 	"bazel.commandLine.queryExpression": "//...:*",
 	"bazel.queriesShareServer": false,
 	"terminal.integrated.env.windows": {
@@ -51,8 +60,5 @@
 		"--message-format=json",
 		"--target-dir",
 		".build/rust-analyzer"
-	],
-	"[jsonc]": {
-		"editor.defaultFormatter": "vscode.json-language-features"
-	}
+	]
 }

@@ -282,6 +282,80 @@ class ScopedFormattingTests(unittest.TestCase):
         result = self.invoke("--check", str(self.directory))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_config_snapshots_match_direct_bun_output_and_preserve_unselected_files(
+        self,
+    ) -> None:
+        cases = {
+            "config [with spaces].json": '{"value":1}\n',
+            "config.jsonc": '{\n// retained\n"value":1,\n}\n',
+            "workflow.yaml": "name:   example\non: [push,pull_request]\n",
+            "notes.md": "#   Heading\n\n```ts\nconst value=1\n```\n",
+            "style.css": ".example{color:red;padding:0  1px}\n",
+            "index.html": "<main><p>example</p><p>text</p></main>\n",
+        }
+        paths = {
+            self.write(name, contents): contents for name, contents in cases.items()
+        }
+        workspace_config = self.root / ".vscode" / f"{self.directory.name}.jsonc"
+        workspace_config.write_text(cases["config.jsonc"], encoding="utf-8")
+        self.addCleanup(workspace_config.unlink)
+        paths[workspace_config] = cases["config.jsonc"]
+        neighbor = self.write("neighbor.json", '{"untouched":true}\n')
+        ignored = self.write("fixtures/invalid.json", "invalid fixture\n")
+        selected = [str(path) for path in paths] + [str(ignored)]
+        expected = {}
+        for path, original in paths.items():
+            direct = subprocess.run(
+                [
+                    str(
+                        self.root
+                        / "node_modules/bun"
+                        / ("bun.exe" if sys.platform == "win32" else "bun")
+                    ),
+                    "fmt",
+                    "--ignore-path",
+                    ".gitignore",
+                    "--ignore-path",
+                    ".prettierignore",
+                    "--stdin-filepath",
+                    str(path),
+                ],
+                cwd=self.root,
+                input=original,
+                encoding="utf-8",
+                capture_output=True,
+                check=True,
+            )
+            expected[path] = direct.stdout
+            self.assertNotEqual(direct.stdout, original, str(path))
+        result = self.invoke("--language", "config", "--check", *selected)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        for path, original in paths.items():
+            self.assertEqual(path.read_text(), original)
+        result = self.invoke("--language", "config", *selected)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        for path, formatted in expected.items():
+            self.assertEqual(path.read_text(), formatted, str(path))
+        self.assertEqual(neighbor.read_text(), '{"untouched":true}\n')
+        self.assertEqual(ignored.read_text(), "invalid fixture\n")
+        result = self.invoke("--language", "config", "--check", *selected)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_config_snapshot_applies_git_ignores_to_explicit_files(self) -> None:
+        source = self.write("output/generated.json", "invalid generated JSON\n")
+        selected = {source.relative_to(self.root).as_posix()}
+        with tempfile.TemporaryDirectory(prefix="ash format snapshot ") as directory:
+            snapshot = Path(directory)
+            formatting.snapshot_files(snapshot, selected)
+            commands = formatting.scoped_commands(False, snapshot, selected, "config")
+            for command in commands:
+                _, code, diagnostic = formatting.run(command)
+                self.assertEqual(code, 0, diagnostic)
+            self.assertEqual(
+                (snapshot / source.relative_to(self.root)).read_text(),
+                "invalid generated JSON\n",
+            )
+
     def test_rust_formats_only_the_selected_file_without_traversing_children(
         self,
     ) -> None:

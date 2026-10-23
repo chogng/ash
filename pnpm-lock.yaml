@@ -167,7 +167,6 @@ overrides:
 
 patchedDependencies:
   '@vscode/tree-sitter-wasm@0.3.1': db89542b8b2621108d0481133f35856d6d703ac84f0714bf86a745bffc68b1d9
-  bun@1.4.3: c44c19ee21e5b3173628bec365abee1f8b5bc80e2c88f50b3c34021fe7b464fa
 
 importers:
 
@@ -247,8 +246,8 @@ importers:
         specifier: 2.1.0
         version: 2.1.0(playwright@1.61.1)
       bun:
-        specifier: 1.4.3
-        version: 1.4.3(patch_hash=c44c19ee21e5b3173628bec365abee1f8b5bc80e2c88f50b3c34021fe7b464fa)
+        specifier: runtime:1.4.4
+        version: runtime:1.4.4
       concurrently:
         specifier: ^10.0.4
         version: 10.0.4
@@ -270,9 +269,6 @@ importers:
       pdfjs-dist:
         specifier: 6.1.200
         version: 6.1.200
-      prettier:
-        specifier: 3.9.9
-        version: 3.9.9
       sirv:
         specifier: ^3.0.2
         version: 3.0.2
@@ -766,70 +762,6 @@ packages:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
 
-  '@oven/bun-darwin-aarch64@1.4.3':
-    resolution: {integrity: sha512-u2wAM9RzqyF4baO5oFVhcFUVWO1CCMLG6yC5/aPWCYGZPfL5ULMbeHt+0/3I0h3yaPx1m+PKSANO/61jPtDZcQ==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@oven/bun-darwin-x64@1.4.3':
-    resolution: {integrity: sha512-wRGeciWOyKyG/BfTHq4CAyqoOfuzj5UJkKA8FlJETW2yhtDh+Ba3EgPnsVclFyzIw7E0HJxpsonoj17g3HPK/Q==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@oven/bun-freebsd-aarch64@1.4.3':
-    resolution: {integrity: sha512-z4LiDRPTJMKA8JvtP+Z+I5m1syJr8HGYFainIJoCAdkWaHMyQMaEEYr0N+FzTK4pECUHUmscCTNfC9XJwTe4dQ==}
-    cpu: [arm64]
-    os: [freebsd]
-
-  '@oven/bun-freebsd-x64@1.4.3':
-    resolution: {integrity: sha512-YpwGnfvtSMRMnnViJI5wCGmS5HpCBAl0wLhBflJfmZYkgOHfplzeKUkUVDW2bNOZyrym3YN+EDaLWooaJpX8Eg==}
-    cpu: [x64]
-    os: [freebsd]
-
-  '@oven/bun-linux-aarch64-android@1.4.3':
-    resolution: {integrity: sha512-KCsYD+HHawd6xht4BOffTnLZXNf+xzq8l52MsIF2yRtIfUvGTCumdnJPXxuo969iXukb7cWtz+WMkpYlKMG+sg==}
-    cpu: [arm64]
-    os: [android]
-
-  '@oven/bun-linux-aarch64-musl@1.4.3':
-    resolution: {integrity: sha512-5OJIbcVspZxIN/zQtrFYwLuJgaOlciGcynmwCtwKyg0rmXHJoNG0QyspiiLnDUDoVTSGY/nrn0QEbWKhu0QbEQ==}
-    cpu: [arm64]
-    os: [linux]
-    libc: [musl]
-
-  '@oven/bun-linux-aarch64@1.4.3':
-    resolution: {integrity: sha512-ylogDFxDD+aRKO0TJauwDzCWM+rULvc85gRNZQ9CnY6rm2BU4GC2XUDi20bh67CIuB4Wt/0PL1xpsJ2hqplMww==}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@oven/bun-linux-x64-android@1.4.3':
-    resolution: {integrity: sha512-5CdcvAc+iTqf/p6S0VkoGF8harKMjTfEkMOXJHslwBzl5GcY5alth1mkhD3T7SqLA5aUal95vzfiNjoAZXkPOw==}
-    cpu: [x64]
-    os: [android]
-
-  '@oven/bun-linux-x64-musl@1.4.3':
-    resolution: {integrity: sha512-L0gTTjTncLqv7VsV/2iLz7Zk4vd969xqRgbtGnskmV3MvL+IJgzTyQr5zm8GGGWSm/SO/ab2vnn4GXgPomoGbg==}
-    cpu: [x64]
-    os: [linux]
-    libc: [musl]
-
-  '@oven/bun-linux-x64@1.4.3':
-    resolution: {integrity: sha512-RArgnpjeXjaGzjp5h7Rs89cUYJutO8IyqR3itE8OBaBzEt8KNm2jp/YozxBHq4eFovwrQLryeSwTAcmiT+zcoA==}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@oven/bun-windows-aarch64@1.4.3':
-    resolution: {integrity: sha512-a3Vyu9KI0J9vfIS+/LJMmjWI/qsBpph8u0R7d6Tm+YaSOqZeN2LRULfVqz13dgQRTvqg6aWBxOv9jE4Rl0lAAQ==}
-    cpu: [arm64]
-    os: [win32]
-
-  '@oven/bun-windows-x64@1.4.3':
-    resolution: {integrity: sha512-9pV16qXHTFvZDH61S8hpdpVBbWmvEqekczLF54zTnQHKP28D6yRCNLrD/7jVbXYR61fQYAx4FSBgzCxGCKb3rQ==}
-    cpu: [x64]
-    os: [win32]
-
   '@oxc-project/types@0.130.0':
     resolution: {integrity: sha512-ibD2usx9JRu7f5pu2tMKMI4cpA4NgXJQoYRP4pQ7Pxmn1l6k/53qWtQWZayhYy3X4QZkt90Ot+mJEaeXouio6Q==}
 
@@ -1200,10 +1132,113 @@ packages:
   buffer-from@1.1.2:
     resolution: {integrity: sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==}
 
-  bun@1.4.3:
-    resolution: {integrity: sha512-EvQQ2dUJlixjKgJjeXZvdsHUWIKnVfYufrQNDHa++0YM4XksQ4GtGofEdRnQSiyNp/yUWiX6SlqS8zugZCo+2A==}
-    cpu: [arm64, x64]
-    os: [darwin, linux, android, freebsd, win32]
+  bun@runtime:1.4.4:
+    resolution:
+      type: variations
+      variants:
+        - resolution:
+            archive: zip
+            bin: bun
+            integrity: sha256-wkDX8My5DCY6hJ/NsJt+5iYw2SE0jtaq/ahrnVd7xRA=
+            prefix: bun-darwin-aarch64
+            type: binary
+            url: https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-darwin-aarch64.zip
+          targets:
+            - cpu: arm64
+              os: darwin
+        - resolution:
+            archive: zip
+            bin: bun
+            integrity: sha256-UKNJH3Orwv6BZzFxqFdi07wswWgMzsrdmD3pmt93l34=
+            prefix: bun-darwin-x64
+            type: binary
+            url: https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-darwin-x64.zip
+          targets:
+            - cpu: x64
+              os: darwin
+        - resolution:
+            archive: zip
+            bin: bun
+            integrity: sha256-sfPJXYLB+sOMzDytPaGoDjApjr/ZmSGNak/AWzQyUzc=
+            prefix: bun-freebsd-aarch64
+            type: binary
+            url: https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-freebsd-aarch64.zip
+          targets:
+            - cpu: arm64
+              os: freebsd
+        - resolution:
+            archive: zip
+            bin: bun
+            integrity: sha256-mPdnLV0GBBYUFPiwW6Aa+cF89av803Ric3BGv3aDmuk=
+            prefix: bun-freebsd-x64
+            type: binary
+            url: https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-freebsd-x64.zip
+          targets:
+            - cpu: x64
+              os: freebsd
+        - resolution:
+            archive: zip
+            bin: bun
+            integrity: sha256-V/AbAqxxE8Yck18o84wuq4SePJcNqyH4tkCoex72UAk=
+            prefix: bun-linux-aarch64-musl
+            type: binary
+            url: https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-aarch64-musl.zip
+          targets:
+            - cpu: arm64
+              os: linux
+              libc: musl
+        - resolution:
+            archive: zip
+            bin: bun
+            integrity: sha256-uqa7NvUdblhWHgK76oJQOKnfRU9nPW13bou/hvjHhQ4=
+            prefix: bun-linux-aarch64
+            type: binary
+            url: https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-aarch64.zip
+          targets:
+            - cpu: arm64
+              os: linux
+        - resolution:
+            archive: zip
+            bin: bun
+            integrity: sha256-pajMxedNy4g/6XTxJae9s7QeUZXtG4cOc/F+/9PrKy0=
+            prefix: bun-linux-x64-musl
+            type: binary
+            url: https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64-musl.zip
+          targets:
+            - cpu: x64
+              os: linux
+              libc: musl
+        - resolution:
+            archive: zip
+            bin: bun
+            integrity: sha256-v4zL+ysLgBWeD5ptFcVTF63YB3U028YTCj7bUvzLOVw=
+            prefix: bun-linux-x64
+            type: binary
+            url: https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64.zip
+          targets:
+            - cpu: x64
+              os: linux
+        - resolution:
+            archive: zip
+            bin: bun.exe
+            integrity: sha256-LVeg7sDLRNlckYw/lzT2BFWhMGrlCF12/Gj0Tj7jDQk=
+            prefix: bun-windows-aarch64
+            type: binary
+            url: https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-windows-aarch64.zip
+          targets:
+            - cpu: arm64
+              os: win32
+        - resolution:
+            archive: zip
+            bin: bun.exe
+            integrity: sha256-zSwPzMePPt4fUMqCehXwY+2hPU0VCj0GdPT24yPYZKU=
+            prefix: bun-windows-x64
+            type: binary
+            url: https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-windows-x64.zip
+          targets:
+            - cpu: x64
+              os: win32
+    version: 1.4.4
     hasBin: true
 
   call-bind-apply-helpers@1.0.2:
@@ -1946,11 +1981,6 @@ packages:
     engines: {node: '>=14.0.0'}
     hasBin: true
 
-  prettier@3.9.9:
-    resolution: {integrity: sha512-Z/CJHIkdujO/OtN7nXUii0Rf3VT5SRuhjBA82Xvu2XhBUgX3nhP67T0LHceBdQLex7OOFGTox+Q5Yg8Jk2Qivg==}
-    engines: {node: '>=14'}
-    hasBin: true
-
   proc-log@6.1.0:
     resolution: {integrity: sha512-iG+GYldRf2BQ0UDUAd6JQ/RwzaQy6mXmsk/IzlYyal4A4SNFw54MeH4/tLkF4I5WoWG9SQwuqWzS99jaFQHBuQ==}
     engines: {node: ^20.17.0 || >=22.9.0}
@@ -2657,42 +2687,6 @@ snapshots:
       '@tybys/wasm-util': 0.10.3
     optional: true
 
-  '@oven/bun-darwin-aarch64@1.4.3':
-    optional: true
-
-  '@oven/bun-darwin-x64@1.4.3':
-    optional: true
-
-  '@oven/bun-freebsd-aarch64@1.4.3':
-    optional: true
-
-  '@oven/bun-freebsd-x64@1.4.3':
-    optional: true
-
-  '@oven/bun-linux-aarch64-android@1.4.3':
-    optional: true
-
-  '@oven/bun-linux-aarch64-musl@1.4.3':
-    optional: true
-
-  '@oven/bun-linux-aarch64@1.4.3':
-    optional: true
-
-  '@oven/bun-linux-x64-android@1.4.3':
-    optional: true
-
-  '@oven/bun-linux-x64-musl@1.4.3':
-    optional: true
-
-  '@oven/bun-linux-x64@1.4.3':
-    optional: true
-
-  '@oven/bun-windows-aarch64@1.4.3':
-    optional: true
-
-  '@oven/bun-windows-x64@1.4.3':
-    optional: true
-
   '@oxc-project/types@0.130.0': {}
 
   '@playwright/test@1.61.1':
@@ -2944,20 +2938,7 @@ snapshots:
   buffer-from@1.1.2:
     optional: true
 
-  bun@1.4.3(patch_hash=c44c19ee21e5b3173628bec365abee1f8b5bc80e2c88f50b3c34021fe7b464fa):
-    optionalDependencies:
-      '@oven/bun-darwin-aarch64': 1.4.3
-      '@oven/bun-darwin-x64': 1.4.3
-      '@oven/bun-freebsd-aarch64': 1.4.3
-      '@oven/bun-freebsd-x64': 1.4.3
-      '@oven/bun-linux-aarch64': 1.4.3
-      '@oven/bun-linux-aarch64-android': 1.4.3
-      '@oven/bun-linux-aarch64-musl': 1.4.3
-      '@oven/bun-linux-x64': 1.4.3
-      '@oven/bun-linux-x64-android': 1.4.3
-      '@oven/bun-linux-x64-musl': 1.4.3
-      '@oven/bun-windows-aarch64': 1.4.3
-      '@oven/bun-windows-x64': 1.4.3
+  bun@runtime:1.4.4: {}
 
   call-bind-apply-helpers@1.0.2:
     dependencies:
@@ -3576,8 +3557,6 @@ snapshots:
   postject@1.0.0-alpha.6:
     dependencies:
       commander: 9.5.0
-
-  prettier@3.9.9: {}
 
   proc-log@6.1.0: {}
 

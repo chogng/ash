@@ -100,7 +100,7 @@ jobs:
           path: .build/desktop-addons
           key: ${{ steps.desktop-addons.outputs.cache-primary-key }}
       - name: Check packaged automation types
-        run: ./node_modules/bun/bin/bun.exe check -p test/automation/tsconfig.json --all
+        run: ./node_modules/.bin/bun check -p test/automation/tsconfig.json --all
       - name: Verify real Desktop startup, quit, file and terminal operations
         run: pnpm run test:smoke:ui:no-compile test/smoke/areas/windows/packaged-app.spec.ts
       - name: Verify background, TUI restart, crash recovery, binding upgrade and rollback
