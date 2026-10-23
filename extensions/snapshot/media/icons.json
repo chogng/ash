@@ -1,0 +1,80 @@
+{
+  "family": "Ash Snapshot Icons",
+  "glyphs": [
+    {
+      "id": "select",
+      "unicode": "E04B",
+      "source": "../../../resources/icons/cursor.svg"
+    },
+    {
+      "id": "rectangle",
+      "unicode": "E0F0",
+      "source": "../../../resources/icons/square.svg"
+    },
+    {
+      "id": "arrow",
+      "unicode": "E011",
+      "source": "../../../resources/icons/arrow-right.svg"
+    },
+    {
+      "id": "pen",
+      "unicode": "E0CC",
+      "source": "../../../resources/icons/pen.svg"
+    },
+    {
+      "id": "text",
+      "unicode": "E103",
+      "source": "../../../resources/icons/text-2.svg"
+    },
+    {
+      "id": "mosaic",
+      "unicode": "E0A3",
+      "source": "../../../resources/icons/layout.svg"
+    },
+    {
+      "id": "undo",
+      "unicode": "E058",
+      "source": "../../../resources/icons/discard.svg"
+    },
+    {
+      "id": "coordinates",
+      "unicode": "E079",
+      "source": "../../../resources/icons/frame.svg"
+    },
+    {
+      "id": "help",
+      "unicode": "E0D4",
+      "source": "../../../resources/icons/question.svg"
+    },
+    {
+      "id": "retake",
+      "unicode": "E0D9",
+      "source": "../../../resources/icons/refresh.svg"
+    },
+    {
+      "id": "cancel",
+      "unicode": "E039",
+      "source": "../../../resources/icons/close.svg"
+    },
+    {
+      "id": "save",
+      "unicode": "E0E2",
+      "source": "../../../resources/icons/save.svg"
+    },
+    {
+      "id": "copy",
+      "unicode": "E042",
+      "source": "../../../resources/icons/copy.svg"
+    },
+    {
+      "id": "attach",
+      "unicode": "E02A",
+      "source": "../../../resources/icons/chat-4.svg"
+    },
+    {
+      "id": "entire",
+      "unicode": "E0E3",
+      "source": "../../../resources/icons/screen-full.svg"
+    }
+  ]
+}

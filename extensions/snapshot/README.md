@@ -75,3 +75,9 @@ The image view owns one bitmap, selection and annotation history. OCR, translati
 additional editing and sharing can consume this package's image workflow later;
 they must use public capabilities for host resources. No unused provider APIs or
 placeholder implementations are installed for those future features.
+
+The compact capture toolbar uses icon buttons with localized tooltips and accessible
+names. Its package-local WOFF2 is built from the artwork listed in `media/icons.json`;
+runtime code never imports host UI modules. Independent icon customization, font
+rebuilding and native-window validation follow the
+[Snapshot toolbar workflow](../../.agents/skills/svg-icon-font/SKILL.md#snapshot-工具栏独立图标).

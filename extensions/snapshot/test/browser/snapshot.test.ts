@@ -124,7 +124,27 @@ suite('chatScreenshot browser component', () => {
 			await page.mouse.move(bounds.x + bounds.width * 0.75, bounds.y + bounds.height * 0.75);
 			await page.mouse.down();
 			await page.mouse.move(bounds.x + bounds.width * 0.5, bounds.y + bounds.height * 0.5, { steps: 4 });
+			await expect(overlay.locator('.ash-screenshot-toolbar')).toBeHidden();
 			await page.mouse.up();
+			const toolbar = overlay.getByRole('group', { name: chinese ? '截图工具' : 'Screenshot tools' });
+			await expect(toolbar).toBeVisible();
+			// The opaque extension view must load its own font; labels remain discoverable without visible text.
+			await expect.poll(() => toolbar.evaluate(element => {
+				return [...element.ownerDocument.fonts].some(font => font.family.replaceAll(/["']/g, '') === 'Ash Snapshot Icons' && font.status === 'loaded');
+			})).toBe(true);
+			const buttons = toolbar.getByRole('button');
+			expect(await buttons.count()).toBe(14);
+			for (const action of await buttons.all()) {
+				await expect(action).toHaveText('');
+				await expect(action).toHaveAttribute('aria-label', /\S/);
+				await expect(action).toHaveAttribute('title', /\S/);
+				const glyph = action.locator('[aria-hidden="true"]');
+				await expect(glyph).toHaveAttribute('data-glyph', /\S/);
+				await expect(glyph).toHaveCSS('font-size', '16px');
+				const box = (await action.boundingBox())!;
+				expect({ width: box.width, height: box.height }).toEqual({ width: 24, height: 24 });
+			}
+			await expect(toolbar.getByRole('button', { name: chinese ? '选择' : 'Select', exact: true })).toHaveAttribute('aria-pressed', 'true');
 			await overlay.getByRole('button', { name: chinese ? '坐标' : 'Coordinates', exact: true }).click();
 			await expect(overlay.getByLabel('X', { exact: true })).toHaveValue('400');
 			await expect(overlay.getByLabel(chinese ? '宽度' : 'Width', { exact: true })).toHaveValue('200');

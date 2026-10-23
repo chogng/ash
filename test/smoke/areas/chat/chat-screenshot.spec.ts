@@ -125,6 +125,13 @@ for (const locale of ['en', 'zh-CN']) {
 			await overlay.mouse.down();
 			await overlay.mouse.move(image.x + 500, image.y + 350, { steps: 4 });
 			await overlay.mouse.up();
+			const toolbar = overlay.frameLocator('iframe').getByRole('group', { name: chinese ? '截图工具' : 'Screenshot tools' });
+			await expect(toolbar).toBeVisible();
+			expect(await toolbar.getByRole('button').allTextContents()).toEqual(Array(14).fill(''));
+			// Native image views inherit their host CSP; a browser fixture alone cannot catch blocked inline fonts.
+			await expect.poll(() => toolbar.evaluate(element => {
+				return [...element.ownerDocument.fonts].some(font => font.family.includes('Ash Snapshot Icons') && font.status === 'loaded');
+			})).toBe(true);
 			// The independent window-capture endpoint remains usable while manual selection is open.
 			const overlayCount = desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length;
 			const raw = await page.evaluate(async () => [...(await (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:host:screenshot', { x: 0, y: 0, width: 80, height: 60 }) as Uint8Array).slice(0, 8)]);

@@ -1,3 +1,9 @@
+@font-face {
+	font-family: "Ash Snapshot Icons";
+	src: url("../media/AshSnapshotIcons.woff2") format("woff2");
+	font-display: block;
+}
+
 .ash-screenshot-overlay {
 	position: fixed;
 	inset: 0;
@@ -131,6 +137,10 @@
 	white-space: nowrap;
 }
 .ash-screenshot-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--snapshot-spacing-2);
 	max-width: calc(100vw - 16px);
 	max-height: calc(100vh - 16px);
 	overflow-y: auto;
@@ -143,9 +153,6 @@
 	flex-wrap: wrap;
 	gap: var(--snapshot-spacing-1);
 }
-.ash-screenshot-tool-row + .ash-screenshot-tool-row {
-	margin-top: var(--snapshot-spacing-2);
-}
 .ash-screenshot-overlay button {
 	padding: var(--snapshot-spacing-1) var(--snapshot-spacing-2);
 	border: var(--snapshot-border-width) solid transparent;
@@ -154,6 +161,26 @@
 	background: transparent;
 	font: inherit;
 	cursor: pointer;
+}
+.ash-screenshot-overlay .ash-screenshot-icon-button {
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 24px;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+}
+.ash-screenshot-icon {
+	width: 16px;
+	height: 16px;
+	font: 400 16px/1 "Ash Snapshot Icons";
+	font-synthesis: none;
+	pointer-events: none;
+}
+.ash-screenshot-icon::before {
+	content: attr(data-glyph);
 }
 .ash-screenshot-overlay button:hover {
 	background: var(--snapshot-hover-background);
@@ -178,8 +205,9 @@
 	outline-offset: -1px;
 }
 .ash-screenshot-tool-row input[type="color"] {
-	width: 28px;
-	height: 28px;
+	box-sizing: border-box;
+	width: 24px;
+	height: 24px;
 	padding: 0;
 	border: var(--snapshot-border-width) solid var(--snapshot-input-border);
 	border-radius: var(--snapshot-small-radius);
@@ -197,7 +225,12 @@
 	border-radius: var(--snapshot-small-radius);
 	font: inherit;
 }
+.ash-screenshot-tool-row select {
+	height: 24px;
+	padding-block: 0;
+}
 .ash-screenshot-fields {
+	flex-basis: 100%;
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--snapshot-spacing-2);

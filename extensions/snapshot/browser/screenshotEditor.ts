@@ -1,9 +1,12 @@
 import './screenshotEditor.css';
 import { addDisposableListener, Disposable, DisposableStore, toDisposable } from './lifecycle.js';
 import { localize } from '../common/nls.js';
+import iconManifest from '../media/icons.json' with { type: 'json' };
 import type { ImageEditorCompletion as ScreenshotCompletion } from '@ash/sdk';
 import type { ImageRectangle as IRectangle } from '../common/image.js';
 const SCREENSHOT_MAX_PIXELS = 16_777_216;
+const iconGlyphs = new Map(iconManifest.glyphs.map(icon => [icon.id, String.fromCodePoint(parseInt(icon.unicode, 16))]));
+type ScreenshotIcon = ScreenshotTool | 'undo' | 'coordinates' | 'help' | 'retake' | 'cancel' | 'save' | 'copy' | 'attach' | 'entire';
 import {
 	clampScreenshotRectangle,
 	paintScreenshotAnnotation,
@@ -109,11 +112,16 @@ export class ScreenshotEditor extends Disposable {
 		this.toolbar.setAttribute('role', 'group');
 		this.toolbar.setAttribute('aria-label', localize('screenshot.tools', 'Screenshot tools'));
 		this.toolbar.hidden = true;
-		const button = (parent: HTMLElement, label: string, run: () => void, primary = false): HTMLButtonElement => {
-			const element = node('button');
+		const button = (parent: HTMLElement, label: string, icon: ScreenshotIcon, run: () => void, primary = false): HTMLButtonElement => {
+			const element = node('button', 'ash-screenshot-icon-button');
 			element.type = 'button';
-			element.textContent = label;
+			element.setAttribute('aria-label', label);
 			element.title = label;
+			const glyph = node('span', 'ash-screenshot-icon');
+			glyph.setAttribute('aria-hidden', 'true');
+			glyph.dataset.icon = icon;
+			glyph.dataset.glyph = iconGlyphs.get(icon)!;
+			element.append(glyph);
 			if (primary) element.classList.add('primary');
 			this._register(addDisposableListener(element, 'click', run));
 			this.controls.push(element);
@@ -132,7 +140,7 @@ export class ScreenshotEditor extends Disposable {
 		for (const tool of Object.keys(toolNames) as ScreenshotTool[]) {
 			this.toolButtons.set(
 				tool,
-				button(tools, toolNames[tool], () => this.selectTool(tool))
+				button(tools, toolNames[tool], tool, () => this.selectTool(tool))
 			);
 		}
 		this.color = node('input');
@@ -151,33 +159,34 @@ export class ScreenshotEditor extends Disposable {
 		}
 		this.lineWidth.value = '4';
 		tools.append(this.color, this.lineWidth);
-		button(tools, localize('screenshot.undo', 'Undo'), () => {
+		button(tools, localize('screenshot.undo', 'Undo'), 'undo', () => {
 			this.annotations.pop();
 			this.paint();
 			this.announce();
 		});
 		const actions = node('div', 'ash-screenshot-tool-row');
-		button(actions, localize('screenshot.coordinates', 'Coordinates'), () => {
+		button(actions, localize('screenshot.coordinates', 'Coordinates'), 'coordinates', () => {
 			this.fields.hidden = !this.fields.hidden;
 			this.positionToolbar();
 			if (!this.fields.hidden) this.inputs.get('x')!.focus();
 		});
-		button(actions, localize('screenshot.helpTitle', 'Screenshot Help'), () => this.showAccessibleContent(false));
-		button(actions, localize('screenshot.retake', 'Retake'), () => {
+		button(actions, localize('screenshot.helpTitle', 'Screenshot Help'), 'help', () => this.showAccessibleContent(false));
+		button(actions, localize('screenshot.retake', 'Retake'), 'retake', () => {
 			void this.complete({ kind: 'retake' });
 		});
-		button(actions, localize('screenshot.cancel', 'Cancel'), () => {
+		button(actions, localize('screenshot.cancel', 'Cancel'), 'cancel', () => {
 			void this.complete({ kind: 'cancel' });
 		});
-		button(actions, localize('screenshot.save', 'Save'), () => {
+		button(actions, localize('screenshot.save', 'Save'), 'save', () => {
 			void this.export('save');
 		}).title = localize('screenshot.saveTitle', 'Save screenshot');
-		button(actions, localize('screenshot.copy', 'Copy'), () => {
+		button(actions, localize('screenshot.copy', 'Copy'), 'copy', () => {
 			void this.export('copy');
 		}, options.defaultAction === 'copy');
 		button(
 			actions,
 			localize('chat.screenshot.attach', 'Add to Chat'),
+			'attach',
 			() => {
 				void this.export('attach');
 			},
@@ -213,9 +222,9 @@ export class ScreenshotEditor extends Disposable {
 		this.toolbar.append(tools, actions, this.fields);
 		const hint = node('div', 'ash-screenshot-instructions');
 		hint.textContent = localize('screenshot.instructions', 'Drag to capture a region · Esc to cancel');
-		button(hint, localize('screenshot.entire', 'Entire screen'), () => this.selectEntire());
-		button(hint, localize('screenshot.helpTitle', 'Screenshot Help'), () => this.showAccessibleContent(false));
-		button(hint, localize('screenshot.cancel', 'Cancel'), () => {
+		button(hint, localize('screenshot.entire', 'Entire screen'), 'entire', () => this.selectEntire());
+		button(hint, localize('screenshot.helpTitle', 'Screenshot Help'), 'help', () => this.showAccessibleContent(false));
+		button(hint, localize('screenshot.cancel', 'Cancel'), 'cancel', () => {
 			void this.complete({ kind: 'cancel' });
 		});
 		this.textInput = node('input', 'ash-screenshot-text');
