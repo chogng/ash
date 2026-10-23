@@ -51,7 +51,11 @@ import { createHash } from 'node:crypto';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService, UnavailableRemoteConnectionApi } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+import { TestViewDescriptorService, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewRegistry } from '../../../../common/views.js';
+import { ITimelineService } from '../../../../contrib/timeline/common/timeline.js';
+import { TimelineService } from '../../../../contrib/timeline/common/timelineService.js';
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import assert from "node:assert/strict";
 import { suite, test } from "mocha";
@@ -106,6 +110,49 @@ import { ExtensionResourceLoaderService } from '../../../../../platform/extensio
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
+
+test('a missing tree container isolates one registration while the fleet commits and activates other extensions', async () => {
+	const initial = snapshot(1, 'acme.run', [
+		{ kind: 'treeDataProvider', registrationId: 'missing-tree', viewId: 'acme.missing', title: 'Missing tree', containerId: 'missing.container' },
+		{ kind: 'treeDataProvider', registrationId: 'sibling-tree', viewId: 'acme.sibling', title: 'Sibling tree' },
+	]);
+	const healthy = { ...initial.extensions[0]!, id: 'acme.healthy', registrations: [{ kind: 'treeDataProvider' as const, registrationId: 'tree', viewId: 'acme.healthy', title: 'Healthy tree' }] };
+	const dormant = { ...dormantSnapshot(['*']).extensions[0]!, id: 'acme.lazy' };
+	const fleet = { ...initial, extensions: [...initial.extensions, healthy, dormant] };
+	const api = new FakeExtensionHostApi(fleet);
+	const activation = deferred<ExtensionHostFleetSnapshot>();
+	api.activationResult = activation.promise;
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using timeline = services.createInstance(TimelineService);
+	services.registerInstance(ITimelineService, timeline);
+	using registry = new WorkbenchViewRegistry();
+	using container = registry.registerViewContainer({ id: 'test.trees', title: 'Trees', location: ViewContainerLocation.Sidebar, isDefault: true });
+	using descriptors = new TestViewDescriptorService({ registry }, services.get(IContextKeyService));
+	services.registerInstance(IViewDescriptorService, descriptors);
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	const failures: string[] = [];
+	using failed = host.onDidFail(failure => failures.push(`${failure.extensionId}: ${failure.message}`));
+	await host.start();
+	await waitFor(() => api.activations.length === 1);
+	assert.equal(host.currentSnapshot.fleetGeneration, 1);
+	assert.deepEqual(host.currentSnapshot.extensions.map(runtime => runtime.id), ['acme.demo', 'acme.healthy', 'acme.lazy']);
+	assert.equal(host.state, 'degraded');
+	assert.deepEqual(failures, ['acme.demo: No container for tree view: acme.missing']);
+	assert.ok(descriptors.getViewDescriptorById('acme.sibling'));
+	assert.ok(descriptors.getViewDescriptorById('acme.healthy'));
+	assert.equal(api.activations[0]!.extensionId, 'acme.lazy');
+	assert.deepEqual(api.activations[0]!.event, { type: 'startupFinished' });
+	using recovered = registry.registerViewContainer({ id: 'missing.container', title: 'Recovered', location: ViewContainerLocation.Sidebar });
+	api.current = { ...fleet, generation: 2, extensions: fleet.extensions.slice(0, 2) };
+	api.emitChanged(2);
+	await waitFor(() => host.currentSnapshot.fleetGeneration === 2);
+	assert.equal(host.state, 'ready');
+	assert.ok(descriptors.getViewDescriptorById('acme.missing'));
+	await host.stop();
+	activation.resolve({ ...api.current, extensions: [...api.current.extensions, { ...dormant, lifecycle: 'ready', incarnation: 4, registrations: [] }] });
+	assert.equal(descriptors.getViewDescriptorById('acme.healthy'), null);
+});
 
 for (const stopBeforeReady of [false, true]) test(`provider activation waits for declarative identity and configuration${stopBeforeReady ? ' and stays stopped after a late catalog' : ''}`, async () => {
 	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run'));
@@ -1029,6 +1076,7 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 }
 
 class ProviderSink<TProvider> {
+	readonly onDidWriteTerminalData = Event.None;
 	readonly onDidStartTask = Event.None;
 	readonly onDidChangeTaskRun = Event.None;
 	readonly onWillNewSession = Event.None;

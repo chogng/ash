@@ -383,11 +383,11 @@ export class MainThreadExtensionApi extends Disposable {
 		this.debugApi.update(snapshot);
 		this.statusbar.update(snapshot);
 		this.scmApi.update(snapshot);
-		if (this.treeViews || snapshot.extensions.some(runtime => runtime.registrations.some(registration => registration.kind === 'treeDataProvider'))) {
-			(this.treeViews ??= this._register(this.instantiation.createInstance(MainThreadTreeViews, this.invocationTimeoutMillis))).update(snapshot);
-		}
+		const treeIssues = this.treeViews || snapshot.extensions.some(runtime => runtime.registrations.some(registration => registration.kind === 'treeDataProvider'))
+			? (this.treeViews ??= this._register(this.instantiation.createInstance(MainThreadTreeViews, this.invocationTimeoutMillis))).update(snapshot)
+			: [];
 		this.editorsApi?.updateSources(snapshot);
-		return this.activeContributions?.issues ?? [];
+		return [...this.activeContributions?.issues ?? [], ...treeIssues];
 	}
 
 	public clear(): void {
