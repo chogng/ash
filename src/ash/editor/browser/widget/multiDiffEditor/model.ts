@@ -1,5 +1,5 @@
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
 import type { URI } from '../../../../base/common/uri.js';
 
@@ -17,6 +17,8 @@ export interface IDocumentDiffItem {
 	readonly error: Error | undefined;
 	readonly onDidChange: Event<void>;
 	resolve(): Promise<DiffModel | undefined>;
+	/** Pins a comparison while a viewport or asynchronous navigation uses it. */
+	retain?(): IDisposable;
 }
 
 export interface IMultiDiffEditorModel {
@@ -73,7 +75,7 @@ export interface DocumentDiffItemDescriptor {
 	readonly binary?: boolean;
 }
 
-/** Resolves one comparison once; the caller retains ownership of its DiffModel. */
+/** Resolves comparisons on demand; source models and reload resources remain caller-owned. */
 export class DocumentDiffItem extends Disposable implements IDocumentDiffItem {
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	private readonly load: () => Promise<DiffModel | undefined>;
@@ -82,11 +84,16 @@ export class DocumentDiffItem extends Disposable implements IDocumentDiffItem {
 	private currentState: IDocumentDiffItem['state'];
 	private loadError: Error | undefined;
 	private resolvedBinary = false;
+	private users = 0;
 	readonly onDidChange: Event<void> = this.changeEmitter.event;
 
 	constructor(
 		private readonly descriptor: DocumentDiffItemDescriptor,
 		model: DiffModel | (() => Promise<DiffModel | undefined>) | undefined,
+		private readonly retention?: {
+			readonly onDidChange: (item: DocumentDiffItem) => void;
+			readonly release: () => void;
+		},
 	) {
 		super();
 		if (!model && !descriptor.binary) throw new TypeError('Text comparisons require a model loader');
@@ -111,6 +118,27 @@ export class DocumentDiffItem extends Disposable implements IDocumentDiffItem {
 	public get model(): DiffModel | undefined { return this.resolvedModel; }
 	public get state(): IDocumentDiffItem['state'] { return this.currentState; }
 	public get error(): Error | undefined { return this.loadError; }
+
+	public get isInUse(): boolean { return this.users > 0; }
+
+	public retain(): IDisposable {
+		this.users++;
+		this.retention?.onDidChange(this);
+		return toDisposable(() => {
+			this.users--;
+			if (!this.isDisposed) this.retention?.onDidChange(this);
+		});
+	}
+
+	/** Only a caller with a reloadable loader may release an unused comparison. */
+	public release(): boolean {
+		if (!this.retention || this.isInUse || this.pending || !this.resolvedModel) return false;
+		this.resolvedModel = undefined;
+		this.currentState = 'unresolved';
+		this.retention.release();
+		this.changeEmitter.fire();
+		return true;
+	}
 
 	public resolve(): Promise<DiffModel | undefined> {
 		if (this.isDisposed) return Promise.reject(new Error(`Comparison '${this.id}' has been disposed`));
@@ -140,6 +168,10 @@ export class DocumentDiffItem extends Disposable implements IDocumentDiffItem {
 			this.currentState = 'error';
 			this.changeEmitter.fire();
 			throw this.loadError;
+		} finally {
+			// A settled promise otherwise keeps its resolved DiffModel alive after eviction.
+			this.pending = undefined;
+			if (!this.isDisposed) this.retention?.onDidChange(this);
 		}
 	}
 }

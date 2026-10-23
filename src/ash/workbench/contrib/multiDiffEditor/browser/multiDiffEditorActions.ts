@@ -8,7 +8,7 @@ import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
-import { MultiDiffEditor, MultiDiffEditorAllCollapsed } from './multiDiffEditor.js';
+import { MultiDiffEditor, MultiDiffEditorAllCollapsed, MultiDiffEditorHideUnchangedRegions } from './multiDiffEditor.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 
@@ -125,7 +125,7 @@ export class MultiDiffToggleCollapseUnchangedRegionsAction extends Action2 {
 			title: localize2({ bundle: 'ash', key: 'toggleCollapseUnchangedRegions' }, 'Toggle Collapse Unchanged Regions'),
 			icon: Lxicon.map,
 			precondition: MultiDiffEditorActive,
-			toggled: ContextKeyExpr.equals('config.diffEditor.hideUnchangedRegions.enabled', true),
+			toggled: MultiDiffEditorHideUnchangedRegions.isEqualTo(true),
 			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: '1_diff', order: 21 },
 		});
 	}

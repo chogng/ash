@@ -4,7 +4,7 @@ import { type URI } from '../../../../base/common/uri.js';
 import { type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../../editor/common/diff/documentDiffProvider.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
-import { LineDiffKind, type LineDiff, type LineDiffHunk, type LineDiffRow } from '../../../../editor/common/diff/lineDiff.js';
+import { LineDiffKind, type LineDiffRows, type LineDiffRow } from '../../../../editor/common/diff/lineDiff.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
 import {
 	type IQuickDiffModel,
@@ -158,7 +158,7 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 			const rows = change.comparison.model.diff?.rows;
 			if (!rows) return false;
 			for (let rowIndex = change.rowStart; rowIndex < change.rowEnd; rowIndex += 1) {
-				const row = rows[rowIndex];
+				const row = rows.get(rowIndex);
 				if (row && (row.modifiedLineIndex ?? deletionAnchor(rows, rowIndex, this.modified.lineCount)) === lineIndex) return true;
 			}
 			return false;
@@ -207,7 +207,7 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 function changesForComparison(comparison: QuickDiffComparison, modifiedLineCount: number): QuickDiffChange[] {
 	const diff = comparison.model.diff;
 	if (!diff) return [];
-	return hunksOf(diff).map((hunk, hunkIndex) => {
+	return diff.hunks.map((hunk, hunkIndex) => {
 		const rows = diff.rows.slice(hunk.rowStart, hunk.rowEnd);
 		const lineIndex = firstModifiedLine(rows) ?? deletionAnchor(diff.rows, hunk.rowStart, modifiedLineCount);
 		return Object.freeze({
@@ -220,30 +220,6 @@ function changesForComparison(comparison: QuickDiffComparison, modifiedLineCount
 	});
 }
 
-function hunksOf(diff: LineDiff): readonly LineDiffHunk[] {
-	if (diff.hunks.length > 0) return diff.hunks;
-	const hunks: LineDiffHunk[] = [];
-	let rowStart = -1;
-	for (let rowIndex = 0; rowIndex <= diff.rows.length; rowIndex += 1) {
-		const changed = rowIndex < diff.rows.length && diff.rows[rowIndex]!.kind !== LineDiffKind.Unchanged;
-		if (changed && rowStart < 0) rowStart = rowIndex;
-		if (changed || rowStart < 0) continue;
-		const rows = diff.rows.slice(rowStart, rowIndex);
-		const originalLines = rows.flatMap(row => row.originalLineIndex === undefined ? [] : [row.originalLineIndex]);
-		const modifiedLines = rows.flatMap(row => row.modifiedLineIndex === undefined ? [] : [row.modifiedLineIndex]);
-		hunks.push(Object.freeze({
-			rowStart,
-			rowEnd: rowIndex,
-			originalStartLineIndex: originalLines[0] ?? nearestOriginalLine(diff.rows, rowStart),
-			originalLineCount: originalLines.length,
-			modifiedStartLineIndex: modifiedLines[0] ?? nearestModifiedLine(diff.rows, rowStart),
-			modifiedLineCount: modifiedLines.length,
-		}));
-		rowStart = -1;
-	}
-	return Object.freeze(hunks);
-}
-
 function hunkKind(rows: readonly LineDiffRow[]): Exclude<LineDiffKind, LineDiffKind.Unchanged> {
 	if (rows.every(row => row.kind === LineDiffKind.Added)) return LineDiffKind.Added;
 	if (rows.every(row => row.kind === LineDiffKind.Removed)) return LineDiffKind.Removed;
@@ -254,36 +230,16 @@ function firstModifiedLine(rows: readonly LineDiffRow[]): number | undefined {
 	return rows.find(row => row.modifiedLineIndex !== undefined)?.modifiedLineIndex;
 }
 
-function deletionAnchor(rows: readonly LineDiffRow[], rowIndex: number, lineCount: number): number {
+function deletionAnchor(rows: LineDiffRows, rowIndex: number, lineCount: number): number {
 	for (let index = rowIndex + 1; index < rows.length; index += 1) {
-		const lineIndex = rows[index]?.modifiedLineIndex;
+		const lineIndex = rows.get(index)?.modifiedLineIndex;
 		if (lineIndex !== undefined) return lineIndex;
 	}
 	for (let index = rowIndex - 1; index >= 0; index -= 1) {
-		const lineIndex = rows[index]?.modifiedLineIndex;
+		const lineIndex = rows.get(index)?.modifiedLineIndex;
 		if (lineIndex !== undefined) return lineIndex;
 	}
 	return Math.max(0, lineCount - 1);
-}
-
-function nearestOriginalLine(rows: readonly LineDiffRow[], rowIndex: number): number {
-	return nearestLine(rows, rowIndex, 'originalLineIndex');
-}
-
-function nearestModifiedLine(rows: readonly LineDiffRow[], rowIndex: number): number {
-	return nearestLine(rows, rowIndex, 'modifiedLineIndex');
-}
-
-function nearestLine(rows: readonly LineDiffRow[], rowIndex: number, side: 'originalLineIndex' | 'modifiedLineIndex'): number {
-	for (let index = rowIndex; index < rows.length; index += 1) {
-		const lineIndex = rows[index]?.[side];
-		if (lineIndex !== undefined) return lineIndex;
-	}
-	for (let index = rowIndex - 1; index >= 0; index -= 1) {
-		const lineIndex = rows[index]?.[side];
-		if (lineIndex !== undefined) return lineIndex + 1;
-	}
-	return 0;
 }
 
 function validateLineIndex(lineIndex: number): void {

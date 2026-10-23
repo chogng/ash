@@ -1120,7 +1120,7 @@ const harness = {
 			state: model.state.kind,
 			version: modified.version,
 			resultVersion: model.state.modifiedVersion,
-			kinds: model.diff?.rows.map(row => row.kind),
+			kinds: Array.from(model.diff?.rows ?? []).map(row => row.kind),
 			quickDiffReady: reference.object.state.comparisons[0]?.model.state.kind === 'ready',
 			quickDiffChanges: reference.object.state.changes.length,
 			baselineRequests,
@@ -1143,7 +1143,7 @@ const harness = {
 		using nextOriginal = new TextModel('old');
 		using nextModified = new TextModel('new');
 		const next = await computation.computeDiff(nextOriginal, nextModified, diffOptions, CancellationToken.None);
-		return { outcome: await outcome, kinds: toLineDiff(next, 1, 1).rows.map(row => row.kind) };
+		return { outcome: await outcome, kinds: Array.from(toLineDiff(next, 1, 1).rows).map(row => row.kind) };
 	},
 	async compareLineEndings() {
 		using original = new TextModel('first\r\nold\r\nlast');

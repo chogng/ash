@@ -875,6 +875,9 @@ test.describe('SCM editor groups', () => {
 			await expect(collapseAll.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'fold');
 			const actionIds = await group.title.locator('.ash-editor-title-actions [data-action-id]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-action-id')));
 			expect(actionIds).toEqual(['multiDiffEditor.goToPreviousChange', 'multiDiffEditor.goToNextChange', 'multiDiffEditor.toggleCollapseAll', 'workbench.action.splitEditor', 'ash.toolbar.moreActions']);
+			await expect.poll(() => multi.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
+			const unchangedLabel = locale === 'zh-CN' ? '切换折叠未变更区域' : 'Toggle Collapse Unchanged Regions';
+			expect((await workbench.menus.inspect(application, () => more.click())).find(item => item.label === unchangedLabel)?.checked).toBe(true);
 			const positions = await Promise.all([previous, next, collapseAll, more].map(button => button.boundingBox()));
 			expect(positions.every((box, index) => box && (index === 0 || box.x > positions[index - 1]!.x))).toBe(true);
 			await expect(collapseAll).toHaveAttribute('aria-pressed', 'false');
@@ -910,7 +913,10 @@ test.describe('SCM editor groups', () => {
 			await collapseAll.press('Space');
 			await expect(collapseAll).toHaveAttribute('aria-pressed', 'false');
 			await expect(collapseAll.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'fold');
-			await workbench.menus.select(application, () => more.click(), [locale === 'zh-CN' ? '切换折叠未变更区域' : 'Toggle Collapse Unchanged Regions']);
+			await workbench.menus.select(application, () => more.click(), [unchangedLabel]);
+			await expect(multi.locator('.ash-diff-hidden-region')).toHaveCount(0);
+			expect((await workbench.menus.inspect(application, () => more.click())).find(item => item.label === unchangedLabel)?.checked).toBe(false);
+			await workbench.menus.select(application, () => more.click(), [unchangedLabel]);
 			await expect.poll(() => multi.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			const location = multi.locator('.stanza-multi-diff-editor-accessibility-status');
 			await expect(location).toContainText('main.ts');

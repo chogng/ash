@@ -207,7 +207,7 @@ suite('Frontend diff Worker', () => {
 		});
 		assert.equal(model.state.modifiedVersion, modified.version);
 		assert.equal(modified.getText(), 'current 😀');
-		assert.deepEqual(model.diff!.rows.map(row => row.kind), ['modified']);
+		assert.deepEqual(Array.from(model.diff!.rows).map(row => row.kind), ['modified']);
 	});
 });
 

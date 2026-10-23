@@ -502,7 +502,17 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 		// A text editor retains one cursor row when hidden ranges cover a shrinking model.
 		if (!visibleLogicalLines.some(Boolean)) visibleLogicalLines[0] = true;
 		Object.freeze(visibleLogicalLines);
-		const lines = source.lines.filter(line => visibleLogicalLines[line.logicalLineIndex]);
+		// The unwrapped projection is lazy. Reading source.lines would allocate
+		// and cache a row object for every hidden line on each editor mount.
+		const lines: EditorVisualLine[] = [];
+		for (let logicalLineIndex = 0; logicalLineIndex < source.logicalLineCount; logicalLineIndex++) {
+			if (!visibleLogicalLines[logicalLineIndex]) continue;
+			const start = source.firstVisualLineIndex(logicalLineIndex);
+			const end = logicalLineIndex + 1 < source.logicalLineCount
+				? source.firstVisualLineIndex(logicalLineIndex + 1)
+				: source.visualLineCount;
+			for (let index = start; index < end; index++) lines.push(source.lineAt(index)!);
+		}
 		const anchors = createVisualLineAnchors(source, visibleLogicalLines, lines);
 		return EditorVisualLineProjection.fromVisibleLines(source.modelVersion, source.logicalLineCount, lines, anchors);
 	}
@@ -723,7 +733,17 @@ class ViewModelCoordinatesConverter implements ICoordinatesConverter {
 
 	public getModelLineViewLineCount(modelLineNumber: number): number {
 		if (modelLineNumber < 1 || modelLineNumber > this.model.getLineCount()) return 1;
-		return this.lines.ensureCurrent().lines.filter(line => line.logicalLineIndex === modelLineNumber - 1).length || 1;
+		const projection = this.lines.ensureCurrent();
+		const start = projection.firstVisualLineIndex(modelLineNumber - 1);
+		let count = 0;
+		for (let index = start; index < projection.visualLineCount; index++) {
+			const line = projection.lineAt(index)!;
+			// Hidden lines share an anchor with a visible neighbour.
+			if (line.logicalLineIndex !== modelLineNumber - 1) break;
+			count++;
+			if (line.lastForLogicalLine) break;
+		}
+		return count || 1;
 	}
 
 	public getViewLineNumberOfModelPosition(modelLineNumber: number, modelColumn: number): number {

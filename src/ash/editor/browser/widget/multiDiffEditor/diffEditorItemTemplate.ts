@@ -1,6 +1,6 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { formatNlsMessage, localize } from '../../../../nls.js';
 import { type CodeEditorViewState, type CodeEditorWidget } from '../codeEditor/codeEditorWidget.js';
@@ -30,6 +30,7 @@ export class DiffEditorItemTemplate extends Disposable {
 	private readonly bodyDomNode: HTMLDivElement;
 	private readonly incompleteStatusDomNode: HTMLSpanElement;
 	private readonly editorSlot = this._register(new MutableDisposable<DiffEditorWidget>());
+	private readonly modelRetention = this._register(new MutableDisposable<IDisposable>());
 	private readonly editorListeners = this._register(new DisposableStore());
 	private originalState: CodeEditorViewState | null = null;
 	private modifiedState: CodeEditorViewState | null = null;
@@ -130,6 +131,10 @@ export class DiffEditorItemTemplate extends Disposable {
 		}
 	}
 
+	public retainModel(): void {
+		if (!this.modelRetention.value) this.modelRetention.value = this.item.retain?.();
+	}
+
 	public mount(editor: DiffEditorWidget): void {
 		this.editorListeners.clear();
 		this.editorSlot.value = editor;
@@ -160,11 +165,12 @@ export class DiffEditorItemTemplate extends Disposable {
 
 	public unmount(): void {
 		const editor = this.editor;
-		if (!editor) return;
+		if (!editor) { this.modelRetention.clear(); return; }
 		this.originalState = editor.originalEditor.saveViewState();
 		this.modifiedState = editor.modifiedEditor.saveViewState();
 		this.editorListeners.clear();
 		this.editorSlot.clear();
+		this.modelRetention.clear();
 	}
 
 	public saveViewState(): DiffEditorItemViewState {

@@ -11,7 +11,7 @@ import { type HideUnchangedRegionsOptions } from '../../../../common/config/diff
 import { LineRange } from '../../../../common/core/ranges/lineRange.js';
 import { Range } from '../../../../common/core/range.js';
 import { type DiffModel } from '../../../../common/diff/diffModel.js';
-import { LineDiffKind, type LineDiff } from '../../../../common/diff/lineDiff.js';
+import { type LineDiff } from '../../../../common/diff/lineDiff.js';
 import { type LanguageSymbolKind } from '../../../../common/languages.js';
 import { type TextModel } from '../../../../common/model/textModel.js';
 import { GlyphMarginLane } from '../../../../common/model.js';
@@ -425,15 +425,12 @@ function hiddenRange(range: LineRange, region: UnchangedRegion, includeEmpty = f
 function unchangedRegions(diff: LineDiff, options: HideUnchangedRegionsOptions): UnchangedRegion[] {
 	if (diff.hunks.length === 0) return [];
 	const regions: UnchangedRegion[] = [];
-	for (let start = 0; start < diff.rows.length;) {
-		if (diff.rows[start].kind !== LineDiffKind.Unchanged) { start++; continue; }
-		let end = start + 1;
-		while (end < diff.rows.length && diff.rows[end].kind === LineDiffKind.Unchanged) end++;
+	for (const [start, end] of diff.rows.unchangedRanges()) {
 		const contextAbove = start === 0 ? 0 : options.contextLineCount;
 		const contextBelow = end === diff.rows.length ? 0 : options.contextLineCount;
 		if (end - start - contextAbove - contextBelow >= options.minimumLineCount) {
-			const first = diff.rows[start + contextAbove];
-			const last = diff.rows[end - contextBelow - 1];
+			const first = diff.rows.get(start + contextAbove)!;
+			const last = diff.rows.get(end - contextBelow - 1)!;
 			regions.push({
 				original: new LineRange(first.originalLineIndex! + 1, last.originalLineIndex! + 2),
 				modified: new LineRange(first.modifiedLineIndex! + 1, last.modifiedLineIndex! + 2),
@@ -441,7 +438,6 @@ function unchangedRegions(diff: LineDiff, options: HideUnchangedRegionsOptions):
 				revealedBelow: 0,
 			});
 		}
-		start = end;
 	}
 	return regions;
 }
