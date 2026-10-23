@@ -13,7 +13,6 @@ import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { installEditorTestGlobals } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import { IImageEditorService } from '../../../../services/imageEditor/common/imageEditorService.js';
 import { ImageEditorService } from '../../../../services/imageEditor/browser/imageEditorService.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';

@@ -2,6 +2,7 @@ use crate::Project;
 use crate::ProjectCommandRequest;
 use crate::ProjectCommit;
 use crate::ProjectError;
+use crate::ProjectStatus;
 use crate::ProjectStore;
 use crate::ProjectStoreError;
 use crate::ProjectStoreOutcome;
@@ -34,12 +35,18 @@ impl ProjectCoordinator {
         for project in &projects {
             project.validate()?;
         }
-        Ok(projects)
+        Ok(projects
+            .into_iter()
+            .filter(|project| project.status != ProjectStatus::Deleted)
+            .collect())
     }
 
     pub fn read(&self, project_id: &ProjectId) -> Result<Project, ProjectError> {
         let project = self.store.load(project_id).map_err(map_store_error)?;
         project.validate()?;
+        if project.status == ProjectStatus::Deleted {
+            return Err(ProjectError::NotFound(project_id.to_string()));
+        }
         Ok(project)
     }
 

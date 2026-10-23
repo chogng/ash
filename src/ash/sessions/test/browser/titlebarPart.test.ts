@@ -107,6 +107,16 @@ test('Sessions titlebar initializes localized actions and closes the application
 	const modeHost = titlebar.domNode.querySelector<HTMLElement>('.ash-sessions-workspace-mode')!;
 	const chatMode = modeHost.querySelector<HTMLButtonElement>('button')!;
 	try {
+		const firstPage = browser.window.document.createElement('nav');
+		const nextPage = browser.window.document.createElement('nav');
+		const firstMount = titlebar.setPageContent(firstPage);
+		assert.equal(titlebar.domNode.querySelector('.ash-sessions-titlebar-page-content')!.firstElementChild, firstPage);
+		const nextMount = titlebar.setPageContent(nextPage);
+		assert.equal(firstPage.isConnected, false, 'Replacing a page detaches its retained titlebar content');
+		firstMount.dispose();
+		assert.equal(nextPage.isConnected, true, 'Releasing an old page must preserve the visible page titlebar');
+		nextMount.dispose();
+		assert.equal(titlebar.domNode.querySelector('.ash-sessions-titlebar-page-content')!.childElementCount, 0);
 		assert.equal(modeHost.hidden, false);
 		menuButton().click();
 		assert.equal(menuButton().getAttribute('aria-expanded'), 'true');

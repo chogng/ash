@@ -13,7 +13,7 @@ description: Import or update Ash UI icons from SVG sources, build static or var
 
 - **IDE 和 Agent Window 都使用 SVG 生成的 WOFF2**，共用图标注册、主题解析与字体 renderer。
 - **IDE 保持原 SVG 的外观**：保留轮廓、线宽、尺寸和留白，静态字体默认字重为 400。400 是字体的常规字重标识，不要求把不同原稿的线宽统一成某个数值；不得因格式迁移调整 IDE 的粗细。
-- **Agent Window 独立调整粗细**：专用字体选择和字重设置限定在 `.ash-sessions-window`，不修改共享默认值或影响独立 IDE 窗口。单色线性图标统一为 16px 下的 1.25px 设计线宽；功能图标使用线框，选中不切实心。后续调整遵循 [Sessions STYLE.md](../../../src/ash/sessions/STYLE.md)。
+- **Agent Window 独立调整粗细**：专用字体选择和字重设置限定在 `.ash-sessions-window`，不修改共享默认值或影响独立 IDE 窗口。单色线性图标统一为 16px 下的 1.25px 设计线宽。后续调整遵循 [Sessions STYLE.md](../../../src/ash/sessions/STYLE.md)。
 - 用户只提供一套原始 SVG；需要可变粗细时由 Agent 生成兼容母版，不要求用户另交 Agent Window 专用的 bold SVG。
 
 ## 导入与字形约定
@@ -73,7 +73,7 @@ pnpm icons:build
 
 `scripts/build_sessions_font.py` 按 `resources/icons/font/sessions.json` 生成 Sessions 专用轮廓。普通描边按目标线宽展开；以填充路径导出的线框必须在 `outlinedFills` 中显式分类，并确认原线宽；遮罩内侧描边通过 `insetStrokes` 校正可见宽度。账户头像、停止方块等需要取消实心的几何形状由 `outlineShapes` 选择轮廓；与已有描边重合的实心装饰由 `omitShapes` 排除。索引是排除 defs/mask/clipPath 内容后的可见几何元素顺序，从 0 开始。新增或替换 SVG 时同步核对分类，保留必要细节与品牌造型，不从任意填充图形猜测中心线。
 
-全量 Sessions 字体保留已确认四字形的真实可变数据，其余字形固定在 1.25px 设计轮廓，不宣称这些固定字形支持粗细插值。存在对应线框的 `*-filled` 码点在 Sessions 字体中映射到线框；IDE 的码点和原字形保持不变。
+全量 Sessions 字体保留已确认四字形的真实可变数据，其余字形固定在 1.25px 设计轮廓，不宣称这些固定字形支持粗细插值。`*-filled` 保留其语义对应的实心图稿；IDE 的码点和原字形保持不变。
 
 ## 接入 Ash 与 VS Code 对齐边界
 

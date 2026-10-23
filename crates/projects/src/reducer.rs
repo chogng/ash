@@ -70,8 +70,19 @@ pub(crate) fn apply(
 }
 
 fn apply_existing(project: &mut Project, command: &ProjectCommand) -> Result<(), ProjectError> {
+    if project.status == ProjectStatus::Deleted {
+        return Err(ProjectError::NotFound(project.project_id.to_string()));
+    }
     match command {
         ProjectCommand::Create { .. } => unreachable!("existing create rejected by caller"),
+        ProjectCommand::Delete => {
+            // Keep a revisioned tombstone for command replay; references never own their source data.
+            project.status = ProjectStatus::Deleted;
+            project.roots.clear();
+            project.session_ids.clear();
+            project.materials.clear();
+            return Ok(());
+        }
         ProjectCommand::Restore => {
             if project.status != ProjectStatus::Archived {
                 return Err(ProjectError::InvalidTransition(

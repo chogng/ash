@@ -4,16 +4,21 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import { addDisposableListener, getActiveElement, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Dialog, DialogContentsAlignment } from '../../../../base/browser/ui/dialog/dialog.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import type { IAction } from '../../../../base/common/actions.js';
+import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { basename } from '../../../../base/common/resources.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
-import type { Project, ProjectMaterial } from '../../../../platform/projects/common/projectService.js';
+import type { Project, ProjectMaterial, ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
@@ -21,6 +26,7 @@ import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { IProjectsService, type ProjectsState } from './projectsService.js';
+import { ISessionsTitlebarService } from '../../../browser/parts/titlebar/titlebarPart.js';
 import './projects.css';
 
 /** Projects own the front page. Material types appear only inside an opened project. */
@@ -29,8 +35,12 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	public domNode!: HTMLElement;
 	private readonly content = this._register(new DisposableStore());
 	private readonly dialog = this._register(new MutableDisposable<DisposableStore>());
+	private readonly titlebarContent = this._register(new MutableDisposable());
 	private title!: HTMLElement;
 	private breadcrumb!: HTMLElement;
+	private breadcrumbProjects!: Button;
+	private breadcrumbSeparator!: HTMLElement;
+	private breadcrumbName!: HTMLElement;
 	private search!: HTMLInputElement;
 	private tools!: HTMLElement;
 	private body!: HTMLElement;
@@ -46,6 +56,9 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		@IHoverService private readonly hover: IHoverService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@ISessionsTitlebarService private readonly titlebar: ISessionsTitlebarService,
+		@IContextMenuService private readonly contextMenus: IContextMenuService,
+		@IDialogService private readonly dialogs: IDialogService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) { super('sessions.editor.projects', themeService, storageService); }
@@ -58,7 +71,12 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this._register(this.contextKeys.createScoped(this.domNode)).createKey('sessionsProjectsFocused', true);
 		const main = h(document, 'div', { className: 'ash-projects-main' });
 		this.breadcrumb = h(document, 'nav', { className: 'ash-projects-breadcrumb', attributes: { 'aria-label': localize('projects.breadcrumb', 'Project navigation') } });
-		this._register(new Button(this.breadcrumb, { ...defaultButtonStyles, label: localize('projects.title', 'Projects'), icon: Lxicon.arrowLeft, onClick: () => { this.projects.showProjects(); this.createButton.focus(); } }));
+		this._register(this.contextKeys.createScoped(this.breadcrumb)).createKey('sessionsProjectsFocused', true);
+		this.breadcrumbProjects = this._register(new Button(this.breadcrumb, { ...defaultButtonStyles, label: localize('projects.title', 'Projects'), onClick: () => { this.projects.showProjects(); this.createButton.focus(); } }));
+		this.breadcrumbSeparator = h(document, 'span', { className: 'ash-projects-breadcrumb-separator', attributes: { 'aria-hidden': 'true' } }, '/');
+		this.breadcrumbName = h(document, 'span', { className: 'ash-projects-breadcrumb-name', attributes: { 'aria-current': 'page' } });
+		this.breadcrumb.append(this.breadcrumbSeparator, this.breadcrumbName);
+		this._register(this.hover.setupDelayedHover(this.breadcrumbName, () => ({ content: this.breadcrumbName.textContent ?? '' })));
 		const heading = h(document, 'header', { className: 'ash-projects-heading' });
 		this.title = h(document, 'h1', { properties: { tabIndex: -1 } }, localize('projects.title', 'Projects'));
 		this.tools = h(document, 'div', { className: 'ash-projects-tools' });
@@ -72,15 +90,17 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.retry = this._register(new Button(feedback, { ...defaultButtonStyles, label: localize('projects.retry', 'Try again'), onClick: () => { void this.projects.reload(); } }));
 		feedback.prepend(this.message);
 		this.body = h(document, 'div', { className: 'ash-projects-body' });
-		main.append(this.breadcrumb, heading, this.search, feedback, this.body);
+		main.append(heading, this.search, feedback, this.body);
 		this.domNode.append(main);
 		this._register(addDisposableListener(this.search, 'input', () => this.projects.setQuery(this.search.value)));
 		this._register(addDisposableListener(this.body, 'keydown', event => this.navigateCards(event)));
-		this._register(addDisposableListener(this.domNode, 'focusin', event => {
-			if (!this.domNode.contains(event.relatedTarget as Node) && this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.Projects)) {
-				status(localize('projects.helpHint', 'Press Alt+F1 for Projects accessibility help.'));
-			}
-		}));
+		for (const container of [this.domNode, this.breadcrumb]) {
+			this._register(addDisposableListener(container, 'focusin', event => {
+				if (!this.domNode.contains(event.relatedTarget as Node) && !this.breadcrumb.contains(event.relatedTarget as Node) && this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.Projects)) {
+					status(localize('projects.helpHint', 'Press Alt+F1 for Projects accessibility help.'));
+				}
+			}));
+		}
 		this._register(autorun(reader => this.render(this.projects.state.read(reader))));
 	}
 
@@ -88,8 +108,13 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	public override clearInput(): void { }
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
-		if (visible) { void this.projects.reload(); }
-		else { this.dialog.clear(); }
+		if (visible) {
+			this.titlebarContent.value ??= this.titlebar.setPageContent(this.breadcrumb);
+			void this.projects.reload();
+		} else {
+			this.titlebarContent.clear();
+			this.dialog.clear();
+		}
 	}
 	public override layout(dimension: IDimension): void { this.domNode.classList.toggle('narrow', dimension.width < 760); }
 	public override focus(): void { this.projects.state.get().selectedId ? this.title.focus() : this.createButton.focus(); }
@@ -99,7 +124,11 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const focusKey = this.body.contains(focused) ? focused.dataset.projectControl : undefined;
 		this.content.clear();
 		this.body.replaceChildren();
-		this.breadcrumb.hidden = !state.selectedId;
+		this.breadcrumbSeparator.hidden = !state.selected;
+		this.breadcrumbName.hidden = !state.selected;
+		this.breadcrumbName.textContent = state.selected?.name ?? '';
+		if (state.selectedId) { this.breadcrumbProjects.domNode.removeAttribute('aria-current'); }
+		else { this.breadcrumbProjects.domNode.setAttribute('aria-current', 'page'); }
 		this.tools.hidden = !!state.selectedId;
 		this.title.textContent = state.selected?.name ?? localize('projects.title', 'Projects');
 		this.title.title = this.title.textContent;
@@ -142,15 +171,66 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const document = this.domNode.ownerDocument;
 		const list = h(document, 'ul', { className: 'ash-projects-grid', attributes: { 'aria-label': localize('projects.title', 'Projects') } });
 		for (const project of this.projects.getProjects()) {
-			const row = h(document, 'li');
-			const card = h(document, 'button', { className: 'ash-projects-card', properties: { type: 'button' }, attributes: { 'aria-label': project.name } });
+			const row = h(document, 'li', { className: 'ash-projects-row' });
+			const card = h(document, 'button', { className: 'ash-button ash-button-quiet ash-projects-card', properties: { type: 'button' }, attributes: { 'aria-label': project.name } });
 			card.dataset.projectControl = project.id;
-			card.append(h(document, 'span', { className: 'ash-projects-card-mark', attributes: { 'aria-hidden': 'true' } }), h(document, 'span', { className: 'ash-projects-card-name' }, project.name), h(document, 'span', { className: 'ash-projects-card-caption' }, localize('projects.open', 'Open project')));
+			const mark = h(document, 'span', { className: 'ash-projects-card-mark', attributes: { 'aria-hidden': 'true' } });
+			appendIcon(Lxicon.projects, mark);
+			const content = h(document, 'span', { className: 'ash-projects-card-content' }, h(document, 'span', { className: 'ash-projects-card-name' }, project.name), h(document, 'span', { className: 'ash-projects-card-caption' }, localize('projects.open', 'Open project')));
+			card.append(mark, content);
+			const actionsHost = h(document, 'div', { className: 'ash-projects-card-actions' });
+			const pinned = this.projects.isPinned(project.id);
+			const pinLabel = pinned ? localize('projects.unpin', 'Unpin {0}', project.name) : localize('projects.pin', 'Pin {0}', project.name);
+			const pin: IAction = {
+				id: 'projects.pin', label: pinLabel, tooltip: pinLabel, icon: pinned ? Lxicon.pinFilled : Lxicon.pinned,
+				enabled: !this.projects.state.get().busy, checked: pinned,
+				run: () => this.projects.togglePinned(project.id),
+			};
+			const toolbar = this.content.add(new WorkbenchToolBar(actionsHost, {
+				showContextMenu: delegate => {
+					row.classList.add('menu-visible');
+					this.contextMenus.showContextMenu({
+						...delegate,
+						getMenuClassName: () => 'ash-projects-menu',
+						onHide: didCancel => { row.classList.remove('menu-visible'); delegate.onHide?.(didCancel); },
+					});
+				},
+			}, { ariaLabel: localize('projects.actions', 'Actions for {0}', project.name), presentation: 'inherit-foreground', highlightToggledItems: false }));
+			toolbar.setActions([], this.projectActions(project), [pin]);
+			const pinButton = actionsHost.querySelector<HTMLElement>('[data-action-id="projects.pin"] button')!;
+			pinButton.dataset.projectControl = `pin:${project.id}`;
+			const moreButton = actionsHost.querySelector<HTMLElement>('.ash-toolbar-more-actions button')!;
+			moreButton.dataset.projectControl = `more:${project.id}`;
 			this.content.add(this.hover.setupDelayedHover(card, { content: project.name }));
 			this.content.add(addDisposableListener(card, 'click', () => { void this.projects.openProject(project.id).then(() => this.title.focus()); }));
-			row.append(card); list.append(row);
+			row.append(card, actionsHost); list.append(row);
 		}
 		this.body.append(list);
+	}
+
+	private projectActions(project: ProjectSummary): readonly IAction[] {
+		const action = (id: string, label: string, icon: IAction['icon'], run: () => unknown): IAction => ({ id, label, tooltip: label, icon, enabled: !this.projects.state.get().busy, run });
+		return [
+			action('projects.edit', localize('projects.edit', 'Edit details'), Lxicon.edit, async () => {
+				const current = await this.projects.readProject(project.id);
+				if (current && !this.isDisposed && this.isVisible()) { this.showProjectDialog(current); }
+			}),
+			action('projects.archive', localize('projects.archive', 'Archive'), Lxicon.archive, async () => {
+				await this.projects.archive(project);
+				if (!this.isDisposed && this.isVisible()) { (this.body.querySelector<HTMLElement>('.ash-projects-card') ?? this.createButton.domNode).focus(); }
+			}),
+			action('projects.delete', localize('projects.delete', 'Delete'), Lxicon.trash, async () => {
+				const result = await this.dialogs.confirm({
+					message: localize('projects.deleteConfirm', 'Delete project "{0}"?', project.name),
+					detail: localize('projects.deleteDetail', 'The project and its material references will be removed. Conversations and source files will be kept.'),
+					primaryButton: localize('projects.delete', 'Delete'),
+				});
+				if (result.confirmed) {
+					await this.projects.remove(project);
+					if (!this.isDisposed && this.isVisible()) { (this.body.querySelector<HTMLElement>('.ash-projects-card') ?? this.createButton.domNode).focus(); }
+				}
+			}),
+		];
 	}
 
 	private renderProject(project: Project): void {
@@ -274,8 +354,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const updateSubmit = () => { submit.enabled = !!name.value.trim() && !needsMerge && unresolved.size === 0; };
 		store.add(addDisposableListener(name, 'input', updateSubmit));
 		const offerMerge = (): boolean => {
-			const latest = this.projects.state.get().selected;
-			if (!base || latest?.id !== base.id || latest.revision === base.revision) { return false; }
+			const latest = this.projects.state.get().projects.find(item => item.id === base?.id);
+			if (!base || !latest || latest.revision === base.revision) { return false; }
 			needsMerge = true;
 			feedback.textContent = localize('projects.editConflict', 'This project changed in another window. Reload and merge to keep your draft and include the saved changes.');
 			reload.domNode.hidden = false;
@@ -312,8 +392,9 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			reload.enabled = false; name.disabled = true; description.disabled = true; folder.enabled = false;
 			await this.projects.reload();
 			if (store.isDisposed) { return; }
+			const latest = await this.projects.readProject(base.id);
+			if (store.isDisposed) { return; }
 			const state = this.projects.state.get();
-			const latest = state.selected;
 			if (state.message || latest?.id !== base.id) {
 				feedback.textContent = state.message ?? localize('projects.loadFailed', 'Could not load projects. Try again.');
 			} else {

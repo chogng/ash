@@ -98,7 +98,6 @@ import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibi
 import { ChatService } from "../../../workbench/services/chat/browser/chatService.js";
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
-import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
 import { BrowserImageEditorService } from '../../../workbench/services/imageEditor/browser/browserImageEditorService.js';
 import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from "../../../workbench/services/chat/common/chatService.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';

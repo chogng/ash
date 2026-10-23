@@ -3651,6 +3651,9 @@ impl AppServer {
             Some(ClientMethod::ProjectRestore) => self
                 .project_processor()
                 .project_restore(connection, &request.params),
+            Some(ClientMethod::ProjectDelete) => self
+                .project_processor()
+                .project_delete(connection, &request.params),
             Some(ClientMethod::TeamList) => {
                 self.team_processor().team_list(connection, &request.params)
             }

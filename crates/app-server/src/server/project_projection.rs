@@ -65,5 +65,6 @@ fn status(status: ProjectStatus) -> ProjectStatusDto {
     match status {
         ProjectStatus::Active => ProjectStatusDto::Active,
         ProjectStatus::Archived => ProjectStatusDto::Archived,
+        ProjectStatus::Deleted => ProjectStatusDto::Deleted,
     }
 }
