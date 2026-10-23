@@ -75,7 +75,7 @@ test('Suggested context follows active files without adding draft context and hi
 test('Adding suggested context captures unsaved text and restores input focus', async () => {
 	using resources = new DisposableStore();
 	const { widget, attachments, input } = setup(resources, async () => { assert.fail('Unsaved text must take precedence'); }, 'const unsaved = true;');
-	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(resolve)));
+	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(() => resolve())));
 	widget.domNode.querySelector('button')!.focus();
 	widget.domNode.querySelector('button')!.click();
 	await added;
@@ -91,7 +91,7 @@ test('A pending suggested file keeps its clicked identity and ignores completion
 	const pending = new Promise<string>(resolve => { complete = resolve; });
 	const reads: string[] = [];
 	const { widget, attachments, activate } = setup(resources, async resource => { reads.push(resource.path); return pending; });
-	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(resolve)));
+	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(() => resolve())));
 	widget.domNode.querySelector('button')!.click();
 	activate(URI.file('/workspace/other.ts'));
 	widget.domNode.querySelector('button')!.click();
@@ -126,7 +126,7 @@ test('SCM diff suggestions attach the modified snapshot instead of the synthetic
 	activateInput(createDiffEditorInput(original, modified));
 	assert.equal(widget.domNode.hidden, false);
 	assert.equal(widget.domNode.textContent, 'current.ts');
-	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(resolve)));
+	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(() => resolve())));
 	widget.domNode.querySelector('button')!.click();
 	await added;
 	assert.equal(widget.domNode.hidden, true);
@@ -143,7 +143,7 @@ test('A file diff suggestion uses its modified working copy rather than the comp
 	const { widget, attachments, activateInput } = setup(resources, async () => { assert.fail('Read the modified working copy'); }, 'Unsaved modified text');
 	activateInput(createDiffEditorInput({ resource: URI.file('/workspace/before.ts') }, { resource: URI.file('/workspace/after.ts') }));
 	assert.equal(widget.domNode.textContent, 'after.ts');
-	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(resolve)));
+	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(() => resolve())));
 	widget.domNode.querySelector('button')!.click();
 	await added;
 	assert.equal(attachments.attachments[0]!.resource?.path, '/workspace/after.ts');
