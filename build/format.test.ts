@@ -80,7 +80,7 @@ test('the CLI checks without writing, fixes both languages, and leaves generated
 	for (const name of excluded) {
 		assert.equal(readFileSync(join(directory, name), 'utf8'), input);
 	}
-	for (const path of [join(directory, 'types.d.mts'), 'src/ash/base/common/productIcons.ts', 'src/ash/base/browser/dompurify/dompurify.js', 'src/ash/base/common/marked/marked.js']) {
+	for (const path of [join(directory, 'types.d.mts'), 'src/ash/base/common/lxiconsLibrary.ts', 'src/ash/base/browser/dompurify/dompurify.js', 'src/ash/base/common/marked/marked.js']) {
 		const unsupported = spawnSync(process.execPath, [join(repositoryRoot, 'build/format.ts'), '--check', path], { cwd: repositoryRoot, encoding: 'utf8' });
 		assert.equal(unsupported.status, 1);
 		assert.match(unsupported.stderr, /No first-party TypeScript or JavaScript sources matched/);
