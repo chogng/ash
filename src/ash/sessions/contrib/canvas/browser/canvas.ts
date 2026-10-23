@@ -1,8 +1,8 @@
 import './canvas.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
 import { foreground } from '../../../../platform/theme/common/colors/baseColors.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { CanvasViewport } from '../common/canvasViewport.js';
@@ -29,6 +29,7 @@ export class Canvas extends Disposable {
 	private readonly worldDomNode: HTMLElement;
 	private readonly selectionDomNode: SVGSVGElement;
 	private readonly selectionBoundsDomNodes: SVGRectElement[] = [];
+	private cursorVersion = 0;
 
 	constructor(ownerDocument: Document, @IThemeService private readonly themeService: IThemeService) {
 		super();
@@ -41,8 +42,10 @@ export class Canvas extends Disposable {
 		this.domNode.append(this.worldDomNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener(this.domNode, 'pointerdown', () => this.setFocused(false)));
-		this._register(themeService.onDidColorThemeChange(() => this.updatePointerCursor()));
-		this.updatePointerCursor();
+		this._register(toDisposable(() => this.cursorVersion++));
+		this._register(themeService.onDidColorThemeChange(() => { void this.updatePointerCursor(); }));
+		this._register(themeService.onDidProductIconThemeChange(() => { void this.updatePointerCursor(); }));
+		void this.updatePointerCursor();
 	}
 
 	public setContent(content: HTMLElement | SVGElement): void {
@@ -79,14 +82,32 @@ export class Canvas extends Disposable {
 		this.selectionDomNode.classList.toggle('visible', bounds.length > 0);
 	}
 
-	private updatePointerCursor(): void {
+	private async updatePointerCursor(): Promise<void> {
+		const version = ++this.cursorVersion;
+		const document = this.domNode.ownerDocument;
+		if (!document.fonts) return;
+		// Read the owning window's font profile after the constructor's host mounts.
+		await Promise.resolve();
+		if (version !== this.cursorVersion) return;
 		const color = this.themeService.getColorTheme().getColorCss(foreground)!;
-		const definition = getLxiconDefinition(Lxicon.cursor2.id)!;
-		// Native cursor URLs need self-contained artwork rather than a font that
-		// is loaded by the owning document.
-		const artwork = typeof definition === 'function' ? definition() : definition.fallback!();
-		const svg = artwork.replace('<svg ', '<svg width="24" height="24" ').replaceAll('#000', color);
+		const probe = appendIcon(Lxicon.cursor2, this.domNode);
+		const style = document.defaultView!.getComputedStyle(probe);
+		const font = `${style.fontStyle || 'normal'} ${style.fontWeight || '400'} 24px ${style.fontFamily || '"Ash UI Icons"'}`;
+		const character = probe.dataset.ashIconCharacter!;
+		probe.remove();
+		// Native cursors require an image URL. Rasterize the prepared glyph rather
+		// than importing, recoloring or converting its source SVG in the renderer.
+		try {
+			if (!(await document.fonts.load(font, character)).length || version !== this.cursorVersion) return;
+		} catch { return; }
+		const canvas = document.createElement('canvas');
+		canvas.width = canvas.height = 24;
+		const context = canvas.getContext('2d');
+		if (!context) return;
+		context.font = font;
+		context.fillStyle = color;
+		context.fillText(character, 0, 24);
 		// The hotspot follows the artwork's tip at (4.5, 3.258) in its 16-unit viewBox.
-		this.domNode.style.setProperty('--ash-canvas-pointer-cursor', `url("data:image/svg+xml,${encodeURIComponent(svg)}") 6 4, default`);
+		this.domNode.style.setProperty('--ash-canvas-pointer-cursor', `url("${canvas.toDataURL()}") 6 4, default`);
 	}
 }

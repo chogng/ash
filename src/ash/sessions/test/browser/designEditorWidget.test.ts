@@ -242,14 +242,26 @@ function dispatchWheel(view: { readonly domNode: HTMLElement; }, init: WheelEven
 }
 
 test('Design cursor follows configuration and theme changes and releases its subscriptions', async () => {
+	const fontDescriptor = Object.getOwnPropertyDescriptor(browser.window.document, 'fonts');
+	const canvasPrototype = browser.window.HTMLCanvasElement.prototype;
+	const originalContext = canvasPrototype.getContext;
+	const originalDataUrl = canvasPrototype.toDataURL;
+	const context = { font: '', fillStyle: '', fillText() { } };
+	Object.defineProperty(browser.window.document, 'fonts', { configurable: true, value: Object.assign(new browser.window.EventTarget(), { load: async () => [{}] }) });
+	canvasPrototype.getContext = (() => context) as unknown as typeof originalContext;
+	canvasPrototype.toDataURL = () => 'data:image/png;base64,' + Buffer.from(context.font + context.fillStyle).toString('base64');
+	const settle = () => new Promise<void>(resolve => setImmediate(resolve));
 	const view = createView();
 	const viewport = view.domNode.querySelector<HTMLElement>('.ash-canvas-viewport')!;
 	const cursor = () => viewport.style.getPropertyValue('--ash-canvas-pointer-cursor');
 	try {
 		assert.equal(viewport.classList.contains('pointer-cursor'), true);
-		assert.match(decodeURIComponent(cursor()), /width="24" height="24"/u);
+		await settle();
+		assert.match(cursor(), /data:image\/png;base64,/u);
+		assert.match(context.font, /24px/u);
 		const initialCursor = cursor();
 		theme.setColorTheme(darkColorTheme);
+		await settle();
 		assert.notEqual(cursor(), initialCursor);
 		await configuration.updateValue(DesignConfiguration.usePointerCursor, false);
 		assert.equal(viewport.classList.contains('pointer-cursor'), false);
@@ -268,6 +280,11 @@ test('Design cursor follows configuration and theme changes and releases its sub
 		view.dispose();
 		await configuration.updateValue(DesignConfiguration.usePointerCursor, undefined);
 		theme.setColorTheme(lightColorTheme);
+		await settle();
+		canvasPrototype.getContext = originalContext;
+		canvasPrototype.toDataURL = originalDataUrl;
+		if (fontDescriptor) Object.defineProperty(browser.window.document, 'fonts', fontDescriptor);
+		else Reflect.deleteProperty(browser.window.document, 'fonts');
 	}
 });
 

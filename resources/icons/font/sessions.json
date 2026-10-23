@@ -80,7 +80,8 @@
     "layout-panel-1": [0],
     "mic": [0],
     "mic-filled": [1],
-    "play": [0]
+    "play": [0],
+    "symbol-method": [0, 1]
   },
   "outlineShapes": {
     "account": [0, 2],

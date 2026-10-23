@@ -7,6 +7,7 @@ glyphs have a fixed Sessions outline at every weight coordinate.
 """
 
 import json
+from copy import deepcopy
 import math
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -93,7 +94,7 @@ def prepare_svg(path, profile):
     return ET.tostring(root, encoding="unicode"), changed
 
 
-def build_sessions(manifest, profile_path, out):
+def build_sessions(manifest, profile_path, out, color_glyphs=()):
     _, sources = read_manifest(manifest)
     profile = json.loads(profile_path.read_text())
     known = {name for name, _, _ in sources}
@@ -109,7 +110,7 @@ def build_sessions(manifest, profile_path, out):
         glyphs.append({"id": name, "unicode": f"{codepoint:04X}", "source": str((prepared / path.name).resolve())})
     generated = out / "manifest.json"
     generated.write_text(json.dumps({"family": "Ash UI Sessions", "glyphs": glyphs}, indent=2) + "\n")
-    report = build_static(generated, out / "font")
+    report = build_static(generated, out / "font", color_glyphs)
     report.update({"strokeWidth": profile["strokeWidth"], "changes": changes})
     (out / "validation.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
@@ -119,8 +120,9 @@ def merge_sessions(variable_path, static_path, codepoints):
     """Keep true variation for four glyphs and add fixed-width Sessions glyphs."""
     with TTFont(variable_path) as variable, TTFont(static_path) as static:
         names = set(static.getBestCmap().values())
+        color_names = {record.BaseGlyph for record in static["COLR"].table.BaseGlyphList.BaseGlyphPaintRecord} if "COLR" in static else set()
         aliases = {name: name.removesuffix("-filled") for name in names
-                   if name.endswith("-filled") and name.removesuffix("-filled") in names}
+                   if name.endswith("-filled") and name.removesuffix("-filled") in names and name not in color_names}
         order = list(variable.getGlyphOrder())
         varying = {name for name, variations in variable["gvar"].variations.items() if variations}
         for name in static.getGlyphOrder():
@@ -138,6 +140,9 @@ def merge_sessions(variable_path, static_path, codepoints):
                 table.cmap = dict(cmap)
         variable["OS/2"].usFirstCharIndex = min(cmap)
         variable["OS/2"].usLastCharIndex = max(cmap)
+        for tag in ("COLR", "CPAL"):
+            if tag in static:
+                variable[tag] = deepcopy(static[tag])
         variable.recalcTimestamp = False
         variable["head"].created = variable["head"].modified = 3029529600
         variable.save(variable_path)

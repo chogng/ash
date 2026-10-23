@@ -1,3 +1,4 @@
+import { expectIconFontLoaded } from '../../automation/iconFonts.js';
 import { test } from './rustSyntaxProcessFixture.js';
 import { expect } from '@playwright/test';
 
@@ -208,7 +209,7 @@ test('resource decorations resolve asynchronously, follow themes and clear after
 });
 
 
-test('decoration icons follow SVG and font product themes while retaining the label and icon', async ({ page }) => {
+test('decoration icons follow font product themes while retaining the label and icon', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/themes.html');
@@ -220,9 +221,9 @@ test('decoration icons follow SVG and font product themes while retaining the la
 	await expect(icon).toHaveCount(1);
 	const retainedLabel = await label.elementHandle();
 	const retainedIcon = await icon.elementHandle();
-	const original = await icon.innerHTML();
-	await page.locator('#svg-icons').click();
-	await expect.poll(() => icon.innerHTML()).not.toBe(original);
+	const original = await icon.getAttribute('data-ash-icon-character');
+	await page.locator('#font-icons').click();
+	await expect(icon).toHaveAttribute('data-ash-icon-character', '\ue005');
 	const color = await page.locator('#root').evaluate(element => {
 		const probe = document.createElement('span');
 		probe.style.color = 'var(--ash-error-foreground)';
@@ -233,7 +234,7 @@ test('decoration icons follow SVG and font product themes while retaining the la
 	});
 	await expect(icon).toHaveCSS('color', color);
 	await page.evaluate(() => window.setThemeSetting('workbench.productIconTheme', 'test-font-product'));
-	await expect(icon).toHaveClass(/ash-icon-font-ready/);
+	await expectIconFontLoaded(icon);
 	await expect(icon.locator('svg')).toHaveCount(0);
 	await expect(icon).toHaveCSS('font-weight', '700');
 	await expect(icon).toHaveCSS('font-style', 'italic');
@@ -245,7 +246,7 @@ test('decoration icons follow SVG and font product themes while retaining the la
 	expect(await retainedLabel!.evaluate(element => element === document.querySelector('#decorated-label .ash-icon-label'))).toBe(true);
 	expect(await retainedIcon!.evaluate(element => element === document.querySelector('#decorated-label .ash-icon-label-suffix-icon .ash-icon'))).toBe(true);
 	await page.locator('#default-icons').click();
-	await expect.poll(() => icon.innerHTML()).toBe(original);
+	await expect(icon).toHaveAttribute('data-ash-icon-character', original!);
 	await page.evaluate(() => window.removeLabelDecorationProvider());
 	await expect(icon).toHaveCount(0);
 	await expect(label.locator('.ash-icon-label-suffix-icon')).toBeHidden();
@@ -464,7 +465,7 @@ test('Seti TODO icons match between resource labels and completion CSS across co
 	}
 });
 
-test('extension product icon themes replace mounted SVG artwork and restore built-in artwork', async ({ page }) => {
+test('product font themes replace mounted glyphs and restore built-in glyphs', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/themes.html');
@@ -475,9 +476,9 @@ test('extension product icon themes replace mounted SVG artwork and restore buil
 	const originalSemanticCharacter = await semanticIcon.getAttribute('data-ash-icon-character');
 	const mounted = await icon.elementHandle();
 	const mountedSemantic = await semanticIcon.elementHandle();
-	await page.getByRole('button', { name: 'SVG icons' }).click();
-	await expect(icon.locator('circle')).toHaveCount(1);
-	await expect(semanticIcon.locator('circle')).toHaveCount(1);
+	await page.getByRole('button', { name: 'Font icons' }).click();
+	await expect(icon).toHaveAttribute('data-ash-icon-character', '\ue005');
+	await expect(semanticIcon).toHaveAttribute('data-ash-icon-character', '\ue005');
 	expect(await mounted!.evaluate(element => element === document.querySelector('#product-icon .ash-icon'))).toBe(true);
 	expect(await mountedSemantic!.evaluate(element => element === document.querySelector('#semantic-product-icon .ash-icon'))).toBe(true);
 	await page.getByRole('button', { name: 'Default icons' }).click();
@@ -487,7 +488,7 @@ test('extension product icon themes replace mounted SVG artwork and restore buil
 	expect(errors).toEqual([]);
 });
 
-test('SVG icon select box filters, navigates, selects, and follows product icon themes', async ({ page }) => {
+test('Font icon select box filters, navigates, selects, and follows product icon themes', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/themes.html');
@@ -517,10 +518,10 @@ test('SVG icon select box filters, navigates, selects, and follows product icon 
 	await options.nth(1).click();
 	await expect(picker).toHaveAttribute('data-selected-icon', 'chevron-right');
 	expect(await options.nth(1).evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
-	await page.getByRole('button', { name: 'SVG icons' }).click();
-	await expect(options.first().locator('circle')).toHaveCount(1);
+	await page.getByRole('button', { name: 'Font icons' }).click();
+	await expect(options.first().locator('.ash-icon')).toHaveAttribute('data-ash-icon-character', '\ue005');
 	await page.getByRole('button', { name: 'Default icons' }).click();
-	await expect(options.first().locator('.ash-icon')).toHaveClass(/ash-icon-font-ready/);
+	await expectIconFontLoaded(options.first().locator('.ash-icon'));
 	await expect(options.first().locator('svg')).toHaveCount(0);
 	await page.evaluate(() => window.disposeIconSelectBox());
 	await expect(picker.locator('.ash-icon-select-box')).toHaveCount(0);
@@ -601,7 +602,7 @@ test('standard product icon fonts load into mounted icons and unload with their 
 	const icon = page.locator('#product-icon .ash-icon');
 	const mounted = await icon.elementHandle();
 	await page.evaluate(() => window.setThemeSetting('workbench.productIconTheme', 'test-font-product'));
-	await expect(icon).toHaveClass(/ash-icon-font-ready/);
+	await expectIconFontLoaded(icon);
 	await expect(icon.locator('svg')).toHaveCount(0);
 	await expect(icon).toHaveCSS('font-weight', '700');
 	await expect(icon).toHaveCSS('font-style', 'italic');

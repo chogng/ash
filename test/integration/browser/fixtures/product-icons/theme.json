@@ -1,6 +1,7 @@
 {
+  "fonts": [{ "id": "test", "src": [{ "path": "./font.woff2", "format": "woff2" }] }],
   "iconDefinitions": {
-    "add": { "iconPath": "./add.svg" },
-    "browser-test-semantic-product": { "iconPath": "./add.svg" }
+    "add": { "fontCharacter": "\\e005", "fontId": "test" },
+    "browser-test-semantic-product": { "fontCharacter": "\\e005", "fontId": "test" }
   }
 }

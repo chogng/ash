@@ -1,3 +1,4 @@
+import { expectIconFontLoaded } from '../../automation/iconFonts.js';
 import { expect, test } from '@playwright/test';
 
 for (const registerAfterPart of [false, true]) {
@@ -273,7 +274,7 @@ test('notification bell stays visible at rest and projects unread and do not dis
 		await page.evaluate(index => window.ashNotificationsIntegration.theme(index), theme);
 		await expect(icon).toHaveCSS('width', '16px');
 		await expect(icon).toHaveCSS('height', '16px');
-		await expect(icon).toHaveClass(/ash-icon-font-ready/);
+		await expectIconFontLoaded(icon);
 		await expect(icon.locator('svg')).toHaveCount(0);
 		const glyph = await icon.evaluate(element => {
 			const style = getComputedStyle(element, '::before');

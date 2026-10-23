@@ -32,7 +32,8 @@ import manifest from '../../../extensions/theme-seti/package.json' with { type: 
 import themeUrl from '../../../extensions/theme-seti/icons/vs-seti-icon-theme.json?url';
 import fontUrl from '../../../extensions/theme-seti/icons/seti.woff?url';
 import productThemeUrl from './fixtures/product-icons/theme.json?url';
-import productIconUrl from './fixtures/product-icons/add.svg?url';
+import { ashTitlebarMark } from '../../../src/ash/workbench/browser/parts/titlebar/titlebarMark.js';
+import productFontUrl from '../../../src/ash/base/browser/ui/lxicons/lxicon.woff2?url';
 import '../../../src/ash/workbench/browser/media/style.css';
 import '../../../src/ash/base/browser/ui/contextview/contextview.css';
 import '../../../src/ash/base/browser/ui/button/button.css';
@@ -256,6 +257,14 @@ resources.add(new Button(styledButtons, {
 	...getButtonStyles({ buttonForeground: 'button.primaryBackground', buttonBackground: 'button.primaryForeground' }),
 }));
 appendIcon(Lxicon.add, document.querySelector<HTMLElement>('#product-icon')!);
+// Reference SVGs belong to this comparison fixture, never the runtime icon catalog.
+const colorGlyphSources = import.meta.glob<string>('../../../resources/icons/{claude,csv-green,docx-blue,inspect,layout-panel-off-1,layout-sidebar-left-off-1,layout-sidebar-right-off-1,pdf-filled,pdf-red,symbol-method,xls-green,mic,search,git-branch,mic-filled,paperclip}.svg', { query: '?raw', import: 'default', eager: true });
+for (const [path, source] of Object.entries(colorGlyphSources)) {
+	const id = path.split('/').at(-1)!.slice(0, -4);
+	const icon = appendIcon({ id }, document.querySelector<HTMLElement>('#color-glyphs')!);
+	icon.dataset.svgReference = source;
+	icon.dataset.comparisonProfiles = ['mic', 'search', 'git-branch', 'mic-filled', 'paperclip'].includes(id) ? 'IDE' : 'both';
+}
 appendIcon(registerIcon('browser-test-semantic-product', Lxicon.chevronRight, 'Browser test semantic product icon'), document.querySelector<HTMLElement>('#semantic-product-icon')!);
 const iconSelectBox = resources.add(new IconSelectBox({ icons: [Lxicon.add, Lxicon.chevronRight, Lxicon.check], showIconInfo: true }));
 const iconSelectHost = document.querySelector<HTMLElement>('#icon-select-host')!;
@@ -288,11 +297,12 @@ window.disposeNestedHighContrastWidget = () => {
 	nestedHighContrastWidget = undefined;
 };
 const render = (): void => themes.renderFileIcon(URI.file('/workspace/main.ts'), document.querySelector<HTMLElement>('#icon')!);
+appendIcon(ashTitlebarMark, document.querySelector<HTMLElement>('#brand-icon')!);
 resources.add(themes.onDidChangeResourceIcons(render));
-const manifestJson = JSON.stringify({ ...manifest, contributes: { ...manifest.contributes, productIconThemes: [{ id: 'test-svg-product', label: 'Test SVG product icons', path: './product-icons/theme.json' }, { id: 'test-font-product', label: 'Font icons', path: './icons/font-product.json' }] } });
+const manifestJson = JSON.stringify({ ...manifest, contributes: { ...manifest.contributes, productIconThemes: [{ id: 'test-product-icons', label: 'Test product icons', path: './product-icons/theme.json' }, { id: 'test-font-product', label: 'Font icons', path: './icons/font-product.json' }] } });
 const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(manifestJson));
 const hash = 'sha256:' + Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-const urls: Record<string, string> = { 'icons/vs-seti-icon-theme.json': themeUrl, 'icons/seti.woff': fontUrl, 'product-icons/theme.json': productThemeUrl, 'product-icons/add.svg': productIconUrl };
+const urls: Record<string, string> = { 'icons/vs-seti-icon-theme.json': themeUrl, 'icons/seti.woff': fontUrl, 'product-icons/theme.json': productThemeUrl, 'product-icons/font.woff2': productFontUrl };
 const extensions = resources.add(new AppServerExtensionService({
 	api: {
 		list: async () => ({
@@ -319,7 +329,7 @@ render();
 document.querySelector('#none')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.iconTheme, null); });
 document.querySelector('#seti')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.iconTheme, 'vs-seti'); });
 document.querySelector('#light')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-light'); });
-document.querySelector('#svg-icons')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'test-svg-product'); });
+document.querySelector('#font-icons')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'test-product-icons'); });
 document.querySelector('#default-icons')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'default'); });
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 const workspace = resources.add(new TestWorkspaceService({ id: 'icon-models', folders: [] }));

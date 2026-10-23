@@ -1,3 +1,4 @@
+import { expectIconFontLoaded } from '../../automation/iconFonts.js';
 import { expect, test } from '@playwright/test';
 
 test.afterEach(async ({ page }) => { await page.evaluate(() => window.ashFileMenusIntegration?.dispose()); });
@@ -213,7 +214,7 @@ test("application menu keeps submenu arrows inside their menu rows", async ({ pa
 	await fileItem.hover();
 	await expect(fileItem).toHaveAttribute('aria-expanded', 'true');
 	const arrow = fileItem.locator('.ash-submenu-indicator > .ash-icon');
-	await expect(arrow).toHaveClass(/ash-icon-font-ready/);
+	await expectIconFontLoaded(arrow);
 	await expect(arrow).toHaveCSS('font-size', '12px');
 	await expect(arrow.locator('svg')).toHaveCount(0);
 	const [itemBounds, arrowBounds] = await Promise.all([fileItem.boundingBox(), arrow.boundingBox()]);

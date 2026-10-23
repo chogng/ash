@@ -5,12 +5,16 @@ import math
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from fontTools.pens.areaPen import AreaPen
 from fontTools.ttLib import TTFont
+from fontTools.ttLib.tables import otTables
 
 from build_font import UPM, build, normalize_svg
 from build_sessions_font import build_sessions
+from build_product_font import rebuild
 
 
 class SvgFontTests(unittest.TestCase):
@@ -45,6 +49,50 @@ class SvgFontTests(unittest.TestCase):
             self.assertEqual(font["hmtx"].metrics["ring"], (UPM, glyph.xMin))
             self.assertEqual((font["hhea"].ascent, font["hhea"].descent, font["hhea"].lineGap), (UPM, 0, 0))
             self.assertNotIn("fvar", font)
+
+    def test_small_arc_strokes_are_expanded_at_font_scale(self):
+        source = self.svg('<path fill="none" stroke="currentColor" d="M4.5 10.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z"/>', "small-ring")
+        report = build(self.manifest([{"id": "small-ring", "unicode": "E001", "source": source.name}]), self.root / "font")
+        with TTFont(report["woff2"]) as font:
+            glyphs = font.getGlyphSet()
+            pen = AreaPen(glyphs)
+            glyphs["small-ring"].draw(pen)
+            expected = math.pi * (2.5 ** 2 - 1.5 ** 2) * (UPM / 16) ** 2
+            self.assertAlmostEqual(abs(pen.value) / expected, 1, delta=.01)
+
+    def test_product_publication_discards_a_snapshot_superseded_during_conversion(self):
+        source = self.root / "icons"
+        source.mkdir()
+        for name in ("font/manifest.json", "font/sessions.json", "variable/sidebar/manifest.yaml", "variable/sidebar/preview.html"):
+            path = source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}")
+        artwork = source / "sample.svg"
+        artwork.write_text("old")
+        args = SimpleNamespace(source_directory=source, font_directory=self.root / "fonts",
+                               typescript_file=self.root / "catalog.ts", out=self.root / "build")
+        args.out.mkdir()
+        conversions = []
+
+        def convert(staged_source, media, typescript, _out):
+            content = (staged_source / "sample.svg").read_text()
+            conversions.append(content)
+            self.assertFalse(args.typescript_file.exists(), "the superseded result must never be published")
+            media.mkdir()
+            for name in ("lxicon.woff2", "lxicon-variable.woff2"):
+                (media / name).write_text(content)
+            (staged_source / "manifest.json").write_text(content)
+            typescript.write_text(content)
+            if content == "old":
+                artwork.write_text("new")
+            return {}
+
+        with patch("build_product_font.compile_fonts", side_effect=convert):
+            self.assertTrue(rebuild(args, args.out / "stamp")["changed"])
+        self.assertEqual(conversions, ["old", "new"])
+        self.assertEqual(artwork.read_text(), "new")
+        for path in (args.typescript_file, args.font_directory / "lxicon.woff2", args.font_directory / "lxicon-variable.woff2"):
+            self.assertEqual(path.read_text(), "new")
 
     def test_curves_group_transforms_and_reordered_manifest(self):
         a = self.svg('<g transform="translate(1 2)"><path d="M1 4 C4 0 8 0 11 4" fill="none" stroke="#000" stroke-linecap="round"/></g>', "curve")
@@ -95,6 +143,30 @@ class SvgFontTests(unittest.TestCase):
             entries = [{"id": "one", "unicode": "E001", "source": source.name}, {"id": "two", "unicode": codepoint, "source": source.name}]
             with self.subTest(codepoint=codepoint), self.assertRaises(ValueError):
                 build(self.manifest(entries), self.root / "font")
+
+    def test_color_font_preserves_palette_foreground_alpha_and_strokes(self):
+        source = self.svg('<path fill="#d97757" d="M2 2H7V7H2Z"/><path fill="none" stroke="currentColor" stroke-opacity=".5" d="M9 2V7"/><circle cx="8" cy="12" r="2" fill="white"/>', "painted")
+        manifest = self.manifest([{"id": "painted", "unicode": "E001", "source": source.name}])
+        with self.assertRaises(ValueError):
+            build(manifest, self.root / "mono")
+        report = build(manifest, self.root / "color", {"painted"})
+        with TTFont(report["woff2"]) as font:
+            self.assertEqual(font.getBestCmap(), {0xE001: "painted"})
+            self.assertEqual(font["COLR"].version, 1)
+            palette = font["CPAL"].palettes[0]
+            self.assertEqual([(c.red, c.green, c.blue, c.alpha) for c in palette], [(217, 119, 87, 255), (255, 255, 255, 255)])
+            layers = font["COLR"].table.LayerList.Paint
+            self.assertEqual([layer.Format for layer in layers], [otTables.PaintFormat.PaintGlyph] * 3)
+            self.assertEqual([layer.Paint.PaletteIndex for layer in layers], [0, 0xFFFF, 1])
+            self.assertEqual([layer.Paint.Alpha for layer in layers], [1, .5, 1])
+            for layer in layers:
+                self.assertGreater(font["glyf"][layer.Glyph].numberOfContours, 0)
+                self.assertEqual(font["hmtx"].metrics[layer.Glyph][0], UPM)
+
+    def test_color_font_rejects_group_compositing_instead_of_losing_opacity(self):
+        source = self.svg('<g opacity=".5"><rect x="2" y="2" width="8" height="8" fill="red"/><rect x="6" y="6" width="8" height="8" fill="blue"/></g>', "group")
+        with self.assertRaisesRegex(ValueError, "group opacity"):
+            build(self.manifest([{"id": "group", "unicode": "E001", "source": source.name}]), self.root / "font", {"group"})
 
     def sessions(self, source, profile):
         manifest = self.manifest([{"id": source.stem, "unicode": "E001", "source": source.name}])

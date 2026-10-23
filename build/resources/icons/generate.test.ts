@@ -1,178 +1,89 @@
-import assert from "node:assert/strict";
-import { EventEmitter } from "node:events";
-import { mkdtemp, mkdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import test from "node:test";
-import { setTimeout as delay } from "node:timers/promises";
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+import { checkIcons, generateIcons, type IconOutputs } from './generate.ts';
 
-import { productIconsPlugin } from "../../desktop/vite/productIconsPlugin.ts";
-import { checkIcons, generateIcons, type IconOutputs } from "./generate.ts";
-
-const addSvg = `<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-  <path stroke="black" d="M2.5 8h11M8 2.5v11"/>
-</svg>
-`;
+const addSvg = '<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path stroke="black" d="M2.5 8h11M8 2.5v11"/></svg>\n';
 
 function outputs(root: string): IconOutputs {
-	return {
-		manifestFile: join(root, "icons", "manifest.json"),
-		typescriptFile: join(root, "generated", "product-icons.ts"),
-	};
+	return { manifestFile: join(root, 'icons/manifest.json'), typescriptFile: join(root, 'generated/lxiconsLibrary.ts') };
 }
 
-test("product icon generation tracks added, changed, and removed SVG files", async () => {
-	const root = await mkdtemp(join(tmpdir(), "ash-product-icons-"));
-	const sourceDirectory = join(root, "icons");
-	const generatedOutputs = outputs(root);
-	const outputFile = generatedOutputs.typescriptFile!;
-	try {
-		await mkdir(sourceDirectory);
-		await writeFile(join(sourceDirectory, "add.svg"), addSvg);
-		let report = await generateIcons({ outputs: generatedOutputs, sourceDirectory });
-		let generated = await readFile(outputFile, "utf8");
-		assert.equal(report.count, 1);
-		assert.equal(report.outputChanged, true);
-		assert.match(generated, /add: register\("add", iconAdd\)/);
-		assert.match(generated, /viewBox=\\"0 0 16 16\\"/);
-		assert.doesNotMatch(generated, /\bwidth=\\"16\\"/);
-		assert.doesNotMatch(generated, /\bheight=\\"16\\"/);
-		assert.match(await readFile(generatedOutputs.manifestFile!, "utf8"), /"rendering": "symbolic"/);
-		assert.equal((await generateIcons({ outputs: generatedOutputs, sourceDirectory })).outputChanged, false);
-
-		await writeFile(join(sourceDirectory, "close.svg"), addSvg.replace("black", "red"));
-		report = await generateIcons({ outputs: generatedOutputs, sourceDirectory });
-		generated = await readFile(outputFile, "utf8");
-		assert.equal(report.count, 2);
-		assert.match(generated, /close: register\("close", iconClose\)/);
-		assert.match(generated, /stroke=\\"red\\"/);
-		assert.match(await readFile(generatedOutputs.manifestFile!, "utf8"), /"rendering": "multicolor"/);
-
-		await unlink(join(sourceDirectory, "close.svg"));
-		report = await generateIcons({ outputs: generatedOutputs, sourceDirectory });
-		generated = await readFile(outputFile, "utf8");
-		assert.equal(report.count, 1);
-		assert.doesNotMatch(generated, /close: register/);
-	} finally {
-		await rm(root, { force: true, recursive: true });
+/** Models the resource toolchain publishing a font and its matching source fingerprints. */
+async function prepareFont(sourceDirectory: string, codepoints: Record<string, string>, color: Record<string, string> = {}): Promise<void> {
+	await generateIcons({ sourceDirectory, outputs: { manifestFile: join(sourceDirectory, 'manifest.json') } });
+	const sources: Record<string, string> = {};
+	for (const file of await readdir(sourceDirectory)) {
+		if (file.endsWith('.svg')) sources[file.slice(0, -4)] = createHash('sha256').update((await readFile(join(sourceDirectory, file), 'utf8')).trim()).digest('hex');
 	}
+	await mkdir(join(sourceDirectory, 'font'), { recursive: true });
+	await writeFile(join(sourceDirectory, 'font/manifest.json'), JSON.stringify({ codepoints, color, sources }));
+}
+
+test('the resource catalog tracks SVG changes and canonicalizes artwork without a font build', async t => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-product-icons-'));
+	t.after(() => rm(root, { recursive: true, force: true }));
+	const sourceDirectory = join(root, 'icons');
+	const catalog = { manifestFile: join(sourceDirectory, 'manifest.json') };
+	await mkdir(sourceDirectory);
+	await writeFile(join(sourceDirectory, 'add.svg'), addSvg);
+	const report = await generateIcons({ sourceDirectory, outputs: catalog });
+	assert.equal(report.sourceChanged, true);
+	assert.doesNotMatch(await readFile(join(sourceDirectory, 'add.svg'), 'utf8'), /\b(?:width|height)="16"/);
+	assert.equal((await checkIcons({ sourceDirectory, outputs: catalog })).count, 1);
+	await writeFile(join(sourceDirectory, 'close.svg'), addSvg.replace('black', 'red'));
+	await generateIcons({ sourceDirectory, outputs: catalog });
+	assert.deepEqual(JSON.parse(await readFile(catalog.manifestFile, 'utf8')).icons.map(({ id, rendering }: { id: string; rendering: string; }) => ({ id, rendering })), [
+		{ id: 'add', rendering: 'symbolic' }, { id: 'close', rendering: 'multicolor' },
+	]);
+	await unlink(join(sourceDirectory, 'close.svg'));
+	assert.equal((await generateIcons({ sourceDirectory, outputs: catalog })).count, 1);
 });
 
-test("product icon generation exposes prefix-free names including reserved words", async () => {
-	const root = await mkdtemp(join(tmpdir(), "ash-product-icons-"));
-	const sourceDirectory = join(root, "icons");
+test('the runtime library registers stable codepoints for both monochrome and color glyphs', async t => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-product-icons-'));
+	t.after(() => rm(root, { recursive: true, force: true }));
+	const sourceDirectory = join(root, 'icons');
+	await mkdir(sourceDirectory);
+	await writeFile(join(sourceDirectory, 'add.svg'), addSvg);
+	await writeFile(join(sourceDirectory, 'export.svg'), addSvg);
+	await writeFile(join(sourceDirectory, 'close.svg'), addSvg.replace('black', 'red'));
+	await prepareFont(sourceDirectory, { add: 'E004', export: 'E010', close: 'E020' }, { close: 'Fixed color' });
 	const generatedOutputs = outputs(root);
-	const outputFile = generatedOutputs.typescriptFile!;
-	try {
-		await mkdir(sourceDirectory);
-		await writeFile(join(sourceDirectory, "export.svg"), addSvg);
-		await generateIcons({ outputs: generatedOutputs, sourceDirectory });
-		const generated = await readFile(outputFile, "utf8");
-		assert.match(generated, /const iconExport/);
-		assert.match(generated, /export: register\("export", iconExport\)/);
-	} finally {
-		await rm(root, { force: true, recursive: true });
-	}
+	await generateIcons({ sourceDirectory, outputs: generatedOutputs });
+	const generated = await readFile(generatedOutputs.typescriptFile!, 'utf8');
+	assert.match(generated, /add: registerLxicon\("add", 0xe004\)/);
+	assert.match(generated, /export: registerLxicon\("export", 0xe010\)/);
+	assert.match(generated, /close: registerLxicon\("close", 0xe020\)/);
+	assert.doesNotMatch(generated, /<svg|fallback|artwork|createProductIconLibrary|\.svg/);
+	assert.equal((await generateIcons({ sourceDirectory, outputs: generatedOutputs })).outputChanged, false);
+	await writeFile(generatedOutputs.typescriptFile!, 'stale');
+	await assert.rejects(checkIcons({ sourceDirectory, outputs: generatedOutputs }), /require generation: typescript/);
+	assert.equal(await readFile(generatedOutputs.typescriptFile!, 'utf8'), 'stale');
 });
 
-test("product icon generation can update generated output without rewriting source SVGs", async () => {
-	const root = await mkdtemp(join(tmpdir(), "ash-product-icons-"));
-	const sourceDirectory = join(root, "icons");
-	const generatedOutputs = outputs(root);
-	const outputFile = generatedOutputs.typescriptFile!;
-	try {
-		await mkdir(sourceDirectory);
-		await writeFile(join(sourceDirectory, "add.svg"), addSvg);
-		const report = await generateIcons({ outputs: generatedOutputs, sourceDirectory, sourceHandling: "ignore" });
-		assert.equal(report.outputChanged, true);
-		assert.equal(report.sourceChanged, false);
-		assert.equal(await readFile(join(sourceDirectory, "add.svg"), "utf8"), addSvg);
-		assert.match(await readFile(outputFile, "utf8"), /viewBox=\\"0 0 16 16\\"/);
-	} finally {
-		await rm(root, { force: true, recursive: true });
-	}
+test('runtime generation rejects missing or stale font inputs instead of emitting an SVG catalog', async t => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-product-icons-'));
+	t.after(() => rm(root, { recursive: true, force: true }));
+	const sourceDirectory = join(root, 'icons');
+	await mkdir(sourceDirectory);
+	await writeFile(join(sourceDirectory, 'add.svg'), addSvg);
+	const options = { sourceDirectory, outputs: outputs(root), sourceHandling: 'ignore' as const };
+	await assert.rejects(generateIcons(options), { code: 'ENOENT' });
+	await prepareFont(sourceDirectory, {});
+	await assert.rejects(generateIcons(options), /Missing icon font codepoint: add/);
+	await prepareFont(sourceDirectory, { add: 'E004' });
+	await writeFile(join(sourceDirectory, 'add.svg'), addSvg.replace('M2.5', 'M3.5'));
+	await assert.rejects(generateIcons(options), /Icon font is stale for 'add'/);
+	await assert.rejects(readFile(options.outputs.typescriptFile!), { code: 'ENOENT' });
 });
 
-test("product icon generation canonicalizes sources and supports a read-only check", async () => {
-	const root = await mkdtemp(join(tmpdir(), "ash-product-icons-"));
-	const sourceDirectory = join(root, "icons");
-	const generatedOutputs = outputs(root);
-	try {
-		await mkdir(sourceDirectory);
-		await writeFile(join(sourceDirectory, "add.svg"), addSvg);
-		await assert.rejects(checkIcons({ outputs: generatedOutputs, sourceDirectory }), /require generation/);
-		await assert.rejects(readFile(generatedOutputs.manifestFile!, "utf8"), { code: "ENOENT" });
-		const report = await generateIcons({ outputs: generatedOutputs, sourceDirectory });
-		const optimized = await readFile(join(sourceDirectory, "add.svg"), "utf8");
-		assert.equal(report.sourceChanged, true);
-		assert.doesNotMatch(optimized, /\bwidth="16"/);
-		assert.doesNotMatch(optimized, /\bheight="16"/);
-		assert.match(optimized, /viewBox="0 0 16 16"/);
-		assert.equal((await checkIcons({ outputs: generatedOutputs, sourceDirectory })).count, 1);
-	} finally {
-		await rm(root, { force: true, recursive: true });
-	}
-});
-
-test("product icon generation rejects linked or active SVG content", async () => {
-	const root = await mkdtemp(join(tmpdir(), "ash-product-icons-"));
-	const sourceDirectory = join(root, "icons");
-	const generatedOutputs = outputs(root);
-	try {
-		await mkdir(sourceDirectory);
-		await writeFile(join(sourceDirectory, "linked.svg"), `<svg viewBox="0 0 16 16"><a href="https://example.test"><path d="M0 0h1v1z"/></a></svg>`);
-		await assert.rejects(generateIcons({ outputs: generatedOutputs, sourceDirectory }), /unsupported active or external content/);
-	} finally {
-		await rm(root, { force: true, recursive: true });
-	}
-});
-
-test("Vite product icon integration regenerates and reloads after an SVG replacement", async () => {
-	const root = await mkdtemp(join(tmpdir(), "ash-product-icons-vite-"));
-	const sourceDirectory = join(root, "icons");
-	const outputFile = join(root, "generated", "product-icons.ts");
-	try {
-		await mkdir(sourceDirectory);
-		const sourceFile = join(sourceDirectory, "close.svg");
-		await writeFile(sourceFile, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M3 3l10 10"/></svg>\n');
-
-		const watcher = Object.assign(new EventEmitter(), { add(_path: string): void { } });
-		let resolveReload!: (message: { readonly type: "full-reload"; }) => void;
-		let rejectReload!: (reason: Error) => void;
-		const reload = new Promise<{ readonly type: "full-reload"; }>((resolvePromise, reject) => {
-			resolveReload = resolvePromise;
-			rejectReload = reject;
-		});
-		const reloadMessages: Array<{ readonly type: "full-reload"; }> = [];
-		const plugin = productIconsPlugin({ sourceDirectory, outputFile, debounceMilliseconds: 0 });
-		plugin.configureServer({
-			watcher,
-			ws: {
-				send(message) {
-					reloadMessages.push(message);
-					resolveReload(message);
-				},
-			},
-			config: {
-				logger: {
-					error(message) {
-						rejectReload(new Error(message));
-					},
-				},
-			},
-		});
-
-		const changedSource = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M1 1l14 14"/></svg>\n';
-		await writeFile(sourceFile, changedSource);
-		watcher.emit("all", "change", sourceFile);
-		assert.deepEqual(await reload, { type: "full-reload" });
-		assert.match(await readFile(outputFile, "utf8"), /d=\\"m1 1 14 14\\"/);
-		assert.equal(await readFile(sourceFile, "utf8"), changedSource);
-
-		watcher.emit("all", "change", sourceFile);
-		await delay(25);
-		assert.equal(reloadMessages.length, 1);
-	} finally {
-		await rm(root, { force: true, recursive: true });
-	}
+test('product icon generation rejects linked or active SVG content', async t => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-product-icons-'));
+	t.after(() => rm(root, { recursive: true, force: true }));
+	await writeFile(join(root, 'linked.svg'), '<svg viewBox="0 0 16 16"><a href="https://example.test"><path d="M0 0h1v1z"/></a></svg>');
+	await assert.rejects(generateIcons({ sourceDirectory: root, outputs: { manifestFile: join(root, 'manifest.json') } }), /unsupported active or external content/);
 });

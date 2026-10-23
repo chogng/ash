@@ -5,9 +5,8 @@ import { iconFontSchema } from './fileIconThemeSchema.js';
 export const productIconThemeSchemaId = 'vscode://schemas/product-icon-theme';
 const definition: JsonSchema = {
 	type: 'object', additionalProperties: false,
-	oneOf: [{ required: ['iconPath'] }, { required: ['fontCharacter'] }],
+	required: ['fontCharacter'],
 	properties: {
-		iconPath: { type: 'string', pattern: '\\.svg$' },
 		fontCharacter: { type: 'string', minLength: 1, maxLength: 16 }, fontId: { type: 'string' },
 	},
 };

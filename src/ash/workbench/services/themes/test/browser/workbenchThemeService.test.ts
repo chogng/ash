@@ -40,9 +40,9 @@ test('selected product icon theme refreshes retained icon nodes and returns to d
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
 		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => { }, removeEventListener: () => { } }) });
-		const icon = registerIcon('test-workbench-product-icon', () => '<svg viewBox="0 0 16 16"><path d="M1 1"/></svg>', 'Workbench product icon test');
+		const icon = registerIcon('test-workbench-product-icon', { fontCharacter: 'A' }, 'Workbench product icon test');
 		using registration = WorkbenchProductIconThemesRegistry.registerThemes();
-		registration.replace([{ id: 'test-workbench-svg', label: 'Test SVG', icons: new Map([[icon.id, () => '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4"/></svg>']]) }]);
+		registration.replace([{ id: 'test-workbench-font', label: 'Test font', icons: new Map([[icon.id, { fontCharacter: 'B' }]]) }]);
 		using configuration = new WorkbenchConfigurationService();
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
@@ -53,17 +53,17 @@ test('selected product icon theme refreshes retained icon nodes and returns to d
 		using active = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		active.initialize();
 		const mounted = appendIcon(icon, browser.window.document.body);
-		assert(mounted.querySelector('path'));
-		await configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'test-workbench-svg');
-		assert.equal(active.getProductIconTheme().id, 'test-workbench-svg');
-		assert(mounted.querySelector('circle'));
+		assert.equal(mounted.dataset.ashIconCharacter, 'A');
+		await configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'test-workbench-font');
+		assert.equal(active.getProductIconTheme().id, 'test-workbench-font');
+		assert.equal(mounted.dataset.ashIconCharacter, 'B');
 		await configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'default');
 		assert.equal(active.getProductIconTheme().id, 'default');
-		assert(mounted.querySelector('path'));
-		await configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'test-workbench-svg');
+		assert.equal(mounted.dataset.ashIconCharacter, 'A');
+		await configuration.updateValue(WorkbenchConfiguration.productIconTheme, 'test-workbench-font');
 		registration.replace([]);
 		assert.equal(active.getProductIconTheme().id, 'default');
-		assert(mounted.querySelector('path'));
+		assert.equal(mounted.dataset.ashIconCharacter, 'A');
 		assert.equal(browser.window.document.body.querySelector('.ash-icon'), mounted);
 	} finally {
 		browser.window.close();

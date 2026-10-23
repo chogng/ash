@@ -1143,19 +1143,33 @@ design('Sessions Design canvas keeps grid and cursor readable across themes', as
 		await testInfo.attach(`design-menu-${scheme}`, { body: await page.locator('.ash-context-view-menu:has(> .ash-design-menu)').screenshot(), contentType: 'image/png' });
 		await page.keyboard.press('Escape');
 		await expect(viewport).toHaveCSS('background-image', /linear-gradient[\s\S]*linear-gradient/u);
+		await expect.poll(() => viewport.evaluate(async element => {
+			const styles = getComputedStyle(element);
+			const url = /url\("?(data:image\/png;base64,[^"\)]+)"?\)/u.exec(styles.cursor)?.[1];
+			if (!url) return false;
+			const probe = document.createElement('span');
+			probe.style.color = 'var(--ash-foreground)'; element.append(probe);
+			const foreground = getComputedStyle(probe).color; probe.remove();
+			const canvas = document.createElement('canvas'); canvas.width = canvas.height = 24;
+			const context = canvas.getContext('2d')!;
+			context.fillStyle = foreground; context.fillRect(0, 0, 1, 1);
+			const expected = context.getImageData(0, 0, 1, 1).data;
+			const image = new Image(); image.src = url; await image.decode();
+			if (image.width !== 24 || image.height !== 24) return false;
+			context.clearRect(0, 0, 24, 24); context.drawImage(image, 0, 0);
+			const pixels = context.getImageData(0, 0, 24, 24).data;
+			let ink = 0;
+			for (let index = 0; index < pixels.length; index += 4) {
+				if (pixels[index + 3] !== 255) continue;
+				ink++;
+				if ([0, 1, 2].some(channel => Math.abs(pixels[index + channel]! - expected[channel]!) > 1)) return false;
+			}
+			return ink > 0;
+		})).toBe(true);
 		const colors = await viewport.evaluate(element => {
 			const styles = getComputedStyle(element);
-			const cursor = decodeURIComponent(styles.cursor);
-			const probe = document.createElement('span');
-			element.append(probe);
-			probe.style.color = cursor.match(/stroke="([^"]+)"/u)![1];
-			const cursorColor = getComputedStyle(probe).color;
-			probe.style.color = 'var(--ash-foreground)';
-			const foreground = getComputedStyle(probe).color;
-			probe.remove();
-			return { cursorColor, foreground, grid: styles.getPropertyValue('--ash-canvas-grid-line').trim(), contrast: styles.getPropertyValue('--ash-contrastBorder').trim() };
+			return { grid: styles.getPropertyValue('--ash-canvas-grid-line').trim(), contrast: styles.getPropertyValue('--ash-contrastBorder').trim() };
 		});
-		expect(colors.cursorColor).toBe(colors.foreground);
 		if (scheme.startsWith('hc')) {
 			expect(colors.grid).toBe(colors.contrast);
 		}

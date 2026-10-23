@@ -49,9 +49,7 @@
 .ash-getting-started-mark {
 	width: 42px;
 	height: 42px;
-	background-color: currentColor;
-	mask: center / contain no-repeat
-		url("../../../../browser/media/ash-mark.svg");
+	--ash-lxiconFontSize: 42px;
 }
 
 .ash-getting-started-name {

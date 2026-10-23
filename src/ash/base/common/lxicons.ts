@@ -10,7 +10,7 @@ function registerDerivedIcon(id: string, source: Icon): Icon {
 	return registerLxicon(id, definition);
 }
 
-// Derived IDs share artwork but retain independent product theme overrides.
+// Derived IDs share glyphs but retain independent product theme overrides.
 const lxiconsDerived = {
 	dialogError: registerDerivedIcon('dialog-error', lxiconsLibrary.error),
 	dialogWarning: registerDerivedIcon('dialog-warning', lxiconsLibrary.warning),
@@ -24,7 +24,7 @@ const lxiconsDerived = {
 	dropDownButton: registerDerivedIcon('drop-down-button', lxiconsLibrary.chevronDown),
 } as const;
 
-/** Built-in icon identities backed by generated font glyphs or fixed-color artwork. */
+/** Built-in icon identities backed by prepared native font glyphs. */
 export const Lxicon = Object.freeze({ ...lxiconsLibrary, ...lxiconsDerived });
 
 export function getAllLxicons(): readonly Icon[] {

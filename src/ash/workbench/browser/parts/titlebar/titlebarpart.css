@@ -81,9 +81,6 @@
 	width: 16px;
 	height: 16px;
 	flex: 0 0 auto;
-	background-color: currentColor;
-	/* The explicit browser segment lets Vite resolve this shared asset in development. */
-	mask: center / contain no-repeat url("../../../browser/media/ash-mark.svg");
 }
 
 .ash-workbench[data-os="mac"] .ash-titlebar-app-icon {

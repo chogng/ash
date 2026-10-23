@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile explicitly mapped monochrome SVG artwork into a static WOFF2 font."""
+"""Compile explicitly mapped SVG artwork into native WOFF2 glyphs."""
 
 from __future__ import annotations
 
@@ -14,13 +14,16 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from fontTools.fontBuilder import FontBuilder
+from fontTools.colorLib.builder import buildCOLR, buildCPAL
 from fontTools.pens.cu2quPen import Cu2QuPen
 from fontTools.pens.boundsPen import BoundsPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.svgLib.path import parse_path
 from fontTools.ttLib import TTFont
+from fontTools.ttLib.tables import otTables
 from picosvg.svg import SVG
+from picosvg.svg_transform import Affine2D
 from picosvg.svg_types import SVGPath, union
 
 SVG_NS = "http://www.w3.org/2000/svg"
@@ -34,6 +37,22 @@ ATTRIBUTES = {
     "opacity", "fill-opacity", "stroke-opacity", "style", "version",
 }
 PAINT_ALIASES = {"black": "#000", "#000000": "#000", "white": "#fff", "#ffffff": "#fff", "currentcolor": "#000"}
+
+
+class _GlyphSVG(SVG):
+    def _stroke(self, shape):
+        # Skia's stroker uses device-space precision even for vector output.
+        # Expanding at a 16-unit viewBox can turn small circles into rounded
+        # squares; work in font units before restoring the SVG coordinate space.
+        viewbox = self.view_box()
+        scale = UPM / max(viewbox.w, viewbox.h)
+        enlarged = shape.as_path().apply_transform(Affine2D(scale, 0, 0, scale, 0, 0))
+        enlarged.stroke_width *= scale
+        enlarged.stroke_dashoffset *= scale
+        if enlarged.stroke_dasharray != "none":
+            enlarged.stroke_dasharray = " ".join(str(float(value) * scale) for value in re.split(r"[, ]", enlarged.stroke_dasharray) if value)
+        for path in super()._stroke(enlarged):
+            yield path.apply_transform(Affine2D(1 / scale, 0, 0, 1 / scale, 0, 0))
 
 
 def read_manifest(path):
@@ -66,7 +85,7 @@ def read_manifest(path):
     return family, sorted(result, key=lambda item: item[1])
 
 
-def normalize_svg(path):
+def normalize_svg(path, preserve_paints=False):
     source = path.read_text(encoding="utf-8")
     if re.search(r"<!DOCTYPE|<!ENTITY|<\?(?!xml(?:\s|\?>))", source, re.I):
         raise ValueError(f"{path}: DTDs, entities and processing instructions are unsupported")
@@ -77,7 +96,7 @@ def normalize_svg(path):
     if len(values) != 4 or not all(math.isfinite(v) for v in values) or min(values[2:]) <= 0:
         raise ValueError(f"{path}: a finite positive viewBox is required")
     # An opaque white mask is precisely a geometric clip. Other masks require
-    # compositing and must remain explicit SVG exceptions in the product catalog.
+    # compositing beyond the supported glyph conversion subset.
     masks = set()
     for mask in root.findall(f".//{{{SVG_NS}}}mask"):
         if set(mask.attrib) != {"id", "fill"} or mask.get("fill", "").lower() not in {"#fff", "#ffffff", "white"}:
@@ -111,19 +130,44 @@ def normalize_svg(path):
                 raise ValueError(f"{path}: unsupported attribute or external reference {name!r}")
             if "url" in value.lower() and not (name == "clip-path" and re.fullmatch(r"url\(#[\w.-]+\)", value)):
                 raise ValueError(f"{path}: gradients and external resources cannot become a monochrome glyph")
-            if name in {"opacity", "fill-opacity", "stroke-opacity"} and float(value) != 1:
-                raise ValueError(f"{path}: transparency cannot become an opaque monochrome glyph")
+            if name in {"opacity", "fill-opacity", "stroke-opacity"}:
+                opacity = float(value)
+                if not math.isfinite(opacity) or not 0 <= opacity <= 1:
+                    raise ValueError(f"{path}: opacity must be finite and between zero and one")
+                if opacity != 1 and not preserve_paints:
+                    raise ValueError(f"{path}: transparency cannot become an opaque monochrome glyph")
+                if opacity != 1 and tag in {"g", "svg"}:
+                    raise ValueError(f"{path}: group opacity requires compositing beyond solid glyph layers")
             if name in {"fill", "stroke"}:
                 paint = value.strip().lower()
                 element.set(key, PAINT_ALIASES.get(paint, paint))
-    svg = SVG.fromstring(ET.tostring(root)).topicosvg(ndigits=6).clip_to_viewbox()
+    svg = _GlyphSVG.fromstring(ET.tostring(root))
+    # picosvg's clone returns its base class; retain the font-scale stroker.
+    svg.topicosvg(ndigits=6, inplace=True)
+    svg = svg.clip_to_viewbox()
     viewbox = svg.view_box()
     if viewbox is None or not all(math.isfinite(v) for v in viewbox) or viewbox.w <= 0 or viewbox.h <= 0:
         raise ValueError(f"{path}: a finite positive viewBox is required")
     shapes = list(svg.shapes())
+    if preserve_paints:
+        if any(float(group.get("opacity", "1")) != 1
+               for group in ET.fromstring(svg.tostring()).iter(f"{{{SVG_NS}}}g")):
+            raise ValueError(f"{path}: group opacity requires compositing beyond solid glyph layers")
+        # Keep each expanded paint in SVG order. COLRv1's foreground palette
+        # index can retain opacity while still inheriting the caller's color.
+        layers = []
+        for shape in shapes:
+            if shape.fill == "none":
+                continue
+            opacity = shape.opacity * shape.fill_opacity
+            if opacity:
+                layers.append((shape.as_path().remove_overlaps().d, shape.fill, opacity))
+        if not layers:
+            raise ValueError(f"{path}: conversion produced no visible paint layers")
+        return source, svg.tostring() + "\n", viewbox, layers
     paints = {PAINT_ALIASES.get(s.fill.lower(), s.fill.lower()) for s in shapes if s.fill != "none"}
     if paints != {"#000"} or not shapes:
-        raise ValueError(f"{path}: expected opaque foreground paint, found {sorted(paints)}; fixed colors require dedicated artwork")
+        raise ValueError(f"{path}: expected opaque foreground paint, found {sorted(paints)}; fixed colors require explicit color-glyph classification")
     # Resolve each SVG fill rule before unioning the same-color paths. Overlap
     # removal keeps holes and joins correct in TrueType's nonzero winding model.
     shapes = [s.as_path().remove_overlaps() for s in shapes if s.fill != "none"]
@@ -143,12 +187,41 @@ def make_glyph(viewbox, outline):
     return pen.glyph()
 
 
-def build(manifest, out):
+def build(manifest, out, color_glyphs=()):
     family, sources = read_manifest(manifest)
-    converted = [(name, cp, path, normalize_svg(path)) for name, cp, path in sources]
+    color_glyphs = set(color_glyphs)
+    if color_glyphs - {name for name, _, _ in sources}:
+        raise ValueError("Color glyphs must name explicitly mapped sources")
+    converted = [(name, cp, path, normalize_svg(path, name in color_glyphs)) for name, cp, path in sources]
     glyphs = {".notdef": TTGlyphPen(None).glyph()}
+    color_paints, palette = {}, []
     for name, _, _, (_, _, vb, outline) in converted:
-        glyphs[name] = make_glyph(vb, outline)
+        if name not in color_glyphs:
+            glyphs[name] = make_glyph(vb, outline)
+            continue
+        paints = []
+        for index, (path, color, opacity) in enumerate(outline):
+            layer_name = f"{name}.paint{index}"
+            glyphs[layer_name] = make_glyph(vb, path)
+            normalized = PAINT_ALIASES.get(color.lower(), color.lower())
+            if normalized == "#000":
+                palette_index = 0xFFFF
+            else:
+                normalized = {"red": "#ff0000", "blue": "#0000ff", "green": "#008000"}.get(normalized, normalized)
+                if not re.fullmatch(r"#(?:[0-9a-f]{3}|[0-9a-f]{6})", normalized):
+                    raise ValueError(f"{name}: unsupported solid paint {color!r}")
+                digits = normalized[1:]
+                if len(digits) == 3:
+                    digits = "".join(digit * 2 for digit in digits)
+                rgba = tuple(int(digits[offset:offset + 2], 16) / 255 for offset in (0, 2, 4)) + (1.0,)
+                if rgba not in palette:
+                    palette.append(rgba)
+                palette_index = palette.index(rgba)
+            paints.append({"Format": otTables.PaintFormat.PaintGlyph, "Glyph": layer_name,
+                           "Paint": {"Format": otTables.PaintFormat.PaintSolid, "PaletteIndex": palette_index, "Alpha": opacity}})
+        color_paints[name] = {"Format": otTables.PaintFormat.PaintColrLayers, "Layers": paints}
+        silhouette = SVGPath.from_commands(union([SVGPath(d=path) for path, _, _ in outline])).d
+        glyphs[name] = make_glyph(vb, silhouette)
     metrics = {}
     for name, glyph in glyphs.items():
         glyph.recalcBounds(glyphs)
@@ -168,6 +241,9 @@ def build(manifest, out):
     fb.setupOS2(sTypoAscender=UPM, sTypoDescender=0, sTypoLineGap=0, usWinAscent=UPM, usWinDescent=0, usWeightClass=400)
     fb.setupPost()
     fb.setupMaxp()
+    if color_paints:
+        fb.font["CPAL"] = buildCPAL([palette or [(0.0, 0.0, 0.0, 1.0)]])
+        fb.font["COLR"] = buildCOLR(color_paints, version=1, glyphMap=fb.font.getReverseGlyphMap())
     # Deterministic artifact bytes let callers distinguish artwork changes from
     # a mere rebuild. This fixed OpenType timestamp represents 2000-01-01 UTC.
     fb.font["head"].created = fb.font["head"].modified = 3029529600
@@ -195,7 +271,7 @@ def build(manifest, out):
 <script>document.fonts.load('400 16px "{family}"', {json.dumps("".join(chr(cp) for _, cp, _ in sources))}).then(fonts=>{{document.body.dataset.fontReady=String(fonts.length>0);document.getElementById('status').textContent=fonts.length?'Actual WOFF2 loaded.':'Font missing.';}});</script></html>'''
     (out / "index.html").write_text(preview, encoding="utf-8")
     (out / "glyphs.json").write_text(json.dumps({"family": family, "glyphs": mappings}, indent=2) + "\n", encoding="utf-8")
-    report = {"ok": True, "kind": "static", "glyphs": len(sources), "unitsPerEm": UPM, "woff2": str(woff2), "woff2Sha256": hashlib.sha256(woff2.read_bytes()).hexdigest()}
+    report = {"ok": True, "kind": "static", "glyphs": len(sources), "colorGlyphs": len(color_paints), "unitsPerEm": UPM, "woff2": str(woff2), "woff2Sha256": hashlib.sha256(woff2.read_bytes()).hexdigest()}
     (out / "validation.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return report
 

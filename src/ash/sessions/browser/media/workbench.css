@@ -15,22 +15,6 @@
 	--ash-icon-font-weight: 550;
 }
 
-/* Dedicated SVG artwork keeps its paints; normalize its linework in this host. */
-.ash-sessions-window
-	.ash-icon:not(.ash-icon-default-font)
-	.ash-icon-artwork
-	[stroke] {
-	stroke-width: 1.25px;
-}
-
-/* The catalog's opaque masks clip one half of these inside-aligned strokes. */
-.ash-sessions-window
-	.ash-icon:not(.ash-icon-default-font)
-	.ash-icon-artwork
-	[stroke][mask] {
-	stroke-width: 2.5px;
-}
-
 *,
 *::before,
 *::after {

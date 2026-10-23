@@ -158,7 +158,7 @@ export interface IColorTheme {
 	getSize(id: string): SizeValue | undefined;
 }
 
-/** Font glyphs and dedicated artwork selected for semantic product icon IDs in one window. */
+/** Prepared font glyphs selected for semantic product icon IDs in one window. */
 export interface IProductIconTheme {
 	readonly id: string;
 	readonly label: string;

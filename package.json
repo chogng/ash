@@ -23,6 +23,7 @@
     "test:component-fixtures:prepared": "bun check -p test/componentFixtures/playwright/tsconfig.json --all && node test/integration/browser/run.ts --component-fixtures",
     "test:component-fixtures:unit": "node --test test/componentFixtures/playwright/tests/*.test.ts",
     "icons:generate": "bun build/resources/icons/generate.ts",
+    "icons:build": "node build/python.ts -B .agents/skills/svg-icon-font/scripts/build_product_font.py",
     "icons:check": "bun build/resources/icons/generate.ts --check",
     "protocol:generate": "node build/protocol/generate.ts",
     "prepare:generated": "node build/prepare.ts",

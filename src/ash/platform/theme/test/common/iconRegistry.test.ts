@@ -16,21 +16,21 @@ test('derived Lxicon defaults resolve through the product registry and preserve 
 	}
 	const artwork = resolveIconDefinition(Lxicon.error);
 	assert.equal(resolveIconDefinition(Lxicon.dialogError), artwork);
-	const themed = () => '<svg viewBox="0 0 24 24"/>';
+	const themed = { fontCharacter: 'B' };
 	const theme = new Map([[Lxicon.dialogError.id, themed]]);
 	assert.equal(resolveIconDefinition(Lxicon.dialogError, theme), themed);
 	assert.equal(resolveIconDefinition(Lxicon.error, theme), artwork);
 });
 
 test('semantic icons resolve through aliases and theme overrides', () => {
-	const definition = () => '<svg></svg>';
+	const definition = { fontCharacter: 'A' };
 	const defaultIcon = registerIcon(nextIconId('default'), definition, 'Default test icon');
 	assert.equal(getIconRegistry().getIcon(defaultIcon.id)?.description, 'Default test icon');
 	const semanticIcon = registerIcon(nextIconId('semantic'), defaultIcon, 'Semantic test icon');
 	assert.equal(resolveIconDefinition(semanticIcon), definition);
-	const themed = () => '<svg viewBox="0 0 16 16"/>';
+	const themed = { fontCharacter: 'B' };
 	assert.equal(resolveIconDefinition(semanticIcon, new Map([[defaultIcon.id, themed]])), themed);
-	const directTheme = () => '<svg viewBox="0 0 24 24"/>';
+	const directTheme = { fontCharacter: 'B' };
 	assert.equal(resolveIconDefinition(semanticIcon, new Map([[semanticIcon.id, directTheme]])), directTheme);
 });
 
@@ -49,7 +49,7 @@ test('circular icon defaults report the complete alias chain', () => {
 
 test('duplicate and malformed icon IDs are rejected', () => {
 	const id = nextIconId('duplicate');
-	const definition = () => '<svg></svg>';
+	const definition = { fontCharacter: 'A' };
 	registerIcon(id, definition, 'Test icon');
 	assert.throws(() => registerIcon(id, definition, 'Duplicate'), TypeError);
 	assert.throws(() => registerIcon('Not Valid', definition, 'Invalid'), TypeError);

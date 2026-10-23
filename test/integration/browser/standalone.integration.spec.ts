@@ -1,3 +1,4 @@
+import { expectIconFontLoaded } from '../../automation/iconFonts.js';
 import { expect, test, type Page } from '@playwright/test';
 import { Editor } from '../../automation/editor.js';
 import { ShowLightbulbIconMode } from '../../../src/ash/editor/common/config/editorOptions.js';
@@ -1938,7 +1939,8 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 		await expect(sash).toBeVisible();
 		const findIcons = findWidget.locator('.ash-icon[data-ash-icon-id^="find-"]');
 		await expect(findIcons).toHaveCount(5);
-		await expect.poll(() => findIcons.evaluateAll(icons => icons.every(icon => icon.tagName === 'SPAN' && icon.classList.contains('ash-icon-font-ready') && icon.childElementCount === 0))).toBe(true);
+		await expectIconFontLoaded(findIcons.first());
+		await expect.poll(() => findIcons.evaluateAll(icons => icons.every(icon => icon.tagName === 'SPAN' && icon.classList.contains('ash-icon-font') && icon.childElementCount === 0))).toBe(true);
 		await sash.hover();
 		const initial = await findWidget.boundingBox();
 		const sashBox = await sash.boundingBox();

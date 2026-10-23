@@ -12,7 +12,7 @@ import { setHoverDelegate, type IManagedHover } from '../../browser/ui/hover/hov
 
 test('IconLabel updates name, description, suffix, and semantic icons in place', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const icon = registerLxicon('test-icon-label-inline', () => '<svg viewBox="0 0 16 16"></svg>');
+	const icon = registerLxicon('test-icon-label-inline', { fontCharacter: 'A' });
 	const hoverContents: unknown[] = [];
 	using delegate = setHoverDelegate({
 		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
@@ -75,7 +75,7 @@ test('IconLabel renders unknown inline icons as literal text', () => {
 
 test('SimpleIconLabel renders semantic icons and owns its hover', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const icon = registerLxicon('test-simple-icon-label', () => '<svg viewBox="0 0 16 16"></svg>');
+	const icon = registerLxicon('test-simple-icon-label', { fontCharacter: 'A' });
 	const container = h(dom.window.document, 'span');
 	dom.window.document.body.append(container);
 	using label = new SimpleIconLabel(container);
@@ -123,7 +123,7 @@ suite('IconLabel suffix icons', () => {
 	test('keeps text suffixes and literal filenames while mounted icon themes update in place', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {
-			const icon = registerLxicon('test-suffix-icon', () => '<svg viewBox="0 0 16 16"><path d="M0 0"/></svg>');
+			const icon = registerLxicon('test-suffix-icon', { fontCharacter: 'A' });
 			using label = new IconLabel(dom.window.document.body, { label: '$(add).ts', suffix: ':3', suffixIcon: icon });
 			const mounted = label.element.querySelector('.ash-icon-label-suffix-icon .ash-icon');
 			assert.equal(label.labelElement.textContent, '$(add).ts');
@@ -131,9 +131,9 @@ suite('IconLabel suffix icons', () => {
 			assert.equal(mounted?.getAttribute('aria-hidden'), 'true');
 			assert.equal(mounted?.getAttribute('tabindex'), null);
 			label.setLabel('renamed.ts', undefined, { suffix: ':5', suffixIcon: icon });
-			setIconResolver(dom.window.document, () => () => '<svg viewBox="0 0 16 16"><circle r="4"/></svg>');
+			setIconResolver(dom.window.document, () => ({ fontCharacter: 'B' }));
 			assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon .ash-icon'), mounted);
-			assert.equal(mounted?.querySelector('circle')?.getAttribute('r'), '4');
+			assert.equal(mounted?.getAttribute('data-ash-icon-character'), 'B');
 			label.clear();
 			assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon .ash-icon'), null);
 			assert.equal(label.element.querySelector<HTMLElement>('.ash-icon-label-suffix-icon')?.hidden, true);

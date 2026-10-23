@@ -1,3 +1,4 @@
+import { expectIconFontLoaded } from '../../../automation/iconFonts.js';
 import type { ElectronApplication, Locator } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
@@ -1187,8 +1188,11 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 	await expect(page.locator(`.ash-titlebar-left-actions [data-action-id="${actionId}"]`)).toHaveCount(0);
 	await expect(entry).toBeVisible();
 	await expect(entry).toHaveAttribute('aria-label', target.kind === 'electron' ? 'Open in Agents' : 'Open Code Sessions');
-	const mark = entry.locator('svg.ash-titlebar-mark');
-	await expect(mark.locator('path')).toHaveCount(9);
+	await page.mouse.move(400, 180);
+	await commandCenter.focus();
+	const mark = entry.locator('.ash-icon-ash-titlebar-mark');
+	await expect(mark.locator('.ash-icon-font-layer')).toHaveCount(9);
+	await expect(mark.locator('svg')).toHaveCount(0);
 	const expandedLabel = entry.locator('.ash-icon-label-container');
 	const checkExpandedSpacing = async (): Promise<void> => {
 		await expect.poll(() => entry.evaluate(button => {
@@ -1229,7 +1233,7 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 	}
 
 	const collapsedWidth = await entry.evaluate(button => button.getBoundingClientRect().width);
-	const petal = mark.locator('#petal-north');
+	const petal = mark.locator('[data-ash-icon-layer="petal-north"]');
 	await entry.hover({ position: { x: 2, y: 11 } });
 	await expect(petal).toHaveCSS('animation-name', 'ash-titlebar-mark-bloom');
 	if (target.kind === 'electron') {
@@ -1322,7 +1326,7 @@ test('titlebar toolbar icons fit inside their buttons', async ({ workbench }) =>
 		await expect(toggle.locator('.ash-button-label')).toBeHidden();
 	}
 	const fontIcon = page.locator('.ash-workbench-titlebar .ash-icon-default-font:visible').first();
-	await expect(fontIcon).toHaveClass(/ash-icon-font-ready/);
+	await expectIconFontLoaded(fontIcon);
 	await expect(fontIcon).toHaveCSS('font-family', '"Ash UI Icons"');
 	await expect(fontIcon).toHaveCSS('font-weight', '400');
 	await expect(fontIcon.locator('svg')).toHaveCount(0);
@@ -1390,7 +1394,8 @@ responsiveTitleTest('titlebar command center opens file search, switches to comm
 
 	const titlebar = page.locator('.ash-workbench-titlebar');
 	const appIcon = titlebar.locator('.ash-titlebar-app-icon');
-	await expect(appIcon).toHaveCSS('mask-image', /ash-mark.*\.svg/u);
+	await expectIconFontLoaded(appIcon.locator('.ash-icon'));
+	await expect(appIcon.locator('svg')).toHaveCount(0);
 	await expect(appIcon).toHaveCSS('background-image', 'none');
 	await expect(appIcon).toHaveCSS('background-color', await appIcon.evaluate(element => getComputedStyle(element).color));
 	if (process.platform === 'darwin') {

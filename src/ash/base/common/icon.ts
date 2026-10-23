@@ -10,12 +10,10 @@ export namespace Icon {
 	}
 }
 
-/** A native font glyph, with SVG artwork retained for a failed font load. */
-export interface FontIconDefinition {
+/** A native font glyph resolved by the product icon theme. */
+export interface IconDefinition {
 	readonly fontCharacter: string;
 	readonly font?: { readonly id: string; readonly definition: { readonly weight?: string; readonly style?: string; }; };
-	readonly fallback?: () => string;
+	/** Prepared glyph layers retain independent animation without carrying SVG artwork. */
+	readonly layers?: readonly { readonly id: string; readonly fontCharacter: string; readonly origin: readonly [number, number]; }[];
 }
-
-/** Font glyphs are the default; fixed-color artwork can supply its own SVG. */
-export type IconDefinition = FontIconDefinition | (() => string);

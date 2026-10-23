@@ -23,7 +23,6 @@ from fontTools.svgLib.path import parse_path
 from fontTools.ttLib import TTFont
 
 ROOT = Path(__file__).resolve().parents[4]
-SOURCES = ROOT / "resources/icons/variable/sidebar"
 ICONS = ("add", "code", "projects", "clockface")
 
 
@@ -69,13 +68,13 @@ def sample_path(data):
     return paths
 
 
-def centerlines(name):
+def centerlines(name, source_directory):
     if name == "add":
         # These two round-capped strokes reproduce add.svg's filled plus outline.
         return [([(1.5, 7.5), (13.5, 7.5)], False),
                 ([(7.5, 1.5), (7.5, 13.5)], False)]
     result = []
-    for element in ET.parse(ROOT / f"resources/icons/{name}.svg").getroot():
+    for element in ET.parse(source_directory / f"{name}.svg").getroot():
         tag = element.tag.rsplit("}", 1)[-1]
         if tag == "path":
             if element.get("stroke") != "#000":
@@ -124,9 +123,9 @@ def offset_side(points, closed, side, radius, round_join):
     return result
 
 
-def outlines(name, width):
+def outlines(name, width, source_directory):
     contours = []
-    for points, closed in centerlines(name):
+    for points, closed in centerlines(name, source_directory):
         radius = width / 2
         # Projects uses SVG's default miter join; the other selected icons use round joins.
         left = offset_side(points, closed, 1, radius, name != "projects")
@@ -142,12 +141,12 @@ def outlines(name, width):
     return contours
 
 
-def write_masters(masters):
+def write_masters(masters, source_directory):
     masters.mkdir(parents=True, exist_ok=True)
     for name in ICONS:
         for label, width in (("regular", 1), ("bold", 1.5)):
             paths = []
-            for contour in outlines(name, width):
+            for contour in outlines(name, width, source_directory):
                 coordinates = " L".join(f"{x:.6f},{y:.6f}" for x, y in contour)
                 paths.append(f'  <path d="M{coordinates} Z"/>')
             svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">\n'
@@ -177,6 +176,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=ROOT / ".build/variable-sidebar-icons")
     parser.add_argument("--font-output", type=Path)
+    parser.add_argument("--source-directory", type=Path, default=ROOT / "resources/icons")
     args = parser.parse_args()
     spec = importlib.util.spec_from_file_location("vifont", ROOT / ".agents/skills/variable-iconfont/scripts/vifont.py")
     vifont = importlib.util.module_from_spec(spec)
@@ -193,8 +193,8 @@ def main():
     vifont.build_master_font = build_square_master
     args.out.mkdir(parents=True, exist_ok=True)
     masters = args.out / "source-masters"
-    write_masters(masters)
-    source = yaml.safe_load((SOURCES / "manifest.yaml").read_text())
+    write_masters(masters, args.source_directory)
+    source = yaml.safe_load((args.source_directory / "variable/sidebar/manifest.yaml").read_text())
     for glyph in source["glyphs"]:
         glyph["start"] = str((masters / f'{glyph["name"]}.regular.svg').resolve())
         glyph["end"] = str((masters / f'{glyph["name"]}.bold.svg').resolve())
@@ -217,8 +217,8 @@ def main():
     reference = args.out / "reference"
     reference.mkdir(exist_ok=True)
     for name in ICONS:
-        shutil.copy2(ROOT / f"resources/icons/{name}.svg", reference / f"{name}.svg")
-    shutil.copy2(SOURCES / "preview.html", args.out / "index.html")
+        shutil.copy2(args.source_directory / f"{name}.svg", reference / f"{name}.svg")
+    shutil.copy2(args.source_directory / "variable/sidebar/preview.html", args.out / "index.html")
     print(json.dumps({"artifacts": artifacts, "validation": validation}, indent=2))
 
 

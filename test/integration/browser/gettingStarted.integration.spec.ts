@@ -1,3 +1,4 @@
+import { expectIconFontLoaded } from '../../automation/iconFonts.js';
 import { expect, test } from '@playwright/test';
 
 test('Welcome renders its brand and light-theme action cards', async ({ page }) => {
@@ -8,9 +9,10 @@ test('Welcome renders its brand and light-theme action cards', async ({ page }) 
 	const mark = welcome.locator('.ash-getting-started-mark');
 	await expect(mark).toBeVisible();
 	await expect(mark).toHaveAttribute('aria-hidden', 'true');
-	await expect(mark).toHaveCSS('mask-image', /ash-mark.*\.svg/u);
+	await expectIconFontLoaded(mark.locator('.ash-icon'));
+	await expect(mark.locator('svg')).toHaveCount(0);
 	await expect(mark).toHaveCSS('background-image', 'none');
-	await expect(mark).toHaveCSS('background-color', await mark.evaluate(element => getComputedStyle(element).color));
+	await expect(mark.locator('.ash-icon')).toHaveCSS('color', await mark.evaluate(element => getComputedStyle(element).color));
 	const cards = welcome.locator('.ash-getting-started-card');
 	await expect(cards).toHaveCount(4);
 	await expect(cards.locator('.ash-getting-started-card-label')).toHaveText(['Open folder', 'Clone repo', 'Connect via SSH', 'Connect GitHub']);
@@ -30,7 +32,7 @@ test('Welcome renders its brand and light-theme action cards', async ({ page }) 
 	await expect(github).toHaveCSS('color', 'rgb(255, 255, 255)');
 	await expect(github.locator('.ash-icon')).toHaveCSS('color', 'rgb(255, 255, 255)');
 	const githubIcon = github.locator('.ash-icon');
-	await expect(githubIcon).toHaveClass(/ash-icon-font-ready/);
+	await expectIconFontLoaded(githubIcon);
 	await expect(githubIcon.locator('svg')).toHaveCount(0);
 	expect(await githubIcon.evaluate(element => getComputedStyle(element, '::before').color)).toBe('rgb(255, 255, 255)');
 	await github.hover();

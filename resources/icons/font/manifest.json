@@ -292,20 +292,17 @@
     "find-previous": "E121",
     "replace-match": "E122",
     "replace-matches": "E123",
-    "search-selection": "E124"
-  },
-  "svg": {
-    "claude": "Brand color",
-    "csv-green": "File type color",
-    "docx-blue": "File type color",
-    "layout-panel-off-1": "Fixed color/opacity",
-    "layout-sidebar-left-off-1": "Fixed color/opacity",
-    "layout-sidebar-right-off-1": "Fixed color/opacity",
-    "pdf-filled": "File type color",
-    "pdf-red": "File type color",
-    "xls-green": "File type color",
-    "inspect": "Fixed white fill with black outlines",
-    "symbol-method": "Translucent stroke overlay"
+    "search-selection": "E124",
+    "ash-mark": "E125",
+    "ash-mark-petal-north": "E126",
+    "ash-mark-petal-northwest": "E127",
+    "ash-mark-petal-northeast": "E128",
+    "ash-mark-petal-west": "E129",
+    "ash-mark-petal-east": "E12A",
+    "ash-mark-petal-center": "E12B",
+    "ash-mark-petal-southwest": "E12C",
+    "ash-mark-petal-southeast": "E12D",
+    "ash-mark-petal-south": "E12E"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -324,6 +321,7 @@
     "arrow-right": "b72dea4330d4412f4fd3edfe1790600c244e4e28e08d3ca76d0397bd37f37a2c",
     "arrow-swap": "d530bc8a2a200af39368a09ac0118c66330d32b9f43fab13a4e079d5358d926f",
     "arrow-up": "ac3d09f47fa97b06dfda18bd85a5a73141a62a97d30ac92521f6ad14fdab420c",
+    "ash-mark": "7941c365eb7b3cd3e98435315ef71ba1c8366b45785c89aa238686f9ff449514",
     "ask": "54c423dfc247eb347dda55370f2af31a6d0ffd210825a519255f5731bc5c54ab",
     "bell-dot": "b6e467ce1ac38da0374dce31c8f2e3b4bf30b19535b0d5a6473fd250ab88f73f",
     "bell-slash-dot": "a041a4804c2c73def9632a79e4fc703df72502809ab14a34a75a31ae80befc0b",
@@ -600,5 +598,67 @@
     "xls-letter": "402a011a5bb67da339cca15031b55e1cb2bedfa231c2bd179a279d1e5c39612e",
     "zoom-in": "430657f09863ea729dff9dc452d5c3a0e7061095d939771baabae3a44008d957",
     "zoom-out": "318e94cbe6c2700ac08d1ef8bce76604f465585539311f072eabfdf6da2fbbb4"
+  },
+  "color": {
+    "claude": "Brand color",
+    "csv-green": "File type color",
+    "docx-blue": "File type color",
+    "inspect": "Fixed white fill with black outlines",
+    "layout-panel-off-1": "Fixed color/opacity",
+    "layout-sidebar-left-off-1": "Fixed color/opacity",
+    "layout-sidebar-right-off-1": "Fixed color/opacity",
+    "pdf-filled": "File type color",
+    "pdf-red": "File type color",
+    "symbol-method": "Translucent stroke overlay",
+    "xls-green": "File type color"
+  },
+  "layers": {
+    "ash-mark": [
+      {
+        "id": "petal-north",
+        "glyph": "ash-mark-petal-north",
+        "origin": [0.5, 0.2333984375]
+      },
+      {
+        "id": "petal-northwest",
+        "glyph": "ash-mark-petal-northwest",
+        "origin": [0.30078125, 0.33544921875]
+      },
+      {
+        "id": "petal-northeast",
+        "glyph": "ash-mark-petal-northeast",
+        "origin": [0.6982421875, 0.3349609375]
+      },
+      {
+        "id": "petal-west",
+        "glyph": "ash-mark-petal-west",
+        "origin": [0.23193359375, 0.50048828125]
+      },
+      {
+        "id": "petal-east",
+        "glyph": "ash-mark-petal-east",
+        "origin": [0.76611328125, 0.5]
+      },
+      {
+        "id": "petal-center",
+        "glyph": "ash-mark-petal-center",
+        "origin": [0.49853515625, 0.49951171875]
+      },
+      {
+        "id": "petal-southwest",
+        "glyph": "ash-mark-petal-southwest",
+        "origin": [0.302734375, 0.66162109375]
+      },
+      {
+        "id": "petal-southeast",
+        "glyph": "ash-mark-petal-southeast",
+        "origin": [0.6953125, 0.6611328125]
+      },
+      {
+        "id": "petal-south",
+        "glyph": "ash-mark-petal-south",
+        "origin": [0.49951171875, 0.7529296875]
+      }
+    ]
   }
 }

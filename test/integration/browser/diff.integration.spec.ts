@@ -1,3 +1,4 @@
+import { expectIconFontLoaded } from '../../automation/iconFonts.js';
 import { attachRustGit } from './rustGitProcessFixture.js';
 import { expect, test, type Page } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
@@ -2406,7 +2407,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(margins.first()).toHaveAttribute('aria-hidden', 'true');
 		await expect(removedSigns.first().locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'diff-remove');
 		await expect(removedSigns.first().locator('.ash-icon')).toHaveAttribute('aria-hidden', 'true');
-		await expect(removedSigns.first().locator('.ash-icon')).toHaveClass(/ash-icon-font-ready/);
+		await expectIconFontLoaded(removedSigns.first().locator('.ash-icon'));
 		await expect(removedSigns.first().locator('.ash-icon svg')).toHaveCount(0);
 		await expect(removedLines.first()).toHaveAttribute('aria-label', localized(locale, 'Removed line 6: \tremoved', '已删除的第 6 行：\tremoved'));
 		await expect(removedLines.first()).toHaveCSS('border-left-width', '0px');
