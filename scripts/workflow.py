@@ -190,6 +190,8 @@ def run_test(
 
 
 def verify(args: argparse.Namespace, root: Path) -> int:
+    if args.process_tests and not args.test:
+        raise ValueError("--process-tests requires explicit --test targets")
     packages = workspace_packages(root)
     if args.package not in packages:
         raise ValueError(f"unknown workspace package: {args.package}")
@@ -231,7 +233,7 @@ def verify(args: argparse.Namespace, root: Path) -> int:
         *[
             [
                 "just",
-                "test",
+                "test-processes" if args.process_tests else "test",
                 test_package,
                 *settings,
                 *targets,
@@ -246,7 +248,7 @@ def verify(args: argparse.Namespace, root: Path) -> int:
             print(shlex.join(command))
         elif result := (
             run_test(command, root)
-            if command[1] == "test"
+            if command[1] in {"test", "test-processes"}
             else run(command, root).returncode
         ):
             print(f"Verification stopped: {command[1]} exited with {result}")
@@ -486,6 +488,11 @@ def main(arguments: list[str] | None = None, root: Path = ROOT) -> int:
     targets.add_argument("--lib", action="store_true", help="test only the library")
     targets.add_argument(
         "--test", action="append", help="select integration test targets"
+    )
+    validation.add_argument(
+        "--process-tests",
+        action="store_true",
+        help="run explicit --test targets independently of Cargo's Windows Job",
     )
     validation.add_argument(
         "--profile", default="ci-test", help="shared Cargo profile (default: ci-test)"

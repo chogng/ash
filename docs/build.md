@@ -161,7 +161,7 @@ Electron、Browser、编辑器的构建和测试命令，以及测试是否启�
 | `just snapshot <path.snap>...` | 定位所属 TUI 测试并按组运行；展示待审阅差异，有待审阅基线时返回非零退出码                          |
 | `just snapshot --pending`      | 汇总 TUI 的 `.snap.new`，按测试分组复跑并展示差异                                                  |
 
-`verify` 支持 `--lib` 或可重复的 `--test <target>`、`--filter <test-name>`、`--features <features>` 和 `--profile <profile>`；目标选择与过滤条件只传给测试，feature 与 profile 传给三个步骤。`verify` 和 `snapshot` 支持 `--plan`，只解析并展示命令，不编译或运行。路径可以使用仓库根目录下的相对路径或绝对路径。
+`verify` 支持 `--lib` 或可重复的 `--test <target>`、`--filter <test-name>`、`--features <features>` 和 `--profile <profile>`；目标选择与过滤条件只传给测试，feature 与 profile 传给三个步骤。对显式选择的集成测试，可加 `--process-tests` 使用独立进程测试入口，仍执行 check、测试通过数检查与 warning 检查。`verify` 和 `snapshot` 支持 `--plan`，只解析并展示命令，不编译或运行。路径可以使用仓库根目录下的相对路径或绝对路径。
 
 只有 trait 契约或测试设施、由消费方覆盖行为的包，可以在自己的 Cargo 清单中声明
 `[package.metadata.ash.verify]` 的 `test-packages` 列表。例如 `ash-core-api` 声明 `["ash-core"]`，
@@ -187,7 +187,7 @@ just snapshot crates/tui/snapshots/fullscreen/composer/composer_focused.snap --a
 
 `--accept` 必须显式列出已审阅文件，不能与 `--pending` 同用；接受后按组复跑测试。其他待审阅文件保留；目录中还有 `.snap.new` 时返回非零退出码并列出路径。
 
-Windows Cargo 的测试 Job 禁止子进程脱离。验证共享 App Server 独立于启动者存活时，使用 `just test-processes ash-app-server --test managed_lifecycle`，先由 Cargo 编译，再独立运行测试程序。此入口只接受显式选择的集成测试；普通测试使用 `just test`。
+Windows Cargo 的测试 Job 禁止子进程脱离。验证共享 App Server 独立于启动者存活时，使用 `just verify ash-app-server --process-tests --test managed_lifecycle`，先由 Cargo 编译，再独立运行测试程序；单独复跑测试使用 `just test-processes ash-app-server --test managed_lifecycle`。此入口只接受显式选择的集成测试；普通测试使用 `just test`。
 
 修改 TUI 后先运行受影响的单测，需要验证真实进程、终端信号或恢复时再运行 PTY 场景：
 
