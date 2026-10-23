@@ -29,6 +29,7 @@
 .ash-global-composite-bar .ash-action-view-item > button .ash-icon {
 	width: var(--ash-activity-bar-icon-size);
 	height: var(--ash-activity-bar-icon-size);
+	font-size: var(--ash-activity-bar-icon-size);
 }
 
 .ash-global-composite-bar .ash-button-content > .ash-icon-label-container {

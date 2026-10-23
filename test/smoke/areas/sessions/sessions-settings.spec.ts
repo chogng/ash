@@ -15,8 +15,8 @@ test('Sessions Settings command queries reuse search and restore saved values af
 		clipboardData.setData('text/plain', source);
 		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
 	}, JSON.stringify([
-		{ key: 'ctrl+alt+y', command: 'workbench.action.openSettings', args: 'sessions.activityBar.compact' },
-		{ key: 'ctrl+alt+u', command: 'workbench.action.openSettings', args: { query: '@id:sessions.activityBar.compact', target: 3 } },
+		{ key: 'ctrl+alt+y', command: 'workbench.action.openSettings', args: 'chat.disableAIFeatures' },
+		{ key: 'ctrl+alt+u', command: 'workbench.action.openSettings', args: { query: '@id:chat.disableAIFeatures', target: 3 } },
 		{ key: 'ctrl+alt+i', command: 'workbench.action.openSettings', args: { query: '' } },
 		{ key: 'ctrl+alt+o', command: 'workbench.action.openSettings', args: { section: 'models' } },
 		{ key: 'ctrl+alt+p', command: 'workbench.action.openSettings', args: { openToSide: true, query: '@id:editor.fontSize' } },
@@ -31,27 +31,27 @@ test('Sessions Settings command queries reuse search and restore saved values af
 		await expect(launcher).toBeFocused();
 		await sessionsPage.keyboard.press('Control+Alt+Y');
 		const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
-		await expect(settings.getByRole('searchbox')).toHaveValue('sessions.activityBar.compact');
+		await expect(settings.getByRole('searchbox')).toHaveValue('chat.disableAIFeatures');
 		await expect(settings.getByRole('searchbox')).toBeFocused();
 		await settings.getByRole('searchbox').evaluate(element => element.setAttribute('data-settings-query-reuse', 'retained'));
 		await settings.getByRole('searchbox').press('Control+Alt+U');
 		await expect(settings.getByRole('searchbox')).toHaveAttribute('data-settings-query-reuse', 'retained');
-		await expect(settings.getByRole('searchbox')).toHaveValue('@id:sessions.activityBar.compact');
+		await expect(settings.getByRole('searchbox')).toHaveValue('@id:chat.disableAIFeatures');
 		await expect(settings.getByRole('searchbox')).toBeFocused();
 		await expect(sessionsPage.getByRole('dialog', { name: 'Sessions Settings' })).toHaveCount(1);
 	};
 	await openQuery();
 	let settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
-	const compact = settings.locator('[data-settings-item-id="sessions.activityBar.compact"]').getByRole('switch');
-	await expect(compact).not.toBeChecked();
-	await compact.press('Space');
-	await expect(compact).toBeChecked();
+	const disabledAI = settings.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch');
+	await expect(disabledAI).not.toBeChecked();
+	await disabledAI.press('Space');
+	await expect(disabledAI).toBeChecked();
 	const readSaved = async (): Promise<unknown> => {
 		if ('windows' in application) {
 			const profile = await application.evaluate(() => process.env.ASH_HOME!);
-			return JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))['sessions.activityBar.compact'];
+			return JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))['chat.disableAIFeatures'];
 		}
-		return (async () => { const snapshot = await readUserSettings(sessionsPage); return JSON.parse(snapshot.content)['sessions.activityBar.compact']; })();
+		return (async () => { const snapshot = await readUserSettings(sessionsPage); return JSON.parse(snapshot.content)['chat.disableAIFeatures']; })();
 	};
 	await expect.poll(readSaved).toBe(true);
 	await settings.getByRole('searchbox').press('Control+Alt+I');
@@ -62,12 +62,12 @@ test('Sessions Settings command queries reuse search and restore saved values af
 	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
 	await expect(settings).toHaveCount(0);
 	await openQuery();
-	await expect(sessionsPage.locator('[data-settings-item-id="sessions.activityBar.compact"]').getByRole('switch')).toBeChecked();
+	await expect(sessionsPage.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch')).toBeChecked();
 	await sessionsPage.getByRole('dialog', { name: 'Sessions Settings' }).evaluate(element => (element as HTMLDialogElement).requestClose());
 	sessionsPage = await workbench.reopenAgentsWindow(application, sessionsPage);
 	await openQuery();
 	settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
-	await expect(settings.locator('[data-settings-item-id="sessions.activityBar.compact"]').getByRole('switch')).toBeChecked();
+	await expect(settings.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch')).toBeChecked();
 	await expect.poll(readSaved).toBe(true);
 	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
 	await openQuery();
@@ -102,7 +102,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 		const clipboardData = new DataTransfer();
 		clipboardData.setData('text/plain', source);
 		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
-	}, '{ "window.menuStyle": "custom", "sessions.activityBar.compact": false, "workbench.activityBar.compact": true }');
+	}, '{ "window.menuStyle": "custom", "chat.disableAIFeatures": false, "workbench.activityBar.compact": true }');
 	await group.editor.input.press('ControlOrMeta+S');
 	await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	let sessionsPage = await workbench.openAgentsWindow(target.kind);
@@ -112,7 +112,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 	};
 	await openSettings();
 	let settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
-	await settings.getByRole('searchbox').fill('compact @id:sessions.activityBar.compact');
+	await settings.getByRole('searchbox').fill('AI @id:chat.disableAIFeatures');
 	const filter = settings.getByRole('button', { name: 'Filter Settings', exact: true });
 	const inputBounds = await settings.getByRole('searchbox').boundingBox();
 	const filterBounds = await filter.boundingBox();
@@ -121,15 +121,15 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 	expect(Math.abs(inputBounds.y - filterBounds.y)).toBeLessThanOrEqual(1);
 	await filter.press('Enter');
 	await settings.getByRole('menuitem', { name: 'Modified', exact: true }).press('Enter');
-	await expect(settings.getByRole('searchbox')).toHaveValue('compact @id:sessions.activityBar.compact @modified');
+	await expect(settings.getByRole('searchbox')).toHaveValue('AI @id:chat.disableAIFeatures @modified');
 	await expect(settings.getByRole('searchbox')).toBeFocused();
-	const row = settings.locator('[data-settings-item-id="sessions.activityBar.compact"]');
+	const row = settings.locator('[data-settings-item-id="chat.disableAIFeatures"]');
 	await expect(row.getByRole('switch')).not.toBeChecked();
 	await expect(settings.locator('[data-settings-item-id="workbench.activityBar.compact"]')).toHaveCount(0);
 	await expect(settings.locator('.ash-models-settings-model-row')).toHaveCount(0);
 	let writer: Workbench | undefined;
-	const saveExternal = async (compact: boolean | undefined): Promise<void> => {
-		const source = JSON.stringify({ 'window.menuStyle': 'custom', 'workbench.activityBar.compact': true, ...(compact === undefined ? {} : { 'sessions.activityBar.compact': compact }) });
+	const saveExternal = async (disabledAI: boolean | undefined): Promise<void> => {
+		const source = JSON.stringify({ 'window.menuStyle': 'custom', 'workbench.activityBar.compact': true, ...(disabledAI === undefined ? {} : { 'chat.disableAIFeatures': disabledAI }) });
 		if ('windows' in application) {
 			await (async source => {
 				const current = await readUserSettings(sessionsPage);
@@ -184,13 +184,13 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 	sessionsPage = await workbench.reopenAgentsWindow(application, sessionsPage);
 	await openSettings();
 	settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
-	await settings.getByRole('searchbox').fill('@modified @id:sessions.activityBar.compact');
-	await expect(settings.locator('[data-settings-item-id="sessions.activityBar.compact"]')).toHaveCount(0);
+	await settings.getByRole('searchbox').fill('@modified @id:chat.disableAIFeatures');
+	await expect(settings.locator('[data-settings-item-id="chat.disableAIFeatures"]')).toHaveCount(0);
 	await settings.getByRole('button', { name: 'Filter Settings', exact: true }).press('Enter');
 	await settings.getByRole('menuitem', { name: 'Clear Filters', exact: true }).press('Enter');
 	await expect(settings.getByRole('searchbox')).toHaveValue('');
-	await settings.getByRole('button', { name: 'Appearance', exact: true }).click();
-	await expect(settings.locator('[data-settings-item-id="sessions.activityBar.compact"]').getByRole('switch')).not.toBeChecked();
+	await settings.getByRole('button', { name: 'General', exact: true }).click();
+	await expect(settings.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch')).not.toBeChecked();
 	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
 	await testInfo.attach('sessions-modified-settings-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
 	expect(runningApplication.diagnostics.errors).toEqual([]);
@@ -204,7 +204,7 @@ test('Sessions setting menus copy their current registered value as JSON', async
 		const clipboardData = new DataTransfer();
 		clipboardData.setData('text/plain', source);
 		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
-	}, '{ "window.menuStyle": "custom", "sessions.activityBar.compact": true }');
+	}, '{ "window.menuStyle": "custom", "chat.disableAIFeatures": true }');
 	await group.editor.input.press('ControlOrMeta+S');
 	await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
@@ -236,9 +236,9 @@ test('Sessions setting menus copy their current registered value as JSON', async
 			await sessionsPage.getByRole('menuitem', { name: 'Settings', exact: true }).click();
 			await expect(settings).toHaveCount(1);
 			await expect(settings.locator('.ash-context-view')).toHaveCount(1);
-			await settings.getByRole('button', { name: 'Appearance', exact: true }).click();
+			await settings.getByRole('button', { name: 'General', exact: true }).click();
 		};
-		const row = settings.locator('[data-settings-item-id="sessions.activityBar.compact"]');
+		const row = settings.locator('[data-settings-item-id="chat.disableAIFeatures"]');
 		const more = row.getByRole('button', { name: /^More actions/u });
 		const copy = settings.getByRole('menuitem', { name: 'Copy Setting as JSON', exact: true });
 		const openMenu = async (): Promise<void> => {
@@ -274,7 +274,7 @@ test('Sessions setting menus copy their current registered value as JSON', async
 		await copy.press('Enter');
 		await expect(copy).toHaveCount(0);
 		await expect(more).toBeFocused();
-		await expect.poll(read).toEqual({ text: '"sessions.activityBar.compact": true', count: 1 });
+		await expect.poll(read).toEqual({ text: '"chat.disableAIFeatures": true', count: 1 });
 		await openMenu();
 		await sessionsPage.keyboard.press('Escape');
 		await expect(copy).toHaveCount(0);
@@ -285,13 +285,13 @@ test('Sessions setting menus copy their current registered value as JSON', async
 		await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
 		await expect(settings).toHaveCount(0);
 		await expect(sessionsPage.locator('.ash-context-view-menu')).toHaveCount(0);
-		await expect.poll(read).toEqual({ text: '"sessions.activityBar.compact": true', count: 1 });
+		await expect.poll(read).toEqual({ text: '"chat.disableAIFeatures": true', count: 1 });
 		await openSettings();
 		await expect(row.getByRole('switch')).toBeChecked();
 		await openMenu();
 		await copy.press('Enter');
 		await expect(more).toBeFocused();
-		await expect.poll(read).toEqual({ text: '"sessions.activityBar.compact": true', count: 2 });
+		await expect.poll(read).toEqual({ text: '"chat.disableAIFeatures": true', count: 2 });
 		await marker.hover();
 		await expect(settings.getByRole('tooltip')).toBeVisible();
 		await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
@@ -315,7 +315,7 @@ test('Workbench and Sessions keep one settings document across edits and window 
 		'workbench.activityBar.compact': true,
 		'workbench.layoutStyle': 'modern',
 		'sessions.layoutStyle': 'flat',
-		'sessions.activityBar.compact': false,
+		'chat.disableAIFeatures': false,
 	}, null, '\t');
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 	const group = workbench.editors.groupAt(0);
@@ -369,7 +369,7 @@ test('Workbench and Sessions keep one settings document across edits and window 
 		'workbench.sideBar.location': 'right',
 		'workbench.activityBar.compact': true,
 		'workbench.layoutStyle': 'modern',
-		'sessions.activityBar.compact': false,
+		'chat.disableAIFeatures': false,
 	});
 	await expect(workbench.page.locator('[data-part="sidebar"]')).toHaveClass(/sidebar-right/u);
 });

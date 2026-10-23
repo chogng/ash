@@ -123,7 +123,7 @@ for (const locale of ['en', 'zh-CN']) {
 			page = await agentsWorkbench.openAgentsWindow(target.kind);
 			await page.evaluate(observeDetails);
 			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
-			await page.locator('.ash-sessions-list-add').click();
+			await page.locator('[data-action-id="sessions.newSession"] button').click();
 			const active = (): ReturnType<Page['locator']> => page!.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork)');
 			const editor = new Editor(active());
 			await editor.waitForEditorFocus(); await page.keyboard.insertText('Keep the unsent management draft');

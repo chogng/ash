@@ -125,17 +125,17 @@ suite('IconLabel suffix icons', () => {
 		try {
 			const icon = registerLxicon('test-suffix-icon', () => '<svg viewBox="0 0 16 16"><path d="M0 0"/></svg>');
 			using label = new IconLabel(dom.window.document.body, { label: '$(add).ts', suffix: ':3', suffixIcon: icon });
-			const mounted = label.element.querySelector('.ash-icon-label-suffix-icon svg');
+			const mounted = label.element.querySelector('.ash-icon-label-suffix-icon .ash-icon');
 			assert.equal(label.labelElement.textContent, '$(add).ts');
 			assert.equal(label.element.querySelector('.ash-icon-label-suffix')?.textContent, ':3');
 			assert.equal(mounted?.getAttribute('aria-hidden'), 'true');
-			assert.equal(mounted?.getAttribute('focusable'), 'false');
+			assert.equal(mounted?.getAttribute('tabindex'), null);
 			label.setLabel('renamed.ts', undefined, { suffix: ':5', suffixIcon: icon });
 			setIconResolver(dom.window.document, () => () => '<svg viewBox="0 0 16 16"><circle r="4"/></svg>');
-			assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon svg'), mounted);
+			assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon .ash-icon'), mounted);
 			assert.equal(mounted?.querySelector('circle')?.getAttribute('r'), '4');
 			label.clear();
-			assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon svg'), null);
+			assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon .ash-icon'), null);
 			assert.equal(label.element.querySelector<HTMLElement>('.ash-icon-label-suffix-icon')?.hidden, true);
 		} finally { dom.window.close(); }
 	});

@@ -800,7 +800,7 @@ test('source menu filters system, user, extension and unassigned rows and edits 
 	editor.search('@source:default @command:test.shortcuts.system');
 	const row = shortcutRow(document, 'test.shortcuts.system')!;
 	assert.equal(document.querySelectorAll('.ash-keybindings-row').length, 1);
-	assert.ok(row.querySelector('.ash-keybindings-row-action svg'));
+	assert.ok(row.querySelector('.ash-keybindings-row-action .ash-icon'));
 	findButton(row, 'Edit').click();
 	const input = document.querySelector<HTMLInputElement>('.ash-keybindings-record-input input')!;
 	assert.equal(input.value, '');

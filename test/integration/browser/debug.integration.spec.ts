@@ -476,7 +476,7 @@ test('debug launch dropdown searches configurations, retains selection, starts c
 	await expect(page.locator('.ash-debug .ash-debug-launch-start')).toHaveCount(0);
 	await expect(page.locator('.ash-workbench-part-title .ash-debug-launch-start')).toHaveCount(1);
 	await expect(dropdown).toHaveText('Run — First');
-	await expect(page.getByRole('button', { name: 'Open launch.json', exact: true }).locator('svg')).toHaveAttribute('data-ash-icon-id', 'debug-configure');
+	await expect(page.getByRole('button', { name: 'Open launch.json', exact: true }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'debug-configure');
 	await dropdown.focus();
 	await dropdown.press('ArrowDown');
 	const search = page.getByRole('searchbox', { name: 'Debug configuration', exact: true });
@@ -629,7 +629,7 @@ for (const locale of ['en', 'zh-cn']) test(`debug launch split action keeps its 
 		const geometry = await launcher.evaluate(element => {
 			const start = element.querySelector<HTMLElement>(':scope > button')!;
 			const dropdown = element.querySelector<HTMLElement>('.ash-debug-configuration')!;
-			const arrow = dropdown.querySelector<SVGElement>('.ash-icon')!;
+			const arrow = dropdown.querySelector<HTMLSpanElement>('.ash-icon')!;
 			const label = dropdown.querySelector<HTMLElement>('.ash-debug-configuration-label')!;
 			const outer = getComputedStyle(element);
 			const startStyle = getComputedStyle(start);

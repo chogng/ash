@@ -1343,8 +1343,8 @@ test('Sessions chat fills its content area without a duplicate session title', a
 	const navigation = page.locator('.ash-sessions-activity-content');
 	for (const width of [1_200, 760]) {
 		await page.setViewportSize({ width, height: 760 });
-		await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-		await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await navigation.getByRole('button', { name: /^New(?:\.|$)/u }).click();
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await expect(sessionsContent.getByRole('heading', { name: 'What can we work on?' })).toBeVisible();
 		await expect.poll(() => sessionsContent.evaluate(content => {
@@ -1363,7 +1363,7 @@ test('Sessions new session keeps the welcome composer stable across frames', asy
 			await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
 			await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 		}
-		await navigation.getByRole('button', { name: session === 1 ? 'Code' : /^Chat(?:\.|$)/u, exact: true }).click();
+		await navigation.getByRole('button', { name: session === 1 ? 'Code' : /^New(?:\.|$)/u, exact: true }).click();
 		const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-cowork):visible').first();
 		await expect(chat.getByRole('heading', { name: 'What can we work on?' })).toBeVisible();
 		await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toHaveAttribute('aria-busy', 'false');
@@ -1395,7 +1395,7 @@ test('Sessions new session keeps the welcome composer stable across frames', asy
 			return samples;
 		});
 		for (let click = 0; click < 6; click++) {
-			await page.locator('.ash-sessions-list-add').click();
+			await page.locator('[data-action-id="sessions.newSession"] button').click();
 		}
 		await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toHaveAttribute('aria-busy', 'false');
 		await page.evaluate(() => document.dispatchEvent(new Event('ash-integration-composer-sampling-complete')));

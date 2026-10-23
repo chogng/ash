@@ -5,7 +5,7 @@ import { QuickAccess } from '../../../automation/quickaccess.js';
 
 test('Sessions Reopen Closed Editor reads its real file through the session provider', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const editors = page.locator('[data-part="editor"]');
 	const explorer = page.locator('[data-part="auxiliarybar"]');
 	const editor = new Editor(editors.locator('.stanza-editor-pane'));

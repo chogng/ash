@@ -50,7 +50,7 @@ test("Button only installs a Hover for an explicit title", () => {
 	assert.equal(iconButton.domNode.getAttribute("aria-label"), "Menu");
 	iconButton.label = "Application menu";
 	assert.equal(iconButton.domNode.getAttribute("aria-label"), "Application menu");
-	assert.ok(iconButton.domNode.querySelector("svg.ash-icon"));
+	assert.ok(iconButton.domNode.querySelector(".ash-icon"));
 
 	using submitButton = new Button(dom.window.document.body, {
 		label: "Submit",

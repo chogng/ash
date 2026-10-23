@@ -19,7 +19,7 @@ test('Welcome renders its brand and light-theme action cards', async ({ page }) 
 		await expect(card).toHaveCSS('background-color', 'rgb(243, 243, 243)');
 		await expect(card).toHaveCSS('border-color', 'rgb(212, 212, 212)');
 		await expect(card).toHaveCSS('opacity', '1');
-		await expect(card.locator('svg.ash-icon')).toHaveCSS('width', '16px');
+		await expect(card.locator('.ash-icon')).toHaveCSS('width', '16px');
 		await card.hover();
 		await expect(card).toHaveCSS('background-color', 'rgb(228, 228, 228)');
 	}
@@ -28,8 +28,11 @@ test('Welcome renders its brand and light-theme action cards', async ({ page }) 
 	await expect(github.locator('.ash-getting-started-card-arrow')).toHaveCount(0);
 	await expect(github).toHaveCSS('background-color', 'rgb(0, 0, 0)');
 	await expect(github).toHaveCSS('color', 'rgb(255, 255, 255)');
-	await expect(github.locator('svg.ash-icon')).toHaveCSS('color', 'rgb(255, 255, 255)');
-	await expect(github.locator('svg.ash-icon path').first()).toHaveCSS('fill', 'rgb(255, 255, 255)');
+	await expect(github.locator('.ash-icon')).toHaveCSS('color', 'rgb(255, 255, 255)');
+	const githubIcon = github.locator('.ash-icon');
+	await expect(githubIcon).toHaveClass(/ash-icon-font-ready/);
+	await expect(githubIcon.locator('svg')).toHaveCount(0);
+	expect(await githubIcon.evaluate(element => getComputedStyle(element, '::before').color)).toBe('rgb(255, 255, 255)');
 	await github.hover();
 	await expect(github).toHaveCSS('background-color', 'rgb(38, 38, 38)');
 });
@@ -98,7 +101,7 @@ for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
 		const rowBox = await row.boundingBox();
 		const actionBox = await actions.boundingBox();
 		const removeBox = await remove.boundingBox();
-		const iconBox = await remove.locator('svg').boundingBox();
+		const iconBox = await remove.locator('.ash-icon').boundingBox();
 		expect(removeBox).toMatchObject({ width: 20, height: 20 });
 		expect(iconBox!.x + iconBox!.width / 2).toBeCloseTo(removeBox!.x + removeBox!.width / 2, 2);
 		expect(iconBox!.y + iconBox!.height / 2).toBeCloseTo(removeBox!.y + removeBox!.height / 2, 2);

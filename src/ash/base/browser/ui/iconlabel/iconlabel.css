@@ -107,6 +107,7 @@
 .ash-icon-label-inline-icon .ash-icon {
 	width: 1em;
 	height: 1em;
+	font-size: inherit;
 }
 .ash-icon-label-inline-icon.default-color {
 	color: inherit;
@@ -127,6 +128,7 @@
 .ash-icon-label-suffix-icon .ash-icon {
 	width: var(--ash-lxiconFontSize-compact);
 	height: var(--ash-lxiconFontSize-compact);
+	font-size: var(--ash-lxiconFontSize-compact);
 }
 
 .ash-icon-label-suffix-icon[hidden] {

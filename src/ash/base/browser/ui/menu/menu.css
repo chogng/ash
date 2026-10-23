@@ -93,9 +93,7 @@
 .ash-menu .ash-submenu-indicator > .ash-icon {
 	width: 12px;
 	height: 12px;
-}
-.ash-menu .ash-submenu-indicator > .ash-icon [stroke] {
-	stroke-width: 1.5;
+	font-size: var(--ash-lxiconFontSize-compact);
 }
 .ash-menu .ash-menu-keybinding {
 	margin-left: auto;

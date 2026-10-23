@@ -22,14 +22,15 @@ import { IViewsService } from '../../../../workbench/services/views/common/views
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { EditorPart as SessionsEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../services/layout/common/sessionsLayoutService.js';
-import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../browser/parts/sidebar/sidebarPart.js';
+import { CODE_NAVIGATION_CONTAINER_ID } from '../../../browser/parts/sidebar/sidebarPart.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 
 export const documentEntry: ISessionsEntry = {
-	id: 'code', activityContext: 'sessions.activity.codeSelected', content: 'documents',
-	sidebarContainerId: SESSIONS_NAVIGATION_CONTAINER_ID, restoreCommand: 'sessions.open.code', focus: 'editor',
+	id: 'code', workspaceMode: 'code', activityContext: 'sessions.activity.codeSelected', content: 'documents',
+	sidebarContainerId: CODE_NAVIGATION_CONTAINER_ID, restoreCommand: 'sessions.open.code', focus: 'editor',
 };
 
 interface EntryVisibility {
@@ -49,6 +50,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	public get conversationVisible(): boolean { return this.activeEntry.get()?.conversation === 'optional' && this.layout.isPartVisible('sessions'); }
 	private readonly controller: DesktopLayoutController;
 	private readonly activeEntry = observableValue<ISessionsEntry | undefined>(this, undefined);
+	private readonly workspaceMode = derived(reader => this.activeEntry.read(reader)?.workspaceMode ?? 'chat');
 	public readonly documentContent = derived(reader => !this.customViews.activeCustomView.read(reader) && this.activeEntry.read(reader)?.content === 'documents');
 	private readonly visibility = new Map<string, EntryVisibility>();
 	private readonly editorEntries = new Map<string, ISessionsEntry>();
@@ -141,6 +143,18 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 			if (event.kind === 'activeGroupChanged' || (event.kind === 'groupChanged' && event.groupId === editor.activeGroup.id && event.event.kind === 'activeEditorChanged')) revealActiveEditor();
 		}));
 		this._register(toDisposable(() => { for (const key of this.activityKeys.values()) { key.reset(); } }));
+		const workspaceMode = SessionsWorkspaceModeContext.bindTo(this.contextKeys);
+		this._register(toDisposable(() => workspaceMode.reset()));
+		this._register(autorun(reader => workspaceMode.set(this.workspaceMode.read(reader))));
+		this._register(autorun(reader => {
+			const opening = this.customViews.activeCustomViewOpen.read(reader);
+			const entryCommand = opening?.descriptor.entryCommand;
+			if (entryCommand && opening.source !== 'restore') {
+				void this.commands.executeCommand(entryCommand, 'restore').catch(error => {
+					if (!this.isDisposed) this.notifications.error(String(error));
+				});
+			}
+		}));
 		this._register(autorun(reader => {
 			const entry = this.activeEntry.read(reader);
 			const covered = this.customViews.activeCustomView.read(reader) !== undefined;
@@ -250,7 +264,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	public async restore(): Promise<void> {
 		await this.controller.whenSettled();
 		if (this.isDisposed) { return; }
-		const saved = this.storage.get(activeEntryKey, StorageScope.WORKSPACE);
+		const saved = this.customViews.activeCustomView.get()?.entryCommand ?? this.storage.get(activeEntryKey, StorageScope.WORKSPACE);
 		// These names describe the discarded storage format, not runtime product selection.
 		const oldEditor = this.storage.get('sessions.layout.primaryEditor', StorageScope.WORKSPACE);
 		const oldEntry = this.storage.get('sessions.layout.activeMode', StorageScope.WORKSPACE)

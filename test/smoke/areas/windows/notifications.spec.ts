@@ -536,7 +536,7 @@ test('notification status shows unread and do not disturb icons and restores the
 		const bell = element.getBoundingClientRect();
 		return {
 			direction: getComputedStyle(part).flexDirection,
-			icon: element.querySelector('svg')?.getAttribute('data-ash-icon-id'),
+			icon: element.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'),
 			stylesheets: [...document.styleSheets].map((sheet, index) => ({ href: sheet.href, index })).filter(sheet => /(?:statusbarpart|\/media\/part)\.css/.test(sheet.href ?? '')),
 			inside: bell.top >= bar.top && bell.bottom <= bar.bottom && bell.left >= bar.left && bell.right <= bar.right,
 			hit: element.contains(document.elementFromPoint(bell.x + bell.width / 2, bell.y + bell.height / 2)),
@@ -546,27 +546,27 @@ test('notification status shows unread and do not disturb icons and restores the
 	expect(startupGeometry).toMatchObject({ direction: 'row', icon: 'bell', inside: true, hit: true });
 	await workbench.quickaccess.runCommand('notifications.clearAll');
 	await expect(page.locator(bellSelector)).toBeVisible();
-	await expect(page.locator(bellSelector).locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell');
+	await expect(page.locator(bellSelector).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell');
 	await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
-	await expect(page.locator(bellSelector).locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell-dot');
+	await expect(page.locator(bellSelector).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell-dot');
 	await page.locator(bellSelector).focus();
 	await page.keyboard.press('Enter');
-	await expect(page.locator(bellSelector).locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell');
+	await expect(page.locator(bellSelector).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell');
 	await workbench.menus.select(application, () => page.getByRole('button', { name: 'Configure Do Not Disturb...', exact: true }).click(), ['Enable Do Not Disturb Mode']);
-	await expect(page.locator(bellSelector).locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell-slash');
+	await expect(page.locator(bellSelector).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell-slash');
 	await page.keyboard.press('Escape');
 	await expect(page.locator(bellSelector)).toBeFocused();
 	await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
-	await expect(page.locator(bellSelector).locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell-slash-dot');
+	await expect(page.locator(bellSelector).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell-slash-dot');
 	await expect(page.locator('.ash-notification')).toHaveCount(0);
 	await page.locator(bellSelector).click();
 	await expect(page.locator('.ash-notifications-row')).toHaveCount(2);
 	({ workbench } = await reloadWorkbench());
 	page = workbench.page;
 	await expect(page.locator(bellSelector)).toBeVisible();
-	await expect(page.locator(bellSelector).locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell-slash');
+	await expect(page.locator(bellSelector).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell-slash');
 	await workbench.quickaccess.runCommand('notifications.toggleDoNotDisturbMode');
-	await expect(page.locator(bellSelector).locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell');
+	await expect(page.locator(bellSelector).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell');
 });
 
 test('notification position menus move the entry between the status bar and title bar and persist after reload', async ({ application, workbench, reloadWorkbench }, testInfo) => {
@@ -622,9 +622,9 @@ macFocusTest('notification ordinary toast expires into unread history in the rea
 	await testInfo.attach('ordinary-toast-before-timeout', { body: await page.screenshot(), contentType: 'image/png' });
 	await expect(toast).toHaveCount(0, { timeout: 16000 });
 	await expect(bell).toBeFocused();
-	await expect(bell.locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell-dot');
+	await expect(bell.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell-dot');
 	await bell.click();
 	await expect(page.locator(`.ash-notifications-row[data-notification-id="${id}"] .ash-notification-message`)).toHaveText(message!);
-	await expect(bell.locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell');
+	await expect(bell.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell');
 	await testInfo.attach('ordinary-toast-retained-history', { body: await page.screenshot(), contentType: 'image/png' });
 });

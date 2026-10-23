@@ -81,7 +81,11 @@ export class Canvas extends Disposable {
 
 	private updatePointerCursor(): void {
 		const color = this.themeService.getColorTheme().getColorCss(foreground)!;
-		const svg = getLxiconDefinition(Lxicon.cursor2.id)!().replace('<svg ', '<svg width="24" height="24" ').replaceAll('#000', color);
+		const definition = getLxiconDefinition(Lxicon.cursor2.id)!;
+		// Native cursor URLs need self-contained artwork rather than a font that
+		// is loaded by the owning document.
+		const artwork = typeof definition === 'function' ? definition() : definition.fallback!();
+		const svg = artwork.replace('<svg ', '<svg width="24" height="24" ').replaceAll('#000', color);
 		// The hotspot follows the artwork's tip at (4.5, 3.258) in its 16-unit viewBox.
 		this.domNode.style.setProperty('--ash-canvas-pointer-cursor', `url("data:image/svg+xml,${encodeURIComponent(svg)}") 6 4, default`);
 	}

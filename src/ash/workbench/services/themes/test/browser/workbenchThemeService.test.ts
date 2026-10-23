@@ -36,7 +36,7 @@ import { registerIcon } from '../../../../../platform/theme/common/iconRegistry.
 
 const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
-test('selected product icon theme refreshes mounted SVGs and returns to defaults', async () => {
+test('selected product icon theme refreshes retained icon nodes and returns to defaults', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
 		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => { }, removeEventListener: () => { } }) });
@@ -64,7 +64,7 @@ test('selected product icon theme refreshes mounted SVGs and returns to defaults
 		registration.replace([]);
 		assert.equal(active.getProductIconTheme().id, 'default');
 		assert(mounted.querySelector('path'));
-		assert.equal(browser.window.document.body.querySelector('svg.ash-icon'), mounted);
+		assert.equal(browser.window.document.body.querySelector('.ash-icon'), mounted);
 	} finally {
 		browser.window.close();
 	}

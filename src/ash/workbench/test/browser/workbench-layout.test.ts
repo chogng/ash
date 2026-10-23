@@ -1663,8 +1663,8 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	const closePanel = [...panelToolbar.querySelectorAll("button")].find((button) => button.textContent === "Close Panel");
 	assert.ok(maximizePanel);
 	assert.ok(closePanel);
-	assert.ok(maximizePanel.querySelector("svg.ash-icon"));
-	assert.ok(closePanel.querySelector("svg.ash-icon"));
+	assert.ok(maximizePanel.querySelector(".ash-icon"));
+	assert.ok(closePanel.querySelector(".ash-icon"));
 	assert.equal(maximizePanel.compareDocumentPosition(closePanel) & browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING, browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING);
 
 	const terminalDescriptor = viewDescriptors.getViewContainers(ViewContainerLocation.Panel).find((container) => container.id === "ash.panel.terminal");

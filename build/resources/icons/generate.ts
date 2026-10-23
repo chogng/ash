@@ -1,6 +1,7 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from 'node:crypto';
 import { optimize } from "svgo";
 import { generateToTs } from "./generate-to-ts.ts";
 
@@ -51,6 +52,7 @@ export interface GeneratedIcon {
 	readonly rendering: IconRendering;
 	readonly sourcePath: string;
 	readonly svg: string;
+	readonly fontCharacter?: string;
 }
 
 interface IconSourceUpdate {
@@ -60,7 +62,7 @@ interface IconSourceUpdate {
 }
 
 interface IconCompilation {
-	readonly icons: readonly GeneratedIcon[];
+	readonly icons: GeneratedIcon[];
 	readonly sourceUpdates: readonly IconSourceUpdate[];
 }
 
@@ -75,6 +77,25 @@ export async function generateIcons(options: GenerateIconsOptions = {}): Promise
 	const sourceHandling = options.sourceHandling ?? "write";
 	const outputs = options.outputs ?? defaultOutputs;
 	const compilation = await compileIcons(sourceDirectory);
+	if (outputs.typescriptFile) {
+		const path = resolve(sourceDirectory, 'font/manifest.json');
+		let font: { codepoints: Record<string, string>; svg: Record<string, string>; sources: Record<string, string>; } | undefined;
+		try { font = JSON.parse(await readFile(path, 'utf8')); }
+		catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error; }
+		if (font) {
+			for (let i = 0; i < compilation.icons.length; i++) {
+				const icon = compilation.icons[i]!;
+				if (font.sources[icon.id] !== createHash('sha256').update(icon.svg.trim()).digest('hex')) {
+					throw new Error(`Icon font is stale for '${icon.id}'. Run python3 .agents/skills/svg-icon-font/scripts/build_product_font.py`);
+				}
+				if (!font.svg[icon.id]) {
+					const point = font.codepoints[icon.id];
+					if (!point || !/^[E-F][0-9A-F]{3}$/u.test(point)) throw new TypeError(`Missing icon font codepoint: ${icon.id}`);
+					compilation.icons[i] = { ...icon, fontCharacter: String.fromCodePoint(Number.parseInt(point, 16)) };
+				}
+			}
+		}
+	}
 	const generatedOutputs = compileOutputs(compilation.icons, outputs);
 	const staleOutputs = await findStaleOutputs(generatedOutputs);
 
@@ -254,14 +275,14 @@ async function writeTextFile(path: string, content: string): Promise<void> {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 	const argumentsList = process.argv.slice(2);
-	if (argumentsList.length > 1 || (argumentsList.length === 1 && argumentsList[0] !== "--check")) {
-		throw new Error(`Expected --check or no arguments; received ${argumentsList.join(" ")}`);
+	if (argumentsList.length > 1 || (argumentsList.length === 1 && !["--check", "--catalog-only"].includes(argumentsList[0]!))) {
+		throw new Error(`Expected --check, --catalog-only or no arguments; received ${argumentsList.join(" ")}`);
 	}
 	if (argumentsList[0] === "--check") {
 		const report = await checkIcons();
 		console.log(`Validated ${report.count} product icons and generated outputs.`);
 	} else {
-		const report = await generateIcons();
+		const report = await generateIcons(argumentsList[0] === '--catalog-only' ? { outputs: { manifestFile: defaultOutputs.manifestFile } } : undefined);
 		const status = report.outputChanged || report.sourceChanged ? "Generated" : "Already generated";
 		console.log(`${status} ${report.count} product icons and generated outputs.`);
 	}

@@ -91,17 +91,25 @@ import { WebWorkerService } from '../platform/webWorker/browser/webWorkerService
 // Sessions has its own renderer entry and cannot rely on Code's shared editor service registrations.
 registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed);
 
-for (const [id, title, icon, activeIcon, order] of [
-	['chat', localize2({ bundle: 'ash', key: 'sessions.activity.chat' }, 'Chat'), Lxicon.chat2, Lxicon.chat2Filled, 10],
-	['collaboration', localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collab'), Lxicon.collab, Lxicon.collabFilled, 20],
-	['teams', localize2({ bundle: 'ash', key: 'sessions.activity.teams' }, 'Agent Teams'), Lxicon.agent, Lxicon.agent, 25],
-	['code', localize2({ bundle: 'ash', key: 'sessions.mode.code' }, 'Code'), Lxicon.code, Lxicon.code, 40],
-] as const) {
-	MenusRegistry.appendMenuItem(Menus.ActivityBar, {
-		command: { id: `sessions.open.${id}`, title, icon, toggled: { condition: ContextKeyExpr.has(`sessions.activity.${id}Selected`), icon: activeIcon } },
-		group: 'navigation', order,
-	});
-}
+MenusRegistry.appendMenuItem(Menus.ActivityBar, {
+	command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.has('sessions.activity.chatSelected') },
+	group: 'navigation', order: 10,
+});
+
+MenusRegistry.appendMenuItems([
+	{
+		id: Menus.CodeActivityBar,
+		item: { command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.has('sessions.activity.codeSelected') }, group: 'navigation', order: 10 },
+	},
+	{
+		id: Menus.CodeActivityBar,
+		item: { command: { id: 'sessions.open.collaboration', title: localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collab'), icon: Lxicon.collab, toggled: ContextKeyExpr.has('sessions.activity.collaborationSelected') }, group: 'navigation', order: 30 },
+	},
+	{
+		id: Menus.CodeActivityBar,
+		item: { command: { id: 'sessions.open.teams', title: localize2({ bundle: 'ash', key: 'sessions.activity.teams' }, 'Agent Teams'), icon: Lxicon.agent, toggled: ContextKeyExpr.has('sessions.activity.teamsSelected') }, group: 'navigation', order: 35 },
+	},
+]);
 
 registerTerminalView(SessionsViewRegistry);
 registerOutputView(SessionsViewRegistry);

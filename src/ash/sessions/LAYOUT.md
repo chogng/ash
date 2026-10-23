@@ -12,6 +12,8 @@ Exact dimensions, styling, action placement, and regression behavior belong in c
 
 Desktop modes that need separate navigation select a view container in the shared `SidebarPart`. Creator home and Make retain this sidebar. Projects owns navigation inside its EditorPane and omits the sidebar container, making SidebarPart unavailable while that entry is active. Each mode supplies content to the shared window Parts; a product-page name does not justify a new Part or another window grid.
 
+Chat and Code are workspace shells selected by the titlebar switcher. Entry descriptors declare their workspace; `ISessionsLayoutService` derives the active workspace from the selected entry and publishes its context for navigation. Code has its own Activity Bar menu and a navigation-only sidebar container; it does not reuse Chat's session list or contribute a sidebar entry for switching to Code. New creates a conversation in the current workspace. Collab, Agent Teams, Automations and Symphony belong to Code. A Custom View can declare the entry command that supplies its underlying workspace; opening and restoring that view preserves the overlay while applying the declared entry. A Custom View can keep that workspace sidebar visible; Automations uses this composition so Code navigation remains available. Navigation order is independent per workspace in the existing profile UI state store; the selected workspace is reconstructed from the restored entry rather than persisted separately.
+
 | Surface                           | Shared host        | Mode-owned content                                                               |
 | --------------------------------- | ------------------ | -------------------------------------------------------------------------------- |
 | Persistent window notices         | `BannerPart`       | Notices submitted through the shared window-scoped `IBannerService`              |
@@ -139,7 +141,11 @@ Contributions register localized titles, icons and commands in `Menus.ActivityBa
 `ActivityBarPart` owns profile-scoped command order and presentation. Selected
 items follow the entry context published by the Sessions layout service. Focusing a conversation inside Code keeps Code selected.
 Account actions remain outside the sortable group, and placement changes retain
-the same buttons and order.
+the same actions and order. At the default location, SidebarPart hosts labeled
+navigation above its active view and Accounts below it. The concrete layout hides
+the separate Activity Bar leaf while the sidebar is visible; closing or suppressing
+the sidebar restores the icon rail. ActivityBarPart retains action ownership and
+keyboard focus as its presentation moves between these hosts.
 
 Both workbenches open, hide and focus view containers through
 `IPaneCompositePartService`. Sidebar, Panel and Auxiliary Bar retain their

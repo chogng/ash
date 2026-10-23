@@ -36,6 +36,20 @@
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
+.ash-sessions-window
+	.ash-workbench-sidebar
+	.ash-sessions-activity-host.top.integrated {
+	max-height: 50%;
+	overflow: auto;
+	border-bottom: 0;
+}
+
+.ash-sessions-window
+	.ash-workbench-sidebar
+	.ash-sessions-activity-host.bottom.integrated {
+	margin-top: auto;
+}
+
 .ash-sessions-window .ash-workbench-sidebar .ash-sessions-activity-host.bottom {
 	border-top: var(--ash-strokeThickness) solid var(--ash-border);
 }

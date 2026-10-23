@@ -115,7 +115,7 @@ test('Markdown renders alerts, registered icons, and an incomplete emphasis tail
 	await expect(alert).toHaveCSS('border-left-color', 'rgb(171, 205, 239)');
 	await expect(advanced.locator('blockquote')).toContainText('Read');
 	await expect(advanced.locator('strong:not(.ash-markdown-alert-label)')).toHaveText('bold');
-	await expect(advanced.locator('svg.ash-icon')).toHaveCount(2);
+	await expect(advanced.locator('.ash-icon')).toHaveCount(2);
 	await expect(advanced.locator('img')).toHaveAttribute('width', '32');
 	await expect(advanced.locator('img')).toHaveAttribute('height', '16');
 	await expect(advanced.locator('img')).toHaveJSProperty('naturalWidth', 1);

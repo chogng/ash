@@ -322,7 +322,7 @@ for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
 			const threadId = created.session.threads[0].threadId;
 			const thread = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
 			await client.request(APP_SERVER_METHODS['session/request'], { commandId: `hook-start-${outcome}`, sessionId, request: { type: 'startTurn', threadId, expectedSequence: thread.thread.sequence, input: [{ type: 'text', text: 'hook-trace-fixture' }], model: { provider: 'custom-trace-fixture', model: 'gpt-6.1-sol' }, mode: 'agent', approvalMode: 'bypassPermissions', toolMode: 'direct' } });
-			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await page.locator('.ash-sessions-list-item').filter({ hasText: `Hook ${outcome}` }).click();
 			await expect.poll(() => readFile(marker, 'utf8').catch(error => {
 				if (error.code === 'ENOENT') { return undefined; }
@@ -401,7 +401,7 @@ for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
 			await connection.close();
 			connection = undefined;
 			page = await workbench.reopenAgentsWindow(application, page);
-			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await page.locator('.ash-sessions-list-item').filter({ hasText: `Hook ${outcome}` }).click();
 			const restored = transcript().locator('.ash-chat-hook');
 			await expect(restored).toHaveAttribute('data-status', outcome);

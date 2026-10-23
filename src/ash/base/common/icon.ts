@@ -10,5 +10,12 @@ export namespace Icon {
 	}
 }
 
-/** Produces SVG markup for the browser renderer. */
-export type IconDefinition = () => string;
+/** A native font glyph, with SVG artwork retained for a failed font load. */
+export interface FontIconDefinition {
+	readonly fontCharacter: string;
+	readonly font?: { readonly id: string; readonly definition: { readonly weight?: string; readonly style?: string; }; };
+	readonly fallback?: () => string;
+}
+
+/** Font glyphs are the default; fixed-color artwork can supply its own SVG. */
+export type IconDefinition = FontIconDefinition | (() => string);

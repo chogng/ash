@@ -2,7 +2,7 @@
 	-webkit-app-region: no-drag;
 }
 
-.ash-sessions-titlebar-actions.ash-menubar {
+.ash-sessions-titlebar-actions {
 	--ash-actionBar-gap: var(--ash-spacing-size80);
 	--ash-toolbar-actionSize: var(--ash-spacing-size280);
 	--ash-toolbar-hoverBackground: var(--ash-sessions-selectionBackground);

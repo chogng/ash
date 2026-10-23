@@ -17,7 +17,9 @@ test('extension product icon themes load SVG resources and reject executable art
 	};
 	const theme = await ProductIconThemeData.load('test-svg-icons', 'SVG Icons', { iconDefinitions: { 'folding-expanded': { iconPath: './icons/chevron.svg' } } }, readResource, document);
 	assert.equal(theme.id, 'test-svg-icons');
-	assert.match(theme.icons.get('folding-expanded')!(), /<path/);
+	const definition = theme.icons.get('folding-expanded')!;
+	assert.equal(typeof definition, 'function');
+	assert.match((definition as () => string)(), /<path/);
 	for (const iconPath of ['./icons/script.svg', './icons/remote.svg', '../outside.svg']) {
 		await assert.rejects(ProductIconThemeData.load('invalid-svg-icons', 'Invalid', { iconDefinitions: { 'folding-expanded': { iconPath } } }, readResource, document));
 	}

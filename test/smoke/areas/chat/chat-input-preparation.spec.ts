@@ -67,7 +67,7 @@ for (const locale of ['en', 'zh-CN']) {
 				if (surface === 'sessions') {
 					page = await workbench.openAgentsWindow(target.kind);
 					await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
-					await page.locator('.ash-sessions-list-add').click();
+					await page.locator('[data-action-id="sessions.newSession"] button').click();
 					composer = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 				} else {
 					if (!await page.locator('.ash-chat-view-pane').isVisible()) await page.getByRole('button', { name: copy.sideBar, exact: true }).click();

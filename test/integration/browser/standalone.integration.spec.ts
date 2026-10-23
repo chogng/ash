@@ -923,7 +923,7 @@ test.describe('contribution lifecycle', () => {
 			}
 			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ showFoldingControls: 'always' }));
 			await expect(page.locator('#caller .ash-icon-folding-expanded').first()).toBeVisible();
-			await expect(page.locator('#caller .ash-icon-folding-expanded svg.ash-icon').first()).toBeVisible();
+			await expect(page.locator('#caller .ash-icon-folding-expanded .ash-icon').first()).toBeVisible();
 			await page.locator('#caller .ash-icon-folding-expanded').first().click();
 			await expect(page.locator('#caller .view-line[data-logical-line-index="1"]')).toHaveCount(0);
 			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ folding: false }));
@@ -1153,16 +1153,16 @@ test.describe('contribution lifecycle', () => {
 		});
 		const folds = page.locator('#caller .stanza-editor-sticky-scroll-folding');
 		await expect(folds).toHaveCount(2);
-		await expect(folds.last().locator('svg.ash-icon')).toHaveCount(1);
+		await expect(folds.last().locator('.ash-icon')).toHaveCount(1);
 		expect(await folds.last().evaluate(element => {
-			const path = element.querySelector('svg [stroke]');
-			return path !== null && getComputedStyle(path).stroke === getComputedStyle(element).color;
+			const icon = element.querySelector('.ash-icon');
+			return icon !== null && getComputedStyle(icon, '::before').color === getComputedStyle(element).color;
 		})).toBe(true);
-		const expandedPath = await folds.last().locator('svg path').first().getAttribute('d');
+		const expandedIcon = await folds.last().locator('.ash-icon').getAttribute('data-ash-icon-id');
 		await folds.last().click();
 		await expect(folds.last()).toHaveAttribute('aria-expanded', 'false');
-		await expect(folds.last().locator('svg.ash-icon')).toHaveCount(1);
-		expect(await folds.last().locator('svg path').first().getAttribute('d')).not.toBe(expandedPath);
+		await expect(folds.last().locator('.ash-icon')).toHaveCount(1);
+		expect(await folds.last().locator('.ash-icon').getAttribute('data-ash-icon-id')).not.toBe(expandedIcon);
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyState().hidden)).toEqual([[3, 83]]);
 		await folds.last().focus();
 		await page.keyboard.press('Enter');
@@ -1936,6 +1936,9 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 		const findWidget = page.locator('#caller .stanza-editor-find-widget');
 		const sash = findWidget.getByRole('separator', { name: 'Resize find widget' });
 		await expect(sash).toBeVisible();
+		const findIcons = findWidget.locator('.ash-icon[data-ash-icon-id^="find-"]');
+		await expect(findIcons).toHaveCount(5);
+		await expect.poll(() => findIcons.evaluateAll(icons => icons.every(icon => icon.tagName === 'SPAN' && icon.classList.contains('ash-icon-font-ready') && icon.childElementCount === 0))).toBe(true);
 		await sash.hover();
 		const initial = await findWidget.boundingBox();
 		const sashBox = await sash.boundingBox();

@@ -287,7 +287,7 @@ test("TabList renders IconLabel content, custom actions, and its standard close 
 	assert.equal(closeButton.title, "Close");
 	assert.equal(closeButton.getAttribute("aria-label"), "Close first");
 	assert.equal(closeButton.closest(".ash-action-view-item")?.getAttribute("data-action-id"), TAB_CLOSE_ACTION_ID);
-	assert.equal(closeButton.querySelector("svg.ash-icon")?.getAttribute("data-test-icon"), "custom-close");
+	assert.equal(closeButton.querySelector(".ash-icon svg")?.getAttribute("data-test-icon"), "custom-close");
 
 	selected.dispatchEvent(keyboardEvent(dom.window, "Delete"));
 	closeButton.click();

@@ -1263,25 +1263,24 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 		await expect(page.locator('#app')).toHaveAttribute('data-runtime', 'web');
 		await expect(page.getByRole('button', { name: 'Return to Workbench' })).toHaveCount(0);
 		await expect(page.locator('.ash-sessions-titlebar-title, .ash-sessions-titlebar-avatar')).toHaveCount(0);
-		await expect(page.locator("[data-part='activitybar']")).toBeVisible();
-		const activityButtons = page.locator("[data-part='activitybar'] button");
-		expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'collab', 'projects', 'code', 'symbol-color', 'account']);
+		await expect(page.locator("[data-part='activitybar']")).toBeHidden();
+		const activityButtons = page.locator('.ash-sessions-activity-content button');
+		expect(await activityButtons.locator('.ash-icon').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['add', 'projects', 'symbol-color']);
 		await expect(activityButtons.first()).toHaveAttribute('aria-current', 'page');
-		await expect(page.getByRole('button', { name: 'Collab', exact: true })).toBeEnabled();
-		await expect(page.getByRole('button', { name: 'Library', exact: true })).toBeEnabled();
-		await expect(page.getByRole('button', { name: 'Code', exact: true })).toBeEnabled();
-		const design = page.getByRole('button', { name: 'Design', exact: true });
-		await expect(design).toBeEnabled();
-		const designBounds = await design.boundingBox();
-		const accountBounds = await page.getByRole('button', { name: 'Accounts', exact: true }).boundingBox();
-		const navigationBounds = await page.locator("[data-part='activitybar']").boundingBox();
-		expect(accountBounds!.y).toBeGreaterThan(designBounds!.y);
+		await expect(activityButtons.getByText('Projects', { exact: true })).toBeVisible();
+		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true })).toBeEnabled();
+		const creator = page.getByRole('button', { name: 'Creator', exact: true });
+		await expect(creator).toBeEnabled();
+		const creatorBounds = await creator.boundingBox();
+		const accounts = page.getByRole('button', { name: 'Accounts', exact: true });
+		const accountBounds = await accounts.boundingBox();
+		const navigationBounds = await page.locator("[data-part='sidebar']").boundingBox();
+		expect(accountBounds!.y).toBeGreaterThan(creatorBounds!.y);
 		expect(navigationBounds!.y + navigationBounds!.height - (accountBounds!.y + accountBounds!.height)).toBeLessThanOrEqual(16);
 		const sidebarBounds = await page.locator("[data-part='sidebar']").boundingBox();
 		const sessionsBounds = await page.locator("[data-part='sessions']").boundingBox();
 		const sidebarFrameBounds = await page.locator("[data-part='sidebar']").locator('..').boundingBox();
-		expect(navigationBounds?.width).toBeCloseTo(44, 0);
-		expect(sidebarFrameBounds?.width).toBeCloseTo(260, 0);
+		expect(sidebarFrameBounds?.width).toBeCloseTo(240, 0);
 		expect(sessionsBounds!.x).toBeGreaterThan(sidebarBounds!.x);
 		await expect(page.locator("[data-part='auxiliarybar']")).toBeHidden();
 		await expect(page.locator("[data-part='editor']")).toBeHidden();
@@ -1293,7 +1292,7 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 		await expect(showSidebar).toHaveAttribute('aria-pressed', 'false');
 		await showSidebar.click();
 		await expect(page.locator("[data-part='sidebar']")).toBeVisible();
-		const sessionsNavigation = page.locator("[data-part='activitybar']").getByRole('button', { name: 'Chat', exact: true });
+		const sessionsNavigation = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New', exact: true });
 		await sessionsNavigation.focus();
 		await page.keyboard.press('Alt+F1');
 		await expect(page.getByRole('dialog', { name: 'Accessibility Help' })).toBeVisible();
@@ -1303,7 +1302,7 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 		await page.getByRole('searchbox', { name: 'Search sessions' }).fill('no matching session title');
 		await expect(page.locator('.ash-sessions-empty')).toHaveText('No matching sessions');
 		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', /ash-(?:light|dark)/u);
-		await activityButtons.last().click();
+		await accounts.click();
 		await page.getByRole('menuitem', { name: 'Return to Workbench' }).click();
 		await expect(page).toHaveURL(/workbench\.html/u);
 	}
@@ -1315,23 +1314,29 @@ test('titlebar toolbar icons fit inside their buttons', async ({ workbench }) =>
 	const panelToggle = page.locator('.ash-titlebar-actions [data-action-id="workbench.action.togglePanel"] button');
 	for (const [toggle, accessibleName] of [
 		[sidebarToggle, /(?:Show|Hide) Primary Side Bar/u],
-		[panelToggle, /(?:Show|Hide) Panel/u],
+		[panelToggle, 'Toggle Panel Visibility'],
 	] as const) {
 		await expect(toggle).toBeVisible();
 		await expect(toggle).toHaveAccessibleName(accessibleName);
 		await expect(toggle.locator('.ash-icon')).toBeVisible();
 		await expect(toggle.locator('.ash-button-label')).toBeHidden();
 	}
+	const fontIcon = page.locator('.ash-workbench-titlebar .ash-icon-default-font:visible').first();
+	await expect(fontIcon).toHaveClass(/ash-icon-font-ready/);
+	await expect(fontIcon).toHaveCSS('font-family', '"Ash UI Icons"');
+	await expect(fontIcon).toHaveCSS('font-weight', '400');
+	await expect(fontIcon.locator('svg')).toHaveCount(0);
 	const buttons = page.locator('.ash-workbench-titlebar .ash-toolbar .ash-action-view-item.icon > .ash-button');
 	await expect(buttons.first()).toBeVisible();
 	const iconBounds = await buttons.evaluateAll(elements => elements.map(button => {
 		const label = button.querySelector('.ash-icon-label');
-		const icon = label?.querySelector('svg.ash-icon');
+		const icon = label?.querySelector('.ash-icon');
 		if (!label || !icon) throw new Error('Toolbar icon button is missing its icon');
 		const labelRect = label.getBoundingClientRect();
 		const iconRect = icon.getBoundingClientRect();
 		const buttonRect = button.getBoundingClientRect();
 		return {
+			action: button.closest('[data-action-id]')?.getAttribute('data-action-id'),
 			buttonWidth: buttonRect.width,
 			labelWidth: labelRect.width,
 			iconWidth: iconRect.width,
@@ -1342,13 +1347,15 @@ test('titlebar toolbar icons fit inside their buttons', async ({ workbench }) =>
 		};
 	}));
 	for (const bounds of iconBounds) {
-		expect(bounds.buttonWidth).toBe(22);
+		// The expandable Agents entry owns a wider collapsed hit target.
+		const actionSize = bounds.action === 'workbench.action.chat.openAgentsWindow.titleBar' ? 24 : 22;
+		expect(bounds.buttonWidth).toBe(actionSize);
 		expect(bounds.iconWidth).toBe(16);
 		expect(bounds.labelWidth).toBeGreaterThanOrEqual(bounds.iconWidth);
 		expect(bounds.leftInset).toBeGreaterThanOrEqual(0);
 		expect(bounds.rightInset).toBeGreaterThanOrEqual(0);
-		expect(bounds.buttonLeftInset).toBeCloseTo(3, 1);
-		expect(bounds.buttonRightInset).toBeCloseTo(3, 1);
+		expect(bounds.buttonLeftInset).toBeCloseTo((actionSize - 16) / 2, 1);
+		expect(bounds.buttonRightInset).toBeCloseTo((actionSize - 16) / 2, 1);
 	}
 });
 

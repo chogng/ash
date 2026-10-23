@@ -159,7 +159,7 @@ const documentTest = test.extend<{
 			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], identity)).thread.turns.at(-1)?.status).toBe('completed');
 			if (before.directory?.type !== 'local') throw new Error('The Session has no local directory');
 			const page = await workbench.openAgentsWindow(target.kind);
-			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await page.locator('.ash-sessions-list-item').filter({ hasText: 'Editor document fixture' }).click();
 			const sessions = new Workbench(page);
 			const composer = page.locator('.ash-sessions-chat-slot.active:visible [role=region][data-thread-id]');
@@ -368,7 +368,7 @@ test('Agent file edits preserve user text and a failed review save remains retry
 		sessionFile = file;
 		expect(sessionFile).not.toBe(testWorkspace.file);
 		let page = await workbench.openAgentsWindow(target.kind);
-		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await page.locator('.ash-sessions-list-item').filter({ hasText: 'K file review fixture' }).click();
 		let sessions = new Workbench(page);
 		await sessions.quickaccess.runCommand('workbench.sessions.auxiliaryBar.filesContainer');

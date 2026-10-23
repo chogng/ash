@@ -1049,9 +1049,9 @@ test('terminal command markers follow the prompt, execution, result and themed g
 	});
 	const pending = page.getByRole('img', { name: '等待输入命令', exact: true });
 	await expect(pending).toBeVisible();
-	await expect(pending.locator('svg')).toHaveAttribute('data-ash-icon-id', 'terminal-decoration-incomplete');
+	await expect(pending.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'terminal-decoration-incomplete');
 	await expect(pending).toHaveCSS('width', '16px');
-	expect(await pending.locator('svg').evaluate(element => (element as SVGGraphicsElement).getBBox().width)).toBe(8);
+	await expect(pending.locator('.ash-icon')).toHaveCSS('font-size', '16px');
 	await page.evaluate(() => window.ashTerminalIntegration.sequence({ type: 'commandExecuted', commandId: 'first', command: 'echo ok', isTrusted: true, cwd: '/workspace', timestampMillis: Date.now() }, 'echo ok'));
 	await expect(page.getByRole('button', { name: '命令正在运行', exact: true })).toBeVisible();
 	await page.evaluate(async () => {
@@ -1068,8 +1068,8 @@ test('terminal command markers follow the prompt, execution, result and themed g
 	});
 	const failure = page.getByRole('button', { name: '命令失败，退出代码为 7', exact: true });
 	await expect(failure).toBeVisible();
-	await expect(failure.locator('svg')).toHaveAttribute('data-ash-icon-id', 'terminal-decoration-error');
-	expect(await failure.locator('svg').evaluate(element => (element as SVGGraphicsElement).getBBox().width)).toBe(8);
+	await expect(failure.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'terminal-decoration-error');
+	await expect(failure.locator('.ash-icon')).toHaveCSS('font-size', '16px');
 	await expect(page.locator('.ash-terminal-command-status')).toHaveCount(2);
 	for (const mode of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
 		await page.evaluate(mode => window.ashTerminalIntegration.theme(mode), mode);
@@ -1090,7 +1090,7 @@ test('terminal command markers follow the prompt, execution, result and themed g
 			await window.ashTerminalIntegration.configure('terminal.integrated.lineHeight', lineHeight);
 		}, { fontSize, lineHeight });
 		const scale = Math.min(1, fontSize / defaultFontSize);
-		const icon = (await success.locator('svg').boundingBox())!;
+		const icon = (await success.locator('.ash-icon').boundingBox())!;
 		const decoration = (await success.boundingBox())!;
 		const screen = (await page.locator('.xterm-screen').boundingBox())!;
 		const terminal = (await page.locator('.ash-terminal-instance').boundingBox())!;
@@ -1103,7 +1103,7 @@ test('terminal command markers follow the prompt, execution, result and themed g
 		expect(icon.x + icon.width).toBeLessThanOrEqual(screen.x);
 		expect(icon.y + icon.height / 2).toBeCloseTo(decoration.y + decoration.height / 2, 1);
 	}
-	expect(await success.locator('svg').evaluate(element => (element as SVGGraphicsElement).getBBox().width)).toBeCloseTo(8, 3);
+	await expect(success.locator('.ash-icon')).toHaveCSS('font-size', '16px');
 	await page.screenshot({ path: testInfo.outputPath('terminal-command-markers.png') });
 	await page.evaluate(() => window.ashTerminalIntegration.write('output\r\n'.repeat(80)));
 	await expect(success).not.toBeVisible();
@@ -1880,7 +1880,7 @@ test('configured terminal profile reaches the real picker and resolver with argv
 	});
 	const tab = page.getByRole('tab', { name: 'shell', exact: true });
 	await expect(tab).toBeVisible();
-	await expect(tab.locator('svg')).toHaveAttribute('data-ash-icon-id', 'terminal-git-bash');
+	await expect(tab.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'terminal-git-bash');
 	expect(await tab.locator('.ash-icon-label-icon').evaluate(element => (element as HTMLElement).style.color)).toBe('var(--ash-terminal-ansiGreen)');
 	await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile'); });
 	const defaults = page.getByRole('combobox', { name: '选择默认终端配置', exact: true });
@@ -2047,11 +2047,11 @@ for (const [kind, path, args, icon, title] of [
 		}
 		await page.getByRole('button', { name: 'Select Terminal Profile', exact: true }).click();
 		const item = page.getByRole('menuitem', { name, exact: true });
-		await expect(item.locator(`svg[data-ash-icon-id="${icon}"]`)).toBeVisible();
+		await expect(item.locator(`[data-ash-icon-id="${icon}"]`)).toBeVisible();
 		await item.click();
 		const tab = page.getByRole('tab', { name: title, exact: true, selected: true });
 		await expect(tab).toBeVisible();
-		await expect(tab.locator('svg')).toHaveAttribute('data-ash-icon-id', icon);
+		await expect(tab.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', icon);
 	}
 	if (kind === 'Git Bash') await page.screenshot({ path: testInfo.outputPath('terminal-bash-name.png') });
 	await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
@@ -2103,7 +2103,7 @@ test('extension terminal profile activates from the picker and persists as the n
 	});
 	const tab = page.getByRole('tab', { name: 'Extension Shell', exact: true });
 	await expect(tab).toBeVisible();
-	await expect(tab.locator('svg')).toHaveAttribute('data-ash-icon-id', 'terminal-git-bash');
+	await expect(tab.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'terminal-git-bash');
 	await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile'); });
 	const defaults = page.getByRole('combobox', { name: '选择默认终端配置', exact: true });
 	await expect(defaults).toBeFocused(); await defaults.fill('Extension Shell'); await defaults.press('Enter');

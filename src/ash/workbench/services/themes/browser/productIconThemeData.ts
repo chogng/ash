@@ -11,7 +11,7 @@ const allowedAttributes = new Set([
 	'x', 'y', 'x1', 'x2', 'y1', 'y2', 'points', 'transform',
 ]);
 
-/** Loads the SVG artwork referenced by an extension product icon theme. */
+/** Loads native font glyphs and sanitized SVG artwork from an extension product icon theme. */
 export class ProductIconThemeData {
 	public static async load(id: string, label: string, source: unknown, readResource: (path: string) => Promise<Uint8Array>, document: Document): Promise<IWorkbenchProductIconTheme> {
 		if (typeof source !== 'object' || source === null || Array.isArray(source)) throw new TypeError(`Product icon theme '${id}' must be an object`);
@@ -117,6 +117,5 @@ function fontIconDefinition(font: IconFontDefinition, value: unknown): IconDefin
 	const escaped = /^\\([\da-f]{1,6})$/iu.exec(value);
 	const character = escaped ? Number.parseInt(escaped[1]!, 16) : [...value].length === 1 ? value.codePointAt(0)! : -1;
 	if (character < 32 || character > 0x10ffff || character >= 0xd800 && character <= 0xdfff) { throw new TypeError('Invalid icon font character'); }
-	// An SVG text node keeps the existing icon DOM and accessibility contract while using a font glyph.
-	return () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><text x="0" y="14" font-family="${font.id}" font-size="16" font-weight="${font.weight ?? 'normal'}" font-style="${font.style ?? 'normal'}" fill="currentColor">&#${character};</text></svg>`;
+	return { fontCharacter: String.fromCodePoint(character), font: { id: font.id, definition: { weight: font.weight, style: font.style } } };
 }

@@ -206,7 +206,7 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 		this.button.domNode.setAttribute("aria-expanded", "false");
 		const indicator = h(ownerDocument, "span");
 		indicator.className = "ash-submenu-indicator";
-		appendIcon(Lxicon.chevronRight, indicator);
+		appendIcon(Lxicon.menuSubmenu, indicator);
 		this.button.domNode.append(indicator);
 		this._register(addDisposableListener(container, "mouseenter", (event) => {
 			this.lastPointerPosition = { x: event.clientX, y: event.clientY };

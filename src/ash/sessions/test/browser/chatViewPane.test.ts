@@ -518,7 +518,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 		3,
 	);
 	assert.ok(toolbar?.querySelector(".ash-button-label"));
-	assert.ok(toolbar?.querySelector("svg.ash-icon"));
+	assert.ok(toolbar?.querySelector(".ash-icon"));
 	assert.ok(layoutToolbar?.querySelector(
 		`[data-action-id="${TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID}"]`,
 	));
@@ -751,7 +751,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 		['Agent', 'Plan', 'Debug', 'Multitask', 'Ask'],
 	);
 	assert.deepEqual(
-		[...modeMenu?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map(item => item.querySelector('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')?.getAttribute('data-ash-icon-id') ?? null),
+		[...modeMenu?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map(item => item.querySelector('.ash-menu-leading-slot .ash-icon-label-icon .ash-icon')?.getAttribute('data-ash-icon-id') ?? null),
 		['unlimited', 'plan', 'debug', 'multitask', 'chat-4'],
 	);
 	assert.deepEqual(

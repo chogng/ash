@@ -294,9 +294,10 @@
 }
 
 .ash-theme-color-link-icon .ash-icon-label-inline-icon,
-.ash-theme-color-link-icon svg {
+.ash-theme-color-link-icon .ash-icon {
 	width: 12px;
 	height: 12px;
+	font-size: var(--ash-lxiconFontSize-compact);
 }
 
 .ash-theme-color-link {

@@ -1348,7 +1348,7 @@ test('pinned editor action stays Unpin on hover and returns the editor to the or
 	await expect(sticky).toHaveCSS('border-bottom-width', '0px');
 	const unpin = sticky.getByRole('button', { name: 'Unpin', exact: true });
 	await expect(sticky.locator('.ash-tab-close-action')).toHaveCount(0);
-	await expect(unpin.locator('svg')).toHaveAttribute('data-ash-icon-id', 'pinned');
+	await expect(unpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pinned');
 	await expect(sticky.getByRole('tab')).toHaveAttribute('aria-description', /Unpin to unpin/u);
 	await page.mouse.move(0, 0);
 	await sticky.getByRole('tab').blur();
@@ -1356,8 +1356,8 @@ test('pinned editor action stays Unpin on hover and returns the editor to the or
 	await sticky.getByRole('tab').hover();
 	await unpin.hover();
 	await expectTabActionCentered(sticky);
-	await expect(unpin.locator('svg')).toBeVisible();
-	await expect(unpin.locator('svg')).toHaveAttribute('data-ash-icon-id', 'pinned');
+	await expect(unpin.locator('.ash-icon')).toBeVisible();
+	await expect(unpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pinned');
 	await expect(sticky.getByRole('button', { name: /^Close /u })).toHaveCount(0);
 	await unpin.click();
 	await expect(page.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);

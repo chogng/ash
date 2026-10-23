@@ -74,7 +74,7 @@ test('Session Issue associations persist through reopen and expose keyboard acti
 			await connection.client.request(APP_SERVER_METHODS['github/session/issue/attach'], { sessionId, reference: { repository: { host: 'github.com', owner: 'ash-fixture', name: 'issues' }, number } });
 		}
 		let page = await workbench.openAgentsWindow(target.kind);
-		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Issue associations' }).click();
 		let summary = page.locator('.ash-session-chat-input-issue-summary');
 		await expect(summary).toHaveAccessibleName('2 issues · 0 open · 0 closed · 2 unavailable');

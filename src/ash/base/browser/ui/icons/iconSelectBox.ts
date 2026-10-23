@@ -22,7 +22,7 @@ interface RenderedIcon {
 
 let nextIconSelectBoxId = 0;
 
-/** A searchable SVG icon grid with one keyboard focus target. */
+/** A searchable product icon grid with one keyboard focus target. */
 export class IconSelectBox extends Disposable {
 	public readonly domId = `ash-icon-select-box-${++nextIconSelectBoxId}`;
 	public readonly domNode: HTMLElement;

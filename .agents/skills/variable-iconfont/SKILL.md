@@ -7,6 +7,9 @@ description: Build and validate an animated OpenType variable icon font from com
 
 Build a real OpenType variable icon font from SVG master pairs. This skill is deliberately narrow: it compiles geometry; it does not design icons, integrate UI components, or silently redraw incompatible artwork.
 
+For importing SVG artwork into Ash, shipping WOFF2 assets, and wiring product icons,
+use [svg-icon-font](../svg-icon-font/SKILL.md). This skill remains the compatible-master compiler.
+
 ## Supported in v0.1
 
 - Two SVG masters per glyph: `start` and `end`.

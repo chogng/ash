@@ -197,6 +197,12 @@ test('Custom Views cover retained content without changing its desired visibilit
 		assert.equal(layout.isPartVisible('customview'), true);
 		for (const id of ['sidebar', 'sessions', 'editor', 'auxiliarybar', 'panel'] as const) assert.equal(layout.isPartVisible(id), false);
 		assert.deepEqual(layout.state, previous);
+		layout.setCustomViewVisible(true, true);
+		assert.equal(layout.isPartVisible('sidebar'), true);
+		assert.equal(layout.isPartVisible('sessions'), false);
+		assert.deepEqual(layout.state, previous);
+		layout.setCustomViewVisible(true);
+		assert.equal(layout.isPartVisible('sidebar'), false);
 		layout.layout(new Dimension(1800, 1100));
 		assert.equal(layout.state.editor.width, previous.editor.width);
 		assert.equal(layout.state.auxiliarybar.width, previous.auxiliarybar.width);
@@ -286,8 +292,6 @@ test('Sessions layout style changes without changing the IDE preference or visib
 	});
 	try {
 		layout.layout(new Dimension(1_200, 800));
-		assert.deepEqual(surface(), { style: 'modern', leftInset: '0px', rightInset: '4px', bottomInset: '4px' });
-		await configuration.updateValue(SessionsConfiguration.layoutStyle, 'flat');
 		assert.deepEqual(surface(), { style: 'flat', leftInset: '0px', rightInset: '0px', bottomInset: '0px' });
 		assert.equal(container.classList.contains('modern-ui'), false);
 		assert.equal(configuration.getValue(WorkbenchConfiguration.layoutStyle), 'modern');
@@ -410,11 +414,15 @@ test('Sessions Activity Bar position changes the grid visibility and frame edge'
 		assert.equal(parts.get('sidebar')!.domNode.parentElement?.style.paddingLeft, '6px');
 		const expandedWidth = layout.getPartSize('sessions').width;
 		layout.setActivityBarLocation(ActivityBarPosition.DEFAULT);
-		assert.equal(layout.isPartVisible('activitybar'), true);
-		assert.equal(layout.getPartSize('activitybar').width, 44);
+		assert.equal(layout.isPartVisible('activitybar'), false, 'Expanded navigation shares the sidebar');
 		assert.equal(parts.get('activitybar')!.domNode.parentElement?.style.paddingLeft, '');
 		assert.equal(parts.get('sidebar')!.domNode.parentElement?.style.paddingLeft, '0px');
-		assert.equal(layout.getPartSize('sessions').width < expandedWidth, true);
+		assert.equal(layout.getPartSize('sessions').width >= expandedWidth, true);
+		layout.hidePart('sidebar');
+		assert.equal(layout.isPartVisible('activitybar'), true, 'Collapsing the sidebar retains product navigation');
+		assert.equal(layout.getPartSize('activitybar').width, 44);
+		layout.showPart('sidebar');
+		assert.equal(layout.isPartVisible('activitybar'), false);
 		layout.setActivityBarLocation(ActivityBarPosition.HIDDEN);
 		assert.equal(layout.isPartVisible('activitybar'), false);
 		assert.equal(parts.get('sidebar')!.domNode.parentElement?.style.paddingLeft, '6px');

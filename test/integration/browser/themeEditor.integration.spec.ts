@@ -259,7 +259,7 @@ test('design token links navigate across groups, follow changes and restore afte
 	const reset = row.getByRole('button', { name: 'Remove the override for input.foreground', exact: true });
 	await row.hover();
 	expect(await reset.boundingBox()).toMatchObject({ width: 22, height: 22 });
-	await expect(reset.locator('svg')).toHaveCSS('width', '16px');
+	await expect(reset.locator('.ash-icon')).toHaveCSS('width', '16px');
 	await reset.click();
 	await expect(row.locator('.ash-theme-color-source')).toHaveText('Linked to foreground');
 	await expect(hex).toHaveValue('447799');
@@ -1053,10 +1053,10 @@ test('switches to the production Agent Window, edits its colors and keeps one is
 	await editColor(color, '#ff9900');
 	await expect.poll(() => frame.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-sessions-activityBar-foreground'))).toBe('#ff9900');
 	const navigation = frame.locator('.ash-sessions-activity-content');
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(navigation.getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-current', 'page');
-	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
-	await expect(navigation.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
+	await frame.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(frame.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	await navigation.getByRole('button', { name: 'New', exact: true }).click();
+	await expect(navigation.getByRole('button', { name: 'New', exact: true })).toHaveAttribute('aria-current', 'page');
 	await popup.screenshot({ path: testInfo.outputPath('agent-window-theme-preview.png') });
 	await tabs.getByRole('tab', { name: 'Workbench', exact: true }).click();
 	await expect(frame.locator('body')).toHaveAttribute('data-ready', 'true');

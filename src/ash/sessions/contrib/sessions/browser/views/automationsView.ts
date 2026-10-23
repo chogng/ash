@@ -812,6 +812,8 @@ export class AutomationsCustomViewContribution extends Disposable {
 			registrations.value = lifetime;
 			lifetime.add(views.registerCustomView({
 				id: AUTOMATIONS_CUSTOM_VIEW_ID,
+				entryCommand: 'sessions.open.code',
+				showSidebar: true,
 				ctor: new SyncDescriptor(AutomationsCustomView),
 				actions: { menuId: Menus.CustomViewAutomations, primaryActionId: 'sessionsView.newAutomation' }
 			}));

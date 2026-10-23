@@ -60,7 +60,7 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 		await alpha.hover();
 		await expect(gear).toHaveCSS('opacity', '1');
 		await expect(alpha.getByRole('toolbar')).toHaveCount(1);
-		await expect(gear.locator('svg')).toHaveAttribute('aria-hidden', 'true');
+		await expect(gear.locator('.ash-icon')).toHaveAttribute('aria-hidden', 'true');
 		await picker.screenshot({ path: testInfo.outputPath('configure-keybinding.png') });
 		await expect(gear).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		const rowBackground = await alpha.evaluate(element => getComputedStyle(element).backgroundColor);
@@ -136,7 +136,7 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 				? variant.locale === 'zh-CN' ? '系统' : 'System'
 				: variant.locale === 'zh-CN' ? '未分配' : 'Unassigned');
 			const closeButton = modal.getByRole('button', { name: variant.locale === 'zh-CN' ? `关闭${title}` : `Close ${title}`, exact: true });
-			await expect(closeButton.locator('svg')).toBeVisible();
+			await expect(closeButton.locator('.ash-icon')).toBeVisible();
 			expect((await closeButton.locator('.ash-button-content').boundingBox())!.width).toBeGreaterThanOrEqual(16);
 			await closeButton.focus();
 			await page.keyboard.press('Shift+Tab');
@@ -169,7 +169,7 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 		const record = actions.getByRole('button', { name: variant.locale === 'zh-CN' ? '录制按键' : 'Record Keys', exact: false });
 		const sort = actions.getByRole('button', { name: variant.locale === 'zh-CN' ? '按优先级排序（从高到低）' : 'Sort by Precedence (Highest first)', exact: false });
 		const clear = actions.getByRole('button', { name: variant.locale === 'zh-CN' ? '清空快捷键搜索输入' : 'Clear Keybindings Search Input', exact: false });
-		expect(await actions.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['record-keys', 'sort-precedence', 'clear-all']);
+		expect(await actions.locator('.ash-icon').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['record-keys', 'sort-precedence', 'clear-all']);
 		await expect(record).toHaveAttribute('aria-pressed', 'false');
 		await expect(sort).toHaveAttribute('aria-pressed', 'false');
 		await clear.click();
@@ -301,7 +301,7 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 		await picker.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' }).click();
 		const modal = page.locator('.ash-modal-editor');
 		const toolbar = modal.locator('.ash-modal-editor-actions');
-		await expect(toolbar.getByRole('button', { name: variant.locale === 'zh-CN' ? '打开键盘快捷方式 (JSON)' : 'Open Keyboard Shortcuts (JSON)', exact: true }).locator('svg')).toBeVisible();
+		await expect(toolbar.getByRole('button', { name: variant.locale === 'zh-CN' ? '打开键盘快捷方式 (JSON)' : 'Open Keyboard Shortcuts (JSON)', exact: true }).locator('.ash-icon')).toBeVisible();
 		const more = toolbar.locator('.ash-toolbar-more-actions button');
 		const search = modal.locator('.ash-keybindings-search input');
 		for (const [source, label] of [
@@ -323,7 +323,7 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 		const row = modal.locator('.ash-keybindings-row');
 		const edit = row.locator('.ash-keybindings-row-action:visible');
 		await expect(edit).toHaveCount(1);
-		await expect(edit.locator('svg')).toBeVisible();
+		await expect(edit.locator('.ash-icon')).toBeVisible();
 		await edit.focus();
 		await page.keyboard.press('Enter');
 		const recorder = modal.locator('.ash-keybindings-record-input input');
@@ -340,7 +340,7 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 		await expect(row).toHaveCount(1);
 		await expect(row.locator('.ash-keybindings-source')).toHaveText(variant.locale === 'zh-CN' ? '用户' : 'User');
 		await expect(row.locator('.ash-keybindings-when')).toHaveText('editorFocus && mode == edit');
-		await expect(row.locator('.ash-keybindings-row-action svg')).toHaveCount(2);
+		await expect(row.locator('.ash-keybindings-row-action .ash-icon')).toHaveCount(2);
 		await modal.screenshot({ path: testInfo.outputPath('keybindings-icons-and-toolbar.png') });
 		await page.setViewportSize({ width: 700, height: 720 });
 		await expect(edit.first()).toBeVisible();
@@ -710,7 +710,7 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 		await expect(labels).toHaveText(['Zulu Format']);
 		const removeName = variant.locale === 'zh-CN' ? '从命令历史记录中移除' : 'Remove from Command History';
 		const remove = page.getByRole('button', { name: removeName });
-		await expect(remove.locator('svg.ash-icon')).toHaveAttribute('aria-hidden', 'true');
+		await expect(remove.locator('.ash-icon')).toHaveAttribute('aria-hidden', 'true');
 		await page.keyboard.press('Tab');
 		await expect(page.getByRole('button', { name: variant.locale === 'zh-CN' ? '清空输入' : 'Clear input' })).toBeFocused();
 		await page.keyboard.press('Tab');

@@ -185,6 +185,25 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.contextKeys.getContext().getValue('sessions.activity.chatSelected'), true);
 	});
 
+	test('Code child entries retain the Code workspace and a declared Custom View restores its underlying entry', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(chatEntry);
+		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'chat');
+		await fixture.service.openEntry({ ...chatEntry, id: 'collaboration', workspaceMode: 'code', activityContext: 'sessions.activity.collaborationSelected' });
+		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'code');
+		using command = CommandsRegistry.register('sessions.open.code', async () => fixture.service.openEntry(documentEntry, undefined, { source: 'restore' }));
+		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView), entryCommand: 'sessions.open.code' });
+		fixture.customViews.showCustomView('automations');
+		await fixture.service.restore();
+		assert.equal(fixture.customViews.activeCustomView.get()?.id, 'automations');
+		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'code');
+		assert.equal(fixture.contextKeys.getValue('sessions.activity.codeSelected'), false);
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), 'sessions.open.code');
+		await fixture.service.openEntry(chatEntry);
+		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'chat');
+		assert.equal(fixture.customViews.activeCustomView.get(), undefined);
+	});
+
 	test('a Custom View opened while navigation awaits keeps its focus after navigation completes', async () => {
 		using fixture = new EntryFixture();
 		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });

@@ -38,7 +38,7 @@ registerAction2(class OpenProjects extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.open.projects', title: localize2({ bundle: 'ash', key: 'sessions.activity.projects' }, 'Projects'), icon: Lxicon.projects,
-			toggled: { condition: ContextKeyExpr.has('sessions.activity.projectsSelected'), icon: Lxicon.projectsFilled },
+			toggled: ContextKeyExpr.has('sessions.activity.projectsSelected'),
 			menu: { id: Menus.ActivityBar, group: 'navigation', order: 30 },
 		});
 	}

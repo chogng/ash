@@ -33,6 +33,8 @@ export interface ICompositeBarActionViewItemOptions extends ActionViewItemOption
 	readonly presentation?: 'tab' | 'navigation';
 	/** Navigation hosts supply their independent button skin; tab styling stays with CompositeBar. */
 	readonly navigationClassName?: string;
+	/** Expanded navigation can show the action name beside its icon. */
+	readonly navigationLabel?: 'visible' | 'hidden';
 	readonly onDidChange?: Event<unknown>;
 }
 
@@ -105,7 +107,7 @@ export class CompositeActionViewItem extends ActionViewItem {
 				...defaultButtonStyles,
 				label: this.action.label,
 				icon: this.action.icon,
-				iconOnly: true,
+				iconOnly: this.options.navigationLabel !== 'visible',
 				onClick: () => { void Promise.resolve(this.action.run()).catch(onUnexpectedError); },
 			}));
 			if (this.options.navigationClassName) { this.button.domNode.classList.add(this.options.navigationClassName); }

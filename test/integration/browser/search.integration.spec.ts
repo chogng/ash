@@ -98,7 +98,7 @@ test('Search ActionBar centers icon-only actions and keeps text actions visible'
 		for (const width of [180, 400]) {
 			await page.evaluate(width => window.ashSearchIntegration.setWidth(width), width);
 			const button = (await replaceAll.boundingBox())!;
-			const icon = (await replaceAll.locator('svg').boundingBox())!;
+			const icon = (await replaceAll.locator('.ash-icon').boundingBox())!;
 			expect(icon.x + icon.width / 2).toBeCloseTo(button.x + button.width / 2, 2);
 			expect(icon.y + icon.height / 2).toBeCloseTo(button.y + button.height / 2, 2);
 			await expect(preserveCase.locator('.ash-action-label-text')).toBeVisible();

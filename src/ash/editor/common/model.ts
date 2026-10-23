@@ -112,7 +112,7 @@ export interface IModelDecorationOptions {
 	linesDecorationsTooltip?: string | null;
 	lineNumberClassName?: string | null;
 	firstLineDecorationClassName?: string | null;
-	/** SVG icon rendered inside the first-line decoration; the class remains its layout and interaction hook. */
+	/** Semantic icon rendered inside the first-line decoration; the class remains its layout and interaction hook. */
 	firstLineDecorationIcon?: Icon | null;
 	marginClassName?: string | null;
 	inlineClassName?: string | null;

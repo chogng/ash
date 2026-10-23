@@ -608,7 +608,7 @@ test("Sticky and ordinary editors occupy separate tab rows", { tag: ['@browser-a
 			background: getComputedStyle(element).backgroundColor,
 			editorBackground,
 			actionLabel: button.getAttribute('aria-label'),
-			icon: button.querySelector('svg')?.getAttribute('data-ash-icon-id'),
+			icon: button.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'),
 			closeActions: element.querySelectorAll('.ash-tab-close-action').length,
 		};
 	});
@@ -629,7 +629,7 @@ test("Sticky and ordinary editors occupy separate tab rows", { tag: ['@browser-a
 	await expect(pinnedTab).toHaveAttribute('data-state', 'dirty');
 	await sticky.getByRole('tab', { name: 'main.ts' }).hover();
 	await unpin.hover();
-	await expect(unpin.locator('svg')).toBeVisible();
+	await expect(unpin.locator('.ash-icon')).toBeVisible();
 	await unpin.click();
 	await expect(sticky.locator(".ash-tab")).toHaveCount(0);
 	await expect(ordinary.locator(".ash-tab")).toHaveCount(2);

@@ -6,7 +6,7 @@ for (const registerAfterPart of [false, true]) {
 		await page.evaluate(() => window.ashNotificationsIntegration.loadBasePartStylesLast());
 		const statusbar = page.locator('[data-part="statusbar"]');
 		const bell = page.locator('[data-statusbar-item-id="ash.status.notifications"] [role="button"]');
-		await expect(bell.locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell');
+		await expect(bell.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell');
 		const geometry = await bell.evaluate(element => {
 			const bar = element.closest<HTMLElement>('[data-part="statusbar"]')!;
 			const bounds = bar.getBoundingClientRect();
@@ -46,7 +46,7 @@ test('notification rows share standard controls, preserve focus, and fit narrow 
 		await expect(close).toHaveCSS('height', '22px');
 		await expect(close).toHaveCSS('border-top-width', '0px');
 		expect(await close.boundingBox()).toMatchObject({ width: 22, height: 22 });
-		await expect(close.locator('svg')).toHaveCount(1);
+		await expect(close.locator('.ash-icon')).toHaveCount(1);
 		await expect(toast).toHaveCSS('border-radius', '8px');
 		await expect(toast.getByRole('button', { name: 'Run action', exact: true })).toHaveCSS('min-height', '28px');
 		const geometry = await toast.evaluate(element => {
@@ -72,7 +72,7 @@ test('notification rows share standard controls, preserve focus, and fit narrow 
 	const id = await toast.getAttribute('data-notification-id');
 	await page.evaluate(() => window.ashNotificationsIntegration.notify('Another notification'));
 	await expect(page.locator('.ash-notification')).toHaveCount(2);
-	await expect(close.filter({ has: page.locator('svg') }).first()).toBeFocused();
+	await expect(close.filter({ has: page.locator('.ash-icon') }).first()).toBeFocused();
 	await page.evaluate(() => window.ashNotificationsIntegration.show());
 	await page.evaluate(() => window.ashNotificationsIntegration.notify('Arrival with hidden toasts'));
 	await expect(page.locator('.ash-aria-status').filter({ hasText: 'Arrival with hidden toasts' })).toHaveCount(1);
@@ -136,12 +136,12 @@ test('extension messages retain source, primary choices and a working configurat
 	await page.evaluate(() => window.ashNotificationsIntegration.extensionMessage(['Show Git Output', 'Retry']));
 	const toast = page.locator('.ash-notification');
 	await expect(toast.getByRole('img', { name: 'Error', exact: true })).toBeVisible();
-	await expect(toast.locator('.ash-notification-severity svg')).toHaveAttribute('data-ash-icon-id', 'error');
+	await expect(toast.locator('.ash-notification-severity .ash-icon')).toHaveAttribute('data-ash-icon-id', 'error');
 	await expect(toast.locator('.ash-notification-source')).toHaveText('Source: Git');
 	await expect(toast.getByRole('button', { name: 'Show Git Output', exact: true })).toHaveClass(/ash-button-primary/);
 	await expect(toast.getByRole('button', { name: 'Retry', exact: true })).toHaveClass(/ash-button-secondary/);
 	const configure = toast.getByRole('button', { name: 'More Actions', exact: true });
-	await expect(configure.locator('svg[data-ash-icon-id="gear"]')).toBeVisible();
+	await expect(configure.locator('[data-ash-icon-id="gear"]')).toBeVisible();
 	await configure.focus();
 	await page.keyboard.press('ArrowDown');
 	await expect(configure).toHaveAttribute('aria-expanded', 'true');
@@ -173,7 +173,7 @@ test('severity icons and source/menu labels use the Chinese catalog and fit narr
 	const toasts = page.locator('.ash-notification');
 	await expect(toasts).toHaveCount(3);
 	for (const [index, id] of ['info', 'warning', 'error'].entries()) {
-		await expect(toasts.nth(index).locator('.ash-notification-severity svg')).toHaveAttribute('data-ash-icon-id', id);
+		await expect(toasts.nth(index).locator('.ash-notification-severity .ash-icon')).toHaveAttribute('data-ash-icon-id', id);
 		await expect(toasts.nth(index).getByRole('img')).toHaveAttribute('aria-label', ['信息', '警告', '错误'][index]);
 	}
 	const error = toasts.last();
@@ -183,7 +183,7 @@ test('severity icons and source/menu labels use the Chinese catalog and fit narr
 		await page.evaluate(index => window.ashNotificationsIntegration.theme(index), theme);
 		for (const toast of await toasts.all()) {
 			expect(await toast.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-			await expect(toast.locator('.ash-notification-severity svg')).toBeVisible();
+			await expect(toast.locator('.ash-notification-severity .ash-icon')).toBeVisible();
 		}
 		await testInfo.attach(`severity-theme-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
 	}
@@ -248,7 +248,7 @@ test('notification history insertion, removal before a frame and hidden DOM do n
 test('notification bell stays visible at rest and projects unread and do not disturb states in every theme', async ({ page }, testInfo) => {
 	await page.goto('/notifications.html?zh');
 	const bell = page.locator('[data-statusbar-item-id="ash.status.notifications"] [role="button"]');
-	const icon = bell.locator('svg');
+	const icon = bell.locator('.ash-icon');
 	await expect(bell).toBeVisible();
 	await expect(icon).toHaveAttribute('data-ash-icon-id', 'bell');
 	await page.evaluate(() => window.ashNotificationsIntegration.notify('未读通知'));
@@ -273,13 +273,19 @@ test('notification bell stays visible at rest and projects unread and do not dis
 		await page.evaluate(index => window.ashNotificationsIntegration.theme(index), theme);
 		await expect(icon).toHaveCSS('width', '16px');
 		await expect(icon).toHaveCSS('height', '16px');
-		const paints = await icon.evaluate(element => ({
-			color: getComputedStyle(element).color,
-			fills: [...element.querySelectorAll('[fill]:not([fill="none"])')].map(path => getComputedStyle(path).fill),
-			strokes: [...element.querySelectorAll('[stroke="#000"]')].map(path => getComputedStyle(path).stroke),
-		}));
-		expect(paints.fills.length).toBeGreaterThan(0);
-		expect([...paints.fills, ...paints.strokes].every(color => color === paints.color)).toBe(true);
+		await expect(icon).toHaveClass(/ash-icon-font-ready/);
+		await expect(icon.locator('svg')).toHaveCount(0);
+		const glyph = await icon.evaluate(element => {
+			const style = getComputedStyle(element, '::before');
+			return {
+				color: style.color, foreground: getComputedStyle(element).color,
+				content: style.content, character: element.getAttribute('data-ash-icon-character'),
+				visibility: style.visibility,
+			};
+		});
+		expect(glyph.content).toBe(`"${glyph.character}"`);
+		expect(glyph.visibility).toBe('visible');
+		expect(glyph.color).toBe(glyph.foreground);
 		await testInfo.attach(`bell-theme-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
 	}
 	await page.evaluate(() => window.ashNotificationsIntegration.notify('错误通知', 3));
@@ -399,7 +405,7 @@ test('progress survives clear commands, moves to the status bar when hidden, and
 	const progress = page.locator('[data-statusbar-item-id="status.progress"] [role="button"]');
 	await expect(progress).toHaveText('Indexing fixture: Reading files');
 	const bell = page.locator('[data-statusbar-item-id="ash.status.notifications"] [role="button"]');
-	await expect(bell.locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell-dot');
+	await expect(bell.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell-dot');
 	await expect(bell).toHaveAttribute('aria-label', /No New Notifications \(1 in progress\)/);
 	await testInfo.attach('hidden-running-progress', { body: await page.screenshot(), contentType: 'image/png' });
 	await progress.click();
@@ -407,7 +413,7 @@ test('progress survives clear commands, moves to the status bar when hidden, and
 	await expect(progress).toHaveCount(0);
 	await row.getByRole('button', { name: 'Cancel', exact: true }).click();
 	await expect(row).toHaveCount(0);
-	await expect(bell.locator('svg')).toHaveAttribute('data-ash-icon-id', 'bell');
+	await expect(bell.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell');
 	await page.evaluate(() => window.ashNotificationsIntegration.show());
 	await page.evaluate(() => window.ashNotificationsIntegration.startProgress(2));
 	await expect(toast).toHaveCount(0);
@@ -449,7 +455,7 @@ test('toast timeouts use severity intervals and leave notification history unrea
 	await expect(page.locator('.ash-notification .ash-notification-message')).toHaveText('Error');
 	await page.clock.fastForward(3000);
 	await expect(page.locator('.ash-notification')).toHaveCount(0);
-	await expect(page.locator('[data-statusbar-item-id="ash.status.notifications"] svg')).toHaveAttribute('data-ash-icon-id', 'bell-dot');
+	await expect(page.locator('[data-statusbar-item-id="ash.status.notifications"] .ash-icon')).toHaveAttribute('data-ash-icon-id', 'bell-dot');
 	await page.evaluate(() => window.ashNotificationsIntegration.show());
 	await expect(page.locator('.ash-notifications-row')).toHaveCount(3);
 	await testInfo.attach('expired-toasts-retain-history', { body: await page.screenshot(), contentType: 'image/png' });

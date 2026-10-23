@@ -56,17 +56,17 @@ Extensions changes, including removal and updates.
 
 ## Supported contribution projection
 
-| Contribution                          | Projection                                                                                                  | Current limitation                                                                                                           |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `languages`                           | Language identity, file/MIME/first-line associations                                                        | No manifest localization                                                                                                     |
-| language `configuration`              | Parsed JSONC to Stanza language configuration                                                               | Only the existing Stanza configuration vocabulary                                                                            |
-| `snippets`                            | Prefix-bearing snippets become completion providers; file templates power `New File from Template`          | Template bodies create language-tagged untitled editors                                                                      |
-| `grammars`                            | Validated legacy manifest metadata                                                                          | Resources are not loaded; syntax requires a supported Tree-sitter grammar                                                    |
-| `themes`                              | Parsed metadata catalog; `ExtensionColorThemeService` independently owns selectable color themes            | Package-relative JSON `include` is resolved before registration; manifest NLS placeholders use deterministic fallback labels |
-| `iconThemes`                          | Package-relative fonts and SVG/PNG file icons; selectable through `workbench.iconTheme`                     | File associations and light variants; folder-specific associations are not consumed by the current file label contract       |
-| `productIconThemes`                   | Package-relative SVG artwork for semantic product icon IDs; selectable through `workbench.productIconTheme` | Unspecified IDs keep Ash's built-in SVG artwork                                                                              |
-| `problemMatchers` / `problemPatterns` | Bounded named patterns, matcher inheritance and background declarations enter the task matcher registry     | Search-based file locations remain incomplete                                                                                |
-| `debuggers`                           | Unique type, label, adapter program, and args                                                               | Discovery only; execution requires an admitted Ash provider                                                                  |
+| Contribution                          | Projection                                                                                                                 | Current limitation                                                                                                           |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `languages`                           | Language identity, file/MIME/first-line associations                                                                       | No manifest localization                                                                                                     |
+| language `configuration`              | Parsed JSONC to Stanza language configuration                                                                              | Only the existing Stanza configuration vocabulary                                                                            |
+| `snippets`                            | Prefix-bearing snippets become completion providers; file templates power `New File from Template`                         | Template bodies create language-tagged untitled editors                                                                      |
+| `grammars`                            | Validated legacy manifest metadata                                                                                         | Resources are not loaded; syntax requires a supported Tree-sitter grammar                                                    |
+| `themes`                              | Parsed metadata catalog; `ExtensionColorThemeService` independently owns selectable color themes                           | Package-relative JSON `include` is resolved before registration; manifest NLS placeholders use deterministic fallback labels |
+| `iconThemes`                          | Package-relative fonts and SVG/PNG file icons; selectable through `workbench.iconTheme`                                    | File associations and light variants; folder-specific associations are not consumed by the current file label contract       |
+| `productIconThemes`                   | Package-relative font glyphs or SVG artwork for semantic product icon IDs; selectable through `workbench.productIconTheme` | Unspecified IDs keep Ash's built-in definitions                                                                              |
+| `problemMatchers` / `problemPatterns` | Bounded named patterns, matcher inheritance and background declarations enter the task matcher registry                    | Search-based file locations remain incomplete                                                                                |
+| `debuggers`                           | Unique type, label, adapter program, and args                                                                              | Discovery only; execution requires an admitted Ash provider                                                                  |
 
 `configurationDefaults` enters the configuration registry with the extension's schemas in one
 validated replacement. Language defaults such as Markdown word wrapping participate in normal
@@ -127,7 +127,7 @@ when compiling product color themes. Publisher metadata is ignored at the extens
 resource boundary; user theme documents retain their complete-value schema.
 
 Product icon themes use the manifest entry `{ "id": "my-icons", "label": "My icons", "path": "./icons/theme.json" }`.
-The referenced JSONC file maps icon IDs to package-relative SVG resources:
+The referenced JSONC file supports standard `fonts`, `fontCharacter`, and `fontId` definitions, or package-relative SVG resources through `iconPath`:
 
 ```json
 { "iconDefinitions": { "add": { "iconPath": "./add.svg" } } }
@@ -136,7 +136,7 @@ The referenced JSONC file maps icon IDs to package-relative SVG resources:
 Each SVG needs a `viewBox` and may contain basic shapes and their drawing attributes. Scripts,
 styles, external references, and paths outside the package are rejected before registration.
 `workbench.productIconTheme` selects one contribution by ID; `default` selects Ash's built-in
-`lxicons` SVGs. Theme changes update icons already displayed in the window.
+`lxicons` WOFF2 definitions. Native glyphs use `span.ash-icon + ::before`; dedicated SVG artwork stays inside the same stable node. Theme changes update icons already displayed in the window, and font resources are released on theme changes or extension unload.
 
 ## Execution and refresh path
 
@@ -144,7 +144,7 @@ styles, external references, and paths outside the package are rejected before r
 IExtensionApi.list("cached" | "refresh")
   -> adapt transport descriptors to Workbench candidates
   -> parseExtensionManifest
-  -> load/parse language configurations, snippets, color themes, and SVG icon themes
+  -> load/parse language configurations, snippets, color themes, and product icon themes
   -> prepare language, completion, file-template, theme, and debugger registrations
   -> commit all domain registrations behind the synchronous event barrier
   -> dispose previous registrations

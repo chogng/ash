@@ -390,7 +390,7 @@
 	background: var(--ash-toolbar-hoverBackground);
 }
 
-.ash-quick-pick-row-action.icon-only svg.ash-icon {
+.ash-quick-pick-row-action.icon-only .ash-icon {
 	width: var(--ash-lxiconFontSize);
 	height: var(--ash-lxiconFontSize);
 }

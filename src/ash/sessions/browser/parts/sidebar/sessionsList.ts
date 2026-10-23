@@ -1,5 +1,3 @@
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { NEW_CHAT_COMMAND_ID } from '../../../../workbench/contrib/chat/common/chat.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import type { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import "./media/sessionsControls.css";
@@ -30,7 +28,6 @@ import { Menus } from '../../menus.js';
 export class SessionsList extends DomWidget {
 	readonly domNode: HTMLElement;
 	private readonly heading: HTMLHeadingElement;
-	private readonly newSessionButton: HTMLButtonElement;
 	private readonly searchInput: HTMLInputElement;
 	private readonly list: HTMLDivElement;
 	private readonly items = this._register(new DisposableMap<string, SessionListItem>());
@@ -44,11 +41,10 @@ export class SessionsList extends DomWidget {
 
 	public get element(): HTMLElement { return this.domNode; }
 
-	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService, title: string, newSessionLabel: string, private readonly github: IGitHubService, private readonly groups: ISessionGroupsService | undefined,
+	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService, title: string, private readonly github: IGitHubService, private readonly groups: ISessionGroupsService | undefined,
 		@ICustomViewService private readonly customViews: ICustomViewService,
 		@IMenuService menus: IMenuService,
 		@INotificationService notifications: INotificationService,
-		@ICommandService commands: ICommandService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -69,13 +65,7 @@ export class SessionsList extends DomWidget {
 		this.searchInput.placeholder = localize('sessions.list.search', 'Search sessions');
 		this.searchInput.setAttribute('aria-label', this.searchInput.placeholder);
 		search.append(this.searchInput);
-		this.newSessionButton = h(ownerDocument, "button");
-		this.newSessionButton.type = "button";
-		this.newSessionButton.className = 'ash-sessions-list-add';
-		this.newSessionButton.setAttribute('aria-label', newSessionLabel);
-		this.newSessionButton.title = newSessionLabel;
-		appendIcon(Lxicon.add, this.newSessionButton);
-		controls.append(search, this.newSessionButton);
+		controls.append(search);
 		this.list = h(ownerDocument, "div");
 		this.list.className = "ash-sessions-list-items";
 		this.empty = h(ownerDocument, "p");
@@ -83,7 +73,6 @@ export class SessionsList extends DomWidget {
 		this.domNode.append(this.navigation, this.heading, controls, this.list);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
-		this._register(addDisposableListener(this.newSessionButton, "click", () => { void commands.executeCommand(NEW_CHAT_COMMAND_ID).catch(error => notifications.error(String(error))); }));
 		this._register(addDisposableListener(this.searchInput, 'input', () => this.render()));
 		this._register(viewService.onDidChange(() => this.render()));
 		this._register(github.onDidChange(() => this.render()));
@@ -121,14 +110,14 @@ export class SessionsList extends DomWidget {
 		if (activeNavigation) { activeNavigation.focus(); return; }
 		const firstItem = this.list.querySelector<HTMLButtonElement>("button");
 		if (firstItem) firstItem.focus();
-		else this.newSessionButton.focus();
+		else this.searchInput.focus();
 	}
 
 	public getViewState(): { readonly query: string; readonly top: number; readonly focus: string | undefined; } {
 		const active = this.domNode.ownerDocument.activeElement;
 		const item = [...this.items].find(([, item]) => item.domNode === active);
 		const navigation = [...this.navigationButtons].find(([, button]) => button.domNode === active);
-		const focus = active === this.searchInput ? 'search' : active === this.newSessionButton ? 'new' : navigation ? `navigation:${navigation[0]}` : item?.[0];
+		const focus = active === this.searchInput ? 'search' : navigation ? `navigation:${navigation[0]}` : item?.[0];
 		return { query: this.searchInput.value, top: this.list.scrollTop, focus };
 	}
 
@@ -137,7 +126,6 @@ export class SessionsList extends DomWidget {
 		this.render();
 		this.list.scrollTop = state.top;
 		if (state.focus === 'search') this.searchInput.focus({ preventScroll: true });
-		else if (state.focus === 'new') this.newSessionButton.focus({ preventScroll: true });
 		else if (state.focus?.startsWith('navigation:')) this.navigationButtons.get(state.focus.slice('navigation:'.length))?.focus();
 		else if (state.focus) this.items.get(state.focus)?.domNode.focus({ preventScroll: true });
 	}
@@ -238,10 +226,6 @@ class SessionListItem extends AbstractDisposable {
 		this.domNode = h(ownerDocument, "button");
 		this.domNode.type = "button";
 		this.domNode.className = "ash-sessions-list-item";
-		const avatar = h(ownerDocument, 'span');
-		avatar.className = 'ash-sessions-list-avatar';
-		avatar.setAttribute('aria-hidden', 'true');
-		appendIcon(Lxicon.chat4, avatar);
 		this.label = h(ownerDocument, 'span');
 		this.label.className = 'ash-sessions-list-label';
 		this.management = h(ownerDocument, 'span');
@@ -255,7 +239,7 @@ class SessionListItem extends AbstractDisposable {
 		this.pullRequest.className = 'ash-sessions-list-pr';
 		this.pullRequest.setAttribute('aria-hidden', 'true');
 		this.pullRequest.hidden = true;
-		this.domNode.append(avatar, content, this.pullRequest);
+		this.domNode.append(content, this.pullRequest);
 		this.clickListener = addDisposableListener(this.domNode, "click", () => this.open());
 	}
 
@@ -264,6 +248,7 @@ class SessionListItem extends AbstractDisposable {
 		const state = sessionManagementLabel(management);
 		if (this.management.textContent !== (state ?? '')) this.management.textContent = state ?? '';
 		this.management.hidden = state === undefined;
+		this.domNode.classList.toggle('has-management', state !== undefined);
 		this.managementDescription = [state, management?.activity?.text, management?.summary].filter(Boolean).join('. ');
 		this.updateDescription();
 		this.domNode.classList.toggle("selected", selected);

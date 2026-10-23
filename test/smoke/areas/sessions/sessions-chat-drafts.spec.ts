@@ -63,7 +63,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await workbench.page.locator('.ash-modal-editor-close').click();
 			let page = await workbench.openAgentsWindow(target.kind);
 			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
-			await page.locator('.ash-sessions-list-add').click();
+			await page.locator('[data-action-id="sessions.newSession"] button').click();
 			const active = () => page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 			await active().locator('.ash-chat-input-model-action').press('ArrowDown');
 			const picker = page.getByRole('dialog', { name: copy.picker, exact: true });
@@ -100,7 +100,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await writeFile(testInfo.outputPath('model-requests.json'), JSON.stringify(requests, null, 2));
 
 			await writeFile(join(testWorkspace.directory, 'draft-source.txt'), 'original draft source snapshot\n');
-			await page.locator('.ash-sessions-list-add').click();
+			await page.locator('[data-action-id="sessions.newSession"] button').click();
 			const commands = new QuickAccess(page);
 			await commands.open('draft-source.txt');
 			await commands.select('draft-source.txt');

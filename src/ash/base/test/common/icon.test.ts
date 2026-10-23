@@ -8,12 +8,13 @@ test('icon references retain their ID', () => {
 	assert.deepEqual(Icon.fromId('search'), { id: 'search' });
 });
 
-test('Lxicon lists repository-owned SVG definitions', () => {
+test('Lxicon lists repository-owned font definitions with source artwork', () => {
 	const icons = getAllLxicons();
 	assert.deepEqual(icons, Object.values(Lxicon));
 	assert.equal(new Set(icons.map(icon => icon.id)).size, icons.length);
 	for (const icon of icons) {
-		const markup = getLxiconDefinition(icon.id)?.();
+		const definition = getLxiconDefinition(icon.id)!;
+		const markup = typeof definition === 'function' ? definition() : definition.fallback?.();
 		assert.match(markup ?? '', /^<svg\b[^>]*>/);
 		assert.match(markup ?? '', /<\/svg>$/);
 	}

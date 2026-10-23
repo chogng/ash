@@ -27,18 +27,28 @@ import { IWorkbenchLayoutService } from '../../../../workbench/services/layout/b
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
 export const SESSIONS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.chats';
+export const CODE_NAVIGATION_CONTAINER_ID = 'sessions.navigation.code';
 export const TEAMS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.teams';
 
 export function registerSessionsNavigation(listRoles: () => Promise<readonly TeamRoleOption[]>): IDisposable {
 	const registrations = new DisposableStore();
 	for (const [id, title, key, ctorDescriptor] of [
 		[SESSIONS_NAVIGATION_CONTAINER_ID, 'Chat', 'sessions.activity.chat', new SyncDescriptor(SessionsNavigationView)],
+		[CODE_NAVIGATION_CONTAINER_ID, localize({ bundle: 'ash', key: 'sessions.mode.code' }, 'Code'), 'sessions.mode.code', new SyncDescriptor(CodeNavigationView)],
 		[TEAMS_NAVIGATION_CONTAINER_ID, 'Agent Teams', 'sessions.activity.teams', new SyncDescriptor(TeamsNavigationView, [listRoles])],
 	] as const) {
 		registrations.add(SessionsViewRegistry.registerViewContainer({ id, title, localizationKey: { bundle: 'ash', key }, location: ViewContainerLocation.Sidebar, order: 0 }));
 		registrations.add(SessionsViewRegistry.registerViews(id, [{ id: id + '.view', title, localizationKey: { bundle: 'ash', key }, ctorDescriptor, canToggleVisibility: false }]));
 	}
 	return registrations;
+}
+
+/** Code starts with workspace actions in the shared sidebar's navigation host. */
+class CodeNavigationView extends ViewPane {
+	constructor(parent: HTMLElement, options: IViewPaneOptions) {
+		super(parent, options);
+		this.contentElement.classList.add('ash-sessions-code-navigation-view');
+	}
 }
 
 class SessionsNavigationView extends ViewPane {
@@ -56,7 +66,7 @@ class SessionsNavigationView extends ViewPane {
 		};
 		this._register(management.onDidChange(updateLoading));
 		updateLoading();
-		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), management, sessions, localize('sessions.activity.chat', 'Chat'), localize('chat.sessions.new', 'New Session'), github, groups);
+		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), management, sessions, localize('sessions.activity.chat', 'Chat'), github, groups);
 		this.list = lists.get();
 		this.contentElement.append(this.list.element);
 		this._register(lists.onDidChange(list => {
@@ -98,6 +108,7 @@ class TeamsNavigationView extends ViewPane {
 export class SidebarPart extends WorkbenchSidebarPart {
 	private readonly topActivityBarHost: HTMLDivElement;
 	private readonly bottomActivityBarHost: HTMLDivElement;
+	public get activityBarAccountHost(): HTMLElement { return this.bottomActivityBarHost; }
 	override get minimumWidth(): number { return 240; }
 	override get maximumWidth(): number { return 520; }
 	override get preferredWidth(): number {
@@ -136,8 +147,12 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		this.contentDomNode.insertBefore(this.getComposite(id)!.element, this.bottomActivityBarHost);
 	}
 	override setActivityBarLocation(location: ActivityBarPosition): HTMLElement | undefined {
-		this.topActivityBarHost.hidden = location !== ActivityBarPosition.TOP;
-		this.bottomActivityBarHost.hidden = location !== ActivityBarPosition.BOTTOM;
+		const integrated = location === ActivityBarPosition.DEFAULT;
+		this.topActivityBarHost.classList.toggle('integrated', integrated);
+		this.bottomActivityBarHost.classList.toggle('integrated', integrated);
+		this.topActivityBarHost.hidden = !integrated && location !== ActivityBarPosition.TOP;
+		this.bottomActivityBarHost.hidden = !integrated && location !== ActivityBarPosition.BOTTOM;
+		if (integrated) { return this.topActivityBarHost; }
 		if (location === ActivityBarPosition.TOP) { return this.topActivityBarHost; }
 		if (location === ActivityBarPosition.BOTTOM) { return this.bottomActivityBarHost; }
 		return undefined;

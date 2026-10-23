@@ -24,4 +24,5 @@
 .ash-chat-suggested-context .ash-icon-label-icon .ash-icon {
 	width: var(--ash-lxiconFontSize-compact);
 	height: var(--ash-lxiconFontSize-compact);
+	font-size: var(--ash-lxiconFontSize-compact);
 }

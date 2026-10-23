@@ -32,6 +32,11 @@ import { QuickInputService } from '../../../src/ash/platform/quickinput/browser/
 import { NotificationsPosition, NotificationsSettings } from '../../../src/ash/workbench/common/notifications.js';
 import { ProgressLocation, type IProgress, type IProgressStep } from '../../../src/ash/platform/progress/common/progress.js';
 import { ProgressService } from '../../../src/ash/workbench/services/progress/browser/progressService.js';
+import { IViewDescriptorService, WorkbenchViewRegistry } from '../../../src/ash/workbench/common/views.js';
+import { ViewDescriptorService } from '../../../src/ash/workbench/services/views/browser/viewDescriptorService.js';
+import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
+import { ViewsService } from '../../../src/ash/workbench/services/views/browser/viewsService.js';
+import { IPaneCompositePartService } from '../../../src/ash/workbench/services/panecomposite/browser/panecomposite.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
@@ -105,6 +110,21 @@ services.registerInstance(IThemeService, themes);
 resources.add(bindTestColorTheme(themes, root));
 const statusbar = resources.add(new StatusbarService());
 services.registerInstance(IStatusbarService, statusbar);
+const viewRegistry = resources.add(new WorkbenchViewRegistry());
+services.registerInstance(IViewDescriptorService, resources.add(services.createInstance(ViewDescriptorService, { registry: viewRegistry })));
+// This host exercises notification progress and owns no pane composite Parts.
+const unexpectedPaneOperation = (): never => { throw new Error('Unexpected pane operation in the notification fixture'); };
+services.registerInstance(IPaneCompositePartService, {
+	onDidPaneCompositeOpen: Event.None,
+	onDidPaneCompositeClose: Event.None,
+	openPaneComposite: unexpectedPaneOperation,
+	getActivePaneComposite: unexpectedPaneOperation,
+	getProgressIndicator: unexpectedPaneOperation,
+	getPartId: unexpectedPaneOperation,
+	hideActivePaneComposite: unexpectedPaneOperation,
+	getLastActivePaneCompositeId: unexpectedPaneOperation,
+});
+services.registerInstance(IViewsService, resources.add(services.createInstance(ViewsService)));
 const progressService = resources.add(services.createInstance(ProgressService));
 resources.add(statusbar.addEntry({ text: 'main' }, { id: 'fixture.branch', alignment: StatusbarAlignment.Left }));
 const createStatusbarPart = (): void => {

@@ -7,8 +7,8 @@ Product icon 是 renderer-independent semantic identity，不是某个 component
 
 ```text
 resources/icons/*.svg
-  ├─ Desktop generator → private SVG factories → Lxicon built-in catalog
-  │                                         → platform iconRegistry → browser SVG renderer
+  ├─ Desktop generator → WOFF2 glyphs + dedicated artwork → Lxicon catalog
+  │                                                   → iconRegistry → span + ::before
   └─ Rust generator → private artwork → explicit semantic library
                                      → ash-icons
                        → zui PaintIcon → ash-ui-components IconLabel / Button
@@ -24,27 +24,27 @@ resources/icons/*.svg
 
 ## 2. 所有权
 
-| 能力                                                   | 当前 owner                                  | 状态                 |
-| ------------------------------------------------------ | ------------------------------------------- | -------------------- |
-| Canonical first-party SVG artwork                      | `resources/icons`                           | ✅                   |
-| Desktop generated SVG factories                        | `src/ash/base/common/productIcons.ts`       | ✅                   |
-| Desktop built-in identities and SVG definitions        | `base/common/lxicons.ts` / `lxiconsUtil.ts` | ✅                   |
-| Desktop semantic registration与resolution              | `platform/theme/common/iconRegistry.ts`     | ✅                   |
-| Desktop SVG creation and display                       | `base/browser/ui/lxicons`                   | ✅                   |
-| Desktop searchable SVG icon selector                   | `base/browser/ui/icons/iconSelectBox.ts`    | ✅，等待产品调用入口 |
-| Desktop product SVG theme selection                    | `workbench/services/themes`                 | ✅                   |
-| Rust semantic identity、definition 与 rendering mode   | `ash-icons`                                 | ✅                   |
-| Rust logical placement、tint 与 clip scene contract    | `zui::PaintIcon`                            | ✅                   |
-| Rust icon+text component geometry                      | `ash-ui-components::IconLabel`              | ✅                   |
-| Product command 与 icon selection                      | 各 product host                             | ✅                   |
-| Seti file-extension/theme resolution                   | `src/ash/platform/theme/browser`            | ✅，浏览器主题能力   |
-| Native symbolic mask、fixed-color atlas 与 render path | `ash-wgpu`                                  | ✅                   |
+| 能力                                                    | 当前 owner                                  | 状态               |
+| ------------------------------------------------------- | ------------------------------------------- | ------------------ |
+| Canonical first-party SVG artwork                       | `resources/icons`                           | ✅                 |
+| Desktop generated font definitions and artwork fallback | `src/ash/base/common/productIcons.ts`       | ✅                 |
+| Desktop built-in identities and icon definitions        | `base/common/lxicons.ts` / `lxiconsUtil.ts` | ✅                 |
+| Desktop semantic registration与resolution               | `platform/theme/common/iconRegistry.ts`     | ✅                 |
+| Desktop native font glyph display and artwork fallback  | `base/browser/ui/lxicons`                   | ✅                 |
+| Desktop searchable product icon selector                | `base/browser/ui/icons/iconSelectBox.ts`    | ✅                 |
+| Desktop product font/artwork theme selection            | `workbench/services/themes`                 | ✅                 |
+| Rust semantic identity、definition 与 rendering mode    | `ash-icons`                                 | ✅                 |
+| Rust logical placement、tint 与 clip scene contract     | `zui::PaintIcon`                            | ✅                 |
+| Rust icon+text component geometry                       | `ash-ui-components::IconLabel`              | ✅                 |
+| Product command 与 icon selection                       | 各 product host                             | ✅                 |
+| Seti file-extension/theme resolution                    | `src/ash/platform/theme/browser`            | ✅，浏览器主题能力 |
+| Native symbolic mask、fixed-color atlas 与 render path  | `ash-wgpu`                                  | ✅                 |
 
 `ash-icons` 不依赖 `zui` 或 `ash-ui-components`。`PaintIcon`、`IconLabel`、`Button` 和 `InputBox` 可以依赖 icon identity，但
 资源 crate 不得包含 component、font、layout、theme color、GPU 或 input routing。
 
 VS Code 的 `base/browser/ui/icons/iconSelectBox.ts` 是图标选择控件。Ash 在同路径提供可筛选、
-可键盘选择的 SVG 控件；当前没有产品调用入口。SVG 创建、挂载与主题更新由 `base/browser/ui/lxicons` 负责。
+可键盘选择的图标控件。字体字形和专属图稿的挂载、主题更新由 `base/browser/ui/lxicons` 负责。
 
 ## 3. 身份与图稿
 
@@ -60,10 +60,18 @@ VS Code 的 `base/browser/ui/icons/iconSelectBox.ts` 是图标选择控件。Ash
 - resource filename 是 artwork generation input，不是 component API。
 
 `Lxicon` 当前包含 Ash 已有 SVG 目录和有对应图稿的常用派生 ID（例如 `dialog-error`、
-`menu-selection`）。派生 ID 复用 SVG 定义，但可分别配置产品主题覆盖。当前尚未加入字体资源、字符映射或字体渲染。后续切换字体时，
-还需同步定义解析、浏览器渲染与资源打包，调用方继续传递稳定的图标 ID。
+`menu-selection`）。派生 ID 复用字形定义，但可分别配置产品主题覆盖。
+`resources/icons/font/manifest.json` 维护只追加的 PUA 码点和源文件指纹；调用方继续使用语义 ID。
+普通单色图标以 `span.ash-icon + ::before` 显示 WOFF2 字形，没有 SVG 子树。固定色图稿和
+字体加载失败回退使用同一稳定节点内的专属 SVG，产品主题可以覆盖字形或图稿。
 
 ## 4. 当前实现
+
+Desktop 的字体成品由共享 `base/browser/ui/lxicons` 拥有。`lxicon.woff2` 保持 IDE 原稿的
+轮廓和线宽，默认字重 400；`lxicon-variable.woff2` 为 Agent Window 提供 16px 下的
+1.25px 线框轮廓，字体族和字重 550 仅由 `.ash-sessions-window` 选择。两份成品来自
+同一套 SVG 和码点清单。只有四个已确认的侧栏字形支持真实粗细插值，其余 Agent Window
+字形固定在当前设计线宽，选中不切换实心。
 
 Rust generator 扫描全部 canonical SVG，生成 164 个 crate-private `IconDefinition` binding；
 `library.rs` 显式登记与 Desktop `Lxicon` 图稿目录对应的公共 semantic constants、排序后的
@@ -84,6 +92,10 @@ pnpm icons:generate
 pnpm icons:check
 cargo test --manifest-path Cargo.toml -p ash-icons -p ash-ui-components
 ```
+
+Desktop 新增或更换 SVG 时，先按 [svg-icon-font skill](../.agents/skills/svg-icon-font/SKILL.md)
+运行 `build_product_font.py` 重建字体、码点清单和 TypeScript 定义，再运行 `pnpm icons:check`。
+`pnpm icons:generate` 单独生成目录输出，不替代字体重建；普通产品构建不需要 Python 字体工具。
 
 Desktop 继续运行自己的 generate/check/optimize workflow。新增 SVG 必须同时更新两个 checked-in
 generated output；新增产品语义应由所属客户端显式注册，跨端共享语义还需更新两个客户端。未来可以把两个 generator

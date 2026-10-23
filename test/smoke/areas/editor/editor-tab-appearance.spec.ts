@@ -196,7 +196,7 @@ test('unsaved tab indicators stay round and centered until the close button is h
 	const tab = group.tabs.filter({ hasText: 'Untitled-1' });
 	const item = group.title.locator('.ash-tab').filter({ has: page.getByRole('tab', { name: /^Untitled-1(?:,|$)/u }) });
 	const close = item.locator('.ash-tab-primary-action button');
-	const icon = close.locator('svg');
+	const icon = close.locator('.ash-icon');
 	await group.editor.waitForEditorFocus();
 	await expect(close).toBeVisible();
 	const indicator = async () => close.evaluate(button => {
@@ -658,7 +658,7 @@ test('editor icon setting updates existing tabs and survives pinning', async ({ 
 	const icon = tab.locator('.ash-icon-label-icon');
 	await expect(icon).toHaveAttribute('aria-hidden', 'true');
 	await expect(icon).toHaveClass(/is-reserved/u);
-	await expect(icon.locator('svg')).toHaveAttribute('data-ash-icon-id', 'home');
+	await expect(icon.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'home');
 	const tabId = await tab.getAttribute('id');
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	const settings = page.locator('.ash-settings-editor');

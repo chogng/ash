@@ -477,7 +477,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(composer).toHaveCSS('border-radius', '9999px');
 			await expect(model).toHaveCSS('border-radius', '9999px');
 			await expect(send).toHaveCSS('border-radius', '9999px');
-			await expect(send.locator('svg')).toHaveAttribute('data-ash-icon-id', 'voice-mode');
+			await expect(send.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'voice-mode');
 			const bounds = await composer.boundingBox();
 			expect(bounds!.height).toBeLessThanOrEqual(50);
 			const modelBounds = await model.boundingBox();
@@ -488,7 +488,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await fillMessage(page, 'A short prompt');
 			await expectDraft(page, 'A short prompt');
 			await expect(send).toHaveAttribute('aria-label', locale === 'en' ? 'Send' : '发送');
-			await expect(send.locator('svg')).toHaveAttribute('data-ash-icon-id', 'arrow-up');
+			await expect(send.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'arrow-up');
 			await expect(editor).toHaveCSS('height', '20px');
 			if (!theme.startsWith('hc')) {
 				await expect.poll(() => composer.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe(restingShadow);

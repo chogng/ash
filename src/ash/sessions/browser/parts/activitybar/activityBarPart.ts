@@ -23,7 +23,7 @@ import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { Menus } from '../../menus.js';
-import { ActivityBarItemContext } from '../../../common/contextkeys.js';
+import { ActivityBarItemContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 
 export interface ActivityBarPartDelegate {
 	showAccountMenu(anchor: HTMLElement): void;
@@ -39,12 +39,13 @@ export class ActivityBarPart extends Part {
 	private order: string[];
 	private orderedActions: ActivityAction[] = [];
 	private draggedActionId: string | undefined;
+	private readonly bottomDomNode: HTMLDivElement;
+	private labeled = false;
 
-	private compact = false;
-
-	public override get minimumWidth(): number { return this.compact ? 36 : 44; }
+	public override get minimumWidth(): number { return 44; }
 	public override get maximumWidth(): number { return this.minimumWidth; }
 	public get focusContainer(): HTMLElement { return this.contentDomNode; }
+	public get accountContainer(): HTMLElement { return this.bottomDomNode; }
 
 	constructor(
 		container: HTMLElement,
@@ -62,10 +63,12 @@ export class ActivityBarPart extends Part {
 		this.contentDomNode.classList.add('ash-sessions-activity-content');
 		this.order = this.readOrder();
 		const menu = this._register(menus.createMenu(Menus.ActivityBar, contextKeys));
+		const codeMenu = this._register(menus.createMenu(Menus.CodeActivityBar, contextKeys));
 		const top = h(container.ownerDocument, 'div');
 		top.className = 'ash-sessions-activity-top';
 		const bottom = h(container.ownerDocument, 'div');
 		bottom.className = 'ash-sessions-activity-bottom';
+		this.bottomDomNode = bottom;
 
 		this.navigation = this._register(new ActionBar(top, {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
@@ -74,6 +77,7 @@ export class ActivityBarPart extends Part {
 			actionViewItemProvider: action => new CompositeActionViewItem(action, {
 				presentation: 'navigation',
 				navigationClassName: 'ash-sessions-activity-item',
+				navigationLabel: this.labeled ? 'visible' : 'hidden',
 				onDidChange: (action as ActivityAction).current.onDidChange,
 				hoverOptions: { position: () => getActivityHoverPosition(this.configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation), 'left') },
 			}),
@@ -94,7 +98,10 @@ export class ActivityBarPart extends Part {
 		}));
 		this.navigation.element.classList.add('ash-sessions-navigation');
 		const updateActions = (): void => {
-			const entries = menu.getActions().flatMap(([, actions]) => actions);
+			const code = this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code';
+			this.contentDomNode.dataset.workspaceMode = code ? 'code' : 'chat';
+			this.order = this.readOrder();
+			const entries = (code ? codeMenu : menu).getActions().flatMap(([, actions]) => actions);
 			for (const id of this.actions.keys()) {
 				if (!entries.some(action => action.id === id)) { this.actions.delete(id); }
 			}
@@ -111,9 +118,13 @@ export class ActivityBarPart extends Part {
 			this.navigation.setActions(this.orderedActions);
 		};
 		this._register(menu.onDidChange(updateActions));
+		this._register(codeMenu.onDidChange(updateActions));
+		const workspaceModeKeys = new Set([SessionsWorkspaceModeContext.key]);
+		this._register(contextKeys.onDidChangeContext(event => {
+			if (event.affectsSome(workspaceModeKeys)) updateActions();
+		}));
 		this._register(storage.onDidChangeValue(event => {
-			if (event.external && event.scope === StorageScope.PROFILE && event.key === 'sessions.activityBar.actionOrder') {
-				this.order = this.readOrder();
+			if (event.external && event.scope === StorageScope.PROFILE && event.key === this.orderStorageKey) {
 				updateActions();
 			}
 		}));
@@ -126,7 +137,7 @@ export class ActivityBarPart extends Part {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: accountLabel,
 			orientation: 'vertical',
-			actionViewItemProvider: (action, options) => this.createAccountActionViewItem(action, options, 'activitybar'),
+			actionViewItemProvider: (action, options) => this.createAccountActionViewItem(action, options, this.labeled ? 'sidebar' : 'activitybar'),
 		}));
 		this.accounts.setActions([this.accountAction]);
 		this.contentDomNode.append(top, bottom);
@@ -136,27 +147,42 @@ export class ActivityBarPart extends Part {
 		}));
 	}
 
-	public setCompact(compact: boolean): void {
-		if (this.compact === compact) return;
-		this.compact = compact;
-		this.contentDomNode.classList.toggle('compact', compact);
-		this.notifyConstraintsChanged();
-	}
-
-	public setLocation(location: ActivityBarPosition, host: HTMLElement | undefined): void {
-		if (location === ActivityBarPosition.TOP || location === ActivityBarPosition.BOTTOM) {
+	public setLocation(location: ActivityBarPosition, host: HTMLElement | undefined, accountHost?: HTMLElement): void {
+		const focused = this.contentDomNode.ownerDocument.activeElement as HTMLElement | null;
+		const focusedId = focused?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
+		const navigationTabStop = this.navigation.element.querySelector('[tabindex="0"]')?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
+		const restoreFocus = focused && (this.contentDomNode.contains(focused) || this.bottomDomNode.contains(focused));
+		const labeled = location === ActivityBarPosition.DEFAULT && host !== undefined && accountHost !== undefined;
+		const presentationChanged = this.labeled !== labeled;
+		this.labeled = labeled;
+		if (labeled || location === ActivityBarPosition.TOP || location === ActivityBarPosition.BOTTOM) {
 			if (!host) throw new Error(`Sessions Activity Bar host is missing for ${location}`);
 			host.append(this.contentDomNode);
 		} else {
 			this.domNode.append(this.contentDomNode);
 		}
+		(labeled ? accountHost! : this.contentDomNode).append(this.bottomDomNode);
+		this.contentDomNode.classList.toggle('labeled', labeled);
+		this.bottomDomNode.classList.toggle('labeled', labeled);
 		const horizontal = location === ActivityBarPosition.TOP || location === ActivityBarPosition.BOTTOM;
 		this.contentDomNode.classList.toggle('horizontal', horizontal);
 		this.navigation.setOrientation(horizontal ? 'horizontal' : 'vertical');
+		if (presentationChanged) {
+			// The same actions retain order and selection while their button presentation changes.
+			this.navigation.setActions([]);
+			this.navigation.setActions(this.orderedActions);
+			if (navigationTabStop) { this.navigation.setTabStop(navigationTabStop); }
+			this.accounts.setActions([]);
+		}
 		this.accounts.setActions(horizontal ? [] : [this.accountAction]);
+		if (restoreFocus && focusedId) {
+			const actions = focusedId === this.accountAction.id ? this.accounts : this.navigation;
+			actions.setTabStop(focusedId);
+			actions.focus();
+		}
 	}
 
-	public createAccountActionViewItem(action: IAction, options: ActionViewItemOptions, presentation: 'activitybar' | 'titlebar'): ActionViewItem {
+	public createAccountActionViewItem(action: IAction, options: ActionViewItemOptions, presentation: 'activitybar' | 'sidebar' | 'titlebar'): ActionViewItem {
 		return new AccountActionViewItem(action, options, presentation, this.showAccountMenu, event => this.showContextMenu(event), anchor => this.hoverService.setupDelayedHover(anchor, () => ({
 			content: action.label,
 			position: { hoverPosition: presentation === 'titlebar' ? HoverPosition.BELOW : getActivityHoverPosition(this.configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation), 'left') },
@@ -186,21 +212,13 @@ export class ActivityBarPart extends Part {
 
 	private getContextMenuActions(): readonly IAction[] {
 		const location = this.configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
-		const compact = this.configurationService.getValue<boolean>(SessionsConfiguration.activityBarCompact);
 		const positions: IAction[] = [
 			{ id: 'sessions.action.activityBar.position.default', label: localize('workbench.activityBarPositionDefault', 'Default'), tooltip: '', enabled: true, checked: location === ActivityBarPosition.DEFAULT, run: () => this.configurationService.updateValue(SessionsConfiguration.activityBarLocation, ActivityBarPosition.DEFAULT) },
 			{ id: 'sessions.action.activityBar.position.top', label: localize('workbench.activityBarPositionTop', 'Top'), tooltip: '', enabled: true, checked: location === ActivityBarPosition.TOP, run: () => this.configurationService.updateValue(SessionsConfiguration.activityBarLocation, ActivityBarPosition.TOP) },
 			{ id: 'sessions.action.activityBar.position.bottom', label: localize('workbench.activityBarPositionBottom', 'Bottom'), tooltip: '', enabled: true, checked: location === ActivityBarPosition.BOTTOM, run: () => this.configurationService.updateValue(SessionsConfiguration.activityBarLocation, ActivityBarPosition.BOTTOM) },
 			{ id: 'sessions.action.activityBar.position.hidden', label: localize('workbench.activityBarPositionHidden', 'Hidden'), tooltip: '', enabled: true, checked: location === ActivityBarPosition.HIDDEN, run: () => this.configurationService.updateValue(SessionsConfiguration.activityBarLocation, ActivityBarPosition.HIDDEN) },
 		];
-		const actions: IAction[] = [new SubmenuAction('sessions.action.activityBar.position', localize('workbench.activityBarPosition', 'Activity Bar Position'), positions)];
-		if (location === ActivityBarPosition.DEFAULT) {
-			actions.push(new SubmenuAction('sessions.action.activityBar.size', localize('workbench.activityBarSize', 'Activity Bar Size'), [
-				{ id: 'sessions.action.activityBar.size.default', label: localize('workbench.activityBarSizeDefault', 'Default'), tooltip: '', enabled: true, checked: !compact, run: () => this.configurationService.updateValue(SessionsConfiguration.activityBarCompact, false) },
-				{ id: 'sessions.action.activityBar.size.compact', label: localize('workbench.activityBarSizeCompact', 'Compact'), tooltip: '', enabled: true, checked: compact, run: () => this.configurationService.updateValue(SessionsConfiguration.activityBarCompact, true) },
-			]));
-		}
-		return actions;
+		return [new SubmenuAction('sessions.action.activityBar.position', localize('workbench.activityBarPosition', 'Activity Bar Position'), positions)];
 	}
 
 	private getOrderActions(target: Element): readonly IAction[] {
@@ -221,16 +239,20 @@ export class ActivityBarPart extends Part {
 		actions.splice(index, 0, this.actions.get(id)!);
 		this.orderedActions = actions;
 		this.order = actions.map(action => action.id);
-		this.storage.store('sessions.activityBar.actionOrder', JSON.stringify(this.order), StorageScope.PROFILE, StorageTarget.USER);
+		this.storage.store(this.orderStorageKey, JSON.stringify(this.order), StorageScope.PROFILE, StorageTarget.USER);
 		this.navigation.setActions(actions);
 		this.navigation.setTabStop(id);
 		this.navigation.focus();
 		status(localize('sessions.activity.moved', '{0}, position {1} of {2}', this.actions.get(id)!.label, actions.findIndex(action => action.id === id) + 1, actions.length));
 	}
 
+	private get orderStorageKey(): string {
+		return this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code' ? 'sessions.activityBar.codeActionOrder' : 'sessions.activityBar.actionOrder';
+	}
+
 	private readOrder(): string[] {
-		const saved = this.storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE);
-		const legacy = saved === undefined ? this.storage.get('sessions.activityBar.pageOrder', StorageScope.PROFILE) : undefined;
+		const saved = this.storage.get(this.orderStorageKey, StorageScope.PROFILE);
+		const legacy = saved === undefined && this.orderStorageKey === 'sessions.activityBar.actionOrder' ? this.storage.get('sessions.activityBar.pageOrder', StorageScope.PROFILE) : undefined;
 		if (saved === undefined && legacy === undefined) { return []; }
 		const order: unknown = JSON.parse((saved ?? legacy)!);
 		if (!Array.isArray(order) || !order.every(id => typeof id === 'string') || new Set(order).size !== order.length) {
@@ -238,16 +260,21 @@ export class ActivityBarPart extends Part {
 		}
 		if (legacy !== undefined) {
 			const migrated = order.map(id => {
+				if (id === 'chat') { return 'sessions.newSession'; }
 				if (id === 'colab') { return 'sessions.open.teams'; }
 				if (id === 'design') { return 'sessions.open.creator'; }
 				return `sessions.open.${id}`;
 			});
-			this.storage.store('sessions.activityBar.actionOrder', JSON.stringify(migrated), StorageScope.PROFILE, StorageTarget.USER);
+			this.storage.store(this.orderStorageKey, JSON.stringify(migrated), StorageScope.PROFILE, StorageTarget.USER);
 			this.storage.remove('sessions.activityBar.pageOrder', StorageScope.PROFILE);
 			return migrated;
 		}
-		const migrated = order.map(id => id === 'sessions.open.design' ? 'sessions.open.creator' : id);
-		if (migrated.some((id, index) => id !== order[index])) { this.storage.store('sessions.activityBar.actionOrder', JSON.stringify(migrated), StorageScope.PROFILE, StorageTarget.USER); }
+		const moved = new Set(['sessions.open.code', 'sessions.open.collaboration', 'sessions.open.teams', 'sessions.open.symphony', 'sessionsView.manageAutomations']);
+		const migrated = [...new Set(order.map(id => {
+			if (id === 'sessions.open.chat') { return 'sessions.newSession'; }
+			return id === 'sessions.open.design' ? 'sessions.open.creator' : id;
+		}).filter(id => this.orderStorageKey !== 'sessions.activityBar.actionOrder' || !moved.has(id)))];
+		if (migrated.length !== order.length || migrated.some((id, index) => id !== order[index])) { this.storage.store(this.orderStorageKey, JSON.stringify(migrated), StorageScope.PROFILE, StorageTarget.USER); }
 		return migrated;
 	}
 
@@ -263,7 +290,7 @@ class AccountActionViewItem extends ActionViewItem {
 	constructor(
 		action: IAction,
 		options: ActionViewItemOptions,
-		private readonly presentation: 'activitybar' | 'titlebar',
+		private readonly presentation: 'activitybar' | 'sidebar' | 'titlebar',
 		private readonly showMenu: (anchor: HTMLElement) => void,
 		private readonly showContextMenu: (event: MouseEvent | KeyboardEvent) => void,
 		private readonly createHover: (anchor: HTMLElement) => IDisposable,
@@ -274,10 +301,10 @@ class AccountActionViewItem extends ActionViewItem {
 			...defaultButtonStyles,
 			label: this.action.label,
 			icon: this.action.icon,
-			iconOnly: true,
+			iconOnly: this.presentation !== 'sidebar',
 			onClick: () => this.showMenu(this.button.domNode),
 		}));
-		if (this.presentation === 'activitybar') { this.button.domNode.classList.add('ash-sessions-activity-item'); }
+		if (this.presentation !== 'titlebar') { this.button.domNode.classList.add('ash-sessions-activity-item'); }
 		this.button.domNode.setAttribute('aria-haspopup', 'menu');
 		this.button.domNode.setAttribute('aria-expanded', 'false');
 		this._register(this.createHover(this.button.domNode));

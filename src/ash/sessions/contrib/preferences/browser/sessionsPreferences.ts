@@ -520,8 +520,7 @@ export class SessionsPreferences extends Disposable {
 		const appearanceSettings: readonly ISetting[] = [
 			SESSIONS_LAYOUT_SCOPE_SETTING,
 			SessionsConfiguration.layoutStyle,
-			SessionsConfiguration.activityBarLocation,
-			SessionsConfiguration.activityBarCompact
+			SessionsConfiguration.activityBarLocation
 		].map(id => defaults.get(id));
 		// Existing accessibility preferences live under General without changing their stored keys.
 		const generalSettings: readonly ISetting[] = [

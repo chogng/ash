@@ -10,7 +10,7 @@
 
 /* One composer is retained while navigation changes the surrounding Parts. */
 .ash-chat > .ash-chat-input-part.ash-sessions-chat-input.chat-composer {
-	--ash-chat-input-min-height: 112px;
+	--ash-chat-input-min-height: 0px;
 	--ash-chat-input-padding: var(--ash-spacing-size160);
 	--ash-chat-input-border: var(--ash-border);
 	--ash-chat-input-focus-border: var(--ash-border);
@@ -38,6 +38,16 @@
 	font-weight: var(--ash-fontWeight-semiBold);
 	line-height: 1.4;
 	text-align: center;
+}
+
+.ash-sessions-chat-tip-slot {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+	line-height: 1.5;
+}
+
+.ash-sessions-chat-tip-slot:empty {
+	display: none;
 }
 
 .chat-composer .ash-sessions-chat-input-footer > button {

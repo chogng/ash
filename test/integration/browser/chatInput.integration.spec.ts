@@ -778,11 +778,11 @@ test('Mode picker keeps its Tab stop and shares menu activation, placement and d
 	for (const name of ['Plan', 'Agent', 'Debug', 'Multitask', 'Ask']) {
 		await mode.press('ArrowDown');
 		const item = menu.getByRole('menuitemradio', { name, exact: true });
-		await expect(item.locator(`svg[data-ash-icon-id="${modes[name]!.icon}"]`)).toBeVisible();
+		await expect(item.locator(`[data-ash-icon-id="${modes[name]!.icon}"]`)).toBeVisible();
 		await item.click();
 		await expect(menu).toBeHidden();
 		await expect(mode).toHaveText(name);
-		await expect(mode.locator(`svg[data-ash-icon-id="${modes[name]!.icon}"]`)).toBeVisible();
+		await expect(mode.locator(`[data-ash-icon-id="${modes[name]!.icon}"]`)).toBeVisible();
 		if (modes[name]!.color) {
 			expect(await mode.evaluate((button, variable) => {
 				const probe = document.createElement('span'); probe.style.color = `var(${variable})`; button.append(probe);
@@ -1591,8 +1591,8 @@ test('Chat mode choices use the shared action widget and floating elevation acro
 		const agent = widget.getByRole('menuitemradio', { name: 'Agent', exact: true });
 		await expect(agent).toBeFocused();
 		await expect(agent).toHaveAttribute('aria-checked', 'true');
-		await expect(agent.locator('.ash-icon-label-icon svg[data-ash-icon-id="unlimited"]')).toBeVisible();
-		await expect(agent.locator('.ash-menu-leading-check > svg[data-ash-icon-id="check"]')).toBeVisible();
+		await expect(agent.locator('.ash-icon-label-icon [data-ash-icon-id="unlimited"]')).toBeVisible();
+		await expect(agent.locator('.ash-menu-leading-check > [data-ash-icon-id="check"]')).toBeVisible();
 		await agent.press('ArrowDown');
 		await expect(widget.getByRole('menuitemradio', { name: 'Plan', exact: true })).toBeFocused();
 		await page.keyboard.press('Escape');

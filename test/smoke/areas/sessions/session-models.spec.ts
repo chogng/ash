@@ -226,7 +226,7 @@ for (const scenario of [
 			}
 			let page = await agentsWorkbench.openAgentsWindow(target.kind);
 			expect(page).not.toBe(source);
-			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await page.locator('.ash-sessions-list-item').filter({ hasText: 'Persisted model choices' }).click();
 			const active = (): ReturnType<Page['locator']> => page.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork)');
 			await expect(active()).toHaveAttribute('data-thread-id', rootThreadId);
@@ -367,7 +367,7 @@ async function verifySubscriptionUpdates(application: PlaywrightApplication, web
 	// Code and Cowork retain separate composer modes. Keep an explicit Auto
 	// choice in Agents Code while both manually selected pickers remain open.
 	const activity = cowork.locator('.ash-sessions-activity-content');
-	await activity.getByRole('button', { name: 'Code', exact: true }).click();
+	await cowork.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await coworkChat.locator('.ash-chat-input-model-action').press('ArrowDown');
 	const codeAuto = cowork.getByRole('dialog', { name: 'Choose a chat model', exact: true }).getByRole('switch', { name: 'Auto', exact: true });
 	if (!await codeAuto.isChecked()) await codeAuto.press('Space');
@@ -388,7 +388,7 @@ async function verifySubscriptionUpdates(application: PlaywrightApplication, web
 	const reads = (page: Page): Promise<number> => page.evaluate(() => (window as Window & { sessionModelTraffic?: ModelTraffic; }).sessionModelTraffic!.modelReads.length);
 	const expectCodeAuto = async (): Promise<void> => {
 		await cowork.keyboard.press('Escape');
-		await activity.getByRole('button', { name: 'Code', exact: true }).click();
+		await cowork.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await coworkChat.locator('.ash-chat-input-model-action').press('ArrowDown');
 		await expect(codeAuto).toBeChecked();
 		await cowork.keyboard.press('Escape');

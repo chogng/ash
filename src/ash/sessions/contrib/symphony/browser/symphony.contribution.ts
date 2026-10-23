@@ -37,7 +37,7 @@ async function openSymphony(accessor: ServicesAccessor, source?: 'restore'): Pro
 	const symphony = accessor.get(ISymphonyService);
 	await symphony.refresh();
 	await accessor.get(ISessionsLayoutService).openEntry({
-		id: 'symphony', activityContext: 'sessions.activity.symphonySelected', content: 'editor',
+		id: 'symphony', workspaceMode: 'code', activityContext: 'sessions.activity.symphonySelected', content: 'editor',
 		sidebarContainerId: SymphonyNavigationId, restoreCommand: 'sessions.open.symphony', focus: 'editor',
 		editorInput: { resource: SymphonyMonitorResource, label: 'Symphony', readOnly: true, showBreadcrumbs: false },
 	}, undefined, source ? { source } : undefined);
@@ -47,7 +47,7 @@ registerAction2(class OpenSymphony extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.open.symphony', title: localize2('symphony.title', 'Symphony'), f1: true, icon: Lxicon.agent,
-			toggled: ContextKeyExpr.has('sessions.activity.symphonySelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 70 }
+			toggled: ContextKeyExpr.has('sessions.activity.symphonySelected'), menu: { id: Menus.CodeActivityBar, group: 'navigation', order: 40 }
 		});
 	}
 	public override async run(accessor: ServicesAccessor, source?: unknown): Promise<void> { await openSymphony(accessor, source === 'restore' ? source : undefined); }

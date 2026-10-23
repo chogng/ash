@@ -21,7 +21,7 @@ export interface IWorkbenchFileIconTheme extends IFileIconTheme {
 	resolveFileIcon(classes: readonly string[], colorScheme: ColorScheme): FileIconDefinition | undefined;
 }
 
-/** SVG replacements for registered product icon IDs. Unspecified IDs retain their built-in artwork. */
+/** Font or dedicated-artwork replacements for registered product icon IDs. Unspecified IDs retain their built-in definitions. */
 export interface IWorkbenchProductIconTheme extends IProductIconTheme { }
 
 

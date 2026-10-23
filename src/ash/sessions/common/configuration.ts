@@ -34,23 +34,9 @@ export const SessionsConfiguration = Object.freeze({
 			}
 		},
 	}),
-	activityBarCompact: configurationRegistry.registerConfiguration<boolean>({
-		key: 'sessions.activityBar.compact',
-		defaultValue: false,
-		parse(value: unknown): boolean {
-			if (typeof value === 'boolean') return value;
-			throw new TypeError(`Invalid Sessions Activity Bar compact value: ${String(value)}`);
-		},
-		setting: {
-			included: false,
-			valueType: 'boolean',
-			get title() { return localize('sessions.activityBar.compact.title', 'Compact Activity Bar'); },
-			get description() { return localize('sessions.activityBar.compact.description', 'Use smaller buttons when the Activity Bar is on the side.'); }
-		},
-	}),
 	layoutStyle: configurationRegistry.registerConfiguration<SessionsLayoutStyle>({
 		key: 'sessions.layoutStyle',
-		defaultValue: 'modern',
+		defaultValue: 'flat',
 		parse(value: unknown): SessionsLayoutStyle {
 			if (value === 'modern' || value === 'flat') return value;
 			throw new TypeError(`Unknown Sessions layout style: ${String(value)}`);

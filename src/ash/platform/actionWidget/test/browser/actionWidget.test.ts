@@ -49,7 +49,7 @@ test('action choices preserve icons, radio states and separators when dispatchin
 		assert.deepEqual(rows.map(row => ({
 			label: row.getAttribute('aria-label'),
 			checked: row.getAttribute('aria-checked'),
-			icon: row.querySelector('.ash-icon-label-icon svg')?.getAttribute('data-ash-icon-id'),
+			icon: row.querySelector('.ash-icon-label-icon .ash-icon')?.getAttribute('data-ash-icon-id'),
 		})), [
 			{ label: 'Agent', checked: 'true', icon: 'unlimited' },
 			{ label: 'Plan', checked: 'false', icon: 'plan' },

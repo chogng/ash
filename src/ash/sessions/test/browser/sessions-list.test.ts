@@ -42,7 +42,7 @@ test("SessionsList keeps session buttons and focus while refreshing", () => {
 		openNewSession() { },
 		openUntitledSession(id: string) { opened.push(id); },
 	} as unknown as ISessionsService;
-	const list = new SessionsList(dom.window.document.body, sessionService, viewService, "Sessions", "New Session", { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, undefined, listCustomViews, listMenus, listNotifications, { executeCommand: async () => { }, onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None } as unknown as import('../../../platform/commands/common/commands.js').ICommandService);
+	const list = new SessionsList(dom.window.document.body, sessionService, viewService, "Sessions", { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, undefined, listCustomViews, listMenus, listNotifications);
 	const buttons = [...list.domNode.querySelectorAll<HTMLButtonElement>(".ash-sessions-list-item")];
 	buttons[0].focus();
 	untitledSessions = [
@@ -73,6 +73,10 @@ test("SessionsList keeps session buttons and focus while refreshing", () => {
 	assert.deepEqual([...list.domNode.querySelectorAll(".ash-sessions-list-item")], [buttons[1]]);
 	buttons[0].click();
 	assert.deepEqual(opened, ["first"]);
+	untitledSessions = [];
+	changes.fire();
+	list.focus();
+	assert.equal(dom.window.document.activeElement, search);
 
 	list.dispose();
 	changes.dispose();
@@ -93,7 +97,7 @@ test('SessionsList updates passive status without changing row identity or selec
 	const sessionService = { get sessions() { return [session]; }, untitledSessions: [], state: 'ready' } as unknown as ISessionsManagementService;
 	const viewService = { onDidChange: changes.event, activeSelection: undefined, visibleSelections: [], openSession(id: string) { opened.push(id); } } as unknown as ISessionsService;
 	const request: IResolvedSessionPullRequest = { uri: URI.parse('https://github.com/fixture/repo/pull/7'), owner: 'fixture', repo: 'repo', number: 7, title: 'Synthetic PR', state: 'open', status: { hasFailingChecks: true }, icon: computePullRequestIcon('open', { hasFailingChecks: true }) };
-	using list = new SessionsList(dom.window.document.body, sessionService, viewService, 'Sessions', 'New Session', { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, undefined, listCustomViews, listMenus, listNotifications, { executeCommand: async () => { }, onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None } as unknown as import('../../../platform/commands/common/commands.js').ICommandService);
+	using list = new SessionsList(dom.window.document.body, sessionService, viewService, 'Sessions', { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, undefined, listCustomViews, listMenus, listNotifications);
 	const button = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 	button.focus();
 	const items = list.domNode.querySelector<HTMLDivElement>('.ash-sessions-list-items')!;
@@ -105,7 +109,7 @@ test('SessionsList updates passive status without changing row identity or selec
 	assert.equal(list.domNode.querySelector('.ash-sessions-list-item'), button);
 	assert.equal(button.querySelector('.ash-sessions-list-management')?.textContent, 'Needs input');
 	assert.equal(button.getAttribute('aria-label'), 'Background session. Needs input. fixture/repo #7 · Synthetic PR · Open · Checks failed');
-	assert.equal(button.querySelector('svg[data-ash-icon-id="git-pull-request-error"]')?.getAttribute('aria-hidden'), 'true');
+	assert.equal(button.querySelector('[data-ash-icon-id="git-pull-request-error"]')?.getAttribute('aria-hidden'), 'true');
 	assert.equal(button.getAttribute('aria-current'), 'false');
 	assert.equal(dom.window.document.activeElement, button);
 	assert.equal(items.scrollTop, 37);

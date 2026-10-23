@@ -14,7 +14,7 @@ for (const [state, reason, icon, color, label] of [
 		await issue.focus();
 		await page.keyboard.press('F2');
 		const card = page.locator('.ash-github-resource-hover');
-		const glyph = card.locator('svg');
+		const glyph = card.locator('.ash-icon');
 		await expect(card.locator('.ash-github-hover-metadata')).toHaveText(label);
 		expect(await page.evaluate(() => window.ashGitHubIntegration.accessibleContent('view' as import('../../../src/ash/platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain(label);
 		await expect(glyph).toHaveAttribute('data-ash-icon-id', icon);
@@ -172,31 +172,31 @@ for (const [state, id, label] of [
 	test(`${state} PRs use the same accessible state icon in the chat link and its keyboard details`, async ({ page }) => {
 		await page.goto(`/github.html?prState=${state}`);
 		const pr = page.locator('main a[href="https://github.com/team/repo/pull/8"]');
-		const glyph = pr.locator('svg');
+		const glyph = pr.locator('.ash-icon');
 		await expect(pr).toHaveAccessibleName(`Fix GitHub links · #8 · team/repo · ${label}`);
 		await expect(glyph).toHaveAttribute('data-ash-icon-id', id);
 		await expect(glyph).toHaveAttribute('aria-hidden', 'true');
 		await pr.focus();
 		await page.keyboard.press('F2');
 		const card = page.locator('.ash-github-resource-hover');
-		await expect(card.locator('svg')).toHaveAttribute('data-ash-icon-id', id);
+		await expect(card.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', id);
 		await page.evaluate(() => window.ashGitHubIntegration.releaseChecks('failure'));
 		await expect(pr).toContainText('Checks failed');
 		const expectedIcon = state === 'open' ? 'git-pull-request-error' : id;
-		await expect(pr.locator('svg')).toHaveAttribute('data-ash-icon-id', expectedIcon);
-		await expect(card.locator('svg')).toHaveAttribute('data-ash-icon-id', expectedIcon);
+		await expect(pr.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', expectedIcon);
+		await expect(card.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', expectedIcon);
 		await expect(card.getByRole('link', { name: 'team/repo', exact: true })).toBeFocused();
 		await page.keyboard.press('Escape');
 		await expect(pr).toBeFocused();
 		for (const theme of ['light', 'highContrast'] as const) {
 			await page.evaluate(theme => window.ashGitHubIntegration.theme(theme), theme);
-			expect(await pr.locator('svg').evaluate(element => getComputedStyle(element).color)).not.toBe('rgba(0, 0, 0, 0)');
-			await expect(pr.locator('svg')).toHaveAttribute('data-ash-icon-id', expectedIcon);
+			expect(await pr.locator('.ash-icon').evaluate(element => getComputedStyle(element).color)).not.toBe('rgba(0, 0, 0, 0)');
+			await expect(pr.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', expectedIcon);
 		}
 		const retainedAnchor = await pr.elementHandle();
 		await page.evaluate(() => window.ashGitHubIntegration.dispose());
 		await expect(pr).toHaveCount(0);
-		expect(await retainedAnchor!.evaluate(element => ({ text: element.textContent, icons: element.querySelectorAll('svg').length }))).toEqual({ text: 'PR', icons: 0 });
+		expect(await retainedAnchor!.evaluate(element => ({ text: element.textContent, icons: element.querySelectorAll('.ash-icon').length }))).toEqual({ text: 'PR', icons: 0 });
 		await retainedAnchor!.dispose();
 	});
 }
@@ -209,32 +209,32 @@ test('a failed CI check remains visible while another check is pending', async (
 	await page.keyboard.press('F2');
 	await page.evaluate(() => window.ashGitHubIntegration.releaseChecks('mixed'));
 	await expect(pr).toContainText('Checks failed');
-	await expect(pr.locator('svg')).toHaveAttribute('data-ash-icon-id', 'git-pull-request-error');
+	await expect(pr.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'git-pull-request-error');
 });
 
 test('Cowork uses the same PR icon and preserves keyboard focus when checks resolve', async ({ page }) => {
 	await page.goto('/github.html?cowork&prState=open');
 	const pr = page.locator('.cowork-test-message a');
-	await expect(pr.locator('svg[data-ash-icon-id="git-pull-request"]')).toHaveCount(1);
+	await expect(pr.locator('[data-ash-icon-id="git-pull-request"]')).toHaveCount(1);
 	await pr.focus();
 	await page.keyboard.press('F2');
 	await page.evaluate(() => window.ashGitHubIntegration.releaseChecks('failure'));
-	await expect(pr.locator('svg[data-ash-icon-id="git-pull-request-error"]')).toHaveCount(1);
+	await expect(pr.locator('[data-ash-icon-id="git-pull-request-error"]')).toHaveCount(1);
 	await page.keyboard.press('Escape');
 	await expect(pr).toBeFocused();
-	await expect(pr.locator('svg')).toHaveAttribute('aria-hidden', 'true');
+	await expect(pr.locator('.ash-icon')).toHaveAttribute('aria-hidden', 'true');
 });
 
 test('merge conflicts are readable in both chat links and keyboard details', async ({ page }) => {
 	await page.goto('/github.html?cowork&prState=open&conflicts');
 	for (const pr of [page.locator('main a[href="https://github.com/team/repo/pull/8"]').first(), page.locator('.cowork-test-message a')]) {
 		await expect(pr).toHaveAccessibleName(/Open · Merge conflicts/);
-		await expect(pr.locator('svg')).toHaveAttribute('data-ash-icon-id', 'git-pull-request-error');
+		await expect(pr.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'git-pull-request-error');
 		await pr.focus();
 		await page.keyboard.press('F2');
 		const card = page.locator('.ash-github-resource-hover');
 		await expect(card).toHaveAttribute('data-github-content', /Merge conflicts/);
-		await expect(card.locator('svg')).toHaveAttribute('data-ash-icon-id', 'git-pull-request-error');
+		await expect(card.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'git-pull-request-error');
 		await page.keyboard.press('Escape');
 		await expect(pr).toBeFocused();
 	}

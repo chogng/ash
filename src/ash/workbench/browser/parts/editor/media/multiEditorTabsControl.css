@@ -30,7 +30,7 @@
 	.ash-tab[data-state]
 	.ash-tab-primary-action
 	button:not(:hover):not(:focus-visible)
-	svg {
+	.ash-icon {
 	visibility: hidden;
 }
 

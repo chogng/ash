@@ -1,6 +1,12 @@
 .ash-workbench-titlebar.ash-sessions-titlebar {
 	padding: 0;
-	background: var(--ash-titleBar-background);
+	background: linear-gradient(
+		to right,
+		var(--ash-sideBar-background) 0
+			var(--ash-sessions-titlebar-sidebar-width, 0px),
+		var(--ash-titleBar-background)
+			var(--ash-sessions-titlebar-sidebar-width, 0px)
+	);
 }
 
 .ash-sessions-titlebar > .ash-workbench-part-content {
@@ -26,6 +32,24 @@
 
 .ash-sessions-titlebar-left {
 	align-self: stretch;
+	/* Keep a usable titlebar group when the sidebar is collapsed. */
+	width: max(
+		calc(
+			var(--ash-sessions-titlebar-sidebar-width, 0px) -
+				(
+					var(--ash-sessions-titlebar-leading-width) -
+						var(--ash-spacing-size280)
+				) /
+				2 - var(--ash-spacing-size160)
+		),
+		calc(6 * var(--ash-spacing-size360))
+	);
+	flex: 0 0 auto;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-sessions-titlebar-left > .ash-window-mode-control {
+	margin-left: auto;
 }
 
 .ash-sessions-titlebar-right {

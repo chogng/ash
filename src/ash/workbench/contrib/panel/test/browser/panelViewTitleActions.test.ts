@@ -46,7 +46,7 @@ test("Output projects channel selection and active-channel clearing into the Pan
 		const clearOutput = titleActions.querySelector<HTMLButtonElement>("[data-action-id='ash.output.clear'] button");
 		assert.ok(selectChannel);
 		assert.ok(clearOutput);
-		assert.ok(clearOutput.querySelector("svg.ash-icon"));
+		assert.ok(clearOutput.querySelector(".ash-icon"));
 		await waitFor(() => pane.element.querySelector(".stanza-editor-input") !== null);
 		clearOutput.click();
 		assert.deepEqual(rust.entries, []);

@@ -422,6 +422,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "diff-line-add",
+      "file": "diff-line-add.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "diff-line-delete",
+      "file": "diff-line-delete.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "diff-multiple-1",
       "file": "diff-multiple-1.svg",
       "rendering": "symbolic"
@@ -569,6 +579,16 @@
     {
       "id": "filter",
       "file": "filter.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "find-next",
+      "file": "find-next.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "find-previous",
+      "file": "find-previous.svg",
       "rendering": "symbolic"
     },
     {
@@ -907,6 +927,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "menu-submenu",
+      "file": "menu-submenu.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "mic",
       "file": "mic.svg",
       "rendering": "symbolic"
@@ -1097,6 +1122,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "replace-match",
+      "file": "replace-match.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "replace-matches",
+      "file": "replace-matches.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "repo-fetch",
       "file": "repo-fetch.svg",
       "rendering": "symbolic"
@@ -1139,6 +1174,11 @@
     {
       "id": "search",
       "file": "search.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "search-selection",
+      "file": "search-selection.svg",
       "rendering": "symbolic"
     },
     {

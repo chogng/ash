@@ -386,7 +386,7 @@ test('Extensions view tab uses the extensions icon', async ({ workbench }) => {
 		await page.getByRole('button', { name: 'Show Primary Side Bar', exact: true }).click();
 	}
 	const extensionManagementTab = page.getByRole('tab', { name: 'Extensions', exact: true });
-	await expect(extensionManagementTab.locator('svg[data-ash-icon-id="extensions"]')).toBeVisible();
+	await expect(extensionManagementTab.locator('[data-ash-icon-id="extensions"]')).toBeVisible();
 	await extensionManagementTab.click();
 	const extensions = page.locator('[data-view-id="ash.extensions.view"] .ash-extensions');
 	await expect(extensions).toBeVisible();

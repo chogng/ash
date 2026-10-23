@@ -1,0 +1,4 @@
+interface:
+  display_name: "SVG 图标字体"
+  short_description: "将 Ash SVG 图标构建为 WOFF2，保留稳定字形映射与主题语义"
+  default_prompt: "使用 $svg-icon-font 将新导入的 SVG 转换为 WOFF2 并接入 Ash 图标体系。"

@@ -3,8 +3,8 @@
 	min-width: 0;
 	min-height: 0;
 	flex-direction: column;
-	gap: var(--ash-spacing-size160);
-	padding: var(--ash-spacing-size240) var(--ash-spacing-size120);
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size120);
 	background: var(--ash-sideBar-background);
 }
 
@@ -49,7 +49,7 @@
 .ash-sessions-list-search {
 	display: flex;
 	min-width: 0;
-	height: 40px;
+	height: 36px;
 	flex: 1 1 auto;
 	align-items: center;
 	gap: var(--ash-spacing-size80);
@@ -59,7 +59,7 @@
 	background: var(--ash-input-background);
 }
 
-.ash-sessions-list-search svg {
+.ash-sessions-list-search .ash-icon {
 	width: 16px;
 	height: 16px;
 	flex: 0 0 auto;
@@ -78,31 +78,6 @@
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }
 
-.ash-sessions-list-add {
-	display: grid;
-	width: 40px;
-	height: 40px;
-	flex: 0 0 auto;
-	place-items: center;
-	padding: 0;
-	border: 0;
-	border-radius: var(--ash-cornerRadius-large);
-	color: var(--ash-foreground);
-	background: var(--ash-input-background);
-	cursor: pointer;
-}
-
-.ash-sessions-list-add svg {
-	width: 20px;
-	height: 20px;
-}
-.ash-sessions-list-add:hover {
-	background: var(--ash-list-hoverBackground);
-}
-.ash-sessions-list-add:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-}
-
 .ash-sessions-list-items {
 	display: flex;
 	min-height: 0;
@@ -115,12 +90,12 @@
 .ash-sessions-list-item {
 	display: flex;
 	min-width: 0;
-	min-height: 64px;
+	min-height: 48px;
 	align-items: center;
 	gap: var(--ash-spacing-size120);
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
 	border: 0;
-	border-radius: var(--ash-cornerRadius-xLarge);
+	border-radius: var(--ash-cornerRadius-large);
 	color: var(--ash-foreground);
 	background: transparent;
 	cursor: pointer;
@@ -128,20 +103,8 @@
 	text-align: left;
 }
 
-.ash-sessions-list-avatar {
-	display: grid;
-	width: 40px;
-	height: 40px;
-	flex: 0 0 auto;
-	place-items: center;
-	border-radius: 50%;
-	color: var(--ash-button-primaryForeground);
-	background: var(--ash-button-primaryBackground);
-}
-
-.ash-sessions-list-avatar svg {
-	width: 24px;
-	height: 24px;
+.ash-sessions-list-item.has-management {
+	min-height: 64px;
 }
 
 .ash-sessions-list-content {
@@ -185,6 +148,7 @@
 .ash-sessions-list-pr > .ash-icon {
 	width: 12px;
 	height: 12px;
+	font-size: var(--ash-lxiconFontSize-compact);
 }
 
 .ash-sessions-list-item:hover {

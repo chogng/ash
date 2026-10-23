@@ -603,8 +603,8 @@ test('terminal command markers use VS Code geometry and follow real shell comman
 	await expect(instance.locator('.xterm')).toHaveCSS('padding-left', '20px');
 	const pending = instance.locator('.ash-terminal-command-status.pending');
 	await expect(pending).toHaveCSS('margin-left', '-17px');
-	await expect(pending.locator('svg')).toHaveCSS('width', '16px');
-	expect(await pending.locator('svg').evaluate(element => (element as SVGGraphicsElement).getBBox().width)).toBe(8);
+	await expect(pending.locator('.ash-icon')).toHaveCSS('width', '16px');
+	await expect(pending.locator('.ash-icon')).toHaveCSS('font-size', '16px');
 	await terminal.runCommand(`node -e "console.log(['ash','command-success'].join('-'))"`);
 	await expect(instance.locator('.ash-terminal-command-status.succeeded')).toBeVisible();
 	await terminal.runCommand('node -e "process.exit(7)"');
@@ -641,7 +641,7 @@ test('terminal split row icons create panes whose keyboard focus and input stay 
 	const firstRow = workbench.terminal.tabs.nth(0).locator('..');
 	await firstRow.hover();
 	const split = firstRow.getByRole('button', { name: 'Split Terminal', exact: true });
-	await expect(split.locator('svg')).toBeVisible();
+	await expect(split.locator('.ash-icon')).toBeVisible();
 	await split.click();
 	await expect(panes).toHaveCount(3);
 	await expect(workbench.terminal.tabs.locator('.ash-terminal-group-branch')).toHaveText(['┌', '├', '└']);

@@ -167,7 +167,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	assert.equal(profile.disabled, false);
 	assert.equal(profile.querySelector(".ash-button-label")?.textContent, "Select Terminal Profile");
 	assert.equal(profile.getAttribute("aria-label"), "Select Terminal Profile");
-	assert.ok(profile.querySelector("svg.ash-icon"));
+	assert.ok(profile.querySelector(".ash-icon"));
 	assert.equal(toolbar.querySelectorAll("[data-action-id='workbench.action.terminal.new']").length, 1);
 	assert.equal(toolbar.querySelector("[data-action-id='workbench.action.terminal.newWithProfile']"), null);
 	const newTerminal = [...toolbar.querySelectorAll("button")].find((button) => button.textContent === "New Terminal");
@@ -197,7 +197,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	const activeTerminal = toolbar.querySelector<HTMLButtonElement>(".ash-terminal-active-action .ash-action-label");
 	assert.ok(activeTerminal);
 	assert.equal(activeTerminal.querySelector(".ash-action-label-text")?.textContent, "Backend shell");
-	assert.ok(activeTerminal.querySelector(".ash-action-label-icon > svg.ash-icon"));
+	assert.ok(activeTerminal.querySelector(".ash-action-label-icon > .ash-icon"));
 	assert.equal(activeTerminal.classList.contains("ash-button"), false);
 	assert.equal(activeTerminal.querySelector(".ash-button-label"), null);
 	assert.equal(activeTerminal.querySelector(".ash-icon-label"), null);

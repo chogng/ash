@@ -273,6 +273,7 @@
 	width: var(--ash-lxiconFontSize-compact);
 	height: var(--ash-lxiconFontSize-compact);
 	flex: 0 0 auto;
+	font-size: var(--ash-lxiconFontSize-compact);
 }
 
 .ash-scm-graph-label-name {

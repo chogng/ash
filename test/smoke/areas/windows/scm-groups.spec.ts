@@ -616,7 +616,7 @@ test.describe('SCM editor groups', () => {
 			const previous = group.title.getByRole('button', { name: locale === 'zh-CN' ? '转到上一个更改' : 'Go to Previous Change', exact: true });
 			const location = diff.locator('.stanza-diff-editor-accessibility-status');
 			const collapse = group.title.getByRole('button', { name: locale === 'zh-CN' ? '切换折叠未变更区域' : 'Toggle Collapse Unchanged Regions', exact: true });
-			await expect(collapse.locator('svg')).toHaveAttribute('data-ash-icon-id', 'map');
+			await expect(collapse.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'map');
 			await expect(collapse).toHaveAttribute('aria-pressed', 'false');
 			await expect(diff.locator('.ash-diff-hidden-region')).toHaveCount(0);
 			await collapse.hover();
@@ -642,7 +642,7 @@ test.describe('SCM editor groups', () => {
 			await expect(location).toContainText(locale === 'zh-CN' ? '第 1 处差异' : 'Change 1 of');
 			const tabCount = await group.tabs.count();
 			const openFile = group.title.getByRole('button', { name: locale === 'zh-CN' ? '打开文件' : 'Open File', exact: true });
-			await expect(openFile.locator('svg')).toHaveAttribute('data-ash-icon-id', 'go-to-file');
+			await expect(openFile.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'go-to-file');
 			await openFile.hover();
 			await expect(page.locator('.ash-hover')).toContainText(locale === 'zh-CN' ? '打开文件' : 'Open File');
 			await openFile.click();
@@ -872,7 +872,7 @@ test.describe('SCM editor groups', () => {
 			const more = group.title.getByRole('button', { name: locale === 'zh-CN' ? '更多操作' : 'More Actions', exact: true });
 			await expect(openFile).toHaveCount(0);
 			await expect(collapse).toHaveCount(0);
-			await expect(collapseAll.locator('svg')).toHaveAttribute('data-ash-icon-id', 'fold');
+			await expect(collapseAll.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'fold');
 			const actionIds = await group.title.locator('.ash-editor-title-actions [data-action-id]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-action-id')));
 			expect(actionIds).toEqual(['multiDiffEditor.goToPreviousChange', 'multiDiffEditor.goToNextChange', 'multiDiffEditor.toggleCollapseAll', 'workbench.action.splitEditor', 'ash.toolbar.moreActions']);
 			const positions = await Promise.all([previous, next, collapseAll, more].map(button => button.boundingBox()));
@@ -909,7 +909,7 @@ test.describe('SCM editor groups', () => {
 			await expect(page.locator('.ash-hover')).toContainText(locale === 'zh-CN' ? '展开所有差异' : 'Expand All Diffs');
 			await collapseAll.press('Space');
 			await expect(collapseAll).toHaveAttribute('aria-pressed', 'false');
-			await expect(collapseAll.locator('svg')).toHaveAttribute('data-ash-icon-id', 'fold');
+			await expect(collapseAll.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'fold');
 			await workbench.menus.select(application, () => more.click(), [locale === 'zh-CN' ? '切换折叠未变更区域' : 'Toggle Collapse Unchanged Regions']);
 			await expect.poll(() => multi.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			const location = multi.locator('.stanza-multi-diff-editor-accessibility-status');
@@ -993,7 +993,7 @@ test.describe('SCM editor groups', () => {
 				}
 				const button = tree.getByRole('button', { name: label, exact: true });
 				await expect(button).toBeEnabled();
-				await expect(button.locator('svg')).toHaveAttribute('data-ash-icon-id', 'diff-multiple-1');
+				await expect(button.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'diff-multiple-1');
 				await button.focus();
 				await expect(button).toBeFocused();
 				await button.press('Enter');

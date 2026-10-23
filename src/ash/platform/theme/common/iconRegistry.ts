@@ -56,7 +56,7 @@ class IconRegistry extends Disposable implements IIconRegistry {
 		for (const contribution of contributions) {
 			let current: IconContribution | undefined = contribution;
 			const visited = new Set<string>();
-			while (typeof current.defaults !== 'function') {
+			while (typeof current.defaults !== 'function' && !('fontCharacter' in current.defaults)) {
 				if (visited.has(current.id)) { throw new TypeError(`Icon default cycle: ${contribution.id}`); }
 				visited.add(current.id);
 				const reference: string = current.defaults.id;
@@ -93,7 +93,7 @@ export function getIconDefinition(icon: Icon, themedDefinitions?: ReadonlyMap<st
 		if (!contribution) return undefined;
 		const themed = themedDefinitions?.get(current.id);
 		if (themed) return themed;
-		if (typeof contribution.defaults === 'function') return contribution.defaults;
+		if (typeof contribution.defaults === 'function' || 'fontCharacter' in contribution.defaults) return contribution.defaults;
 		current = contribution.defaults;
 	}
 }

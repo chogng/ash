@@ -73,6 +73,7 @@ declare global {
 			takeErrors(): string[];
 			disposeAndCheckErrorHandler(): Promise<boolean>;
 			remountAfterDirectDispose(): Promise<void>;
+			openChat(): Promise<void>;
 			setTheme(id: string): Promise<void>;
 			updateConfiguration(key: string, value: unknown): Promise<void>;
 		};
@@ -81,6 +82,7 @@ declare global {
 
 window.ashSessionsIntegration = {
 	errors, errorDetails, multiHost,
+	openChat: () => workbench.acceptHandoff({}),
 	takeErrors: () => { errorDetails.splice(0); return errors.splice(0); },
 	disposeAndCheckErrorHandler: async () => {
 		await workbench.shutdown('windowClose');

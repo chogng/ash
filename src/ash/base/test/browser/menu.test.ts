@@ -28,8 +28,8 @@ test("Menu renders submenu actions with the shared SVG indicator", async () => {
 	assert.equal(menuItem.getAttribute("aria-expanded"), "false");
 	const indicator = menuItem.querySelector(".ash-submenu-indicator");
 	assert.ok(indicator instanceof dom.window.HTMLSpanElement);
-	const icon = indicator.querySelector(":scope > svg.ash-icon");
-	assert.ok(icon instanceof dom.window.SVGElement);
+	const icon = indicator.querySelector(":scope > .ash-icon");
+	assert.ok(icon instanceof dom.window.HTMLSpanElement);
 	assert.equal(icon.getAttribute("aria-hidden"), "true");
 	assert.equal(indicator.textContent, "");
 

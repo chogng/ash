@@ -36,7 +36,7 @@ export default defineConfig(({ mode, command }) => {
 		<link rel="apple-touch-icon" href="/ash-192.png" />
 		<link rel="icon" href="/favicon.ico" type="image/x-icon" />
 		<link rel="manifest" href="/manifest.json" />
-		<title>Ash Code Sessions</title>
+		<title>Ash Sessions</title>
 	</head>
 	<body>
 		<main id="app"></main>

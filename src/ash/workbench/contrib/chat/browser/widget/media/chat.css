@@ -423,6 +423,7 @@
 .ash-chat-input-mode-indicator > .ash-icon {
 	width: var(--ash-lxiconFontSize-compact);
 	height: var(--ash-lxiconFontSize-compact);
+	font-size: var(--ash-lxiconFontSize-compact);
 }
 
 .ash-chat-input-toolbars

@@ -208,7 +208,8 @@ function createSessionsWorkbenchGridDescriptor(
 	const bannerHeight = requiredView(views, 'banner').minimumHeight;
 	const bodyHeight = Math.max(0, dimension.height - titlebarHeight - (bannerVisible ? bannerHeight : 0));
 	const activityBarWidth = requiredView(views, 'activitybar').minimumWidth;
-	const mainWidth = Math.max(0, dimension.width - (activityBarLocation === ActivityBarPosition.DEFAULT ? activityBarWidth : 0) - (state.sidebar.visible ? state.sidebar.width : 0));
+	const activityBarVisible = activityBarLocation === ActivityBarPosition.DEFAULT && !state.sidebar.visible;
+	const mainWidth = Math.max(0, dimension.width - (activityBarVisible ? activityBarWidth : 0) - (state.sidebar.visible ? state.sidebar.width : 0));
 	const editorPrimary = primaryPart === 'editor';
 	const horizontalPanel = isHorizontal(state.panel.position);
 	const panelSize = horizontalPanel ? state.panel.height : state.panel.width;
@@ -251,7 +252,7 @@ function createSessionsWorkbenchGridDescriptor(
 				size: bodyHeight,
 				priority: SESSIONS_LAYOUT_PRIORITY,
 				children: [
-					leaf('activitybar', activityBarWidth, activityBarLocation === ActivityBarPosition.DEFAULT),
+					leaf('activitybar', activityBarWidth, activityBarVisible),
 					leaf('sidebar', state.sidebar.width, state.sidebar.visible),
 					...mainChildren,
 				],
@@ -361,6 +362,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	readonly onDidChangePanelPosition = this.panelPositionChanged.event;
 	private primaryPart: 'sessions' | 'editor' = 'sessions';
 	private customViewVisible = false;
+	private customViewSidebarVisible = false;
 	private get isDocked(): boolean { return this.primaryPart === 'sessions'; }
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
@@ -500,6 +502,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 				if (!this.isDocked && this.grid.isViewVisible(this.view('auxiliarybar'))) this.detailsWidth = this.grid.getViewSize(this.view('auxiliarybar')).width;
 				if (!this.isDocked && this.grid.isViewVisible(this.view('sessions')) && this.grid.isViewVisible(this.view('editor'))) this.conversationWidth = this.grid.getViewSize(this.view('sessions')).width;
 				this.capturePanelSize();
+				this.updateTitlebarSurface();
 				this.saveState();
 			}
 		});
@@ -557,6 +560,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		}
 		this.projectFrameInsets();
 		this.grid.layout(dimension.width, dimension.height);
+		this.updateTitlebarSurface();
 		if (this.partUpdateDepth > 0) return;
 		if (this.isDocked && this.desiredVisibility.editor && this.grid.isViewVisible(this.view('editor'))) {
 			this.sidePaneWidth = this.grid.getViewSize(this.view('editor')).width;
@@ -713,10 +717,11 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		}
 	}
 
-	/** Independent pages cover the entry's content and sidebar while retaining its saved layout. */
-	public setCustomViewVisible(visible: boolean): void {
-		if (visible === this.customViewVisible) return;
+	/** Independent pages retain their underlying layout and may keep its workspace navigation visible. */
+	public setCustomViewVisible(visible: boolean, showSidebar = false): void {
+		if (visible === this.customViewVisible && showSidebar === this.customViewSidebarVisible) return;
 		this.customViewVisible = visible;
+		this.customViewSidebarVisible = showSidebar;
 		if (visible) this.applyCustomViewVisibility();
 		else {
 			this.grid.setViewVisible(this.view('customview'), false);
@@ -730,7 +735,9 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	}
 	private applyCustomViewVisibility(): void {
 		this.grid.setViewVisible(this.view('customview'), true);
-		for (const id of ['sidebar', 'sessions', 'editor', 'auxiliarybar', 'panel'] as const) this.grid.setViewVisible(this.view(id), false);
+		for (const id of ['sidebar', 'sessions', 'editor', 'auxiliarybar', 'panel'] as const) {
+			this.grid.setViewVisible(this.view(id), id === 'sidebar' && this.customViewSidebarVisible && this.desiredVisibility.sidebar && !this.unavailableParts.has('sidebar'));
+		}
 	}
 
 	private saveState(): void {
@@ -740,6 +747,10 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	}
 
 	private projectFrameInsets(auxiliarybarVisible = this.isPartVisible('auxiliarybar')): void {
+		if (this.grid) {
+			// Expanded navigation belongs to SidebarPart; only a closed sidebar needs a separate icon rail.
+			this.grid.setViewVisible(this.view('activitybar'), this.activityBarLocation === ActivityBarPosition.DEFAULT && !this.grid.isViewVisible(this.view('sidebar')));
+		}
 		const { leftEdge, rightEdge } = this.layoutPolicy.getFrameMetrics(this.layoutStyle);
 		const panelVisible = !this.customViewVisible && this.desiredVisibility.panel && !this.unavailableParts.has('panel');
 		this.domNode.dataset.panelVisible = String(panelVisible);
@@ -779,11 +790,16 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 			this.view(partId).part.domNode.classList.toggle('ash-sessions-frame-end', partId === lastPart || horizontalPanel);
 		}
 		// One decorative outline spans the retained Parts; it never intercepts their input or sashes.
-		const activityBarWidth = this.activityBarLocation === ActivityBarPosition.DEFAULT ? this.view('activitybar').minimumWidth : 0;
+		const activityBarWidth = this.grid?.isViewVisible(this.view('activitybar')) ? this.view('activitybar').minimumWidth : 0;
 		this.cardDomNode.style.top = `${this.mainContainerOffset.top}px`;
 		this.cardDomNode.style.left = `${activityBarWidth + contentLeftEdge}px`;
 		this.cardDomNode.style.right = `${rightEdge}px`;
 		this.cardDomNode.style.bottom = `${rightEdge}px`;
+	}
+
+	private updateTitlebarSurface(): void {
+		const width = this.grid.isViewVisible(this.view('sidebar')) ? this.grid.getViewSize(this.view('sidebar')).width : 0;
+		this.view('titlebar').part.domNode.style.setProperty('--ash-sessions-titlebar-sidebar-width', `${width}px`);
 	}
 
 	private publishPartVisibility(): void {

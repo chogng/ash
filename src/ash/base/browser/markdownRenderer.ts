@@ -695,7 +695,7 @@ function renderMarkdownThemeIcons(fragment: DocumentFragment, ownerDocument: Doc
 	for (const textNode of textNodes) {
 		const rendered = h(ownerDocument, "span");
 		renderLabelWithIcons(rendered, textNode.data);
-		if (!rendered.querySelector("svg.ash-icon")) continue;
+		if (!rendered.querySelector(".ash-icon")) continue;
 		textNode.replaceWith(...Array.from(rendered.childNodes));
 	}
 }

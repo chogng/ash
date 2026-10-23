@@ -27,7 +27,7 @@ test("status bar entries render an icon before their text", () => {
 
 	assert.ok(element);
 	assert.ok(label);
-	assert.equal(label.firstElementChild?.tagName.toLowerCase(), "svg");
+	assert.equal(label.firstElementChild?.tagName.toLowerCase(), "span");
 	assert.equal(element.textContent, "main");
 	assert.equal(element.getAttribute("aria-label"), "Git branch main");
 	assert.equal(label.getAttribute("role"), "button");
@@ -59,7 +59,7 @@ test("status bar entries support accessible icon-only presentation", () => {
 
 	assert.ok(element);
 	assert.ok(label);
-	assert.ok(element.querySelector("svg.ash-icon"));
+	assert.ok(element.querySelector(".ash-icon"));
 	assert.equal(element.classList.contains("icon-only"), true);
 	assert.equal(element.textContent, "");
 	assert.equal(element.getAttribute("aria-label"), "App Server ready");
@@ -87,7 +87,7 @@ test("status bar entries render grouped segments inside one action", () => {
 	assert.ok(label);
 	assert.equal(segments?.length, 2);
 	assert.deepEqual([...segments ?? []].map(segment => segment.textContent), ["2", "1"]);
-	assert.equal(label.querySelectorAll("svg.ash-icon").length, 2);
+	assert.equal(label.querySelectorAll(".ash-icon").length, 2);
 	assert.equal(label.getAttribute("aria-label"), "Errors: 2, Warnings: 1");
 
 	entry.update({ text: "", segments: [{ icon: Lxicon.error, text: "3" }, { icon: Lxicon.warning, text: "0" }] });

@@ -13,7 +13,7 @@ test.use({ gitRepository: true });
 
 test('Turn file selection starts disabled and explains review before commit', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await page.locator('.ash-editor-title-control').getByRole('tab', { name: 'Changes', exact: true }).click();
 	const changes = page.locator('.ash-sessions-changes');
 	await expect(changes.getByRole('button', { name: 'Preview selected changes', exact: true })).toBeDisabled();
@@ -61,7 +61,7 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		const a = await create('Selected files A', process.platform === 'win32' ? 'echo const value = 42;>main.ts & echo remaining A>remaining.txt' : "printf 'const value = 42;\\n' > main.ts; printf 'remaining A\\n' > remaining.txt");
 		const b = await create('Selected files B', process.platform === 'win32' ? 'echo separate B>other-session.txt' : "printf 'separate B\\n' > other-session.txt");
 		const page = await workbench.openAgentsWindow(target.kind);
-		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		const open = async (name: string): Promise<void> => {
 			await page.locator('.ash-sessions-list-item').filter({ hasText: name }).click();
 			await page.locator('.ash-editor-title-control').getByRole('tab', { name: 'Changes', exact: true }).click();

@@ -71,7 +71,7 @@ for (const locale of ['en', 'zh-CN']) {
 			}
 			page = await agentsWorkbench.openAgentsWindow(target.kind);
 			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
-			await page.locator('.ash-sessions-list-add').click();
+			await page.locator('[data-action-id="sessions.newSession"] button').click();
 			const active = (): ReturnType<Page['locator']> => page!.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 			const editor = new Editor(active());
 			await editor.waitForEditorFocus();
@@ -99,7 +99,7 @@ for (const locale of ['en', 'zh-CN']) {
 			expect(invokedModels.every(invoked => invoked === model.model)).toBe(true);
 			await expect(active()).toContainText('Isolated lifecycle answer');
 
-			await page.locator('.ash-sessions-list-add').click();
+			await page.locator('[data-action-id="sessions.newSession"] button').click();
 			const draftEditor = new Editor(active());
 			await draftEditor.waitForEditorFocus();
 			await draftEditor.waitForTypeInEditor('Keep this unsent lifecycle draft.');

@@ -246,7 +246,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 				await page.evaluate(() => {
 					const evidence = globalThis.uiHotReloadEvidence;
 					evidence.previous = evidence.sidebar.element.querySelector('.ash-sessions-list')!;
-					evidence.previousButton = evidence.previous.querySelector<HTMLButtonElement>('.ash-sessions-list-add')!;
+					evidence.previousButton = evidence.previous.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 				});
 				const top = await host.locator('.ash-sessions-list-items').evaluate(element => element.scrollTop);
 				await patch('sidebar', 'this.domNode.className = "ash-sessions-list";', 'this.domNode.dataset.hotReloadVersion', version);

@@ -529,7 +529,7 @@ test('Automations entry opens a Custom View and never registers a Panel in eithe
 		using commands = new CommandService(value.services);
 		value.services.registerInstance(ICommandService, commands);
 		const menus = new MenuService(commands, contexts);
-		const navigation = () => menus.getMenuActions(Menus.ActivityBar).flatMap(([, actions]) => actions).filter(action => action.id === 'sessionsView.manageAutomations');
+		const navigation = () => menus.getMenuActions(Menus.CodeActivityBar).flatMap(([, actions]) => actions).filter(action => action.id === 'sessionsView.manageAutomations');
 		const host = value.resources.add(WorkbenchContributionsRegistry.createHost(value.services, error => { throw error; }, ['sessions.contrib.automationsCustomView']));
 		host.advance(WorkbenchPhase.BlockStartup);
 		assert.equal(custom.activeCustomView.get(), undefined);
@@ -540,7 +540,7 @@ test('Automations entry opens a Custom View and never registers a Panel in eithe
 		await value.facade.refresh();
 		assert.equal(custom.activeCustomViewOpen.get()?.source, 'restore');
 		assert.deepEqual(navigation().map(action => ({ id: action.id, checked: action.checked, enabled: action.enabled })), [{ id: 'sessionsView.manageAutomations', checked: true, enabled: true }]);
-		assert.equal(navigation()[0]?.icon?.id, 'clockface-filled');
+		assert.equal(navigation()[0]?.icon?.id, 'clockface');
 		assert.equal(menus.getMenuActions(Menus.SidebarSessionsHeader).flatMap(([, actions]) => actions).some(action => action.id === 'sessionsView.manageAutomations'), false);
 		custom.hideCustomView();
 		assert.equal(navigation()[0]?.icon?.id, 'clockface');

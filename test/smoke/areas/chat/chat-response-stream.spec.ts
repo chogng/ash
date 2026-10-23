@@ -55,7 +55,7 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 		const threadId = created.session.threads[0]!.threadId;
 		const read = async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;
 		readThread = read;
-		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Controlled Chat response' }).click();
 		const chat = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 		await expect(chat).toHaveAttribute('data-thread-id', threadId);

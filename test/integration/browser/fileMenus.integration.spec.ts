@@ -213,6 +213,9 @@ test("application menu keeps submenu arrows inside their menu rows", async ({ pa
 	await fileItem.hover();
 	await expect(fileItem).toHaveAttribute('aria-expanded', 'true');
 	const arrow = fileItem.locator('.ash-submenu-indicator > .ash-icon');
+	await expect(arrow).toHaveClass(/ash-icon-font-ready/);
+	await expect(arrow).toHaveCSS('font-size', '12px');
+	await expect(arrow.locator('svg')).toHaveCount(0);
 	const [itemBounds, arrowBounds] = await Promise.all([fileItem.boundingBox(), arrow.boundingBox()]);
 	expect(itemBounds).not.toBeNull();
 	expect(arrowBounds).not.toBeNull();

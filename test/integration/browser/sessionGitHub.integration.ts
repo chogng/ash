@@ -197,7 +197,7 @@ const notifications = { error: (error: unknown) => { throw error; } } as unknown
 const quickInput = resources.add(new TestQuickInputService({ container: document.body }));
 const toolbar = resources.add(new SessionChatInputToolbar(main, { sessionId: 'session', onDidChange: Event.None }, github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService));
 toolbar.render();
-const list = resources.add(new SessionsList(main, management, sessions, 'Sessions', 'New Session', github, undefined, listCustomViews, listMenus, listNotifications, { executeCommand: async () => { sessions.openNewSession(); }, onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None } as unknown as import('../../../src/ash/platform/commands/common/commands.js').ICommandService));
+const list = resources.add(new SessionsList(main, management, sessions, 'Sessions', github, undefined, listCustomViews, listMenus, listNotifications));
 const submissions: Record<string, unknown>[] = [];
 if (new URL(location.href).searchParams.has('checks')) {
 	transport.failingChecks = true;

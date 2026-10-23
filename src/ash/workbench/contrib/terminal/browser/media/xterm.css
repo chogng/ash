@@ -57,6 +57,7 @@
 .ash-terminal-command-icon > .ash-icon {
 	width: 100%;
 	height: 1em;
+	font-size: inherit;
 }
 
 .ash-terminal-command-status.succeeded {

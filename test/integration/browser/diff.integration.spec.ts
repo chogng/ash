@@ -90,7 +90,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(breadcrumbs).toContainText('Cross-machine Desktop acceptance');
 		await expect(breadcrumbs).not.toContainText('unstaged');
 		await expect(breadcrumbs.locator('.ash-breadcrumb-item')).toHaveText(['docs', 'TODO.md', 'Cross-machine Desktop acceptance']);
-		await expect(breadcrumbs.locator('.ash-icon-label-icon svg')).toHaveCount(1);
+		await expect(breadcrumbs.locator('.ash-icon-label-icon .ash-icon')).toHaveCount(1);
 		expect(await page.evaluate(() => window.ashDiffIntegration.readMarkdownComparison())).toMatchObject({ wordWrap: 'on', find: true, hover: true, suggest: true, originalReadonly: true, modifiedReadonly: false });
 		await breadcrumbs.locator('.ash-breadcrumb-item').last().focus();
 		await page.keyboard.press('Enter');
@@ -101,9 +101,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		expect((await page.evaluate(() => window.ashDiffIntegration.readMarkdownComparison())).position).toMatchObject({ lineNumber: 1, column: 35 });
 		await expect(host.locator('.modified .stanza-editor-input')).toBeFocused();
 		await page.evaluate(() => window.ashDiffIntegration.updateTitleEditorConfiguration('breadcrumbs.icons', false));
-		await expect(breadcrumbs.locator('.ash-icon-label-icon svg')).toHaveCount(0);
+		await expect(breadcrumbs.locator('.ash-icon-label-icon .ash-icon')).toHaveCount(0);
 		await page.evaluate(() => window.ashDiffIntegration.updateTitleEditorConfiguration('breadcrumbs.icons', true));
-		await expect(breadcrumbs.locator('.ash-icon-label-icon svg')).toHaveCount(1);
+		await expect(breadcrumbs.locator('.ash-icon-label-icon .ash-icon')).toHaveCount(1);
 		await page.evaluate(() => window.ashDiffIntegration.updateTitleEditorConfiguration('editor.wordWrap', 'bounded', 'markdown'));
 		expect((await page.evaluate(() => window.ashDiffIntegration.readMarkdownComparison())).wordWrap).toBe('bounded');
 		await page.evaluate(async () => {
@@ -1389,7 +1389,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await testInfo.attach('diff-gutter-button-hover', { body: await page.locator('#single').screenshot(), contentType: 'image/png' });
 			await gutter.hover({ position: { x: 10, y: 1 } });
 			expect(await buttons.evaluateAll(nodes => nodes.map(node => getComputedStyle(node).backgroundColor))).toEqual(restingBackgrounds);
-			for (const icon of await toolbar.locator('svg.ash-icon').all()) {
+			for (const icon of await toolbar.locator('.ash-icon').all()) {
 				await expect(icon).toHaveCSS('width', '16px');
 				await expect(icon).toHaveCSS('height', '16px');
 			}
@@ -2406,6 +2406,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(margins.first()).toHaveAttribute('aria-hidden', 'true');
 		await expect(removedSigns.first().locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'diff-remove');
 		await expect(removedSigns.first().locator('.ash-icon')).toHaveAttribute('aria-hidden', 'true');
+		await expect(removedSigns.first().locator('.ash-icon')).toHaveClass(/ash-icon-font-ready/);
+		await expect(removedSigns.first().locator('.ash-icon svg')).toHaveCount(0);
 		await expect(removedLines.first()).toHaveAttribute('aria-label', localized(locale, 'Removed line 6: \tremoved', '已删除的第 6 行：\tremoved'));
 		await expect(removedLines.first()).toHaveCSS('border-left-width', '0px');
 		const markerPosition = async () => {

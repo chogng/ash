@@ -1,4 +1,3 @@
-import { Menus } from '../../../automation/menus.js';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
@@ -23,7 +22,6 @@ test('Sessions content shares one raised card with equal right and bottom margin
 	await expect(activitybar).toHaveCSS('border-width', '0px');
 	await expect(activitybar).toHaveCSS('border-radius', '0px');
 	await expect(activitybar).toHaveCSS('background-color', await titlebar.evaluate(element => getComputedStyle(element).backgroundColor));
-	const accounts = navigation.getByRole('button', { name: 'Accounts', exact: true });
 	const expectCardGeometry = async (): Promise<void> => {
 		await expect.poll(() => page.evaluate(() => {
 			const card = document.querySelector<HTMLElement>('.ash-sessions-content-card')!.getBoundingClientRect();
@@ -42,19 +40,11 @@ test('Sessions content shares one raised card with equal right and bottom margin
 		})).toEqual([4, 4, 0, 0, 0, 0, 0, 0, ...('windows' in application && process.platform === 'darwin' ? [] : [0])]);
 	};
 	await expectCardGeometry();
-	const menus = new Menus(page);
-	const selectSize = (size: string): Promise<void> => menus.select(application, () => accounts.click({ button: 'right' }), ['Activity Bar Size', size]);
-	await selectSize('Compact');
-	await expect(navigation).toHaveClass(/compact/u);
-	await expectCardGeometry();
-	await selectSize('Default');
-	await expect(navigation).not.toHaveClass(/compact/u);
-	await expectCardGeometry();
 	await expect(sidebar).toHaveCSS('border-top-left-radius', '12px');
 	await expect(sessions).toHaveCSS('border-bottom-right-radius', '12px');
 	await expect(sessions).toHaveCSS('border-right-width', '0px');
 	await expect(page.locator('.ash-sessions-chat-slot:visible').last()).toHaveCSS('border-right-width', '0px');
-	await page.locator('.ash-sessions-list-add').click();
+	await page.locator('[data-action-id="sessions.newSession"] button').click();
 	await expect(page.locator('.ash-sessions-chat-slot:visible')).toHaveCount(1);
 	await expect.poll(async () => {
 		const part = (await sessions.boundingBox())!;
@@ -68,12 +58,13 @@ test('Sessions content shares one raised card with equal right and bottom margin
 	await page.setViewportSize({ width: 900, height: 700 });
 	await expectCardGeometry();
 	await titlebar.getByRole('button', { name: 'Show sidebar', exact: true }).click();
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
 	// Code Details shares the editor's outer frame and keeps its own content below the tabs.
 	await expect(page.locator('[data-part="editor"]')).toHaveClass(/ash-sessions-frame-end/u);
 	await expect(page.locator('[data-part="editor"]')).toHaveCSS('border-bottom-right-radius', '12px');
 	await expectCardGeometry();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
 	await expect(sidebar).toBeVisible();
 	await expect(sidebar).toHaveCSS('border-top-left-radius', '12px');
@@ -111,17 +102,18 @@ test('Sessions shared layout preserves user geometry across views, resize and re
 		return Math.abs(pane.width - part.width);
 	}).toBeLessThanOrEqual(1);
 	const sidebarWidth = (await sidebar.boundingBox())!.width;
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(auxiliarybar).toBeVisible();
 	const auxiliaryWidth = (await auxiliarybar.boundingBox())!.width;
 	const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 	await editor.waitForEditorFocus();
 	await page.keyboard.insertText('Retained Code draft');
 	const input = await editor.input.elementHandle();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
 	await expect(sidebar).toBeVisible();
 	await expect(auxiliarybar).toBeHidden();
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(sidebar).toBeVisible();
 	await expect(auxiliarybar).toBeVisible();
 	await editor.waitForEditorContents(value => value === 'Retained Code draft');
@@ -138,7 +130,7 @@ test('Sessions shared layout preserves user geometry across views, resize and re
 	await expect(page.locator('.ash-projects')).toBeVisible();
 	await expect(auxiliarybar).toBeHidden();
 	// Each mode keeps its visibility preference; returning to Code restores its hidden sidebar.
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(sidebar).toBeHidden();
 	await titlebar.getByRole('button', { name: 'Show sidebar', exact: true }).click();
 	await expect(sidebar).toBeVisible();
@@ -194,7 +186,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	await expect(panes).toHaveCount(1);
 	await typeDraft('Chat third draft');
 	chatReferences.push(await draftReference());
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await add.click();
 	await typeDraft('Code first draft');
 	const codeReferences = [await draftReference()];
@@ -223,7 +215,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	const shared = await snapshot();
 	expect(shared.map(slot => slot.text)).toEqual(['Chat first draft', 'Chat second draft', 'Chat third draft', 'Code first draft', 'Code second draft']);
 	const identities = shared.map(({ width, ...state }) => state);
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panes).toHaveCount(5);
 	await expect.poll(async () => (await snapshot()).map(({ width, ...state }) => state)).toEqual(identities);
 	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
@@ -243,7 +235,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	await expect(panes).toHaveCount(4);
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	await expect(panes).toHaveCount(4);
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panes).toHaveCount(4);
 	await expect.poll(async () => (await snapshot()).map(({ identity, text }) => ({ identity, text }))).toEqual(shared.slice(1).map(({ identity, text }) => ({ identity, text })));
 	await expect.poll(async () => {
@@ -273,7 +265,7 @@ test('Sessions migrates nested editor geometry into its conversation grid and re
 	await page.setViewportSize({ width: 1900, height: 950 });
 	const references: { kind: 'untitled'; session: { untitledSessionId: string; title: string; workspace: { type: 'current'; }; }; }[] = [];
 	for (let index = 0; index < 3; index++) {
-		if (index) await page.locator('.ash-sessions-list-add').click();
+		if (index) await page.locator('[data-action-id="sessions.newSession"] button').click();
 		const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 		await editor.input.focus();
 		await editor.waitForTypeInEditor(`Retained draft ${index}`);
