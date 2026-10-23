@@ -1052,6 +1052,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "pin",
+      "file": "pin.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "pin-filled",
+      "file": "pin-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "pinned",
       "file": "pinned.svg",
       "rendering": "symbolic"

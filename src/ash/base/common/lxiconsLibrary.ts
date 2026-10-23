@@ -214,6 +214,8 @@ export const lxiconsLibrary = {
 	pdfFilled: registerLxicon("pdf-filled", 0xe0c9),
 	pdfRed: registerLxicon("pdf-red", 0xe0ca),
 	pen: registerLxicon("pen", 0xe0cc),
+	pin: registerLxicon("pin", 0xe133),
+	pinFilled: registerLxicon("pin-filled", 0xe132),
 	pinned: registerLxicon("pinned", 0xe0cd),
 	plan: registerLxicon("plan", 0xe0ce),
 	play: registerLxicon("play", 0xe0cf),
