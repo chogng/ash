@@ -42,6 +42,8 @@
 .ash-dialog-detail {
 	margin: 0;
 	overflow-wrap: anywhere;
+	user-select: text;
+	-webkit-user-select: text;
 }
 
 .ash-dialog-message {

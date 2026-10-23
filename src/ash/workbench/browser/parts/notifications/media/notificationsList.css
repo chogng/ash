@@ -50,6 +50,8 @@
 	min-width: 0;
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
+	user-select: text;
+	-webkit-user-select: text;
 }
 .ash-notification-source {
 	min-width: 0;
