@@ -57,7 +57,7 @@
 				"NO_COLOR": "1"
 			},
 			"preLaunchTask": "Prepare Ash Web",
-			"console": "internalConsole",
+			"console": "integratedTerminal",
 			"outputCapture": "std",
 			"presentation": {
 				"group": "0_ash",
@@ -81,7 +81,7 @@
 				"NO_COLOR": "1"
 			},
 			"preLaunchTask": "Prepare Ash Web",
-			"console": "internalConsole",
+			"console": "integratedTerminal",
 			"outputCapture": "std",
 			"serverReadyAction": {
 				"pattern": "Open Ash: (http://[^\\s\\u001b]+)",
@@ -112,7 +112,7 @@
 				"NO_COLOR": "1"
 			},
 			"preLaunchTask": "Prepare Ash Web",
-			"console": "internalConsole",
+			"console": "integratedTerminal",
 			"outputCapture": "std",
 			"serverReadyAction": {
 				"pattern": "Open Ash: (http://[^\\s\\u001b]+)",
@@ -144,7 +144,7 @@
 				"NO_COLOR": "1"
 			},
 			"preLaunchTask": "Prepare Ash Web",
-			"console": "internalConsole",
+			"console": "integratedTerminal",
 			"outputCapture": "std",
 			"serverReadyAction": {
 				"pattern": "Open Ash: (http://[^\\s\\u001b]+)",
@@ -176,7 +176,7 @@
 				"NO_COLOR": "1"
 			},
 			"preLaunchTask": "Prepare Ash Web",
-			"console": "internalConsole",
+			"console": "integratedTerminal",
 			"outputCapture": "std",
 			"serverReadyAction": {
 				"pattern": "Open Ash: (http://[^\\s\\u001b]+)",
@@ -207,7 +207,7 @@
 				"NO_COLOR": "1"
 			},
 			"preLaunchTask": "Prepare Ash Web",
-			"console": "internalConsole",
+			"console": "integratedTerminal",
 			"outputCapture": "std",
 			"serverReadyAction": {
 				"pattern": "Local:\\s+(http://127\\.0\\.0\\.1:5173/)",
@@ -237,7 +237,7 @@
 				"NO_COLOR": "1"
 			},
 			"preLaunchTask": "Prepare Ash Web",
-			"console": "internalConsole",
+			"console": "integratedTerminal",
 			"outputCapture": "std",
 			"serverReadyAction": {
 				"pattern": "Local:\\s+(http://127\\.0\\.0\\.1:5173/)",
@@ -268,10 +268,10 @@
 				"NO_COLOR": "1"
 			},
 			"preLaunchTask": "Prepare Ash Web",
-			"console": "internalConsole",
+			"console": "integratedTerminal",
 			"outputCapture": "std",
 			"serverReadyAction": {
-				"pattern": "Local:\\s+(http://127\\.0\\.0\\.1:5173/)",
+				"pattern": "Local:\\s+(http://127\\.0\\.0\\.1:5175/)",
 				"action": "startDebugging",
 				"name": "Ash Agents Web Browser (Chrome)",
 				"killOnServerStop": true
@@ -299,10 +299,10 @@
 				"NO_COLOR": "1"
 			},
 			"preLaunchTask": "Prepare Ash Web",
-			"console": "internalConsole",
+			"console": "integratedTerminal",
 			"outputCapture": "std",
 			"serverReadyAction": {
-				"pattern": "Local:\\s+(http://127\\.0\\.0\\.1:5173/)",
+				"pattern": "Local:\\s+(http://127\\.0\\.0\\.1:5175/)",
 				"action": "startDebugging",
 				"name": "Ash Agents Web Browser (Edge)",
 				"killOnServerStop": true
@@ -351,7 +351,7 @@
 			"name": "Ash Web Browser (Chrome)",
 			"type": "chrome",
 			"request": "launch",
-			"url": "http://127.0.0.1:5173/",
+			"url": "http://127.0.0.1:5173/browser/workbench/workbench.html",
 			"webRoot": "${workspaceFolder}",
 			"cascadeTerminateToConfigurations": ["Ash Web (Chrome)"],
 			"presentation": {
@@ -362,7 +362,7 @@
 			"name": "Ash Web Browser (Edge)",
 			"type": "msedge",
 			"request": "launch",
-			"url": "http://127.0.0.1:5173/",
+			"url": "http://127.0.0.1:5173/browser/workbench/workbench.html",
 			"webRoot": "${workspaceFolder}",
 			"cascadeTerminateToConfigurations": ["Ash Web (Edge)"],
 			"presentation": {
@@ -373,7 +373,7 @@
 			"name": "Ash Agents Web Browser (Chrome)",
 			"type": "chrome",
 			"request": "launch",
-			"url": "http://127.0.0.1:5173/",
+			"url": "http://127.0.0.1:5175/browser/sessions/sessions.html",
 			"webRoot": "${workspaceFolder}",
 			"cascadeTerminateToConfigurations": ["Ash Agents Web (Chrome)"],
 			"presentation": {
@@ -384,7 +384,7 @@
 			"name": "Ash Agents Web Browser (Edge)",
 			"type": "msedge",
 			"request": "launch",
-			"url": "http://127.0.0.1:5173/",
+			"url": "http://127.0.0.1:5175/browser/sessions/sessions.html",
 			"webRoot": "${workspaceFolder}",
 			"cascadeTerminateToConfigurations": ["Ash Agents Web (Edge)"],
 			"presentation": {

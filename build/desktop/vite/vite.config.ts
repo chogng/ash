@@ -21,7 +21,9 @@ export default defineConfig(({ mode, command }) => {
 	const repositoryRoot = desktopRoot;
 	const webAppServerEnabled = process.env.ASH_WEB_APP_SERVER === "1";
 	const webOnly = mode === "web";
-	const developmentPort = webAppServerEnabled ? 5174 : 5173;
+	const agentsWindow = process.env.ASH_DEV_AGENTS_WINDOW === '1';
+	// Separate Web origins allow parallel IDE/Agents debugging; Desktop keeps its renderer port.
+	const developmentPort = (webAppServerEnabled ? 5174 : 5173) + (webOnly && agentsWindow ? 2 : 0);
 	const sourceRoot = resolve(desktopRoot, "src/ash/code");
 	const sessionsWebEntry = 'browser/sessions/sessions';
 	const moduleUrl = (path: string): string => `/@fs/${normalizePath(resolve(repositoryRoot, 'src/ash', path))}`;
@@ -65,7 +67,7 @@ export default defineConfig(({ mode, command }) => {
 		</script>
 	</body>
 </html>`;
-	const browserEntryPath = process.env.ASH_DEV_AGENTS_WINDOW === '1'
+	const browserEntryPath = agentsWindow
 		? `/${sessionsWebEntry}.html`
 		: '/browser/workbench/workbench.html';
 	const browserEntry = "browser/workbench/workbench";
