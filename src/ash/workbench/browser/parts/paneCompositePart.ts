@@ -7,7 +7,7 @@ import type { PaneComposite } from '../panecomposite.js';
 import { HoverPosition } from "../../../base/browser/ui/hover/hoverWidget.js";
 import type { IActivityHoverOptions } from "./compositeBarActions.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
-import "./paneCompositePart.css";
+import "./media/paneCompositePart.css";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import type { IDimension } from "../../../base/browser/dom.js";
 import { localize, type ILocalizationService, type LocalizationKey } from "../../services/localization/common/localizationService.js";

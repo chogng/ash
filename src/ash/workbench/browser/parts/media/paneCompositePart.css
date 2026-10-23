@@ -1,0 +1,109 @@
+.ash-pane-composite-title {
+	display: flex;
+	min-width: 0;
+	height: var(--ash-pane-titleHeight);
+	flex: 0 0 var(--ash-pane-titleHeight);
+	align-items: center;
+}
+
+.ash-pane-composite-title[hidden] {
+	display: none;
+}
+
+.ash-pane-composite-title-content {
+	display: flex;
+	min-width: 0;
+	height: 100%;
+	flex: 1 1 auto;
+}
+
+.ash-pane-composite-title-content > .ash-composite-bar {
+	min-width: 0;
+	height: 100%;
+	flex: 1 1 auto;
+}
+
+.ash-pane-composite-title-content > .ash-composite-bar[hidden] {
+	display: none;
+}
+
+.ash-pane-composite-title-actions {
+	display: flex;
+	height: 100%;
+	flex: 0 1 auto;
+	min-width: 0;
+	align-items: center;
+	margin-left: auto;
+	padding: 0 4px;
+}
+
+.ash-pane-composite-title-menu-actions.ash-toolbar {
+	height: 100%;
+}
+
+.ash-pane-composite-title-view-actions {
+	display: flex;
+	min-width: 0;
+}
+
+.ash-pane-composite-title-part-actions {
+	flex-shrink: 0;
+}
+
+/*
+ * Panel selects label tabs for its PaneCompositePart title; shared icon and
+ * orientation mechanics remain in CompositeBar's stylesheet.
+ */
+.ash-composite-bar-label > .ash-action-bar {
+	font-size: var(--ash-fontSize-body1);
+	line-height: 20px;
+}
+
+.ash-composite-bar-label > .ash-action-bar > .ash-composite-bar-item {
+	box-sizing: border-box;
+	width: auto;
+	min-width: 0;
+	padding: 0 var(--ash-spacing-size100);
+}
+
+.ash-composite-bar-label .ash-composite-bar-action {
+	width: auto;
+	font-weight: var(--ash-fontWeight-regular);
+	opacity: 1;
+}
+
+.ash-composite-bar-label .ash-composite-bar-item:hover {
+	color: var(--ash-compositeBar-foreground);
+}
+
+.ash-composite-bar-label .ash-composite-bar-item:focus-visible {
+	outline: 0;
+	color: var(--ash-list-activeSelectionForeground);
+	background: var(--ash-list-activeSelectionBackground);
+}
+
+.ash-composite-bar-label .ash-icon-label-text {
+	display: block;
+	white-space: nowrap;
+}
+
+.ash-composite-bar-label.ash-composite-bar-horizontal > .ash-action-bar {
+	gap: 0;
+	padding: 0 var(--ash-compositeBar-contentInset);
+}
+
+.ash-composite-bar-label > .ash-action-bar > .ash-composite-bar-overflow {
+	padding: 0;
+}
+
+.ash-composite-bar-label .ash-composite-bar-badge {
+	align-self: center;
+	margin-left: 2px;
+	min-width: 16px;
+	height: 16px;
+	padding: 3px 5px;
+	border-radius: 10px;
+	font-size: 10px;
+	font-weight: 400;
+	line-height: 10px;
+}

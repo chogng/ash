@@ -1,3 +1,4 @@
+import './media/compositepart.css';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { Emitter, Event } from "../../../base/common/event.js";
