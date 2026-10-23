@@ -33,17 +33,95 @@ const { TextModel } = await import("../../../../../editor/common/model/textModel
 const { ICodeEditorService } = await import("../../../../../editor/browser/services/codeEditorService.js");
 const { ICommandService } = await import('../../../../../platform/commands/common/commands.js');
 const { Selection } = await import('../../../../../editor/common/core/selection.js');
-const { ChatDynamicVariableModel } = await import('../../browser/attachments/chatDynamicVariables.js');
+const { ChatDynamicVariableModel, dynamicVariableDecorationType } = await import('../../browser/attachments/chatDynamicVariables.js');
 const { SelectAllCommand } = await import("../../../../../editor/browser/editorExtensions.js");
+const { URI } = await import('../../../../../base/common/uri.js');
+const { IEditorService } = await import('../../../../services/editor/common/editorService.js');
+const { emptyEditorServiceState } = await import('../../../../test/common/testEditorService.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
+
+test('Reference previews shorten the shared snapshot without exposing output identities or changing submission', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using editorServices = new DisposableStore();
+	const services = createChatInputServices(editorServices);
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using references = new ChatDynamicVariableModel(editor);
+	const resource = URI.parse('output:/language-server.rust-analyzer.internal-id#3,1-33,1');
+	const text = Array.from({ length: 30 }, (_, index) => `Captured line ${index + 1}`).join('\n');
+	const content = `Source: ${resource.toString()}\n\n${text}`;
+	let acquisitions = 0;
+	const entry = references.addReference({ id: 'selection', kind: 'codeSelection', name: 'rust-analyzer (3-32)', resource, resolve: async () => { acquisitions++; return { name: 'rust-analyzer (3-32)', content }; } });
+	const hover = () => editor.getModel().getAllDecorations().find(decoration => decoration.options.description === 'chat-context-reference')?.options.hoverMessage as { value: string; } | undefined;
+	await waitFor(() => hover()?.value.includes('Captured line 12') === true);
+	assert.doesNotMatch(hover()!.value, /internal-id|output:\/|Captured line 13/u);
+	assert.match(hover()!.value.replaceAll('&nbsp;', ' '), /Preview shortened/u);
+	editor.setSelection({ anchor: 0, active: 0 });
+	editor.insertText('Explain ');
+	await waitFor(() => hover()?.value.includes('Captured line 12') === true);
+	assert.equal((await entry.resolve()).content, content);
+	assert.equal(acquisitions, 1);
+});
+
+test('Late reference previews cannot restore removed references or decorate another draft', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using editorServices = new DisposableStore();
+	const opened: string[] = [];
+	const services = createChatInputServices(editorServices, async input => { opened.push(input.resource.toString()); });
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using references = new ChatDynamicVariableModel(editor);
+	let finish!: (value: { name: string; content: string; }) => void;
+	const pending = new Promise<{ name: string; content: string; }>(resolve => { finish = resolve; });
+	references.addReference({ id: 'old', kind: 'codeSelection', name: 'old.ts (1)', resolve: () => pending });
+	editor.setSelection({ anchor: 0, active: 0 });
+	editor.element.querySelector('.stanza-editor-input')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true }));
+	references.removeReference('old');
+	references.addReference({ id: 'new', kind: 'codeSelection', name: 'new.ts (1)', resolve: async () => ({ name: 'new.ts (1)', content: 'Current snapshot' }) });
+	finish({ name: 'old.ts (1)', content: 'Retired snapshot' });
+	await waitFor(() => editor.getModel().getAllDecorations().some(decoration => JSON.stringify(decoration.options.hoverMessage).includes('Current snapshot')));
+	assert.equal(editor.getModel().getAllDecorations().filter(decoration => decoration.options.description === 'chat-context-reference').length, 1);
+	assert.doesNotMatch(JSON.stringify(editor.getModel().getAllDecorations().map(decoration => decoration.options.hoverMessage)), /Retired snapshot/u);
+	assert.deepEqual(opened, []);
+});
+
+test('Opening saved references isolates same-name snapshots and reuses the same snapshot tab', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using editorServices = new DisposableStore();
+	const opened: import('../../../../common/editor.js').IResourceEditorInput[] = [];
+	const services = createChatInputServices(editorServices, async input => { opened.push(input); });
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using references = new ChatDynamicVariableModel(editor);
+	for (const content of ['First saved version', 'Second saved version']) {
+		references.addReference({ id: 'same-file', kind: 'file', name: 'same.ts', resource: URI.file('/same.ts'), resolve: async () => ({ name: 'same.ts', content }) });
+	}
+	const open = async (index: number, count: number): Promise<void> => {
+		const offset = references.variables[index]!.reference!.start;
+		editor.setSelection({ anchor: offset, active: offset });
+		editor.element.querySelector('.stanza-editor-input')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true }));
+		await waitFor(() => opened.length === count);
+	};
+	await open(0, 1);
+	await open(1, 2);
+	await open(0, 3);
+	assert.deepEqual(opened.map(input => input.initialText), ['First saved version', 'Second saved version', 'First saved version']);
+	assert.notEqual(opened[0]!.resource.toString(), opened[1]!.resource.toString());
+	assert.equal(opened[0]!.resource.toString(), opened[2]!.resource.toString());
+	assert.ok(opened.every(input => input.readOnly && input.resource.scheme === 'chat-context-snapshot' && !input.showBreadcrumbs));
+	assert.equal(references.variables.length, 2);
+});
 
 test('Inline code references track edits, atomic deletion, undo and redo in the real Chat editor', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
-	const services = createCodeEditorServices(editorServices);
+	const services = createChatInputServices(editorServices);
 	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
 	using references = new ChatDynamicVariableModel(editor);
 	editor.value = 'Explain  please';
@@ -51,7 +129,7 @@ test('Inline code references track edits, atomic deletion, undo and redo in the 
 	references.addReference({ id: 'selection', kind: 'codeSelection', name: 'file.ts (6-9)', resolve: async () => ({ name: 'file.ts (6-9)', content: 'Unsaved code' }) });
 	assert.equal(editor.value, 'Explain file.ts (6-9) please');
 	assert.deepEqual(references.variables[0]?.reference, { start: 8, end: 21 });
-	assert.equal(editor.getModel().getAllDecorations().filter(decoration => decoration.options.inlineClassName === 'ash-chat-code-reference').length, 1);
+	assert.equal(editor.getModel().getAllDecorations().filter(decoration => decoration.options.inlineClassName?.split(' ').includes('ash-chat-code-reference')).length, 1);
 	editor.setSelection({ anchor: 0, active: 0 });
 	editor.insertText('First: ');
 	assert.deepEqual(references.variables[0]?.reference, { start: 15, end: 28 });
@@ -76,13 +154,15 @@ test('Chat registers its focused editor for global commands and removes it on di
 	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
-	const services = createCodeEditorServices(editorServices);
+	const services = createChatInputServices(editorServices);
 	const editors = services.get(ICodeEditorService);
+	const decorationTypes = editors.listDecorationTypes();
 	const lifecycle: string[] = [];
 	using willCreate = editors.onWillCreateCodeEditor(() => lifecycle.push('will'));
 	using added = editors.onCodeEditorAdd(() => lifecycle.push('add'));
 	using removed = editors.onCodeEditorRemove(() => lifecycle.push('remove'));
 	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, "main"), placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	assert.ok(editors.listDecorationTypes().includes(dynamicVariableDecorationType));
 	editor.value = 'message';
 	editor.focus();
 	assert.equal(editors.listCodeEditors().length, 1);
@@ -96,6 +176,7 @@ test('Chat registers its focused editor for global commands and removes it on di
 	await services.invokeFunction(accessor => SelectAllCommand.runCommand(accessor, undefined));
 	assert.deepEqual(editors.getFocusedCodeEditor()?.getSelection(), new Selection(1, 1, 1, 8));
 	editor.dispose();
+	assert.deepEqual(editors.listDecorationTypes(), decorationTypes);
 	assert.equal(editors.listCodeEditors().length, 0);
 	assert.deepEqual(lifecycle, ['will', 'add', 'remove']);
 });
@@ -105,7 +186,7 @@ test('Chat typography updates preserve the draft and selection, resize the input
 	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
-	const services = createCodeEditorServices(editorServices);
+	const services = createChatInputServices(editorServices);
 	const configuration = services.get(IConfigurationService);
 	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
@@ -198,7 +279,7 @@ test("Chat input completes slash commands before submitting", async () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using editorServices = new DisposableStore();
-	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	using editor = createChatInputServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	let submissions = 0;
 	using submitListener = editor.onDidSubmit(() => submissions += 1);
 	const input = requiredElement<HTMLTextAreaElement>(editor.element, ".stanza-editor-input");
@@ -231,7 +312,7 @@ test('Chat input shows a missing-character match without choosing it', async () 
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
-	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, {
+	using editor = createChatInputServices(editorServices).createInstance(ChatInputEditor, {
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		placeholder: 'Ask Ash',
 		ariaLabel: 'Chat message',
@@ -271,7 +352,7 @@ test('Chat input emphasizes a description-only command match', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
-	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, {
+	using editor = createChatInputServices(editorServices).createInstance(ChatInputEditor, {
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		placeholder: 'Ask Ash',
 		ariaLabel: 'Chat message',
@@ -298,7 +379,7 @@ test('Chat input discovers Skills through the shared `$` selector', async () => 
 	const catalog = new SlashCommandCatalog(DesktopSlashCommands, []);
 	const skills = new SkillSelectorCatalog();
 	using editorServices = new DisposableStore();
-	const services = createCodeEditorServices(editorServices);
+	const services = createChatInputServices(editorServices);
 	const options = { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: catalog, skills };
 	using editor = services.createInstance(ChatInputEditor, options);
 	let submissions = 0;
@@ -328,7 +409,7 @@ test('Chat command completion replaces the whole command and preserves arguments
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using editorServices = new DisposableStore();
-	const services = createCodeEditorServices(editorServices);
+	const services = createChatInputServices(editorServices);
 	using editor = services.createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
 	editor.layout();
@@ -351,7 +432,7 @@ test("Chat input starts with two lines and grows and shrinks with content", asyn
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using editorServices = new DisposableStore();
-	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	using editor = createChatInputServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
 	editor.layout();
 
@@ -401,3 +482,9 @@ const { EditorExtensionsRegistry } = await import('../../../../../editor/browser
 let editorFeatures: import('../../../../../base/common/lifecycle.js').IDisposable;
 setup(() => { editorFeatures = EditorExtensionsRegistry.registerEditorFeatures(getEditorFeatures()); });
 teardown(() => editorFeatures.dispose());
+
+function createChatInputServices(resources: DisposableStore, openEditor: import('../../../../services/editor/common/editorService.js').IEditorService['openEditor'] = async () => { }): ReturnType<typeof createCodeEditorServices> {
+	const services = createCodeEditorServices(resources);
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor, focusActiveEditor() { } });
+	return services;
+}

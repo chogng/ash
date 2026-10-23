@@ -395,8 +395,7 @@ export class CoworkWidgetModel extends Disposable {
 	}
 
 	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions): Promise<void> {
-		const input = text.trim();
-		if (!input && !contexts?.length) return;
+		if (!text.trim() && !contexts?.length) return;
 		this.assertAIEnabled();
 		const operation = this.captureOperation(options);
 		const stateRequest = ++this.stateRequest;
@@ -424,7 +423,8 @@ export class CoworkWidgetModel extends Disposable {
 				sessionId: active.session.sessionId,
 				threadId: active.threadId,
 				expectedSequence: thread.sequence,
-				text: input,
+				// Reference offsets belong to the exact composer text, including leading whitespace.
+				text,
 				mode,
 				approvalMode: this.inputState.approvalMode,
 				model: this.isAutomaticModel ? undefined : this.selectedModel,

@@ -18,6 +18,8 @@
 
 当前职责、运行契约和验证入口按功能阅读：[Chat／Speech](chat.md)、[Terminal](terminal.md)、[Sessions／Changes／Docker](sessions.md)、[Preferences／Configuration](preferences-and-settings.md)。未完成动作与验收缺口集中在[根 TODO](../TODO.md)，按“功能 · TODO”组织，完成后移除。文档中的通用审查清单、接口模板和可选目标设计保留各自用途，不自动转为实施任务。
 
+输入交互的设计缘由见[为什么 Ash 把上下文放进正文](blog/inline-context-references.md)，说明附件标签如何表达材料顺序、与 VS Code 的职责对应，以及当前发送链路的实现边界。
+
 [提权保存](../src/ash/workbench/services/textfile/README.md#windows-uac-regression)与[上传文件验证](browser-foundation.md#浏览器上传文件访问验证)的回归步骤随功能维护，平台剩余验收由 TODO 维护。编辑器和 Work 的目标契约继续保留在 [design](design/editor-roadmap.md) 中，研究快照与测量证据保留原路径。
 
 ## 理解系统

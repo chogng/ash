@@ -27,6 +27,7 @@ import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IChatContextPickService } from '../../../../services/chat/common/chatContextService.js';
 import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
+import { IOutputService } from '../../../../services/output/common/output.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { type AnythingQuickAccessProviderRunOptions } from '../../../../../platform/quickinput/common/quickAccess.js';
 import { FilesAndFoldersPickerPick, SymbolsContextPickerPick, SearchViewResultChatContextPick } from '../../../search/browser/searchChatContext.js';
@@ -61,7 +62,9 @@ export function registerChatContextActions(imageEditors: IImageEditorService, co
 			// Capture before opening Chat can change focus, the active editor, or its unsaved text.
 			const code = model.getValueInRange(selection);
 			const lastLine = selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber ? selection.endLineNumber - 1 : selection.endLineNumber;
-			const file = basename(model.uri).replace(/\s/gu, ' ');
+			// Output URIs contain registry IDs; use the channel's presentation name in the composer.
+			const channel = model.uri.scheme === 'output' ? accessor.get(IOutputService).getChannel(model.uri.path.slice(1)) : undefined;
+			const file = (channel?.label ?? basename(model.uri)).replace(/\s/gu, ' ');
 			const name = selection.startLineNumber === lastLine
 				? localize('chat.context.selectionLine', '{0} ({1})', file, selection.startLineNumber)
 				: localize('chat.context.selectionLines', '{0} ({1}-{2})', file, selection.startLineNumber, lastLine);

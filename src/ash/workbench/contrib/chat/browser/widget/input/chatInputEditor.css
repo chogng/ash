@@ -13,26 +13,7 @@
 }
 
 .ash-chat-input-editor .ash-chat-code-reference {
-	color: var(--ash-textLink-activeForeground);
-	background-color: var(--ash-badge-background);
-	border-radius: var(--ash-cornerRadius-small);
-	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
-	box-decoration-break: clone;
-}
-
-:is(
-		[data-color-scheme="dark"],
-		[data-color-scheme="hcDark"],
-		[data-color-scheme="hcLight"]
-	)
-	.ash-chat-input-editor
-	.ash-chat-code-reference {
-	color: var(--ash-badge-foreground);
-}
-
-/* The editor owns selected-text foregrounds; retain their matching background above the reference fill. */
-.ash-chat-input-editor .ash-chat-code-reference.stanza-editor-selected-text {
-	background-color: var(--ash-editor-selectionBackground);
+	cursor: pointer;
 }
 
 .ash-chat-input-editor

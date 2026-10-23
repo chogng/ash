@@ -13,6 +13,7 @@ import { isMacintosh } from '../../../../base/common/platform.js';
 import { HoverParticipantRegistry, type HoverAnchor, type IEditorHoverParticipant, type IRenderedHoverParts } from './hoverTypes.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { localize } from '../../../../nls.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 
 /** Projects provider-backed hover content into an editor-local, non-modal widget. */
 export class ContentHoverController extends Disposable implements IContentWidget {
@@ -34,6 +35,7 @@ export class ContentHoverController extends Disposable implements IContentWidget
 		private readonly editor: ICodeEditor,
 		private readonly onError: (error: unknown) => void,
 		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
+		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
 		this.element = h(viewport.domNode.domNode.ownerDocument, "div");
@@ -42,7 +44,7 @@ export class ContentHoverController extends Disposable implements IContentWidget
 		this.element.setAttribute("role", "tooltip");
 		this.element.setAttribute('aria-label', localize('hover.title', 'Editor hover'));
 		this.element.tabIndex = -1;
-		this.participants = HoverParticipantRegistry.getAll().map(Participant => new Participant(editor));
+		this.participants = HoverParticipantRegistry.getAll().map(Participant => instantiationService.createInstance(Participant, editor));
 		editor.addContentWidget(this);
 		this._register(observeResize(this.element, () => { if (!this.element.hidden) { editor.layoutContentWidget(this); } }));
 		this.modifierKeys = ModifierKeyEmitter.getInstance(this.element.ownerDocument.defaultView!);

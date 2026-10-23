@@ -545,7 +545,7 @@ suite('textModel browser component', () => {
 	});
 
 	for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
-		test(`dragged selection backgrounds stay behind readable text in ${theme}`, async function () {
+		test(`dragged selections retain the decoration and text paint order in ${theme}`, async function () {
 			const { page } = browserTests;
 
 			await openEditor(page);
@@ -554,6 +554,13 @@ suite('textModel browser component', () => {
 				const editor = window.ashTextModelIntegration.getControl();
 				editor.updateOptions({ fontFamily: 'monospace', wordWrap: 'off', cursorBlinking: 'solid' });
 				editor.setValue('session rename > selected content');
+				const style = document.createElement('style');
+				style.textContent = '.selection-test-decoration { background-color: var(--ash-badge-background); }';
+				document.head.append(style);
+				editor.getModel()!.deltaDecorations([], [{
+					range: { startLineNumber: 1, startColumn: 18, endLineNumber: 1, endColumn: 34 },
+					options: { description: 'selection-test', className: 'selection-test-decoration' },
+				}]);
 			}, theme);
 			const line = page.locator('.view-lines .stanza-editor-line-text').first();
 			await expect(line).toHaveText('session rename > selected content');
@@ -594,6 +601,9 @@ suite('textModel browser component', () => {
 				await expect.poll(() => selection.evaluate((element, focused) => {
 					const rect = element.getBoundingClientRect();
 					const pointerEvents = (element as HTMLElement).style.pointerEvents;
+					const decoration = element.closest('.stanza-editor')!.querySelector<HTMLElement>('.selection-test-decoration')!;
+					const decorationPointerEvents = decoration.style.pointerEvents;
+					decoration.style.pointerEvents = 'auto';
 					// Include the non-interactive background in the browser's paint-order hit test.
 					(element as HTMLElement).style.pointerEvents = 'auto';
 					try {
@@ -604,16 +614,88 @@ suite('textModel browser component', () => {
 						const backgroundToken = focused ? '--ash-editor-selectionBackground' : '--ash-editor-inactiveSelectionBackground';
 						return {
 							textAboveBackground: textIndex >= 0 && backgroundIndex > textIndex,
+							decorationAboveSelection: stack.indexOf(decoration) > textIndex && stack.indexOf(decoration) < backgroundIndex,
 							hasBackground: getComputedStyle(element).backgroundColor !== 'rgba(0, 0, 0, 0)',
 							hasThemeColor: getComputedStyle(root).getPropertyValue(backgroundToken).trim().length > 0,
 						};
 					} finally {
 						(element as HTMLElement).style.pointerEvents = pointerEvents;
+						decoration.style.pointerEvents = decorationPointerEvents;
 					}
-				}, focused)).toEqual({ textAboveBackground: true, hasBackground: true, hasThemeColor: true });
+				}, focused)).toEqual({ textAboveBackground: true, decorationAboveSelection: true, hasBackground: true, hasThemeColor: true });
 			}
 		});
 	}
+
+	test('rounded selections connect row contours and follow configuration, themes and scrolling', async function () {
+		const { page } = browserTests;
+		await openEditor(page);
+		await page.evaluate(() => {
+			const harness = window.ashTextModelIntegration;
+			harness.setTheme('light');
+			const editor = harness.getControl();
+			editor.updateOptions({ fontFamily: 'monospace', fontSize: 14, lineHeight: 20, wordWrap: 'off', roundedSelection: true, renderWhitespace: 'none' });
+			editor.setValue('short\nwide selection text extends much further\ntail');
+			editor.setSelection({ startLineNumber: 1, startColumn: 1, endLineNumber: 3, endColumn: 5 });
+			editor.focus();
+		});
+		const selections = page.locator('.stanza-editor-selection');
+		const corners = page.locator('.stanza-editor-selection-corner');
+		const radii = () => selections.evaluateAll(elements => elements.map(element => {
+			const style = getComputedStyle(element);
+			return [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomRightRadius, style.borderBottomLeftRadius].map(parseFloat);
+		}));
+		await expect.poll(radii).toEqual([[3, 3, 0, 0], [0, 3, 3, 0], [0, 0, 3, 3]]);
+		await expect(corners).toHaveCount(2);
+		await page.screenshot({ path: browserTests.info.outputPath('rounded-selection-steps.png') });
+		for (const theme of ['light', 'dark', 'contrast', 'contrastLight'] as const) {
+			await page.evaluate(theme => window.ashTextModelIntegration.setTheme(theme), theme);
+			const expected = theme.startsWith('contrast') ? Array.from({ length: 3 }, () => [0, 0, 0, 0]) : [[3, 3, 0, 0], [0, 3, 3, 0], [0, 0, 3, 3]];
+			await expect.poll(radii).toEqual(expected);
+			await page.screenshot({ path: browserTests.info.outputPath(`selection-steps-${theme}.png`) });
+		}
+		await page.evaluate(() => window.ashTextModelIntegration.setTheme('light'));
+		await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ roundedSelection: false }));
+		await expect.poll(radii).toEqual(Array.from({ length: 3 }, () => [0, 0, 0, 0]));
+		await expect(corners).toHaveCount(0);
+		await page.evaluate(() => {
+			window.ashTextModelIntegration.getControl().updateOptions({ roundedSelection: true });
+			window.ashTextModelIntegration.setTheme('contrast');
+		});
+		await expect.poll(radii).toEqual(Array.from({ length: 3 }, () => [0, 0, 0, 0]));
+		await expect(corners).toHaveCount(0);
+		await page.evaluate(() => window.ashTextModelIntegration.setTheme('light'));
+		await expect.poll(radii).toEqual([[3, 3, 0, 0], [0, 3, 3, 0], [0, 0, 3, 3]]);
+		await page.evaluate(() => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.setSelections([
+				{ selectionStartLineNumber: 1, selectionStartColumn: 1, positionLineNumber: 1, positionColumn: 6 },
+				{ selectionStartLineNumber: 3, selectionStartColumn: 1, positionLineNumber: 3, positionColumn: 5 },
+			]);
+		});
+		await expect.poll(radii).toEqual([[3, 3, 3, 3], [3, 3, 3, 3]]);
+		await expect(corners).toHaveCount(0);
+		await page.evaluate(() => {
+			const editor = window.ashTextModelIntegration.getControl();
+			const text = 'wrap these selected words across several visual rows';
+			editor.updateOptions({ wordWrap: 'wordWrapColumn', wordWrapColumn: 16 });
+			editor.setValue(text);
+			editor.setSelection({ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: text.length + 1 });
+		});
+		await expect.poll(() => selections.count()).toBeGreaterThan(2);
+		await expect.poll(async () => (await radii())[0]!.slice(0, 2)).toEqual([3, 3]);
+		await expect.poll(async () => (await radii()).at(-1)!.slice(2)).toEqual([3, 3]);
+		await page.evaluate(() => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.updateOptions({ wordWrap: 'off' });
+			editor.setValue(Array.from({ length: 100 }, () => 'continuous selection').join('\n'));
+			editor.setSelection({ startLineNumber: 1, startColumn: 1, endLineNumber: 100, endColumn: 21 });
+			editor.setScrollTop(800);
+		});
+		await expect.poll(() => selections.first().evaluate(element => Number((element.parentElement as HTMLElement | null)?.dataset.lineIndex ?? -1))).toBeGreaterThan(0);
+		await expect.poll(async () => (await radii())[0]!.slice(0, 2)).toEqual([0, 0]);
+		await expect.poll(async () => (await radii()).at(-1)!.slice(2)).toEqual([0, 0]);
+	});
 
 	test('selection foreground applies only to selected characters and clears when selections or themes change', async function () {
 		const { page } = browserTests;
