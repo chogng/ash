@@ -5,6 +5,20 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 
 suite('extensions browser component', () => {
 	const browserTests = useBrowserTests();
+	test('Extension attribution stays empty when only an internal publisher is declared', async function () {
+		const { page } = browserTests;
+		await page.goto('/extensions.html?classification&locale=zh-CN');
+		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
+		const row = page.locator('[data-view-id="ash.extensions.plugins"] [data-package-id="ash.bat"]');
+		await expect(row).toBeVisible();
+		await expect(row.locator('.extension-metadata')).toHaveCount(0);
+		await expect(row).not.toHaveAccessibleName(/Ash/u);
+		await row.click();
+		const editor = page.locator('.ash-extension-editor');
+		await expect(editor.locator('.extension-detail-attribution')).toBeHidden();
+		await expect(editor.locator('.extension-detail-attribution')).toBeEmpty();
+	});
+
 	test('Declared package icons load in the list and details and release removed rows', async function () {
 		const { page } = browserTests;
 		await page.goto('/extensions.html?locale=zh-CN');
@@ -313,10 +327,10 @@ suite('extensions browser component', () => {
 				await page.screenshot({ path: `.build/desktop/ui-previews/connection-flat-details-${locale}-${theme}.png` });
 				await details.getByRole('button', { name: locale === 'en' ? 'Open MCP server details' : '打开 MCP 服务器详情', exact: true }).click();
 				await expect(details.getByRole('heading', { name: 'Account runtime server', exact: true })).toBeVisible();
-				await expect(details.locator('.extension-detail-heading > .extension-metadata')).toHaveText('github:connector:account:mcp:tools');
+				await expect(details.locator('.extension-detail-identity > .extension-metadata')).toHaveText('github:connector:account:mcp:tools');
 				await expect(details.getByRole('status')).toHaveText(locale === 'en' ? 'Disconnected' : '已断开');
 				await list.getByRole('option').filter({ hasText: 'GitHub account' }).nth(1).click();
-				await expect(details.locator('.extension-detail-heading > .extension-metadata')).toHaveText('user:mcp:same-name');
+				await expect(details.locator('.extension-detail-identity > .extension-metadata')).toHaveText('user:mcp:same-name');
 				await expect(details.locator('.extension-detail-heading')).toContainText(locale === 'en' ? 'This connection uses an MCP server.' : '此连接通过 MCP 服务器提供工具。');
 				await expect(details.getByRole('status')).toHaveText(locale === 'en' ? 'Disabled' : '已禁用');
 				await expect(details.getByRole('button', { name: locale === 'en' ? 'Connect with API token' : '使用 API 令牌连接', exact: true })).toHaveCount(0);
@@ -709,7 +723,7 @@ suite('extensions browser component', () => {
 			await page.goto(`/extensions.html?preview&locale=${locale}&theme=light&unsafeReadme`);
 			await page.evaluate(() => window.ashExtensionsIntegration.openEditorExtension());
 			const editor = page.locator('.ash-extension-editor');
-			await expect(editor.locator('.extension-detail-header')).toContainText('Fixture publisher');
+			await expect(editor.locator('.extension-detail-attribution')).toHaveText('Fixture author');
 			await expect(editor.locator('.extension-detail-icon img')).toBeVisible();
 			await expect.poll(() => editor.locator('.extension-detail-icon img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 			await expect(editor.getByRole('tabpanel', { name: detailsLabel, exact: true }).getByRole('heading', { name: 'Getting started', exact: true })).toBeVisible();
@@ -836,8 +850,8 @@ suite('extensions browser component', () => {
 			await search.fill('rust');
 			await search.press('Enter');
 			await page.locator('[data-package-id="ash.rust"]').click();
-			await expect(editor.locator('.extension-detail-publisher')).toHaveText('Ash');
-			await expect(editor.locator('.extension-detail-description')).toBeHidden();
+			await expect(editor.locator('.extension-detail-attribution')).toHaveText('The Rust Programming Language');
+			await expect(editor.locator('.extension-detail-description')).toHaveText('Rust language configuration, syntax highlighting and language server support.');
 			await expect(editor.getByRole('switch')).toBeChecked();
 			for (const width of [360, 850]) {
 				await page.locator('#details').evaluate((element, width) => { element.style.width = `${width}px`; }, width);
@@ -848,7 +862,8 @@ suite('extensions browser component', () => {
 				const tabs = await editor.locator('.extension-detail-tabs').boundingBox();
 				expect(Math.abs(track!.y + track!.height / 2 - identity!.y - identity!.height / 2)).toBeLessThanOrEqual(1);
 				expect(tabs!.y - header!.y - header!.height).toBeCloseTo(16);
-				expect(header!.height).toBeLessThanOrEqual(98);
+				const attribution = await editor.locator('.extension-detail-attribution').boundingBox();
+				expect(attribution!.y + attribution!.height).toBeLessThanOrEqual(header!.y + header!.height);
 				await expect.poll(() => editor.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
 				await page.screenshot({ path: `.build/desktop/ui-previews/rust-enablement-${theme}-${width}.png` });
 			}
@@ -1184,8 +1199,8 @@ suite('extensions browser component', () => {
 			await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.open'));
 			const view = page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions');
 			const languagePack = view.locator('[data-package-id="ash.language-pack-zh-cn"]');
-			await expect(languagePack.locator('.extension-metadata')).toHaveText('Ash');
-			await expect(languagePack).toHaveAccessibleName(/Ash/u);
+			await expect(languagePack.locator('.extension-metadata')).toHaveCount(0);
+			await expect(languagePack.locator('.extension-description')).not.toBeEmpty();
 			await expect(languagePack.getByRole('button')).toHaveCount(0);
 			await languagePack.click();
 			await expect(page.locator('.ash-extension-editor').getByRole('status')).toContainText(languagePackReason);
@@ -1234,13 +1249,17 @@ suite('extensions browser component', () => {
 			const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
 			const provider = plugins.locator('[data-package-id="ash.rust"]');
 			await expect(provider).toBeVisible();
-			await expect(provider.locator('.extension-metadata')).toHaveText('Ash');
+			await expect(provider.locator('.extension-metadata')).toHaveText('The Rust Programming Language');
+			await expect(provider.locator('.extension-body > .ash-icon-label')).toHaveText(['Rust', 'The Rust Programming Language', locale === 'en' ? 'Rust language configuration, syntax highlighting and language server support.' : 'Rust 语言配置、语法高亮和语言服务器支持。']);
+			await expect(provider).toHaveAccessibleName(/The Rust Programming Language/u);
 			await expect(provider.getByRole('button')).toHaveCount(0);
 			await provider.click();
 			const editor = page.locator('.ash-extension-editor');
+			await expect(editor.locator('.extension-detail-attribution')).toHaveText('The Rust Programming Language');
+			await expect(editor.locator('.extension-detail-description')).toHaveText(locale === 'en' ? 'Rust language configuration, syntax highlighting and language server support.' : 'Rust 语言配置、语法高亮和语言服务器支持。');
 			await editor.getByRole('switch').press('Space');
 			await expect(provider).toHaveAccessibleName(new RegExp(disabled, 'u'));
-			for (const query of ['rust-analyzer', '@installed rust-analyzer', '@builtin rust-analyzer']) {
+			for (const query of ['The Rust Programming Language', 'rust-analyzer', '@installed rust-analyzer', '@builtin rust-analyzer']) {
 				await search.fill(query);
 				await search.press('Enter');
 				await expect(provider).toHaveAccessibleName(new RegExp(disabled, 'u'));
@@ -1738,8 +1757,8 @@ suite('extensions browser component', () => {
 				await expect(name).toHaveAttribute('title', (await name.locator('.ash-icon-label-text').textContent())!);
 				await expect(name.locator('.ash-icon-label-text')).toHaveCSS('text-overflow', 'ellipsis');
 				if (view === 'plugins') {
-					const row = list.getByRole('option').first();
-					const nameBox = (await name.boundingBox())!;
+					const row = list.getByRole('option').filter({ hasText: 'The Rust Programming Language' });
+					const nameBox = (await row.locator('.extension-name.ash-icon-label').boundingBox())!;
 					const contentBox = (await row.locator('.extension-row').boundingBox())!;
 					const metadataBox = (await row.locator('.extension-metadata').boundingBox())!;
 					expect(contentBox.x + contentBox.width - nameBox.x - nameBox.width).toBeCloseTo(12);
@@ -1860,8 +1879,8 @@ suite('extensions browser component', () => {
 				await search.press('Enter');
 				await expect(plugins.getByRole('option')).toHaveCount(1);
 				const bat = plugins.locator('[data-package-id="ash.bat"]');
-				await expect(bat.locator('.extension-body > .ash-icon-label')).toHaveText(['bat', 'Ash']);
-				await expect(bat.locator('.extension-footer, .extension-state, .extension-description')).toHaveCount(0);
+				await expect(bat.locator('.extension-body > .ash-icon-label')).toHaveText(locale === 'en' ? ['Batch Language Support', 'Language identification, syntax highlighting, editing configuration, and snippets.'] : ['批处理语言支持', '提供语言识别、语法高亮、编辑配置和代码片段。']);
+				await expect(bat.locator('.extension-footer, .extension-state')).toHaveCount(0);
 				await expect(bat.getByRole('button')).toHaveCount(0);
 				await expect(plugins.locator('.ash-count-badge')).toHaveText('1');
 				await expect(plugins.locator('.ash-count-badge')).toHaveAttribute('aria-label', locale === 'en' ? '1 plugins' : '1 个插件');
@@ -1885,7 +1904,7 @@ suite('extensions browser component', () => {
 			await page.getByRole('dialog', { name: install, exact: true }).getByRole('button', { name: install, exact: true }).click();
 			const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
 			await expect(plugins.getByRole('option').filter({ hasText: 'Academy' })).toHaveCount(1);
-			await expect(plugins.getByRole('option').filter({ hasText: 'Academy' }).locator('.extension-metadata')).toHaveText('Fixture publisher');
+			await expect(plugins.getByRole('option').filter({ hasText: 'Academy' }).locator('.extension-metadata')).toHaveText('Fixture author');
 			await page.locator('#extensions').getByRole('searchbox').fill('@installed Academy');
 			const installations = await page.evaluate(() => window.ashExtensionsIntegration.installationSnapshot());
 			await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.browse'));
@@ -1957,7 +1976,7 @@ suite('extensions browser component', () => {
 			await search.press('Enter');
 			const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
 			await expect(plugins.getByRole('option')).toHaveCount(1);
-			await expect(plugins.getByRole('option').locator('.extension-name')).toHaveText('bat');
+			await expect(plugins.getByRole('option').locator('.extension-name')).toHaveText(locale === 'en' ? 'Batch Language Support' : '批处理语言支持');
 			await search.fill('Web');
 			await search.press('Enter');
 			await expect(page.locator('[data-view-id="ash.extensions.view"]').getByRole('option')).toContainText('Web tools');

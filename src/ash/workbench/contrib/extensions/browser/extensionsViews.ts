@@ -43,6 +43,7 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
 import { ExtensionsInput, ExtensionsCapabilityInput, type ExtensionsCapabilityTarget, ExtensionsInputSource } from '../common/extensionsInput.js';
+import { getExtensionAttribution } from '../common/extensionAttribution.js';
 import { IExtensionRecommendationsService } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
 import { appendLabelIcon } from '../../../../base/browser/ui/iconlabel/iconLabels.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -51,11 +52,12 @@ import { changeExtensionPackage } from './extensionEditor.js';
 import { IGlobalExtensionEnablementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
 import { IPluginManagementService } from '../../../../platform/extensionManagement/common/pluginManagementService.js';
 import { IExtensionApi, type ExtensionCatalog, type ExtensionResourceRequest } from '../../../../platform/extensions/common/extensionApi.js';
+import { MainThreadLocalization } from '../../../api/browser/mainThreadLocalization.js';
 import './media/extension.css';
 
 interface ExtensionListItem {
 	readonly summary: ExtensionsPackageSummary;
-	readonly publisher?: string;
+	readonly attribution?: string;
 	readonly searchTerms?: readonly string[];
 	readonly installation?: ExtensionsInstalledPackage;
 	readonly source?: ExtensionsInputSource;
@@ -82,6 +84,7 @@ class ExtensionsContent extends Disposable {
 	private generation = 0;
 	private working = false;
 	private loaded = false;
+	private readonly localization: MainThreadLocalization;
 
 	constructor(container: HTMLElement, options: ExtensionsOpenOptions & { readonly beforeOpenEditor?: () => Promise<void>; },
 		@IExtensionManagementService private readonly extensionManagement: IExtensionManagementService,
@@ -92,8 +95,10 @@ class ExtensionsContent extends Disposable {
 		@IGlobalExtensionEnablementService private readonly enablement: IGlobalExtensionEnablementService,
 		@IPluginManagementService private readonly plugins: IPluginManagementService,
 		@IExtensionApi private readonly extensionCatalog: IExtensionApi,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
+		this.localization = instantiation.createInstance(MainThreadLocalization);
 		this.options = options;
 		this.isPluginsPane = options.view === 'plugins';
 		this.domNode = h(mainWindow.document, 'section'); this.domNode.className = 'ash-extensions';
@@ -113,7 +118,7 @@ class ExtensionsContent extends Disposable {
 			accessibilityProvider: {
 				getAriaLabel: item => [
 					item.summary.displayName,
-					...this.isPluginsPane ? [item.publisher] : [item.summary.version, item.summary.description],
+					...this.isPluginsPane ? [item.attribution, item.summary.description] : [item.summary.version, item.summary.description],
 					item.enabled === undefined ? '' : item.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled'),
 				].filter(Boolean).join(', ')
 			},
@@ -139,7 +144,7 @@ class ExtensionsContent extends Disposable {
 			type: AccessibleViewType.Help, priority: 100, name: `extensions-help-${generateUuid()}`, when: ContextKeyExpr.has('extensionsFocused'), getProvider: () => {
 				const focused = mainWindow.document.activeElement;
 				if (!this.visible || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-				return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type: AccessibleViewType.Help }, () => localize({ bundle: 'ash.extensions', key: 'accessibilityHelp' }, 'Extensions opens your installed Skills, Plugins and Connections, followed by Recommended. Skills contain Agent working methods, Plugins add features, and Connections lists external services and tool servers together. The search box above all panes searches the Marketplace and installed Plugins, including built-in language servers. Use Filter extensions to choose installed categories, built-in plugins or recommendations. Clear Search removes the query and filters. Use @installed to filter installed items, or clear the search to return to these categories. One Refresh extensions action reloads all categories. The title bar More Actions menu provides marketplace, installed, source management and installation commands. Pane actions appear on hover or keyboard focus. Use Left and Right on pane headers to collapse or expand them. Use Tab to move between controls, arrow keys to select an item, and Enter to open details. Open Plugin details to enable or disable it and view its version and identifier. Skill enablement and connection actions are managed separately in their details. Execution authorization and permissions are reviewed in package details. Language packs are managed through the display language setting. Run Install extension from Git repository in the Command Palette to install a repository package. Press Escape during installation to cancel. Escape closes this help.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+				return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type: AccessibleViewType.Help }, () => localize({ bundle: 'ash.extensions', key: 'accessibilityHelp' }, 'Extensions opens your installed Skills, Plugins and Connections, followed by Recommended. Skills contain Agent working methods, Plugins add features, and Connections lists external services and tool servers together. The search box above all panes searches the Marketplace and installed Plugins, including built-in language servers. Use Filter extensions to choose installed categories, built-in plugins or recommendations. Clear Search removes the query and filters. Use @installed to filter installed items, or clear the search to return to these categories. One Refresh extensions action reloads all categories. The title bar More Actions menu provides marketplace, installed, source management and installation commands. Pane actions appear on hover or keyboard focus. Use Left and Right on pane headers to collapse or expand them. Use Tab to move between controls, arrow keys to select an item, and Enter to open details. Plugin rows show the name, publisher and description. Search also matches the publisher. Open Plugin details to enable or disable it and view its version and identifier. Skill enablement and connection actions are managed separately in their details. Execution authorization and permissions are reviewed in package details. Language packs are managed through the display language setting. Run Install extension from Git repository in the Command Palette to install a repository package. Press Escape during installation to cancel. Escape closes this help.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 			}
 		}));
 	}
@@ -172,7 +177,7 @@ class ExtensionsContent extends Disposable {
 		}
 		const body = h(mainWindow.document, 'div'); body.className = 'extension-body';
 		const labels: readonly [string, string | undefined][] = this.isPluginsPane
-			? [['extension-name', item.summary.displayName], ['extension-metadata', item.publisher]]
+			? [['extension-name', item.summary.displayName], ['extension-metadata', item.attribution], ['extension-description', item.summary.description]]
 			: [['extension-name', item.summary.displayName], ['extension-description', item.summary.description], ['extension-metadata', `${item.summary.id} · ${item.summary.version}`]];
 		for (const [className, value] of labels) {
 			if (!value) { continue; }
@@ -251,26 +256,27 @@ class ExtensionsContent extends Disposable {
 				editorCatalog = catalog;
 				const providers = await this.extensionManagement.listBuiltInProviders().catch(() => undefined);
 				const disabled = new Set(this.enablement.getDisabledExtensions().map(value => value.id));
-				builtInItems.push(...catalog.extensions.filter(extension => extension.sourceKind === 'builtIn' && (!this.options.capabilityKind || this.options.capabilityKind === 'editorExtension' || this.options.capabilityKind === 'localization' && JSON.parse(extension.manifestJson).contributes?.localizations?.length)).map(extension => {
-					const manifest = JSON.parse(extension.manifestJson);
+				builtInItems.push(...await Promise.all(catalog.extensions.filter(extension => extension.sourceKind === 'builtIn' && (!this.options.capabilityKind || this.options.capabilityKind === 'editorExtension' || this.options.capabilityKind === 'localization' && JSON.parse(extension.manifestJson).contributes?.localizations?.length)).map(async extension => {
+					const manifest = JSON.parse(await this.localization.localizeManifest(extension.id, extension.manifestJson, catalog.generation));
 					const provider = providers?.providers.find(value => value.id === extension.id);
 					const isProvider = (manifest.ashRuntime?.kind === 'rust' && !manifest.browser) || !!manifest.ashLanguageServers;
 					return {
-						publisher: extension.publisher === 'ash' ? 'Ash' : extension.publisher,
+						attribution: getExtensionAttribution(manifest),
 						source: ExtensionsInputSource.BuiltIn, enabled: isProvider ? provider?.enabled : !disabled.has(extension.id.toLowerCase()), canChangeEnablement: isProvider ? !!provider && providers?.canChangeEnablement === true : !manifest.contributes?.localizations?.length,
 						searchTerms: manifest.ashLanguageServers?.servers?.map((server: { id: string; }) => server.id),
 						summary: { id: extension.id, version: extension.version, packageType: 'editorExtension', displayName: manifest.displayName?.startsWith('%') ? extension.name : manifest.displayName ?? extension.displayName, description: typeof manifest.description === 'string' && !manifest.description.startsWith('%') ? manifest.description : '' }
 					};
-				}));
+				})));
 			}
 			if (this.options.mode === 'builtIn') {
 				items = builtInItems;
 			} else if (isInstalled) {
-				items = installed.filter(entry => (!this.options.capabilityKind || entry.capabilities.some(capability => capability.kind === this.options.capabilityKind))).map(installation => {
+				items = await Promise.all(installed.filter(entry => (!this.options.capabilityKind || entry.capabilities.some(capability => capability.kind === this.options.capabilityKind))).map(async installation => {
 					const policy = policies.extensions.find(value => value.installationId === installation.installationId);
 					const editor = editorCatalog?.extensions.find(value => value.id === installation.package.id.split('@')[0] && value.version === installation.package.version);
-					return { installation, publisher: editor?.publisher === 'ash' ? 'Ash' : editor?.publisher, enabled: policy?.enabled, canChangeEnablement: !!policy, summary: { id: installation.package.id, version: installation.package.version, displayName: editor?.displayName ?? installation.package.id.split('@')[0], packageType: 'installed', description: installation.capabilities.map(capability => capability.kind === 'editorExtension' ? localize({ bundle: 'ash.extensions', key: 'pluginEditorTag' }, 'Editor') : capability.kind).join(' · ') } };
-				});
+					const manifest = editor && editorCatalog ? JSON.parse(await this.localization.localizeManifest(editor.id, editor.manifestJson, editorCatalog.generation)) : undefined;
+					return { installation, attribution: getExtensionAttribution(manifest), enabled: policy?.enabled, canChangeEnablement: !!policy, summary: { id: installation.package.id, version: installation.package.version, displayName: typeof manifest?.displayName === 'string' && !manifest.displayName.startsWith('%') ? manifest.displayName : editor?.displayName ?? installation.package.id.split('@')[0], packageType: 'installed', description: typeof manifest?.description === 'string' && !manifest.description.startsWith('%') ? manifest.description : installation.capabilities.map(capability => capability.kind === 'editorExtension' ? localize({ bundle: 'ash.extensions', key: 'pluginEditorTag' }, 'Editor') : capability.kind).join(' · ') } };
+				}));
 				items.push(...builtInItems);
 				if (this.isPluginsPane || !this.options.capabilityKind || this.options.capabilityKind === 'editorExtension') {
 					const catalog = await this.plugins.list();
@@ -300,7 +306,7 @@ class ExtensionsContent extends Disposable {
 			}
 			this.installed = installed;
 			this.list.items = this.options.mode === 'browse' || this.options.mode === undefined ? items : items.filter(item =>
-				[item.summary.id, item.summary.displayName, item.summary.description, ...item.searchTerms ?? []]
+				[item.summary.id, item.summary.displayName, item.summary.description, item.attribution ?? '', ...item.searchTerms ?? []]
 					.some(value => value.toLowerCase().includes(query.toLowerCase())));
 			this.loaded = true;
 			this.status.textContent = '';

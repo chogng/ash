@@ -67,6 +67,7 @@ import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, type Extension
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
+import { ILanguagePackService } from '../../../../../../platform/languagePacks/common/languagePacks.js';
 import { ILocalizationService } from '../../../../../services/localization/common/localizationService.js';
 import { IAppServerRemoteAgentService } from '../../../../../services/remote/common/appServerRemoteAgentService.js';
 import { createSettingsEditorInput } from '../../../../../services/preferences/common/settingsEditorInput.js';
@@ -170,7 +171,7 @@ const extensionDetails = { ...packageDetails, package: extensionReference, ...ex
 const uninstalled = new URLSearchParams(location.search).has('uninstalled');
 const rustBuiltIn = new URLSearchParams(location.search).has('rustBuiltIn');
 const rustLanguagePackManifest = { publisher: 'ash', name: 'language-pack-zh-cn', version: '1.0.0', displayName: '中文语言包（Rust 目录）', description: 'Rust package snapshot', contributes: { localizations: [{ languageId: 'zh-CN' }] } };
-const extensionManifest = { publisher: 'Fixture publisher', name: 'sample', icon: 'icon.svg', categories: ['Programming Languages'], homepage: 'https://example.invalid/tools' };
+const extensionManifest = { publisher: 'Fixture publisher', author: { name: 'Fixture author' }, name: 'sample', icon: 'icon.svg', categories: ['Programming Languages'], homepage: 'https://example.invalid/tools' };
 let heldReadme: ((text: string) => void) | undefined;
 let holdReadme = false;
 const fixtureReadme = '# Sample editor extension\n\nTools for working with your project.\n\n## Features\n\n- Inspect and review workspace files\n- Keep your tools in the editor\n\n## Getting started\n\nInstall the extension and review its requested permissions.\n\n[Homepage](https://example.invalid/tools)\n' + (new URLSearchParams(location.search).has('unsafeReadme') ? '\n[Unsafe](command:fixture.unsafe)\n\n<script>window.fixtureUnsafe = true</script>\n' : '');
@@ -412,6 +413,7 @@ services.registerInstance(ILocalGitService, {
 services.registerInstance(ILogService, new NullLoggerService());
 services.registerSingleton(IPluginManagementService, () => disposables.add(services.createInstance(AppServerPluginManagementService, pluginApi, { subscribe: (listener: (event: ServerNotification) => void) => pluginEvents.event(listener) })));
 services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(document.body)));
+services.registerInstance(ILanguagePackService, { onDidChange: Event.None, whenReady: Promise.resolve(), catalogs: [], getInstalledLanguages: async () => [], refresh: async () => { }, getBuiltInExtensionTranslationsUri: async () => undefined });
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (bundle, key, text, parameters) => localize({ bundle, key }, text, ...Object.keys(parameters ?? {}).sort().map(key => parameters![key]!)) });
 services.registerInstance(IAppServerRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService);
 services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });

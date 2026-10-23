@@ -1,5 +1,8 @@
 # Resource provenance
 
+The rust-analyzer language server is developed by the
+[rust-analyzer team](https://github.com/rust-lang/rust-analyzer).
+
 Language declarations, editing configuration and any snippets are derived from
 [Microsoft VS Code](https://github.com/microsoft/vscode/tree/main/extensions/rust)
 and retain its [MIT license](../../third_party/vscode/LICENSE.txt).

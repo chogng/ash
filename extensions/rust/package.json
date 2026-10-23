@@ -4,6 +4,7 @@
   "description": "%description%",
   "version": "10.0.0",
   "publisher": "ash",
+  "author": "The Rust Programming Language",
   "license": "MIT",
   "engines": {
     "ash": "*"
