@@ -418,6 +418,7 @@
 		"--scm-graph-lane-6",
 		"--scm-graph-lane-7",
 		"--scm-graph-lane-color",
+		"--scm-graph-lane-width",
 		"--scm-graph-node-x",
 		"--scm-graph-row-background",
 		"--sessions-accent",

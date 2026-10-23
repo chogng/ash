@@ -39,7 +39,7 @@ import { IEditorService } from "../../../services/editor/common/editorService.js
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane, ViewPaneShowActions } from "../../../browser/parts/views/viewPane.js";
 import { createBinaryDiffEditorInput, createDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
-import { setupHistoryItemHover, toHistoryItemHoverContent, SWIMLANE_HEIGHT, renderSCMHistoryItemGraph, renderSCMHistoryGraphPlaceholder, toISCMHistoryItemViewModelArray } from './scmHistory.js';
+import { setupHistoryItemHover, toHistoryItemHoverContent, SWIMLANE_HEIGHT, SWIMLANE_WIDTH, renderSCMHistoryItemGraph, renderSCMHistoryGraphPlaceholder, toISCMHistoryItemViewModelArray } from './scmHistory.js';
 import { SCMHistoryBusyContext, SCMHistoryProviderIdContext } from '../common/scm.js';
 import { createMultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../multiDiffEditor/browser/multiDiffEditorInput.js';
 
@@ -321,6 +321,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.contentElement.classList.add("ash-scm-secondary-pane");
 		this.graphElement = h(container.ownerDocument, "div");
 		this.graphElement.className = "ash-scm-graph";
+		this.graphElement.style.setProperty('--scm-graph-lane-width', `${SWIMLANE_WIDTH}px`);
 		this.statusElement = h(container.ownerDocument, 'div');
 		this.statusElement.className = 'ash-scm-empty';
 		this.statusElement.setAttribute('role', 'status');
