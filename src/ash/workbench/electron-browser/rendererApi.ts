@@ -8,7 +8,7 @@ import { agentHostConnectionAddress } from '../../platform/agentHost/common/agen
 import type { RemoteConnectionDefinition } from '../../platform/remote/common/remoteConnectionService.js';
 import { REMOTE_AGENT_HOST_OPEN_CHANNEL, REMOTE_AGENT_HOST_CLOSE_CHANNEL } from '../../platform/remote/common/remoteConnectionIpc.js';
 import { createSshRemoteWorkspaceUri } from '../../platform/remote/common/remote.js';
-import { AppServerChannelService } from "../../platform/collaboration/browser/appServerChannelService.js";
+import { AppServerChannelService } from "../../platform/collab/browser/appServerChannelService.js";
 import type { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import type { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
 import type { IAddress } from '../../platform/remote/common/remoteAgentConnection.js';

@@ -10,23 +10,23 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { FocusedViewContext } from '../../../common/contextkeys.js';
 import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from '../../../common/views.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
-import { CHANNELS_VIEW_ID, COLLABORATION_CONTAINER_ID } from '../common/collaboration.js';
-import { CollaborationViewPane } from './collaborationViewPane.js';
+import { CHANNELS_VIEW_ID, COLLAB_CONTAINER_ID } from '../common/collab.js';
+import { CollabViewPane } from './collabViewPane.js';
 
 
 /** Each product entry registers the same views in its own registry. */
-export function registerCollaborationViews(registry: WorkbenchViewRegistry = ViewsRegistry, open?: (accessor: ServicesAccessor) => Promise<unknown>): void {
+export function registerCollabViews(registry: WorkbenchViewRegistry = ViewsRegistry, open?: (accessor: ServicesAccessor) => Promise<unknown>): void {
 	registry.registerStaticViewContainer({
-		id: COLLABORATION_CONTAINER_ID, title: 'Collaboration', localizationKey: { bundle: 'ash', key: 'collaboration.title' },
-		location: ViewContainerLocation.Sidebar, icon: Lxicon.colab, order: 5,
+		id: COLLAB_CONTAINER_ID, title: 'Collab', localizationKey: { bundle: 'ash', key: 'collaboration.title' },
+		location: ViewContainerLocation.Sidebar, icon: Lxicon.collab, order: 5,
 		mergeViewWithContainerWhenSingleView: false,
 	});
-	registry.registerStaticViews(COLLABORATION_CONTAINER_ID, [{
+	registry.registerStaticViews(COLLAB_CONTAINER_ID, [{
 		id: CHANNELS_VIEW_ID, title: 'Channels', localizationKey: { bundle: 'ash', key: 'collaboration.channels' },
-		order: 0, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(CollaborationViewPane),
+		order: 0, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(CollabViewPane),
 	}]);
-	registerAction2(class OpenCollaboration extends Action2 {
-		constructor() { super({ id: 'ash.collaboration.open', title: localize2('collaboration.open', 'Open Collaboration'), f1: true }); }
+	registerAction2(class OpenCollab extends Action2 {
+		constructor() { super({ id: 'ash.collaboration.open', title: localize2('collaboration.open', 'Open Collab'), f1: true }); }
 		public override async run(accessor: ServicesAccessor): Promise<void> {
 			// Sessions also owns activity selection and the surrounding composition.
 			if (open) await open(accessor);
@@ -38,12 +38,12 @@ export function registerCollaborationViews(registry: WorkbenchViewRegistry = Vie
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Collaboration, defaultValue: true, scope: ConfigurationScope.APPLICATION,
 	parse(value: unknown): boolean {
-		if (typeof value !== 'boolean') throw new TypeError(localize('collaboration.invalidVerbosity', 'Collaboration accessibility verbosity must be a boolean.'));
+		if (typeof value !== 'boolean') throw new TypeError(localize('collaboration.invalidVerbosity', 'Collab accessibility verbosity must be a boolean.'));
 		return value;
 	},
 	setting: {
 		valueType: 'boolean',
-		get title() { return localize('collaboration.verbosityTitle', 'Collaboration accessibility help'); },
+		get title() { return localize('collaboration.verbosityTitle', 'Collab accessibility help'); },
 		get description() { return localize('collaboration.verbosityDescription', 'Announce how to open accessibility help when the channel tree receives focus.'); },
 	},
 });
@@ -53,7 +53,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 		type, priority: 100, name: `collaboration${type}`, when: FocusedViewContext.isEqualTo(CHANNELS_VIEW_ID),
 		getProvider: accessor => {
 			const view = accessor.get(IViewsService).getViewWithId(CHANNELS_VIEW_ID);
-			if (!(view instanceof CollaborationViewPane)) return undefined;
+			if (!(view instanceof CollabViewPane)) return undefined;
 			const focused = view.element.ownerDocument.activeElement;
 			return new AccessibleContentProvider(AccessibleViewProviderId.Collaboration, { type },
 				() => type === AccessibleViewType.Help

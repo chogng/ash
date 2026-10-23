@@ -9,7 +9,7 @@ import { bindTestColorTheme } from './themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
-import type { IDocumentCollaborationApi } from '../../../src/ash/platform/collaboration/common/documentCollaborationApi.js';
+import type { IDocumentCollaborationApi } from '../../../src/ash/platform/collab/common/documentCollaborationApi.js';
 import { generalProfile, createEditorProfileConfiguration } from '../../../extensions/academy/browser/generalProfile.js';
 import { documentContributions } from '../../../extensions/academy/browser/documentContributions.js';
 import { DocumentTextModel } from '../../../extensions/academy/common/model/documentTextModel.js';

@@ -4,7 +4,7 @@ import type { AppServerFrameDecoder } from '../../platform/agentHost/browser/app
 import { AgentHostResourceService } from '../services/agentHost/common/agentHostResourceService.js';
 import { registerAgentHostResourceHost } from '../../platform/agentHost/browser/agentHostResourceHost.js';
 import type { IAppServerConnectionRecovery } from '../../platform/agentHost/common/appServerApi.js';
-import { AppServerChannelService } from "../../platform/collaboration/browser/appServerChannelService.js";
+import { AppServerChannelService } from "../../platform/collab/browser/appServerChannelService.js";
 import { createAppServerSecretStorageStatusService } from '../../platform/secrets/browser/appServerSecretStorageStatusService.js';
 import { AppServerMessageHistoryService } from '../../platform/messageHistory/browser/appServerMessageHistoryService.js';
 import { createExtensionBackendApi } from '../../platform/agentHost/browser/extensionBackendApi.js';
@@ -35,7 +35,7 @@ import { createAppServerContentSearchApi, createAppServerContentSearchConfigurat
 import { createAppServerAgentSessionService, createAppServerAgentThreadService, createAppServerAgentTurnService } from "../../platform/agentHost/browser/appServerAgentService.js";
 import { createAppServerAgentModelsService } from "../../platform/agentHost/browser/appServerAgentModels.js";
 import { AppServerTerminalProcessService } from "../../platform/terminal/browser/appServerTerminalProcessService.js";
-import { createAppServerDocumentCollaborationApi } from "../../platform/collaboration/browser/documentCollaborationApi.js";
+import { createAppServerDocumentCollaborationApi } from "../../platform/collab/browser/documentCollaborationApi.js";
 import { createAppServerCodebaseApi } from "../../platform/codebase/browser/codebaseApi.js";
 import { createAppServerCodebaseSymbolsApi } from "../../platform/codebaseSymbols/browser/codebaseSymbolsApi.js";
 import { createAppServerConnectorApi, type BrowserConnectorHostServices } from "../../platform/connectors/browser/connectorApi.js";

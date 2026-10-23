@@ -95,7 +95,7 @@ test('Cowork and Code retain separate editors while transferring the selected dr
 	await editor.waitForEditorContents(text => text === 'Updated presentation brief brief.txt ');
 	await expect(composer.locator('.ash-chat-code-reference')).toHaveText('brief.txt');
 	expect(await editor.input.evaluate((input, previous) => input === previous, coworkInput)).toBe(true);
-	await navigation.getByRole('button', { name: 'Collaboration', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
 	await expect(conversation.locator('.ash-cowork')).toBeVisible();
 	await expect(page.locator('[data-part="sidebar"] [data-view-container-id="ash.collaboration"]')).toBeVisible();
 	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();

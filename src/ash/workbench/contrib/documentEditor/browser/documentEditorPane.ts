@@ -1,7 +1,7 @@
 import type { IEditorExtensionApi } from '../../../common/editor.js';
 import type { DocumentEditorConfiguration, DocumentEditorWidget } from '../../../services/documentEditor/browser/documentEditorProfile.js';
 import type { DocumentCodec, DocumentTextFormat } from '../../../services/documentEditor/common/documentCodec.js';
-import { IChannelService, type ChannelReference } from '../../../../platform/collaboration/common/channelService.js';
+import { IChannelService, type ChannelReference } from '../../../../platform/collab/common/channelService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';

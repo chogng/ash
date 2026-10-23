@@ -1,4 +1,4 @@
-import { IChannelService } from '../../../../platform/collaboration/common/channelService.js';
+import { IChannelService } from '../../../../platform/collab/common/channelService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { CancellationError } from "../../../../base/common/errors.js";

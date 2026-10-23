@@ -61,8 +61,8 @@ test('Persistent collaboration channels share across windows and enforce member 
 		}
 		await workbench.quickaccess.runCommand('ash.collaboration.open');
 		await page.getByRole('button', { name: 'Connect Channels', exact: true }).click();
-		await page.getByRole('option', { name: 'Create Collaboration Space', exact: true }).click();
-		for (const [name, value] of [['Collaboration Server', url], ['Server Administrator Credential', administrator], ['Space Name', 'Ash shared space'], ['Your Display Name', 'Owner']]) {
+		await page.getByRole('option', { name: 'Create Collab Space', exact: true }).click();
+		for (const [name, value] of [['Collab Server', url], ['Server Administrator Credential', administrator], ['Space Name', 'Ash shared space'], ['Your Display Name', 'Owner']]) {
 			const input = page.getByRole('textbox', { name, exact: true }); await input.fill(value!); await input.press('Enter');
 		}
 		await expect(page.locator('.collaboration-connection')).toContainText('Ash shared space');
@@ -75,7 +75,7 @@ test('Persistent collaboration channels share across windows and enforce member 
 		const notes = page.getByRole('textbox', { name: 'Paragraph', exact: true }).first();
 		await notes.fill('Channel notes survive restart');
 		const agents = await workbench.openAgentsWindow(target.kind);
-		await agents.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Collaboration', exact: true }).click();
+		await agents.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Collab', exact: true }).click();
 		await expect(agents.getByRole('treeitem', { name: 'engineering', exact: true })).toBeVisible();
 		await agents.getByRole('treeitem', { name: 'engineering', exact: true }).dblclick();
 		await expect(agents.locator('.stanza-document-collaboration-toolbar')).toHaveAttribute('data-state', 'connected');

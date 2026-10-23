@@ -18,7 +18,7 @@ import { createDisconnectedContentSearchApi, createDisconnectedContentSearchConf
 import { createDisconnectedAgentSessionService, createDisconnectedAgentThreadService, createDisconnectedAgentTurnService } from "../../platform/agentHost/browser/appServerAgentService.js";
 import { createDisconnectedAgentModelsService } from "../../platform/agentHost/browser/appServerAgentModels.js";
 import { DisconnectedTerminalProcessService } from "../../platform/terminal/browser/disconnectedTerminalProcessService.js";
-import { createDisconnectedDocumentCollaborationApi } from "../../platform/collaboration/browser/documentCollaborationApi.js";
+import { createDisconnectedDocumentCollaborationApi } from "../../platform/collab/browser/documentCollaborationApi.js";
 import { createDisconnectedCodebaseApi } from "../../platform/codebase/browser/codebaseApi.js";
 import { createDisconnectedCodebaseSymbolsApi } from "../../platform/codebaseSymbols/browser/codebaseSymbolsApi.js";
 import { createDisconnectedConnectorApi } from "../../platform/connectors/browser/connectorApi.js";

@@ -74,7 +74,7 @@ test('Sessions content shares one raised card with equal right and bottom margin
 	await expect(page.locator('[data-part="editor"]')).toHaveClass(/ash-sessions-frame-end/u);
 	await expect(page.locator('[data-part="editor"]')).toHaveCSS('border-bottom-right-radius', '12px');
 	await expectCardGeometry();
-	await navigation.getByRole('button', { name: 'Collaboration', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
 	await expect(sidebar).toBeVisible();
 	await expect(sidebar).toHaveCSS('border-top-left-radius', '12px');
 	await expect(sessions).toHaveCSS('border-bottom-right-radius', '12px');
@@ -118,7 +118,7 @@ test('Sessions shared layout preserves user geometry across views, resize and re
 	await editor.waitForEditorFocus();
 	await page.keyboard.insertText('Retained Code draft');
 	const input = await editor.input.elementHandle();
-	await navigation.getByRole('button', { name: 'Collaboration', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
 	await expect(sidebar).toBeVisible();
 	await expect(auxiliarybar).toBeHidden();
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();

@@ -1,7 +1,7 @@
 import { Emitter } from '../../../src/ash/base/common/event.js';
 import { Disposable, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { generateUuid } from '../../../src/ash/base/common/uuid.js';
-import type { ChannelReference, ChannelChange, ChannelRole, ChannelSpace, IChannelService, ChannelFailure } from '../../../src/ash/platform/collaboration/common/channelService.js';
+import type { ChannelReference, ChannelChange, ChannelRole, ChannelSpace, IChannelService, ChannelFailure } from '../../../src/ash/platform/collab/common/channelService.js';
 
 /** UI-only authority fixture. Persistence and cross-host authorization are tested against Rust/HTTP. */
 export class ChannelServiceFixture extends Disposable implements IChannelService {

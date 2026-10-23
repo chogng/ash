@@ -35,7 +35,7 @@ import { FileNotFoundError, type IFileService } from "../../../../platform/files
 import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
-import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
+import type { IDocumentCollaborationApi } from "../../../../platform/collab/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import { Part } from "../../part.js";
 import { EditorGroupView, EditorOpenSupersededError, type EditorGroupOptions } from "./editorGroupView.js";

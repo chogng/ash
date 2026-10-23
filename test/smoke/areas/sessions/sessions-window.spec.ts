@@ -1243,7 +1243,7 @@ test('Sessions navigation retains its own selection and hover skin while changin
 		await expect(projects.locator('svg')).toHaveCSS('color', 'rgb(128, 128, 128)');
 		await chat.focus();
 		await chat.press(position === 'Default' ? 'ArrowDown' : 'ArrowRight');
-		await expect(navigation.getByRole('button', { name: 'Collaboration', exact: true })).toBeFocused();
+		await expect(navigation.getByRole('button', { name: 'Collab', exact: true })).toBeFocused();
 		await projects.focus();
 		await projects.press('Enter');
 		await expect(projects).toHaveAttribute('aria-current', 'page');
@@ -1414,10 +1414,10 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 		await expect(page.locator('.ash-workbench-activitybar, .ash-activity-bar-content')).toHaveCount(0);
 		const activityNavigation = page.locator('.ash-sessions-activity-content');
 		await expectActivityIconSize(activityNavigation, 24);
-		const collaboration = page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Collaboration' });
+		const collaboration = page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Collab' });
 		const projects = page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Projects' });
 		await collaboration.click();
-		await expect(collaboration.locator('svg')).toHaveAttribute('data-ash-icon-id', 'colab-filled');
+		await expect(collaboration.locator('svg')).toHaveAttribute('data-ash-icon-id', 'collab-filled');
 		await expect(page.locator('.ash-sessions-list-controls')).toBeHidden();
 		await projects.click();
 		await expect(projects.locator('svg')).toHaveAttribute('data-ash-icon-id', 'projects-filled');
@@ -2333,7 +2333,7 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 		}
 	};
 	await checkTooltip(chat, 'Chat', 'right');
-	for (const label of ['Collaboration', 'Projects', 'Code', 'Accounts']) {
+	for (const label of ['Collab', 'Projects', 'Code', 'Accounts']) {
 		await checkTooltip(navigation.getByRole('button', { name: label, exact: true }), label, 'right');
 	}
 	await checkTooltip(accounts, 'Accounts', 'right', true);

@@ -80,7 +80,7 @@ test('Sessions common entry supplies the shared editor Worker service in each wi
 	assert.notEqual(secondWindow.get(IWebWorkerService), first);
 });
 
-test('Sessions Activity Bar selects Chat, Collaboration, Agent Teams, Projects, Code, Creator, and Symphony actions', async () => {
+test('Sessions Activity Bar selects Chat, Collab, Agent Teams, Projects, Code, Creator, and Symphony actions', async () => {
 	const ownerDocument = browser.window.document;
 	ownerDocument.body.replaceChildren();
 	let accountAnchor: HTMLElement | undefined;
@@ -114,7 +114,7 @@ test('Sessions Activity Bar selects Chat, Collaboration, Agent Teams, Projects, 
 			disabled: button.disabled,
 		})), [
 			{ icon: 'chat-2-filled', disabled: false },
-			{ icon: 'colab', disabled: false },
+			{ icon: 'collab', disabled: false },
 			{ icon: 'agent', disabled: false },
 			{ icon: 'projects', disabled: false },
 			{ icon: 'code', disabled: false },
@@ -124,21 +124,21 @@ test('Sessions Activity Bar selects Chat, Collaboration, Agent Teams, Projects, 
 		]);
 		assert.deepEqual([...bar.domNode.querySelectorAll('.ash-sessions-activity-top, .ash-sessions-activity-bottom')].map(group =>
 			[...group.querySelectorAll('button')].map(button => button.getAttribute('aria-label')),
-		), [['Chat', 'Collaboration', 'Agent Teams', 'Projects', 'Code', 'Creator', 'Symphony'], ['Accounts']]);
+		), [['Chat', 'Collab', 'Agent Teams', 'Projects', 'Code', 'Creator', 'Symphony'], ['Accounts']]);
 		assert.ok(buttons.every(button => button.classList.contains('icon-only')));
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item > button.ash-sessions-activity-item').length, 7);
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
 		buttons[1]?.click();
 		assert.deepEqual([buttons[0], buttons[1], buttons[3]].map(button => [button?.querySelector('svg')?.getAttribute('data-ash-icon-id'), button?.getAttribute('aria-current')]), [
-			['chat-2', null], ['colab-filled', 'page'], ['projects', null],
+			['chat-2', null], ['collab-filled', 'page'], ['projects', null],
 		]);
 		buttons[2]?.click();
 		assert.equal(buttons[2]?.getAttribute('aria-current'), 'page');
 		assert.equal(buttons[1]?.getAttribute('aria-current'), null);
 		buttons[3]?.click();
 		assert.deepEqual([buttons[0], buttons[1], buttons[3]].map(button => [button?.querySelector('svg')?.getAttribute('data-ash-icon-id'), button?.getAttribute('aria-current')]), [
-			['chat-2', null], ['colab', null], ['projects-filled', 'page'],
+			['chat-2', null], ['collab', null], ['projects-filled', 'page'],
 		]);
 		buttons[4]?.click();
 		assert.deepEqual(buttons.slice(0, 5).map(button => [button.parentElement!.classList.contains('checked'), button.getAttribute('aria-current')]), [
@@ -277,7 +277,7 @@ test('navigation order survives a new window and includes new menu contributions
 	using restored = registerTestComponentServices(services).createInstance(ActivityBarPart, document.body, { showAccountMenu() { } });
 	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 5).map(button => button.getAttribute('aria-label')), ['Chat', 'Agent Teams', 'Projects', 'Creator', 'Code']);
 	using contribution = MenusRegistry.appendMenuItem(Menus.ActivityBar, { command: { id: 'test.activity', title: 'Test action', icon: Lxicon.chat2 }, order: 60 });
-	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['Chat', 'Agent Teams', 'Projects', 'Creator', 'Code', 'Collaboration', 'Symphony', 'Test action', 'Accounts']);
+	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['Chat', 'Agent Teams', 'Projects', 'Creator', 'Code', 'Collab', 'Symphony', 'Test action', 'Accounts']);
 	assert.equal(restored.domNode.querySelector('button')!.getAttribute('aria-current'), 'page');
 });
 

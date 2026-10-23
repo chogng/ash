@@ -1,5 +1,5 @@
 import { ChannelServiceFixture } from './channelServiceFixture.js';
-import { IChannelService, type ChannelRole } from '../../../src/ash/platform/collaboration/common/channelService.js';
+import { IChannelService, type ChannelRole } from '../../../src/ash/platform/collab/common/channelService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
@@ -32,8 +32,8 @@ import { IThemeService } from '../../../src/ash/platform/theme/common/themeServi
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
 import { WorkbenchViewRegistry } from '../../../src/ash/workbench/common/views.js';
-import { CollaborationViewPane } from '../../../src/ash/workbench/contrib/collaboration/browser/collaborationViewPane.js';
-import { CHANNELS_VIEW_ID } from '../../../src/ash/workbench/contrib/collaboration/common/collaboration.js';
+import { CollabViewPane } from '../../../src/ash/workbench/contrib/collab/browser/collabViewPane.js';
+import { CHANNELS_VIEW_ID } from '../../../src/ash/workbench/contrib/collab/common/collab.js';
 import { CallViewPane } from '../../../src/ash/workbench/contrib/call/browser/callViewPane.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
@@ -44,13 +44,13 @@ import { bindTestColorTheme } from './themeFixture.js';
 
 const parameters = new URLSearchParams(location.search);
 if (parameters.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', translations); document.documentElement.lang = 'zh-CN'; }
-const { registerCollaborationViews } = await import('../../../src/ash/workbench/contrib/collaboration/browser/collaboration.contribution.js');
+const { registerCollabViews } = await import('../../../src/ash/workbench/contrib/collab/browser/collab.contribution.js');
 const { registerCallView } = await import('../../../src/ash/workbench/contrib/call/browser/call.contribution.js');
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
 const root = document.querySelector<HTMLElement>('#app')!;
 setARIAContainer(root);
-document.querySelector('#title')!.textContent = localize('collaboration.title', 'Collaboration');
+document.querySelector('#title')!.textContent = localize('collaboration.title', 'Collab');
 const configuration = resources.add(new InMemoryConfigurationService());
 services.registerInstance(IConfigurationService, configuration);
 const context = resources.add(new ContextKeyService());
@@ -93,13 +93,13 @@ if (!parameters.has('noCalls')) services.registerInstance(ICallService, {
 });
 services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None } as unknown as IEditorService);
 const registry = new WorkbenchViewRegistry();
-registerCollaborationViews(registry);
+registerCollabViews(registry);
 registerCallView(registry);
 const contributions = resources.add(WorkbenchContributionsRegistry.createHost(services, undefined, ['workbench.contrib.call']));
 contributions.advance(WorkbenchPhase.BlockStartup);
 const paneHost = document.querySelector<HTMLElement>('#panes')!;
 const panes = resources.add(new PaneView(paneHost));
-const channels = resources.add(services.createInstance(CollaborationViewPane, paneHost, { id: CHANNELS_VIEW_ID, title: localize('collaboration.channels', 'Channels') }));
+const channels = resources.add(services.createInstance(CollabViewPane, paneHost, { id: CHANNELS_VIEW_ID, title: localize('collaboration.channels', 'Channels') }));
 panes.addPane(channels, 540); channels.setVisible(true);
 const call = services.getOptional(ICallService) ? resources.add(services.createInstance(CallViewPane, paneHost, { id: 'ash.call.view', title: localize('collaboration.calls', 'Calls') })) : undefined;
 if (call) { panes.addPane(call, 260); call.setVisible(true); }

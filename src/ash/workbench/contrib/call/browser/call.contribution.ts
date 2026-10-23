@@ -13,7 +13,7 @@ import { type ServicesAccessor } from '../../../../platform/instantiation/common
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { type WorkbenchViewRegistry, ViewsRegistry } from '../../../common/views.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
-import { COLLABORATION_CONTAINER_ID } from '../../collaboration/common/collaboration.js';
+import { COLLAB_CONTAINER_ID } from '../../collab/common/collab.js';
 import { CallViewPane } from './callViewPane.js';
 import './media/call.css';
 
@@ -27,7 +27,7 @@ export function registerCallView(registry: WorkbenchViewRegistry = ViewsRegistry
 	registerWorkbenchContribution('workbench.contrib.call', WorkbenchPhase.BlockStartup, accessor => {
 		const registrations = new DisposableStore();
 		if (!accessor.getOptional(ICallService)) { return registrations; }
-		registrations.add(registry.registerViews(COLLABORATION_CONTAINER_ID, [{
+		registrations.add(registry.registerViews(COLLAB_CONTAINER_ID, [{
 			id: 'ash.call.view', title: 'Calls', localizationKey: { bundle: 'ash', key: 'collaboration.calls' }, order: 1, canToggleVisibility: false,
 			ctorDescriptor: new SyncDescriptor(CallViewPane),
 		}]));

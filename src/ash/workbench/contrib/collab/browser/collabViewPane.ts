@@ -1,10 +1,10 @@
-import { CHANNEL_NOTES_CONTENT_TYPE } from '../common/collaboration.js';
+import { CHANNEL_NOTES_CONTENT_TYPE } from '../common/collab.js';
 import { URI } from '../../../../base/common/uri.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { ICallService } from '../../../../platform/call/common/callService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { isDocumentCollaborationEditor, DocumentTypes } from '../../../services/documentEditor/common/documentTypes.js';
-import './media/collaboration.css';
+import './media/collab.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -12,7 +12,7 @@ import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectT
 import type { IAction } from '../../../../base/common/actions.js';
 import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { IChannelService, type Channel, type ChannelRole, type ChannelFailure } from '../../../../platform/collaboration/common/channelService.js';
+import { IChannelService, type Channel, type ChannelRole, type ChannelFailure } from '../../../../platform/collab/common/channelService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { localize } from '../../../../nls.js';
@@ -27,7 +27,7 @@ import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultS
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 
 /** One shared channel tree; only search, focus and expansion are local UI state. */
-export class CollaborationViewPane extends ViewPane {
+export class CollabViewPane extends ViewPane {
 	private readonly tree: WorkbenchObjectTree<Channel>;
 	private readonly search: HTMLInputElement;
 	private readonly message: HTMLElement;
@@ -302,7 +302,7 @@ export class CollaborationViewPane extends ViewPane {
 		});
 		this.toolbar.setActions(this.channels ? [
 			{ ...this.action('collaboration.new', localize('collaboration.new', 'New Channel'), () => this.editChannel()), icon: Lxicon.add },
-			{ ...this.action('collaboration.members', localize('collaboration.members', 'Members and Permissions'), () => this.members()), enabled, icon: Lxicon.colab },
+			{ ...this.action('collaboration.members', localize('collaboration.members', 'Members and Permissions'), () => this.members()), enabled, icon: Lxicon.collab },
 		] : [], secondary);
 		const channel = this.channels?.find(channel => channel.id === this.selectedId);
 		this.selectionLabel.parentElement!.hidden = !channel;
@@ -378,7 +378,7 @@ export class CollaborationViewPane extends ViewPane {
 		const action = await this.pick([
 			{ label: localize('collaboration.copyKey', 'Copy My Sign-in Key'), id: 'copy' },
 			{ label: localize('collaboration.forgetAccount', 'Continue and Forget Saved Account'), id: 'continue' },
-		], { title: localize('collaboration.accountChange', 'Change Collaboration Account'), placeHolder: localize('collaboration.keepKey', 'Keep your sign-in key before leaving. Without it, you will need another administrator to invite you.') });
+		], { title: localize('collaboration.accountChange', 'Change Collab Account'), placeHolder: localize('collaboration.keepKey', 'Keep your sign-in key before leaving. Without it, you will need another administrator to invite you.') });
 		if (action?.id === 'copy') await this.copyKey();
 		return action?.id === 'continue' && !this.isDisposed;
 	}
@@ -391,7 +391,7 @@ export class CollaborationViewPane extends ViewPane {
 		if (!service || service.busy || !(await this.confirmAccountChange())) return;
 		const mode = await this.pick([
 			{ label: localize('collaboration.join', 'Join with Invitation'), type: 'join' as const },
-			{ label: localize('collaboration.createSpace', 'Create Collaboration Space'), type: 'create' as const },
+			{ label: localize('collaboration.createSpace', 'Create Collab Space'), type: 'create' as const },
 		], { title: localize('collaboration.connect', 'Connect Channels') });
 		if (!mode || this.isDisposed) return;
 		if (mode.type === 'join') {
@@ -404,7 +404,7 @@ export class CollaborationViewPane extends ViewPane {
 			if (parsed && !this.isDisposed) await service.connect({ type: 'join', ...parsed });
 		} else {
 			const serverUrl = await this.quickInput.input({
-				title: localize('collaboration.server', 'Collaboration Server'), placeHolder: 'https://collaboration.example.com', value: service.space?.serverUrl,
+				title: localize('collaboration.server', 'Collab Server'), placeHolder: 'https://collaboration.example.com', value: service.space?.serverUrl,
 				validateInput: async value => this.validServer(value) ? undefined : localize('collaboration.invalidServer', 'Use an HTTPS server origin, or HTTP on localhost.')
 			});
 			if (!serverUrl || this.isDisposed) return;

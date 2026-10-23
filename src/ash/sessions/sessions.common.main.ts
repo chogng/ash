@@ -75,7 +75,7 @@ import { registerTerminalView } from '../workbench/contrib/terminal/browser/term
 // Connected App tools use the same Task owner and Terminal execution services as Code.
 import '../workbench/contrib/tasks/browser/task.contribution.js';
 import { registerOutputView } from '../workbench/contrib/output/browser/output.contribution.js';
-import { registerCollaborationViews } from '../workbench/contrib/collaboration/browser/collaboration.contribution.js';
+import { registerCollabViews } from '../workbench/contrib/collab/browser/collab.contribution.js';
 import { registerCallView } from '../workbench/contrib/call/browser/call.contribution.js';
 import { SessionsViewRegistry } from './common/views.js';
 import { Lxicon } from '../base/common/lxicons.js';
@@ -93,7 +93,7 @@ registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed
 
 for (const [id, title, icon, activeIcon, order] of [
 	['chat', localize2({ bundle: 'ash', key: 'sessions.activity.chat' }, 'Chat'), Lxicon.chat2, Lxicon.chat2Filled, 10],
-	['collaboration', localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collaboration'), Lxicon.colab, Lxicon.colabFilled, 20],
+	['collaboration', localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collab'), Lxicon.collab, Lxicon.collabFilled, 20],
 	['teams', localize2({ bundle: 'ash', key: 'sessions.activity.teams' }, 'Agent Teams'), Lxicon.agent, Lxicon.agent, 25],
 	['code', localize2({ bundle: 'ash', key: 'sessions.mode.code' }, 'Code'), Lxicon.code, Lxicon.code, 40],
 ] as const) {
@@ -106,5 +106,5 @@ for (const [id, title, icon, activeIcon, order] of [
 registerTerminalView(SessionsViewRegistry);
 registerOutputView(SessionsViewRegistry);
 
-registerCollaborationViews(SessionsViewRegistry, accessor => accessor.get(ICommandService).executeCommand('sessions.open.collaboration'));
+registerCollabViews(SessionsViewRegistry, accessor => accessor.get(ICommandService).executeCommand('sessions.open.collaboration'));
 registerCallView(SessionsViewRegistry);

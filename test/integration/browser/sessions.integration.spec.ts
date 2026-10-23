@@ -100,11 +100,11 @@ test('Sessions navigation icons and surface controls follow the selected compone
 	await page.mouse.move(400, 180);
 	await expect(page.getByRole('button', { name: 'Hide sidebar' })).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	await expect(activityBar.locator('.ash-sessions-activity-top button svg').first()).toHaveAttribute('data-ash-icon-id', 'chat-2-filled');
-	const collaboration = activityBar.getByRole('button', { name: 'Collaboration' });
+	const collaboration = activityBar.getByRole('button', { name: 'Collab' });
 	const projects = activityBar.getByRole('button', { name: 'Projects' });
 	const chat = activityBar.getByRole('button', { name: 'Chat' });
 	await collaboration.click();
-	await expect(collaboration.locator('svg')).toHaveAttribute('data-ash-icon-id', 'colab-filled');
+	await expect(collaboration.locator('svg')).toHaveAttribute('data-ash-icon-id', 'collab-filled');
 	await expect(collaboration).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-sessions-list-controls')).toBeHidden();
 	await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
@@ -112,7 +112,7 @@ test('Sessions navigation icons and surface controls follow the selected compone
 	await projects.click();
 	await expect(projects.locator('svg')).toHaveAttribute('data-ash-icon-id', 'projects-filled');
 	await expect(projects).toHaveAttribute('aria-current', 'page');
-	await expect(collaboration.locator('svg')).toHaveAttribute('data-ash-icon-id', 'colab');
+	await expect(collaboration.locator('svg')).toHaveAttribute('data-ash-icon-id', 'collab');
 	await chat.click();
 	await expect(chat).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-sessions-list-controls')).toBeVisible();
@@ -617,7 +617,7 @@ test('Activity Bar compact and horizontal menus preserve icon geometry and accou
 	expect(buttonBounds!.height).toBe(36);
 	expect(iconBounds!.width).toBe(24);
 	expect(iconBounds!.height).toBe(24);
-	const collaborationIcon = activityBar.locator('button svg[data-ash-icon-id="colab"]');
+	const collaborationIcon = activityBar.locator('button svg[data-ash-icon-id="collab"]');
 	await expect(collaborationIcon).toHaveCSS('width', '24px');
 	expect(Math.abs(iconBounds!.x + iconBounds!.width / 2 - (buttonBounds!.x + buttonBounds!.width / 2))).toBeLessThanOrEqual(1);
 	expect(Math.abs(iconBounds!.y + iconBounds!.height / 2 - (buttonBounds!.y + buttonBounds!.height / 2))).toBeLessThanOrEqual(1);
@@ -715,7 +715,7 @@ test('Sessions titlebar colors resolve under light and dark themes', async ({ pa
 test('Sessions navigation geometry centers icons and enables the component actions', async ({ page }) => {
 	await expect(page.locator("[data-part='activitybar']")).toBeVisible();
 	const activityButtons = page.locator("[data-part='activitybar'] button");
-	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'colab', 'agent', 'projects', 'code', 'symbol-color', 'agent', 'account']);
+	expect(await activityButtons.locator('svg').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['chat-2-filled', 'collab', 'agent', 'projects', 'code', 'symbol-color', 'agent', 'account']);
 	await expect(page.locator('.ash-sessions-activity-bottom button')).toHaveCount(1);
 	const chatButton = activityButtons.first();
 	const chatButtonBounds = await chatButton.boundingBox();

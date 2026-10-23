@@ -4,7 +4,7 @@ function channel(page: Page, id: string) { return page.getByRole('treeitem').fil
 
 for (const locale of ['en', 'zh-CN']) {
 	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
-		test(`Collaboration panel ${locale} ${theme}: channels, call controls and narrow layout`, async ({ page }) => {
+		test(`Collab panel ${locale} ${theme}: channels, call controls and narrow layout`, async ({ page }) => {
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.message));
 			await page.setViewportSize({ width: 360, height: 820 });
