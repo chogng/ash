@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { ImageEditorService } from '../../browser/imageEditorService.js';
 import type { ImageEditorOptions } from '../../common/imageEditorService.js';
-import type { VSBuffer } from '../../../../../base/common/buffer.js';
+import { VSBuffer } from '../../../../../base/common/buffer.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
@@ -10,7 +11,9 @@ class TestImageEditorService extends ImageEditorService {
 	constructor() { super(); }
 	lastSignal: AbortSignal | undefined;
 	lastOptions: ImageEditorOptions | undefined;
-	async capture(signal: AbortSignal, options?: ImageEditorOptions): Promise<VSBuffer | undefined> { this.lastSignal = signal; this.lastOptions = options; return undefined; }
+	result: VSBuffer | undefined;
+	pending: DeferredPromise<VSBuffer | undefined> | undefined;
+	async capture(signal: AbortSignal, options?: ImageEditorOptions): Promise<VSBuffer | undefined> { this.lastSignal = signal; this.lastOptions = options; return this.pending ? this.pending.p : this.result; }
 }
 
 test('image interactions are fenced by their exact provider and never fall back after retirement', async () => {
@@ -38,28 +41,55 @@ test('ambiguous defaults fail while an explicit editor remains available', async
 });
 
 
-test('image destinations own draft cancellation and retire their only handler', async () => {
+test('standalone copy, save and cancellation need no chat destination', async () => {
 	using service = new TestImageEditorService();
-	const draft = new AbortController();
 	const request = new AbortController();
-	using destination = service.registerAttachmentHandler(capture => capture(draft.signal).then(() => undefined));
-	assert.throws(() => service.registerAttachmentHandler(async () => { }), /already registered/);
 	await service.show({ editorId: 'other.image:editor' }, request.signal);
 	assert.equal(service.lastOptions?.editorId, 'other.image:editor');
+	assert.equal(service.lastOptions?.defaultAction, 'copy');
 	assert.equal(service.lastSignal?.aborted, false);
-	draft.abort();
-	assert.equal(service.lastSignal?.aborted, true);
-	destination.dispose();
-	await assert.rejects(service.show({}, request.signal), /No image attachment target/);
 });
 
-test('retiring an attachment destination cancels its active producer without cancelling the caller', async () => {
+test('Add to Chat acquires its destination only after the standalone image is ready', async () => {
 	using service = new TestImageEditorService();
 	const request = new AbortController();
-	using destination = service.registerAttachmentHandler(capture => capture(new AbortController().signal).then(() => undefined));
-	await service.show({}, request.signal);
-	assert.equal(service.lastSignal?.aborted, false);
-	destination.dispose();
-	assert.equal(service.lastSignal?.aborted, true);
+	service.pending = new DeferredPromise();
+	const interaction = service.show({}, request.signal);
+	let attachments = 0;
+	using destination = service.registerAttachmentHandler(async capture => {
+		attachments++;
+		assert.equal(await capture(new AbortController().signal), image);
+	});
+	assert.throws(() => service.registerAttachmentHandler(async () => { }), /already registered/);
+	assert.equal(attachments, 0);
+	const image = VSBuffer.fromString('selected image');
+	await service.pending.complete(image);
+	await interaction;
+	assert.equal(attachments, 1);
 	assert.equal(request.signal.aborted, false);
+});
+
+test('retiring a chat destination does not cancel an independent screenshot', async () => {
+	using service = new TestImageEditorService();
+	service.pending = new DeferredPromise();
+	using destination = service.registerAttachmentHandler(async () => { assert.fail('No attach action was chosen'); });
+	const interaction = service.show({}, new AbortController().signal);
+	destination.dispose();
+	assert.equal(service.lastSignal?.aborted, false);
+	await service.pending.complete(undefined);
+	await interaction;
+	service.result = VSBuffer.fromString('image');
+	service.pending = undefined;
+	await assert.rejects(service.show({}, new AbortController().signal), /No image attachment target/);
+});
+
+test('cancelling an independent image request prevents a late attachment', async () => {
+	using service = new TestImageEditorService();
+	service.pending = new DeferredPromise();
+	using destination = service.registerAttachmentHandler(async () => { assert.fail('Cancelled image must not attach'); });
+	const request = new AbortController();
+	const interaction = service.show({}, request.signal);
+	request.abort();
+	await service.pending.complete(VSBuffer.fromString('late image'));
+	await interaction;
 });

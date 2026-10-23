@@ -25,6 +25,7 @@ export class NativeImageEditorService extends ImageEditorService {
 			id, title: resolved.displayName, html: resolved.view.html,
 			source: options?.code ? 'content' : 'screen',
 			input: {
+				defaultAction: options?.defaultAction ?? 'attach',
 				...(options?.code ? { code: options.code } : {}),
 				...(resolved.view.state !== undefined ? { state: resolved.view.state } : {}),
 				theme: readImageEditorTheme(document),

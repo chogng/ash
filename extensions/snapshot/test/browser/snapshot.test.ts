@@ -22,7 +22,12 @@ suite('chatScreenshot browser component', () => {
 		await input.focus();
 		await page.keyboard.insertText('Shortcut draft');
 		await page.keyboard.press(process.platform === 'darwin' ? 'Control+Meta+A' : 'Control+Alt+S');
-		await expect(page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true })).toBeVisible();
+		const overlay = page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true });
+		await expect(overlay).toBeVisible();
+		await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
+		await expect(overlay.getByRole('button', { name: 'Copy', exact: true })).toHaveClass(/primary/);
+		await expect(overlay.getByRole('button', { name: 'Add to Chat', exact: true })).not.toHaveClass(/primary/);
+		expect(await page.evaluate(() => window.ashScreenshotIntegration.state().pending)).toBe(false);
 		await page.keyboard.press('Escape');
 		await expect(page.locator('iframe')).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashScreenshotIntegration.draft())).toBe('Shortcut draft');
@@ -72,17 +77,21 @@ suite('chatScreenshot browser component', () => {
 		expect(await page.evaluate(() => window.ashScreenshotIntegration.state().calls)).toBe(1);
 	});
 
-	test('changing drafts cancels the CodeSnap interaction through the Chat consumer', async function () {
+	test('independent code images survive a draft switch and attach only when requested', async function () {
 		const { page } = browserTests;
 		await openFixture(page, '/chatInput.html?screenshotFixture=1&inlineCode=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		await page.getByRole('button', { name: 'Create code image', exact: true }).click();
 		await expect(page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true })).toBeVisible();
-		expect(await page.evaluate(() => window.ashScreenshotIntegration.state().pending)).toBe(true);
-		await page.evaluate(() => window.ashScreenshotIntegration.switchDraft());
-		await expect(page.locator('iframe')).toHaveCount(0);
-		expect(await page.evaluate(() => window.ashScreenshotIntegration.draft())).toBe('Next conversation');
 		expect(await page.evaluate(() => window.ashScreenshotIntegration.state().pending)).toBe(false);
+		await page.evaluate(() => window.ashScreenshotIntegration.switchDraft());
+		const overlay = page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true });
+		await expect(overlay).toBeVisible();
+		await overlay.getByRole('button', { name: 'Add to Chat', exact: true }).click();
+		await expect(page.locator('iframe')).toHaveCount(0);
+		expect(await page.evaluate(() => window.ashScreenshotIntegration.draft())).toMatch(/^Next conversation/);
+		expect(await page.evaluate(() => window.ashScreenshotIntegration.state().pending)).toBe(false);
+		expect((await submittedImage(page)).width).toBeGreaterThan(400);
 	});
 
 	async function submittedImage(page: Page): Promise<{ width: number; height: number; pixel: number[]; }> {

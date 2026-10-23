@@ -38,6 +38,7 @@ export class BrowserImageEditorService extends ImageEditorService {
 						if (finished) return;
 						if (!image && !options?.code) { finish(); return; }
 						frame = createImageViewFrame(document, resolved.displayName, resolved.view.html, {
+							defaultAction: options?.defaultAction ?? 'attach',
 							image, code: options?.code, state: resolved.view.state, theme: readImageEditorTheme(document),
 							colorScheme: (document.querySelector('.ash-workbench') ?? document.body)?.getAttribute('data-color-scheme') ?? 'dark',
 						}, async result => {

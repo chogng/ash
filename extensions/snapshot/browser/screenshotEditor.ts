@@ -15,6 +15,7 @@ import {
 
 
 interface ScreenshotEditorOptions {
+	readonly defaultAction: 'copy' | 'attach';
 	readonly accessibilityHints: boolean;
 	readonly help: string;
 	readonly selectEntire?: boolean;
@@ -173,14 +174,14 @@ export class ScreenshotEditor extends Disposable {
 		}).title = localize('screenshot.saveTitle', 'Save screenshot');
 		button(actions, localize('screenshot.copy', 'Copy'), () => {
 			void this.export('copy');
-		});
+		}, options.defaultAction === 'copy');
 		button(
 			actions,
 			localize('chat.screenshot.attach', 'Add to Chat'),
 			() => {
 				void this.export('attach');
 			},
-			true
+			options.defaultAction === 'attach'
 		);
 		this.fields = node('div', 'ash-screenshot-fields');
 		this.fields.hidden = true;
@@ -493,7 +494,7 @@ export class ScreenshotEditor extends Disposable {
 		if (event.key === 'Enter' && this.region) {
 			event.preventDefault();
 			event.stopImmediatePropagation();
-			void this.export('attach');
+			void this.export(this.options.defaultAction);
 			return;
 		}
 		if (!this.region || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;

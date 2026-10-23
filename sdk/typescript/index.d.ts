@@ -191,6 +191,8 @@ export interface ImageEditorTheme {
 /** Initialization sent to the view after it posts { type: 'initialize' }. Never grants host service access. */
 export interface ImageEditorInput {
 	readonly type: 'initialize';
+	/** Preferred explicit export action, determined by the interaction's entry point. */
+	readonly defaultAction: 'copy' | 'attach';
 	readonly image?: Uint8Array;
 	readonly code?: CodeImageSnapshot;
 	readonly state?: JsonValue;

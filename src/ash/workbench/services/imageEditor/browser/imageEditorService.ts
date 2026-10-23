@@ -47,9 +47,16 @@ export abstract class ImageEditorService extends Disposable implements IImageEdi
 	async show(options: ImageEditorOptions, signal: AbortSignal): Promise<void> {
 		this.assertNotDisposed();
 		signal.throwIfAborted();
+		// Capture belongs to the image interaction. Acquire a chat draft only after
+		// Add to Chat returns pixels; copy, save and cancel never open a chat.
+		const image = await this.capture(signal, { ...options, defaultAction: 'copy' });
+		if (!image || signal.aborted || this.isDisposed) return;
 		const handler = this.attachmentHandler;
 		if (!handler) throw new Error(localize('imageEditor.attachmentUnavailable', 'No image attachment target is registered.'));
-		await handler.run(draftSignal => this.capture(AbortSignal.any([signal, draftSignal, handler.lifetime.signal]), options));
+		await handler.run(async draftSignal => {
+			if (signal.aborted || draftSignal.aborted || handler.lifetime.signal.aborted) return undefined;
+			return image;
+		});
 	}
 	abstract capture(signal: AbortSignal, options?: ImageEditorOptions): Promise<VSBuffer | undefined>;
 	override dispose(): void {

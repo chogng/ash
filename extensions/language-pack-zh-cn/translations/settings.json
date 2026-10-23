@@ -420,7 +420,15 @@
     "target.help": "选择用户、工作区或工作区文件夹。输入 @lang: 和语言 ID 可编辑特定语言的设置。已修改筛选、修改和重置均使用所选目标和语言。",
     "status.configuredTarget": "已在所选目标中配置。",
     "status.configuredLanguage": "已在所选目标中为 {0} 配置。",
-    "search.languageHelp": "@lang:plaintext 等语言查询会在共享工作台编辑器中打开特定语言的设置。工作区和文件夹设置也使用该编辑器。"
+    "search.languageHelp": "@lang:plaintext 等语言查询会在共享工作台编辑器中打开特定语言的设置。工作区和文件夹设置也使用该编辑器。",
+    "snapshot.shortcut": "键盘快捷键",
+    "snapshot.unassigned": "未设置",
+    "snapshot.changeShortcut": "修改快捷键",
+    "snapshot.screen": "屏幕截图",
+    "snapshot.screenDescription": "框选并标注屏幕内容，然后选择复制、保存或添加到聊天。",
+    "snapshot.code": "代码截图",
+    "snapshot.codeDescription": "将编辑器中选中的代码生成为图片，无需屏幕录制权限。",
+    "snapshot.shortcutHelp": "截图快捷键\n使用 Tab 移动到“修改快捷键”，按 Enter 在“键盘快捷方式”中打开对应命令。修改后，此处会显示新的快捷键。屏幕截图可以复制、保存或添加到聊天。后台截图使用同一个屏幕截图快捷键。代码截图从编辑器选区生成图片，无需屏幕录制权限。Escape 关闭帮助并恢复焦点。"
   },
   "ash": {
     "color.settings.focusedRowBackground": "包含键盘焦点的设置行的背景色。",

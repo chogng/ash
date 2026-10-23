@@ -62,7 +62,8 @@
           "minimum": 0,
           "maximum": 128,
           "scope": "application",
-          "description": "%code.padding%"
+          "description": "%code.padding%",
+          "title": "%code.padding.title%"
         },
         "snapshot.code.scale": {
           "type": "number",
@@ -70,44 +71,51 @@
           "minimum": 1,
           "maximum": 4,
           "scope": "application",
-          "description": "%code.scale%"
+          "description": "%code.scale%",
+          "title": "%code.scale.title%"
         },
         "snapshot.code.background": {
           "type": "string",
           "default": "#6366f1",
           "pattern": "^#[0-9a-fA-F]{6}$",
           "scope": "application",
-          "description": "%code.background%"
+          "description": "%code.background%",
+          "title": "%code.background.title%"
         },
         "snapshot.code.lineNumbers": {
           "type": "boolean",
           "default": true,
           "scope": "application",
-          "description": "%code.lineNumbers%"
+          "description": "%code.lineNumbers%",
+          "title": "%code.lineNumbers.title%"
         },
         "snapshot.code.realLineNumbers": {
           "type": "boolean",
           "default": true,
           "scope": "application",
-          "description": "%code.realLineNumbers%"
+          "description": "%code.realLineNumbers%",
+          "title": "%code.realLineNumbers.title%"
         },
         "snapshot.code.windowControls": {
           "type": "boolean",
           "default": true,
           "scope": "application",
-          "description": "%code.windowControls%"
+          "description": "%code.windowControls%",
+          "title": "%code.windowControls.title%"
         },
         "snapshot.code.windowTitle": {
           "type": "boolean",
           "default": true,
           "scope": "application",
-          "description": "%code.windowTitle%"
+          "description": "%code.windowTitle%",
+          "title": "%code.windowTitle.title%"
         },
         "snapshot.code.transparent": {
           "type": "boolean",
           "default": false,
           "scope": "application",
-          "description": "%code.transparent%"
+          "description": "%code.transparent%",
+          "title": "%code.transparent.title%"
         }
       }
     }

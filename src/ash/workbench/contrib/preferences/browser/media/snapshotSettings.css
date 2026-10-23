@@ -1,0 +1,26 @@
+.ash-snapshot-shortcut {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	column-gap: var(--ash-spacing-size120);
+	row-gap: var(--ash-spacing-size40);
+}
+
+.ash-snapshot-shortcut > h5 {
+	grid-column: 1;
+	grid-row: 1;
+}
+
+.ash-snapshot-shortcut > p:empty {
+	display: none;
+}
+
+.ash-snapshot-shortcut > [role="status"] {
+	grid-column: 1;
+	grid-row: 2;
+}
+
+.ash-snapshot-shortcut > .ash-settings-section-actions {
+	grid-column: 2;
+	grid-row: 1 / 3;
+	align-self: center;
+}

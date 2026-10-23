@@ -302,15 +302,15 @@ export class ImageViewMainService extends Disposable {
 				type: 'info',
 				message:
 					messages?.['screenshot.permission.title'] ??
-					localize2('screenshot.permission.title', 'Allow screen capture').original,
+					localize2('screenshot.permission.title', 'Screen recording permission needed').original,
 				detail:
 					formatNlsMessage(
 						messages?.['screenshot.permission.detail'] ??
 						localize2(
 							'screenshot.permission.detail',
-							'To capture your screen, enable {0} in System Settings → Privacy & Security → Screen & System Audio Recording. If it is missing, click + and select the application shown below.\n\nCurrent application: {1}\n\nAfter granting access, quit and reopen the application if macOS asks, then try Screenshot again.'
+							'macOS requires screen recording permission to capture screen images.\n\nOpen System Settings → Privacy & Security → Screen & System Audio Recording, and enable {0}. Then return to Ash and try again. Restart the app if macOS asks.\n\nIf the app is missing from the list, choose Show Application in Finder to locate it, then add it with the + button in System Settings.'
 						).original,
-						{ '0': bundleName, '1': bundlePath }
+						{ '0': bundleName }
 					) +
 					(app.isPackaged
 						? ''
@@ -319,7 +319,7 @@ export class ImageViewMainService extends Disposable {
 							messages?.['screenshot.permission.development'] ??
 							localize2(
 								'screenshot.permission.development',
-								'This development instance runs as {0}. Grant access to this application; a packaged Ash.app has its own permission.'
+								'This development version appears as {0} in System Settings.'
 							).original,
 							{ '0': bundleName }
 						)),

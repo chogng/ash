@@ -1991,6 +1991,14 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-item-id="screenshot.section"]'), null);
 	assert.equal(root.querySelector('[data-settings-category-id="screenshot"]'), null);
 	assert.equal(root.querySelector('[data-settings-category-id="extension.ash.snapshot"]')?.textContent, 'Snapshot');
+	const screenSettings = root.querySelector<HTMLElement>('[data-settings-tree-group-id="extension.ash.snapshot.group.screen"]')!;
+	const codeSettings = root.querySelector<HTMLElement>('[data-settings-tree-group-id="extension.ash.snapshot.group.code"]')!;
+	assert.ok(screenSettings);
+	assert.ok(codeSettings);
+	assert.ok(screenSettings.querySelector('[data-settings-item-id="snapshot.screen.shortcut"]')?.textContent?.includes('Not set'));
+	assert.ok(codeSettings.querySelector('[data-settings-item-id="snapshot.code.shortcut"]')?.textContent?.includes('Not set'));
+	assert.ok(codeSettings.textContent?.includes('Resolution scale'));
+	assert.equal(screenSettings.querySelector('[data-configuration-key="snapshot.code.padding"]'), null);
 	const globalScreenshot = root.querySelector<HTMLElement>(`[data-configuration-key="${ScreenshotGlobalShortcutSetting}"]`)!;
 	assert.ok(globalScreenshot);
 	assert.equal(globalScreenshot.getAttribute('aria-checked'), 'false');

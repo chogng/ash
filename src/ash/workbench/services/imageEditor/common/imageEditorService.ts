@@ -25,6 +25,8 @@ export interface ImageEditorProvider {
 export interface ImageEditorOptions {
 	readonly editorId?: string;
 	readonly code?: CodeImageSnapshot;
+	/** Chat-originated captures attach on Enter; standalone images copy on Enter. */
+	readonly defaultAction?: 'attach' | 'copy';
 }
 /** The destination owns its draft and lends cancellation to this producer. */
 export type ImageEditorCapture = (signal: AbortSignal) => Promise<VSBuffer | undefined>;

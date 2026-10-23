@@ -29,7 +29,11 @@ The Chat attachment source and `workbench.action.chat.attachScreenshot` resolve
 the registered default editor. Desktop captures every display into native overlay
 windows; Browser uses the browser's screen-sharing picker. Pixels go directly to
 the extension's opaque view. Region selection, resize, rectangle, arrow, pen,
-text, mosaic, undo, retake, copy, save and Add to Chat retain their existing flow.
+text, mosaic, undo, retake, copy, save and Add to Chat share the same image editor.
+The screenshot command opens independently of Chat. Copy, save and cancel never
+open Chat or reserve a draft. Enter copies standalone images; a capture started
+from Chat's attachment picker attaches on Enter. Add to Chat remains an explicit
+action in both cases.
 
 The default shortcuts remain Control+Command+A on macOS and Control+Alt+S on
 Windows/Linux. `screenshot.globalShortcut` keeps its existing key and default.
@@ -45,8 +49,10 @@ numbers, resolved token styles and editor font information. It requests no deskt
 pixels or screen permission. The extension renders the snapshot into a PNG, then
 offers the same annotation and output controls. Accessibility view includes the
 selected code as text.
-Chat registers its attachment handler with the image-editor service and binds the
-destination draft before capture; switching drafts cancels the interaction. The
+Chat registers its attachment handler with the image-editor service. Captures
+started from Chat bind the originating draft before capture, and switching drafts
+cancels those captures. Standalone screen and code images acquire the current
+destination only after Add to Chat; switching drafts does not cancel them. The
 SDK adapter does not invoke Chat commands or construct attachments. The native
 image-view platform receives opaque presentation data and has no editor or Chat
 dependencies.
@@ -60,6 +66,10 @@ Settings are declared in this package's `package.json`. User values remain in
 the profile's `settings.json`. `snapshot.code.*` controls padding, resolution,
 background, original/relative line numbers, window controls, title and transparency.
 `accessibility.verbosity.chatScreenshot` retains its existing key.
+Settings presents separate Screen capture and Code images groups, each with the
+current shortcut and a link to its command in Keyboard Shortcuts. Bindings stay
+in the profile's `keybindings.json`; changing the background toggle does not
+create a second shortcut.
 
 The image view owns one bitmap, selection and annotation history. OCR, translation,
 additional editing and sharing can consume this package's image workflow later;

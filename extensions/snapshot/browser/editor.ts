@@ -52,6 +52,7 @@ async function open(input: ImageEditorInput): Promise<void> {
 	document.documentElement.dataset.colorScheme = input.colorScheme;
 	const image = input.code ? await renderCodeImage(document, input.code, state!.code!) : input.image!;
 	editor = await ScreenshotEditor.create(document, image, {
+		defaultAction: input.defaultAction,
 		accessibilityHints: state?.accessibilityHints !== false,
 		help: state?.help ?? '',
 		selectEntire: !!input.code,

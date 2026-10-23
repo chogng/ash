@@ -30,6 +30,13 @@ test('CSS variable checks find unknown names in nested fallbacks without treatin
 	assert.deepEqual(second, []);
 });
 
+test('Snapshot webview variables pass production checks while misspellings still fail', () => {
+	assert.deepEqual(checkStyles([join(root, 'extensions/snapshot/browser/screenshotEditor.css')]), []);
+	const errors: string[] = [];
+	getVariableNameValidator()('.capture { color: var(--snapshot-foregound); padding: var(--snapshot-spacing-5); }', name => errors.push(name));
+	assert.deepEqual(errors, ['--snapshot-foregound', '--snapshot-spacing-5']);
+});
+
 test('manifest loading rejects malformed, duplicate, and unsorted variables', () => {
 	const directory = mkdtempSync(join(tmpdir(), 'ash-stylelint-manifest-'));
 	const file = join(directory, 'variables.json');

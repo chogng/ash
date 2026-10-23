@@ -36,7 +36,6 @@ import { IChatSessionNavigationService } from '../../../../services/chat/common/
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
-import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import type { ChatContextAttachment, ChatImageCapture, IChatContextTarget } from '../../../../services/chat/common/chatContextService.js';
 
 /** Registers editor context commands for the lifetime of their Workbench host. */
@@ -73,13 +72,13 @@ export function registerChatContextActions(imageEditors: IImageEditorService, co
 		}
 	}));
 
-	store.add(registerAction2(class AttachScreenshotToChatAction extends Action2 {
+	store.add(registerAction2(class CaptureScreenshotAction extends Action2 {
 		constructor() {
 			super({
 				id: ScreenshotCommandId,
-				title: localize2('chat.context.attachScreenshot', 'Chat: Add Screenshot'),
+				// Keep the stored command ID so existing custom shortcuts still apply.
+				title: localize2('chat.context.attachScreenshot', 'Screenshot: Capture Screen'),
 				f1: true,
-				precondition: ChatContextKeys.enabled.isEqualTo(true),
 				keybinding: {
 					primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyS,
 					mac: { primary: KeyMod.WinCtrl | KeyMod.CtrlCmd | KeyCode.KeyA },
@@ -90,6 +89,10 @@ export function registerChatContextActions(imageEditors: IImageEditorService, co
 
 		override async run(accessor: ServicesAccessor, capture?: ChatImageCapture): Promise<void> {
 			if (capture !== undefined && typeof capture !== 'function') throw new TypeError('Expected a host-owned image capture');
+			if (!capture) {
+				await accessor.get(IImageEditorService).show({}, new AbortController().signal);
+				return;
+			}
 			const target = await accessor.get(IViewsService).openView<IView & IChatContextTarget>(CHAT_VIEW_ID);
 			await target?.captureScreenshot(capture);
 		}
