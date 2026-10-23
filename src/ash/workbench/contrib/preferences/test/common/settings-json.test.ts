@@ -393,13 +393,16 @@ test('the text-model save path updates configuration and accepts later external 
 	}]);
 
 	assert.equal(reference.isDirty, true);
+	const savedConfiguration = new Promise<void>(resolve => Event.once(configuration.onDidChangeConfiguration)(() => resolve()));
 	await reference.save(new AbortController().signal);
+	await savedConfiguration;
 	assert.equal(configuration.getValue(enabled), false);
 	assert.equal(reference.isDirty, false);
 	assert.equal(reference.hasExternalChange, false);
 
+	const reloadedModel = new Promise<void>(resolve => Event.once(reference.model.onDidChangeContent)(() => resolve()));
 	await configuration.updateValue(enabled, true);
-	await nextTurn();
+	await reloadedModel;
 	assert.equal(configuration.getValue(enabled), true);
 	assert.match(reference.model.getText(), /Keep me/u);
 	assert.doesNotMatch(reference.model.getText(), /"editor\.enabled"/u);

@@ -129,13 +129,6 @@
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
-.ash-theme-editor-name-actions {
-	display: flex;
-	gap: 8px;
-	justify-content: flex-end;
-	margin-top: 12px;
-}
-
 .ash-theme-editor-scroll {
 	flex: 1;
 	min-height: 0;

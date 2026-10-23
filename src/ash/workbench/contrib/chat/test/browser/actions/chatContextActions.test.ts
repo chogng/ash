@@ -467,7 +467,8 @@ suite('chatContextActions browser component', () => {
 		test(`clipboard, screenshot and session context send snapshots in ${locale}`, async function () {
 			const { page } = browserTests;
 
-			await page.goto(`/chatInput.html?locale=${locale}`);
+			await page.goto(`/chatInput.html?locale=${locale}&screenshotFixture=1`);
+			await page.waitForFunction(() => !!window.ashChatInputIntegration);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const chinese = locale === 'zh-CN';
 			const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
@@ -475,7 +476,7 @@ suite('chatContextActions browser component', () => {
 				await add.press('Enter');
 				await page.getByRole('dialog').getByRole('option', { name, exact: true }).click();
 				if (name === 'Screenshot…' || name === '截图…') {
-					const capture = page.getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture' });
+					const capture = page.frameLocator('iframe').getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture' });
 					await capture.getByRole('button', { name: chinese ? '整个屏幕' : 'Entire screen', exact: true }).click();
 					await capture.getByRole('button', { name: chinese ? '加入聊天' : 'Add to Chat', exact: true }).click();
 				}

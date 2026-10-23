@@ -410,7 +410,9 @@ const integration = {
 		const input = EditorInputSerializers.deserialize(JSON.parse(localStorage.getItem('binary-comparison')!));
 		const services = binaryResources.add(new InstantiationService());
 		services.registerSingleton(IFileService, () => createTestFileService(files));
-		const pane = binaryResources.add(registerTestComponentServices(services).createInstance(BinaryResourceDiffEditor));
+		registerTestComponentServices(services);
+		registerCodeEditorServices(services);
+		const pane = binaryResources.add(services.createInstance(BinaryResourceDiffEditor));
 		const container = document.createElement('div');
 		container.id = 'binary-comparison';
 		container.style.width = '640px';
@@ -442,6 +444,7 @@ const integration = {
 		const parent = binaryResources.add(new InstantiationService());
 		parent.registerSingleton(IFileService, () => createTestFileService(files));
 		const services = binaryResources.add(createTestEditorServices(undefined, parent));
+		registerCodeEditorServices(services);
 		const registry = new EditorPaneRegistry();
 		registry.registerEditorPane(binaryDiffEditorDescriptor());
 		const container = document.createElement('div');

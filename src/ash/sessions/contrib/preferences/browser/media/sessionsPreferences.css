@@ -4,7 +4,7 @@
 	container-type: inline-size;
 }
 
-.ash-sessions-settings-dialog > .ash-dialog-title {
+.ash-sessions-settings-dialog > .ash-dialog-header {
 	display: none;
 }
 

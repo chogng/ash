@@ -89,7 +89,6 @@
     "chatSession.wording.title": "会话操作用语",
     "chatSession.wording.description": "选择归档和恢复会话的标签。归档会中断正在运行的工作；恢复会重新开放根对话，但不会恢复运行工作。",
     "chatSession.target.invalid": "请选择有效的会话。",
-    "chatSession.active.missing": "请先打开一个会话，再将其归档。",
     "chatSession.active.none": "没有可用的活动会话。",
     "chatSession.archive.confirm": "{0}：{1}？",
     "chatSession.archive.detail": "此会话中正在运行的工作将被中断。之后可以恢复根对话。",

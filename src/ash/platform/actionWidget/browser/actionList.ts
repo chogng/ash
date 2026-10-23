@@ -1,10 +1,4 @@
-import {
-	defaultButtonStyles,
-	defaultDialogStyles,
-	defaultInputBoxStyles,
-	defaultMenuStyles,
-	defaultKeybindingLabelStyles,
-} from '../../theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultDialogStyles, defaultInputBoxStyles, defaultMenuStyles, defaultKeybindingLabelStyles, defaultCheckboxStyles } from '../../theme/browser/defaultStyles.js';
 import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement, stopEvent } from '../../../base/browser/dom.js';
 import { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
@@ -226,11 +220,13 @@ export class ActionList<T> extends Disposable {
 				}
 				const lifetime = new DisposableStore();
 				const provider = lifetime.add(createHelpProvider(getActiveElement(this.domNode.ownerDocument)));
-				const dialog = lifetime.add(new Dialog(container, {
+				const dialog = lifetime.add(new Dialog(container, localize('actionWidget.helpTitle', 'Action menu accessibility help'), [], {
 					buttonStyles: defaultButtonStyles,
 					dialogStyles: defaultDialogStyles,
-					title: localize('actionWidget.helpTitle', 'Action menu accessibility help'),
-					content: provider.provideContent(),
+					checkboxStyles: defaultCheckboxStyles,
+					inputBoxStyles: defaultInputBoxStyles,
+					disableDefaultAction: true,
+					detail: provider.provideContent(),
 				}));
 				this.help.value = lifetime;
 				void dialog.show().finally(() => {

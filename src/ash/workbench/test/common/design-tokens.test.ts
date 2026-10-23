@@ -22,6 +22,8 @@ import { Colors } from "../../../platform/theme/common/colorRegistry.js";
 import { Sizes } from "../../../platform/theme/common/sizeRegistry.js";
 import { asCssVariableName } from "../../../platform/theme/common/sizeUtils.js";
 import "../../../editor/common/core/editorColorRegistry.js";
+import '../../contrib/debug/browser/debugColors.js';
+import '../../../sessions/contrib/creator/browser/widget/designToolsWidget.js';
 import "../../../editor/browser/widget/multiDiffEditor/colors.js";
 import "../../common/theme.js";
 import "../../contrib/chat/common/widget/chatColors.js";

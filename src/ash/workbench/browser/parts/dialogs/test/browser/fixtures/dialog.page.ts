@@ -1,4 +1,9 @@
-import { Dialog } from '../../../../../../../base/browser/ui/dialog/dialog.js';
+import '../../../../../../../platform/theme/common/sizes/baseSizes.js';
+import { Sizes } from '../../../../../../../platform/theme/common/sizeRegistry.js';
+import { asCssVariableName, sizeValueToCss } from '../../../../../../../platform/theme/common/sizeUtils.js';
+import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../../../../platform/theme/browser/defaultStyles.js';
+import { Dialog, DialogContentsAlignment, type IDialogResult } from '../../../../../../../base/browser/ui/dialog/dialog.js';
+import { Button } from '../../../../../../../base/browser/ui/button/button.js';
 import { Emitter, Event } from '../../../../../../../base/common/event.js';
 import { DisposableStore, MutableDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { DeferredPromise } from '../../../../../../../base/common/async.js';
@@ -40,6 +45,10 @@ declare global {
 			showInput(): void;
 			showCheckboxConfirmation(): void;
 			showBare(): void;
+			showCore(kind: 'standard' | 'custom' | 'blocked' | 'detail' | 'footer' | 'default' | 'buttons' | 'search' | 'vertical'): void;
+			updateCoreMessage(message: string): void;
+			lastCoreResult?: IDialogResult;
+			visibility: boolean[];
 			disposeBare(): void;
 			abort(): void;
 			showCommandFailure(): void;
@@ -53,6 +62,11 @@ declare global {
 			lastOutcome?: IDialogOutcome;
 		};
 	}
+}
+
+// The fixture host supplies the same size registry as a real themed window.
+for (const { id, value } of Sizes.getSizes()) {
+	document.documentElement.style.setProperty(asCssVariableName(id), sizeValueToCss(value));
 }
 
 const handler = new BrowserDialogHandler(document.body);
@@ -163,9 +177,68 @@ window.ashDialogIntegration = {
 			checkbox: { label: 'Also remove credentials' },
 		}, controller.signal).then(result => { window.ashDialogIntegration.lastOutcome = result; });
 	},
+	visibility: [],
+	showCore(kind): void {
+		const resources = new DisposableStore();
+		window.ashDialogIntegration.lastCoreResult = undefined;
+		window.ashDialogIntegration.visibility = [];
+		const detail = document.createElement('div');
+		const link = document.createElement('a');
+		link.textContent = 'Details link';
+		detail.append(link);
+		const labels = kind === 'default' ? undefined : kind === 'blocked' ? ['Complete'] : kind === 'footer' ? [] : ['Keep', 'Cancel', 'Discard'];
+		const dialog = resources.add(new Dialog(document.body, 'Core dialog', labels, {
+			buttonStyles: defaultButtonStyles,
+			checkboxStyles: defaultCheckboxStyles,
+			inputBoxStyles: defaultInputBoxStyles,
+			dialogStyles: { ...defaultDialogStyles, textLinkForeground: 'rgb(4, 5, 6)' },
+			cancelId: kind === 'blocked' ? 0 : 1,
+			alignment: kind === 'vertical' ? DialogContentsAlignment.Vertical : undefined,
+			buttonOptions: kind === 'buttons' ? [{ styleButton: button => { button.enabled = false; } }] : undefined,
+			extraClasses: ['base-dialog-contract'],
+			type: kind === 'standard' ? 'warning' : 'none',
+			inputs: kind === 'standard' ? [{ placeholder: 'Name', value: 'Initial' }, { type: 'password', placeholder: 'Secret' }] : undefined,
+			checkboxLabel: kind === 'standard' ? 'Remember values' : undefined,
+			detail: kind === 'detail' ? 'Ignored plain detail' : undefined,
+			detailElement: kind === 'detail' ? detail : undefined,
+			disableCloseAction: kind === 'blocked',
+			disableDefaultAction: kind === 'blocked' || kind === 'footer',
+			onVisibilityChange: (_window, visible) => window.ashDialogIntegration.visibility.push(visible),
+			renderBody: body => {
+				if (kind === 'search') {
+					const search = document.createElement('input');
+					search.type = 'search';
+					search.setAttribute('aria-label', 'Search');
+					body.append(search);
+				}
+				if (kind === 'custom' || kind === 'blocked') {
+					const textarea = kind === 'blocked' ? document.createElement('input') : document.createElement('textarea');
+					textarea.setAttribute('aria-label', 'Custom text');
+					const editable = document.createElement('div');
+					editable.contentEditable = 'true';
+					editable.setAttribute('aria-label', 'Editable content');
+					body.append(textarea, editable);
+				}
+			},
+			renderFooter: kind === 'footer' ? footer => {
+				resources.add(new Button(footer, {
+					label: 'Done', buttonSecondaryForeground: 'rgb(1, 2, 3)',
+					onClick: () => dialog.dispose(),
+				}));
+				footer.append(link);
+			} : undefined,
+		}));
+		bareDialog = dialog;
+		void dialog.show().then(result => {
+			window.ashDialogIntegration.lastCoreResult = result;
+			resources.dispose();
+		});
+	},
+	updateCoreMessage(message): void { bareDialog.updateMessage(message); },
+
 	showBare(): void {
-		bareDialog = new Dialog(document.body, { title: 'Plain dialog', content: 'Plain content' });
-		void bareDialog.show().then(result => { window.ashDialogIntegration.lastResult = result; });
+		bareDialog = new Dialog(document.body, 'Plain dialog', [], { buttonStyles: defaultButtonStyles, checkboxStyles: defaultCheckboxStyles, inputBoxStyles: defaultInputBoxStyles, dialogStyles: defaultDialogStyles, detail: 'Plain content', disableCloseAction: true, disableDefaultAction: true });
+		void bareDialog.show().then(result => { window.ashDialogIntegration.lastResult = String(result.button); });
 	},
 	disposeBare(): void {
 		bareDialog.dispose();

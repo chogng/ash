@@ -144,7 +144,7 @@ suite('extensions browser component', () => {
 			await openAccounts();
 			const empty = page.getByRole('dialog').filter({ hasText: zh ? '暂无可用的服务账号。' : 'No service accounts are available.' });
 			await expect(empty).toContainText(zh ? '先安装提供服务账号的插件' : 'Install a plugin that provides a service account');
-			await empty.getByRole('button').click();
+			await empty.getByRole('button', { name: zh ? '确定' : 'OK', exact: true }).click();
 			await expect(add).toBeFocused();
 			await page.evaluate(() => window.ashExtensionsIntegration.failConnectorList(true));
 			await openAccounts();

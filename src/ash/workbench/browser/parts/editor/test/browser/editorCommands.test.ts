@@ -1,4 +1,5 @@
 import '../../../../../../editor/test/browser/testEditorDom.js';
+import { installTestElementHeights } from '../../../../../../editor/test/browser/editorTestGlobals.js';
 import { Event } from '../../../../../../base/common/event.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -261,6 +262,7 @@ test('Close Workspace delegates an empty window to the host and follows workspac
 
 test("editor commands close the active tab and reopen it with a chosen editor", async () => {
 	const dom = new JSDOM("<!doctype html><body><button>Editor</button></body>");
+	using heights = installTestElementHeights(dom.window.document);
 	const previousGlobals = new Map<string, PropertyDescriptor | undefined>();
 	for (const [name, value] of Object.entries({
 		window: dom.window,

@@ -1,4 +1,4 @@
-import { defaultDialogStyles, defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import { defaultDialogStyles, defaultButtonStyles, defaultCheckboxStyles, defaultInputBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { localize2, localize } from '../../../../../nls.js';
 import './inspectEditorTokens.css';
 import { h } from '../../../../../base/browser/dom.js';
@@ -74,16 +74,18 @@ class InspectEditorTokens extends Action2 {
 		content.setAttribute('aria-label', localize('inspectEditorTokens.report', 'Editor token inspection'));
 		const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.InspectEditorTokens);
 		if (hint) content.setAttribute('aria-description', hint);
-		const dialog = lifetime.add(new Dialog(root, {
+		const dialog = lifetime.add(new Dialog(root, localize('inspectEditorTokens.title', 'Editor Tokens'), [localize('inspectEditorTokens.close', 'Close')], {
 			buttonStyles: defaultButtonStyles,
 			dialogStyles: defaultDialogStyles,
-			title: localize('inspectEditorTokens.title', 'Editor Tokens'),
-			content,
-			buttons: [{ label: localize('inspectEditorTokens.close', 'Close'), value: 'close' }],
-			cancelValue: 'close',
+			checkboxStyles: defaultCheckboxStyles,
+			inputBoxStyles: defaultInputBoxStyles,
+			renderBody: body => {
+				body.append(content);
+				// Keep the feature's help available when its standard footer action receives focus.
+				lifetime.add(contextKeys.createScoped(body)).createKey('inspectEditorTokensVisible', true);
+			},
+			cancelId: 0,
 		}));
-		const context = lifetime.add(contextKeys.createScoped(dialog.element));
-		context.createKey('inspectEditorTokensVisible', true);
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			lifetime.add(AccessibleViewRegistry.register({
 				name: 'inspectEditorTokens', type, priority: 150, when: ContextKeyExpr.has('inspectEditorTokensVisible'),

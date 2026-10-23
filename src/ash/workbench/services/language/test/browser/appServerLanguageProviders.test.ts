@@ -35,7 +35,7 @@ suite('Rust configuration catalog forwarding', () => {
 	test('catalog defaults stay with the server while explicit settings and the memory default reach each directory', async () => {
 		const source = await readFile('extensions/rust/package.json', 'utf8');
 		const manifest = JSON.parse(source);
-		const nodes = [...parseExtensionManifest(source, { id: 'vscode.rust', name: 'rust', publisher: 'vscode', version: manifest.version }).contributes.configuration];
+		const nodes = [...parseExtensionManifest(source, { id: 'ash.rust', name: 'rust', publisher: 'ash', version: manifest.version }).contributes.configuration];
 		const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 		registry.updateConfigurations({ add: nodes, remove: [] });
 		using registration = toDisposable(() => registry.updateConfigurations({ add: [], remove: nodes }));

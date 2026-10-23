@@ -1,10 +1,10 @@
-import { defaultButtonStyles, defaultDialogStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultDialogStyles, defaultCheckboxStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import { addDisposableListener, getActiveElement, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
-import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
+import { Dialog, DialogContentsAlignment } from '../../../../base/browser/ui/dialog/dialog.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
@@ -235,7 +235,11 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const folderRow = h(document, 'div', { className: 'ash-projects-folder-choice' });
 		const feedback = h(document, 'p', { className: 'ash-projects-form-error', attributes: { role: 'alert' } });
 		const folder = store.add(new Button(folderRow, {
-			...defaultButtonStyles, label: localize('projects.useFolder', 'Use a folder'), icon: Lxicon.folders, onClick: () => {
+			...defaultButtonStyles,
+			label: localize('projects.useFolder', 'Use a folder'),
+			icon: Lxicon.newFolder,
+			title: localize('projects.useFolderTooltip', 'Ash can work in this folder when you use the project from this computer.'),
+			onClick: () => {
 				void this.files.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }).then(resources => {
 					if (store.isDisposed || !resources?.[0]) { return; }
 					const resource = resources[0];
@@ -251,13 +255,21 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const actions = h(document, 'footer', { className: 'ash-projects-form-actions' });
 		const conflicts = h(document, 'div', { className: 'ash-projects-conflicts', properties: { hidden: true } });
 		form.append(nameLabel, descriptionLabel, folderRow, feedback, conflicts, actions);
-		const dialog = store.add(new Dialog(this.domNode, { title: project ? localize('projects.edit', 'Edit details') : localize('projects.createTitle', 'Create a project'), content: form, dialogStyles: defaultDialogStyles }));
-		dialog.element.classList.add('ash-projects-dialog');
-		const close = store.add(new Button(dialog.element, { ...defaultButtonStyles, label: localize('projects.close', 'Close'), icon: Lxicon.close, iconOnly: true, onClick: () => dialog.close() }));
-		close.domNode.classList.add('ash-projects-dialog-close');
+		let didSave = false;
+		const dialog = store.add(new Dialog(this.domNode, project ? localize('projects.edit', 'Edit details') : localize('projects.createTitle', 'Create a project'), [], {
+			buttonStyles: defaultButtonStyles,
+			checkboxStyles: defaultCheckboxStyles,
+			inputBoxStyles: defaultInputBoxStyles,
+			dialogStyles: defaultDialogStyles,
+			type: 'none',
+			alignment: DialogContentsAlignment.Vertical,
+			extraClasses: ['ash-projects-dialog'],
+			disableDefaultAction: true,
+			renderBody: body => body.append(form),
+		}));
 		const reload = store.add(new Button(actions, { ...defaultButtonStyles, label: localize('projects.reloadMerge', 'Reload and merge'), presentation: 'secondary', onClick: () => { void reloadAndMerge(); } }));
 		reload.domNode.hidden = true;
-		store.add(new Button(actions, { ...defaultButtonStyles, label: localize('projects.cancel', 'Cancel'), presentation: 'secondary', onClick: () => dialog.close() }));
+		store.add(new Button(actions, { ...defaultButtonStyles, label: localize('projects.cancel', 'Cancel'), presentation: 'secondary', onClick: () => dialog.dispose() }));
 		const submit = store.add(new Button(actions, { ...defaultButtonStyles, label: project ? localize('projects.save', 'Save changes') : localize('projects.create', 'Create project'), presentation: 'primary', type: 'submit', enabled: !!name.value.trim() }));
 		const updateSubmit = () => { submit.enabled = !!name.value.trim() && !needsMerge && unresolved.size === 0; };
 		store.add(addDisposableListener(name, 'input', updateSubmit));
@@ -331,7 +343,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			const result = base ? this.projects.update(base, name.value.trim(), description.value.trim(), materials) : this.projects.create(id, name.value.trim(), description.value.trim(), materials);
 			void result.then(saved => {
 				if (store.isDisposed) { return; }
-				if (saved) { dialog.close('saved'); }
+				if (saved) { didSave = true; dialog.dispose(); }
 				else {
 					feedback.textContent = this.projects.state.get().message ?? '';
 					name.disabled = false; description.disabled = false; folder.enabled = true;
@@ -340,9 +352,9 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				}
 			});
 		}));
-		void dialog.show().then(result => {
+		void dialog.show().then(() => {
 			if (this.dialog.value === store) { this.dialog.clear(); }
-			if (result === 'saved' && !this.isDisposed) { this.title.focus(); }
+			if (didSave && !this.isDisposed) { this.title.focus(); }
 		});
 		name.focus();
 	}

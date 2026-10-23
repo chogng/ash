@@ -147,13 +147,28 @@ suite('Browser Worker service', () => {
 		assert.equal(service.getWorkerUrl(new WebWorkerDescriptor({ label: 'editor', esmModuleLocation: URI.parse('https://ash.example/default.js') })), 'https://host.example/custom-worker.js');
 	});
 
-	test('production Diff factory assembly requires the registered Worker service and stays lazy', () => {
+	test('production Diff factory requires the Worker service and starts one Worker with its first provider', async () => {
 		using services = new InstantiationService();
 		assert.throws(() => services.createInstance(WorkerBasedDiffProviderFactoryService), /IWebWorkerService/);
-		services.registerInstance(IWebWorkerService, new WebWorkerService());
+		const worker = new TestWorker();
+		let created = 0;
+		services.registerInstance(IWebWorkerService, new class extends WebWorkerService {
+			protected override _createWorker(descriptor: WebWorkerDescriptor): Promise<Worker> {
+				assert.equal(descriptor.label, 'ash-editor-diff');
+				created++;
+				return Promise.resolve(worker as unknown as Worker);
+			}
+		}());
 		using factory = services.createInstance(WorkerBasedDiffProviderFactoryService);
+		assert.equal(created, 0);
 		using provider = factory.createDiffProvider();
 		assert.equal(typeof provider.computeDiff, 'function');
+		assert.equal(created, 1);
+		using second = factory.createDiffProvider();
+		assert.equal(created, 1);
+		factory.dispose();
+		await Promise.resolve();
+		assert.equal(worker.terminationCount, 1);
 	});
 
 });

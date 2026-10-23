@@ -206,7 +206,6 @@
 		"--ash-scmGraph-historyItemHoverLabelForeground",
 		"--ash-scmGraph-historyItemRefColor",
 		"--ash-scmGraph-historyItemRemoteRefColor",
-		"--ash-screenshot-maskBackground",
 		"--ash-scrollbar-background",
 		"--ash-scrollbar-shadow",
 		"--ash-scrollbarSlider-activeBackground",

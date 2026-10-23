@@ -12,6 +12,7 @@ import { WindowTitle } from '../../../titlebar/windowTitle.js';
 import { ILocalizationService } from '../../../../../services/localization/common/localizationService.js';
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestComponentServices, registerTestComponentServices, createTestEditorServices, createTestTextFileService, createTestFileService } from '../../../../../test/common/testEditorServices.js';
+import { registerCodeEditorServices } from '../../../../../../editor/test/browser/testCodeEditor.js';
 import { MemoryFileService } from '../../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { createDocumentEditorPane } from '../../../../../contrib/documentEditor/browser/editorProfile.js';
 import { academyProfile } from '../../../../../../../../extensions/academy/browser/editorProfile.js';
@@ -4927,6 +4928,7 @@ function createEditorParts(main: ConstructorParameters<typeof EditorParts>[0], w
 	const parts = services.createInstance(EditorParts, main, windows, factory, accessibility, storage);
 	services.registerSingleton(ICodeEditorService, () => new CodeEditorService(parts));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
+	registerCodeEditorServices(services);
 	return parts;
 }
 
@@ -5037,6 +5039,7 @@ suite('Auxiliary editor lifecycle', () => {
 				} as unknown as IAccessibilityService, services.get(IStorageService));
 				services.registerSingleton(ICodeEditorService, () => new CodeEditorService(parts));
 				services.registerSingleton(ICommandService, () => new CommandService(services));
+				registerCodeEditorServices(services);
 				const original = input('/project/original.ts');
 				const newer = input('/project/newer.ts');
 				await main.openEditor(original);

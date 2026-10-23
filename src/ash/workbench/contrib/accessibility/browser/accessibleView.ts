@@ -1,4 +1,4 @@
-import { defaultDialogStyles, defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultDialogStyles, defaultButtonStyles, defaultCheckboxStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/accessibleView.css';
 import { h, getActiveDocument, getActiveElement } from '../../../../base/browser/dom.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
@@ -102,15 +102,15 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 				? localize('accessibility.helpTitle', 'Accessibility Help')
 				: localize('accessibility.viewTitle', 'Accessible View');
 			content.setAttribute('aria-label', title);
-			const dialog = lifetime.add(new Dialog(root, {
+			const dialog = lifetime.add(new Dialog(root, title, [localize('accessibility.close', 'Close')], {
 				buttonStyles: defaultButtonStyles,
 				dialogStyles: defaultDialogStyles,
-				title,
-				content,
-				buttons: [{ label: localize('accessibility.close', 'Close'), value: 'close' }],
-				cancelValue: 'close',
+				checkboxStyles: defaultCheckboxStyles,
+				inputBoxStyles: defaultInputBoxStyles,
+				renderBody: body => body.append(content),
+				extraClasses: ['ash-accessible-view-dialog'],
+				cancelId: 0,
 			}));
-			dialog.element.classList.add('ash-accessible-view-dialog');
 			// Close child help before releasing the content dialog and its provider.
 			lifetime.add(toDisposable(() => this.help.clear()));
 			if (provider.onDidChangeContent) {
@@ -192,15 +192,15 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 			};
 			updateContent();
 			lifetime.add(this.keybindings.onDidUpdateKeybindings(updateContent));
-			const dialog = lifetime.add(new Dialog(root, {
+			const dialog = lifetime.add(new Dialog(root, title, [localize('accessibility.close', 'Close')], {
 				buttonStyles: defaultButtonStyles,
 				dialogStyles: defaultDialogStyles,
-				title,
-				content,
-				buttons: [{ label: localize('accessibility.close', 'Close'), value: 'close' }],
-				cancelValue: 'close',
+				checkboxStyles: defaultCheckboxStyles,
+				inputBoxStyles: defaultInputBoxStyles,
+				renderBody: body => body.append(content),
+				extraClasses: ['ash-accessible-view-dialog'],
+				cancelId: 0,
 			}));
-			dialog.element.classList.add('ash-accessible-view-dialog');
 			this.help.value = lifetime;
 			this.contextKeys.bufferChangeEvents(() => {
 				helpShown.set(true);

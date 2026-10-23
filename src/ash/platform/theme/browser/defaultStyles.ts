@@ -87,6 +87,10 @@ export const defaultDialogStyles: IDialogStyles = Object.freeze({
 	dialogBackground: colorVariable('dialog.background'),
 	dialogBorder: colorVariable('dialog.border'),
 	dialogShadow: colorVariable('dialog.shadow'),
+	errorIconForeground: colorVariable('error.foreground'),
+	warningIconForeground: colorVariable('warning.foreground'),
+	infoIconForeground: colorVariable('foreground'),
+	textLinkForeground: colorVariable('textLink.foreground'),
 });
 
 export const defaultSelectBoxStyles: ISelectBoxStyles = Object.freeze({

@@ -115,7 +115,7 @@ suite('sessions browser component', () => {
 		await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await expect(chat).toHaveCSS('background-color', 'rgb(240, 240, 240)');
-		await expect(page.locator('.ash-sessions-list-item.selected').first()).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+		await expect(page.locator('.ash-sessions-list-item[aria-current="page"]').first()).toHaveCSS('background-color', 'rgb(240, 240, 240)');
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 			await chat.click();

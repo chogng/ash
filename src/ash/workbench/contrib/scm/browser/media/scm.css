@@ -90,6 +90,10 @@
 	line-height: var(--ash-list-rowHeight);
 }
 
+.ash-scm-graph-change-row:hover {
+	--scm-graph-row-background: var(--ash-list-hoverBackground);
+}
+
 .ash-scm-graph-commit.selected,
 .ash-scm-graph-change-row.selected {
 	--scm-graph-row-background: var(
