@@ -288,6 +288,17 @@ test('the preinstalled Chinese extension can update independently and uninstall 
 	assert.deepEqual(await resolveLanguagePackCatalog('zh-CN', productLanguagePackCatalogs, store), original);
 });
 
+test('development reloads prefer current source translations while installed locales remain available', async () => {
+	const chinese = productLanguagePackCatalogs.find(value => value.locale === 'zh-CN')!;
+	const savedChinese = { ...chinese, bundles: { ...chinese.bundles, 'ash.settings': { ...chinese.bundles['ash.settings'], 'categories.editor-fonts.label': '字体与排版' } } };
+	const french: LanguagePackCatalog = { schemaVersion: 1, locale: 'fr', languageName: 'French', localizedLanguageName: 'Français', catalogVersion: 'ash-1', bundles: { ash: { hello: 'Bonjour' } } };
+	const catalogs = new Map([['zh-CN', savedChinese], ['fr', french]]);
+	const store = { read: async (locale: string) => catalogs.get(locale) };
+	assert.equal((await resolveLanguagePackCatalog('zh-CN', productLanguagePackCatalogs, store)).bundles['ash.settings']['categories.editor-fonts.label'], '字体与排版');
+	assert.equal((await resolveLanguagePackCatalog('ZH_cn', productLanguagePackCatalogs, store, { preferStartupCatalogs: true })).bundles['ash.settings']['categories.editor-fonts.label'], '字体');
+	assert.equal(await resolveLanguagePackCatalog('fr-CA', productLanguagePackCatalogs, store, { preferStartupCatalogs: true }), french);
+});
+
 test('uninstall removes a language provider from startup resources and falls back to English', async () => {
 	const catalog: LanguagePackCatalog = { schemaVersion: 1, locale: 'fr', languageName: 'French', localizedLanguageName: 'Français', catalogVersion: 'ash-1', bundles: { ash: { hello: 'Bonjour' } } };
 	const extensions = createExtensions([catalog]);

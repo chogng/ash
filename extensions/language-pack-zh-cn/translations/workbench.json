@@ -1179,6 +1179,7 @@
     "workbench.selectAccount": "选择要管理的账户",
     "workbench.manageSelectedAccount": "管理 {0}",
     "workbench.loadAccountsFailed": "无法加载账户。",
+    "workbench.signOutAccount": "退出 {0}",
     "workbench.signOutFailed": "无法退出 {0}。",
     "workbench.signInWithChatGPT": "使用 ChatGPT 登录",
     "workbench.signInWithBigModelStartPlan": "使用 BigModel Start Plan 登录",

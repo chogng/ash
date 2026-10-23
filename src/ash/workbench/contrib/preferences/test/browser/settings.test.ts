@@ -541,7 +541,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const messages = JSON.parse(await readFile(`extensions/rust/package.nls${locale === 'en' ? '' : '.zh-CN'}.json`, 'utf8'));
 		const localized = JSON.stringify(manifest, (_key, value) => typeof value === 'string' ? value.replace(/%([^%]+)%/g, (match, key) => messages[key] ?? match) : value);
 		const registry = new ConfigurationRegistry();
-		registry.updateConfigurations({ add: [...parseExtensionManifest(localized, { id: 'vscode.rust', name: 'rust', publisher: 'vscode', version: manifest.version }).contributes.configuration], remove: [] });
+		registry.updateConfigurations({ add: [...parseExtensionManifest(localized, { id: `${manifest.publisher}.${manifest.name}`, name: manifest.name, publisher: manifest.publisher, version: manifest.version }).contributes.configuration], remove: [] });
 		const defaults = new DefaultSettings(registry);
 		for (const key of ['lru.capacity', 'numThreads', 'cachePriming.numThreads', 'procMacro.processes', 'completion.limit']) {
 			assert.equal(defaults.get(`rust-analyzer.${key}`).valueType, 'numberWithOptions', key);
@@ -1182,7 +1182,7 @@ test('font preferences show translated labels and the actual platform defaults',
 		const defaults = new DefaultSettings();
 		const layout = await loadChineseSettingsLayout();
 		const fonts = layout.createSettingsLayout(defaults.all).find(category => category.id === 'editor-fonts')!;
-		assert.equal(fonts.groups[0]?.title, '字体与排版');
+		assert.equal(fonts.groups[0]?.title, '字体');
 		assert.deepEqual(fonts.groups.flatMap(group => group.settings.map(setting => ({ id: setting.id, title: setting.title, type: setting.valueType }))), [
 			{ id: 'editor.fontFamily', title: '字体', type: 'text' },
 			{ id: 'editor.fontSize', title: '字号', type: 'number' },

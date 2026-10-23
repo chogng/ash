@@ -224,13 +224,13 @@ export const SettingsNavigation = [
 		categories: [
 			{
 				id: 'editor-fonts',
-				label: localize({ bundle: 'ash.settings', key: 'categories.editor-fonts.label' }, 'Fonts and spacing'),
+				label: localize({ bundle: 'ash.settings', key: 'categories.editor-fonts.label' }, 'Font'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.editor-fonts.description' }, 'Configure the font, text size, ligatures, and line spacing.'),
 				presentation: 'editor',
 				groups: [
 					{
 						id: 'typography',
-						label: localize('settings.editor.typography.label', 'Fonts and spacing'),
+						label: localize('settings.editor.typography.label', 'Font'),
 						description: localize('settings.editor.typography.description', 'Configure editor fonts and line spacing.'),
 						settings: ['editor.fontFamily', 'editor.fontSize', 'editor.fontLigatures', 'editor.lineHeight'],
 					},
@@ -278,13 +278,13 @@ export const SettingsNavigation = [
 			},
 			{
 				id: 'editor-suggestions',
-				label: localize({ bundle: 'ash.settings', key: 'categories.editor-suggestions.label' }, 'Completions and hints'),
+				label: localize({ bundle: 'ash.settings', key: 'categories.editor-suggestions.label' }, 'Code assistance'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.editor-suggestions.description' }, 'Configure code completions, inline suggestions, and hints.'),
 				presentation: 'editor',
 				groups: [
 					{
 						id: 'code-intelligence',
-						label: localize('settings.editor.code-intelligence.label', 'Completions and hints'),
+						label: localize('settings.editor.code-intelligence.label', 'Code assistance'),
 						description: localize('settings.editor.code-intelligence.description', 'Configure completions, hints, and provider annotations.'),
 						settings: ['editor.suggest.*', 'editor.inlineSuggest.*', 'editor.parameterHints.*', 'editor.inlayHints.*', 'editor.codeLens', 'editor.colorDecorators', 'editor.colorDecoratorsActivatedOn', 'editor.colorDecoratorsLimit', 'editor.defaultColorDecorators'],
 					},
@@ -304,7 +304,7 @@ export const SettingsNavigation = [
 			},
 			{
 				id: 'editor-search',
-				label: localize({ bundle: 'ash.settings', key: 'categories.editor-search.label' }, 'Search and replace'),
+				label: localize({ bundle: 'ash.settings', key: 'categories.editor-search.label' }, 'Find and replace'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.editor-search.description' }, 'Configure search and replace in the current file.'),
 				presentation: 'editor',
 				groups: [
@@ -318,7 +318,7 @@ export const SettingsNavigation = [
 			},
 			{
 				id: 'editor-diff',
-				label: localize({ bundle: 'ash.settings', key: 'categories.editor-diff.label' }, 'Diff editor'),
+				label: localize({ bundle: 'ash.settings', key: 'categories.editor-diff.label' }, 'Diff'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.editor-diff.description' }, 'Configure how differences are displayed and navigated.'),
 				presentation: 'editor',
 				groups: [
@@ -353,13 +353,13 @@ export const SettingsNavigation = [
 			},
 			{
 				id: 'editor-opening',
-				label: localize({ bundle: 'ash.settings', key: 'categories.editor-opening.label' }, 'Tabs and editors'),
+				label: localize({ bundle: 'ash.settings', key: 'categories.editor-opening.label' }, 'Tabs and groups'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.editor-opening.description' }, 'Configure editor tabs, previews, and editor groups.'),
 				presentation: 'editor',
 				groups: [
 					{
 						id: 'selection',
-						label: localize('settings.editor.selection.label', 'Tabs and editors'),
+						label: localize('settings.editor.selection.label', 'Tabs and groups'),
 						description: localize('settings.editor.selection.description', 'Choose tab appearance and how documents open.'),
 						settings: ['workbench.editor.*', 'workbench.experimental.modernUIEditorTabStyle'],
 					},
