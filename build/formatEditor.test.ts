@@ -36,6 +36,9 @@ test('VS Code save formatting matches the pinned Bun CI formatter', {
 	}));
 	const samples = [
 		['json', 'config [with spaces].json', '{"value":1,"nested":{"enabled":true}}\n'],
+		['json', 'config $(touch formatter-shell-marker).json', '{"value":1,"nested":{"enabled":true}}\n'],
+		['json', 'localized.json', JSON.stringify({ value: '中文'.repeat(30_000) }) + '\n'],
+		['json', 'blank.json', ' \n'],
 		['jsonc', '.vscode/sample.jsonc', '{\n// retained comment\n"value":1,\n"nested":{"enabled":true},\n}\n'],
 		['yaml', 'workflow.yaml', 'name:   example\non: [push,pull_request]\n'],
 		['markdown', 'notes.md', '#   Heading\n\n```ts\nconst value=1\n```\n'],
@@ -66,8 +69,8 @@ const fs = require('node:fs');
 exports.activate = async () => {
   const report = { vscode: vscode.version, cases: [] };
   try {
-    const formatter = vscode.extensions.getExtension('jkillian.custom-local-formatters');
-    assert.ok(formatter, 'The real Custom Local Formatters extension must be installed.');
+    const formatter = vscode.extensions.getExtension('wdomitrz.simple-lsp-client');
+    assert.ok(formatter, 'The real Simple LSP Client extension must be installed.');
     await formatter.activate();
     report.extensionVersion = formatter.packageJSON.version;
     for (const item of ${JSON.stringify(cases)}) {
@@ -83,8 +86,9 @@ exports.activate = async () => {
       assert.equal(fs.readFileSync(item.file, 'utf8'), '', 'Editing must not write the buffer.');
       await vscode.commands.executeCommand('workbench.action.files.save');
       assert.equal(document.isDirty, false, item.name);
-      assert.equal(fs.readFileSync(item.file, 'utf8'), item.expected, item.name);
-      assert.equal(document.getText(), item.expected, item.name);
+      assert.equal(Buffer.compare(fs.readFileSync(item.file), Buffer.from(item.expected)), 0, item.name);
+      assert.equal(document.getText() === item.expected, true, item.name);
+      assert.equal(fs.existsSync(${JSON.stringify(join(workspace, 'formatter-shell-marker'))}), false, 'File names must not execute shell commands.');
       report.cases.push({ language: item.language, file: item.name, passed: true });
     }
     report.passed = true;
