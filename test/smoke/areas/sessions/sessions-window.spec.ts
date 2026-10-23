@@ -1243,13 +1243,14 @@ test('Sessions navigation retains its own selection and hover skin while changin
 		await expect(projects.locator('svg')).toHaveCSS('color', 'rgb(128, 128, 128)');
 		await chat.focus();
 		await chat.press(position === 'Default' ? 'ArrowDown' : 'ArrowRight');
-		await expect(navigation.getByRole('button', { name: 'Collab', exact: true })).toBeFocused();
-		await projects.focus();
-		await projects.press('Enter');
-		await expect(projects).toHaveAttribute('aria-current', 'page');
-		await expect(projects.locator('svg')).toHaveCSS('color', 'rgb(0, 0, 0)');
-		await expect(projects).toHaveCSS('background-color', 'rgb(240, 240, 240)');
-		await expect(projects.locator('svg')).toHaveAttribute('data-ash-icon-id', 'projects-filled');
+		// Collab retains the sidebar that hosts horizontal navigation; Projects hides it.
+		const collaboration = navigation.getByRole('button', { name: 'Collab', exact: true });
+		await expect(collaboration).toBeFocused();
+		await collaboration.press('Enter');
+		await expect(collaboration).toHaveAttribute('aria-current', 'page');
+		await expect(collaboration.locator('svg')).toHaveCSS('color', 'rgb(0, 0, 0)');
+		await expect(collaboration).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+		await expect(collaboration.locator('svg')).toHaveAttribute('data-ash-icon-id', 'collab-filled');
 		await expect(navigation.locator('.ash-composite-bar-navigation-item.checked')).toHaveCount(1);
 		await expect(chat).not.toHaveAttribute('aria-current');
 		await chat.press('Enter');

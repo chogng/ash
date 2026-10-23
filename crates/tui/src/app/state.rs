@@ -675,6 +675,16 @@ impl App {
                 }
                 .into(),
             ),
+            CommandPanelOutcome::Connectors(ConnectorSelectionAction::SetEnabled {
+                connector_id,
+                enabled,
+            }) => Some(
+                ConnectorCommand::SetEnabled {
+                    connector_id,
+                    enabled,
+                }
+                .into(),
+            ),
             CommandPanelOutcome::Connectors(ConnectorSelectionAction::Disconnect {
                 connector_id,
             }) => Some(ConnectorCommand::Disconnect { connector_id }.into()),

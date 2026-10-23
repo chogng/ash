@@ -26,7 +26,7 @@ async function expectReadOnlyGit(workbench: Workbench, screenshotPath: string): 
 async function toggleGit(workbench: Workbench, state: 'Enabled' | 'Disabled'): Promise<void> {
 	const details = await openGitDetails(workbench);
 	await expect(details).toContainText(state);
-	await details.getByRole('button', { name: state === 'Enabled' ? 'Disable' : 'Enable', exact: true }).click();
+	await details.getByRole('switch').press('Space');
 	await expect(details).toContainText(state === 'Enabled' ? 'Disabled' : 'Enabled');
 	await workbench.editors.groupAt(0).tabs.filter({ hasText: 'Independent comparison' }).click();
 	await workbench.git.open();
@@ -55,9 +55,9 @@ test.describe('Git extension enablement in the full product', () => {
 			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
 			await workbench.page.getByRole('listbox', { name: 'Installed Extensions', exact: true }).locator('[data-package-id="ash-test/scm-fixture"]').click();
 			const details = workbench.page.locator('.ash-extension-editor:visible').filter({ hasText: 'ash-test/scm-fixture' });
-			await details.getByRole('button', { name: 'Enable', exact: true }).click();
+			await details.getByRole('switch').press('Space');
 			await expect(details).toHaveAttribute('aria-busy', 'false');
-			await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
+			await expect(details.getByRole('switch')).toBeChecked();
 			await workbench.dialogs.confirm(application, 'Independent SCM fixture', 'Grant permissions', () => details.getByRole('button', { name: 'Grant permissions', exact: true }).click());
 			const reload = async (): Promise<void> => {
 				if (reloadMode === 'restart') {

@@ -49,8 +49,8 @@ exports.activate = context => {
 	};
 	await manage();
 	await workbench.dialogs.confirm(application, 'Extension tree smoke', 'Grant permissions', () => details.getByRole('button', { name: 'Grant permissions', exact: true }).click());
-	await details.getByRole('button', { name: 'Enable', exact: true }).click();
-	await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
+	await details.getByRole('switch').press('Space');
+	await expect(details.getByRole('switch')).toBeChecked();
 	await workbench.openExplorer();
 	const pane = page.locator('[data-view-id="acme.treeSmoke"]');
 	const label = pane.locator('.ash-custom-tree-label');
@@ -70,6 +70,6 @@ exports.activate = context => {
 	await workbench.quickaccess.runCommand('acme.treeSmoke.refresh');
 	await expect(label).toHaveText('Provider refreshed');
 	await manage();
-	await details.getByRole('button', { name: 'Disable', exact: true }).click();
+	await details.getByRole('switch').press('Space');
 	await expect(pane).toHaveCount(0);
 });

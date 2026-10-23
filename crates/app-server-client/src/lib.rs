@@ -53,6 +53,7 @@ use ash_app_server_protocol::protocol::connectors::ConnectorOAuthCancelParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthRefreshParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthStartParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthStartResult;
+use ash_app_server_protocol::protocol::connectors::ConnectorSetEnabledParams;
 use ash_app_server_protocol::protocol::dictation::DictationBackend;
 use ash_app_server_protocol::protocol::dictation::DictationModelParams;
 use ash_app_server_protocol::protocol::dictation::DictationModelStartParams;
@@ -1056,6 +1057,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: ConnectorDisconnectParams,
     ) -> Result<ConnectorDisconnectResultDto, ClientError> {
         self.call(ClientMethod::ConnectorOAuthRevoke, params)
+    }
+
+    pub fn set_connector_enabled(
+        &mut self,
+        params: ConnectorSetEnabledParams,
+    ) -> Result<ConnectorCommandResultDto, ClientError> {
+        self.call(ClientMethod::ConnectorSetEnabled, params)
     }
 
     pub fn disconnect_connector(

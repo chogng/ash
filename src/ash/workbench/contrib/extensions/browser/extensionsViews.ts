@@ -702,7 +702,7 @@ export class McpServersViewPane extends ExtensionsListViewPane {
 				target: { kind: 'connector', connectorId: connector.id },
 				name: connector.displayName,
 				description: connector.description,
-				metadata: [describeConnectorState(connector.state), connector.state.status === 'unavailable' ? connector.state.reason : ''].filter(Boolean).join(' · '),
+				metadata: [describeConnectorState(connector.state, connector.enabled), connector.state.status === 'unavailable' ? connector.state.reason : ''].filter(Boolean).join(' · '),
 			});
 		}
 		for (const server of configured?.servers ?? []) {

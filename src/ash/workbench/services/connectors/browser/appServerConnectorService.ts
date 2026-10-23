@@ -43,9 +43,10 @@ export class AppServerConnectorService extends Disposable implements IConnectorS
 		});
 	}
 
-	async disconnect(connector: ConnectorView, catalogGeneration: number): Promise<void> {
-		await this.api.disconnect({
-			commandId: `desktop-connector-disconnect-${crypto.randomUUID()}`,
+	async setEnabled(connector: ConnectorView, catalogGeneration: number, enabled: boolean): Promise<void> {
+		await this.api.setEnabled({
+			enabled,
+			commandId: `desktop-connector-enablement-${crypto.randomUUID()}`,
 			expectedGeneration: catalogGeneration,
 			connectorId: connector.id,
 		});
@@ -72,6 +73,7 @@ function connectorView(connector: ConnectorDto): ConnectorView {
 		mcpDeclarationId: connector.runtimeServerId,
 		mcpServerId: connector.mcpServerId,
 		connectionGeneration: connector.connectionGeneration,
+		enabled: connector.enabled,
 		state: connectorState(connector.state),
 		oauthMethods: connector.oauthMethods,
 		canConnectApiToken: connector.availableActions.includes("connectApiToken") || connector.availableActions.includes("reauthorizeApiToken"),

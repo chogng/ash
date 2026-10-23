@@ -793,6 +793,8 @@ use crate::protocol::connectors::ConnectorOAuthStartParams;
 use crate::protocol::connectors::ConnectorOAuthStartResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::connectors::ConnectorSecretDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::connectors::ConnectorSetEnabledParams;
 use crate::protocol::connectors::ConnectorsChanged;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::debug::DebugAdapterCloseParams;
@@ -4289,6 +4291,11 @@ client_methods! {
         response: ConnectorDisconnectResultDto,
         serialization: GlobalExclusive,
     },
+    ConnectorSetEnabled => "connector/enablement/set" {
+        params: ConnectorSetEnabledParams,
+        response: ConnectorCommandResultDto,
+        serialization: GlobalExclusive,
+    },
     ConnectorDisconnect => "connector/disconnect" {
         params: ConnectorDisconnectParams,
         response: ConnectorDisconnectResultDto,
@@ -6312,6 +6319,7 @@ typescript_bindings! {
     ConnectorDeviceOAuthPollResult,
     ConnectorOAuthRefreshParams,
     ConnectorDisconnectParams,
+    ConnectorSetEnabledParams,
     ConnectorCommandDispositionDto,
     ConnectorCommandResultDto,
     ConnectorCredentialCleanupDto,

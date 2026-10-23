@@ -632,8 +632,8 @@ exports.activate = context => {
 	await workbench.page.getByRole('listbox', { name: 'Installed Extensions', exact: true }).getByRole('option').filter({ has: workbench.page.getByText('Output wiring smoke', { exact: true }) }).click();
 	const details = workbench.page.locator('.ash-extension-editor');
 	await expect(details.getByRole('heading', { name: 'Output wiring smoke', exact: true })).toBeVisible();
-	await details.getByRole('button', { name: 'Enable', exact: true }).click();
-	await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
+	await details.getByRole('switch').press('Space');
+	await expect(details.getByRole('switch')).toBeChecked();
 	await workbench.dialogs.confirm(application, 'Output wiring smoke', 'Grant permissions', () => details.getByRole('button', { name: 'Grant permissions', exact: true }).click());
 
 	await expect(details.getByRole('button', { name: 'Revoke permissions', exact: true })).toBeVisible();

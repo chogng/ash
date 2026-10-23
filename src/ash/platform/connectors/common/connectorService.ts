@@ -18,6 +18,8 @@ export interface ConnectorView {
 	readonly mcpDeclarationId: string;
 	readonly mcpServerId: string | null;
 	readonly connectionGeneration: number;
+	/** Saved connection intent; account authorization and credentials survive disconnection. */
+	readonly enabled: boolean;
 	readonly state: ConnectorState;
 	readonly oauthMethods: readonly ("browser" | "device")[];
 	readonly canConnectApiToken: boolean;
@@ -44,7 +46,7 @@ export interface IConnectorService {
 	list(): Promise<ConnectorCatalogView>;
 	connectApiToken(connector: ConnectorView, catalogGeneration: number, input: ConnectorApiTokenInput): Promise<void>;
 	connectOAuth(connector: ConnectorView, catalogGeneration: number): Promise<void>;
-	disconnect(connector: ConnectorView, catalogGeneration: number): Promise<void>;
+	setEnabled(connector: ConnectorView, catalogGeneration: number, enabled: boolean): Promise<void>;
 	refreshOAuth(connector: ConnectorView): Promise<void>;
 	revokeOAuth(connector: ConnectorView, catalogGeneration: number): Promise<void>;
 }

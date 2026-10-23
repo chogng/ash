@@ -31,10 +31,11 @@ impl ConnectorEntry {
     }
 
     pub fn is_ready(&self) -> bool {
-        matches!(
-            self.connection.state(),
-            ConnectorConnectionState::Connected(_)
-        )
+        self.connection.enabled()
+            && matches!(
+                self.connection.state(),
+                ConnectorConnectionState::Connected(_)
+            )
     }
 }
 

@@ -316,13 +316,15 @@ let holdInstructions = false;
 let completeInstructions: ((text: string) => void) | undefined;
 let revision = 3;
 let enabled = true;
+let holdSkillEnablement = false;
+let completeSkillEnablement: (() => void) | undefined;
 const skillId = { source: 'marketplace:example/web', name: 'review' };
 services.registerInstance(IAppServerSkillApi, {
 	onDidChangeSkills: Event.None,
 	readTextResource: async (_reference, _path, signal) => { instructionSignal = signal; if (holdInstructions) { return new Promise<string>(resolve => { completeInstructions = resolve; }); } return '---\r\nname: review\r\ndescription: Review changes\r\n---\r\n# Review\r\nReview changes carefully.'; },
 	list: async () => ({ generation: 1, skills: [] }),
 	read: async () => (managementReads.skills++, { revision, catalog: { generation: 1, skills: [{ id: skillId, description: 'Review changes', enabled, compatible: true, contentDigest: 'digest' }] }, diagnostics: [{ source: 'workspace', subject: 'bad-skill', message: 'Invalid metadata' }] }),
-	setEnabled: async (id, value, expectedRevision, sessionId) => { requests.push(sessionId ? ['skill', id, value, expectedRevision, sessionId] : ['skill', id, value, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } enabled = value; revision++; },
+	setEnabled: async (id, value, expectedRevision, sessionId) => { if (holdSkillEnablement) { await new Promise<void>(resolve => { completeSkillEnablement = resolve; }); } requests.push(sessionId ? ['skill', id, value, expectedRevision, sessionId] : ['skill', id, value, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } enabled = value; revision++; },
 });
 const connectorChanges = disposables.add(new Emitter<number>());
 let connectorGeneration = 1;
@@ -338,19 +340,19 @@ services.registerInstance(IConnectorService, {
 	connectOAuth: async (connector, generation) => {
 		if (generation !== connectorGeneration) { throw new Error('Connection changed. Refresh before saving.'); }
 		requests.push(['connector/oauth', connector.id, generation]);
-		connectorEntries = connectorEntries.map(entry => entry.id === connector.id ? { ...entry, state: { status: 'connected', account: { id: 'oauth-user', displayName: 'OAuth user' } }, canDisconnect: true } : entry);
+		connectorEntries = connectorEntries.map(entry => entry.id === connector.id ? { ...entry, enabled: true, state: { status: 'connected', account: { id: 'oauth-user', displayName: 'OAuth user' } }, canDisconnect: true } : entry);
 		connectorChanges.fire(++connectorGeneration);
 	},
 	connectApiToken: async (connector, generation, input) => {
 		if (generation !== connectorGeneration) { throw new Error('Connection changed. Refresh before saving.'); }
 		requests.push(['connector/connect', connector.id, input.accountId]);
-		connectorEntries = connectorEntries.map(entry => entry.id === connector.id ? { ...entry, state: { status: 'connected', account: { id: input.accountId, displayName: input.accountDisplayName } }, canDisconnect: true } : entry);
+		connectorEntries = connectorEntries.map(entry => entry.id === connector.id ? { ...entry, enabled: true, state: { status: 'connected', account: { id: input.accountId, displayName: input.accountDisplayName } }, canDisconnect: true } : entry);
 		connectorChanges.fire(++connectorGeneration);
 	},
-	disconnect: async (connector, generation) => {
+	setEnabled: async (connector, generation, enabled) => {
 		if (generation !== connectorGeneration) { throw new Error('Connection changed. Refresh before saving.'); }
-		requests.push(['connector/disconnect', connector.id]);
-		connectorEntries = connectorEntries.map(entry => entry.id === connector.id ? { ...entry, state: { status: 'disconnected' }, canDisconnect: false } : entry);
+		requests.push(['connector/enablement/set', connector.id, enabled]);
+		connectorEntries = connectorEntries.map(entry => entry.id === connector.id ? { ...entry, enabled } : entry);
 		connectorChanges.fire(++connectorGeneration);
 	},
 	refreshOAuth: async () => { },
@@ -657,6 +659,9 @@ function prepareSettings(): void {
 }
 
 window.ashExtensionsIntegration = {
+	holdSkillEnablement: () => { holdSkillEnablement = true; },
+	skillEnablementStarted: () => !!completeSkillEnablement,
+	completeSkillEnablement: () => { completeSkillEnablement?.(); holdSkillEnablement = false; },
 	enableMcpOAuth: () => { mcpCapabilities.mcpOAuth = true; },
 	completeMcpLogin: () => { finishMcpLogin?.({ state: 'synthetic-state', code: 'synthetic-code', issuer: 'https://issuer.test' }); },
 	mcpLoginWaiting: () => !!finishMcpLogin,
@@ -684,7 +689,7 @@ window.ashExtensionsIntegration = {
 	setConnectors: (entries: readonly ConnectorView[]) => { connectorEntries = structuredClone([...entries]); connectorChanges.fire(++connectorGeneration); },
 	failConnectorList: (fail: boolean) => { failConnectorList = fail; },
 	addConnector: (binding?: { declarationId: string; serverId: string | null; }) => {
-		connectorEntries.push({ id: 'github', displayName: 'GitHub account', description: 'Review repository changes', mcpDeclarationId: binding?.declarationId ?? 'marketplace:example/github:mcp:tools', mcpServerId: binding ? binding.serverId : 'github:connector:account:mcp:tools', connectionGeneration: 1, state: { status: 'connected', account: { id: 'octocat', displayName: 'Octocat' } }, oauthMethods: [], canConnectApiToken: true, canConnectOAuth: false, canDisconnect: true, canRefreshOAuth: false, canRevokeOAuth: false });
+		connectorEntries.push({ id: 'github', displayName: 'GitHub account', description: 'Review repository changes', mcpDeclarationId: binding?.declarationId ?? 'marketplace:example/github:mcp:tools', mcpServerId: binding ? binding.serverId : 'github:connector:account:mcp:tools', connectionGeneration: 1, enabled: true, state: { status: 'connected', account: { id: 'octocat', displayName: 'Octocat' } }, oauthMethods: [], canConnectApiToken: true, canConnectOAuth: false, canDisconnect: true, canRefreshOAuth: false, canRevokeOAuth: false });
 		connectorChanges.fire(++connectorGeneration);
 	},
 	setRecommendations: async (content: string) => { await files.writeFile({ resource: recommendationsResource, content }); recommendationChanges.fire({ resources: [recommendationsResource] }); },
@@ -729,7 +734,7 @@ window.ashExtensionsIntegration = {
 declare global {
 	interface Window {
 
-		ashExtensionsIntegration: { managementReads(): { installed: number; skills: number; connectors: number; }; installationSnapshot(): ExtensionsInstalledPackage[]; notifyConnectorsChanged(): void; setConnectors(entries: readonly ConnectorView[]): void; failConnectorList(fail: boolean): void; addConnector(binding?: { declarationId: string; serverId: string | null; }): void; enableMcpOAuth(): void; completeMcpLogin(): void; mcpLoginWaiting(): boolean; holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
+		ashExtensionsIntegration: { holdSkillEnablement(): void; skillEnablementStarted(): boolean; completeSkillEnablement(): void; managementReads(): { installed: number; skills: number; connectors: number; }; installationSnapshot(): ExtensionsInstalledPackage[]; notifyConnectorsChanged(): void; setConnectors(entries: readonly ConnectorView[]): void; failConnectorList(fail: boolean): void; addConnector(binding?: { declarationId: string; serverId: string | null; }): void; enableMcpOAuth(): void; completeMcpLogin(): void; mcpLoginWaiting(): boolean; holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
 	}
 }
 

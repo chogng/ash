@@ -38,7 +38,7 @@ fn connected_connector_is_actionable_while_disconnected_connector_is_read_only()
     assert_eq!(view.actions.len(), 2);
     assert!(matches!(
         view.actions.values().next(),
-        Some(ConnectorSelectionAction::Disconnect { connector_id }) if connector_id == "github"
+        Some(ConnectorSelectionAction::SetEnabled { connector_id, enabled: false }) if connector_id == "github"
     ));
 }
 
@@ -70,6 +70,7 @@ fn connector(
     available_actions: Vec<ConnectorAvailableActionDto>,
 ) -> ConnectorDto {
     ConnectorDto {
+        enabled: true,
         id: id.into(),
         display_name: id.into(),
         description: format!("Connect {id}."),
@@ -82,4 +83,26 @@ fn connector(
         oauth_methods: Vec::new(),
         credential_cleanup_pending: false,
     }
+}
+
+#[test]
+fn retained_authorization_reconnects_without_a_new_oauth_flow() {
+    let mut github = connector(
+        "github",
+        ConnectorConnectionStateDto::Connected {
+            account: ash_app_server_protocol::protocol::connectors::ConnectorAccountDto {
+                id: "octocat".into(),
+                display_name: "Octocat".into(),
+            },
+        },
+        vec![ConnectorAvailableActionDto::Disconnect],
+    );
+    github.enabled = false;
+    let view = connector_choices(&ConnectorListResult {
+        generation: 4,
+        connectors: vec![github],
+    });
+    assert!(
+        matches!(view.actions.values().next(), Some(ConnectorSelectionAction::SetEnabled { connector_id, enabled: true }) if connector_id == "github")
+    );
 }

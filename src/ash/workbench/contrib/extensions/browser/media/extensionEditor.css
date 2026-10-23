@@ -46,6 +46,25 @@
 	min-width: 0;
 }
 
+.ash-extension-editor .extension-detail-description {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size200);
+}
+
+.ash-extension-editor .extension-detail-description > p {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-extension-editor .extension-detail-enablement {
+	flex-shrink: 0;
+}
+
+.ash-extension-editor .extension-detail-enablement[hidden] {
+	display: none;
+}
+
 .ash-extension-editor h1 {
 	margin: 0 0 8px;
 	font-size: var(--ash-fontSize-heading1);

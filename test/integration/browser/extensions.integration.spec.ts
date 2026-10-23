@@ -4,7 +4,7 @@ import type { ConnectorView } from '../../../src/ash/platform/connectors/common/
 function serviceAccount(id: string, displayName: string, oauth = false): ConnectorView {
 	return {
 		id, displayName, description: `Authorize ${displayName}`, mcpDeclarationId: `fixture:${id}:mcp:tools`, mcpServerId: null,
-		connectionGeneration: 0, state: { status: 'disconnected' }, oauthMethods: oauth ? ['browser'] : [],
+		connectionGeneration: 0, enabled: false, state: { status: 'disconnected' }, oauthMethods: oauth ? ['browser'] : [],
 		canConnectOAuth: oauth, canConnectApiToken: !oauth, canDisconnect: false, canRefreshOAuth: false, canRevokeOAuth: false,
 	};
 }
@@ -289,7 +289,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await pane.getByRole('option').click();
 		const details = page.locator('.ash-extension-editor');
 		await expect(details.locator('.extension-detail-info')).toContainText(locale === 'en' ? 'No runtime status reported' : '未报告运行状态');
-		await details.getByRole('button', { name: locale === 'en' ? 'Disconnect' : '断开', exact: true }).click();
+		await details.getByRole('switch').press('Space');
 		await expect(details.getByRole('status')).toHaveText(locale === 'en' ? 'Disconnected' : '已断开');
 		await expect(pane.getByRole('option')).toHaveCount(1);
 	});
@@ -326,8 +326,8 @@ for (const labels of [
 		await expect(details.getByRole('heading', { name: 'Standalone test', exact: true })).toBeVisible();
 		await expect(details.getByRole('status')).toHaveText(labels.disabled);
 		await expect(details.getByRole('button', { name: labels.connect, exact: true })).toBeDisabled();
-		await expect(details.getByRole('button', { name: labels.edit, exact: true })).toBeFocused();
-		await details.getByRole('button', { name: labels.enable, exact: true }).press('Enter');
+		await expect(details.getByRole('switch')).toBeFocused();
+		await details.getByRole('switch').press('Space');
 		await expect(details.getByRole('status')).toHaveText(labels.disconnected);
 		await details.getByRole('button', { name: labels.connect, exact: true }).click();
 		await expect(details.getByRole('status')).toHaveText(labels.connected);
@@ -402,11 +402,11 @@ test('MCP failed mutations refresh actual state and stale revisions never overwr
 	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
 	await mcp.getByRole('option').filter({ hasText: 'Reviewed server' }).click();
 	const details = page.locator('.ash-extension-editor');
-	await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
+	await expect(details.getByRole('switch')).toBeChecked();
 	await page.evaluate(() => window.ashExtensionsIntegration.changeMcpRevision());
-	await details.getByRole('button', { name: 'Disable', exact: true }).click();
+	await details.getByRole('switch').press('Space');
 	await expect(details.getByRole('status')).toContainText('MCP configuration changed.');
-	await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
+	await expect(details.getByRole('switch')).toBeChecked();
 	expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'mcp/server/enablement/set'))).toHaveLength(1);
 	await page.evaluate(() => window.ashExtensionsIntegration.deferMcpConnection());
 	await details.getByRole('button', { name: 'Connect', exact: true }).click();
@@ -728,6 +728,25 @@ for (const theme of ['light', 'dark', 'hc']) {
 		const narrowContent = await editor.locator('.extension-detail-content').boundingBox();
 		const narrowInfo = await editor.locator('.extension-detail-info').boundingBox();
 		expect(narrowInfo!.y).toBeGreaterThanOrEqual(narrowContent!.y + narrowContent!.height);
+		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('workbench.action.chat.configure.skills'));
+		await page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').click();
+		const toggle = editor.getByRole('switch', { name: 'Enable skill', exact: true });
+		await expect(toggle).toBeChecked();
+		for (const width of [360, 850]) {
+			await page.locator('#details').evaluate((element, width) => { element.style.width = `${width}px`; }, width);
+			if (width < 720) { await expect(editor).toHaveClass(/compact/u); } else { await expect(editor).not.toHaveClass(/compact/u); }
+			const description = await editor.locator('.extension-detail-description > p').boundingBox();
+			const row = await editor.locator('.extension-detail-description').boundingBox();
+			const track = editor.locator('.ash-switch-track');
+			const bounds = await track.boundingBox();
+			expect(bounds!.x).toBeGreaterThan(description!.x + description!.width);
+			expect(Math.abs(bounds!.x + bounds!.width - row!.x - row!.width)).toBeLessThanOrEqual(1);
+			expect(Math.abs(bounds!.y + bounds!.height / 2 - row!.y - row!.height / 2)).toBeLessThanOrEqual(1);
+			await expect.poll(() => editor.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+			await toggle.focus();
+			await expect.poll(() => track.evaluate(element => Number.parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThanOrEqual(1);
+			await page.screenshot({ path: `.build/desktop/ui-previews/skill-enablement-${theme}-${width}.png` });
+		}
 	});
 }
 
@@ -813,8 +832,8 @@ for (const [locale, installTitle, enable, grant, permission, disable, revoke, un
 		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageLocal'));
 		await page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions').getByRole('option').filter({ hasText: 'SDK fixture' }).click();
 		const editor = page.locator('.ash-extension-editor');
-		await editor.getByRole('button', { name: enable, exact: true }).click();
-		await expect(editor.getByRole('button', { name: disable, exact: true })).toBeVisible();
+		await editor.getByRole('switch').press('Space');
+		await expect(editor.getByRole('switch')).toBeChecked();
 		await editor.getByRole('button', { name: grant, exact: true }).click();
 		const permissions = page.getByRole('dialog', { name: 'SDK fixture', exact: true });
 		await expect(permissions).toContainText(permission);
@@ -823,8 +842,8 @@ for (const [locale, installTitle, enable, grant, permission, disable, revoke, un
 		await expect(editor.getByRole('button', { name: revoke, exact: true })).toBeVisible();
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.localPackages().map(({ enabled, granted }) => ({ enabled, granted })))).toEqual([{ enabled: true, granted: true }]);
 		await expect(editor.getByRole('button', { name: uninstall, exact: true })).toBeDisabled();
-		await editor.getByRole('button', { name: disable, exact: true }).click();
-		await expect(editor.getByRole('button', { name: enable, exact: true })).toBeVisible();
+		await editor.getByRole('switch').press('Space');
+		await expect(editor.getByRole('switch')).not.toBeChecked();
 		await editor.getByRole('button', { name: revoke, exact: true }).click();
 		await page.getByRole('dialog', { name: 'SDK fixture', exact: true }).getByRole('button', { name: revoke, exact: true }).click();
 		await expect(editor.getByRole('button', { name: uninstall, exact: true })).toBeEnabled();
@@ -859,8 +878,8 @@ test('LSP and Skills share capability discovery while retaining their own config
 	await skills.getByRole('option').filter({ hasText: 'review' }).click();
 	const details = page.locator('.ash-extension-editor');
 	await expect(details).toContainText('workspace / bad-skill: Invalid metadata');
-	await details.getByRole('button', { name: 'Disable skill', exact: true }).click();
-	await expect(details.getByRole('button', { name: 'Enable skill', exact: true })).toBeEnabled();
+	await details.locator('.extension-detail-enablement .ash-switch-track').click();
+	await expect(details.getByRole('switch', { name: 'Enable skill', exact: true })).not.toBeChecked();
 	expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'skill'))).toEqual([['skill', { source: 'marketplace:example/web', name: 'review' }, false, 3]]);
 	await lsp.getByRole('button', { name: 'Save server configuration', exact: true }).click();
 	await expect(lsp.getByRole('status')).toContainText('Refresh before saving again.');
@@ -893,7 +912,8 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(editor.getByRole('button', { name: locale === 'en' ? 'Authorize execution' : '授权执行', exact: true })).toBeVisible();
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'editorPolicy'))).toEqual([]);
 		for (const [action, policyAction] of locale === 'en' ? [['Disable', 'disable'], ['Authorize execution', 'grant'], ['Revoke execution authorization', 'revoke'], ['Enable', 'enable']] : [['禁用', 'disable'], ['授权执行', 'grant'], ['撤销执行授权', 'revoke'], ['启用', 'enable']]) {
-			await editor.getByRole('button', { name: action, exact: true }).click();
+			if (policyAction === 'enable' || policyAction === 'disable') { await editor.getByRole('switch').press('Space'); }
+			else { await editor.getByRole('button', { name: action, exact: true }).click(); }
 			if (policyAction === 'grant' || policyAction === 'revoke') {
 				await page.getByRole('dialog', { name: 'publisher.sample@ash', exact: true }).getByRole('button', { name: action, exact: true }).click();
 			}
@@ -917,8 +937,8 @@ test('Extensions execution can be revoked when its entry becomes unavailable', a
 	await editor.getByRole('button', { name: 'Revoke execution authorization', exact: true }).click();
 	await page.getByRole('dialog', { name: 'publisher.sample@ash', exact: true }).getByRole('button', { name: 'Revoke execution authorization', exact: true }).click();
 	await expect(editor.getByRole('button', { name: 'Authorize execution', exact: true })).toHaveCount(0);
-	await editor.getByRole('button', { name: 'Disable', exact: true }).click();
-	await expect(editor.getByRole('button', { name: 'Enable', exact: true })).toBeVisible();
+	await editor.getByRole('switch').press('Space');
+	await expect(editor.getByRole('switch')).not.toBeChecked();
 });
 
 for (const trigger of ['command', 'view']) {
@@ -1049,7 +1069,7 @@ for (const [locale, disable, enable, disabled, languagePackReason] of [
 		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
 		await expect(extension.getByRole('button', { name: enable, exact: true })).toBeVisible();
 		await extension.click();
-		await editor.getByRole('button', { name: enable, exact: true }).click();
+		await editor.getByRole('switch').press('Space');
 		await expect(extension.getByRole('button', { name: disable, exact: true })).toBeVisible();
 		const languagePack = view.getByRole('option').filter({ hasText: 'ash.language-pack-zh-cn' });
 		await expect(languagePack.getByRole('button')).toHaveCount(0);
@@ -1070,7 +1090,7 @@ for (const [locale, disable, enable, disabled, running, onDemand] of [
 		await provider.click();
 		const editor = page.locator('.ash-extension-editor');
 		await expect(editor.getByRole('status')).toHaveText(running);
-		await editor.getByRole('button', { name: disable, exact: true }).click();
+		await editor.getByRole('switch').press('Space');
 		await expect(provider.getByRole('button', { name: enable, exact: true })).toBeVisible();
 		await expect(editor.getByRole('status')).toHaveText(disabled);
 		await provider.getByRole('button', { name: enable, exact: true }).click();
@@ -1092,17 +1112,17 @@ for (const [locale, disable, enable, disabled, running, onDemand] of [
 		const reason = locale === 'en' ? 'This connection cannot enable or disable backend providers.' : '此连接无权启用或禁用后端提供程序。';
 		await expect(editor.getByRole('status')).toContainText(running);
 		await expect(editor.getByRole('status')).toContainText(reason);
-		await expect(editor.getByRole('button', { name: disable, exact: true })).toBeDisabled();
+		await expect(editor.getByRole('switch')).toBeDisabled();
 		// A native disabled control must also reject keyboard activation.
-		await editor.getByRole('button', { name: disable, exact: true }).press('Enter');
+		await editor.getByRole('switch').press('Space');
 		await expect(editor.getByRole('status')).toContainText(running);
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'builtInPolicy'))).toEqual([]);
 	});
 }
 
-for (const [locale, skillsTitle, disable, enable, openInstructions] of [
-	['en', 'Skills', 'Disable skill', 'Enable skill', 'Open instructions'],
-	['zh-CN', '技能', '禁用技能', '启用技能', '打开说明'],
+for (const [locale, skillsTitle, enable, openInstructions] of [
+	['en', 'Skills', 'Enable skill', 'Open instructions'],
+	['zh-CN', '技能', '启用技能', '打开说明'],
 ]) {
 	test(`Extensions panes open scoped Skills details and readonly instructions in ${locale}`, async ({ page }) => {
 		const errors: string[] = [];
@@ -1120,9 +1140,23 @@ for (const [locale, skillsTitle, disable, enable, openInstructions] of [
 		await list.press('Enter');
 		const details = page.locator('.ash-extension-editor');
 		await expect(details).toContainText('workspace / bad-skill: Invalid metadata');
-		await details.getByRole('button', { name: disable, exact: true }).click();
-		await expect(details.getByRole('button', { name: enable, exact: true })).toBeVisible();
+		const toggle = details.getByRole('switch', { name: enable, exact: true });
+		await expect(toggle).toBeChecked();
+		await toggle.focus();
+		await toggle.press('Space');
+		await expect(toggle).not.toBeChecked();
+		await expect(toggle).toBeFocused();
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'skill'))).toEqual([['skill', { source: 'marketplace:example/web', name: 'review' }, false, 3, 'session-scope']]);
+		await toggle.press('Space');
+		await expect(toggle).toBeChecked();
+		await expect(toggle).toBeEnabled();
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'skill').at(-1))).toEqual(['skill', { source: 'marketplace:example/web', name: 'review' }, true, 4, 'session-scope']);
+		await page.evaluate(() => window.ashExtensionsIntegration.changeRevision());
+		await toggle.press('Space');
+		await expect(details.getByRole('status')).toContainText('Configuration changed. Refresh before saving.');
+		await expect(toggle).toBeChecked();
+		await expect(toggle).toBeEnabled();
+		await expect(toggle).toBeFocused();
 		await details.getByRole('button', { name: openInstructions, exact: true }).click();
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'document').map((entry: any) => [entry[0], { ...entry[1], resource: { scheme: entry[1].resource.scheme, authority: entry[1].resource.authority, path: entry[1].resource.path } }])[0])).toMatchObject(['document', { resource: { scheme: 'private', authority: 'skill', path: '/review/SKILL.md' }, readOnly: true, languageId: 'markdown' }]);
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.find((entry: any) => entry[0] === 'documentOptions'))).toMatchObject(['documentOptions', { selection: { startLineNumber: 5, startColumn: 1, endLineNumber: 5, endColumn: 1 } }]);
@@ -1642,13 +1676,22 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('workbench.action.chat.configure.skills'));
 		await page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').click();
 		const details = page.locator('.ash-extension-editor');
-		await details.getByRole('button', { name: locale === 'en' ? 'Disable skill' : '禁用技能', exact: true }).press('Enter');
-		await expect(details.getByRole('status')).toHaveText(locale === 'en' ? 'Disabled' : '已禁用');
+		const skillToggle = details.getByRole('switch', { name: locale === 'en' ? 'Enable skill' : '启用技能', exact: true });
+		await skillToggle.press('Space');
+		await expect(skillToggle).not.toBeChecked();
 		const connectors = page.locator('[data-view-id="ash.extensions.mcp"]');
 		await connectors.getByRole('button', { name: locale === 'en' ? 'Connections' : '连接', exact: true }).press('ArrowRight');
 		await connectors.getByRole('option').filter({ hasText: 'GitHub account' }).click();
-		await details.getByRole('button', { name: locale === 'en' ? 'Disconnect' : '断开', exact: true }).press('Enter');
+		await details.getByRole('switch').press('Space');
 		await expect(connectors.getByRole('option').filter({ hasText: 'GitHub account' })).toContainText(locale === 'en' ? 'Disconnected' : '已断开');
+		await expect(details.locator('.extension-detail-info')).toContainText('octocat');
+		await expect(details.getByRole('switch')).not.toBeChecked();
+		await details.getByRole('switch').press('Space');
+		await expect(details.getByRole('status')).toHaveText(locale === 'en' ? 'Connected · Octocat' : '已连接 · Octocat');
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'connector/enablement/set'))).toEqual([
+			['connector/enablement/set', 'github', false], ['connector/enablement/set', 'github', true],
+		]);
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'connector/connect' || entry[0] === 'connector/oauth'))).toEqual([]);
 		const tokenButton = details.getByRole('button', { name: locale === 'en' ? 'Connect with API token' : '使用 API 令牌连接', exact: true });
 		await tokenButton.press('Enter');
 		const tokenDialog = page.getByRole('dialog', { name: 'GitHub account', exact: true });
@@ -1829,3 +1872,21 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(after.connectors).toBeGreaterThan(before.connectors);
 	});
 }
+
+
+test('Saving detail enablement preserves focus moved to the shared search box', async ({ page }) => {
+	await page.goto('/extensions.html');
+	await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('workbench.action.chat.configure.skills'));
+	await page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').click();
+	const toggle = page.locator('.ash-extension-editor').getByRole('switch');
+	await page.evaluate(() => window.ashExtensionsIntegration.holdSkillEnablement());
+	await toggle.press('Space');
+	await expect(toggle).toBeDisabled();
+	await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.skillEnablementStarted())).toBe(true);
+	const search = page.locator('#extensions').getByRole('searchbox');
+	await search.focus();
+	await page.evaluate(() => window.ashExtensionsIntegration.completeSkillEnablement());
+	await expect(toggle).toBeEnabled();
+	await expect(toggle).not.toBeChecked();
+	await expect(search).toBeFocused();
+});

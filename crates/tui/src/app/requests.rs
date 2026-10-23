@@ -216,7 +216,9 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         }
         AppCommand::Ide(_) => Some(RequestKey::Ide),
         AppCommand::Connectors(
-            ConnectorCommand::ConnectDeviceOAuth { .. } | ConnectorCommand::Disconnect { .. },
+            ConnectorCommand::ConnectDeviceOAuth { .. }
+            | ConnectorCommand::Disconnect { .. }
+            | ConnectorCommand::SetEnabled { .. },
         ) => Some(RequestKey::Connectors),
         AppCommand::Dirs(
             DirCommand::Add { .. }
