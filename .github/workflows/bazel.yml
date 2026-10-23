@@ -80,8 +80,10 @@ jobs:
         env:
           ASH_DESKTOP_STARTUP_TRACE: ${{ inputs.startup_trace && '1' || '0' }}
           ASH_DESKTOP_STARTUP_TRACE_ID: "00000000-0000-4000-8000-000000000001"
+        # Real-process deadlines require optimized programs. Fastbuild spends
+        # the startup budget hashing executables before rendering the first frame.
         run: >-
-          bazel test //cli:tui-real-scenarios --test_output=streamed
+          bazel test //cli:tui-real-scenarios --compilation_mode=opt --test_output=streamed
           --test_env=PATH --test_env=ASH_RG_PATH --test_env=ASH_TGREP_PATH
           --test_env=ASH_DESKTOP_STARTUP_TRACE --test_env=ASH_DESKTOP_STARTUP_TRACE_ID
           --test_arg=--nocapture --test_arg=--test-threads=4
