@@ -2,9 +2,12 @@ use ropey::Rope;
 use ropey::RopeSlice;
 use std::cell::RefCell;
 use std::cmp::Reverse;
+use std::ops::ControlFlow;
 use std::ops::Range;
 use std::sync::Arc;
 
+use tree_sitter::ParseOptions;
+use tree_sitter::ParseState;
 use tree_sitter::{InputEdit, Node, Parser, Point, Query, QueryCursor, StreamingIterator, Tree};
 
 use crate::language::LanguageConfiguration;
@@ -289,20 +292,81 @@ fn parse_rope(
     text: &Rope,
     old_tree: Option<&Tree>,
 ) -> Result<Tree, SyntaxError> {
-    parser
-        .parse_with_options(
-            &mut |offset, _| {
-                if offset >= text.len_bytes() {
-                    return &[][..];
-                }
-                let (chunk, start, _, _) = text.chunk_at_byte(offset);
-                &chunk.as_bytes()[offset - start..]
-            },
-            old_tree,
-            None,
-        )
-        .ok_or(SyntaxError::ParseCancelled)
+    let mut progress = ParseProgress::new(text.len_bytes());
+    let mut callback = |state: &ParseState| progress.advance(state.current_byte_offset());
+    parse_rope_with_options(
+        parser,
+        text,
+        old_tree,
+        ParseOptions::new().progress_callback(&mut callback),
+    )
 }
+
+// File size and snapshot limits do not bound native parsing: a grammar can keep
+// reducing at one byte offset while allocating nodes. Tree-sitter checks progress
+// about every 100 operations. Tree balancing and external scanners also do work
+// without advancing the reported offset, so their allowance scales with input
+// size. Repeated reductions on small malformed inputs retain a bounded allowance.
+const MAX_STALLED_PARSE_CHECKS: usize = 1_024;
+
+struct ParseProgress {
+    furthest_byte: usize,
+    stalled_checks: usize,
+    max_stalled_checks: usize,
+}
+
+impl ParseProgress {
+    fn new(source_bytes: usize) -> Self {
+        Self {
+            furthest_byte: 0,
+            stalled_checks: 0,
+            max_stalled_checks: MAX_STALLED_PARSE_CHECKS.saturating_add(source_bytes / 16),
+        }
+    }
+
+    fn advance(&mut self, offset: usize) -> ControlFlow<()> {
+        if offset > self.furthest_byte {
+            self.furthest_byte = offset;
+            self.stalled_checks = 0;
+        } else {
+            self.stalled_checks += 1;
+        }
+        if self.stalled_checks >= self.max_stalled_checks {
+            ControlFlow::Break(())
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+}
+
+fn parse_rope_with_options(
+    parser: &mut Parser,
+    text: &Rope,
+    old_tree: Option<&Tree>,
+    options: ParseOptions<'_>,
+) -> Result<Tree, SyntaxError> {
+    let tree = parser.parse_with_options(
+        &mut |offset, _| {
+            if offset >= text.len_bytes() {
+                return &[][..];
+            }
+            let (chunk, start, _, _) = text.chunk_at_byte(offset);
+            &chunk.as_bytes()[offset - start..]
+        },
+        old_tree,
+        Some(options),
+    );
+    // A cancelled parser retains its partial parse for resumption. Edits are
+    // atomic here, so the next call may use different text and must start fresh.
+    if tree.is_none() {
+        parser.reset();
+    }
+    tree.ok_or(SyntaxError::ParseCancelled)
+}
+
+#[cfg(test)]
+#[path = "parse_tests.rs"]
+mod parse_tests;
 
 fn point_at(text: &Rope, offset: usize) -> SyntaxPoint {
     let row = text.byte_to_line(offset);

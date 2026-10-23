@@ -31,6 +31,7 @@ export function createSCMApi(runtime, request, invoke, retain, stateRequest = re
 					})
 				})),
 				input: { visible: value.input.visible, buttonVisible: value.input.buttonVisible, validationMessage: value.input.validationMessage, value: value.input.value, placeholder: value.input.placeholder, enabled: value.input.enabled, canAccept: value.input.canAccept, buttonLabel: value.input.buttonLabel, buttonTooltip: value.input.buttonTooltip },
+				actionButton: value.actionButton,
 				activeRepositoryName: value.activeRepositoryName, statusMessage: value.statusMessage, isBusy: value.isBusy,
 				statusBarCommands: value.statusBarCommands.map(command => ({
 					id: command.id, text: command.text, ariaLabel: command.ariaLabel, tooltip: command.tooltip,

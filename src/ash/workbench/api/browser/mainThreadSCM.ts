@@ -16,7 +16,7 @@ import { LRUCache } from '../../../base/common/map.js';
 import type { IAction } from '../../../base/common/actions.js';
 import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
-import { ISCMService, ISCMViewService, type ISCMProvider, type ISCMResourceGroup, type ISCMConflictFile, type ISCMConflictResolution } from '../../contrib/scm/common/scm.js';
+import { ISCMService, ISCMViewService, type ISCMProvider, type ISCMResourceGroup, type ISCMConflictFile, type ISCMConflictResolution, type ISCMActionButtonDescriptor } from '../../contrib/scm/common/scm.js';
 import type { ISCMHistoryProvider, ISCMHistoryItem, ISCMHistoryOptions, ISCMHistoryItemRef, ISCMHistoryItemChange, ISCMHistoryItemDetails, ISCMHistoryItemChangeContents } from '../../contrib/scm/common/history.js';
 import { IQuickDiffService } from '../../contrib/scm/common/quickDiff.js';
 import { IDecorationsService } from '../../services/decorations/common/decorations.js';
@@ -440,6 +440,7 @@ interface ProviderSnapshot {
 	readonly selectionRevision: number;
 	readonly groups: readonly Record<string, JsonValue>[];
 	readonly input: Record<string, JsonValue>;
+	readonly actionButton: ISCMActionButtonDescriptor | undefined;
 	readonly activeRepositoryName: string | undefined;
 	readonly count: number | undefined;
 	readonly statusMessage: string;
@@ -558,6 +559,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	public get statusMessage(): string { return this.snapshot.statusMessage; }
 	public get isBusy(): boolean { return this.snapshot.isBusy; }
 	public get count(): number | undefined { return this.snapshot.count; }
+	public get actionButton(): ISCMActionButtonDescriptor | undefined { return this.snapshot.actionButton; }
 	public get input(): ISCMProvider['input'] {
 		const owner = this;
 		const input = this.snapshot.input;
@@ -699,6 +701,21 @@ function parseActions(value: JsonValue): void {
 		}
 	}
 }
+function parseActionButton(value: JsonValue): ISCMActionButtonDescriptor {
+	const entry = object(value);
+	if (typeof entry.enabled !== 'boolean') throw new TypeError('Invalid SCM action button availability');
+	const command = (value: JsonValue): ISCMActionButtonDescriptor['command'] => {
+		const entry = object(value);
+		return {
+			id: string(entry.id), title: string(entry.title), tooltip: optionalString(entry.tooltip),
+			shortTitle: optionalString(entry.shortTitle), arguments: entry.arguments == null ? undefined : [...array(entry.arguments)],
+		};
+	};
+	return {
+		command: command(entry.command), enabled: entry.enabled,
+		secondaryCommands: entry.secondaryCommands == null ? undefined : array(entry.secondaryCommands).map(group => array(group).map(command)),
+	};
+}
 function parseProvider(value: JsonValue): ProviderSnapshot {
 	const entry = object(value);
 	for (const key of ['hasHistoryItemRefs', 'hasHistoryMergeBase']) {
@@ -753,7 +770,7 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 	if (!Number.isSafeInteger(historyRefsRevision) || historyRefsRevision < 0) { throw new TypeError('Invalid SCM history refs revision'); }
 	const historyRefsItems = entry.historyRefsItems == null ? [] : array(entry.historyRefsItems).map(parseHistoryItem);
 	const timeline = entry.timeline == null ? undefined : object(entry.timeline);
-	return { timeline: timeline ? { label: string(timeline.label), resetKey: optionalString(timeline.resetKey) } : undefined, count: entry.count == null ? undefined : number(entry.count), id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, selectionRevision, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRemoteRef: entry.historyRemoteRef == null ? undefined : parseRef(entry.historyRemoteRef), historyBaseRef: entry.historyBaseRef == null ? undefined : parseRef(entry.historyBaseRef), hasHistoryItemRefs: entry.hasHistoryItemRefs === true, hasHistoryMergeBase: entry.hasHistoryMergeBase === true, historyRevision: number(entry.historyRevision), historyRefsRevision, historyRefsItems, hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
+	return { actionButton: entry.actionButton == null ? undefined : parseActionButton(entry.actionButton), timeline: timeline ? { label: string(timeline.label), resetKey: optionalString(timeline.resetKey) } : undefined, count: entry.count == null ? undefined : number(entry.count), id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, selectionRevision, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRemoteRef: entry.historyRemoteRef == null ? undefined : parseRef(entry.historyRemoteRef), historyBaseRef: entry.historyBaseRef == null ? undefined : parseRef(entry.historyBaseRef), hasHistoryItemRefs: entry.hasHistoryItemRefs === true, hasHistoryMergeBase: entry.hasHistoryMergeBase === true, historyRevision: number(entry.historyRevision), historyRefsRevision, historyRefsItems, hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
 }
 function parseHistoryItem(value: JsonValue): ISCMHistoryItem { const entry = object(value); return { id: string(entry.id), parentIds: array(entry.parentIds).map(value => string(value)), subject: string(entry.subject), message: string(entry.message, 512 * 1024), displayId: optionalString(entry.displayId), timestamp: entry.timestamp == null ? undefined : number(entry.timestamp), tooltip: entry.tooltip == null ? undefined : parseDetails(entry.tooltip), references: array(entry.references ?? []).map(parseRef), remoteLinks: array(entry.remoteLinks ?? []).map(value => { const link = object(value); return { name: string(link.name), uri: URI.parse(string(link.uri)) }; }) }; }
 function parseHistoryChange(value: JsonValue): ISCMHistoryItemChange { const entry = object(value); return { uri: URI.parse(string(entry.uri)), originalUri: entry.originalUri == null ? undefined : URI.parse(string(entry.originalUri)), modifiedUri: entry.modifiedUri == null ? undefined : URI.parse(string(entry.modifiedUri)), path: string(entry.path), originalPath: optionalString(entry.originalPath), status: string(entry.status), parentId: optionalString(entry.parentId) }; }

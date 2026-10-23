@@ -2101,3 +2101,63 @@ test('SCM publishes its count through view activity and retires it with the cont
 	controller.dispose();
 	assert.deepEqual(badges(), []);
 });
+
+
+test('SCM compound commit button dispatches provider commands and keeps menu ownership and keyboard focus', async () => {
+	using fixture = await createResourceGroupMenuFixture(true);
+	const provider = fixture.scm.getRepository('first')!.provider;
+	let enabled = true;
+	let busy = false;
+	const calls: unknown[][] = [];
+	fixture.add(CommandsRegistry.register('scm.test.commit', (_accessor, ...args) => { calls.push([...args]); }));
+	fixture.add(CommandsRegistry.register('scm.test.amend', (_accessor, ...args) => { calls.push([...args]); }));
+	Object.defineProperties(provider, {
+		input: { value: { ...provider.input, enabled: true, canAccept: true } },
+		actionButton: {
+			get: () => ({
+				command: { id: 'scm.test.commit', title: '$(check) Commit', arguments: ['first', 'primary'] }, enabled,
+				secondaryCommands: [[{ id: 'scm.test.amend', title: 'Commit (Amend)', arguments: ['first', 'amend'] }]],
+			})
+		},
+		isBusy: { get: () => busy },
+	});
+	fixture.refresh();
+	const main = fixture.pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit')!;
+	const dropdown = fixture.pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit-dropdown')!;
+	assert.equal(main.textContent, 'Commit');
+	assert.ok(main.querySelector('[data-ash-icon-id="check"]'));
+	assert.equal(dropdown.hidden, false);
+	assert.equal(dropdown.type, 'button', 'Opening the menu cannot submit the commit form');
+	main.click();
+	await waitFor(() => calls.length === 1);
+	assert.deepEqual(calls, [['first', 'primary']]);
+	dropdown.focus();
+	dropdown.dispatchEvent(new fixture.browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+	assert.equal(dropdown.getAttribute('aria-expanded'), 'true');
+	const actions = fixture.lastMenu().getActions();
+	assert.deepEqual(actions.map(action => action.label), ['Commit (Amend)']);
+	fixture.hideMenu();
+	assert.equal(dropdown.getAttribute('aria-expanded'), 'false');
+	assert.equal(fixture.browser.window.document.activeElement, dropdown);
+	dropdown.click();
+	const outside = fixture.browser.window.document.createElement('button');
+	fixture.browser.window.document.body.append(outside);
+	outside.focus();
+	fixture.hideMenu();
+	assert.equal(fixture.browser.window.document.activeElement, outside, 'Closing a menu preserves focus transferred outside the SCM pane');
+	await actions[0].run();
+	assert.deepEqual(calls.at(-1), ['first', 'amend']);
+	fixture.views.selectRepository('second');
+	await actions[0].run();
+	assert.equal(calls.length, 2, 'An open menu never follows a later repository selection');
+	fixture.views.selectRepository('first');
+	busy = true;
+	fixture.refresh();
+	assert.equal(main.disabled, true);
+	assert.equal(dropdown.disabled, true);
+	busy = false;
+	enabled = false;
+	fixture.refresh();
+	assert.equal(main.disabled, true);
+	assert.equal(dropdown.disabled, true);
+});

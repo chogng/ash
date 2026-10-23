@@ -679,6 +679,49 @@
 	outline-offset: -1px;
 }
 
+.ash-scm-commit-actions {
+	display: flex;
+	min-width: 0;
+}
+
+.ash-scm-commit-actions[hidden] {
+	display: none;
+}
+
+.ash-scm-commit-actions > .ash-scm-commit {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-scm-commit-actions.has-dropdown > .ash-scm-commit {
+	border-top-right-radius: 0;
+	border-bottom-right-radius: 0;
+}
+
+.ash-scm-commit-dropdown.ash-button {
+	flex: 0 0 var(--ash-toolbar-actionSize);
+	padding: 0;
+	border-left-color: currentColor;
+	border-top-left-radius: 0;
+	border-bottom-left-radius: 0;
+	color: var(--ash-button-primaryForeground);
+	background: var(--ash-button-primaryBackground);
+}
+
+.ash-scm-commit-dropdown.ash-button:not(:disabled):hover {
+	background: var(--ash-button-primaryHoverBackground);
+}
+
+.ash-scm-commit .ash-icon-label-container {
+	min-width: 0;
+}
+
+.ash-scm-commit .ash-button-label {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
 .ash-scm-commit.ash-button,
 .ash-scm-find-issues.ash-button {
 	width: 100%;
