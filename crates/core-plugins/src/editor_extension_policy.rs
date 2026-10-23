@@ -210,13 +210,28 @@ impl EditorExtensionPolicy {
         {
             return Err(EditorExtensionPolicyError::Storage);
         }
-        Ok(Self {
+        let policy = Self {
             path,
             state: Mutex::new(State {
                 durable,
                 subscribers: Vec::new(),
             }),
-        })
+        };
+        {
+            let mut state = policy
+                .state
+                .lock()
+                .map_err(|_| EditorExtensionPolicyError::Storage)?;
+            // The Ash Rust adapter changed publisher. Preserve an existing disablement
+            // before the catalog resolves its new identity; never migrate execution consent.
+            if state.durable.disabled_extensions.contains("vscode.rust") {
+                let mut next = state.durable.clone();
+                next.disabled_extensions.remove("vscode.rust");
+                next.disabled_extensions.insert("ash.rust".into());
+                policy.commit(&mut state, next)?;
+            }
+        }
+        Ok(policy)
     }
 
     pub fn generation(&self) -> u64 {

@@ -218,7 +218,7 @@ if (partialDiscoveryFailure) { sources.push({ id: 'offline-source', kind: 'ash',
 if (new URLSearchParams(location.search).has('pagedDiscovery')) { sources.push({ id: 'other', kind: 'ash', enabled: true, productOwned: false }); }
 const builtInProviderStates = new Map([
 	['ash.github-authentication', { enabled: true, running: true }],
-	['vscode.rust', { enabled: true, running: true }],
+	['ash.rust', { enabled: true, running: true }],
 ]);
 function builtInProviders() {
 	return { revision: editorPolicyRevision, canChangeEnablement: !new URLSearchParams(location.search).has('readOnlyProviders'), providers: [...builtInProviderStates].map(([id, state]) => ({ id, ...state })) };

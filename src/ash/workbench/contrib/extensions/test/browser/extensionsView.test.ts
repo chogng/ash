@@ -819,17 +819,38 @@ suite('extensions browser component', () => {
 			for (const width of [360, 850]) {
 				await page.locator('#details').evaluate((element, width) => { element.style.width = `${width}px`; }, width);
 				if (width < 720) { await expect(editor).toHaveClass(/compact/u); } else { await expect(editor).not.toHaveClass(/compact/u); }
-				const description = await editor.locator('.extension-detail-description > p').boundingBox();
-				const row = await editor.locator('.extension-detail-description').boundingBox();
+				const identity = await editor.locator('.extension-detail-identity').boundingBox();
+				const row = await editor.locator('.extension-detail-identity-row').boundingBox();
 				const track = editor.locator('.ash-switch-track');
 				const bounds = await track.boundingBox();
-				expect(bounds!.x).toBeGreaterThan(description!.x + description!.width);
+				expect(bounds!.x).toBeGreaterThan(identity!.x + identity!.width);
 				expect(Math.abs(bounds!.x + bounds!.width - row!.x - row!.width)).toBeLessThanOrEqual(1);
 				expect(Math.abs(bounds!.y + bounds!.height / 2 - row!.y - row!.height / 2)).toBeLessThanOrEqual(1);
 				await expect.poll(() => editor.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
 				await toggle.focus();
 				await expect.poll(() => track.evaluate(element => Number.parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThanOrEqual(1);
 				await page.screenshot({ path: `.build/desktop/ui-previews/skill-enablement-${theme}-${width}.png` });
+			}
+			await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
+			const search = page.locator('#extensions').getByRole('searchbox');
+			await search.fill('rust');
+			await search.press('Enter');
+			await page.locator('[data-package-id="ash.rust"]').click();
+			await expect(editor.locator('.extension-detail-publisher')).toHaveText('Ash');
+			await expect(editor.locator('.extension-detail-description')).toBeHidden();
+			await expect(editor.getByRole('switch')).toBeChecked();
+			for (const width of [360, 850]) {
+				await page.locator('#details').evaluate((element, width) => { element.style.width = `${width}px`; }, width);
+				if (width < 720) { await expect(editor).toHaveClass(/compact/u); } else { await expect(editor).not.toHaveClass(/compact/u); }
+				const identity = await editor.locator('.extension-detail-identity').boundingBox();
+				const track = await editor.locator('.ash-switch-track').boundingBox();
+				const header = await editor.locator('.extension-detail-header').boundingBox();
+				const tabs = await editor.locator('.extension-detail-tabs').boundingBox();
+				expect(Math.abs(track!.y + track!.height / 2 - identity!.y - identity!.height / 2)).toBeLessThanOrEqual(1);
+				expect(tabs!.y - header!.y - header!.height).toBeCloseTo(16);
+				expect(header!.height).toBeLessThanOrEqual(98);
+				await expect.poll(() => editor.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+				await page.screenshot({ path: `.build/desktop/ui-previews/rust-enablement-${theme}-${width}.png` });
 			}
 		});
 	}
@@ -1211,8 +1232,9 @@ suite('extensions browser component', () => {
 			await search.fill('rust');
 			await search.press('Enter');
 			const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
-			const provider = plugins.locator('[data-package-id="vscode.rust"]');
+			const provider = plugins.locator('[data-package-id="ash.rust"]');
 			await expect(provider).toBeVisible();
+			await expect(provider.locator('.extension-metadata')).toHaveText('Ash');
 			await expect(provider.getByRole('button')).toHaveCount(0);
 			await provider.click();
 			const editor = page.locator('.ash-extension-editor');
@@ -1233,8 +1255,8 @@ suite('extensions browser component', () => {
 			await expect(editor.locator('.extension-detail-header [role="status"]')).toBeEmpty();
 			await expect(editor.getByRole('switch')).toBeChecked();
 			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'builtInPolicy'))).toEqual([
-				['builtInPolicy', { id: 'vscode.rust', enabled: false, expectedRevision: 1 }],
-				['builtInPolicy', { id: 'vscode.rust', enabled: true, expectedRevision: 2 }],
+				['builtInPolicy', { id: 'ash.rust', enabled: false, expectedRevision: 1 }],
+				['builtInPolicy', { id: 'ash.rust', enabled: true, expectedRevision: 2 }],
 			]);
 		});
 

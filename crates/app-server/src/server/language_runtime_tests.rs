@@ -152,7 +152,7 @@ fn extension_advertisement_is_lazy_and_respects_language_and_extension_disableme
     configuration.servers.clear();
     policy
         .set_built_in_enablement(
-            "vscode.rust",
+            "ash.rust",
             ash_core_plugins::EditorExtensionPolicyAction::Disable,
             policy.generation(),
         )
@@ -163,7 +163,7 @@ fn extension_advertisement_is_lazy_and_respects_language_and_extension_disableme
     assert_eq!(runtime.acquisitions(&configuration).count(), 0);
     policy
         .set_built_in_enablement(
-            "vscode.rust",
+            "ash.rust",
             ash_core_plugins::EditorExtensionPolicyAction::Enable,
             policy.generation(),
         )

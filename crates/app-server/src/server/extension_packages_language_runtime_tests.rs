@@ -812,7 +812,7 @@ fn language_acquisition_only_admits_built_in_packages_and_rejects_conflicting_ow
     let mut builtin = ExtensionPackages::new(vec![ExtensionRoot::built_in(root.path())]);
     let snapshot = builtin.list(ExtensionPackagesReload::Cached);
     assert_eq!(
-        language_server_contributions(&snapshot).unwrap()["vscode.rust"][0].id,
+        language_server_contributions(&snapshot).unwrap()["ash.rust"][0].id,
         "rust-analyzer"
     );
     let conflict = root.path().join("other");

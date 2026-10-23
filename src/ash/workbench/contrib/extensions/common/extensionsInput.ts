@@ -39,8 +39,10 @@ EditorInputSerializers.registerStatic({
 		const record = requireRecord(value, 'Extensions input');
 		const source = optionalString(record.source, 'extension source') ?? ExtensionsInputSource.Registry;
 		if (!Object.values(ExtensionsInputSource).includes(source as ExtensionsInputSource)) { throw new TypeError('Invalid extension source'); }
+		const id = requireString(record.id, 'extension ID');
 		return new ExtensionsInput({
-			id: requireString(record.id, 'extension ID'),
+			// Resolve the renamed built-in before constructing its resource identity.
+			id: source === ExtensionsInputSource.BuiltIn && id === 'vscode.rust' ? 'ash.rust' : id,
 			version: requireString(record.version, 'extension version'),
 			displayName: requireString(record.displayName, 'extension name'),
 			packageType: requireString(record.packageType, 'extension type'),

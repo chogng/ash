@@ -628,9 +628,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			message: openError?.forceMessage ? openError.message : title,
 			detail: openError?.forceMessage ? undefined : error instanceof Error ? error.message : String(error),
 			severity,
-			buttons: actions.length
-				? actions.filter(action => action.enabled).map(action => ({ label: action.label, run: () => action }))
-				: [{ label: localize("workbench.editorOpenDismiss", "Dismiss"), run: () => undefined }],
+			buttons: actions.filter(action => action.enabled).map(action => ({ label: action.label, run: () => action })),
 			cancelButton: localize("workbench.editorOpenDismiss", "Dismiss"),
 		});
 		if (result) {

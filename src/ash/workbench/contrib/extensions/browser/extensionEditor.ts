@@ -103,16 +103,20 @@ class ExtensionDetailHeader extends Disposable {
 		this.icon.append(this.iconText, this.iconImage);
 		this._register(addDisposableListener(this.iconImage, 'error', () => { this.iconImage.hidden = true; this.iconText.hidden = false; }));
 		const heading = h(mainWindow.document, 'div'); heading.className = 'extension-detail-heading';
+		const identityRow = h(mainWindow.document, 'div'); identityRow.className = 'extension-detail-identity-row';
+		const identity = h(mainWindow.document, 'div'); identity.className = 'extension-detail-identity';
 		this.publisher.className = 'extension-detail-publisher'; this.publisher.hidden = true;
 		this.metadata.className = 'extension-metadata';
+		identity.append(this.title, this.publisher, this.metadata);
+		identityRow.append(identity);
 		const descriptionRow = h(mainWindow.document, 'div'); descriptionRow.className = 'extension-detail-description';
 		descriptionRow.append(this.description);
-		this.enablement = this._register(new Switch(descriptionRow, defaultToggleStyles));
+		this.enablement = this._register(new Switch(identityRow, defaultToggleStyles));
 		this.enablement.element.classList.add('extension-detail-enablement');
 		this.enablement.element.hidden = true;
 		this.actions.className = 'extension-actions';
 		this.status.setAttribute('role', 'status');
-		heading.append(this.title, this.publisher, this.metadata, descriptionRow, this.actions, this.status);
+		heading.append(identityRow, descriptionRow, this.actions, this.status);
 		this.element.append(this.icon, heading);
 	}
 }
@@ -217,7 +221,7 @@ export class ExtensionEditor extends EditorPane {
 				getProvider: () => {
 					const focused = mainWindow.document.activeElement;
 					if (!this.currentInput || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected plugin, skill, service account or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information moves below the content in a narrow editor. Open package opens the owning package for installation and permissions. The switch at the right of the description enables or disables the selected resource. Press Space to toggle it. For a service account, the switch connects or disconnects while preserving authorization and credentials. Service account details offer sign-in, API token connection, disconnect or sign-out according to the service. Associated MCP status appears in the account details; Open MCP server details shows its tools and diagnostics. Disconnect keeps the package installed. MCP server details show runtime status and diagnostics, with Edit, Connect, Disconnect and Remove for independent servers; the header switch controls saved enablement. Enablement is saved; connection actions control the running instance. Operations refresh the owning service state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected plugin, skill, service account or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information moves below the content in a narrow editor. Open package opens the owning package for installation and permissions. The switch at the right of the header identity enables or disables the selected resource. Press Space to toggle it. For a service account, the switch connects or disconnects while preserving authorization and credentials. Service account details offer sign-in, API token connection, disconnect or sign-out according to the service. Associated MCP status appears in the account details; Open MCP server details shows its tools and diagnostics. Disconnect keeps the package installed. MCP server details show runtime status and diagnostics, with Edit, Connect, Disconnect and Remove for independent servers; the header switch controls saved enablement. Enablement is saved; connection actions control the running instance. Operations refresh the owning service state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 				},
 			}));
 		}
@@ -795,7 +799,7 @@ export class ExtensionEditor extends EditorPane {
 		} catch { return; }
 		if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 		const publisher = descriptor?.publisher ?? (typeof manifest.publisher === 'string' ? manifest.publisher : '');
-		this.header.publisher.textContent = publisher; this.header.publisher.hidden = !publisher;
+		this.header.publisher.textContent = publisher === 'ash' ? 'Ash' : publisher; this.header.publisher.hidden = !publisher;
 		if (Array.isArray(manifest.categories) && manifest.categories.length && manifest.categories.every(category => typeof category === 'string')) {
 			const section = h(mainWindow.document, 'section'); section.className = 'extension-info-section';
 			const heading = h(mainWindow.document, 'h2'); heading.textContent = localize({ bundle: 'ash.extensions', key: 'detailCategories' }, 'Categories');
