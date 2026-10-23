@@ -1,5 +1,122 @@
 import { expect, test } from '@playwright/test';
 
+for (const direction of ['topToBottom', 'bottomToTop'] as const) test(`Animated counts resize and interrupt in ${direction}`, async ({ page }) => {
+	await page.goto('/changes.html');
+	await page.evaluate(direction => {
+		window.ashChangesIntegration.counter(9, direction);
+	}, direction);
+	const counter = page.locator('#counter .ash-animated-counter');
+	await expect(counter).toHaveText('+9');
+	expect(await counter.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+	const previousWidth = (await counter.boundingBox())!.width;
+	const growing = await page.evaluate(() => {
+		window.ashChangesIntegration.updateCounter(100);
+		const element = document.querySelector<HTMLElement>('#counter .ash-animated-counter')!;
+		const animations = element.getAnimations({ subtree: true });
+		for (const animation of animations) { animation.pause(); animation.currentTime = 120; }
+		const width = element.getAnimations()[0]!.effect as KeyframeEffect;
+		const digits = element.querySelector('.ash-animated-counter-value')!.getAnimations()[0]!.effect as KeyframeEffect;
+		return { width: width.getKeyframes().map(frame => Number.parseFloat(String(frame.width))), digits: digits.getKeyframes().map(frame => frame.transform), currentWidth: element.getBoundingClientRect().width };
+	});
+	await expect(counter).toHaveText('+100');
+	await expect(counter.locator('.ash-animated-counter-outgoing')).toHaveAttribute('aria-hidden', 'true');
+	expect(growing.width[0]).toBeCloseTo(previousWidth, 1);
+	expect(growing.width[1]!).toBeGreaterThan(previousWidth);
+	expect(growing.currentWidth).toBeGreaterThan(previousWidth);
+	expect(growing.currentWidth).toBeLessThan(growing.width[1]!);
+	expect(growing.digits[0]).toBe(direction === 'topToBottom' ? 'translateY(-100%)' : 'translateY(100%)');
+	const reversed = await page.evaluate(() => {
+		const element = document.querySelector<HTMLElement>('#counter .ash-animated-counter')!;
+		const old = element.getAnimations({ subtree: true });
+		window.ashChangesIntegration.updateCounter(2);
+		const digits = element.querySelector('.ash-animated-counter-value')!.getAnimations()[0]!;
+		for (const animation of element.getAnimations({ subtree: true })) animation.pause();
+		window.ashChangesIntegration.updateCounter(2);
+		return { cancelled: old.every(animation => animation.playState === 'idle'), reused: element.querySelector('.ash-animated-counter-value')!.getAnimations()[0] === digits, from: (digits.effect as KeyframeEffect).getKeyframes()[0]!.transform };
+	});
+	await expect(counter).toHaveText('+2');
+	await expect(counter.locator('.ash-animated-counter-outgoing')).toHaveCount(1);
+	expect(reversed).toEqual({ cancelled: true, reused: true, from: direction === 'topToBottom' ? 'translateY(100%)' : 'translateY(-100%)' });
+	await page.evaluate(() => {
+		for (const animation of document.querySelector('#counter')!.getAnimations({ subtree: true })) animation.finish();
+	});
+	await expect(counter.locator('.ash-animated-counter-outgoing')).toHaveCount(0);
+	expect((await counter.boundingBox())!.width).toBeCloseTo(previousWidth, 1);
+});
+
+test('Animated counts clear, reduce motion and dispose without retaining transitions', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/changes.html');
+	await page.evaluate(() => {
+		window.ashChangesIntegration.counter(1);
+		window.ashChangesIntegration.updateCounter(99);
+		for (const animation of document.querySelector('#counter')!.getAnimations({ subtree: true })) animation.pause();
+	});
+	const counter = page.locator('#counter .ash-animated-counter');
+	await expect(counter.locator('.ash-animated-counter-outgoing')).toHaveCount(1);
+	await page.evaluate(() => window.ashChangesIntegration.reduceMotion('on'));
+	await expect(counter).toHaveText('+99');
+	await expect(counter.locator('.ash-animated-counter-outgoing')).toHaveCount(0);
+	expect(await counter.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+	await page.evaluate(() => window.ashChangesIntegration.updateCounter(1000));
+	await expect(counter).toHaveText('+1000');
+	expect(await counter.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+	await page.evaluate(() => window.ashChangesIntegration.reduceMotion('auto'));
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await page.evaluate(() => window.ashChangesIntegration.updateCounter(7));
+	expect(await counter.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
+	await page.evaluate(() => window.ashChangesIntegration.updateCounter(undefined));
+	await expect(counter).toHaveText('');
+	await page.evaluate(() => window.ashChangesIntegration.updateCounter(8));
+	await expect(counter).toHaveText('+8');
+	expect(await counter.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+	await page.evaluate(() => {
+		window.ashChangesIntegration.counter(9, 'topToBottom', 0);
+		window.ashChangesIntegration.updateCounter(100);
+	});
+	expect(await counter.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+	const disposed = await page.evaluate(() => {
+		window.ashChangesIntegration.counter(1);
+		window.ashChangesIntegration.updateCounter(999);
+		const element = document.querySelector('#counter .ash-animated-counter')!;
+		window.ashChangesIntegration.disposeCounter();
+		window.ashChangesIntegration.updateCounter(2);
+		return { connected: element.isConnected, animations: element.getAnimations({ subtree: true }).length, text: element.textContent };
+	});
+	expect(disposed).toEqual({ connected: false, animations: 0, text: '+999' });
+	expect(errors).toEqual([]);
+});
+
+for (const locale of ['en', 'zh-CN']) test(`Changes summary shares animated statistics in ${locale}`, async ({ page }) => {
+	await page.goto(`/changes.html?locale=${locale}`);
+	const summary = page.locator('.ash-sessions-changes-summary');
+	await expect(summary).toHaveText(locale === 'en' ? '1 file +3 −2' : '1 个文件 +3 −2');
+	for (const theme of ['light', 'dark', 'contrast']) {
+		await page.evaluate(theme => window.ashChangesIntegration.theme(theme), theme);
+		const colors = await summary.evaluate(element => {
+			const added = element.querySelector('.ash-changes-stats-added')!;
+			const removed = element.querySelector('.ash-changes-stats-removed')!;
+			const probe = document.createElement('span');
+			element.append(probe);
+			probe.style.color = 'var(--ash-charts-green)';
+			const green = getComputedStyle(probe).color;
+			probe.style.color = 'var(--ash-charts-red)';
+			const red = getComputedStyle(probe).color;
+			probe.remove();
+			return { added: getComputedStyle(added).color, removed: getComputedStyle(removed).color, green, red };
+		});
+		expect(colors.added).toBe(colors.green);
+		expect(colors.removed).toBe(colors.red);
+		expect(colors.added).not.toBe(colors.removed);
+	}
+	await page.evaluate(() => window.ashChangesIntegration.multipleTurns());
+	await expect(summary).toHaveText(locale === 'en' ? '2 files +6 −4' : '2 个文件 +6 −4');
+	await expect.poll(() => summary.locator('.ash-animated-counter-outgoing').count()).toBe(0);
+	expect(await page.evaluate(() => window.ashChangesIntegration.content())).toContain(locale === 'en' ? '2 files +6 −4' : '2 个文件 +6 −4');
+});
+
 for (const locale of ['en', 'zh-CN'] as const) test(`Changes restores per-conversation choices and Viewed after a window reload (${locale})`, async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -316,7 +433,7 @@ test('Changes keeps keyboard selection through refresh and clears stale actions 
 	const tree = page.getByRole('tree', { name: 'Changes' });
 	const file = page.getByRole('treeitem');
 	await expect(file).toHaveCount(1);
-	await expect(page.locator('.ash-sessions-changes-summary')).toHaveText('1 file changes · +3 −2');
+	await expect(page.locator('.ash-sessions-changes-summary')).toHaveText('1 file +3 −2');
 	await expect(page.locator('.ash-sessions-changes-repository-status')).toContainText('origin/feature: 1 incoming · 2 outgoing · 3 uncommitted files');
 	await expect(page.locator('.ash-sessions-changes-summary')).toHaveCSS('font-size', '11px');
 	await tree.focus();
@@ -358,7 +475,7 @@ test('Changes keeps keyboard selection through refresh and clears stale actions 
 	await page.getByRole('button', { name: 'Sync changes', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.gitCalls())).toEqual(['git.pull:repository', 'git.push:repository']);
 	await page.evaluate(() => window.ashChangesIntegration.setLocale());
-	await expect(page.locator('.ash-sessions-changes-summary')).toHaveText('1 项文件更改 · +3 −2');
+	await expect(page.locator('.ash-sessions-changes-summary')).toHaveText('1 个文件 +3 −2');
 });
 
 test('Changes creates and attaches the edited PR, and cancellation restores keyboard focus', async ({ page }) => {

@@ -1161,6 +1161,36 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
+test('Chat changes animate the latest values and preserve partial, error and focus states', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/chatInput.html?locale=en&theme=light');
+	await page.evaluate(() => window.ashChatInputIntegration.setChanges({ files: 1, additions: 9, deletions: 9 }));
+	const changes = page.locator('.ash-chat-changes-pill');
+	await changes.focus();
+	const transition = await page.evaluate(() => {
+		window.ashChatInputIntegration.setChanges({ files: 2, additions: 100, deletions: 10, partial: true });
+		const counters = [...document.querySelectorAll<HTMLElement>('.ash-chat-changes-pill .ash-animated-counter')];
+		for (const counter of counters) for (const animation of counter.getAnimations({ subtree: true })) animation.pause();
+		return counters.map(counter => ({ text: counter.textContent, marker: getComputedStyle(counter, '::after').content, animations: counter.getAnimations({ subtree: true }).length }));
+	});
+	expect(transition).toEqual([{ text: '+100', marker: '"*"', animations: 3 }, { text: '−10', marker: '"*"', animations: 3 }]);
+	await expect(changes).toHaveAccessibleName('Open Conversation Changes: 2 files, 100 lines added, 10 lines removed. Line counts exclude files that cannot be compared as text.');
+	await expect(changes).toBeFocused();
+	await expect(changes.locator('.ash-chat-changes-statistics')).toHaveAttribute('aria-hidden', 'true');
+	await page.evaluate(() => window.ashChatInputIntegration.setChangesError('Repository unavailable'));
+	await expect(changes).toHaveAccessibleName('Repository unavailable');
+	await expect(changes).toBeFocused();
+	expect(await changes.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+	await page.evaluate(() => window.ashChatInputIntegration.setChanges({ files: 1, additions: 3, deletions: 0 }));
+	await expect(changes).toHaveText('1 file+3 −0');
+	await expect(changes.locator('.ash-animated-counter-outgoing')).toHaveCount(0);
+	await page.evaluate(() => window.ashChatInputIntegration.setChanges(undefined));
+	await expect(changes).toBeHidden();
+	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+	expect(errors).toEqual([]);
+});
+
 for (const locale of ['en', 'zh-CN']) {
 	for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
 		for (const surface of ['code', 'cowork']) {
@@ -1173,7 +1203,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await expect(changes).toBeHidden();
 				await page.evaluate(() => window.ashChatInputIntegration.setChanges({ files: 3, additions: 677, deletions: 31 }));
 				await expect(changes).toBeVisible();
-				await expect(changes).toHaveText(locale === 'en' ? '3 files+677−31' : '3 个文件+677−31');
+				await expect(changes).toHaveText(locale === 'en' ? '3 files+677 −31' : '3 个文件+677 −31');
 				await expect(changes).toHaveAccessibleName(locale === 'en' ? 'Open Conversation Changes: 3 files, 677 lines added, 31 lines removed' : '打开会话变更：3 个文件，新增 677 行，删除 31 行');
 				for (const width of [240, 450]) {
 					await page.locator('main').evaluate((element, width) => { element.style.width = `${width}px`; }, width);
@@ -1190,7 +1220,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await expect(page.getByLabel('Opened sources')).toHaveText('[{"changes":true}]');
 				await expect(input).toHaveValue('Keep my draft');
 				await page.evaluate(() => window.ashChatInputIntegration.setChanges({ files: 1, additions: 2, deletions: 0 }));
-				await expect(changes).toHaveText(locale === 'en' ? '1 file+2−0' : '1 个文件+2−0');
+				await expect(changes).toHaveText(locale === 'en' ? '1 file+2 −0' : '1 个文件+2 −0');
 				await expect(changes).toBeFocused();
 				await page.keyboard.press('Space');
 				await expect(page.getByLabel('Opened sources')).toHaveText('[{"changes":true},{"changes":true}]');

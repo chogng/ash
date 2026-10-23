@@ -126,7 +126,7 @@ export class ChangesViewPane extends ViewPane {
 		};
 		this._register(sessions.onDidChange(updatePullRequest));
 		updatePullRequest();
-		this._register(new ChangesSummaryWidget(this.statistics)).render(this.contentElement);
+		this._register(instantiation.createInstance(ChangesSummaryWidget, this.statistics)).render(this.contentElement);
 		const controls = h(container.ownerDocument, 'div', { className: 'ash-sessions-changes-view-actions' });
 		this.contentElement.append(controls);
 		this.changesetPicker = h(container.ownerDocument, 'select');

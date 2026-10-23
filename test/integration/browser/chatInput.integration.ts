@@ -668,7 +668,7 @@ window.ashChatInputIntegration = {
 		activeEditorChanged.fire();
 	},
 	setActiveFile: path => { activeEditor = path ? { resource: URI.parse(path) } : undefined; activeEditorChanged.fire(); },
-	setChanges: changes => { state = { ...state, changes, interaction: undefined }; part.render(state); },
+	setChanges: changes => { state = { ...state, changes, changesError: undefined, interaction: undefined }; part.render(state); },
 	setChangesScope: changesScope => { state = { ...state, changesScope, changes: undefined }; part.render(state); },
 	releaseWorkspaceChanges: changes => releaseWorkspaceChanges?.(changes),
 	workspaceChangesReads: () => workspaceChangesReads,

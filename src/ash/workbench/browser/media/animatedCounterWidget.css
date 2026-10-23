@@ -1,0 +1,24 @@
+.ash-animated-counter {
+	display: inline-block;
+	position: relative;
+	flex-shrink: 0;
+	overflow: clip;
+	vertical-align: bottom;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+.ash-animated-counter-value {
+	display: inline-block;
+}
+
+.ash-animated-counter-outgoing {
+	position: absolute;
+	inset-inline-start: 0;
+	top: 0;
+	pointer-events: none;
+}
+
+.ash-animated-counter-outgoing::before {
+	content: attr(data-value);
+}

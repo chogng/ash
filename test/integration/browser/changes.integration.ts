@@ -40,8 +40,16 @@ import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import '../../../src/ash/base/browser/ui/styles.css';
+import { IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
+import { AccessibilityService } from '../../../src/ash/platform/accessibility/browser/accessibilityService.js';
+import { AnimatedCounterWidget, type IAnimatedCounterWidgetOptions } from '../../../src/ash/workbench/browser/animatedCounterWidget.js';
+import { observableValue } from '../../../src/ash/base/common/observable.js';
+import chineseWorkbench from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
+import { IChecksOperationService } from '../../../src/ash/sessions/contrib/changes/common/checksOperationService.js';
+import { ChecksOperationService } from '../../../src/ash/sessions/contrib/changes/browser/checksOperationService.js';
 
-if (new URL(location.href).searchParams.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', chinese); }
+const chineseMessages = { ash: { ...chinese.ash, ...chineseWorkbench.ash } };
+if (new URL(location.href).searchParams.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', chineseMessages); }
 
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
@@ -51,6 +59,7 @@ services.registerInstance(ILogService, new NullLoggerService());
 services.registerSingleton(IDecorationsService, () => services.createInstance(DecorationsService, document));
 services.registerSingleton(IChangesViewService, () => resources.add(services.createInstance(ChangesViewService)));
 services.registerSingleton(ISessionChangesService, () => services.createInstance(SessionChangesService));
+services.registerSingleton(IChecksOperationService, () => services.createInstance(ChecksOperationService));
 services.registerInstance(ISessionsManagementService, {
 	get sessions() {
 		const selection = services.get(ISessionsService).activeSelection;
@@ -59,8 +68,14 @@ services.registerInstance(ISessionsManagementService, {
 } as unknown as ISessionsManagementService);
 services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
 const changed = resources.add(new Emitter<void>());
-services.registerInstance(IConfigurationService, resources.add(new WorkbenchConfigurationService()));
+const configuration = resources.add(new WorkbenchConfigurationService());
+services.registerInstance(IConfigurationService, configuration);
 services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
+services.registerSingleton(IAccessibilityService, accessor => new AccessibilityService({
+	root: document.body,
+	configurationService: accessor.get(IConfigurationService),
+	contextKeyService: accessor.get(IContextKeyService),
+}));
 const accountChanged = resources.add(new Emitter<AccountState>());
 services.registerInstance(IAccountService, { onDidChangeAccounts: accountChanged.event } as unknown as IAccountService);
 services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(document.body)));
@@ -166,10 +181,19 @@ let view = services.createInstance(ChangesViewPane, container, { id: 'sessions.c
 viewOwner.value = view;
 view.setVisible(true);
 window.addEventListener('pagehide', () => { viewOwner.clear(); resources.dispose(); }, { once: true });
+const counterOwner = resources.add(new MutableDisposable<AnimatedCounterWidget>());
+const counterValue = observableValue<number | undefined>('counter', undefined);
+const counterHost = document.createElement('div');
+counterHost.id = 'counter';
+document.body.append(counterHost);
 
 declare global {
 	interface Window {
 		ashChangesIntegration: {
+			counter(value: number | undefined, direction?: IAnimatedCounterWidgetOptions['direction'], duration?: number): void;
+			updateCounter(value: number | undefined): void;
+			disposeCounter(): void;
+			reduceMotion(value: 'on' | 'off' | 'auto'): Promise<void>;
 			fail(value: boolean): void;
 			multipleTurns(): void;
 			revision(value: number): void;
@@ -204,6 +228,14 @@ declare global {
 	}
 }
 window.ashChangesIntegration = {
+	counter: (value, direction, duration) => {
+		counterOwner.clear();
+		counterValue.set(value);
+		counterOwner.value = services.createInstance(AnimatedCounterWidget, counterHost, { count: counterValue, prefix: '+', direction, duration });
+	},
+	updateCounter: value => counterValue.set(value),
+	disposeCounter: () => counterOwner.clear(),
+	reduceMotion: value => configuration.updateValue('workbench.reduceMotion', value),
 	agentRequests: () => agentRequests,
 	activeTurn: value => { activeTurn = value; },
 	multipleTurns: () => {
@@ -234,7 +266,7 @@ window.ashChangesIntegration = {
 	fileReadStarted: () => fileReadStarted,
 	rejectFile: () => { failFile!(new Error('Delayed file read failed')); pendingFileFailure = undefined; failFile = undefined; },
 	fail: value => { fail = value; changed.fire(); },
-	setLocale: () => { setNlsMessages('zh-CN', chinese); changed.fire(); },
+	setLocale: () => { setNlsMessages('zh-CN', chineseMessages); changed.fire(); },
 	opened: () => opened,
 	reviews: () => reviews,
 	content: () => view.getAccessibleContent(),

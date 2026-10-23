@@ -626,7 +626,6 @@
     "sessions.changes.expandFullFile": "展开整个文件",
     "sessions.changes.collapseUnchanged": "折叠未更改区域",
     "sessions.changes.editorActionsHelp": "使用文件工具栏标记“已查看”、打开工作区文件、展开整个文件或折叠未更改区域。标记“已查看”会折叠该比较；取消标记会展开该比较。查看标记属于当前捕获版本。预览提交会询问提交说明，并准备当前捕获文件的精确内容供提交前审阅。",
-    "sessions.changes.summary": "{0} 项文件更改 · +{1} −{2}",
     "sessions.changes.retry": "重新加载更改",
     "sessions.changes.checkActions": "{0} 操作",
     "sessions.changes.checkPermission": "你的 GitHub 账号没有执行此检查操作的权限。",

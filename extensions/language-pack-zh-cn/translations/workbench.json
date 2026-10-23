@@ -1,5 +1,7 @@
 {
   "ash": {
+    "changesStatsWidget.file": "{0} 个文件",
+    "changesStatsWidget.files": "{0} 个文件",
     "treeView.empty": "没有项目。",
     "treeView.checked": "已选中",
     "treeView.unchecked": "未选中",

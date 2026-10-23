@@ -844,8 +844,6 @@
     "chatEditing.history.undone": "已撤销上一个请求及其文件更改。",
     "chatEditing.history.redone": "已恢复请求及其文件更改。",
     "chat.changes.partialStatistics": "{0}。行数统计不包含无法按文本比较的文件。",
-    "chat.changes.file": "{0} 个文件",
-    "chat.changes.files": "{0} 个文件",
     "chat.changes.loadFailed": "变更暂不可用，请打开变更视图重试。",
     "chat.changes.unavailableLabel": "变更不可用",
     "chat.changes.openWorkspace": "打开工作区变更：{0} 个文件，新增 {1} 行，删除 {2} 行",

@@ -42,6 +42,8 @@ import { URI } from '../../../../../base/common/uri.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
+import { AccessibilityService } from '../../../../../platform/accessibility/browser/accessibilityService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import type { IChatWidgetModel } from '../../browser/widget/chatWidget.js';
 import type { IWillShutdownEvent } from '../../../../services/lifecycle/common/lifecycle.js';
@@ -108,6 +110,11 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 	const contextView = inputResources.add(new BrowserContextViewService(document.body));
 	partServices.registerInstance(IContextViewService, contextView);
 	if (!partServices.has(IConfigurationService)) partServices.registerInstance(IConfigurationService, inputResources.add(new InMemoryConfigurationService()));
+	if (!partServices.has(IAccessibilityService)) partServices.registerSingleton(IAccessibilityService, accessor => new AccessibilityService({
+		root: document.body,
+		configurationService: accessor.get(IConfigurationService),
+		contextKeyService: accessor.get(IContextKeyService),
+	}));
 	partServices.registerSingleton(IActionWidgetService, () => partServices.createInstance(ActionWidgetService));
 	partServices.registerInstance(ILanguageModelsService, {
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),

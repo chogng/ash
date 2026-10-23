@@ -274,7 +274,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.secondaryToolbarContainer = options.renderSecondaryToolbar === false
 			? undefined
 			: this.createSecondaryToolbar(contextMenuService, menuService);
-		this.changesPill = this._register(new ChatChangesPill(this.element, () => {
+		this.changesPill = this._register(instantiationService.createInstance(ChatChangesPill, this.element, () => {
 			void this.runSecondaryAction(async () => { await this.delegate.openChanges?.(this.state.changesRevision); });
 		}, () => this.focus(), this.delegate.readWorkspaceChanges));
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
