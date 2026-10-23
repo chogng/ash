@@ -63,6 +63,10 @@ export function showPartsSplash(ownerDocument: Document, splash: IPartsSplash): 
 				width: `${part.width}px`, height: `${part.height}px`, boxSizing: 'border-box',
 				backgroundColor: part.background,
 			});
+			if (part.backgroundGradient) {
+				const { angle, stops } = part.backgroundGradient;
+				region.style.backgroundImage = `linear-gradient(${angle}deg, ${stops.map(stop => `${stop.color} ${stop.offset}px`).join(', ')})`;
+			}
 			['top', 'right', 'bottom', 'left'].forEach((side, index) => {
 				const border = part.borders[index];
 				region.style.setProperty(`border-${side}`, `${border.width}px ${border.style} ${border.color}`);

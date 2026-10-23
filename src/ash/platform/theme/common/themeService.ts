@@ -28,6 +28,11 @@ export interface IPartsSplash {
 		readonly height: number;
 		readonly partBounds: readonly (IPartsSplashPartBounds & {
 			readonly background: string;
+			/** Resolved linear-gradient paint; offsets are CSS pixels along the gradient line. */
+			readonly backgroundGradient?: {
+				readonly angle: number;
+				readonly stops: readonly { readonly color: string; readonly offset: number; }[];
+			};
 			/** Clockwise from top-left; each corner keeps its horizontal and vertical radius. */
 			readonly borderRadii: readonly (readonly [number, number])[];
 			/** Clockwise from top, including edges with no visible border. */
@@ -91,9 +96,27 @@ export function validatePartsSplash(value: unknown): IPartsSplash {
 				}
 				return { width: border.width, color: border.color, style: border.style };
 			});
+			let backgroundGradient: NonNullable<IPartsSplash['layoutInfo']>['partBounds'][number]['backgroundGradient'];
+			if (part.backgroundGradient !== undefined) {
+				const gradient = part.backgroundGradient;
+				if (!isRecord(gradient) || typeof gradient.angle !== 'number' || !Number.isFinite(gradient.angle)
+					|| gradient.angle < 0 || gradient.angle >= 360 || !Array.isArray(gradient.stops)
+					|| gradient.stops.length < 2 || gradient.stops.length > 32) {
+					throw new TypeError('Invalid window splash gradient');
+				}
+				const stops = gradient.stops.map((stop: unknown) => {
+					if (!isRecord(stop) || !validSplashColor(stop.color) || typeof stop.offset !== 'number'
+						|| !Number.isFinite(stop.offset) || Math.abs(stop.offset) > 65536) {
+						throw new TypeError('Invalid window splash gradient stop');
+					}
+					return { color: stop.color, offset: stop.offset };
+				});
+				backgroundGradient = { angle: gradient.angle, stops };
+			}
 			return {
 				top: part.top, left: part.left, width: part.width, height: part.height,
 				background: part.background, borderRadii, borders,
+				...(backgroundGradient ? { backgroundGradient } : {}),
 			};
 		});
 		layoutInfo = { version: 2, width, height, partBounds };
