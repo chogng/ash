@@ -200,7 +200,10 @@ Windows Cargo 的测试 Job 禁止子进程脱离。验证共享 App Server 独�
 ```sh
 just test-tui-unit session_manager
 just test-tui actual_tui_process_interrupts_an_inflight_http_stream
+ASH_USE_INMEMORY_SECRETSTORAGE=1 just test-tui -- --test-threads=4 --skip actual_tui_sandbox_
 ```
+
+整组 PTY 回归中的 Issues 场景会在测试进程内创建 App Server，因此需要为该进程设置测试密钥存储。macOS 所需的原生 watcher host 由 Cargo 包装器准备；真实沙箱场景由独立作业覆盖。
 
 涉及进程内 App Server 的会话测试需显式启用功能：`just test-tui-unit conversation_flow_tests --features in-process-tests`。两个入口都可用 `just --set tui_profile <profile> ...` 覆盖配置；PTY 入口的服务程序和测试会一起切换。首次构建服务程序仍需时间。日常启动验证用 `just build-code`，使用 `dev-small`。
 
@@ -212,13 +215,15 @@ just test-tui actual_tui_process_interrupts_an_inflight_http_stream
 
 #### Bazel TUI 场景测试
 
-运行迁移后的 CLI/TUI 场景：
+运行与 Linux CI 相同的 CLI/TUI 场景：
 
 ```sh
-bazel test //cli:tui-real-scenarios --test_output=errors --test_env=PATH
+bazel test //cli:tui-real-scenarios --compilation_mode=opt \
+  --test_output=errors --test_env=PATH --test_env=ASH_RG_PATH --test_env=ASH_TGREP_PATH \
+  --test_arg=--test-threads=4 --test_arg=--skip --test_arg=actual_tui_sandbox_
 ```
 
-`--test_env=PATH` 将固定版本 Node 的路径传给测试进程。`//cli:tui-real-scenarios` 运行同一组 CLI/TUI PTY 场景；先将锁定的 `rg`、`tgrep` 路径设为 `ASH_RG_PATH`、`ASH_TGREP_PATH`。Linux CI 无法运行的真实沙箱场景由 macOS 作业覆盖。
+`--test_env=PATH` 将固定版本 Node 的路径传给测试进程。`//cli:tui-real-scenarios` 运行同一组 CLI/TUI PTY 场景；先将锁定的 `rg`、`tgrep` 路径设为 `ASH_RG_PATH`、`ASH_TGREP_PATH`。优化构建使二进制摘要校验在既有启动预算内完成。Linux CI 无法运行的真实沙箱场景由 macOS 作业覆盖。
 
 Linux 构建需安装 `pkg-config` 和 `libwayland-dev`。Bazel 只导入宿主的 Wayland client 共享库，不把 pkg-config 返回的整个系统库目录加入链接路径，避免宿主 libc 覆盖固定工具链的 libc；运行时仍由操作系统提供 Wayland。
 
