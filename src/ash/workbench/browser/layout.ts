@@ -360,7 +360,7 @@ export class WorkbenchLayout
 		};
 	}
 
-	override layout(dimension: IDimension = getClientArea(this.mainContainer)): void {
+	override layout(dimension: IDimension = measureWorkbenchContainer(this.mainContainer)): void {
 		assertDimension(dimension);
 		this.projectPartFrameInsets();
 		this.grid.layout(dimension.width, dimension.height);
@@ -751,14 +751,18 @@ function resolveInitialDimension(
 			return new Dimension(dimension.width, dimension.height);
 		}
 	}
-	const measured = {
-		width: container.clientWidth,
-		height: container.clientHeight,
-	};
+	const measured = measureWorkbenchContainer(container);
 	return new Dimension(
 		measured.width > 0 ? measured.width : DEFAULT_LAYOUT_WIDTH,
 		measured.height > 0 ? measured.height : DEFAULT_LAYOUT_HEIGHT,
 	);
+}
+
+function measureWorkbenchContainer(container: HTMLElement): Dimension {
+	// clientWidth/clientHeight round fractional DPI sizes. A later explicit layout
+	// must retain the same precision as ResizeObserver instead of clipping the footer.
+	const bounds = container.getBoundingClientRect();
+	return new Dimension(bounds.width || container.clientWidth, bounds.height || container.clientHeight);
 }
 
 function parseWorkbenchPartId(value: unknown): WorkbenchPartId {

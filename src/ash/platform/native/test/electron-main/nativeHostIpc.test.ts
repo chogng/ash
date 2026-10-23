@@ -25,6 +25,13 @@ test('window frame reads use the creation value and reject renderer arguments', 
 	assert.equal(await route.invoke(route.validate(undefined)), 'custom');
 });
 
+test('client size reads retain physical pixels and cannot select another window', async () => {
+	const route = nativeHostIpcRoutes({ getWindowClientSize: () => ({ width: 1500, height: 999 }) } as INativeHostMainService)
+		.find(route => route.channel === 'ash:native-host:get-window-client-size')!;
+	assert.throws(() => route.validate({ windowId: 2 }), /no arguments/);
+	assert.deepEqual(await route.invoke(route.validate(undefined)), { width: 1500, height: 999 });
+});
+
 test('desktop privilege reads use the desktop process and accept no renderer arguments', async () => {
 	if (process.platform !== 'win32') {
 		assert.equal(await isAdmin(), process.geteuid!() === 0);

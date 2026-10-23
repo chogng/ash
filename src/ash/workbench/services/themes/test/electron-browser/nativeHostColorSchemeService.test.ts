@@ -26,6 +26,8 @@ test('a system event wins over an older startup read and disposed windows ignore
 		releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
 		onDidChangeAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 		getTitleBarStyle: async () => 'custom',
+		getWindowClientSize: async () => undefined,
+		onDidChangeWindowClientSize: () => ({ dispose() { } }),
 		isAdmin: unexpected,
 		getOSColorScheme: () => new Promise(resolve => pending.push(resolve)),
 		onDidChangeColorScheme: listener => events.event(listener),

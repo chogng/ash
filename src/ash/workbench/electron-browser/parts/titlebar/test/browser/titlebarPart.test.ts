@@ -90,6 +90,8 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 			releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
 			onDidChangeAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 			getTitleBarStyle: async () => titleBarStyle,
+			getWindowClientSize: async () => undefined,
+			onDidChangeWindowClientSize: () => ({ dispose() { } }),
 			isAdmin: async () => false,
 			onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 			openExternal: async () => { throw new Error('unused'); },

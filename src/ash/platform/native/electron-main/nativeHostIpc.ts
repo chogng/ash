@@ -11,6 +11,7 @@ import type {
 import {
 	NATIVE_HOST_IS_ADMIN_CHANNEL,
 	NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL,
+	NATIVE_HOST_GET_WINDOW_CLIENT_SIZE_CHANNEL,
 	NATIVE_HOST_PICK_FOLDER_CHANNEL,
 	NATIVE_HOST_PICK_FILE_CHANNEL,
 	NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
@@ -46,7 +47,7 @@ import {
 	validateRevealFilePath,
 } from "../common/nativeHost.js";
 
-import { validateOpenEmptyWindowOptions, type IOpenEmptyWindowOptions, type TitleBarStyleConfiguration } from '../../window/common/window.js';
+import { validateOpenEmptyWindowOptions, type IOpenEmptyWindowOptions, type TitleBarStyleConfiguration, type IWindowClientSize } from '../../window/common/window.js';
 import type { AgentHostEditorUpdate, IAgentHostEditorState, IAgentsWindowInvitation } from '../../chat/common/agentsWindowInvitation.js';
 import { URI, type UriComponents } from '../../../base/common/uri.js';
 import {
@@ -58,6 +59,7 @@ import {
 /** Main-process implementation of native operations for one window. */
 export interface INativeHostMainService {
 	getTitleBarStyle(): TitleBarStyleConfiguration;
+	getWindowClientSize(): IWindowClientSize | undefined;
 	isAdmin(): Promise<boolean>;
 	performDialogOperation(operation: NativeDialogOperation): unknown;
 	pickFolder(): Promise<string | undefined>;
@@ -87,6 +89,14 @@ export function nativeHostIpcRoutes(
 	service: INativeHostMainService,
 ): readonly IpcRoute<unknown, unknown>[] {
 	return [
+		{
+			channel: NATIVE_HOST_GET_WINDOW_CLIENT_SIZE_CHANNEL,
+			validate: value => {
+				if (value !== undefined) throw new TypeError('Window client size reads accept no arguments');
+				return undefined;
+			},
+			invoke: () => service.getWindowClientSize(),
+		},
 
 		{
 			channel: NATIVE_HOST_TERMINAL_MOVE_CHANNEL,

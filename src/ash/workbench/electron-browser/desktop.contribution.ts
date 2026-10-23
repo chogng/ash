@@ -17,6 +17,8 @@ import {
 } from '../../platform/window/common/window.js';
 import { localize } from '../../nls.js';
 import { NativeWindow } from './window.js';
+import { ILayoutService } from '../../platform/layout/browser/layoutService.js';
+import { onUnexpectedError } from '../../base/common/errors.js';
 import {
 	CloseOtherWindowsAction,
 	CloseWindowAction,
@@ -158,4 +160,8 @@ registerAction2(ShowNextWindowTabAction);
 registerAction2(ShowPreviousWindowTabAction);
 registerAction2(MoveWindowTabToNewWindowAction);
 registerAction2(MergeWindowTabsAction);
-registerWorkbenchContribution('workbench.contrib.nativeWindow', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(NativeWindow));
+registerWorkbenchContribution('workbench.contrib.nativeWindow', WorkbenchPhase.AfterRestored, accessor => {
+	const window = accessor.get(IInstantiationService).createInstance(NativeWindow);
+	void window.initialize(accessor.get(ILayoutService).mainContainer).catch(onUnexpectedError);
+	return window;
+});

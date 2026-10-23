@@ -5,6 +5,7 @@ import { type IAnyWorkspaceIdentifier, type IWorkspace, type IWorkspaceIdentifie
 import {
 	DEFAULT_EMPTY_WINDOW_SIZE,
 	DEFAULT_WORKSPACE_WINDOW_SIZE,
+	type IWindowClientSize,
 } from "../common/window.js";
 import {
 	WorkbenchState,
@@ -54,6 +55,7 @@ export interface ICodeWindow<TWindow = Electron.BrowserWindow> extends IDisposab
 	focus(): void;
 	close(): void;
 	getBounds(): IWindowBounds;
+	getClientSize(): IWindowClientSize | undefined;
 	isFullScreen(): boolean;
 	serializeWindowState(): IWindowState & IWindowBounds;
 	addTabbedWindow(window: ICodeWindow<TWindow>): void;

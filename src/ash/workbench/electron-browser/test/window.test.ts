@@ -30,6 +30,9 @@ import { ILogService } from '../../../platform/log/common/log.js';
 import { IEditorService } from '../../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../services/editor/common/editorGroupsService.js';
 import { ElectronWindow } from '../window.js';
+import { JSDOM } from 'jsdom';
+import type { IWindowClientSize } from '../../../platform/window/common/window.js';
+import { validateWindowClientSize } from '../../../platform/window/common/window.js';
 import { URI } from '../../../base/common/uri.js';
 
 test('desktop initialization reads privileges and installation proofs through injected services', async () => {
@@ -159,6 +162,72 @@ test('desktop zoom follows the profile setting and persists a shared window zoom
 	changed?.(3);
 	await persisted;
 	assert.equal(configuration.getValue<number>(WINDOW_ZOOM_LEVEL_SETTING), 3);
+});
+
+test('desktop root uses client pixels at the current scale and rejects a stale initial size', async () => {
+	const dom = new JSDOM('<!doctype html><main></main>', { pretendToBeVisual: true });
+	try {
+		const root = dom.window.document.querySelector('main')!;
+		root.style.maxHeight = '95%';
+		let scale = 1.25;
+		Object.defineProperty(dom.window, 'devicePixelRatio', { get: () => scale });
+		let frame: FrameRequestCallback | undefined;
+		dom.window.requestAnimationFrame = callback => { frame = callback; return 1; };
+		dom.window.cancelAnimationFrame = () => { frame = undefined; };
+		const render = (): void => { const callback = frame; frame = undefined; callback?.(0); };
+		using changes = new Emitter<IWindowClientSize | undefined>();
+		let finish!: (size: IWindowClientSize) => void;
+		const initial = new Promise<IWindowClientSize>(resolve => { finish = resolve; });
+		const host = {
+			getWindowClientSize: () => initial,
+			onDidChangeWindowClientSize: changes.event,
+			getZoomLevel: async () => 0,
+			setZoomLevel: async () => { },
+			onDidChangeAuxiliaryWindowState: Event.None,
+			onDidChangeZoomLevel: Event.None,
+			onDidRequestOpenExternalUri: Event.None,
+		} as unknown as INativeHostApi;
+		using configuration = new InMemoryConfigurationService();
+		await configuration.updateValue(WINDOW_ZOOM_LEVEL_SETTING, 0);
+		using services = new InstantiationService();
+		services.registerInstance(INativeHostService, host);
+		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
+		using window = services.createInstance(NativeWindow);
+		const initialized = window.initialize(root);
+		changes.fire({ width: 1500, height: 999 });
+		render();
+		assert.equal(root.style.maxHeight, '799.2px');
+		assert.equal(root.style.maxWidth, '1200px');
+		finish({ width: 1400, height: 998 });
+		await initialized;
+		render();
+		assert.equal(root.style.maxHeight, '799.2px');
+		scale = 2;
+		dom.window.dispatchEvent(new dom.window.Event('resize'));
+		render();
+		assert.equal(root.style.maxHeight, '499.5px');
+		changes.fire({ width: 1500, height: 1000 });
+		render();
+		assert.equal(root.style.maxHeight, '500px');
+		changes.fire(undefined);
+		render();
+		assert.equal(root.style.maxHeight, '95%');
+		changes.fire({ width: 1500, height: 997 });
+		window.dispose();
+		assert.equal(frame, undefined);
+		assert.equal(changes.hasListeners(), false);
+		assert.equal(root.style.maxHeight, '95%');
+		assert.equal(root.style.maxWidth, '');
+	} finally { dom.window.close(); }
+});
+
+test('native client size IPC accepts physical pixels and rejects malformed dimensions', () => {
+	assert.deepEqual(validateWindowClientSize({ width: 1500, height: 999 }), { width: 1500, height: 999 });
+	assert.equal(validateWindowClientSize(undefined), undefined);
+	for (const value of [null, { width: 1.5, height: 999 }, { width: 1500, height: 0 }, { width: NaN, height: 999 }, { width: 1500, height: 999, inset: 1 }]) {
+		assert.throws(() => validateWindowClientSize(value), /Invalid window client size/);
+	}
 });
 
 test('window controls follow theme changes and release their theme listener', () => {

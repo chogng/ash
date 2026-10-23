@@ -3,6 +3,7 @@ import type { IMainProcessService } from '../../ipc/common/mainProcessService.js
 import {
 	NATIVE_HOST_IS_ADMIN_CHANNEL,
 	NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL,
+	NATIVE_HOST_GET_WINDOW_CLIENT_SIZE_CHANNEL,
 	NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL,
 	validateColorScheme,
 	NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
@@ -29,6 +30,7 @@ import {
 	parseTitleBarStyle,
 	WINDOW_OPERATION_CHANNEL,
 	WINDOW_ZOOM_CHANGED_CHANNEL,
+	WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, validateWindowClientSize,
 	WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL,
 	AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, validateAuxiliaryWindowState, validateAuxiliaryWindowStateEvent,
 	validateWindowAlwaysOnTopChangedEvent,
@@ -57,6 +59,8 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 			return VSBuffer.wrap(new Uint8Array(value));
 		},
 		getTitleBarStyle: async () => parseTitleBarStyle(await invoke<unknown>(NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL)),
+		getWindowClientSize: async () => validateWindowClientSize(await invoke<unknown>(NATIVE_HOST_GET_WINDOW_CLIENT_SIZE_CHANNEL)),
+		onDidChangeWindowClientSize: listener => subscribe<unknown>(WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, value => listener(validateWindowClientSize(value))),
 		async isAdmin(): Promise<boolean> {
 			const value = await invoke<unknown>(NATIVE_HOST_IS_ADMIN_CHANNEL);
 			if (typeof value !== 'boolean') { throw new TypeError('Invalid desktop privilege result'); }

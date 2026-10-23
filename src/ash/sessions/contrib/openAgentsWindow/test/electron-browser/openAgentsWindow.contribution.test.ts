@@ -75,6 +75,8 @@ class Fixture extends Disposable {
 			releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
 			onDidChangeAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 			getTitleBarStyle: async () => 'custom',
+			getWindowClientSize: async () => undefined,
+			onDidChangeWindowClientSize: () => ({ dispose() { } }),
 			isAdmin: async () => false,
 			getOSColorScheme: async () => ({ dark: false, highContrast: false }),
 			onDidChangeColorScheme: () => Disposable.None,

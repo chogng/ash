@@ -12,6 +12,24 @@ export interface IRectangle {
 	readonly height: number;
 }
 
+/** The drawable Win32 client area in physical pixels, before Electron's DIP rounding. */
+export interface IWindowClientSize {
+	readonly width: number;
+	readonly height: number;
+}
+
+export const WINDOW_CLIENT_SIZE_CHANGED_CHANNEL = 'ash:window:client-size-changed';
+
+export function validateWindowClientSize(value: unknown): IWindowClientSize | undefined {
+	if (value === undefined) return undefined;
+	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'height,width'
+		|| !Number.isSafeInteger(value.width) || (value.width as number) <= 0
+		|| !Number.isSafeInteger(value.height) || (value.height as number) <= 0) {
+		throw new TypeError('Invalid window client size');
+	}
+	return value as unknown as IWindowClientSize;
+}
+
 export const WORKSPACE_RECOVERY_CHANNEL = 'ash:window:restoreWorkspaces';
 export const WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL = 'ash:window:terminal-transfer-startup';
 export const WINDOW_OPEN_EXTERNAL_URI_CHANNEL = 'ash:window:openExternalUri';
