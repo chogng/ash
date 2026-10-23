@@ -9,6 +9,7 @@ use std::io::Read;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::process::Command;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
@@ -35,6 +36,7 @@ fn interactive_remote_tui_preserves_home_draft_after_transport_loss() {
     let profile_root = root.join("profile");
     let fake_ssh = root.join("fake-ssh");
     let connection_count = root.join("connection-count");
+    let disconnect = root.join("disconnect-first");
     let recovered_requests = root.join("recovered-requests.jsonl");
     fs::create_dir_all(&dir).unwrap();
     write_reconnecting_fake_ssh(
@@ -42,6 +44,7 @@ fn interactive_remote_tui_preserves_home_draft_after_transport_loss() {
         &profile_root,
         &connection_count,
         &recovered_requests,
+        &disconnect,
     );
 
     let pty_system = native_pty_system();
@@ -95,12 +98,17 @@ fn interactive_remote_tui_preserves_home_draft_after_transport_loss() {
     command.cwd(&dir);
     command.env("TERM", "xterm-256color");
     command.env("ASH_HOME", &profile_root);
+    command.env("ASH_USE_INMEMORY_SECRETSTORAGE", "1");
     command.env("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "5000");
     let mut child = ChildGuard::new(pair.slave.spawn_command(command).unwrap());
     drop(pair.slave);
 
     assert!(
-        wait_for_screen(&screen, "Resume session", STATE_TIMEOUT),
+        wait_for_screen(
+            &screen,
+            "Start a task below, or continue a previous session.",
+            STATE_TIMEOUT,
+        ),
         "first TUI generation did not draw its ready frame; output:\n{}",
         captured_output(&output)
     );
@@ -113,6 +121,8 @@ fn interactive_remote_tui_preserves_home_draft_after_transport_loss() {
         "the first TUI did not accept the draft; output:\n{}",
         captured_output(&output)
     );
+    // Drop the transport only after the real first generation has accepted its draft.
+    fs::write(&disconnect, b"disconnect").unwrap();
 
     assert!(
         wait_for_file(&recovered_requests, STATE_TIMEOUT, |contents| {
@@ -172,7 +182,16 @@ fn interactive_remote_tui_preserves_home_draft_after_transport_loss() {
     assert!(output.contains("Remote App Server disconnected:"));
     assert!(output.contains("Reconnecting to Remote App Server"));
 
-    thread::sleep(Duration::from_millis(5_500));
+    let stopped = Command::new(env!("CARGO_BIN_EXE_ash"))
+        .args(["app-server", "daemon", "stop"])
+        .env("ASH_HOME", &profile_root)
+        .output()
+        .unwrap();
+    assert!(
+        stopped.status.success(),
+        "daemon cleanup failed: {}",
+        String::from_utf8_lossy(&stopped.stderr)
+    );
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -217,6 +236,7 @@ fn write_reconnecting_fake_ssh(
     profile_root: &Path,
     connection_count: &Path,
     recovered_requests: &Path,
+    disconnect: &Path,
 ) {
     let first_requests = connection_count.with_file_name("first-requests.jsonl");
     let request_fifo = connection_count.with_file_name("first-requests.fifo");
@@ -226,6 +246,7 @@ fn write_reconnecting_fake_ssh(
         profile_root,
         connection_count,
         recovered_requests,
+        disconnect,
         &first_requests,
         &request_fifo,
         &response_fifo,
@@ -236,14 +257,48 @@ fn write_reconnecting_fake_ssh(
     fs::write(
         path,
         format!(
-            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *__ASH_REMOTE_RUNTIME_FOUND__*) printf '%s\\n' '__ASH_REMOTE_RUNTIME_FOUND__:{runtime}' ;;
-  *\"'connect'\"*)\n    export ASH_HOME='{profile}'\n    count=0\n    if [ -f '{count}' ]; then count=$(cat '{count}'); fi\n    count=$((count + 1))\n    printf '%s\\n' \"$count\" > '{count}'\n    if [ \"$count\" -eq 1 ]; then\n      rm -f '{request_fifo}' '{response_fifo}' '{first_requests}'\n      mkfifo '{request_fifo}' '{response_fifo}'\n      exec 3<&0\n      /bin/sh -c \"$command\" < '{request_fifo}' > '{response_fifo}' &\n      server=$!\n      tee -a '{first_requests}' <&3 > '{request_fifo}' &\n      request_relay=$!\n      cat '{response_fifo}' &\n      response_relay=$!\n      attempt=0\n      while [ \"$attempt\" -lt 30 ]; do\n        if grep -q '\"method\":\"git/status\"' '{first_requests}' 2>/dev/null; then break; fi\n        sleep 1\n        attempt=$((attempt + 1))\n      done\n      sleep 1\n      kill \"$server\" \"$request_relay\" \"$response_relay\" 2>/dev/null || true\n      wait \"$server\" 2>/dev/null\n      rm -f '{request_fifo}' '{response_fifo}'\n      exit 255\n    fi\n    tee -a '{requests}' | /bin/sh -c \"$command\"\n    ;;
+            r#"#!/bin/sh
+command=''
+for argument in "$@"; do command=$argument; done
+case "$command" in
+  *__ASH_REMOTE_RUNTIME_FOUND__*) printf '%s\n' '__ASH_REMOTE_RUNTIME_FOUND__:{runtime}' ;;
+  *"'connect'"*)
+    export ASH_HOME='{profile}'
+    count=0
+    if [ -f '{count}' ]; then count=$(cat '{count}'); fi
+    count=$((count + 1))
+    printf '%s\n' "$count" > '{count}'
+    if [ "$count" -eq 1 ]; then
+      rm -f '{request_fifo}' '{response_fifo}' '{first_requests}'
+      mkfifo '{request_fifo}' '{response_fifo}'
+      exec 3<&0
+      /bin/sh -c "$command" < '{request_fifo}' > '{response_fifo}' &
+      server=$!
+      tee -a '{first_requests}' <&3 > '{request_fifo}' &
+      request_relay=$!
+      cat '{response_fifo}' &
+      response_relay=$!
+      attempt=0
+      while [ "$attempt" -lt 30 ]; do
+        if [ -f '{disconnect}' ] && grep -q '"method":"git/status"' '{first_requests}' 2>/dev/null; then break; fi
+        sleep 1
+        attempt=$((attempt + 1))
+      done
+      kill "$server" "$request_relay" "$response_relay" 2>/dev/null || true
+      wait "$server" 2>/dev/null
+      rm -f '{request_fifo}' '{response_fifo}'
+      exit 255
+    fi
+    tee -a '{requests}' | /bin/sh -c "$command"
+    ;;
   *) exit 64 ;;
-esac\n",
+esac
+"#,
             runtime = remote::executable(),
             profile = profile_root.display(),
             count = connection_count.display(),
             requests = recovered_requests.display(),
+            disconnect = disconnect.display(),
             first_requests = first_requests.display(),
             request_fifo = request_fifo.display(),
             response_fifo = response_fifo.display(),

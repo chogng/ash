@@ -201,8 +201,8 @@ jobs:
 
       - name: Compile CLI and connection library tests
         run: |
-          python3 -B scripts/cargo.py --deny-warnings test \
-            -p ash-cli --test stdio --test commands --profile ci-test --locked --no-run
+          python3 -B scripts/cargo.py --deny-warnings --process-tests test \
+            -p ash-cli --test stdio --test commands --profile ci-test --locked -- --list
           python3 -B scripts/cargo.py --deny-warnings test \
             -p ash-app-server-client -p ash-remote-connections \
             --lib --profile ci-test --locked --no-run

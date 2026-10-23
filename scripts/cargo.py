@@ -274,8 +274,8 @@ def main(arguments: list[str] | None = None) -> int:
     ):
         environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = "packed"
     packages = cargo_command_packages(args.cargo, cargo_arguments, REPOSITORY_ROOT)
-    # The real PTY target launches the matching programs built by `just test-tui`.
-    # It does not execute the dependency crates' unit-test fixture owners.
+    # PTY scenarios launch the programs built by `just test-tui`; their embedded
+    # issue server still needs the macOS watcher host prepared below.
     tui_process_tests = (
         cargo_arguments[0] == "test"
         and "ash-cli" in packages
@@ -344,7 +344,6 @@ def main(arguments: list[str] | None = None) -> int:
         if (
             cargo_arguments[0] == "test"
             and "apple-darwin" in target
-            and not tui_process_tests
             and "--no-run" not in cargo_arguments
             and "ash-file-watcher" in packages
             and "ASH_FILE_WATCHER_TEST_HOST" not in environment
