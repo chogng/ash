@@ -13,7 +13,7 @@ import { Keybinding, logicalKey } from '../../base/common/keybindings.js';
 import type { ISessionsService } from '../services/sessions/browser/sessionsService.js';
 import type { IAgentWorkbenchLayoutService } from './workbench.js';
 import { Menus } from './menus.js';
-import { CanGoBackContext, CanGoForwardContext, CompactTitlebarNavigationContext } from '../common/contextkeys.js';
+import { CanGoBackContext, CanGoForwardContext } from '../common/contextkeys.js';
 
 const sessionTools = new RawContextKey<boolean>('sessions.toolsAvailable', false);
 
@@ -108,12 +108,12 @@ export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sess
 		},
 	]));
 	for (const [id, title, icon, precondition, order] of [
-		['ash.sessions.back', localize2({ bundle: 'ash', key: 'sessions.navigation.back' }, 'Back'), Lxicon.arrowLeft, CanGoBackContext.isEqualTo(true), 1],
-		['ash.sessions.forward', localize2({ bundle: 'ash', key: 'sessions.navigation.forward' }, 'Forward'), Lxicon.arrowRight, CanGoForwardContext.isEqualTo(true), 2],
+		['ash.sessions.back', localize2({ bundle: 'ash', key: 'sessions.navigation.back' }, 'Back'), Lxicon.chevronLeft, CanGoBackContext.isEqualTo(true), 1],
+		['ash.sessions.forward', localize2({ bundle: 'ash', key: 'sessions.navigation.forward' }, 'Forward'), Lxicon.chevronRight, CanGoForwardContext.isEqualTo(true), 2],
 	] as const) {
 		const command = { id, title, icon, precondition };
 		disposables.add(MenusRegistry.appendMenuItems([
-			{ id: Menus.TitleBarLeftLayout, item: { command, group: 'navigation', order, when: CompactTitlebarNavigationContext.isEqualTo(false) } },
+			{ id: Menus.TitleBarLeftLayout, item: { command, group: 'navigation', order } },
 			{ id: MenuId.MenubarGoMenu, item: { command, group: 'navigation', order } },
 		]));
 	}

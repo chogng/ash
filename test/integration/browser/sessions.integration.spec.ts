@@ -5,18 +5,6 @@ import { StorageTarget } from '../../../src/ash/platform/storage/common/storage.
 
 const runtimeErrors = new WeakMap<Page, string[]>();
 
-async function expandSidebarForHistory(page: Page): Promise<void> {
-	const sidebar = (await page.locator('[data-part="sidebar"]').boundingBox())!;
-	for (const sash of await page.getByRole('separator').all()) {
-		const bounds = await sash.boundingBox();
-		if (!bounds || bounds.height < 200 || Math.abs(bounds.x - sidebar.x - sidebar.width) > 8) continue;
-		await sash.focus();
-		for (let step = 0; step < 20; step++) await sash.press('ArrowRight');
-		break;
-	}
-	await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeVisible();
-}
-
 async function expectActivityIconSize(navigation: Locator, size: number, horizontal = false): Promise<void> {
 	await expect.poll(() => navigation.evaluate(element => element.classList.contains('horizontal'))).toBe(horizontal);
 	const labeled = await navigation.evaluate(element => element.classList.contains('labeled'));
@@ -31,7 +19,7 @@ async function expectActivityIconSize(navigation: Locator, size: number, horizon
 		else { await expect(item).toHaveCSS('width', `${itemSize}px`); }
 		await expect(item).toHaveCSS('height', `${itemSize}px`);
 	}
-	await expect(icons).toHaveCount(horizontal || labeled ? 3 : 4);
+	await expect(icons).toHaveCount(horizontal || labeled ? 4 : 5);
 	const accounts = navigation.page().getByRole('button', { name: 'Accounts', exact: true });
 	await expect(accounts).toHaveCount(1);
 	const titlebarAccounts = navigation.page().locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });
@@ -74,6 +62,100 @@ test.afterEach(async ({ page }) => {
 	expect(runtimeErrors.get(page)).toEqual([]);
 });
 
+for (const locale of ['en', 'zh-CN']) test(`Sessions Search filters host sessions and restores navigation focus (${locale})`, async ({ page }, testInfo) => {
+	await page.goto(`/sessions.html?multiHost&search&locale=${locale}`);
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const search = page.locator('[data-action-id="sessions.search"] button');
+	const navigation = page.locator('.ash-sessions-navigation [data-action-id]');
+	expect((await navigation.evaluateAll(items => items.map(item => item.getAttribute('data-action-id')))).slice(0, 2)).toEqual(['sessions.newSession', 'sessions.search']);
+	await expect(search).toHaveAccessibleName(locale === 'en' ? 'Search' : '搜索');
+	await search.focus();
+	await search.press('Enter');
+	const picker = page.locator('.ash-sessions-search-dialog');
+	const input = picker.getByRole('combobox');
+	await expect(input).toBeFocused();
+	await expect(picker).toHaveAttribute('aria-modal', 'true');
+	await expect(page.locator('.ash-quick-input-host:not([hidden])')).toHaveCount(0);
+	if (locale === 'en') {
+		await input.press('Alt+F1');
+		const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+		await expect(help.getByRole('textbox')).toHaveValue(/Search finds saved sessions/);
+		await help.press('Escape');
+		await expect(help).toHaveCount(0);
+		await expect(input).toBeFocused();
+	}
+	const initialBounds = (await picker.boundingBox())!;
+	const viewport = page.viewportSize()!;
+	expect(Math.abs(initialBounds.x + initialBounds.width / 2 - viewport.width / 2)).toBeLessThan(2);
+	expect(Math.abs(initialBounds.y + initialBounds.height / 2 - viewport.height / 2)).toBeLessThan(2);
+	for (let step = 0; step < 10; step++) {
+		await page.keyboard.press('Tab');
+		expect(await picker.evaluate(element => element.contains(document.activeElement))).toBe(true);
+	}
+	await input.focus();
+	await expect(picker.getByRole('tab')).toHaveText(locale === 'en' ? ['All', 'Sessions', 'Projects', 'Scheduled'] : ['全部', '会话', '项目', '计划']);
+	await expect(picker.getByRole('option', { name: /Search project fixture/ })).toBeVisible();
+	await page.screenshot({ path: testInfo.outputPath(`sessions-search-full-${locale}.png`) });
+	await input.fill('Task from Host B');
+	await expect(picker.getByRole('option')).toHaveCount(1);
+	await expect(picker.getByRole('option')).toContainText('Task from Host B');
+	await picker.getByRole('tab', { name: locale === 'en' ? 'Projects' : '项目', exact: true }).click();
+	await expect(picker.getByRole('option')).toHaveCount(0);
+	await expect(input).toHaveValue('Task from Host B');
+	await page.keyboard.press('ArrowLeft');
+	await page.keyboard.press('Enter');
+	await expect(picker.getByRole('tab', { name: locale === 'en' ? 'Sessions' : '会话', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(picker.getByRole('option')).toHaveCount(1);
+	await page.keyboard.press('ArrowDown');
+	await expect(input).toBeFocused();
+	await input.press('Enter');
+	await expect(picker).toHaveCount(0);
+	await expect(page.locator('.ash-sessions-chat-slot.active > [role="region"]')).toHaveAccessibleName('Task from Host B');
+	await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.calls.some(call => call.host === 'Host B' && call.method === 'subscribe'))).toBe(true);
+	await search.click();
+	await input.fill('missing_search_result');
+	await expect(picker.locator('.ash-sessions-search-empty')).toBeVisible();
+	await input.press('Escape');
+	await expect(picker).toHaveCount(0);
+	await expect(search).toBeFocused();
+	await search.click();
+	await input.fill('Daily search fixture');
+	await picker.getByRole('tab', { name: locale === 'en' ? 'Scheduled' : '计划', exact: true }).click();
+	await expect(picker.getByRole('option')).toHaveCount(1);
+	await picker.getByRole('option').click();
+	const scheduleDialog = page.getByRole('dialog', { name: locale === 'en' ? 'Edit automation' : '编辑自动化', exact: true });
+	await expect(scheduleDialog).toBeVisible();
+	await expect(scheduleDialog.locator('input').first()).toHaveValue('Daily search fixture');
+	await scheduleDialog.press('Escape');
+	await expect(scheduleDialog).toHaveCount(0);
+	await search.click();
+	await input.fill('Search project fixture');
+	await expect(picker.getByRole('option')).toHaveCount(1);
+	await input.press('Enter');
+	await expect(page.locator('.ash-projects h1')).toHaveText('Search project fixture');
+	if (!await search.isVisible()) { await page.getByRole('button', { name: locale === 'en' ? 'Show sidebar' : '显示侧栏', exact: true }).click(); }
+	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+		await search.click();
+		expect(await picker.evaluate(element => getComputedStyle(element).color !== getComputedStyle(element).backgroundColor)).toBe(true);
+		await input.press('Escape');
+	}
+	await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-light'));
+	await page.setViewportSize({ width: 700, height: 650 });
+	await search.click();
+	const bounds = (await picker.boundingBox())!;
+	expect(bounds.x).toBeGreaterThanOrEqual(0);
+	expect(bounds.x + bounds.width).toBeLessThanOrEqual(700);
+	await page.screenshot({ path: testInfo.outputPath(`sessions-search-${locale}.png`) });
+	await picker.getByRole('button', { name: locale === 'en' ? 'Close' : '关闭', exact: true }).click();
+	await expect(picker).toHaveCount(0);
+	await expect(search).toBeFocused();
+	await search.click();
+	await page.mouse.click(4, 4);
+	await expect(picker).toHaveCount(0);
+	await expect(search).toBeFocused();
+});
+
 for (const locale of ['en', 'zh-CN']) test(`Workspace mode control aligns with the sidebar and supports keyboard navigation (${locale})`, async ({ page }, testInfo) => {
 	if (locale === 'zh-CN') await page.goto('/sessions.html?locale=zh-CN');
 	const modes = page.getByRole('toolbar', { name: locale === 'zh-CN' ? '界面模式' : 'Workspace mode', exact: true });
@@ -84,8 +166,16 @@ for (const locale of ['en', 'zh-CN']) test(`Workspace mode control aligns with t
 	const sidebar = await page.locator('[data-part="sidebar"]').boundingBox();
 	const bounds = await modes.boundingBox();
 	expect(bounds!.x + bounds!.width).toBeCloseTo(sidebar!.x + sidebar!.width - 16, 0);
-	const history = page.locator('.ash-sessions-titlebar-actions [data-action-id="ash.sessions.back"]');
-	await expect(history).toHaveCount(0);
+	const history = page.locator('[data-action-id="ash.sessions.back"] button');
+	const forward = page.locator('[data-action-id="ash.sessions.forward"] button');
+	await expect(history).toBeVisible();
+	await expect(forward).toBeVisible();
+	await expect(history).toHaveAccessibleName(locale === 'zh-CN' ? '后退' : 'Back');
+	await expect(forward).toHaveAccessibleName(locale === 'zh-CN' ? '前进' : 'Forward');
+	await expect(history.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'chevron-left');
+	await expect(forward.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'chevron-right');
+	await expect(history).toBeDisabled();
+	await expect(forward).toBeDisabled();
 	const sashes = await page.getByRole('separator').all();
 	let resized = false;
 	for (const sash of sashes) {
@@ -124,9 +214,17 @@ for (const locale of ['en', 'zh-CN']) test(`Workspace mode control aligns with t
 	}
 	await page.setViewportSize({ width: 600, height: 700 });
 	await expect(modes).toBeVisible();
+	await expect(history).toBeVisible();
+	await expect(forward).toBeVisible();
 	const narrow = await modes.boundingBox();
 	expect(narrow!.x).toBeGreaterThanOrEqual(0);
 	expect(narrow!.x + narrow!.width).toBeLessThanOrEqual(600);
+	const forwardBounds = (await forward.boundingBox())!;
+	expect(forwardBounds.x + forwardBounds.width).toBeLessThanOrEqual(narrow!.x);
+	await page.locator('[data-action-id="ash.sessions.toggleSidebar"] button').click();
+	await expect(modes).toBeHidden();
+	await expect(history).toBeVisible();
+	await expect(forward).toBeVisible();
 });
 
 for (const locale of ['en', 'zh-CN']) test(`Workspace mode switches Chat and Code pages in this window and retains the draft (${locale})`, async ({ page }, testInfo) => {
@@ -173,14 +271,14 @@ for (const locale of ['en', 'zh-CN']) test(`Code workspace owns New, Automations
 	const code = modes.getByRole('button', { name: chinese ? '代码' : 'Code', exact: true });
 	const chat = modes.getByRole('button', { name: 'Chat / Agents', exact: true }).or(modes.getByRole('button', { name: '聊天 / Agents', exact: true }));
 	const navigation = page.locator('.ash-sessions-navigation');
-	await expect(navigation.getByRole('button').locator('.ash-icon-label-text')).toHaveText(chinese ? ['新建', '项目', 'Creator'] : ['New', 'Projects', 'Creator']);
+	await expect(navigation.getByRole('button').locator('.ash-icon-label-text')).toHaveText(chinese ? ['新建', '搜索', '项目', 'Creator'] : ['New', 'Search', 'Projects', 'Creator']);
 	await expect(navigation.locator('[data-action-id="sessions.open.code"]')).toHaveCount(0);
 	await code.click();
 	await expect(page.locator('.ash-sessions-activity-content')).toHaveAttribute('data-workspace-mode', 'code');
-	const expected = chinese ? ['新建', '自动化', 'Collab', 'Agent 团队', 'Symphony'] : ['New', 'Automations', 'Collab', 'Agent Teams', 'Symphony'];
+	const expected = chinese ? ['新建', '搜索', '自动化', 'Collab', 'Agent 团队', 'Symphony'] : ['New', 'Search', 'Automations', 'Collab', 'Agent Teams', 'Symphony'];
 	await expect(navigation.getByRole('button').locator('.ash-icon-label-text')).toHaveText(expected);
-	await expect(page.locator('.ash-sessions-code-navigation-view')).toBeVisible();
-	await expect(page.locator('.ash-sessions-list:visible')).toHaveCount(0);
+	await expect(page.locator('.ash-sessions-list[data-mode=code]')).toBeVisible();
+	await expect(page.locator('.ash-sessions-list:visible')).toHaveCount(1);
 	await navigation.getByRole('button', { name: chinese ? '新建' : 'New', exact: true }).click();
 	await expect(code).toHaveAttribute('aria-pressed', 'true');
 	await expect(page.locator('.ash-sessions-chat-view:visible .ash-sessions-chat-input')).toBeVisible();
@@ -211,11 +309,11 @@ for (const locale of ['en', 'zh-CN']) test(`Code workspace owns New, Automations
 	await expect(page.locator('[data-part="customview"]')).toBeVisible();
 	await expect(code).toHaveAttribute('aria-pressed', 'true');
 	await expect(navigation.getByRole('button').locator('.ash-icon-label-text')).toHaveText(expected);
-	await expect(page.locator('.ash-sessions-list:visible')).toHaveCount(0);
+	await expect(page.locator('.ash-sessions-list[data-mode=code]')).toBeVisible();
 	await chat.click();
 	await expect(page.locator('[data-part="customview"]')).toBeHidden();
 	await expect(page.locator('.ash-sessions-list')).toBeVisible();
-	await expect(navigation.getByRole('button').locator('.ash-icon-label-text')).toHaveText(chinese ? ['新建', '项目', 'Creator'] : ['New', 'Projects', 'Creator']);
+	await expect(navigation.getByRole('button').locator('.ash-icon-label-text')).toHaveText(chinese ? ['新建', '搜索', '项目', 'Creator'] : ['New', 'Search', 'Projects', 'Creator']);
 });
 
 test('Sessions reports browser errors and rejected promises once without rethrowing', async ({ page }) => {
@@ -239,7 +337,6 @@ test('Sessions reports browser errors and rejected promises once without rethrow
 	expect(await page.evaluate(() => window.ashSessionsIntegration.takeErrors().length)).toBe(2);
 	expect(await page.evaluate(() => window.ashSessionsIntegration.disposeAndCheckErrorHandler())).toBe(true);
 });
-
 
 for (const locale of ['en', 'zh-CN']) test(`Projects keeps global navigation, width and window expansion state (${locale})`, async ({ page }, testInfo) => {
 	if (locale === 'zh-CN') await page.goto('/sessions.html?locale=zh-CN');
@@ -279,6 +376,7 @@ for (const locale of ['en', 'zh-CN']) test(`Projects keeps global navigation, wi
 	expect((await sidebar.boundingBox())!.width).toBeCloseTo(width, 0);
 	await page.screenshot({ path: testInfo.outputPath(`projects-navigation-${locale}.png`) });
 	const create = surface.getByRole('button', { name: chinese ? '新建项目' : 'New project', exact: true }).first();
+	await expect(create).toHaveCSS('border-radius', '8px');
 	await create.focus();
 	await page.keyboard.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(chinese ? /侧栏开关可隐藏或显示全局导航/ : /sidebar toggle hides or shows global navigation without leaving Projects/);
@@ -287,7 +385,6 @@ for (const locale of ['en', 'zh-CN']) test(`Projects keeps global navigation, wi
 });
 
 test('New navigation creates distinct sessions in Code and preserves the previous draft', async ({ page }) => {
-	await expandSidebarForHistory(page);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const pane = page.locator('.ash-sessions-chat-slot.active > [role="region"]');
 	const draft = 'Retained draft before New';
@@ -309,6 +406,8 @@ test('New navigation creates distinct sessions in Code and preserves the previou
 	await page.getByRole('button', { name: 'Back', exact: true }).click();
 	await expect(pane).toHaveAttribute('data-untitled-session-id', original!);
 	await expect(pane.locator('.ash-chat-input-editor')).toContainText(draft);
+	await page.getByRole('button', { name: 'Forward', exact: true }).click();
+	await expect(pane).toHaveAttribute('data-untitled-session-id', first!);
 });
 
 test('Sessions can directly dispose and recreate a restored window without capturing released editor grids', async ({ page }) => {
@@ -365,6 +464,26 @@ for (const locale of ['en', 'zh-CN']) test(`Automations management stays selecte
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: chinese ? '聊天 / Agents' : 'Chat / Agents', exact: true }).click();
 	await page.locator('.ash-sessions-list-item').first().click();
 	await expect(page.locator('.ash-sessions-list-item.selected')).toHaveCount(1);
+});
+
+test('Sessions owns shared panel placement across window layouts', async ({ page }) => {
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const quick = new QuickAccess(page);
+	await quick.runCommand('workbench.action.togglePanel');
+	const panel = page.locator('[data-part="panel"]');
+	await expect(panel).toBeVisible();
+	for (const layout of ['flat', 'modern']) {
+		await page.evaluate(layout => window.ashSessionsIntegration.updateConfiguration('sessions.layoutStyle', layout), layout);
+		for (const [position, suffix, edge] of [['left', 'Left', 'right'], ['right', 'Right', 'left'], ['top', 'Top', 'bottom'], ['bottom', 'Bottom', 'top']] as const) {
+			await quick.runCommand(`workbench.action.positionPanel${suffix}`);
+			await expect(page.locator('.ash-sessions-workbench-layout')).toHaveAttribute('data-panel-position', position);
+			await expect(panel).toBeVisible();
+			await expect(panel).toHaveCSS(`border-${edge}-width`, '1px');
+			const bounds = await panel.boundingBox();
+			expect(bounds!.width).toBeGreaterThan(0);
+			expect(bounds!.height).toBeGreaterThan(0);
+		}
+	}
 });
 
 test('Code defaults stay in document groups after opening the Trace editor', async ({ page }) => {
@@ -450,6 +569,15 @@ test('a corrupt legacy draft reports its failure while other drafts and startup 
 	await page.reload();
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 	await expect(page.getByRole('region', { name: 'Notifications', exact: true }).getByText(/^Could not restore the Chat draft:/u)).toBeVisible();
+	const feedback = page.locator('.ash-sessions-window > .ash-feedback-host');
+	await expect(feedback).toHaveCSS('position', 'absolute');
+	await expect(feedback).toHaveCSS('bottom', '40px');
+	const placement = await feedback.evaluate(element => {
+		const host = element.parentElement!.getBoundingClientRect();
+		const bounds = element.getBoundingClientRect();
+		return { right: host.right - bounds.right, bottom: host.bottom - bounds.bottom };
+	});
+	expect(placement).toEqual({ right: 12, bottom: 40 });
 	await expect(page.locator('[data-action-id="sessions.newSession"] button')).toBeVisible();
 	expect(await page.evaluate(() => window.ashSessionsIntegration.disposeAndCheckErrorHandler())).toBe(true);
 	const entries = await page.evaluate(() => JSON.parse(localStorage.getItem('ash.storage.workspace.sessions')!).entries);
@@ -463,10 +591,19 @@ test('Creator canvas responds to wheel, drag and keyboard input', async ({ page 
 	await creator.click();
 	await expect(creator.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'symbol-color');
 	await expect(creator).toHaveAttribute('aria-current', 'page');
-	await expect(page.locator('.ash-sessions-list-controls')).toBeHidden();
+	await expect(page.locator('.ash-sessions-list:visible')).toBeHidden();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await expect(canvas).toBeVisible();
+	const tools = page.locator('.ash-design-tools-widget');
+	const split = tools.locator('.ash-dropdown-with-primary-dropdown > .ash-button').first();
+	await expect(split).toHaveCSS('width', '20px');
+	await expect(split).toHaveCSS('height', '32px');
+	await expect(split).toHaveCSS('padding', '0px');
+	const tool = tools.locator('.ash-button').first();
+	await expect(tool).toHaveCSS('width', '32px');
+	await tool.hover();
+	await expect(tool).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	const world = canvas.locator('.ash-canvas-world');
 	const worldTransform = () => world.evaluate(element => (element as HTMLElement).style.transform);
 	await expect.poll(worldTransform).toBe('translate(0px, 0px) scale(1)');
@@ -483,6 +620,204 @@ test('Creator canvas responds to wheel, drag and keyboard input', async ({ page 
 	await expect.poll(worldTransform).toBe('translate(60px, 0px) scale(1)');
 	await page.getByRole('button', { name: 'New', exact: true }).click();
 	await expect(canvas).toBeHidden();
+});
+
+
+
+
+
+
+
+
+
+
+test('multiple Agent hosts keep equal backend IDs, model scopes and retained Code/Cowork drafts isolated', async ({ page }) => {
+	await page.goto('/sessions.html?multiHost');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const sidebar = page.locator('.ash-sessions-list');
+	await expect(sidebar.locator('.ash-sessions-list-subgroup')).toHaveCount(0);
+	await expect(sidebar.locator('[data-section=recent] > h3 button')).toHaveAccessibleName('Chats');
+	await sidebar.getByRole('button', { name: 'Task from Host A', exact: true }).click();
+	await sidebar.getByRole('button', { name: 'Task from Host B', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.calls.filter(call => call.method === 'subscribe').map(call => call.host))).toEqual(expect.arrayContaining(['Host A', 'Host B']));
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(sidebar.getByRole('heading', { name: 'Host A', exact: true })).toBeVisible();
+	await expect(sidebar.getByRole('heading', { name: 'Host B', exact: true })).toBeVisible();
+	await page.evaluate(() => window.ashSessionsIntegration.multiHost!.open('Host A', true));
+	const active = page.locator('.ash-sessions-chat-slot.active');
+	await active.locator('.stanza-editor-input').focus();
+	await page.keyboard.insertText('Private Host A draft');
+	await page.evaluate(() => window.ashSessionsIntegration.multiHost!.open('Host B', true));
+	await active.locator('.stanza-editor-input').focus();
+	await page.keyboard.insertText('Private Host B draft');
+	await expect(active).toContainText('Host B model');
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	await sidebar.getByRole('button', { name: 'Host A draft', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(active.locator('.stanza-editor-line-text')).toContainText('Private Host A draft');
+	await expect(active).toContainText('Host A model');
+	await page.evaluate(() => window.ashSessionsIntegration.openChat());
+	await expect(active.locator('.stanza-editor-line-text')).toContainText('Private Host A draft');
+	// Cowork has its own model preference; choose from the captured host's real catalog.
+	await active.locator('.ash-chat-input-model-action').click();
+	const modelPicker = page.locator('.ash-chat-model-picker');
+	const automaticModel = modelPicker.getByRole('switch', { name: 'Auto', exact: true });
+	await expect(automaticModel).toHaveAttribute('aria-checked', 'true');
+	await automaticModel.focus();
+	await automaticModel.press('Space');
+	await expect(automaticModel).toHaveAttribute('aria-checked', 'false');
+	await expect(modelPicker.getByRole('menuitemradio')).toHaveCount(1);
+	await modelPicker.getByRole('menuitemradio', { name: 'Host A model', exact: true }).click();
+	await expect(active).toContainText('Host A model');
+	await sidebar.getByRole('button', { name: 'Host B draft', exact: true }).click();
+	await expect(active.locator('.stanza-editor-line-text')).toContainText('Private Host B draft');
+	await active.locator('.ash-chat-input-model-action').click();
+	await expect(automaticModel).toHaveAttribute('aria-checked', 'true');
+	await automaticModel.focus();
+	await automaticModel.press('Space');
+	await expect(automaticModel).toHaveAttribute('aria-checked', 'false');
+	await expect(modelPicker.getByRole('menuitemradio')).toHaveCount(1);
+	await modelPicker.getByRole('menuitemradio', { name: 'Host B model', exact: true }).click();
+	await expect(active).toContainText('Host B model');
+	await page.evaluate(() => window.ashSessionsIntegration.multiHost!.disconnect('Host A'));
+	await expect(sidebar.getByRole('button', { name: 'Task from Host A', exact: true })).toHaveCount(0);
+	await expect(sidebar.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
+	await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.calls.every(call => call.sessionId === 'same' && call.threadId === 'same'))).toBe(true);
+});
+
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`new Session host chooser preserves keyboard selection and scope in ${locale}`, async ({ page }) => {
+		await page.goto(`/sessions.html?multiHost&locale=${locale}`);
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('[data-action-id="sessions.newSession"] button').click();
+		const picker = page.getByPlaceholder(locale === 'en' ? 'Choose a host for the new session' : '选择新会话的宿主');
+		await expect(picker).toBeFocused();
+		await picker.fill('Host B');
+		await page.keyboard.press('Enter');
+		await expect(picker).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.activeProvider())).toBe('Host B');
+		const active = page.locator('.ash-sessions-chat-slot.active');
+		await active.locator('.ash-chat-input-model-action').click();
+		const modelPicker = page.locator('.ash-chat-model-picker');
+		const automaticModel = modelPicker.getByRole('switch', { name: locale === 'en' ? 'Auto' : '自动', exact: true });
+		await expect(automaticModel).toHaveAttribute('aria-checked', 'true');
+		await automaticModel.focus();
+		await automaticModel.press('Space');
+		await expect(automaticModel).toHaveAttribute('aria-checked', 'false');
+		await expect(modelPicker.getByRole('menuitemradio')).toHaveCount(1);
+		await modelPicker.getByRole('menuitemradio', { name: 'Host B model', exact: true }).click();
+		await expect(page.locator('.ash-sessions-chat-slot.active')).toContainText('Host B model');
+		const previous = await page.locator('.ash-sessions-chat-slot.active [data-untitled-session-id]').getAttribute('data-untitled-session-id');
+		const code = page.locator('.ash-window-mode-control').getByRole('button', { name: locale === 'en' ? 'Code' : '代码', exact: true });
+		await code.click();
+		await page.locator('[data-action-id="sessions.newSession"] button').click();
+		await expect(picker).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(picker).toHaveCount(0);
+		await expect(code).toHaveAttribute('aria-pressed', 'true');
+		await expect(page.locator('.ash-sessions-chat-slot.active [data-untitled-session-id]')).toHaveAttribute('data-untitled-session-id', previous!);
+		expect(await page.evaluate(() => window.ashSessionsIntegration.multiHost!.activeProvider())).toBe('Host B');
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) test(`Sidebar groups retain pins and separate Chat and Code expansion (${locale})`, async ({ page }, testInfo) => {
+	await page.goto(`/sessions.html?multiHost&sidebarGroups&locale=${locale}`);
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const chinese = locale === 'zh-CN';
+	const list = page.locator('.ash-sessions-list:visible');
+	const mode = page.locator('.ash-window-mode-control');
+	const groups = list.locator(':scope > .ash-sessions-list-items > .ash-sessions-list-section > h3 > button');
+	const recent = list.locator('[data-section=recent] > h3 button');
+	const pinned = list.locator('[data-section=pinned]');
+	const projects = list.locator('[data-section=projects]');
+	await expect(list.locator('input')).toHaveCount(0);
+	await expect(groups).toHaveText(chinese ? ['项目', '聊天'] : ['Projects', 'Chats']);
+	await expect(pinned).toHaveCount(0);
+	await expect(list.locator('.ash-sessions-list-subgroup')).toHaveCount(0);
+	await expect(projects.getByRole('button', { name: 'Search project fixture', exact: true })).toBeVisible();
+	const taskB = list.getByRole('button', { name: 'Task from Host B', exact: true });
+	await taskB.focus();
+	await taskB.press('Shift+F10');
+	await page.getByRole('menuitem', { name: chinese ? '置顶聊天' : 'Pin chat', exact: true }).click();
+	await expect(pinned.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
+	await expect(list.getByRole('button', { name: 'Task from Host B', exact: true })).toHaveCount(1);
+	await expect(groups).toHaveText(chinese ? ['置顶', '项目', '聊天'] : ['Pinned', 'Projects', 'Chats']);
+	for (const heading of await groups.all()) {
+		expect(await heading.evaluate(element => {
+			const label = element.querySelector('.ash-sessions-list-section-label')!.getBoundingClientRect();
+			const icon = element.querySelector('.ash-sessions-list-section-icon')!.getBoundingClientRect();
+			return icon.left >= label.right && icon.left - label.right <= 10;
+		})).toBe(true);
+	}
+
+	await recent.focus();
+	await recent.press('ArrowLeft');
+	await expect(recent).toHaveAttribute('aria-expanded', 'false');
+	await expect(recent.locator('[data-ash-icon-id=chevron-right]')).toBeVisible();
+	await recent.press('ArrowDown');
+	await expect(recent).toBeFocused();
+	await mode.getByRole('button', { name: chinese ? '代码' : 'Code', exact: true }).click();
+	await expect(groups).toHaveText(chinese ? ['置顶', '项目', '最近使用'] : ['Pinned', 'Projects', 'Recents']);
+	await expect(recent).toHaveAttribute('aria-expanded', 'true');
+	await expect(pinned.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
+	const project = projects.locator('.ash-sessions-list-subgroup');
+	const projectToggle = project.locator('h3 button');
+	await expect(projectToggle).toHaveAccessibleName('Search project fixture');
+	await expect(project.getByRole('button', { name: 'Task from Host A', exact: true })).toBeVisible();
+	await expect(projectToggle.locator('[data-ash-icon-id=folder-open]')).toBeVisible();
+	await projectToggle.focus();
+	await projectToggle.press('ArrowLeft');
+	await expect(projectToggle).toHaveAttribute('aria-expanded', 'false');
+	await expect(projectToggle.locator('[data-ash-icon-id=folder]')).toBeVisible();
+	await expect(project.getByRole('button', { name: 'Task from Host A', exact: true })).toBeHidden();
+	await projectToggle.press('ArrowDown');
+	await expect(recent).toBeFocused();
+	await projectToggle.press('ArrowRight');
+	await expect(projectToggle).toHaveAttribute('aria-expanded', 'true');
+	const taskA = project.getByRole('button', { name: 'Task from Host A', exact: true });
+	await expect(taskA.locator(':scope > [data-ash-icon-id=chat-4]')).toBeVisible();
+	await taskA.click();
+	await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.calls.some(call => call.host === 'Host A' && call.method === 'subscribe'))).toBe(true);
+	await taskA.press('Shift+F10');
+	await page.getByRole('menuitem', { name: chinese ? '置顶聊天' : 'Pin chat', exact: true }).click();
+	const pinnedA = pinned.getByRole('button', { name: 'Task from Host A', exact: true });
+	await expect(pinnedA).toBeVisible();
+	await expect(project.locator('.ash-sessions-list-item')).toHaveCount(0);
+	await pinnedA.press('Shift+F10');
+	await page.getByRole('menuitem', { name: chinese ? '取消置顶聊天' : 'Unpin chat', exact: true }).click();
+	await expect(taskA).toBeVisible();
+	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+		await projectToggle.focus();
+		await projectToggle.press('ArrowRight');
+		await expect(projectToggle).toBeFocused();
+		expect(await projectToggle.evaluate(element => {
+			const style = getComputedStyle(element);
+			return style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0 && element.scrollWidth <= element.clientWidth;
+		})).toBe(true);
+		expect(await taskA.locator(':scope > .ash-icon').evaluate(element => {
+			const bounds = element.getBoundingClientRect();
+			return bounds.width === 16 && bounds.height === 16 && getComputedStyle(element).fontFamily.includes('Ash UI Variable');
+		})).toBe(true);
+	}
+	await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-light'));
+	await page.screenshot({ path: testInfo.outputPath(`sidebar-code-groups-${locale}.png`) });
+	await projectToggle.click();
+	await page.evaluate(() => window.ashSessionsIntegration.remountAfterDirectDispose());
+	await expect(projectToggle).toHaveAttribute('aria-expanded', 'false');
+	await mode.getByRole('button', { name: chinese ? '聊天 / Agents' : 'Chat / Agents', exact: true }).click();
+	await expect(recent).toHaveAttribute('aria-expanded', 'false');
+	await expect(pinned.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
+	await pinned.getByRole('button', { name: 'Task from Host B', exact: true }).click({ button: 'right' });
+	await page.getByRole('menuitem', { name: chinese ? '取消置顶聊天' : 'Unpin chat', exact: true }).click();
+	await expect(pinned).toHaveCount(0);
+	await expect(recent).toBeFocused();
+	await recent.press('ArrowRight');
+	await expect(taskB).toBeVisible();
+	await page.screenshot({ path: testInfo.outputPath(`sidebar-chat-groups-${locale}.png`) });
+	await projects.getByRole('button', { name: 'Search project fixture', exact: true }).click();
+	await expect(page.locator('.ash-projects h1')).toHaveText('Search project fixture');
 });
 
 test.describe('Sessions settings components', () => {
@@ -657,101 +992,3 @@ test.describe('Sessions settings components', () => {
 
 
 });
-
-
-
-
-
-
-
-
-
-
-
-test('multiple Agent hosts keep equal backend IDs, model scopes and retained Code/Cowork drafts isolated', async ({ page }) => {
-	await page.goto('/sessions.html?multiHost');
-	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-	const sidebar = page.locator('.ash-sessions-list');
-	await expect(sidebar.getByRole('heading', { name: 'Host A', exact: true })).toBeVisible();
-	await expect(sidebar.getByRole('heading', { name: 'Host B', exact: true })).toBeVisible();
-	await sidebar.getByRole('button', { name: 'Task from Host A', exact: true }).click();
-	await sidebar.getByRole('button', { name: 'Task from Host B', exact: true }).click();
-	await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.calls.filter(call => call.method === 'subscribe').map(call => call.host))).toEqual(expect.arrayContaining(['Host A', 'Host B']));
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await page.evaluate(() => window.ashSessionsIntegration.multiHost!.open('Host A', true));
-	const active = page.locator('.ash-sessions-chat-slot.active');
-	await active.locator('.stanza-editor-input').focus();
-	await page.keyboard.insertText('Private Host A draft');
-	await page.evaluate(() => window.ashSessionsIntegration.multiHost!.open('Host B', true));
-	await active.locator('.stanza-editor-input').focus();
-	await page.keyboard.insertText('Private Host B draft');
-	await expect(active).toContainText('Host B model');
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
-	await sidebar.getByRole('button', { name: 'Host A draft', exact: true }).click();
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(active.locator('.stanza-editor-line-text')).toContainText('Private Host A draft');
-	await expect(active).toContainText('Host A model');
-	await page.evaluate(() => window.ashSessionsIntegration.openChat());
-	await expect(active.locator('.stanza-editor-line-text')).toContainText('Private Host A draft');
-	// Cowork has its own model preference; choose from the captured host's real catalog.
-	await active.locator('.ash-chat-input-model-action').click();
-	const modelPicker = page.locator('.ash-chat-model-picker');
-	const automaticModel = modelPicker.getByRole('switch', { name: 'Auto', exact: true });
-	await expect(automaticModel).toHaveAttribute('aria-checked', 'true');
-	await automaticModel.focus();
-	await automaticModel.press('Space');
-	await expect(automaticModel).toHaveAttribute('aria-checked', 'false');
-	await expect(modelPicker.getByRole('menuitemradio')).toHaveCount(1);
-	await modelPicker.getByRole('menuitemradio', { name: 'Host A model', exact: true }).click();
-	await expect(active).toContainText('Host A model');
-	await sidebar.getByRole('button', { name: 'Host B draft', exact: true }).click();
-	await expect(active.locator('.stanza-editor-line-text')).toContainText('Private Host B draft');
-	await active.locator('.ash-chat-input-model-action').click();
-	await expect(automaticModel).toHaveAttribute('aria-checked', 'true');
-	await automaticModel.focus();
-	await automaticModel.press('Space');
-	await expect(automaticModel).toHaveAttribute('aria-checked', 'false');
-	await expect(modelPicker.getByRole('menuitemradio')).toHaveCount(1);
-	await modelPicker.getByRole('menuitemradio', { name: 'Host B model', exact: true }).click();
-	await expect(active).toContainText('Host B model');
-	await page.evaluate(() => window.ashSessionsIntegration.multiHost!.disconnect('Host A'));
-	await expect(sidebar.getByRole('button', { name: 'Task from Host A', exact: true })).toHaveCount(0);
-	await expect(sidebar.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
-	await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.calls.every(call => call.sessionId === 'same' && call.threadId === 'same'))).toBe(true);
-});
-
-
-for (const locale of ['en', 'zh-CN']) {
-	test(`new Session host chooser preserves keyboard selection and scope in ${locale}`, async ({ page }) => {
-		await page.goto(`/sessions.html?multiHost&locale=${locale}`);
-		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-		await page.locator('[data-action-id="sessions.newSession"] button').click();
-		const picker = page.getByPlaceholder(locale === 'en' ? 'Choose a host for the new session' : '选择新会话的宿主');
-		await expect(picker).toBeFocused();
-		await picker.fill('Host B');
-		await page.keyboard.press('Enter');
-		await expect(picker).toHaveCount(0);
-		await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.activeProvider())).toBe('Host B');
-		const active = page.locator('.ash-sessions-chat-slot.active');
-		await active.locator('.ash-chat-input-model-action').click();
-		const modelPicker = page.locator('.ash-chat-model-picker');
-		const automaticModel = modelPicker.getByRole('switch', { name: locale === 'en' ? 'Auto' : '自动', exact: true });
-		await expect(automaticModel).toHaveAttribute('aria-checked', 'true');
-		await automaticModel.focus();
-		await automaticModel.press('Space');
-		await expect(automaticModel).toHaveAttribute('aria-checked', 'false');
-		await expect(modelPicker.getByRole('menuitemradio')).toHaveCount(1);
-		await modelPicker.getByRole('menuitemradio', { name: 'Host B model', exact: true }).click();
-		await expect(page.locator('.ash-sessions-chat-slot.active')).toContainText('Host B model');
-		const previous = await page.locator('.ash-sessions-chat-slot.active [data-untitled-session-id]').getAttribute('data-untitled-session-id');
-		const code = page.locator('.ash-window-mode-control').getByRole('button', { name: locale === 'en' ? 'Code' : '代码', exact: true });
-		await code.click();
-		await page.locator('[data-action-id="sessions.newSession"] button').click();
-		await expect(picker).toBeFocused();
-		await page.keyboard.press('Escape');
-		await expect(picker).toHaveCount(0);
-		await expect(code).toHaveAttribute('aria-pressed', 'true');
-		await expect(page.locator('.ash-sessions-chat-slot.active [data-untitled-session-id]')).toHaveAttribute('data-untitled-session-id', previous!);
-		expect(await page.evaluate(() => window.ashSessionsIntegration.multiHost!.activeProvider())).toBe('Host B');
-	});
-}

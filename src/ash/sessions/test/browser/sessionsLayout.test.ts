@@ -9,17 +9,6 @@ suite('sessions browser component', () => {
 	const browserTests = useBrowserTests();
 	const runtimeErrors = new WeakMap<Page, string[]>();
 
-	async function expandSidebarForHistory(page: Page): Promise<void> {
-		const sidebar = (await page.locator('[data-part="sidebar"]').boundingBox())!;
-		for (const sash of await page.getByRole('separator').all()) {
-			const bounds = await sash.boundingBox();
-			if (!bounds || bounds.height < 200 || Math.abs(bounds.x - sidebar.x - sidebar.width) > 8) continue;
-			await sash.focus();
-			for (let step = 0; step < 20; step++) await sash.press('ArrowRight');
-			break;
-		}
-		await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeVisible();
-	}
 
 	async function expectActivityIconSize(navigation: Locator, size: number, horizontal = false): Promise<void> {
 		await expect.poll(() => navigation.evaluate(element => element.classList.contains('horizontal'))).toBe(horizontal);
@@ -35,7 +24,7 @@ suite('sessions browser component', () => {
 			else { await expect(item).toHaveCSS('width', `${itemSize}px`); }
 			await expect(item).toHaveCSS('height', `${itemSize}px`);
 		}
-		await expect(icons).toHaveCount(horizontal || labeled ? 3 : 4);
+		await expect(icons).toHaveCount(horizontal || labeled ? 4 : 5);
 		const accounts = navigation.page().getByRole('button', { name: 'Accounts', exact: true });
 		await expect(accounts).toHaveCount(1);
 		const titlebarAccounts = navigation.page().locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });
@@ -104,7 +93,7 @@ suite('sessions browser component', () => {
 		await collaboration.click();
 		await expect(collaboration.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'collab');
 		await expect(collaboration).toHaveAttribute('aria-current', 'page');
-		await expect(page.locator('.ash-sessions-list-controls')).toBeHidden();
+		await expect(page.locator('.ash-sessions-list:visible')).toBeHidden();
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
@@ -122,7 +111,7 @@ suite('sessions browser component', () => {
 		await expect(page.locator('.ash-projects')).toBeVisible();
 		await chat.click();
 		await expect(chat).toHaveAttribute('aria-current', 'page');
-		await expect(page.locator('.ash-sessions-list-controls')).toBeVisible();
+		await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await expect(chat).toHaveCSS('background-color', 'rgb(240, 240, 240)');
 		await expect(page.locator('.ash-sessions-list-item.selected').first()).toHaveCSS('background-color', 'rgb(240, 240, 240)');
@@ -365,7 +354,6 @@ suite('sessions browser component', () => {
 
 	test('Sessions titlebar reserves its dimensions and orders component actions', async function () {
 		const { page } = browserTests;
-		await expandSidebarForHistory(page);
 		const titlebar = page.locator("[data-part='titlebar']");
 		await expect(titlebar).toBeVisible();
 		await expect(titlebar.getByRole('button', { name: 'Return to Workbench' })).toHaveCount(0);
@@ -375,6 +363,10 @@ suite('sessions browser component', () => {
 		const titlebarButtons = titlebarActions.getByRole('button');
 		const expectedTitlebarActions = ['Application menu', 'Hide sidebar', 'Back', 'Forward'];
 		await expect(titlebarButtons).toHaveCount(expectedTitlebarActions.length);
+		await expect(titlebarActions).toHaveCSS('gap', '2px');
+		for (const button of await titlebarButtons.all()) {
+			await expect(button).toHaveCSS('border-radius', '8px');
+		}
 		const activityNavigation = page.locator('.ash-sessions-activity-content');
 		await expect(titlebar.getByRole('navigation', { name: 'Chat and Code' })).toHaveCount(0);
 		await expect(activityNavigation.getByRole('button', { name: 'New' }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'add');

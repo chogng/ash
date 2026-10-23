@@ -80,7 +80,7 @@ test('Sessions common entry supplies the shared editor Worker service in each wi
 	assert.notEqual(secondWindow.get(IWebWorkerService), first);
 });
 
-test('Chat navigation selects New, Projects and Creator with retained Accounts', async () => {
+test('Chat navigation includes Search and selects New, Projects and Creator with retained Accounts', async () => {
 	const ownerDocument = browser.window.document;
 	ownerDocument.body.replaceChildren();
 	let accountAnchor: HTMLElement | undefined;
@@ -114,30 +114,31 @@ test('Chat navigation selects New, Projects and Creator with retained Accounts',
 			disabled: button.disabled,
 		})), [
 			{ icon: 'add', disabled: false },
+			{ icon: 'search', disabled: false },
 			{ icon: 'projects', disabled: false },
 			{ icon: 'symbol-color', disabled: false },
 			{ icon: 'account', disabled: false },
 		]);
 		assert.deepEqual([...bar.domNode.querySelectorAll('.ash-sessions-activity-top, .ash-sessions-activity-bottom')].map(group =>
 			[...group.querySelectorAll('button')].map(button => button.textContent),
-		), [['New', 'Projects', 'Creator'], ['Accounts']]);
+		), [['New', 'Search', 'Projects', 'Creator'], ['Accounts']]);
 		assert.ok(buttons.every(button => !button.classList.contains('icon-only')));
-		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item > button.ash-sessions-activity-item').length, 3);
+		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item > button.ash-sessions-activity-item').length, 4);
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
-		buttons[1]?.click();
-		assert.equal(buttons[1]?.getAttribute('aria-current'), 'page');
-		assert.equal(buttons[0]?.getAttribute('aria-current'), null);
-		assert.equal(buttons[1]?.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'projects');
 		buttons[2]?.click();
-		assert.equal(buttons[2]?.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'symbol-color');
+		assert.equal(buttons[2]?.getAttribute('aria-current'), 'page');
+		assert.equal(buttons[0]?.getAttribute('aria-current'), null);
+		assert.equal(buttons[2]?.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'projects');
+		buttons[3]?.click();
+		assert.equal(buttons[3]?.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'symbol-color');
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
 		buttons[0]?.click();
 		assert.deepEqual(selectedActions, ['chat', 'projects', 'creator', 'chat']);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
-		buttons[3]?.click();
+		buttons[4]?.click();
 		await Promise.resolve();
-		assert.equal(accountAnchor, buttons[3]);
+		assert.equal(accountAnchor, buttons[4]);
 		using titlebar = registerTestComponentServices(services).createInstance(TitlebarPart, ownerDocument.body, 'application-menu');
 		const renderTitlebarAccount = (visible: boolean): void => titlebar.setActivityActions(visible ? [bar.accountAction] : [], (action, options) => bar.createAccountActionViewItem(action, options, 'titlebar'));
 		for (const position of [ActivityBarPosition.TOP, ActivityBarPosition.BOTTOM]) {
@@ -265,17 +266,17 @@ test('navigation order survives a new window and includes new menu contributions
 	using menuServices = registerMenus(services);
 	storage.store('sessions.activityBar.actionOrder', JSON.stringify(['sessions.open.chat', 'sessions.newSession', 'sessions.open.teams', 'sessions.open.projects', 'sessions.open.code', 'sessions.open.design']), StorageScope.PROFILE, StorageTarget.USER);
 	using bar = registerTestComponentServices(services).createInstance(ActivityBar, document.body, { showAccountMenu() { } });
-	assert.equal(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE), JSON.stringify(['sessions.newSession', 'sessions.open.projects', 'sessions.open.creator']));
+	assert.equal(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE), JSON.stringify(['sessions.newSession', 'sessions.search', 'sessions.open.projects', 'sessions.open.creator']));
 	setARIAContainer(document.body);
 	const buttons = [...bar.domNode.querySelectorAll<HTMLButtonElement>('button')];
-	buttons[2]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
+	buttons[3]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
 	await shownActions[0]!.run();
-	assert.equal(bar.domNode.querySelectorAll('button')[1], buttons[2]);
+	assert.equal(bar.domNode.querySelectorAll('button')[2], buttons[3]);
 	await storage.flush();
 	using restored = registerTestComponentServices(services).createInstance(ActivityBar, document.body, { showAccountMenu() { } });
-	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 3).map(button => button.textContent), ['New', 'Creator', 'Projects']);
+	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 4).map(button => button.textContent), ['New', 'Search', 'Creator', 'Projects']);
 	using contribution = MenusRegistry.appendMenuItem(Menus.ActivityBar, { command: { id: 'test.activity', title: 'Test action', icon: Lxicon.chat2 }, order: 60 });
-	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.textContent), ['New', 'Creator', 'Projects', 'Test action', 'Accounts']);
+	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.textContent), ['New', 'Search', 'Creator', 'Projects', 'Test action', 'Accounts']);
 	assert.equal(restored.domNode.querySelector('button')!.getAttribute('aria-current'), 'page');
 });
 
@@ -327,23 +328,23 @@ test('Code navigation has its own actions and order while Chat keeps its saved n
 	using menus = registerMenus(services);
 	const contexts = services.get(IContextKeyService);
 	contexts.setContext('sessions.automationsAvailable', true);
-	const chatOrder = ['sessions.open.creator', 'sessions.newSession', 'sessions.open.projects'];
-	storage.store('sessions.activityBar.actionOrder', JSON.stringify(chatOrder), StorageScope.PROFILE, StorageTarget.USER);
+	const chatOrder = ['sessions.open.creator', 'sessions.newSession', 'sessions.search', 'sessions.open.projects'];
+	storage.store('sessions.activityBar.actionOrder', JSON.stringify(chatOrder.filter(id => id !== 'sessions.search')), StorageScope.PROFILE, StorageTarget.USER);
 	using bar = registerTestComponentServices(services).createInstance(ActivityBar, document.body, { showAccountMenu() { } });
 	const labels = () => [...bar.domNode.querySelectorAll('.ash-sessions-navigation button')].map(button => button.textContent);
-	assert.deepEqual(labels(), ['Creator', 'New', 'Projects']);
+	assert.deepEqual(labels(), ['Creator', 'New', 'Search', 'Projects']);
 	contexts.setContext('sessions.workspaceMode', 'code');
-	assert.deepEqual(labels(), ['New', 'Automations', 'Collab', 'Agent Teams', 'Symphony']);
+	assert.deepEqual(labels(), ['New', 'Search', 'Automations', 'Collab', 'Agent Teams', 'Symphony']);
 	assert.equal(bar.domNode.querySelector('[data-action-id="sessions.open.code"]'), null);
 	setARIAContainer(document.body);
 	bar.domNode.querySelector('[data-action-id="sessions.open.collaboration"] button')!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
 	await shown[0]!.run();
-	assert.deepEqual(labels(), ['New', 'Collab', 'Automations', 'Agent Teams', 'Symphony']);
+	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Agent Teams', 'Symphony']);
 	assert.equal(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE), JSON.stringify(chatOrder));
 	contexts.setContext('sessions.workspaceMode', 'chat');
-	assert.deepEqual(labels(), ['Creator', 'New', 'Projects']);
+	assert.deepEqual(labels(), ['Creator', 'New', 'Search', 'Projects']);
 	contexts.setContext('sessions.workspaceMode', 'code');
-	assert.deepEqual(labels(), ['New', 'Collab', 'Automations', 'Agent Teams', 'Symphony']);
+	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Agent Teams', 'Symphony']);
 });
 
 test('workspace mode controls switch retained pages and follow their owner selection', async () => {

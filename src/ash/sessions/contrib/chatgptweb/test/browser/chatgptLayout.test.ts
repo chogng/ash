@@ -568,6 +568,7 @@ suite('chatgptweb browser component', () => {
 				await mockChatGPTRequests(page);
 				await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${theme}`);
 				await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+				await expect(page.locator('.ash-chatgpt-message-body').last()).toHaveText('Synthetic answer');
 				await fillMessage(page, 'Read the repository');
 				await page.getByRole('button', { name: /^(Send|发送)$/, exact: true }).click();
 				await expect.poll(() => page.evaluate(() => typeof Reflect.get(globalThis, 'pushExecution'))).toBe('function');

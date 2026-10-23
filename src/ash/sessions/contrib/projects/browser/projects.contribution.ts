@@ -42,7 +42,11 @@ registerAction2(class OpenProjects extends Action2 {
 			menu: { id: Menus.ActivityBar, group: 'navigation', order: 30 },
 		});
 	}
-	public override async run(accessor: ServicesAccessor): Promise<void> {
+	public override async run(accessor: ServicesAccessor, projectId?: unknown): Promise<void> {
+		if (projectId !== undefined) {
+			if (typeof projectId !== 'string' || !projectId.trim()) throw new TypeError(localize('projects.invalidId', 'Choose a valid project.'));
+			await accessor.get(IProjectsService).openProject(projectId);
+		}
 		await accessor.get(ICommandService).executeCommand('sessions.show.projects');
 	}
 });

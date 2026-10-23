@@ -71,6 +71,8 @@ import '../../../../../../platform/theme/common/sizes/baseSizes.js';
 import { bindTestColorTheme } from '../../../../../../../../test/fixtures/browser/themeFixture.js';
 import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
+import type { IProjectService } from '../../../../../../platform/projects/common/projectService.js';
+import type { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 
 
 const listCustomViews = { activeCustomView: observableValue('testCustomView', undefined) } as unknown as ICustomViewService;
@@ -133,11 +135,11 @@ const terminalCreations: ITerminalProcessCreateOptions[] = [];
 const profileSelections: TerminalProcessProfileSelection[] = [];
 const terminalViews: Array<{ id: string; focus: boolean | undefined; }> = [];
 const sessions = [1, 2].map(id => ({ sessionId: `session-${id}`, title: `Task ${id}`, status: 'active', chats: [{ threadId: `thread-${id}`, status: 'active', origin: { type: 'root' } }] }));
-const management = { sessions, state: 'ready' } as unknown as ISessionsManagementService;
+const management = { sessions, state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
 const view = { activeSelection: undefined, visibleSelections: [], onDidChange: changes.event, openNewSession: () => { }, openSession: (sessionId: string) => opened.push(sessionId) } as unknown as ISessionsService;
 const container = document.createElement('main');
 document.body.append(container);
-resources.add(new SessionsList(container, management, view, 'Tasks', { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, groups, listCustomViews, listMenus, listNotifications));
+resources.add(new SessionsList(container, 'Tasks', 'code', management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, groups, storage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications));
 const services = resources.add(new InstantiationService());
 services.registerInstance(IStorageService, storage);
 services.registerInstance(IDialogService, resources.add(new DialogService()));

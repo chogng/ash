@@ -28,8 +28,8 @@ suite('appTools browser component', () => {
 		await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
 		const group = await page.evaluate(async () => await window.ashAppToolsIntegration.call({ type: 'createSection', name: '<Review>' }) as { sectionId: string; });
 		await expect(page.getByRole('heading', { name: '<Review>', exact: true })).toBeVisible();
-		await expect(page.getByRole('heading', { name: '<Review>', exact: true })).toHaveCSS('font-size', '12px');
-		await expect(page.getByRole('heading', { name: '<Review>', exact: true })).toHaveCSS('font-weight', '600');
+		await expect(page.getByRole('heading', { name: '<Review>', exact: true }).getByRole('button')).toHaveCSS('font-size', '13px');
+		await expect(page.getByRole('heading', { name: '<Review>', exact: true }).getByRole('button')).toHaveAttribute('aria-expanded', 'true');
 		await page.evaluate(sectionId => window.ashAppToolsIntegration.call({ type: 'moveSession', sessionId: 'session-2', sectionId }), group.sectionId);
 		const rows = page.locator('.ash-sessions-list-item');
 		await expect(rows).toHaveText(['Task 2', 'Task 1']);
@@ -58,7 +58,8 @@ suite('appTools browser component', () => {
 		await page.goto('/appTools.html?locale=zh-CN');
 		await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
 		expect(await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'confetti' }))).toEqual({ fired: false });
-		await expect(page.getByRole('searchbox')).toHaveAttribute('aria-label', '搜索会话');
+		await expect(page.getByRole('searchbox')).toHaveCount(0);
+		await expect(page.locator('[data-section=recent] > h3 button')).toHaveAccessibleName('最近使用');
 		const result = await page.evaluate(async () => {
 			try { await window.ashAppToolsIntegration.call({ type: 'checkUpdate' }); return 'accepted'; }
 			catch (error) { return String(error); }
@@ -244,8 +245,8 @@ suite('appTools browser component', () => {
 			const name = `Review ${theme}`;
 			await page.evaluate(name => window.ashAppToolsIntegration.call({ type: 'createSection', name }), name);
 			const heading = page.getByRole('heading', { name, exact: true });
-			await expect(heading).toHaveCSS('font-size', '12px');
-			await expect(heading).toHaveCSS('font-weight', '600');
+			await expect(heading.getByRole('button')).toHaveCSS('font-size', '13px');
+			await expect(heading.getByRole('button')).toHaveAttribute('aria-expanded', 'true');
 			expect(await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'confetti' }))).toEqual({ fired: true });
 			await expect(page.locator('.ash-app-confetti-particle').first()).toHaveCSS('font-size', '13px');
 			await page.evaluate(() => window.ashAppToolsIntegration.disposeHost());

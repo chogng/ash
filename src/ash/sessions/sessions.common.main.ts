@@ -69,6 +69,7 @@ import '../workbench/contrib/codeEditor/browser/codeEditor.contribution.js';
 import '../workbench/contrib/snippets/browser/snippets.contribution.js';
 import '../workbench/contrib/scm/browser/scm.service.contribution.js';
 import '../workbench/contrib/scm/browser/quickDiff.contribution.js';
+import './contrib/search/browser/search.contribution.js';
 import '../workbench/contrib/mediaPreview/browser/mediaPreview.contribution.js';
 import '../workbench/contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js';
 import { registerTerminalView } from '../workbench/contrib/terminal/browser/terminal.contribution.js';

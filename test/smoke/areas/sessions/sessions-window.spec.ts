@@ -21,6 +21,74 @@ import { USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT } from '../../../../src/ash/platfo
 const focusTest = test.extend({ electronWindowMode: process.platform === 'darwin' ? 'active' : undefined });
 const emptyWorkspaceTest = test.extend({ openWorkspace: false });
 
+test('Sessions sidebar groups switch between Chat and Code and retain expansion', { tag: ['@electron-ui'] }, async ({ target, workbench }, testInfo) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	const list = page.locator('.ash-sessions-list:visible');
+	const headings = list.locator(':scope > .ash-sessions-list-items > section > h3 button');
+	const recent = list.locator('[data-section=recent] > h3 button');
+	const modes = page.locator('.ash-window-mode-control');
+	await expect(list.getByRole('searchbox')).toHaveCount(0);
+	await expect(headings).toHaveText(['Projects', 'Chats']);
+	await expect(list.locator('[data-section=pinned]')).toHaveCount(0);
+	// The disconnected Desktop fixture keeps the project-load failure available for retry.
+	await expect(list.locator('[data-section=projects]').getByRole('button', { name: 'Could not load projects. Retry', exact: true })).toBeVisible();
+	await recent.focus();
+	await recent.press('ArrowLeft');
+	await expect(recent).toHaveAttribute('aria-expanded', 'false');
+	await expect(recent.locator('[data-ash-icon-id=chevron-right]')).toBeVisible();
+	await modes.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(headings).toHaveText(['Projects', 'Recents']);
+	await expect(recent).toHaveAttribute('aria-expanded', 'true');
+	await expect(list.locator('.ash-sessions-list-item > [data-ash-icon-id=chat-4]').first()).toBeVisible();
+	await recent.focus();
+	await recent.press('ArrowLeft');
+	await expect(recent).toHaveAttribute('aria-expanded', 'false');
+	await modes.getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	await expect(recent).toHaveAttribute('aria-expanded', 'false');
+	await recent.press('ArrowRight');
+	await expect(list.locator('.ash-sessions-list-item').first()).toBeVisible();
+	await page.screenshot({ path: testInfo.outputPath('sidebar-chat-groups-desktop.png') });
+	await modes.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(recent).toHaveAttribute('aria-expanded', 'false');
+	await recent.press('ArrowRight');
+	await page.screenshot({ path: testInfo.outputPath('sidebar-code-groups-desktop.png') });
+});
+
+test('Sessions Search opens categorized results and creates a new session', async ({ target, workbench }, testInfo) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	const search = page.locator('[data-action-id="sessions.search"] button');
+	await search.click();
+	const picker = page.locator('.ash-sessions-search-dialog');
+	const input = picker.getByRole('combobox');
+	await expect(input).toBeFocused();
+	await expect(picker.getByRole('tab')).toHaveText(['All', 'Sessions', 'Projects', 'Scheduled']);
+	await expect(page.locator('.ash-quick-input-host:not([hidden])')).toHaveCount(0);
+	await input.press('Alt+F1');
+	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+	await expect(help.getByRole('textbox')).toHaveValue(/Search finds saved sessions/);
+	await help.press('Escape');
+	await expect(help).toHaveCount(0);
+	await expect(input).toBeFocused();
+	await input.fill('missing_search_result');
+	await expect(picker.getByRole('option')).toHaveCount(0);
+	await input.press('Escape');
+	await expect(picker).toHaveCount(0);
+	await expect(search).toBeFocused();
+	const active = page.locator('.ash-sessions-chat-slot.active [data-untitled-session-id]');
+	const previous = await active.getAttribute('data-untitled-session-id');
+	await search.press('Enter');
+	await input.fill('New Session');
+	await picker.getByRole('option', { name: /New Session/ }).last().click();
+	await expect(picker).toHaveCount(0);
+	await expect(active).not.toHaveAttribute('data-untitled-session-id', previous!);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await search.click();
+	await expect(input).toBeFocused();
+	await page.screenshot({ path: testInfo.outputPath('sessions-search.png') });
+	await input.press('Escape');
+	await expect(search).toBeFocused();
+});
+
 test('Sessions keyboard layout commands inspect the active mapping and offer layout selection', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const quickAccess = new QuickAccess(page);
@@ -1284,10 +1352,10 @@ test('Browser Code opens Sessions and reloads the routed workbench', { tag: ['@b
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	await expect(page.getByRole('region', { name: 'Design canvas' })).toBeVisible();
 	await activityBar.getByRole('button', { name: 'New', exact: true }).click();
-	await expect(page.locator('.ash-sessions-list-controls')).toBeVisible();
+	await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();
 	await workbench.reloadWindow(page);
 	await expect(activityBar).toBeVisible();
-	await expect(page.locator('.ash-sessions-list-controls')).toBeVisible();
+	await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();
 });
 
 test('Browser Sessions settings scroll each pane independently', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
@@ -1413,7 +1481,7 @@ test('Electron Code Sessions Activity Bar follows its position setting with fixe
 		const projects = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects' });
 		await collaboration.click();
 		await expect(collaboration.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'collab');
-		await expect(page.locator('.ash-sessions-list-controls')).toBeHidden();
+		await expect(page.locator('.ash-sessions-list:visible')).toBeHidden();
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 		await expect(projects.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'projects');
 		await projects.click();
@@ -1421,7 +1489,7 @@ test('Electron Code Sessions Activity Bar follows its position setting with fixe
 		await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
 		await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New', exact: true }).click();
-		await expect(page.locator('.ash-sessions-list-controls')).toBeVisible();
+		await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();
 		const chatButton = page.locator('.ash-sessions-activity-content button').first();
 		await expect(chatButton).toBeVisible();
 		await chatButton.click({ button: 'right' });
@@ -1841,10 +1909,12 @@ emptyWorkspaceTest("Code opens Sessions in a dedicated Electron window and retur
 	await expect(sessionsPage.locator(".ash-sessions-list")).toHaveCSS("display", "flex");
 	await expect(sessionsPage.locator(".ash-sessions-chat-slot").first()).toHaveCSS("display", "flex");
 	await expect(sessionsPage.locator(":is(.ash-chat-input-part,.ash-cowork-input-part)")).toBeVisible();
-	const search = sessionsPage.getByRole('searchbox', { name: 'Search sessions' });
-	await search.fill('no matching session title');
-	await expect(sessionsPage.locator('.ash-sessions-empty')).toHaveText('No matching sessions');
-	await search.clear();
+	await expect(sessionsPage.getByRole('searchbox', { name: 'Search sessions' })).toHaveCount(0);
+	const chatsGroup = sessionsPage.locator('.ash-sessions-list:visible [data-section="recent"] > h3 button');
+	await chatsGroup.click();
+	await expect(chatsGroup).toHaveAttribute('aria-expanded', 'false');
+	await chatsGroup.press('ArrowRight');
+	await expect(chatsGroup).toHaveAttribute('aria-expanded', 'true');
 	await sessionsPage.locator('[data-action-id="sessions.newSession"] button').click();
 	await expect(sessionsPage.locator(".ash-sessions-chat-slot")).toHaveCount(1);
 	await expect(sessionsPage.locator(".ash-sessions-chat-slot.active")).toHaveCount(1);
@@ -2130,13 +2200,15 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect.poll(() => page.locator('.ash-sessions-titlebar-actions button').evaluateAll(buttons => buttons.map(button => getComputedStyle(button).borderRadius))).toEqual(Array(hasWindowMenu ? 4 : 3).fill('8px'));
 		await projects.hover();
-		await expect(projects).toHaveCSS('background-color', selectedBackground);
+		await expect(projects).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(projects).not.toHaveCSS('background-color', selectedBackground);
 		if (hasWindowMenu) {
 			await menu.hover();
-			await expect(menu).toHaveCSS('background-color', selectedBackground);
+			await expect(menu).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		}
 		await toggle.hover();
-		await expect(toggle).toHaveCSS('background-color', selectedBackground);
+		await expect(toggle).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		const hoverBackground = await toggle.evaluate(button => getComputedStyle(button).backgroundColor);
 		await expect(page.getByRole('tooltip')).toHaveText('Hide sidebar');
 		await expect(page.locator('.ash-context-view-hover')).toHaveCSS('border-radius', '12px');
 		await expect.poll(() => page.locator('.ash-context-view-hover').evaluate(element => getComputedStyle(element, '::before').content)).toBe('none');
@@ -2147,7 +2219,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 		await page.mouse.move(400, 180);
 		await expect(toggle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await toggle.hover();
-		await expect(toggle).toHaveCSS('background-color', selectedBackground);
+		await expect(toggle).toHaveCSS('background-color', hoverBackground);
 		await toggle.click();
 		await expect(sidebar).toBeVisible();
 		await page.mouse.move(400, 180);
@@ -2172,7 +2244,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 			await expect(menu).toBeFocused();
 			await page.keyboard.press('ArrowDown');
 			await expect(menu).toHaveAttribute('aria-expanded', 'true');
-			await expect(menu).toHaveCSS('background-color', selectedBackground);
+			await expect(menu).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			await page.keyboard.press('Escape');
 			await expect(menu).toHaveAttribute('aria-expanded', 'false');
 			await expect(menu).toBeFocused();

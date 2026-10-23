@@ -32,6 +32,10 @@ import { TestThemeService } from '../../../../../../platform/theme/test/common/t
 import { darkColorTheme, highContrastDarkColorTheme, lightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
+import { BrowserStorageService } from '../../../../../../workbench/services/storage/browser/storageService.js';
+import type { ISessionGroupsService } from '../../../../../services/sessions/browser/sessionGroupsService.js';
+import type { IProjectService } from '../../../../../../platform/projects/common/projectService.js';
+import type { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 
 import { ISessionsService, type SessionsViewSelection } from '../../../../../services/sessions/browser/sessionsService.js';
 import type { ISessionsManagementService } from '../../../../../services/sessions/common/sessionsManagement.js';
@@ -171,7 +175,7 @@ const git = {
 	status: async (id: string) => gitStatus(id),
 	graph: async (_query: unknown, id: string) => ({ commits: [], references: [], remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: id } }], hasMore: false, nextCursor: undefined }),
 };
-const management = { sessions: [session], state: 'ready' } as unknown as ISessionsManagementService;
+const management = { sessions: [session], state: 'ready', onDidChange: Event.None } as unknown as ISessionsManagementService;
 const sessions = { get activeSelection() { return selection; }, get visibleSelections() { return selection ? [selection] : []; }, onDidChange: selected.event, openSession: () => { }, openNewSession: () => { } } as unknown as ISessionsService;
 resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => undefined));
 const repositoryCommands = { executeCommand: async () => Promise.all(git.repositories.map(async repository => ({ ...repository, root: repository.root.toString(), head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes }))) } as unknown as ICommandService;
@@ -201,7 +205,8 @@ const notifications = { error: (error: unknown) => { throw error; } } as unknown
 const quickInput = resources.add(new TestQuickInputService({ container: document.body }));
 const toolbar = resources.add(new SessionChatInputToolbar(main, { sessionId: 'session', onDidChange: Event.None }, github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService));
 toolbar.render();
-const list = resources.add(new SessionsList(main, management, sessions, 'Sessions', github, undefined, listCustomViews, listMenus, listNotifications));
+const listStorage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'github-list', flushInterval: 0 }));
+const list = resources.add(new SessionsList(main, 'Sessions', 'chat', management, sessions, github, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, listStorage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications));
 const submissions: Record<string, unknown>[] = [];
 if (new URL(location.href).searchParams.has('checks')) {
 	transport.failingChecks = true;

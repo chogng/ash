@@ -602,8 +602,18 @@
       "rendering": "symbolic"
     },
     {
+      "id": "folder",
+      "file": "folder.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "folder-downloaded",
       "file": "folder-downloaded.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "folder-open",
+      "file": "folder-open.svg",
       "rendering": "symbolic"
     },
     {

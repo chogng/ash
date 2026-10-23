@@ -139,7 +139,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	await page.setViewportSize({ width: 1_900, height: 950 });
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const panes = page.locator('.ash-sessions-chat-view:visible .ash-sessions-chat-slot');
-	const add = page.locator('.ash-sessions-list-controls').getByRole('button', { name: 'New Session', exact: true });
+	const add = navigation.getByRole('button', { name: 'New', exact: true });
 	const typeDraft = async (text: string): Promise<void> => {
 		const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 		await editor.waitForEditorFocus();

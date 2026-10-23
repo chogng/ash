@@ -28,7 +28,8 @@
 
 .ash-sessions-titlebar-left {
 	display: flex;
-	min-width: 0;
+	/* A narrow sidebar must not hide history actions or overlap the workspace switcher. */
+	min-width: max-content;
 	align-items: center;
 }
 

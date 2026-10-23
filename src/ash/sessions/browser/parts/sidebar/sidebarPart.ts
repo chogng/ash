@@ -1,5 +1,4 @@
 import { IActivityService } from '../../../../workbench/services/activity/common/activity.js';
-import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import "./media/sidebarPart.css";
 import { h } from '../../../../base/browser/dom.js';
@@ -22,7 +21,6 @@ import { ITeamsManagementService } from '../../../services/teams/common/teamsMan
 import { SESSION_SIDEBAR_DEFAULT_WIDTH } from '../../../common/layoutConstants.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
-import { IGitHubService } from '../../../contrib/github/browser/githubService.js';
 import { IWorkbenchLayoutService } from '../../../../workbench/services/layout/browser/layoutService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
@@ -33,8 +31,8 @@ export const TEAMS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.teams';
 export function registerSessionsNavigation(listRoles: () => Promise<readonly TeamRoleOption[]>): IDisposable {
 	const registrations = new DisposableStore();
 	for (const [id, title, key, ctorDescriptor] of [
-		[SESSIONS_NAVIGATION_CONTAINER_ID, 'Chat', 'sessions.activity.chat', new SyncDescriptor(SessionsNavigationView)],
-		[CODE_NAVIGATION_CONTAINER_ID, localize({ bundle: 'ash', key: 'sessions.mode.code' }, 'Code'), 'sessions.mode.code', new SyncDescriptor(CodeNavigationView)],
+		[SESSIONS_NAVIGATION_CONTAINER_ID, localize('sessions.activity.chat', 'Chat'), 'sessions.activity.chat', new SyncDescriptor(SessionsNavigationView, ['chat'])],
+		[CODE_NAVIGATION_CONTAINER_ID, localize({ bundle: 'ash', key: 'sessions.mode.code' }, 'Code'), 'sessions.mode.code', new SyncDescriptor(SessionsNavigationView, ['code'])],
 		[TEAMS_NAVIGATION_CONTAINER_ID, 'Agent Teams', 'sessions.activity.teams', new SyncDescriptor(TeamsNavigationView, [listRoles])],
 	] as const) {
 		registrations.add(SessionsViewRegistry.registerViewContainer({ id, title, localizationKey: { bundle: 'ash', key }, location: ViewContainerLocation.Sidebar, order: 0 }));
@@ -43,18 +41,10 @@ export function registerSessionsNavigation(listRoles: () => Promise<readonly Tea
 	return registrations;
 }
 
-/** Code starts with workspace actions in the shared sidebar's navigation host. */
-class CodeNavigationView extends ViewPane {
-	constructor(parent: HTMLElement, options: IViewPaneOptions) {
-		super(parent, options);
-		this.contentElement.classList.add('ash-sessions-code-navigation-view');
-	}
-}
-
 class SessionsNavigationView extends ViewPane {
 	private list: SessionsList;
 	private hiddenListState: ReturnType<SessionsList['getViewState']> | undefined;
-	constructor(parent: HTMLElement, options: IViewPaneOptions, @ISessionsManagementService management: ISessionsManagementService, @ISessionsService sessions: ISessionsService, @IGitHubService github: IGitHubService, @ISessionGroupsService groups: ISessionGroupsService, @IInstantiationService instantiation: IInstantiationService) {
+	constructor(mode: 'chat' | 'code', parent: HTMLElement, options: IViewPaneOptions, @ISessionsManagementService management: ISessionsManagementService, @IInstantiationService instantiation: IInstantiationService) {
 		super(parent, options);
 		this.contentElement.classList.add('ash-sessions-navigation-view');
 		const loading = this._register(new MutableDisposable());
@@ -66,7 +56,7 @@ class SessionsNavigationView extends ViewPane {
 		};
 		this._register(management.onDidChange(updateLoading));
 		updateLoading();
-		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), management, sessions, localize('sessions.activity.chat', 'Chat'), github, groups);
+		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), options.title, mode);
 		this.list = lists.get();
 		this.contentElement.append(this.list.element);
 		this._register(lists.onDidChange(list => {
@@ -81,6 +71,9 @@ class SessionsNavigationView extends ViewPane {
 	public override setVisible(visible: boolean): void {
 		if (!visible && this.isVisible()) { this.hiddenListState = this.list.getViewState(); }
 		super.setVisible(visible);
+		// Retain the view model while only the current mode contributes sidebar rows and tab stops.
+		if (visible) this.contentElement.append(this.list.element);
+		else this.list.element.remove();
 		if (visible && this.hiddenListState) {
 			this.list.restoreViewState({ ...this.hiddenListState, focus: undefined });
 			this.hiddenListState = undefined;

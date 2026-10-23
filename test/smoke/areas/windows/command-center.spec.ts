@@ -1303,8 +1303,8 @@ test('Sessions entry sits beside Quick Access and animates its Ash mark on inten
 		await expect(page.getByRole('textbox', { name: 'Accessibility Help' })).toHaveValue(/Use Tab and Shift\+Tab/u);
 		await page.getByRole('dialog', { name: 'Accessibility Help' }).getByRole('button', { name: 'Close' }).click();
 		await expect(sessionsNavigation).toBeFocused();
-		await page.getByRole('searchbox', { name: 'Search sessions' }).fill('no matching session title');
-		await expect(page.locator('.ash-sessions-empty')).toHaveText('No matching sessions');
+		await expect(page.getByRole('searchbox', { name: 'Search sessions' })).toHaveCount(0);
+		await expect(page.locator('.ash-sessions-list:visible [data-section=recent] > h3 button')).toHaveAccessibleName('Chats');
 		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', /ash-(?:light|dark)/u);
 		await accounts.click();
 		await page.getByRole('menuitem', { name: 'Return to Workbench' }).click();

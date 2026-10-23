@@ -79,15 +79,10 @@ test('Sessions layout commands update menu state from their owners and release w
 		assert.equal(contextKeys.getValue(PanelPositionContext.key), 'left');
 		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
-		const { CompactTitlebarNavigationContext } = await import('../../common/contextkeys.js');
-		const compactNavigation = CompactTitlebarNavigationContext.bindTo(contextKeys);
-		compactNavigation.set(true);
-		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true]]);
 		using goMenu = new MenuService(commands, contextKeys).createMenu(MenuId.MenubarGoMenu);
 		assert.deepEqual(goMenu.getActions().flatMap(([, actions]) => actions).filter(action => action.id.startsWith('ash.sessions.')).map(action => [action.id, action.enabled]), [
 			['ash.sessions.back', true], ['ash.sessions.forward', false],
 		]);
-		compactNavigation.reset();
 		await commands.executeCommand('ash.sessions.toggleSidebar');
 		assert.equal(layout.isPartVisible('sidebar'), false);
 		assert.deepEqual(state(), [['Show sidebar', 'Show sidebar', true, false], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);

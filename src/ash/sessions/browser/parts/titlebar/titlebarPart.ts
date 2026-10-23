@@ -17,8 +17,7 @@ import { Menus } from '../../menus.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { WindowModeControl } from '../../../../workbench/browser/parts/titlebar/windowModeControl.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { CompactTitlebarNavigationContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
-import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { observableFromEvent } from '../../../../base/common/observable.js';
 import { Event } from '../../../../base/common/event.js';
 import { SideBarVisibleContext } from '../../../../workbench/common/contextkeys.js';
@@ -55,15 +54,6 @@ export class TitlebarPart extends WebTitlebarPart {
 		}
 		this.contentDomNode.append(left);
 		const titlebarContext = this._register(contextKeys.createScoped(left));
-		const compactNavigation = CompactTitlebarNavigationContext.bindTo(titlebarContext);
-		if (typeof ResizeObserver !== 'undefined') {
-			const observer = new ResizeObserver(([entry]) => {
-				// macOS also reserves traffic-light space inside this group.
-				if (entry) compactNavigation.set(entry.contentRect.width < (environment.runtime === 'electron' && environment.os === 'mac' ? 296 : 248));
-			});
-			observer.observe(left);
-			this._register(toDisposable(() => observer.disconnect()));
-		}
 		const menubar = this._register(new BrowserMenubarControl(left, menuService, contextMenus, undefined, {
 			presentation,
 			applicationMenuId: Menus.MenubarMainMenu,

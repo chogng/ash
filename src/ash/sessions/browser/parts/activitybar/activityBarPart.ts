@@ -259,22 +259,28 @@ export class ActivityBar extends Disposable {
 		if (!Array.isArray(order) || !order.every(id => typeof id === 'string') || new Set(order).size !== order.length) {
 			throw new TypeError(localize('sessions.activity.invalidOrder', 'Saved navigation order is invalid.'));
 		}
+		const includeSearch = (actions: string[]): string[] => {
+			const index = actions.indexOf('sessions.newSession');
+			// Introduce Search beside New once; later user reordering keeps its saved position.
+			if (index >= 0 && !actions.includes('sessions.search')) { actions.splice(index + 1, 0, 'sessions.search'); }
+			return actions;
+		};
 		if (legacy !== undefined) {
-			const migrated = order.map(id => {
+			const migrated = includeSearch(order.map(id => {
 				if (id === 'chat') { return 'sessions.newSession'; }
 				if (id === 'colab') { return 'sessions.open.teams'; }
 				if (id === 'design') { return 'sessions.open.creator'; }
 				return `sessions.open.${id}`;
-			});
+			}));
 			this.storage.store(this.orderStorageKey, JSON.stringify(migrated), StorageScope.PROFILE, StorageTarget.USER);
 			this.storage.remove('sessions.activityBar.pageOrder', StorageScope.PROFILE);
 			return migrated;
 		}
 		const moved = new Set(['sessions.open.code', 'sessions.open.collaboration', 'sessions.open.teams', 'sessions.open.symphony', 'sessionsView.manageAutomations']);
-		const migrated = [...new Set(order.map(id => {
+		const migrated = includeSearch([...new Set(order.map(id => {
 			if (id === 'sessions.open.chat') { return 'sessions.newSession'; }
 			return id === 'sessions.open.design' ? 'sessions.open.creator' : id;
-		}).filter(id => this.orderStorageKey !== 'sessions.activityBar.actionOrder' || !moved.has(id)))];
+		}).filter(id => this.orderStorageKey !== 'sessions.activityBar.actionOrder' || !moved.has(id)))]);
 		if (migrated.length !== order.length || migrated.some((id, index) => id !== order[index])) { this.storage.store(this.orderStorageKey, JSON.stringify(migrated), StorageScope.PROFILE, StorageTarget.USER); }
 		return migrated;
 	}

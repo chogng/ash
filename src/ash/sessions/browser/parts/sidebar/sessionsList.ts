@@ -1,16 +1,15 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import type { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
-import "./media/sessionsControls.css";
+import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import "./media/sessionsList.css";
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { addDisposableListener, getWindow, h } from "../../../../base/browser/dom.js";
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { AbstractDisposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
 import { DomWidget } from '../../../../platform/domWidget/browser/domWidget.js';
-import type { ISessionsService } from "../../../services/sessions/browser/sessionsService.js";
-import type { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagement.js";
-import type { IGitHubService } from '../../../contrib/github/browser/githubService.js';
+import { ISessionsService } from "../../../services/sessions/browser/sessionsService.js";
+import { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagement.js";
+import { IGitHubService } from '../../../contrib/github/browser/githubService.js';
 import { getPullRequestLabel } from '../../../contrib/github/common/types.js';
 import { getHighestPriorityPullRequestIcon } from '../../../../workbench/common/chatPullRequest.js';
 import { sessionManagementLabel } from '../../sessionManagementLabels.js';
@@ -22,61 +21,83 @@ import { autorun } from '../../../../base/common/observable.js';
 import { IMenuService, type MenuActionGroup } from '../../../../platform/actions/common/actions.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IProjectService, type Project } from '../../../../platform/projects/common/projectService.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
+import { posix } from '../../../../base/common/path.js';
+import type { ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
 import { Menus } from '../../menus.js';
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends DomWidget {
 	readonly domNode: HTMLElement;
 	private readonly heading: HTMLHeadingElement;
-	private readonly searchInput: HTMLInputElement;
 	private readonly list: HTMLDivElement;
 	private readonly items = this._register(new DisposableMap<string, SessionListItem>());
-	private readonly sectionHeadings = new Map<string, HTMLHeadingElement>();
+	private readonly sections = this._register(new DisposableMap<string, SessionListSection>());
+	private projects: readonly Project[] = [];
+	private projectLoad = 0;
+	private projectsFailed = false;
 	private readonly empty: HTMLParagraphElement;
-	private readonly sessionService: ISessionsManagementService;
-	private readonly viewService: ISessionsService;
+	private readonly projectError: HTMLButtonElement;
 	private readonly navigation: HTMLElement;
 	private readonly navigationButtons = this._register(new DisposableMap<string, Button>());
 	private readonly navigationActions = new Map<string, MenuActionGroup[1][number]>();
 
 	public get element(): HTMLElement { return this.domNode; }
 
-	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService, title: string, private readonly github: IGitHubService, private readonly groups: ISessionGroupsService | undefined,
+	constructor(container: HTMLElement, title: string, private readonly mode: 'chat' | 'code',
+		@ISessionsManagementService private readonly sessionService: ISessionsManagementService,
+		@ISessionsService private readonly viewService: ISessionsService,
+		@IGitHubService private readonly github: IGitHubService,
+		@ISessionGroupsService private readonly groups: ISessionGroupsService,
+		@IStorageService private readonly storage: IStorageService,
+		@IProjectService private readonly projectService: IProjectService,
+		@ICommandService private readonly commands: ICommandService,
+		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@ICustomViewService private readonly customViews: ICustomViewService,
 		@IMenuService menus: IMenuService,
-		@INotificationService notifications: INotificationService,
+		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		this.sessionService = sessionService;
-		this.viewService = viewService;
 		this.domNode = h(ownerDocument, "section");
 		this.domNode.className = "ash-sessions-list";
+		this.domNode.tabIndex = -1;
+		this.domNode.dataset.mode = mode;
 		this.navigation = h(ownerDocument, 'nav', { className: 'ash-sessions-list-navigation', attributes: { 'aria-label': localize('sessions.list.navigation', 'Sessions navigation') } });
 		this.heading = h(ownerDocument, "h2");
 		this.heading.textContent = title;
-		const controls = h(ownerDocument, 'div');
-		controls.className = 'ash-sessions-list-controls';
-		const search = h(ownerDocument, 'label');
-		search.className = 'ash-sessions-list-search';
-		appendIcon(Lxicon.search, search);
-		this.searchInput = h(ownerDocument, 'input');
-		this.searchInput.type = 'search';
-		this.searchInput.placeholder = localize('sessions.list.search', 'Search sessions');
-		this.searchInput.setAttribute('aria-label', this.searchInput.placeholder);
-		search.append(this.searchInput);
-		controls.append(search);
 		this.list = h(ownerDocument, "div");
 		this.list.className = "ash-sessions-list-items";
 		this.empty = h(ownerDocument, "p");
 		this.empty.className = "ash-sessions-empty";
-		this.domNode.append(this.navigation, this.heading, controls, this.list);
+		this.projectError = h(ownerDocument, 'button', { className: 'ash-sessions-list-item' });
+		this.projectError.type = 'button';
+		this.projectError.textContent = localize('sessions.list.projectsRetry', 'Could not load projects. Retry');
+		this._register(addDisposableListener(this.projectError, 'click', () => { void this.loadProjects(); }));
+		this.domNode.append(this.navigation, this.heading, this.list);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
-		this._register(addDisposableListener(this.searchInput, 'input', () => this.render()));
+		this._register(addDisposableListener(this.list, 'keydown', event => {
+			if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+			const buttons = [...this.list.querySelectorAll<HTMLButtonElement>('button')].filter(button => !button.closest('[hidden]'));
+			const index = buttons.indexOf(ownerDocument.activeElement as HTMLButtonElement);
+			if (index < 0) return;
+			event.preventDefault();
+			const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : Math.max(0, Math.min(buttons.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
+			buttons[next]?.focus();
+		}));
+		this._register(sessionService.onDidChange(() => this.render()));
+		this._register(storage.onDidChangeValue(event => {
+			if (event.scope === StorageScope.PROFILE && event.key.startsWith('sessions.list.')) this.render();
+		}));
+		this._register(projectService.onDidChange(() => { void this.loadProjects(); }));
 		this._register(viewService.onDidChange(() => this.render()));
 		this._register(github.onDidChange(() => this.render()));
-		if (groups) this._register(groups.onDidChange(() => this.render()));
+		this._register(groups.onDidChange(() => this.render()));
 		const menu = this._register(menus.createMenu(Menus.SidebarSessionsHeader));
 		const updateNavigation = (): void => {
 			const actions = menu.getActions().filter(([group]) => group === 'navigation').flatMap(([, actions]) => actions);
@@ -103,111 +124,229 @@ export class SessionsList extends DomWidget {
 		updateNavigation();
 		this._register(autorun(reader => { customViews.activeCustomView.read(reader); this.render(); }));
 		this.render();
+		void this.loadProjects();
 	}
 
 	focus(): void {
 		const activeNavigation = this.navigation.querySelector<HTMLButtonElement>('[aria-current="page"]');
 		if (activeNavigation) { activeNavigation.focus(); return; }
 		const firstItem = this.list.querySelector<HTMLButtonElement>("button");
-		if (firstItem) firstItem.focus();
-		else this.searchInput.focus();
+		(firstItem ?? this.domNode).focus();
 	}
 
-	public getViewState(): { readonly query: string; readonly top: number; readonly focus: string | undefined; } {
+	public getViewState(): { readonly top: number; readonly focus: string | undefined; } {
 		const active = this.domNode.ownerDocument.activeElement;
 		const item = [...this.items].find(([, item]) => item.domNode === active);
+		const section = [...this.sections].find(([, section]) => section.button === active);
 		const navigation = [...this.navigationButtons].find(([, button]) => button.domNode === active);
-		const focus = active === this.searchInput ? 'search' : navigation ? `navigation:${navigation[0]}` : item?.[0];
-		return { query: this.searchInput.value, top: this.list.scrollTop, focus };
+		return { top: this.list.scrollTop, focus: navigation ? `navigation:${navigation[0]}` : section ? `section:${section[0]}` : item?.[0] };
 	}
 
 	public restoreViewState(state: ReturnType<SessionsList['getViewState']>): void {
-		this.searchInput.value = state.query;
 		this.render();
 		this.list.scrollTop = state.top;
-		if (state.focus === 'search') this.searchInput.focus({ preventScroll: true });
-		else if (state.focus?.startsWith('navigation:')) this.navigationButtons.get(state.focus.slice('navigation:'.length))?.focus();
-		else if (state.focus) this.items.get(state.focus)?.domNode.focus({ preventScroll: true });
+		if (state.focus?.startsWith('navigation:')) this.navigationButtons.get(state.focus.slice('navigation:'.length))?.focus();
+		else if (state.focus?.startsWith('section:')) this.sections.get(state.focus.slice('section:'.length))?.button.focus({ preventScroll: true });
+		else if (state.focus) {
+			const item = this.items.get(state.focus)?.domNode;
+			const collapsed = item?.closest<HTMLElement>('[hidden]');
+			(collapsed?.parentElement?.querySelector<HTMLButtonElement>('h3 button') ?? item)?.focus({ preventScroll: true });
+		}
+	}
+
+	private async loadProjects(): Promise<void> {
+		const generation = ++this.projectLoad;
+		try {
+			const summaries = await this.projectService.list();
+			const projects = await Promise.all(summaries.filter(project => !project.archived).map(project => this.projectService.read(project.id)));
+			if (this.isDisposed || generation !== this.projectLoad) return;
+			this.projects = projects.filter(project => !project.archived);
+			this.projectsFailed = false;
+		} catch {
+			if (this.isDisposed || generation !== this.projectLoad) return;
+			this.projectsFailed = true;
+		}
+		this.render();
+	}
+
+	private pinKey(id: string): string { return `sessions.list.pinned.${id}`; }
+
+	private showItemMenu(id: string, anchor: ContextMenuAnchor): void {
+		const pinned = this.storage.getBoolean(this.pinKey(id), StorageScope.PROFILE, false);
+		this.contextMenus.showContextMenu({
+			getAnchor: () => anchor,
+			getActions: () => [{
+				id: 'sessions.list.togglePin', enabled: true, tooltip: '',
+				label: pinned ? localize('sessions.list.unpin', 'Unpin chat') : localize('sessions.list.pin', 'Pin chat'),
+				run: () => {
+					this.storage.store(this.pinKey(id), !pinned, StorageScope.PROFILE, StorageTarget.USER);
+					this.restoreViewState({ top: this.list.scrollTop, focus: `session:${id}` });
+				},
+			}],
+		});
 	}
 
 	private render(): void {
 		const ownerDocument = this.domNode.ownerDocument;
-		const ordered: HTMLElement[] = [];
-		const grouped = new Map<string, HTMLElement>();
+		const focused = this.list.contains(ownerDocument.activeElement) ? ownerDocument.activeElement as HTMLElement : undefined;
 		const present = new Set<string>();
+		const activeSections = new Set<string>();
+		const pinned: HTMLElement[] = [];
+		const recent: HTMLElement[] = [];
+		const remaining = new Map<string, HTMLElement>();
 		const activeSelection = this.customViews.activeCustomView.get() ? undefined : this.viewService.activeSelection;
-		const query = this.searchInput.value.trim().toLocaleLowerCase();
-		for (const selection of this.viewService.visibleSelections) {
-			if (selection.kind !== "untitled") continue;
-			const session = selection.session;
-			if (query && !session.title.toLocaleLowerCase().includes(query)) continue;
-			const selected = activeSelection?.kind === "untitled" && activeSelection.session.untitledSessionId === session.untitledSessionId;
-			const key = `untitled:${session.untitledSessionId}`;
-			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument));
-			item.update(session.title || "New Session", selected, () => this.viewService.openUntitledSession(session.untitledSessionId));
-			ordered.push(item.domNode);
+		const itemFor = (key: string): SessionListItem => {
 			present.add(key);
+			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument, this.mode === 'code' ? Lxicon.chat4 : undefined));
+			item.domNode.dataset.item = key;
+			return item;
+		};
+		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], subgroup = false): HTMLElement => {
+			activeSections.add(key);
+			const storageKey = `sessions.list.${this.mode}.collapsed.${key}`;
+			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, subgroup, collapsed => {
+				this.storage.store(storageKey, collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
+			}));
+			section.update(title, children, this.storage.getBoolean(storageKey, StorageScope.PROFILE, false));
+			return section.domNode;
+		};
+		for (const selection of this.viewService.visibleSelections) {
+			if (selection.kind !== 'untitled') continue;
+			const session = selection.session;
+			const selected = activeSelection?.kind === 'untitled' && activeSelection.session.untitledSessionId === session.untitledSessionId;
+			const item = itemFor(`untitled:${session.untitledSessionId}`);
+			item.update(session.title || localize('chat.sessions.new', 'New Session'), selected, () => this.viewService.openUntitledSession(session.untitledSessionId));
+			recent.push(item.domNode);
 		}
 		for (const session of this.sessionService.sessions) {
-			if (query && !`${session.title} ${session.providerLabel ?? ''}`.toLocaleLowerCase().includes(query)) continue;
-			const current = activeSelection?.kind === "session" && activeSelection.active.session.sessionId === session.sessionId ? activeSelection.active : undefined;
+			const current = activeSelection?.kind === 'session' && activeSelection.active.session.sessionId === session.sessionId ? activeSelection.active : undefined;
 			const thread = current
-				? session.chats.find(candidate => candidate.threadId === current.threadId && candidate.status === "active")
-				: session.chats.find(candidate => candidate.status === "active" && candidate.origin.type === "root") ?? session.chats.find(candidate => candidate.status === "active");
-			if (!thread || session.status !== "active") continue;
-			const key = `session:${session.sessionId}`;
-			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument));
-			item.update(session.title || "Untitled Session", current !== undefined, () => this.viewService.openSession(session.sessionId, thread.threadId), session.management);
+				? session.chats.find(candidate => candidate.threadId === current.threadId && candidate.status === 'active')
+				: session.chats.find(candidate => candidate.status === 'active' && candidate.origin.type === 'root') ?? session.chats.find(candidate => candidate.status === 'active');
+			if (!thread || session.status !== 'active') continue;
+			const item = itemFor(`session:${session.sessionId}`);
+			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current !== undefined, () => this.viewService.openSession(session.sessionId, thread.threadId), session.management);
+			item.setContextMenu(event => this.showItemMenu(session.sessionId, event.type === 'contextmenu' ? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: getWindow(item.domNode) } : item.domNode));
 			const requests = this.github.getSessionPullRequests(session.sessionId);
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
-			grouped.set(session.sessionId, item.domNode);
-			present.add(key);
+			if (this.storage.getBoolean(this.pinKey(session.sessionId), StorageScope.PROFILE, false)) pinned.push(item.domNode);
+			else remaining.set(session.sessionId, item.domNode);
 		}
-		for (const group of this.groups?.groups ?? []) {
-			const members = group.sessionIds.filter(id => grouped.has(id));
-			if (query && !members.length && !group.name.toLocaleLowerCase().includes(query)) continue;
-			const heading = this.sectionHeadings.get(group.sectionId) ?? h(ownerDocument, 'h3');
-			this.sectionHeadings.set(group.sectionId, heading);
-			heading.textContent = group.name;
-			ordered.push(heading);
-			for (const id of members) { ordered.push(grouped.get(id)!); grouped.delete(id); }
-		}
-		const providerGroups = new Map<string, { label: string; items: HTMLElement[]; }>();
-		for (const session of this.sessionService.sessions) {
-			const item = grouped.get(session.sessionId);
-			if (!item) continue;
-			const key = `provider:${session.providerId ?? ''}`;
-			let group = providerGroups.get(key);
-			if (!group) { group = { label: session.providerLabel ?? localize('automations.localHost', 'Local Agent Host'), items: [] }; providerGroups.set(key, group); }
-			group.items.push(item);
-		}
-		for (const [id, group] of providerGroups) {
-			if (providerGroups.size > 1 && group.label) {
-				const heading = this.sectionHeadings.get(id) ?? h(ownerDocument, 'h3');
-				this.sectionHeadings.set(id, heading);
-				heading.textContent = group.label;
-				ordered.push(heading);
+		const projects: HTMLElement[] = [];
+		for (const project of this.projects) {
+			if (this.mode === 'chat') {
+				const item = itemFor(`project:${project.id}`);
+				item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
+				projects.push(item.domNode);
+			} else {
+				const members: HTMLElement[] = [];
+				for (const id of project.sessionIds) {
+					const item = remaining.get(id);
+					if (item) { members.push(item); remaining.delete(id); }
+				}
+				projects.push(sectionFor(`project:${project.id}`, project.name, members, true));
 			}
-			ordered.push(...group.items);
 		}
-		for (const id of this.sectionHeadings.keys()) {
-			if (!providerGroups.has(id) && !this.groups?.groups.some(group => group.sectionId === id)) this.sectionHeadings.delete(id);
+		if (this.projectsFailed) projects.push(this.projectError);
+		if (this.mode === 'code') {
+			for (const group of this.groups.groups) {
+				const members: HTMLElement[] = [];
+				for (const id of group.sessionIds) {
+					const item = remaining.get(id);
+					if (item) { members.push(item); remaining.delete(id); }
+				}
+				recent.push(sectionFor(`group:${group.sectionId}`, group.name, members, true));
+			}
+			const workspaces = new Map<string, { title: string; items: HTMLElement[]; }>();
+			for (const session of this.sessionService.sessions) {
+				const item = remaining.get(session.sessionId);
+				if (!item) continue;
+				const workspace = session.workspace;
+				const key = workspace ? JSON.stringify([workspace.authorityId, workspace.root]) : `provider:${session.providerId ?? ''}`;
+				let group = workspaces.get(key);
+				if (!group) {
+					const title = workspace ? posix.basename(workspace.root.replace(/\\/g, '/')) || workspace.root : session.providerLabel ?? localize('sessions.list.other', 'Other chats');
+					group = { title, items: [] }; workspaces.set(key, group);
+				}
+				group.items.push(item);
+			}
+			for (const [key, group] of workspaces) recent.push(sectionFor(`workspace:${key}`, group.title, group.items, true));
+		} else recent.push(...remaining.values());
+		const showEmpty = recent.length === 0 && pinned.length === 0;
+		if (showEmpty) {
+			this.empty.textContent = this.sessionService.state === 'loading' ? localize('sessions.list.loading', 'Loading sessions…') : this.sessionService.error ?? localize('sessions.list.empty', 'Create a session to begin.');
 		}
-		for (const key of this.items.keys()) {
-			if (!present.has(key)) this.items.deleteAndDispose(key);
+		const ordered: HTMLElement[] = [];
+		if (pinned.length) ordered.push(sectionFor('pinned', localize('sessions.list.pinned', 'Pinned'), pinned));
+		if (projects.length) ordered.push(sectionFor('projects', localize('projects.title', 'Projects'), projects));
+		if (recent.length) ordered.push(sectionFor('recent', this.mode === 'chat' ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents'), recent));
+		if (showEmpty) ordered.push(this.empty);
+		for (const key of this.items.keys()) if (!present.has(key)) this.items.deleteAndDispose(key);
+		for (const key of this.sections.keys()) if (!activeSections.has(key)) this.sections.deleteAndDispose(key);
+		reconcileChildren(this.list, ordered);
+		if (focused?.isConnected && !focused.closest('[hidden]') && ownerDocument.activeElement !== focused) focused.focus({ preventScroll: true });
+	}
+}
+
+/** Retain rows and headings during refreshes so keyboard focus and scroll do not jump. */
+function reconcileChildren(parent: HTMLElement, children: readonly HTMLElement[]): void {
+	for (let index = 0; index < children.length; index++) {
+		if (parent.childNodes[index] !== children[index]) parent.insertBefore(children[index], parent.childNodes[index] ?? null);
+	}
+	while (parent.childNodes.length > children.length) parent.lastChild!.remove();
+}
+
+class SessionListSection extends AbstractDisposable {
+	readonly domNode: HTMLElement;
+	readonly button: HTMLButtonElement;
+	private readonly body: HTMLElement;
+	private readonly label: HTMLElement;
+	private readonly icon: HTMLElement;
+	private collapsed = false;
+	private readonly listeners: { dispose(): void; }[];
+
+	constructor(document: Document, key: string, private readonly subgroup: boolean, toggle: (collapsed: boolean) => void) {
+		super();
+		this.domNode = h(document, 'section', { className: subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section' });
+		this.domNode.dataset.section = key;
+		const heading = h(document, 'h3');
+		this.button = h(document, 'button', { className: 'ash-sessions-list-section-toggle' });
+		this.button.type = 'button';
+		this.icon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
+		this.label = h(document, 'span', { className: 'ash-sessions-list-section-label' });
+		this.button.append(...(subgroup ? [this.icon, this.label] : [this.label, this.icon]));
+		heading.append(this.button);
+		this.body = h(document, 'div', { className: 'ash-sessions-list-section-body' });
+		this.body.id = `ash-sessions-list-${generateUuid()}`;
+		this.button.setAttribute('aria-controls', this.body.id);
+		this.domNode.append(heading, this.body);
+		this.listeners = [
+			addDisposableListener(this.button, 'click', () => toggle(!this.collapsed)),
+			addDisposableListener(this.button, 'keydown', event => {
+				if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+				event.preventDefault();
+				toggle(event.key === 'ArrowLeft');
+			}),
+		];
+	}
+
+	update(title: string, children: readonly HTMLElement[], collapsed: boolean): void {
+		this.label.textContent = title;
+		this.button.title = title;
+		this.collapsed = collapsed;
+		this.button.setAttribute('aria-expanded', String(!collapsed));
+		const icon = this.subgroup ? collapsed ? Lxicon.folder : Lxicon.folderOpen : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
+		if (this.icon.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
+			this.icon.replaceChildren(); appendIcon(icon, this.icon);
 		}
-		if (ordered.length === 0) {
-			this.empty.textContent = query ? localize('sessions.list.noResults', 'No matching sessions') : this.sessionService.state === "loading"
-				? "Loading sessions…"
-				: this.sessionService.error ?? "Create a session to begin.";
-			if (this.list.firstChild !== this.empty) this.list.replaceChildren(this.empty);
-			return;
-		}
-		for (let index = 0; index < ordered.length; index++) {
-			const button = ordered[index];
-			if (this.list.childNodes[index] !== button) this.list.insertBefore(button, this.list.childNodes[index] ?? null);
-		}
-		while (this.list.childNodes.length > ordered.length) this.list.removeChild(this.list.lastChild!);
+		if (collapsed && this.body.contains(this.domNode.ownerDocument.activeElement)) this.button.focus({ preventScroll: true });
+		this.body.hidden = collapsed;
+		reconcileChildren(this.body, children);
+	}
+
+	protected override disposeCore(): void {
+		for (const listener of this.listeners) listener.dispose();
+		this.domNode.remove();
 	}
 }
 
@@ -220,8 +359,10 @@ class SessionListItem extends AbstractDisposable {
 	private pullRequestDescription = '';
 	private open: () => void = () => { };
 	private readonly clickListener;
+	private readonly contextListeners;
+	private contextMenu: ((event: MouseEvent | KeyboardEvent) => void) | undefined;
 
-	constructor(ownerDocument: Document) {
+	constructor(ownerDocument: Document, icon?: ThemeIcon) {
 		super();
 		this.domNode = h(ownerDocument, "button");
 		this.domNode.type = "button";
@@ -239,9 +380,22 @@ class SessionListItem extends AbstractDisposable {
 		this.pullRequest.className = 'ash-sessions-list-pr';
 		this.pullRequest.setAttribute('aria-hidden', 'true');
 		this.pullRequest.hidden = true;
+		if (icon) appendIcon(icon, this.domNode);
 		this.domNode.append(content, this.pullRequest);
 		this.clickListener = addDisposableListener(this.domNode, "click", () => this.open());
+		const showMenu = (event: MouseEvent | KeyboardEvent): void => {
+			if (!this.contextMenu) return;
+			event.preventDefault(); event.stopPropagation(); this.contextMenu(event);
+		};
+		this.contextListeners = [
+			addDisposableListener(this.domNode, 'contextmenu', showMenu),
+			addDisposableListener(this.domNode, 'keydown', event => {
+				if (event.key === 'ContextMenu' || event.key === 'F10' && event.shiftKey) showMenu(event);
+			}),
+		];
 	}
+
+	setContextMenu(menu: (event: MouseEvent | KeyboardEvent) => void): void { this.contextMenu = menu; }
 
 	update(title: string, selected: boolean, open: () => void, management?: SessionManagementInfo): void {
 		if (this.label.textContent !== title) this.label.textContent = title;
@@ -275,6 +429,7 @@ class SessionListItem extends AbstractDisposable {
 
 	protected override disposeCore(): void {
 		this.clickListener.dispose();
+		for (const listener of this.contextListeners) listener.dispose();
 		this.domNode.remove();
 	}
 }
