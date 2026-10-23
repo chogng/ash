@@ -1441,7 +1441,7 @@ fn wait_shell_cwd(
     }
 }
 
-#[cfg(any(unix, windows))]
+#[cfg(unix)]
 fn read_shell_boundaries(
     service: &TerminalService,
     terminal_id: &str,
@@ -1489,7 +1489,7 @@ fn shell_status(service: &TerminalService, terminal_id: &str) -> TerminalReadRes
         .unwrap()
 }
 
-#[cfg(any(unix, windows))]
+#[cfg(unix)]
 fn wait_shell_events(service: &TerminalService, terminal_id: &str, count: usize) {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
@@ -1567,7 +1567,9 @@ fn windows_powershell_without_a_profile_reports_trusted_commands() {
         .unwrap();
     let id = &created.terminal_id;
     let mut observed = PowerShellObservation::default();
-    observed.wait_for(&service, id, |state| {
+    let startup = Instant::now();
+    // Allow a bounded cold start; subsequent commands keep the usual ten-second limit.
+    observed.wait_for_with_timeout(&service, id, Duration::from_secs(60), |state| {
         let status = shell_status(&service, id);
         state.saw_input_boundary
             && status
@@ -1577,6 +1579,11 @@ fn windows_powershell_without_a_profile_reports_trusted_commands() {
                     integration.has_rich_command_detection && integration.cwd_detection
                 })
     });
+    eprintln!(
+        "Windows PowerShell startup: {:?}, cursor replies: {}",
+        startup.elapsed(),
+        observed.cursor_replies
+    );
     write_shell(&service, id, "Write-Output ('ASH_PS_' + 'READY')\r");
     observed.wait_for(&service, id, |state| state.events.len() >= 2);
     let status = shell_status(&service, id);
@@ -1819,7 +1826,17 @@ impl PowerShellObservation {
         terminal_id: &str,
         ready: impl Fn(&Self) -> bool,
     ) {
-        let deadline = Instant::now() + Duration::from_secs(10);
+        self.wait_for_with_timeout(service, terminal_id, Duration::from_secs(10), ready);
+    }
+
+    fn wait_for_with_timeout(
+        &mut self,
+        service: &TerminalService,
+        terminal_id: &str,
+        timeout: Duration,
+        ready: impl Fn(&Self) -> bool,
+    ) {
+        let deadline = Instant::now() + timeout;
         loop {
             let result = service
                 .read(
