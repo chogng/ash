@@ -5,6 +5,12 @@
 		var(--ash-sessions-design-chromeForeground) 20%,
 		var(--ash-sessions-design-chromeBackground)
 	);
+	--ash-button-hoverBackground: var(--ash-actionBar-toggledBackground);
+	--ash-button-activeBackground: color-mix(
+		in srgb,
+		var(--ash-sessions-design-chromeForeground) 30%,
+		var(--ash-sessions-design-chromeBackground)
+	);
 
 	display: flex;
 	align-items: center;
@@ -21,7 +27,7 @@
 	font-size: var(--ash-fontSize-label1);
 }
 
-.ash-design-tools-widget .ash-button {
+.ash-design-tools-widget .ash-button.ash-button-standard {
 	width: 32px;
 	height: 32px;
 	padding: 0;
@@ -29,6 +35,7 @@
 
 .ash-design-tool-split .ash-dropdown-with-primary-dropdown > .ash-button {
 	width: 20px;
+	min-width: 0;
 }
 
 .ash-design-tool-split

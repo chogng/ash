@@ -28,6 +28,7 @@ import type { ChatGPTConversation } from './chatGPTClient.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { IChatGPTService, chatGPTNavigationContainerId, type ChatGPTState } from './chatGPTService.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
+import '../../../../base/browser/ui/button/button.css';
 import './media/chatGPTNavigationView.css';
 
 interface ConversationGroup {
@@ -72,7 +73,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 		}));
 		const newChat = document.createElement('button');
 		newChat.type = 'button';
-		newChat.className = 'ash-chatgpt-new-chat';
+		newChat.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-new-chat';
 		newChat.textContent = localize('sessions.chatgpt.newChat', 'New chat');
 		this._register(addDisposableListener(newChat, 'click', () => { chat.newChat(); editors.focusActiveEditor(); }));
 		const search = document.createElement('input');
@@ -274,7 +275,7 @@ export class ChatGPTNavigationView extends ViewPane {
 		row.className = 'ash-chatgpt-navigation-row';
 		row.dataset.conversation = conversation.id;
 		const item = document.createElement('button');
-		item.className = 'ash-chatgpt-conversation';
+		item.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-conversation';
 		item.type = 'button';
 		item.textContent = conversation.title;
 		item.title = conversation.title;

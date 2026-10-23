@@ -3,7 +3,7 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { getVariableNameValidator } from './lib/stylelint/validateVariableNames.ts';
 import type { IValidator } from './lib/stylelint/validateVariableNames.ts';
-import { findClassAttributeSubstringSelector, findRootAnchoredHas, findWorkbenchSelector } from './lib/stylelint/validateHasSelectors.ts';
+import { findClassAttributeSubstringSelector, findRootAnchoredHas, findSessionsReference, findWorkbenchSelector } from './lib/stylelint/validateHasSelectors.ts';
 import { validateDesignTokens } from './lib/stylelint/validateDesignTokens.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
@@ -56,6 +56,10 @@ export function checkStyles(files: readonly string[], validator: IValidator = ge
 		if (/^src\/ash\/(?:base|platform|editor)\//.test(name)) {
 			const workbenchRoot = findWorkbenchSelector(content);
 			if (workbenchRoot !== undefined) { report(workbenchRoot, 'Lower-layer CSS must not depend on the .ash-workbench root owned by Workbench.'); }
+		}
+		if (/^src\/ash\/(?:base|platform|editor|workbench)\//.test(name)) {
+			const sessionsReference = findSessionsReference(content);
+			if (sessionsReference !== undefined) { report(sessionsReference, 'Shared CSS must not depend on Sessions classes or variables; put Agent Window presentations in src/ash/sessions.'); }
 		}
 	}
 	return errors;

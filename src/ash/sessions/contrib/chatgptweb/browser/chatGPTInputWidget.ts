@@ -18,6 +18,7 @@ import { IPreferencesService } from '../../../../workbench/services/preferences/
 import { IChatGPTService, type ChatGPTAttachment } from './chatGPTService.js';
 import { ModelPickerWidget } from '../../chat/browser/modelPickerWidget.js';
 import '../../../common/theme.js';
+import '../../../../base/browser/ui/button/button.css';
 import './media/chatGPTInputWidget.css';
 
 /** Owns the ChatGPT composer controls; the service retains drafts and request state. */
@@ -68,7 +69,7 @@ export class ChatGPTInputWidget extends Disposable {
 		picker.type = 'file'; picker.multiple = true; picker.hidden = true;
 		this.attachButton = h(container.ownerDocument, 'button');
 		this.attachButton.type = 'button';
-		this.attachButton.className = 'ash-chatgpt-add ash-chatgpt-round-button';
+		this.attachButton.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-add ash-chatgpt-round-button';
 		const attachLabel = localize('sessions.chatgpt.attachFiles', 'Attach files');
 		this.attachButton.setAttribute('aria-label', attachLabel); this.attachButton.title = attachLabel;
 		appendIcon(Lxicon.add, this.attachButton);
@@ -122,7 +123,7 @@ export class ChatGPTInputWidget extends Disposable {
 			async () => { await preferences.openSettings({ section: 'dictation' }); }, 'chat'));
 		this.updateDictationHost();
 		this.dictationButton = h(container.ownerDocument, 'button');
-		this.dictationButton.className = 'ash-chatgpt-dictation ash-chatgpt-round-button';
+		this.dictationButton.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-dictation ash-chatgpt-round-button';
 		this.dictationButton.type = 'button';
 		appendIcon(Lxicon.mic, this.dictationButton);
 		this._register(addDisposableListener(this.dictationButton, 'click', () => { void this.dictation.action.run(); }));
@@ -140,7 +141,7 @@ export class ChatGPTInputWidget extends Disposable {
 			}
 		}));
 		this.sendButton = h(container.ownerDocument, 'button');
-		this.sendButton.className = 'ash-chatgpt-send ash-chatgpt-round-button';
+		this.sendButton.className = 'ash-button ash-button-standard ash-button-primary ash-chatgpt-send ash-chatgpt-round-button';
 		this.sendButton.type = 'button';
 		this.element.append(this.dictationButton, this.sendButton);
 		this._register(addDisposableListener(this.sendButton, 'click', () => {
@@ -200,8 +201,8 @@ export class ChatGPTInputWidget extends Disposable {
 				const name = h(document, 'span'); name.className = 'ash-chatgpt-attachment-name';
 				const status = h(document, 'span'); status.className = 'ash-chatgpt-attachment-status';
 				const error = h(document, 'span'); error.className = 'ash-chatgpt-attachment-error';
-				const retry = h(document, 'button'); retry.type = 'button'; retry.dataset.attachmentId = attachment.id; retry.dataset.attachmentAction = 'retry';
-				const remove = h(document, 'button'); remove.type = 'button'; remove.dataset.attachmentId = attachment.id; remove.dataset.attachmentAction = 'remove'; appendIcon(Lxicon.close, remove);
+				const retry = h(document, 'button', { className: 'ash-button ash-button-small ash-button-quiet' }); retry.type = 'button'; retry.dataset.attachmentId = attachment.id; retry.dataset.attachmentAction = 'retry';
+				const remove = h(document, 'button', { className: 'ash-button ash-button-small ash-button-quiet' }); remove.type = 'button'; remove.dataset.attachmentId = attachment.id; remove.dataset.attachmentAction = 'remove'; appendIcon(Lxicon.close, remove);
 				element.append(name, status, retry, remove, error); this.attachmentList.append(element);
 				row = { element, name, status, retry, remove, error }; this.attachmentRows.set(attachment.id, row);
 			}

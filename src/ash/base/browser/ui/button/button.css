@@ -6,7 +6,10 @@
 	min-height: 28px;
 	padding: 4px 10px;
 	border: var(--ash-strokeThickness) solid transparent;
-	border-radius: var(--ash-cornerRadius-small);
+	border-radius: var(
+		--ash-button-border-radius,
+		var(--ash-cornerRadius-small)
+	);
 	color: var(
 		--ash-button-style-secondary-foreground,
 		var(--ash-button-foreground)

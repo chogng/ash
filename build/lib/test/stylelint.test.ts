@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { test } from 'node:test';
 import { checkStyles, checkStyleSuggestions, resolveStylelintMatches } from '../../stylelint.ts';
-import { findClassAttributeSubstringSelector, findRootAnchoredHas } from '../stylelint/validateHasSelectors.ts';
+import { findClassAttributeSubstringSelector, findRootAnchoredHas, findSessionsReference } from '../stylelint/validateHasSelectors.ts';
 import { validateDesignTokens } from '../stylelint/validateDesignTokens.ts';
 import { getVariableNameValidator, readKnownVariables } from '../stylelint/validateVariableNames.ts';
 
@@ -146,6 +146,48 @@ test('CSS layer checks reject Workbench roots only in lower-layer production CSS
 		assert.equal(errors.length, 3);
 		for (const [index, layer] of ['base', 'platform', 'editor'].entries()) {
 			assert.equal(errors[index], `src/ash/${layer}/browser/component.css:1:1: Lower-layer CSS must not depend on the .ash-workbench root owned by Workbench.`);
+		}
+	} finally {
+		rmSync(directory, { recursive: true });
+	}
+});
+
+test('Sessions CSS references exclude Workbench agent-session components and documentation examples', () => {
+	for (const source of [
+		'.ash-sessions-window .component { color: red; }',
+		'@media (forced-colors: active) { .ash-sessions-workbench-layout .component { color: red; } }',
+		'.component:is(.ash-code-sessions-window, .ash-workbench-sessions) { color: red; }',
+		'.component { background: var(--ash-sessions-selectionBackground); }',
+		'.component { --sessions-accent: red; }',
+	]) {
+		assert.notEqual(findSessionsReference(source), undefined, source);
+	}
+	for (const source of [
+		'.ash-agent-sessions-control .ash-agent-session-row.selected { background: var(--ash-list-inactiveSelectionBackground); }',
+		'.ash-workbench .component { border-radius: var(--ash-button-border-radius); }',
+		'/* .ash-sessions-window { color: var(--ash-sessions-example); } */ .component { content: ".ash-sessions-window --sessions-example"; }',
+	]) {
+		assert.equal(findSessionsReference(source), undefined, source);
+	}
+});
+
+test('CSS layer checks keep Agent Window selectors and tokens in Sessions', () => {
+	const directory = mkdtempSync(join(tmpdir(), 'ash-stylelint-sessions-'));
+	try {
+		const layers = ['base', 'platform', 'editor', 'workbench', 'sessions'];
+		const files = layers.map(layer => join(directory, `src/ash/${layer}/browser/component.css`));
+		for (const file of files) mkdirSync(join(file, '..'), { recursive: true });
+		for (const source of [
+			'.ash-sessions-window .component { color: var(--ash-foreground); }',
+			'.component { --sessions-accent: var(--ash-foreground); }',
+		]) {
+			for (const file of files) writeFileSync(file, source);
+			const errors = checkStyles(files, getVariableNameValidator(known), directory);
+			assert.equal(errors.length, 4);
+			for (const [index, layer] of layers.slice(0, 4).entries()) {
+				assert.ok(errors[index]!.startsWith(`src/ash/${layer}/browser/component.css:1:`));
+				assert.match(errors[index]!, /Shared CSS must not depend on Sessions classes or variables/);
+			}
 		}
 	} finally {
 		rmSync(directory, { recursive: true });

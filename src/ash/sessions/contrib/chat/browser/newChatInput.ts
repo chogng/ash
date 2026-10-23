@@ -109,7 +109,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		}));
 		const footer = h(container.ownerDocument, 'div');
 		footer.className = 'ash-sessions-chat-input-footer';
-		this.permissionButton = h(container.ownerDocument, 'button');
+		this.permissionButton = h(container.ownerDocument, 'button', { className: 'ash-button ash-button-small ash-button-quiet' });
 		this.permissionButton.type = 'button';
 		this.permissionButton.setAttribute('aria-haspopup', 'menu');
 		this.permissionButton.setAttribute('aria-expanded', 'false');

@@ -1,3 +1,5 @@
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -46,16 +48,16 @@ export class SessionChatInputToolbar extends Disposable {
 		this.domNode.setAttribute('role', 'group');
 		this.domNode.setAttribute('aria-label', localize('sessions.github.references', 'Session GitHub references'));
 		container.append(this.domNode);
-		this.attachDomNode = h(container.ownerDocument, 'button');
-		this.attachDomNode.type = 'button';
-		this.attachDomNode.className = 'ash-session-chat-input-pr-action';
-		this.attachDomNode.textContent = localize('sessions.github.attach', 'Attach PR');
+		this.attachDomNode = this._register(new Button(this.domNode, {
+			...defaultButtonStyles, label: localize('sessions.github.attach', 'Attach PR'), presentation: 'secondary', size: 'small',
+		})).domNode;
+		this.attachDomNode.classList.add('ash-session-chat-input-pr-action');
 		this.domNode.append(this.attachDomNode);
 		this._register(addDisposableListener(this.attachDomNode, 'click', () => { void this.attach().catch(error => this.notifications.error(error)); }));
-		this.attachIssueDomNode = h(container.ownerDocument, 'button');
-		this.attachIssueDomNode.type = 'button';
-		this.attachIssueDomNode.className = 'ash-session-chat-input-pr-action';
-		this.attachIssueDomNode.textContent = localize('sessions.github.attachIssue', 'Attach issue');
+		this.attachIssueDomNode = this._register(new Button(this.domNode, {
+			...defaultButtonStyles, label: localize('sessions.github.attachIssue', 'Attach issue'), presentation: 'secondary', size: 'small',
+		})).domNode;
+		this.attachIssueDomNode.classList.add('ash-session-chat-input-pr-action');
 		this.domNode.append(this.attachIssueDomNode);
 		this._register(addDisposableListener(this.attachIssueDomNode, 'click', () => { void this.attachIssue().catch(error => this.notifications.error(error)); }));
 		this.issuesDomNode = h(container.ownerDocument, 'div');
@@ -224,13 +226,14 @@ class PullRequestEntry extends Disposable {
 		this.labelDomNode = h(container.ownerDocument, 'span');
 		this.labelDomNode.className = 'ash-session-chat-input-pr-label';
 		this.domNode.append(this.iconDomNode, this.labelDomNode);
-		this.removeDomNode = h(container.ownerDocument, 'button');
-		this.removeDomNode.type = 'button';
-		this.removeDomNode.className = 'ash-session-chat-input-pr-action';
-		this.removeDomNode.textContent = localize('sessions.github.remove', 'Remove');
-		const reviewDomNode = h(container.ownerDocument, 'button');
-		reviewDomNode.type = 'button'; reviewDomNode.className = 'ash-session-chat-input-pr-action';
-		reviewDomNode.textContent = localize('sessions.github.review', 'Review');
+		this.removeDomNode = this._register(new Button(this.containerDomNode, {
+			...defaultButtonStyles, label: localize('sessions.github.remove', 'Remove'), presentation: 'secondary', size: 'small',
+		})).domNode;
+		this.removeDomNode.classList.add('ash-session-chat-input-pr-action');
+		const reviewDomNode = this._register(new Button(this.containerDomNode, {
+			...defaultButtonStyles, label: localize('sessions.github.review', 'Review'), presentation: 'secondary', size: 'small',
+		})).domNode;
+		reviewDomNode.classList.add('ash-session-chat-input-pr-action');
 		reviewDomNode.setAttribute('aria-label', localize('sessions.github.reviewLabel', 'Review pull request {0}/{1} #{2} in Ash', request.owner, request.repo, request.number));
 		this._register(addDisposableListener(reviewDomNode, 'click', () => {
 			const resource = this.request.uri.with({ scheme: 'ash-github', query: '', fragment: '' });
@@ -285,10 +288,10 @@ class IssueEntry extends Disposable {
 		this.labelDomNode = h(container.ownerDocument, 'span');
 		this.labelDomNode.className = 'ash-session-chat-input-issue-label';
 		this.linkDomNode.append(this.iconDomNode, this.labelDomNode);
-		this.removeDomNode = h(container.ownerDocument, 'button');
-		this.removeDomNode.type = 'button';
-		this.removeDomNode.className = 'ash-session-chat-input-pr-action';
-		this.removeDomNode.textContent = localize('sessions.github.remove', 'Remove');
+		this.removeDomNode = this._register(new Button(this.domNode, {
+			...defaultButtonStyles, label: localize('sessions.github.remove', 'Remove'), presentation: 'secondary', size: 'small',
+		})).domNode;
+		this.removeDomNode.classList.add('ash-session-chat-input-pr-action');
 		this.domNode.append(this.linkDomNode, this.removeDomNode);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));

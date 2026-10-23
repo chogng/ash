@@ -23,14 +23,6 @@ import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPan
 import { IProjectsService, type ProjectsState } from './projectsService.js';
 import './projects.css';
 
-const projectButtonStyles = {
-	...defaultButtonStyles,
-	buttonBackground: 'var(--ash-foreground)',
-	buttonForeground: 'var(--ash-editor-background)',
-	buttonHoverBackground: 'var(--ash-description-foreground)',
-	buttonSecondaryBackground: 'var(--ash-editor-background)',
-};
-
 /** Projects own the front page. Material types appear only inside an opened project. */
 export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	public readonly id = 'sessions.editor.projects';
@@ -66,18 +58,18 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this._register(this.contextKeys.createScoped(this.domNode)).createKey('sessionsProjectsFocused', true);
 		const main = h(document, 'div', { className: 'ash-projects-main' });
 		this.breadcrumb = h(document, 'nav', { className: 'ash-projects-breadcrumb', attributes: { 'aria-label': localize('projects.breadcrumb', 'Project navigation') } });
-		this._register(new Button(this.breadcrumb, { ...projectButtonStyles, label: localize('projects.title', 'Projects'), icon: Lxicon.arrowLeft, onClick: () => { this.projects.showProjects(); this.createButton.focus(); } }));
+		this._register(new Button(this.breadcrumb, { ...defaultButtonStyles, label: localize('projects.title', 'Projects'), icon: Lxicon.arrowLeft, onClick: () => { this.projects.showProjects(); this.createButton.focus(); } }));
 		const heading = h(document, 'header', { className: 'ash-projects-heading' });
 		this.title = h(document, 'h1', { properties: { tabIndex: -1 } }, localize('projects.title', 'Projects'));
 		this.tools = h(document, 'div', { className: 'ash-projects-tools' });
 		this.search = h(document, 'input', { className: 'ash-projects-search', properties: { type: 'search', placeholder: localize('projects.search', 'Search projects'), hidden: true }, attributes: { 'aria-label': localize('projects.search', 'Search projects') } });
-		this._register(new Button(this.tools, { ...projectButtonStyles, label: localize('projects.search', 'Search projects'), icon: Lxicon.search, iconOnly: true, onClick: () => { this.search.hidden = !this.search.hidden; if (!this.search.hidden) { this.search.focus(); } } }));
-		this.sort = this._register(new Button(this.tools, { ...projectButtonStyles, label: localize('projects.sort', 'Reverse alphabetical order'), icon: Lxicon.sortPrecedence, iconOnly: true, onClick: () => this.projects.toggleSort() }));
-		this.createButton = this._register(new Button(this.tools, { ...projectButtonStyles, label: localize('projects.new', 'New project'), presentation: 'primary', onClick: () => this.showProjectDialog() }));
+		this._register(new Button(this.tools, { ...defaultButtonStyles, label: localize('projects.search', 'Search projects'), icon: Lxicon.search, iconOnly: true, onClick: () => { this.search.hidden = !this.search.hidden; if (!this.search.hidden) { this.search.focus(); } } }));
+		this.sort = this._register(new Button(this.tools, { ...defaultButtonStyles, label: localize('projects.sort', 'Reverse alphabetical order'), icon: Lxicon.sortPrecedence, iconOnly: true, onClick: () => this.projects.toggleSort() }));
+		this.createButton = this._register(new Button(this.tools, { ...defaultButtonStyles, label: localize('projects.new', 'New project'), presentation: 'primary', onClick: () => this.showProjectDialog() }));
 		heading.append(this.title, this.tools);
 		const feedback = h(document, 'div', { className: 'ash-projects-feedback' });
 		this.message = h(document, 'p', { attributes: { role: 'status', 'aria-live': 'polite' } });
-		this.retry = this._register(new Button(feedback, { ...projectButtonStyles, label: localize('projects.retry', 'Try again'), onClick: () => { void this.projects.reload(); } }));
+		this.retry = this._register(new Button(feedback, { ...defaultButtonStyles, label: localize('projects.retry', 'Try again'), onClick: () => { void this.projects.reload(); } }));
 		feedback.prepend(this.message);
 		this.body = h(document, 'div', { className: 'ash-projects-body' });
 		main.append(this.breadcrumb, heading, this.search, feedback, this.body);
@@ -130,7 +122,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	private button(parent: HTMLElement, options: IButtonOptions, key?: string): Button {
-		const button = this.content.add(new Button(parent, { ...projectButtonStyles, ...options }));
+		const button = this.content.add(new Button(parent, { ...defaultButtonStyles, ...options }));
 		if (key) { button.domNode.dataset.projectControl = key; }
 		return button;
 	}
@@ -243,7 +235,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const folderRow = h(document, 'div', { className: 'ash-projects-folder-choice' });
 		const feedback = h(document, 'p', { className: 'ash-projects-form-error', attributes: { role: 'alert' } });
 		const folder = store.add(new Button(folderRow, {
-			...projectButtonStyles, label: localize('projects.useFolder', 'Use a folder'), icon: Lxicon.folders, onClick: () => {
+			...defaultButtonStyles, label: localize('projects.useFolder', 'Use a folder'), icon: Lxicon.folders, onClick: () => {
 				void this.files.showOpenDialog({ canSelectFiles: false, canSelectFolders: true }).then(resources => {
 					if (store.isDisposed || !resources?.[0]) { return; }
 					const resource = resources[0];
@@ -261,12 +253,12 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		form.append(nameLabel, descriptionLabel, folderRow, feedback, conflicts, actions);
 		const dialog = store.add(new Dialog(this.domNode, { title: project ? localize('projects.edit', 'Edit details') : localize('projects.createTitle', 'Create a project'), content: form, dialogStyles: defaultDialogStyles }));
 		dialog.element.classList.add('ash-projects-dialog');
-		const close = store.add(new Button(dialog.element, { ...projectButtonStyles, label: localize('projects.close', 'Close'), icon: Lxicon.close, iconOnly: true, onClick: () => dialog.close() }));
+		const close = store.add(new Button(dialog.element, { ...defaultButtonStyles, label: localize('projects.close', 'Close'), icon: Lxicon.close, iconOnly: true, onClick: () => dialog.close() }));
 		close.domNode.classList.add('ash-projects-dialog-close');
-		const reload = store.add(new Button(actions, { ...projectButtonStyles, label: localize('projects.reloadMerge', 'Reload and merge'), presentation: 'secondary', onClick: () => { void reloadAndMerge(); } }));
+		const reload = store.add(new Button(actions, { ...defaultButtonStyles, label: localize('projects.reloadMerge', 'Reload and merge'), presentation: 'secondary', onClick: () => { void reloadAndMerge(); } }));
 		reload.domNode.hidden = true;
-		store.add(new Button(actions, { ...projectButtonStyles, label: localize('projects.cancel', 'Cancel'), presentation: 'secondary', onClick: () => dialog.close() }));
-		const submit = store.add(new Button(actions, { ...projectButtonStyles, label: project ? localize('projects.save', 'Save changes') : localize('projects.create', 'Create project'), presentation: 'primary', type: 'submit', enabled: !!name.value.trim() }));
+		store.add(new Button(actions, { ...defaultButtonStyles, label: localize('projects.cancel', 'Cancel'), presentation: 'secondary', onClick: () => dialog.close() }));
+		const submit = store.add(new Button(actions, { ...defaultButtonStyles, label: project ? localize('projects.save', 'Save changes') : localize('projects.create', 'Create project'), presentation: 'primary', type: 'submit', enabled: !!name.value.trim() }));
 		const updateSubmit = () => { submit.enabled = !!name.value.trim() && !needsMerge && unresolved.size === 0; };
 		store.add(addDisposableListener(name, 'input', updateSubmit));
 		const offerMerge = (): boolean => {

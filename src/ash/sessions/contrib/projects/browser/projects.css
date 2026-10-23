@@ -61,17 +61,6 @@
 	gap: var(--ash-spacing-size80);
 }
 
-.ash-projects-tools > .ash-button,
-.ash-projects-empty > .ash-button,
-.ash-projects-form-actions > .ash-button {
-	min-height: 36px;
-	padding: var(--ash-spacing-size80) var(--ash-spacing-size160);
-}
-
-.ash-projects-tools > .ash-button.icon-only {
-	padding: var(--ash-spacing-size80);
-}
-
 .ash-projects-search,
 .ash-projects-form input,
 .ash-projects-form textarea,

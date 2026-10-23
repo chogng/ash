@@ -56,20 +56,6 @@
 }
 .ash-cowork-turn-error-action {
 	margin: 0 8px 4px;
-	padding: 4px 8px;
-	border: var(--ash-strokeThickness) solid var(--ash-border);
-	border-radius: var(--ash-cornerRadius-small);
-	color: var(--ash-button-foreground);
-	background: var(--ash-button-secondaryBackground);
-	font: inherit;
-	cursor: pointer;
-}
-.ash-cowork-turn-error-action:hover {
-	background: var(--ash-button-hoverBackground);
-}
-.ash-cowork-turn-error-action:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: var(--ash-strokeThickness);
 }
 
 /* Shared response parts inherit Cowork's editor options without changing its layout. */

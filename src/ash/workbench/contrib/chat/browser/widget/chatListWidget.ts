@@ -659,12 +659,14 @@ export class ChatListWidget extends DomWidget {
 		}
 		if (item.action) {
 			const action = item.action;
-			const button = h(this.element.ownerDocument, "button");
-			button.type = "button";
-			button.className = `${this.classPrefix}-turn-error-action`;
-			button.textContent = action.label;
-			article.append(button);
-			disposables.add(addDisposableListener(button, "click", () => this.onDidRequestErrorAction?.(action)));
+			const button = disposables.add(new Button(article, {
+				...defaultButtonStyles,
+				label: action.label,
+				presentation: 'secondary',
+				size: 'small',
+				onClick: () => this.onDidRequestErrorAction?.(action),
+			}));
+			button.domNode.classList.add(`${this.classPrefix}-turn-error-action`);
 		}
 		const row = new RenderedItem(item, article, disposables, undefined, markdownPart, attachments);
 		if (item.type === 'agentMessage' || item.type === 'userMessage') this.renderCopyAction(row, disposables);

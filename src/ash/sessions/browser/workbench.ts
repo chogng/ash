@@ -127,6 +127,7 @@ import '../../workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js'
 import '../../workbench/contrib/quickaccess/browser/quickAccess.contribution.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../platform/renderer/common/dictation.js';
 import "../../workbench/browser/style.js";
+import "./media/style.css";
 import "./media/workbench.css";
 import "./actions/sessionsChatActions.js";
 import "./actions/approvalEnvironmentActions.js";

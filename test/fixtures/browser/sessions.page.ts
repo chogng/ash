@@ -1,3 +1,4 @@
+import { sessionIdentity } from '../../../src/ash/sessions/services/sessions/common/sessionIdentity.js';
 import { installMultiHostSessionsFixture } from './multiHostSessionsFixture.js';
 import { errorHandler } from '../../../src/ash/base/common/errors.js';
 import { Event } from '../../../src/ash/base/common/event.js';
@@ -26,6 +27,26 @@ globalThis.ashWebWorkbenchHost = {
 		github: { ...disconnectedApi.github, listAccounts: async () => [] },
 	}
 };
+if (new URL(location.href).searchParams.has('search') || new URL(location.href).searchParams.has('sidebarGroups')) {
+	const project = { id: 'search-project', revision: 1, name: 'Search project fixture', archived: false, sessionCount: 0, description: 'Synthetic project for Search navigation', materials: [], sessionIds: new URL(location.href).searchParams.has('sidebarGroups') ? [sessionIdentity('Host A', 'same', 'local-agent-host')] : [] };
+	const unexpectedAutomation = async (): Promise<never> => { throw new Error('Search must not mutate or run the fixture schedule'); };
+	globalThis.ashWebWorkbenchHost = {
+		api: {
+			...globalThis.ashWebWorkbenchHost.api,
+			projects: { ...disconnectedApi.projects, list: async () => [project], read: async () => project },
+			automation: {
+				onDidChange: Event.None,
+				list: async () => [{
+					id: 'search-schedule', revision: 1, status: 'enabled', createdAt: 1, updatedAt: 1, nextRunAt: null,
+					definition: { title: 'Daily search fixture', prompt: 'Synthetic schedule for Search navigation', directory: '/tmp/search-fixture', session: { type: 'new' }, schedule: { type: 'interval', anchor: 1, minutes: 1440 } },
+				}],
+				runs: async () => [], preview: async () => [],
+				save: unexpectedAutomation, delete: unexpectedAutomation, run: unexpectedAutomation,
+				getRun: unexpectedAutomation, stop: unexpectedAutomation, readResult: async () => ({ output: '', files: [] }),
+			},
+		},
+	};
+}
 // Sessions Parts need startup workspace storage while debugger processes remain outside this fixture.
 const unexpectedTransport = async (): Promise<never> => { throw new Error('Sessions component tests must not launch or use a debug adapter'); };
 globalThis.ashWebWorkbenchHost = {

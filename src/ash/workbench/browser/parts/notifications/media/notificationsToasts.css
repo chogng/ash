@@ -22,18 +22,6 @@
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
-.ash-sessions-window {
-	position: relative;
-}
-.ash-sessions-window .ash-feedback-host {
-	position: absolute;
-	z-index: 1000;
-	inset-inline-end: 12px;
-	inset-block-end: 40px;
-	width: min(420px, calc(100% - 24px));
-	max-height: calc(100% - 56px);
-	pointer-events: none;
-}
 .ash-feedback-host.ash-notifications-placement[data-notification-position="bottom-left"] {
 	inset-inline-start: 12px;
 	inset-inline-end: auto;

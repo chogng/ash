@@ -85,7 +85,7 @@
 	flex: 0 0 auto;
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 	border: 0;
-	border-radius: var(--ash-cornerRadius-small);
+	border-radius: var(--ash-cornerRadius-large);
 	color: var(--ash-foreground);
 	background: transparent;
 	font: inherit;

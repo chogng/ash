@@ -40,26 +40,12 @@
 	margin-top: var(--ash-spacing-size160);
 	border-top: var(--ash-strokeThickness) solid var(--ash-border);
 }
-.ash-teams-panel button {
-	min-height: 32px;
-	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
-	border: var(--ash-strokeThickness) solid var(--ash-border);
-	border-radius: var(--ash-cornerRadius-medium);
-	color: var(--ash-foreground);
-	background: var(--ash-input-background);
-	cursor: pointer;
-}
-.ash-teams-panel button:hover {
-	background: var(--ash-list-hoverBackground);
-}
-.ash-teams-panel button:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-}
 .ash-teams-list-item {
 	width: 100%;
+	justify-content: flex-start;
 	text-align: left;
 }
-.ash-teams-list-item.selected {
+.ash-teams-panel .ash-button.ash-teams-list-item.selected {
 	background: var(--ash-sessions-selectionBackground);
 }
 .ash-teams-member {

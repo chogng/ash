@@ -7,6 +7,7 @@ import { DictationInput } from '../../../../../../workbench/contrib/chat/browser
 import { IDictationOnboardingService } from '../../../../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
 import { addDisposableListener, h } from "../../../../../../base/browser/dom.js";
 import { ButtonActionViewItem, type ActionViewItem } from "../../../../../../base/browser/ui/actionbar/actionViewItems.js";
+import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { appendIcon } from "../../../../../../base/browser/ui/lxicons/lxicon.js";
 import type { IAction } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
@@ -521,11 +522,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private interactionButton(label: string, primary = false): HTMLButtonElement {
-		const button = h(this.element.ownerDocument, "button");
-		button.type = "button";
-		button.textContent = label;
-		button.className = primary ? "ash-cowork-send-button" : "ash-cowork-secondary-button";
-		return button;
+		return this.interactionListeners.add(new Button(this.interaction, {
+			...defaultButtonStyles,
+			label,
+			presentation: primary ? 'primary' : 'secondary',
+		})).domNode;
 	}
 
 	private questionSelect(options: readonly { readonly label: string; }[]): HTMLSelectElement {

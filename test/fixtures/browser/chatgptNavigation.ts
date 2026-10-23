@@ -25,6 +25,8 @@ import { normalizeExtensionHostSnapshot } from '../../../src/ash/platform/agentH
 import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../../src/ash/workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
 import { bindTestColorTheme } from './themeFixture.js';
+import '../../../src/ash/sessions/browser/media/workbench.css';
+import '../../../src/ash/sessions/browser/media/style.css';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
@@ -61,6 +63,13 @@ declare global {
 }
 
 const parameters = new URLSearchParams(location.search);
+// The renderer widgets consume the containing Sessions host's visual defaults.
+document.body.classList.add('ash-workbench');
+const sessionsRoot = document.createElement('div');
+sessionsRoot.className = 'ash-sessions-window';
+sessionsRoot.style.flexDirection = 'row';
+sessionsRoot.append(document.getElementById('navigation')!, document.getElementById('editor')!);
+document.body.append(sessionsRoot);
 const locale = parameters.get('locale') ?? 'zh-CN';
 if (locale !== 'en') { setNlsMessages(locale, productLanguagePackCatalogs.find(catalog => catalog.locale === locale)!.bundles); }
 const resources = new DisposableStore();

@@ -1,73 +1,5 @@
-:root {
-	color-scheme: light dark;
-	font-family: var(
-		--ash-font-family,
-		-apple-system,
-		BlinkMacSystemFont,
-		"Segoe UI",
-		sans-serif
-	);
-}
-
-/* Font rendering is shared; visual weight is owned by the Agents Window. */
 .ash-sessions-window {
-	/* Window-owned type roles also apply to shared widgets and anchored popups. */
-	--ash-fontSize-heading1: 26px;
-	--ash-fontSize-heading2: 18px;
-	--ash-fontSize-heading3: 14px;
-	--ash-fontSize-body1: 14px;
-	--ash-fontSize-body2: 11px;
-	--ash-fontSize-label1: 14px;
-	--ash-fontSize-label2: 11px;
-	--ash-fontSize-label3: 10px;
-	--ash-icon-font-family: "Ash UI Variable";
-	--ash-icon-font-weight: 550;
-}
-
-*,
-*::before,
-*::after {
-	box-sizing: border-box;
-}
-
-html,
-body,
-#app {
-	width: 100%;
-	min-width: 0;
-	min-height: 0;
-	height: 100%;
-	margin: 0;
-}
-
-body {
-	overflow: hidden;
-}
-
-button,
-input,
-textarea {
-	font: inherit;
-}
-
-.ash-sessions-window {
-	--ash-button-small-font-size: var(--ash-fontSize-label1);
-	--sessions-accent: var(--ash-button-primaryBackground);
-	--sessions-accent-strong: color-mix(
-		in srgb,
-		var(--ash-button-primaryBackground) 82%,
-		var(--ash-foreground)
-	);
-	--sessions-soft-surface: color-mix(
-		in srgb,
-		var(--ash-editor-background) 88%,
-		var(--ash-workbench-background)
-	);
-	--sessions-muted-surface: color-mix(
-		in srgb,
-		var(--ash-sideBar-background) 74%,
-		var(--ash-workbench-background)
-	);
+	position: relative;
 	display: flex;
 	width: 100%;
 	min-width: 0;
@@ -75,23 +7,6 @@ textarea {
 	height: 100%;
 	overflow: hidden;
 	flex-direction: column;
-	font-size: var(--ash-fontSize-body1);
-	font-weight: var(--ash-fontWeight-regular);
-	line-height: 1.4;
-	color: var(--ash-foreground);
-	background: var(--ash-titleBar-background);
-}
-
-.ash-sessions-window .ash-context-view-hover {
-	/* ContextView hosts the hover under the window root, outside the triggering control. */
-	--ash-hover-background: var(--ash-sessions-tooltip-background);
-	--ash-hover-foreground: var(--ash-sessions-tooltip-foreground);
-	--ash-hover-border: var(--ash-sessions-tooltip-border);
-	border-radius: var(--ash-cornerRadius-xLarge);
-}
-
-.ash-sessions-window .ash-context-view-hover::before {
-	content: none;
 }
 
 .ash-sessions-workbench-layout {
@@ -118,4 +33,31 @@ textarea {
 
 .ash-sessions-window .ash-workbench-sessions:not(.ash-sessions-frame-end) {
 	border-right: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-sessions-window .ash-feedback-host {
+	position: absolute;
+	z-index: 1000;
+	inset-inline-end: 12px;
+	inset-block-end: 40px;
+	width: min(420px, calc(100% - 24px));
+	max-height: calc(100% - 56px);
+	pointer-events: none;
+}
+
+.ash-sessions-workbench-layout[data-panel-position="top"] .ash-workbench-panel {
+	border-top: 0;
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-sessions-workbench-layout[data-panel-position="left"]
+	.ash-workbench-panel {
+	border-top: 0;
+	border-right: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-sessions-workbench-layout[data-panel-position="right"]
+	.ash-workbench-panel {
+	border-top: 0;
+	border-left: var(--ash-strokeThickness) solid var(--ash-border);
 }

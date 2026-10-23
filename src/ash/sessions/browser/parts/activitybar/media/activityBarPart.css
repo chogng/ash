@@ -52,6 +52,7 @@
 
 .ash-sessions-activity-content.horizontal .ash-sessions-activity-item {
 	width: var(--ash-spacing-size240);
+	min-width: var(--ash-spacing-size240);
 	height: var(--ash-spacing-size240);
 	min-height: var(--ash-spacing-size240);
 }

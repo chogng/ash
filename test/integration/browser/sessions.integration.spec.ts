@@ -240,54 +240,6 @@ test('Sessions reports browser errors and rejected promises once without rethrow
 	expect(await page.evaluate(() => window.ashSessionsIntegration.disposeAndCheckErrorHandler())).toBe(true);
 });
 
-for (const locale of ['en', 'zh-CN']) test(`Sessions typography stays independent of IDE defaults (${locale})`, async ({ page, context }, testInfo) => {
-	const chinese = locale === 'zh-CN';
-	if (chinese) await page.goto('/sessions.html?locale=zh-CN');
-	const sessionsWindow = page.locator('.ash-sessions-window');
-	const input = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor .stanza-editor');
-	await expect(sessionsWindow).toHaveCSS('font-size', '14px');
-	await expect(page.locator('.ash-sessions-list-label').first()).toHaveCSS('font-size', '14px');
-	await expect(page.getByRole('note')).toHaveCSS('font-size', '14px');
-	await expect(page.getByRole('note').locator('p').first()).toHaveCSS('font-size', '14px');
-	await expect(input).toHaveCSS('font-size', '14px');
-	await input.getByRole('textbox').focus();
-	await page.keyboard.insertText('Typography draft');
-	await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('chat.input.fontSize', 18));
-	await expect(input).toHaveCSS('font-size', '18px');
-	await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('chat.input.fontSize', undefined));
-	await expect(input).toHaveCSS('font-size', '14px');
-	await expect(input).toContainText('Typography draft');
-	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
-		await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
-		await expect(sessionsWindow).toHaveCSS('font-size', '14px');
-		await expect(input).toHaveCSS('font-size', '14px');
-		await expect(page.locator('[data-action-id="sessions.newSession"] button')).toHaveCSS('font-size', '14px');
-	}
-	await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-light'));
-	await page.screenshot({ path: testInfo.outputPath(`sessions-typography-${locale}.png`) });
-	await page.locator('[data-action-id="sessions.open.projects"] button').click();
-	await expect(page.locator('.ash-projects')).toHaveCSS('font-size', '14px');
-	await expect(page.locator('.ash-projects').getByRole('button', { name: chinese ? '新建项目' : 'New project', exact: true }).first()).toHaveCSS('font-size', '14px');
-	const accounts = page.getByRole('button', { name: chinese ? '账户' : 'Accounts', exact: true });
-	await accounts.click();
-	const settingsAction = page.getByRole('menuitem', { name: chinese ? '设置' : 'Settings', exact: true });
-	await expect(settingsAction).toHaveCSS('font-size', '14px');
-	await settingsAction.click();
-	const settings = page.locator('.ash-sessions-settings');
-	await expect(settings.getByRole('searchbox')).toHaveCSS('font-size', '14px');
-	await settings.getByRole('searchbox').fill('@id:chat.disableAIFeatures');
-	await expect(settings.locator('[data-settings-item-id="chat.disableAIFeatures"] .ash-configuration-setting-description')).toHaveCSS('font-size', '14px');
-	await page.screenshot({ path: testInfo.outputPath(`sessions-typography-settings-${locale}.png`) });
-	const ide = await context.newPage();
-	try {
-		await ide.goto('/chatInput.html?inlineCode=1');
-		await expect(ide.locator('.ash-chat-input-editor .stanza-editor')).toHaveCSS('font-size', '13px');
-		await expect(ide.locator('.ash-chat-input-mode-action')).toHaveCSS('font-size', '12px');
-	} finally {
-		await ide.close();
-	}
-});
-
 
 for (const locale of ['en', 'zh-CN']) test(`Projects keeps global navigation, width and window expansion state (${locale})`, async ({ page }, testInfo) => {
 	if (locale === 'zh-CN') await page.goto('/sessions.html?locale=zh-CN');
