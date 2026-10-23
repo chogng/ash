@@ -126,14 +126,14 @@ test('startup marks record shell readiness and completed restoration in the runn
 	const page = workbench.page;
 	await expect.poll(() => page.evaluate(() => performance.getEntriesByName('ash.workbench.restored').length)).toBe(1);
 	const timings = await page.evaluate(() => Object.fromEntries(performance.getEntriesByType('mark').filter(mark => mark.name.startsWith('ash.')).map(mark => [mark.name, mark.startTime])));
-	const workbenchStages = ['constructor-start', 'services-ready', 'shell-ready', 'constructor-done', 'restored'];
-	for (const stage of [...workbenchStages, 'views-restored']) {
+	// The theme-gated shell callback runs after synchronous construction completes.
+	const workbenchStages = ['constructor-start', 'services-ready', 'constructor-done', 'shell-ready', 'views-restored', 'restored'];
+	for (const stage of workbenchStages) {
 		expect(timings[`ash.workbench.${stage}`], stage).toBeDefined();
 	}
 	for (let index = 1; index < workbenchStages.length; index++) {
-		expect(timings[`ash.workbench.${workbenchStages[index]}`]).toBeGreaterThanOrEqual(timings[`ash.workbench.${workbenchStages[index - 1]}`]!);
+		expect(timings[`ash.workbench.${workbenchStages[index]}`], `${workbenchStages[index]} follows ${workbenchStages[index - 1]}`).toBeGreaterThanOrEqual(timings[`ash.workbench.${workbenchStages[index - 1]}`]!);
 	}
-	expect(timings['ash.workbench.restored']).toBeGreaterThanOrEqual(timings['ash.workbench.views-restored']!);
 	if (target.kind === 'electron') {
 		const desktopStages = ['contributions-start', 'contributions-ready', 'open-start', 'api-ready', 'themes-ready', 'workspace-ready', 'configuration-ready', 'workbench-start', 'workbench-created', 'lifecycle-ready'];
 		for (let index = 0; index < desktopStages.length; index++) {
