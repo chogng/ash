@@ -1,4 +1,5 @@
 import { TestViewDescriptorService } from '../../../../test/browser/workbenchTestServices.js';
+import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { createTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
@@ -220,8 +221,13 @@ test('SCM history title operations keep refresh and busy state with their starti
 		const firstResult = pane.runTitleOperation(() => firstOperation.p);
 		assert.equal(context.getValue('scmHistoryBusy'), true);
 		const choosingRepository = pane.pickRepository();
-		const repositoryOption = [...browser.window.document.querySelectorAll<HTMLElement>('.ash-quick-pick [role="option"]')].find(item => item.textContent?.includes('Second'))!;
-		repositoryOption.click();
+		// This service scenario owns no layout; choose through the real picker model.
+		const picker = historyQuickInput.currentQuickInput as IQuickPick<IQuickPickItem>;
+		assert.equal(picker.type, 'quickPick');
+		const secondItem = picker.items.find((item): item is IQuickPickItem => !('type' in item) && item.label === 'Second');
+		assert.ok(secondItem);
+		picker.activeItems = [secondItem];
+		await historyQuickInput.accept();
 		await choosingRepository;
 		assert.equal(view.activeRepository, second);
 		assert.equal(context.getValue('scmHistoryBusy'), false);
@@ -404,8 +410,10 @@ test('SCM history restores a late HEAD and moves its marker without reloading or
 		pane.setVisible(true);
 		await waitFor(() => pane.element.querySelectorAll('.ash-scm-graph-commit').length === 2);
 		const rows = [...pane.element.querySelectorAll<HTMLElement>('.ash-scm-graph-commit')];
-		rows[0].dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-		await waitFor(() => rows[0].getAttribute('aria-expanded') === 'true' && rows[0].querySelector('.ash-scm-graph-change-state')?.textContent === 'No changed files.');
+		const tree = pane.element.querySelector<HTMLElement>('.ash-scm-graph-tree')!;
+		focusHistoryContent(rows[0]);
+		pressHistoryKey(tree, 'Enter');
+		await waitFor(() => historyTreeRow(rows[0]).getAttribute('aria-expanded') === 'true' && tree.querySelector('.ash-scm-graph-change-state')?.textContent === 'No changed files.');
 		const loaded = queries;
 		head.set({ id: 'localBranch:main', name: 'main', revision: 'one', category: 'localBranch' });
 		assert.equal(rows[0].getAttribute('aria-current'), 'true');
@@ -416,38 +424,39 @@ test('SCM history restores a late HEAD and moves its marker without reloading or
 		assert.equal(rows[0].hasAttribute('aria-current'), false);
 		assert.equal(rows[1].getAttribute('aria-current'), 'true');
 		assert.equal(rows[1].querySelector('.ash-scm-graph-label.head')?.textContent, 'topic');
-		assert.equal(rows[0].getAttribute('aria-expanded'), 'true');
-		assert.equal(rows[0].getAttribute('aria-selected'), 'true');
-		assert.equal(rows[1].getAttribute('aria-selected'), 'false');
+		assert.equal(historyTreeRow(rows[0]).getAttribute('aria-expanded'), 'true');
+		assert.equal(historyTreeRow(rows[0]).getAttribute('aria-selected'), 'true');
+		assert.equal(historyTreeRow(rows[1]).getAttribute('aria-selected'), 'false');
 		assert.equal(pane.element.querySelectorAll('.ash-scm-graph-commit')[0], rows[0]);
 		assert.equal(queries, loaded);
-		rows[0].focus();
-		rows[0].dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-		assert.equal(browser.window.document.activeElement, rows[1]);
-		rows[1].dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-		assert.equal(browser.window.document.activeElement, rows[1], 'Navigation stops at the last commit');
-		rows[1].dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
-		assert.equal(browser.window.document.activeElement, rows[0]);
-		rows[0].dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
-		assert.equal(rows[0].getAttribute('aria-expanded'), 'false');
-		rows[0].dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-		await waitFor(() => rows[0].getAttribute('aria-expanded') === 'true');
+		focusHistoryContent(rows[0]);
+		pressHistoryKey(tree, 'ArrowLeft');
+		pressHistoryKey(tree, 'ArrowDown');
+		assert.equal(focusedHistoryRow(tree), historyTreeRow(rows[1]));
+		pressHistoryKey(tree, 'ArrowDown');
+		assert.equal(focusedHistoryRow(tree), historyTreeRow(rows[1]), 'Navigation stops at the last commit');
+		pressHistoryKey(tree, 'Home');
+		assert.equal(focusedHistoryRow(tree), historyTreeRow(rows[0]));
+		pressHistoryKey(tree, 'ArrowLeft');
+		assert.equal(historyTreeRow(rows[0]).getAttribute('aria-expanded'), 'false');
+		pressHistoryKey(tree, 'ArrowRight');
+		await waitFor(() => historyTreeRow(rows[0]).getAttribute('aria-expanded') === 'true');
 		const reveal = menus.getMenuActions(MenuId.SCMHistoryTitle, { arg: pane }).flatMap(([, actions]) => actions).find(action => action.id === 'workbench.scm.action.graph.revealCurrentHistoryItem')!;
 		assert.equal(reveal.enabled, true);
 		services.registerInstance(IViewsService, { getActiveViewWithId: (id: string) => id === 'ash.gitGraph' ? pane : null } as unknown as IViewsService);
 		await new CommandService(services).executeCommand('workbench.scm.action.graph.revealCurrentHistoryItem');
-		assert.equal(browser.window.document.activeElement, rows[1], 'The title action uses the latest HEAD without reloading');
+		assert.equal(focusedHistoryRow(tree), historyTreeRow(rows[1]), 'The title action uses the latest HEAD without reloading');
 		assert.equal(queries, loaded);
-		assert.equal(rows[1].getAttribute('aria-selected'), 'true', 'Go to Current selects the current history item');
+		assert.equal(historyTreeRow(rows[1]).getAttribute('aria-selected'), 'true', 'Go to Current selects the current history item');
 		rows[0].dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true, ctrlKey: true }));
-		assert.equal(rows[0].getAttribute('aria-selected'), 'true');
-		assert.equal(rows[1].getAttribute('aria-selected'), 'false', 'Modified clicks still use the upstream single-selection policy');
+		assert.equal(historyTreeRow(rows[0]).getAttribute('aria-selected'), 'true');
+		assert.equal(historyTreeRow(rows[1]).getAttribute('aria-selected'), 'false', 'Modified clicks still use the upstream single-selection policy');
 		rows[1].dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true, shiftKey: true }));
-		assert.equal(rows[1].getAttribute('aria-selected'), 'true');
-		assert.equal(rows[0].getAttribute('aria-selected'), 'false');
-		rows[1].dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-		assert.equal(rows[1].getAttribute('aria-selected'), 'false');
-		assert.equal(rows[1].getAttribute('aria-expanded'), 'true', 'Escape clears selection without collapsing files');
+		assert.equal(historyTreeRow(rows[1]).getAttribute('aria-selected'), 'true');
+		assert.equal(historyTreeRow(rows[0]).getAttribute('aria-selected'), 'false');
+		pressHistoryKey(tree, 'Escape');
+		assert.equal(historyTreeRow(rows[1]).getAttribute('aria-selected'), 'false');
+		assert.equal(historyTreeRow(rows[1]).getAttribute('aria-expanded'), 'true', 'Escape clears selection without collapsing files');
 		pane.dispose();
 		head.set({ id: 'HEAD', name: 'detached', revision: 'one' });
 		assert.equal(rows[1].getAttribute('aria-current'), 'true', 'Disposed panes stop observing the old provider');
@@ -530,8 +539,9 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 		const graph = pane.element.querySelector<HTMLElement>('.ash-scm-graph')!;
 		const viewport = graph.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
 		await waitFor(() => graph.getAttribute('aria-busy') === 'false');
-		const first = list!.querySelector('.ash-scm-graph-commit');
-		assert.equal(first?.getAttribute('aria-setsize'), '50');
+		const first = historyTreeRow(list!.querySelector('.ash-scm-graph-commit')!);
+		const tree = pane.element.querySelector<HTMLElement>('.ash-scm-graph-tree')!;
+		assert.equal(first?.getAttribute('aria-setsize'), '51');
 		assert.deepEqual(graphRequests, [{ limit: 51, revisions: ['commit-1'] }]);
 		assert.equal(pane.element.querySelector('.ash-scm-graph .ash-list'), list);
 
@@ -547,7 +557,7 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 		loadMore.focus();
 		loadMore.click();
 		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graphRequests.length === 2);
-		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize'), '50');
+		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.closest('[role="treeitem"]')?.getAttribute('aria-setsize'), '51');
 		const retry = graph.querySelector<HTMLButtonElement>('.ash-scm-graph-load-more > button')!;
 		assert.equal(retry.getAttribute('aria-label'), 'Retry loading commit history');
 		assert.equal(browser.window.document.activeElement, retry, 'A failed page returns keyboard focus to its live retry button');
@@ -557,17 +567,17 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 		await historyConfiguration.updateValue('scm.graph.pageOnScroll', false);
 		retry.click();
 		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graphRequests.length === 3);
-		assert.equal(browser.window.document.activeElement?.querySelector('.ash-scm-graph-subject')?.textContent, 'History item 51');
-		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize'), '100');
+		assert.equal(focusedHistoryRow(tree)?.querySelector('.ash-scm-graph-subject')?.textContent, 'History item 51');
+		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.closest('[role="treeitem"]')?.getAttribute('aria-setsize'), '101');
 		assert.deepEqual(graphRequests, [{ limit: 51, revisions: ['commit-1'] }, { limit: 51, cursor: '50', revisions: ['commit-1'] }, { limit: 51, cursor: '50', revisions: ['commit-1'] }]);
 		assert.equal(list!.querySelectorAll('.ash-scm-graph-commit').length < 100, true);
 
 		viewport.scrollTop = 2178;
 		viewport.dispatchEvent(new browser.window.Event('scroll'));
-		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize'), '100');
+		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.closest('[role="treeitem"]')?.getAttribute('aria-setsize'), '101');
 		await historyConfiguration.updateValue('scm.graph.pageOnScroll', true);
-		await waitFor(() => list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize') === '101');
-		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize'), '101');
+		await waitFor(() => list!.querySelector('.ash-scm-graph-commit')?.closest('[role="treeitem"]')?.getAttribute('aria-setsize') === '101');
+		assert.equal(list!.querySelector('.ash-scm-graph-commit')?.closest('[role="treeitem"]')?.getAttribute('aria-setsize'), '101');
 		assert.equal(pane.element.querySelector('.ash-scm-graph-load-more'), null);
 		assert.equal(graphRequests.length, 4);
 		assert.equal(pane.element.querySelector('.ash-scm-graph .ash-list'), list);
@@ -629,28 +639,31 @@ test('SCM history refresh retains loaded identities and folder focus and bounds 
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => graph.getAttribute('aria-busy') === 'false');
 		graph.querySelector<HTMLButtonElement>('.ash-scm-graph-load-more > button')!.click();
-		await waitFor(() => graph.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize') === '10');
+		await waitFor(() => graph.querySelector('.ash-scm-graph-commit')?.closest('[role="treeitem"]')?.getAttribute('aria-setsize') === '11');
 		const viewport = graph.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
 		viewport.scrollTop = 88;
 		viewport.dispatchEvent(new browser.window.Event('scroll'));
 		const current = (): HTMLElement => graph.querySelector('[data-history-item-id="original-4"]')!;
+		const tree = graph.querySelector<HTMLElement>('.ash-scm-graph-tree')!;
 		current().click();
-		await waitFor(() => current().querySelector('.ash-scm-graph-change') !== null);
+		await waitFor(() => graph.querySelector('.ash-scm-graph-change') !== null);
 		pane.setViewMode('tree');
-		const folder = (): HTMLButtonElement => current().querySelector('.ash-scm-graph-folder')!;
+		const folder = (): HTMLButtonElement => graph.querySelector('.ash-scm-graph-folder')!;
 		folder().click();
-		assert.equal(folder().getAttribute('aria-expanded'), 'false');
-		folder().focus();
+		assert.equal(historyTreeRow(folder()).getAttribute('aria-expanded'), 'false');
+		focusHistoryContent(folder());
+		viewport.scrollTop = 88;
+		viewport.dispatchEvent(new browser.window.Event('scroll'));
 		const position = viewport.scrollTop;
 		const prefix = Array.from({ length: 100 }, (_, index) => makeItem(`new-${index}`));
 		items = [...prefix, ...items];
 		head.set({ id: 'refs/heads/main', name: 'main', revision: items[0].id, category: 'localBranch' });
 		changed.fire();
-		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && current()?.getAttribute('aria-setsize') === '110');
-		assert.equal(current().getAttribute('aria-selected'), 'true');
-		assert.equal(current().getAttribute('aria-expanded'), 'true');
-		assert.equal(folder().getAttribute('aria-expanded'), 'false');
-		assert.equal(browser.window.document.activeElement, folder(), 'Refresh returns to the same logical folder');
+		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && current()?.closest('[role="treeitem"]')?.getAttribute('aria-setsize') === '111');
+		assert.equal(historyTreeRow(folder()).getAttribute('aria-selected'), 'true');
+		assert.equal(historyTreeRow(current()).getAttribute('aria-expanded'), 'true');
+		assert.equal(historyTreeRow(folder()).getAttribute('aria-expanded'), 'false');
+		assert.equal(focusedHistoryRow(tree), historyTreeRow(folder()), 'Refresh returns to the same logical folder');
 		assert.equal(viewport.scrollTop, position + 100 * 22);
 		assert.ok(queries.every(query => query.limit <= 16));
 		const beforeRewrite = queries.length;
@@ -658,11 +671,11 @@ test('SCM history refresh retains loaded identities and folder focus and bounds 
 		items = Array.from({ length: 200 }, (_, index) => makeItem(`rewritten-${index}`));
 		head.set({ id: 'refs/heads/main', name: 'main', revision: items[0].id, category: 'localBranch' });
 		changed.fire();
-		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graph.querySelector('.ash-scm-graph-commit')?.getAttribute('aria-setsize') === '110');
+		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graph.querySelector('.ash-scm-graph-commit')?.closest('[role="treeitem"]')?.getAttribute('aria-setsize') === '111');
 		assert.equal(queries.length, beforeRewrite + 1, 'Unreachable retained IDs do not trigger an unbounded history search');
 		assert.equal(graph.querySelector('[data-history-item-id="original-4"]'), null);
 		assert.equal(graph.querySelectorAll('[role="treeitem"][aria-selected="true"]').length, 0);
-		assert.equal((browser.window.document.activeElement as HTMLElement).dataset.historyItemId, 'rewritten-104');
+		assert.equal(focusedHistoryRow(tree)?.querySelector<HTMLElement>('.ash-scm-graph-commit')?.dataset.historyItemId, 'rewritten-104');
 		const deferred = new DeferredPromise<void>();
 		pauseNextQuery = deferred;
 		changed.fire();
@@ -762,9 +775,10 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelectorAll(".ash-scm-graph-commit").length > 0);
 		const viewport = graph.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+		const tree = graph.querySelector<HTMLElement>('.ash-scm-graph-tree')!;
 		const reveal = menuService.getMenuActions(MenuId.SCMHistoryTitle, { arg: pane }).flatMap(([, actions]) => actions).find(action => action.id === 'workbench.scm.action.graph.revealCurrentHistoryItem')!;
 		await reveal.run();
-		assert.equal(browser.window.document.activeElement?.querySelector('.ash-scm-graph-subject')?.textContent, 'Commit 90', 'Locating HEAD loads the page containing an initially unloaded commit');
+		assert.equal(focusedHistoryRow(tree)?.querySelector('.ash-scm-graph-subject')?.textContent, 'Commit 90', 'Locating HEAD loads the page containing an initially unloaded commit');
 		viewport.scrollTop = 1100;
 		viewport.dispatchEvent(new browser.window.Event('scroll'));
 		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graph.querySelector<HTMLElement>('.ash-list')?.style.height === `${commits.length * 22}px`);
@@ -778,19 +792,19 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		const firstCommit = pane.element.querySelector<HTMLElement>('.ash-scm-graph-commit')!;
 		const firstToolbar = firstCommit.querySelector('.ash-scm-graph-actions')!;
 		const hoverCount = hoverTargets.length;
-		firstCommit.focus();
+		focusHistoryContent(firstCommit);
 		viewport.dispatchEvent(new browser.window.Event('scroll'));
 		assert.equal(pane.element.querySelector('.ash-scm-graph-commit'), firstCommit, 'Scrolling within the same range retains the row');
 		assert.equal(hoverTargets.length, hoverCount, 'Unchanged rows do not create more hover handles');
 		assert.ok(!disposedHoverTargets.has(firstCommit));
-		assert.equal(browser.window.document.activeElement, firstCommit);
+		assert.equal(focusedHistoryRow(tree), historyTreeRow(firstCommit));
 
 		Object.defineProperty(graph, "clientHeight", { configurable: true, value: 320 });
 		resizeCallback?.([{ borderBoxSize: [{ inlineSize: 320, blockSize: 320 }], contentRect: { width: 320, height: 320 } } as unknown as ResizeObserverEntry], {} as ResizeObserver);
 		assert.ok(pane.element.querySelectorAll(".ash-scm-graph-commit").length > initialRows);
 		assert.equal(pane.element.querySelector('.ash-scm-graph-commit'), firstCommit, 'Growing the viewport keeps existing rows');
 		assert.equal(firstCommit.querySelector('.ash-scm-graph-actions'), firstToolbar);
-		assert.equal(browser.window.document.activeElement, firstCommit);
+		assert.equal(focusedHistoryRow(tree), historyTreeRow(firstCommit));
 		hoverHandles.get(firstCommit)!.show();
 		viewport.scrollTop = 264;
 		viewport.dispatchEvent(new browser.window.Event('scroll'));
@@ -798,11 +812,13 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		assert.ok(hiddenHoverTargets.has(firstCommit), 'Leaving the viewport hides the details card');
 		assert.ok(!disposedHoverTargets.has(firstCommit), 'The bounded row cache retains the hover for reuse');
 		const overlapping = [...pane.element.querySelectorAll<HTMLElement>('.ash-scm-graph-commit')].find(element => element.textContent?.includes('Commit 12'))!;
-		overlapping.focus();
+		focusHistoryContent(overlapping);
+		viewport.scrollTop = 264;
+		viewport.dispatchEvent(new browser.window.Event('scroll'));
 		viewport.scrollTop = 286;
 		viewport.dispatchEvent(new browser.window.Event('scroll'));
 		assert.ok(overlapping.isConnected, 'An overlapping visible row remains connected');
-		assert.equal(browser.window.document.activeElement, overlapping);
+		assert.equal(focusedHistoryRow(tree), historyTreeRow(overlapping));
 
 		const list = graph.querySelector<HTMLElement>('.ash-list');
 		assert.ok(list);
@@ -813,11 +829,11 @@ test("SCMHistoryViewPane virtualizes loaded history rows", async () => {
 		viewport.scrollTop = 0;
 		viewport.dispatchEvent(new browser.window.Event('scroll'));
 		assert.equal(pane.element.querySelector('.ash-scm-graph-commit'), firstCommit, 'Returning reuses the cached commit');
-		firstCommit.focus();
-		firstCommit.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
-		assert.equal(browser.window.document.activeElement?.querySelector('.ash-scm-graph-subject')?.textContent, 'Commit 99', 'End reveals and focuses an initially virtualized commit');
-		browser.window.document.activeElement?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
-		assert.equal(browser.window.document.activeElement, firstCommit);
+		focusHistoryContent(firstCommit);
+		pressHistoryKey(tree, 'End');
+		assert.equal(focusedHistoryRow(tree)?.querySelector('.ash-scm-graph-subject')?.textContent, 'Commit 99', 'End reveals and focuses an initially virtualized commit');
+		pressHistoryKey(tree, 'Home');
+		assert.equal(focusedHistoryRow(tree), historyTreeRow(firstCommit));
 		pane.dispose();
 		assert.equal(disposedHoverTargets.size, hoverTargets.length, 'Disposal releases visible and cached rows');
 	} finally {
@@ -844,6 +860,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 	let changeRequests = 0;
 	let fileRequests = 0;
 	let binary = false;
+	const currentObjectId = (): string => binary ? '3'.repeat(40) : objectId;
 	const gitService = {
 		onDidBecomeReady: noEvent,
 		onDidChangeActiveRepository: noEvent,
@@ -853,13 +870,13 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 			historyRevision: 1,
 			revision: 1,
 			workspacePath: ".",
-			head: { type: "branch", name: "main", objectId, upstream: undefined },
+			head: { type: "branch", name: "main", objectId: currentObjectId(), upstream: undefined },
 			changes: [],
 		}),
 		branches: async () => [],
 		graph: async () => ({
-			commits: [{ objectId, parentObjectIds: [parentObjectId], timestampSeconds: 1_753_000_000, subject: "Change editor files" }],
-			references: [{ name: "main", objectId, kind: "localBranch" as const, remoteName: undefined, current: true }, { name: "history-tag", objectId, kind: "tag" as const, remoteName: undefined, current: false }],
+			commits: [{ objectId: currentObjectId(), parentObjectIds: [parentObjectId], timestampSeconds: 1_753_000_000, subject: "Change editor files" }],
+			references: [{ name: "main", objectId: currentObjectId(), kind: "localBranch" as const, remoteName: undefined, current: true }, { name: "history-tag", objectId: currentObjectId(), kind: "tag" as const, remoteName: undefined, current: false }],
 			remotes: [],
 			hasMore: false,
 			nextCursor: undefined,
@@ -906,6 +923,7 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 
 		const commit = pane.element.querySelector<HTMLElement>(".ash-scm-graph-commit");
 		assert.ok(commit);
+		const tree = pane.element.querySelector<HTMLElement>('.ash-scm-graph-tree')!;
 		commit.dispatchEvent(new browser.window.MouseEvent("contextmenu", { bubbles: true }));
 		assert.equal(contextMenus[0]?.menuId, MenuId.SCMHistoryItemContext);
 		const outside = browser.window.document.createElement('input');
@@ -915,25 +933,32 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		assert.equal(browser.window.document.activeElement, outside, 'Closing a history menu preserves focus transferred to another input');
 		outside.remove();
 		assert.equal((contextMenus[0]?.menuActionOptions?.arg as { readonly historyItemViewModel: { readonly historyItem: { readonly id: string; }; }; }).historyItemViewModel.historyItem.id, objectId);
-		commit.focus();
+		focusHistoryContent(commit);
 		for (const modifiers of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, { shiftKey: true }]) {
-			const event = new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...modifiers });
-			commit.dispatchEvent(event);
-			assert.equal(event.defaultPrevented, false);
-			assert.equal(commit.getAttribute('aria-expanded'), 'false');
+			const event = pressHistoryKey(tree, 'Enter', modifiers);
+			assert.equal(event.defaultPrevented, true, 'Modified Enter follows the shared tree accept policy');
+			await waitFor(() => pane.element.querySelector('.ash-scm-graph-change') !== null);
+			assert.equal(historyTreeRow(commit).getAttribute('aria-expanded'), 'true');
+			pressHistoryKey(tree, 'Enter', modifiers);
+			assert.equal(historyTreeRow(commit).getAttribute('aria-expanded'), 'false');
 		}
-		if (isMacintosh) { commit.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', metaKey: true, bubbles: true })); }
+		if (isMacintosh) { pressHistoryKey(tree, 'ArrowDown', { metaKey: true }); }
 		else { commit.click(); }
 		await waitFor(() => pane.element.querySelector(".ash-scm-graph-change") !== null);
 		assert.equal(pane.element.querySelector('.ash-scm-graph-commit'), commit);
-		assert.equal(browser.window.document.activeElement, commit);
+		assert.equal(focusedHistoryRow(tree), historyTreeRow(commit));
 		assert.equal(changeRequests, 1);
 		assert.equal(fileRequests, 0);
-		assert.equal(pane.element.querySelector(".ash-scm-graph-commit")?.getAttribute("aria-expanded"), "true");
+		assert.equal(historyTreeRow(commit).getAttribute("aria-expanded"), "true");
 		assert.equal(pane.element.querySelector(".ash-scm-graph-change-label .ash-icon-label-text")?.textContent, "editor.ts");
 		assert.equal(pane.element.querySelector(".ash-icon-label-description")?.textContent, "src");
 		assert.equal(pane.element.querySelector(".ash-scm-graph-change-label .ash-icon-label-icon")?.getAttribute("data-file-icon"), "editor.ts");
-		assert.ok([...pane.element.querySelectorAll<SVGPathElement>(".ash-scm-graph-path")].some((path) => path.getAttribute("d")?.endsWith("V 44")));
+		assert.equal(historyTreeRow(commit).getAttribute('aria-expanded'), 'true');
+		const childGraph = pane.element.querySelector('.ash-scm-graph-change-row > .ash-scm-graph-graph')!;
+		assert.ok(childGraph);
+		assert.equal((childGraph as SVGSVGElement).style.height, '22px');
+		assert.equal(childGraph.getAttribute('aria-hidden'), 'true');
+		assert.ok([...childGraph.querySelectorAll('path')].every(path => path.getAttribute('d')?.endsWith('V 22')), 'Each flattened child row owns one swimlane segment');
 		assert.equal(commit.style.getPropertyValue("--scm-graph-node-x"), "11px");
 		assert.equal(commit.style.getPropertyValue("--scm-graph-content-x"), "26px");
 		assert.ok(commit.querySelector(":scope > .ash-scm-graph-row > .ash-scm-graph-graph"));
@@ -945,9 +970,9 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 			itemId: (contextMenus[1].menuActionOptions.arg as { readonly historyItemViewModel: { readonly historyItem: { readonly id: string; }; }; }).historyItemViewModel.historyItem.id,
 			path: (contextMenus[1].menuActionOptions.arg as { readonly historyItemChange: { readonly path: string; }; }).historyItemChange.path,
 		}, { itemId: objectId, path: 'src/editor.ts' });
-		change?.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
+		pressHistoryKey(tree, 'F10', { shiftKey: true });
 		assert.equal(contextMenus[2]?.menuId, MenuId.SCMHistoryItemChangeContext);
-		assert.equal(browser.window.document.activeElement, change);
+		assert.equal(focusedHistoryRow(tree), historyTreeRow(change!));
 		change?.click();
 		await waitFor(() => opened.length === 1);
 		assert.equal(fileRequests, 1);
@@ -959,10 +984,10 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		await waitFor(() => opened.length === 2);
 		assert.equal(fileRequests, 2);
 		assert.equal(opened[1].options?.pinned, true);
-		change?.dispatchEvent(new browser.window.KeyboardEvent("keydown", { bubbles: true, key: " " }));
+		pressHistoryKey(tree, ' ');
 		await waitFor(() => opened.length === 3);
 		assert.deepEqual(opened[2].options, { pinned: false, preserveFocus: true });
-		change?.dispatchEvent(new browser.window.KeyboardEvent("keydown", { bubbles: true, key: "Enter", altKey: true }));
+		pressHistoryKey(tree, 'Enter', { altKey: true });
 		assert.equal(opened.length, 3);
 		const openFile = menuService.getMenuActions(MenuId.SCMHistoryItemChangeContext, contextMenus[2].menuActionOptions, contextMenus[2].contextKeyService).flatMap(([, actions]) => actions).find(action => action.id === 'workbench.scm.action.graph.openFile')!;
 		assert.equal(openFile.enabled, true);
@@ -970,14 +995,14 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		assert.ok(inlineOpenFile);
 		inlineOpenFile.click();
 		await waitFor(() => opened.length === 4);
-		assert.equal(commit.getAttribute('aria-expanded'), 'true', 'File actions do not toggle their commit');
+		assert.equal(historyTreeRow(commit).getAttribute('aria-expanded'), 'true', 'File actions do not toggle their commit');
 		assert.equal(opened[3].input.label, 'editor.ts (1111111)');
 		assert.equal(opened[3].input.initialText, 'after\n');
 		assert.equal(opened[3].input.readOnly, true);
-		change?.focus();
+		focusHistoryContent(change!);
 		commit.click();
-		assert.equal(commit.getAttribute('aria-expanded'), 'false');
-		assert.equal(browser.window.document.activeElement, commit, 'Collapsing a focused child returns focus to its commit');
+		assert.equal(historyTreeRow(commit).getAttribute('aria-expanded'), 'false');
+		assert.equal(focusedHistoryRow(tree), historyTreeRow(commit), 'Collapsing a focused child returns focus to its commit');
 		assert.ok(!change?.isConnected);
 		change?.click();
 		assert.equal(opened.length, 4, 'Collapsing files disposes their action listeners');
@@ -986,42 +1011,53 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		assert.equal(historyUiServices.get(IStorageService).get('scm.graphView.viewMode', StorageScope.WORKSPACE), 'tree');
 		commit.click();
 		await waitFor(() => pane.element.querySelector('.ash-scm-graph-folder') !== null);
-		const folder = (): HTMLButtonElement => pane.element.querySelector('.ash-scm-graph-folder')!;
-		assert.equal(folder().getAttribute('aria-label'), 'Folder src');
-		commit.focus();
-		commit.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-		assert.equal(browser.window.document.activeElement, folder(), 'Right Arrow enters an expanded commit');
-		folder().dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-		assert.equal(browser.window.document.activeElement?.className, 'ash-scm-graph-change');
-		const child = browser.window.document.activeElement!;
+		const folder = (): HTMLElement => pane.element.querySelector('.ash-scm-graph-folder')!;
+		assert.equal(folder().textContent?.trim(), 'src');
+		assert.equal(historyTreeRow(folder()).getAttribute('aria-level'), '2');
+		focusHistoryContent(commit);
+		pressHistoryKey(tree, 'ArrowRight');
+		assert.equal(focusedHistoryRow(tree), historyTreeRow(folder()), 'Right Arrow enters an expanded commit');
+		pressHistoryKey(tree, 'ArrowRight');
+		assert.ok(focusedHistoryRow(tree)?.querySelector('.ash-scm-graph-change'));
+		await waitFor(() => opened.length === 5);
+		assert.deepEqual(opened[4].options, { pinned: false, preserveFocus: true }, 'Keyboard navigation previews the focused file');
+		const child = tree;
 		const pageKey = new browser.window.KeyboardEvent('keydown', { key: 'PageDown', bubbles: true, cancelable: true });
 		child.dispatchEvent(pageKey);
-		await waitFor(() => browser.window.document.activeElement === commit);
+		assert.ok(focusedHistoryRow(tree)?.querySelector('.ash-scm-graph-change'), 'PageDown stops at the last visible file');
 		assert.equal(pageKey.defaultPrevented, true);
-		folder().focus();
-		folder().dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-		(browser.window.document.activeElement as HTMLElement).dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
-		assert.equal(browser.window.document.activeElement, folder());
+		focusHistoryContent(folder());
+		pressHistoryKey(tree, 'ArrowRight');
+		await waitFor(() => opened.length === 6);
+		assert.deepEqual(opened[5].options, { pinned: false, preserveFocus: true });
+		pressHistoryKey(tree, 'ArrowLeft');
+		assert.equal(focusedHistoryRow(tree), historyTreeRow(folder()));
 		folder().click();
-		assert.equal(folder().getAttribute('aria-expanded'), 'false');
-		assert.equal(pane.element.querySelector<HTMLUListElement>('.ash-scm-graph-folder-children')!.hidden, true);
-		folder().dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-		assert.equal(folder().getAttribute('aria-expanded'), 'true');
+		assert.equal(historyTreeRow(folder()).getAttribute('aria-expanded'), 'false');
+		assert.equal(pane.element.querySelector('.ash-scm-graph-change'), null, 'Collapsed folder children leave the flattened tree');
+		pressHistoryKey(tree, 'ArrowRight');
+		assert.equal(historyTreeRow(folder()).getAttribute('aria-expanded'), 'true');
 		await new CommandService(commandServices).executeCommand('workbench.scm.action.graph.setListViewMode');
 		assert.equal(pane.element.querySelector('.ash-scm-graph-folder'), null);
+		// History content is immutable; publish a new commit for the binary comparison.
 		binary = true;
+		await pane.runTitleOperation();
+		const binaryCommit = pane.element.querySelector<HTMLElement>(`[data-history-item-id="${currentObjectId()}"]`)!;
+		assert.ok(binaryCommit);
+		binaryCommit.click();
+		await waitFor(() => pane.element.querySelector('.ash-scm-graph-change') !== null);
 		const binaryChange = pane.element.querySelector<HTMLButtonElement>('.ash-scm-graph-change')!;
 		binaryChange.click();
-		await waitFor(() => opened.length === 5);
-		assert.equal(opened[4].input.contentType, 'application/vnd.ash.binary-diff');
-		const sides = opened[4].input as IResourceEditorInput & { readonly modified: IResourceEditorInput; };
+		await waitFor(() => opened.length === 7);
+		assert.equal(opened[6].input.contentType, 'application/vnd.ash.binary-diff');
+		const sides = opened[6].input as IResourceEditorInput & { readonly modified: IResourceEditorInput; };
 		assert.deepEqual(sides.modified.initialBytes, new Uint8Array([0, 255]));
-		binaryChange.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
+		pressHistoryKey(tree, 'F10', { shiftKey: true });
 		const binaryOpen = menuService.getMenuActions(MenuId.SCMHistoryItemChangeContext, contextMenus[3].menuActionOptions, contextMenus[3].contextKeyService).flatMap(([, actions]) => actions).find(action => action.id === 'workbench.scm.action.graph.openFile')!;
 		await binaryOpen.run();
-		assert.equal(opened.length, 6);
-		assert.deepEqual(opened[5].input.initialBytes, new Uint8Array([0, 255]));
-		assert.equal(opened[5].input.readOnly, true);
+		assert.equal(opened.length, 8);
+		assert.deepEqual(opened[7].input.initialBytes, new Uint8Array([0, 255]));
+		assert.equal(opened[7].input.readOnly, true);
 		assert.equal(pane.element.querySelector('[aria-label="history-tag"]'), null, 'Default badges follow the chosen history references');
 		await historyConfiguration.updateValue('scm.graph.badges', 'all');
 		assert.equal(pane.element.querySelector('[aria-label="history-tag"]')?.getAttribute('aria-label'), 'history-tag');
@@ -1029,15 +1065,17 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		await historyConfiguration.updateValue('scm.graph.badges', 'filter');
 		assert.equal(pane.element.querySelector('[aria-label="history-tag"]'), null);
 		const choosing = new CommandService(commandServices).executeCommand('workbench.scm.action.graph.pickHistoryItemRefs');
-		await waitFor(() => browser.window.document.querySelectorAll('[role="option"]').length === 3);
-		const all = [...browser.window.document.querySelectorAll<HTMLElement>('[role="option"]')].find(option => option.textContent?.includes('All References'))!;
-		all.click();
-		browser.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input')!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		await waitFor(() => (historyQuickInput.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.items.length === 3);
+		const referencePicker = historyQuickInput.currentQuickInput as IQuickPick<IQuickPickItem>;
+		const all = referencePicker.items.find((item): item is IQuickPickItem => !('type' in item) && item.label === 'All References');
+		assert.ok(all);
+		referencePicker.selectedItems = [all];
+		await historyQuickInput.accept();
 		await choosing;
 		assert.match(historyUiServices.get(IStorageService).get('scm.graphView.referencesFilter', StorageScope.WORKSPACE)!, /all/);
 		pane.dispose();
 		change?.click();
-		assert.equal(opened.length, 6);
+		assert.equal(opened.length, 8);
 		commit.dispatchEvent(new browser.window.MouseEvent("contextmenu", { bubbles: true }));
 		change?.dispatchEvent(new browser.window.MouseEvent("contextmenu", { bubbles: true }));
 		assert.equal(contextMenus.length, 4);
@@ -2164,3 +2202,33 @@ test('SCM compound commit button dispatches provider commands and keeps menu own
 	assert.equal(main.disabled, true);
 	assert.equal(dropdown.disabled, true);
 });
+
+/** The shared tree retains DOM focus and exposes its logical row through ARIA. */
+function historyTreeRow(content: Element): HTMLElement {
+	const row = content.closest<HTMLElement>('[role="treeitem"]');
+	assert.ok(row, 'History content must be owned by a shared tree row');
+	return row;
+}
+
+function focusedHistoryRow(tree: HTMLElement): HTMLElement | null {
+	assert.equal(tree.ownerDocument.activeElement, tree);
+	return tree.ownerDocument.getElementById(tree.getAttribute('aria-activedescendant') ?? '');
+}
+
+function pressHistoryKey(tree: HTMLElement, key: string, modifiers: KeyboardEventInit = {}): KeyboardEvent {
+	const event = new tree.ownerDocument.defaultView!.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...modifiers });
+	tree.dispatchEvent(event);
+	return event;
+}
+
+function focusHistoryContent(content: HTMLElement): void {
+	const tree = content.closest<HTMLElement>('.ash-scm-graph-tree')!;
+	const id = historyTreeRow(content).id;
+	tree.focus();
+	pressHistoryKey(tree, 'Home');
+	for (let index = 0; index < 1000; index++) {
+		if (focusedHistoryRow(tree)?.id === id) return;
+		pressHistoryKey(tree, 'ArrowDown');
+	}
+	assert.fail(`History row ${id} was not reachable by keyboard`);
+}

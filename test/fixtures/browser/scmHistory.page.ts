@@ -39,7 +39,7 @@ import { ViewDescriptorService } from '../../../src/ash/workbench/services/views
 import { SCMViewService } from '../../../src/ash/workbench/contrib/scm/browser/scmViewService.js';
 import { SCMService } from '../../../src/ash/workbench/contrib/scm/common/scmService.js';
 import { ISCMViewService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
-import type { ISCMHistoryProvider } from '../../../src/ash/workbench/contrib/scm/common/history.js';
+import type { ISCMHistoryItem, ISCMHistoryProvider } from '../../../src/ash/workbench/contrib/scm/common/history.js';
 const resources = new DisposableStore();
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 const root = document.querySelector<HTMLElement>('#history-root')!;
@@ -71,6 +71,7 @@ const historyChanged = resources.add(new Emitter<void>());
 const repositoryChanged = resources.add(new Emitter<void>());
 let repositoryBusy = false;
 let heldHistory: DeferredPromise<void> | undefined;
+let historyItems: readonly ISCMHistoryItem[] | undefined;
 let changeReads = 0;
 const heldContents = new Map<string, DeferredPromise<void>>();
 const completedContents: string[] = [];
@@ -78,8 +79,9 @@ const provider: ISCMHistoryProvider = {
 	onDidChange: historyChanged.event,
 	historyItemRef: observableValue('fixture.history.head', undefined),
 	refresh() { },
-	provideHistoryItems: async () => {
+	provideHistoryItems: async options => {
 		await heldHistory?.p;
+		if (historyItems) return historyItems.slice(options.skip ?? 0, (options.skip ?? 0) + (options.limit ?? 50));
 		return [{ id: hash, displayId: hash.slice(0, 7), parentIds: [], subject, message, tooltip: { authorName: 'History Author', authorEmail: 'history@example.invalid', timestamp: timestamp * 1000, message, statistics: { files: 2, additions: 2, deletions: 0 } }, remoteLinks: [{ name: 'origin', uri: URI.parse(`https://github.com/ash-test/history/commit/${hash}`) }], references: [{ id: 'localBranch:metadata-topic', name: 'metadata-topic', category: 'localBranch' }, { id: 'tag:metadata-v1', name: 'metadata-v1', category: 'tag' }] }];
 	},
 	provideHistoryItemChanges: async () => {
@@ -130,6 +132,14 @@ const fixture = {
 	finishContents(path: string): void { void heldContents.get(path)?.complete(); heldContents.delete(path); },
 	setViewMode(mode: 'list' | 'tree'): void { (panes.getView('fixture.history') as SCMHistoryViewPane).setViewMode(mode); },
 	refresh(): void { historyChanged.fire(); },
+	async setHistoryItems(prefix: string): Promise<void> {
+		await configuration.updateValue('scm.graph.pageSize', 200);
+		historyItems = Array.from({ length: 100 }, (_, index) => ({
+			id: `${prefix}-${index}`, parentIds: index < 99 ? [`${prefix}-${index + 1}`] : [],
+			subject: `${prefix} commit ${index}`, message: `${prefix} details ${index}`,
+		}));
+		historyChanged.fire();
+	},
 	beginHistoryRead(): void { heldHistory = new DeferredPromise<void>(); historyChanged.fire(); },
 	finishHistoryRead(fail = false): void {
 		const pending = heldHistory;

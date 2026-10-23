@@ -354,6 +354,59 @@ suite('scmHistory browser component', () => {
 		await expect(tree.getByRole('treeitem').filter({ has: page.locator('[data-history-path="src/second.ts"]') })).toHaveAttribute('aria-selected', 'true');
 	});
 
+	for (const locale of ['en', 'zh-CN']) {
+		test(`virtualized commits hide their details card when scrolled away (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/scmHistory.html?locale=${locale}`);
+			await page.waitForFunction(() => !!window.ashSCMHistoryIntegration);
+			await page.evaluate(() => window.ashSCMHistoryIntegration.setHistoryItems('original'));
+			const tree = page.locator('.ash-scm-graph-tree');
+			const first = tree.locator('[data-history-item-id="original-0"]');
+			await expect(first).toBeVisible();
+			await first.locator('.ash-scm-graph-subject').hover();
+			const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
+			await expect(hover).toContainText('original details 0');
+			await hover.hover();
+			const viewport = page.locator('.ash-scm-graph .ash-scrollbar-viewport');
+			await viewport.evaluate(element => { element.scrollTop = 1600; element.dispatchEvent(new Event('scroll')); });
+			await expect(first).toHaveCount(0);
+			await expect(hover).toHaveCount(0);
+			await viewport.evaluate(element => { element.scrollTop = 0; element.dispatchEvent(new Event('scroll')); });
+			await expect(first).toBeVisible();
+			await first.locator('.ash-scm-graph-subject').hover();
+			await expect(hover).toContainText('original details 0');
+		});
+
+		test(`rewritten history keeps logical focus on a visible replacement (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/scmHistory.html?locale=${locale}`);
+			await page.waitForFunction(() => !!window.ashSCMHistoryIntegration);
+			await page.evaluate(async () => {
+				await window.ashSCMHistoryIntegration.setHistoryItems('original');
+				window.ashSCMHistoryIntegration.setTheme(2);
+			});
+			const tree = page.locator('.ash-scm-graph-tree');
+			await expect(tree.locator('[data-history-item-id="original-0"]')).toBeVisible();
+			await tree.focus();
+			await tree.press('End');
+			await expect(tree.getByRole('treeitem').filter({ has: page.locator('[data-history-item-id="original-99"]') })).toHaveAttribute('aria-selected', 'true');
+			await page.evaluate(() => window.ashSCMHistoryIntegration.setHistoryItems('rewritten'));
+			await expect(tree).toBeFocused();
+			const focusedCommit = () => tree.evaluate(element => {
+				const row = element.ownerDocument.getElementById(element.getAttribute('aria-activedescendant') ?? '');
+				return row?.querySelector<HTMLElement>('[data-history-item-id]')?.dataset.historyItemId;
+			});
+			await expect.poll(focusedCommit).toMatch(/^rewritten-\d+$/u);
+			const replacement = await focusedCommit();
+			const row = tree.getByRole('treeitem').filter({ has: page.locator(`[data-history-item-id="${replacement}"]`) });
+			await expect(row).toBeInViewport();
+			await expect(tree.getByRole('treeitem', { selected: true })).toHaveCount(0);
+			await tree.press('ArrowDown');
+			await expect.poll(focusedCommit).not.toBe(replacement);
+			await expect.poll(focusedCommit).toMatch(/^rewritten-\d+$/u);
+		});
+	}
+
 	test('expanded file rows stay virtualized and retain selection through refresh', async function () {
 		const { page } = browserTests;
 		await page.goto('/scmHistory.html?manyChanges');

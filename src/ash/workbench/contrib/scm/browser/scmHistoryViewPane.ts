@@ -723,6 +723,12 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.tree.setChildren(children);
 			if (anchor && this.tree.model.has(anchor.id)) this.tree.scrollTop = (this.tree.getElementTop(anchor.id) ?? 0) + anchorOffset;
 			else if (scrollTop === 0) this.tree.scrollTop = 0;
+			if (restoreFocus === this.tree.element && focusedId && !this.tree.model.has(focusedId)) {
+				// A rewritten branch may remove the focused node while the tree keeps
+				// DOM focus. Give its visible replacement logical focus without scrolling.
+				const replacement = this.tree.model.visibleNodes.find(node => (this.tree!.getElementTop(node.id) ?? 0) + SWIMLANE_HEIGHT > this.tree!.scrollTop);
+				if (replacement) this.tree.setFocus(replacement.id);
+			}
 			this.updateSelection();
 			for (const node of this.tree.model.rootNodes) {
 				if (node.element.kind === 'commit' && !node.collapsed && !this.commitChanges.has(node.element.model.historyItem.id)) {
@@ -810,7 +816,9 @@ export class SCMHistoryViewPane extends ViewPane {
 		resources.add(tree.onDidScroll(() => {
 			this.updateSelection();
 			for (const [, row] of this.rowResources) {
-				if (row.hover?.visible) this.contextViewService.layout();
+				if (!row.hover?.visible) continue;
+				if (!row.element.isConnected) row.hover.hide();
+				else this.contextViewService.layout();
 			}
 			this.loadMoreIfVisible();
 		}));

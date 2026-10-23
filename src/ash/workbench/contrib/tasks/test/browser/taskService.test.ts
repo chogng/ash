@@ -2214,7 +2214,7 @@ suite('Extension task execution lifecycle', () => {
 				const snapshot = (incarnation: number): ExtensionHostFleetSnapshot => ({
 					generation: incarnation, extensions: [{
 						id: 'extension', version: '1', packageDigest: 'digest', runtimeApiVersion: 1, activationGeneration: 1, incarnation,
-						lifecycle: 'ready', failure: undefined, stderr: '', outputEvents: [], registrations: [{ registrationId: 'vscode.tasks.events', kind: 'taskEvents' }],
+						lifecycle: 'ready', failure: undefined, stderr: '', outputEvents: [], registrations: [{ registrationId: 'ash.tasks.events', kind: 'taskEvents' }],
 					}]
 				});
 				bridge.update(snapshot(1));
