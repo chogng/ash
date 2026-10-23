@@ -565,6 +565,37 @@ suite('scmHistory browser component', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`loading another commit preserves expanded file rows (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/scmHistory.html?paging&manual&changes&locale=${locale}`);
+			const tree = page.locator('.ash-scm-graph-tree');
+			const first = tree.getByRole('treeitem').filter({ has: page.locator('[data-history-item-id="paging-0"]') });
+			const second = tree.getByRole('treeitem').filter({ has: page.locator('[data-history-item-id="paging-1"]') });
+			await first.click();
+			const file = tree.locator('[data-history-tree-id="file:paging-0:src/first.ts"]');
+			await expect(file).toBeVisible();
+			const retainedFile = await file.elementHandle();
+			const retainedActions = await second.locator('.ash-scm-graph-actions').elementHandle();
+			try {
+				await second.click();
+				await expect(tree.locator('[data-history-tree-id="file:paging-1:src/first.ts"]')).toBeVisible();
+				expect(await retainedFile!.evaluate(element => element.isConnected)).toBe(true);
+				expect(await retainedActions!.evaluate(element => element.isConnected)).toBe(true);
+				await expect(first).toHaveAttribute('aria-expanded', 'true');
+				await second.press('ArrowLeft');
+				await expect(second).toHaveAttribute('aria-expanded', 'false');
+				await second.press('ArrowRight');
+				await expect(second).toHaveAttribute('aria-expanded', 'true');
+				expect(await page.evaluate(() => window.ashSCMHistoryIntegration.changeReads)).toBe(2);
+				expect(await retainedFile!.evaluate(element => element.isConnected)).toBe(true);
+			} finally {
+				await retainedFile?.dispose();
+				await retainedActions?.dispose();
+			}
+		});
+	}
+
+	for (const locale of ['en', 'zh-CN']) {
 		test(`expanded files use one tree selection and full-width rows (${locale})`, async function () {
 			const { page } = browserTests;
 			await page.goto(`/scmHistory.html?changes&locale=${locale}`);

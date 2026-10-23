@@ -206,6 +206,11 @@ async fn commit_details_count_renames_once_and_use_the_first_parent_of_merges() 
             deletions: 0
         }
     );
+    let (_, changes) = client.commit_changes(&repository, &rename).await.unwrap();
+    assert_eq!(changes.len(), 1);
+    assert_eq!(changes[0].path(), Path::new("new.txt"));
+    assert_eq!(changes[0].original_path(), Some(Path::new("old.txt")));
+    assert_eq!(changes[0].status(), GitChangeStatus::Renamed);
     source.git(&["switch", "topic"]);
     source.write("topic.txt", "topic\n");
     source.commit_all("Topic");
@@ -224,6 +229,10 @@ async fn commit_details_count_renames_once_and_use_the_first_parent_of_merges() 
             deletions: 0
         }
     );
+    let (_, changes) = client.commit_changes(&repository, &merge).await.unwrap();
+    assert_eq!(changes.len(), 1);
+    assert_eq!(changes[0].path(), Path::new("topic.txt"));
+    assert_eq!(changes[0].status(), GitChangeStatus::Added);
     source.git(&["commit", "--allow-empty", "-m", "Empty"]);
     let empty = source.git(&["rev-parse", "HEAD"]);
     assert_eq!(
@@ -233,6 +242,14 @@ async fn commit_details_count_renames_once_and_use_the_first_parent_of_merges() 
             .unwrap()
             .statistics,
         crate::GitCommitStatistics::default()
+    );
+    assert!(
+        client
+            .commit_changes(&repository, &empty)
+            .await
+            .unwrap()
+            .1
+            .is_empty()
     );
 }
 
@@ -665,6 +682,54 @@ async fn history_batch_preserves_limits_missing_files_binary_and_newline_paths()
             .unwrap()
             .modified(),
         None
+    );
+}
+
+#[tokio::test]
+async fn commit_details_prime_expansion_for_a_full_history_page() {
+    #[derive(Debug, Default)]
+    struct Observer(std::sync::atomic::AtomicUsize);
+    impl crate::GitProcessObserver for Observer {
+        fn observe(&self, _: crate::GitProcessTiming) {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+    let source = TestRepository::init();
+    for index in 0..50 {
+        source.write("file.txt", &format!("version {index}\n"));
+        source.commit_all(&format!("Version {index}"));
+    }
+    let ids = source.git(&["log", "--format=%H"]);
+    let observer = std::sync::Arc::new(Observer::default());
+    let client = GitClient::system().with_process_observer(observer.clone());
+    let repository = client.open_repository(source.root()).await.unwrap();
+    let before = observer.0.load(std::sync::atomic::Ordering::Relaxed);
+    for id in ids.lines() {
+        let details = client.commit_details(&repository, id).await.unwrap();
+        assert_eq!(details.statistics.files, 1);
+    }
+    assert_eq!(
+        observer.0.load(std::sync::atomic::Ordering::Relaxed) - before,
+        50
+    );
+    for (index, id) in ids.lines().enumerate() {
+        let (parent, changes) = client.commit_changes(&repository, id).await.unwrap();
+        assert_eq!(parent.as_deref(), ids.lines().nth(index + 1));
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].path(), Path::new("file.txt"));
+        assert_eq!(
+            changes[0].status(),
+            if parent.is_some() {
+                GitChangeStatus::Modified
+            } else {
+                GitChangeStatus::Added
+            }
+        );
+    }
+    assert_eq!(
+        observer.0.load(std::sync::atomic::Ordering::Relaxed) - before,
+        50,
+        "expanding any commit from the prepared page must reuse its details diff"
     );
 }
 

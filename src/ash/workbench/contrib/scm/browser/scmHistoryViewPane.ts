@@ -1326,6 +1326,21 @@ export class SCMHistoryViewPane extends ViewPane {
 		}
 	}
 
+	private updateCommitChildren(historyItemId: string): void {
+		const tree = this.tree;
+		const element = tree?.model.getElement(`commit:${historyItemId}`);
+		if (!tree || element?.kind !== 'commit') return;
+		const scrollTop = tree.scrollTop;
+		const anchor = tree.model.visibleNodes.find(node => (tree.getElementTop(node.id) ?? 0) + SWIMLANE_HEIGHT > scrollTop);
+		const anchorOffset = anchor ? scrollTop - (tree.getElementTop(anchor.id) ?? 0) : 0;
+		// File reads do not change graph lanes or other commits' children. Updating
+		// only this branch keeps their rows, actions and hover resources intact.
+		tree.setNodeChildren(element.id, this.getCommitChildren(element.model));
+		if (anchor && tree.model.has(anchor.id)) tree.scrollTop = (tree.getElementTop(anchor.id) ?? 0) + anchorOffset;
+		this.updateSelection();
+		this.loadMoreIfVisible();
+	}
+
 	private async loadCommitChanges(historyItem: ISCMHistoryItem): Promise<void> {
 		const cached = this.commitChanges.get(historyItem.id);
 		if (cached && cached.state !== 'error') return;
@@ -1333,7 +1348,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		if (!provider) return;
 		const pending = { state: 'loading' } as const;
 		this.commitChanges.set(historyItem.id, pending);
-		if (this.page) this.renderGraph(this.page);
+		this.updateCommitChildren(historyItem.id);
 		const progress = this.getProgressIndicator().show(true, 100);
 		const handle = this.loadingProgress.add(toDisposable(() => progress.done()));
 		using progressLifetime = toDisposable(() => { this.loadingProgress.delete(handle); handle.dispose(); });
@@ -1345,7 +1360,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			if (this.isDisposed || provider !== this.provider || this.commitChanges.get(historyItem.id) !== pending) return;
 			this.commitChanges.set(historyItem.id, { state: 'error', message: error instanceof Error ? error.message : String(error) });
 		}
-		if (this.page) this.renderGraph(this.page);
+		this.updateCommitChildren(historyItem.id);
 	}
 
 	private async openCommitChange(historyItem: ISCMHistoryItem, change: ISCMHistoryItemChange, options: IOpenEditorOptions): Promise<void> {
