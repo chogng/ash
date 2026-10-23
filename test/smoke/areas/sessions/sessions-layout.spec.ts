@@ -9,7 +9,6 @@ test('Sessions content shares one raised card with equal right and bottom margin
 	const card = page.locator('.ash-sessions-content-card');
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const sessions = page.locator('[data-part="sessions"]');
-	const activitybar = page.locator('[data-part="activitybar"]');
 	const titlebar = page.locator('[data-part="titlebar"]');
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await expect(card).toBeVisible();
@@ -19,25 +18,15 @@ test('Sessions content shares one raised card with equal right and bottom margin
 	// Chromium rounds strokes to device pixels at Windows display scaling.
 	expect(await card.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderRightWidth)))).toBe(1);
 	await expect(card).not.toHaveCSS('box-shadow', 'none');
-	await expect(activitybar).toHaveCSS('border-width', '0px');
-	await expect(activitybar).toHaveCSS('border-radius', '0px');
-	await expect(activitybar).toHaveCSS('background-color', await titlebar.evaluate(element => getComputedStyle(element).backgroundColor));
+	await expect(page.locator('[data-part="activitybar"]')).toHaveCount(0);
 	const expectCardGeometry = async (): Promise<void> => {
 		await expect.poll(() => page.evaluate(() => {
 			const card = document.querySelector<HTMLElement>('.ash-sessions-content-card')!.getBoundingClientRect();
 			const layout = document.querySelector<HTMLElement>('.ash-sessions-workbench-layout')!.getBoundingClientRect();
 			const start = document.querySelector<HTMLElement>('.ash-sessions-frame-start')!.getBoundingClientRect();
 			const end = document.querySelector<HTMLElement>('.ash-sessions-frame-end')!.getBoundingClientRect();
-			const rail = document.querySelector<HTMLElement>('[data-part="activitybar"]')!.getBoundingClientRect();
-			const menu = document.querySelector<HTMLElement>('.ash-sessions-titlebar-actions .ash-menubar-item')?.getBoundingClientRect();
-			const controlsWidth = document.querySelector<HTMLElement>('.ash-sessions-window-controls-spacer')?.getBoundingClientRect().width ?? 0;
-			const center = (layout.left + card.left) / 2;
-			const buttonOffsets = [...document.querySelectorAll<HTMLElement>('.ash-sessions-activity-item')].map(button => {
-				const bounds = button.getBoundingClientRect();
-				return Math.abs(bounds.left + bounds.width / 2 - center);
-			});
-			return [layout.right - card.right, layout.bottom - card.bottom, card.left - start.left, card.right - end.right, card.bottom - start.bottom, card.bottom - end.bottom, rail.left - layout.left, Math.max(...buttonOffsets), ...(menu ? [menu.left + menu.width / 2 - controlsWidth - center] : [])].map(Math.round);
-		})).toEqual([4, 4, 0, 0, 0, 0, 0, 0, ...('windows' in application && process.platform === 'darwin' ? [] : [0])]);
+			return [layout.right - card.right, layout.bottom - card.bottom, card.left - start.left, card.right - end.right, card.bottom - start.bottom, card.bottom - end.bottom].map(Math.round);
+		})).toEqual([4, 4, 0, 0, 0, 0]);
 	};
 	await expectCardGeometry();
 	await expect(sidebar).toHaveCSS('border-top-left-radius', '12px');

@@ -56,7 +56,7 @@ Brand 的重点是模板约束下的团队生产，单张画图或复制尺寸�
 
 Make 默认从左到右组合 `SidebarPart` 导航、`SessionsPart` 对话和 `EditorPart` 运行预览或代码，选中元素时再显示 `AuxiliaryBarPart`。其他工作区以 `EditorPart` 为主，导航和属性按当前任务显示，打开 Agent 时保留编辑器并显示 `SessionsPart`。打开对话后仍维持 Creator 入口选中；侧栏和属性区遵守现有显示偏好与窄窗口规则，不要求四个区域长期同时展开。Creator 首页保留导航侧栏，中央显示工作区入口。
 
-`PanelPart` 按需承载终端、构建输出等底部工具。讲稿、批量内容表、CMS 编辑与运行预览属于对应的 `EditorPane`，不因位于页面下方就迁入 `PanelPart`。`ActivityBarPart` 保留 Creator 产品入口，七项工作区通过 Creator 导航选择；`TitlebarPart` 保留窗口导航和窗口操作。
+`PanelPart` 按需承载终端、构建输出等底部工具。讲稿、批量内容表、CMS 编辑与运行预览属于对应的 `EditorPane`，不因位于页面下方就迁入 `PanelPart`。`ActivityBar` 导航组件保留 Creator 产品入口，七项工作区通过 Creator 导航选择；`TitlebarPart` 保留窗口导航和窗口操作。
 
 工作区通过布局入口描述导航、编辑器、属性和对话的组合，不自行创建窗口 Grid 或新的 Part。对话身份、草稿、附件和执行状态由现有 Sessions 与 Agent / Thread 契约持有，设计文档、历史与保存由 Creator 编辑器和工作副本持有；两者按文档与对话身份关联。切换工作区、收起对话或进入播放只改变显示与焦点，不重建内容、不丢弃草稿，也不隐式停止运行任务或归档对话。
 

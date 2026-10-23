@@ -3,6 +3,15 @@
 	background: linear-gradient(
 		to right,
 		var(--ash-sideBar-background) 0
+			calc(
+				var(--ash-sessions-titlebar-sidebar-width, 0px) -
+					var(--ash-strokeThickness)
+			),
+		var(--ash-border)
+			calc(
+				var(--ash-sessions-titlebar-sidebar-width, 0px) -
+					var(--ash-strokeThickness)
+			)
 			var(--ash-sessions-titlebar-sidebar-width, 0px),
 		var(--ash-titleBar-background)
 			var(--ash-sessions-titlebar-sidebar-width, 0px)
@@ -14,14 +23,7 @@
 	width: 100%;
 	flex-direction: row;
 	align-items: center;
-	padding: 0 var(--ash-spacing-size160) 0
-		calc(
-			(
-					var(--ash-sessions-titlebar-leading-width) -
-						var(--ash-spacing-size280)
-				) /
-				2
-		);
+	padding: 0 var(--ash-spacing-size160) 0 var(--ash-spacing-size80);
 }
 
 .ash-sessions-titlebar-left {
@@ -36,11 +38,7 @@
 	width: max(
 		calc(
 			var(--ash-sessions-titlebar-sidebar-width, 0px) -
-				(
-					var(--ash-sessions-titlebar-leading-width) -
-						var(--ash-spacing-size280)
-				) /
-				2 - var(--ash-spacing-size160)
+				var(--ash-spacing-size80) - var(--ash-spacing-size160)
 		),
 		calc(6 * var(--ash-spacing-size360))
 	);
@@ -48,7 +46,7 @@
 	gap: var(--ash-spacing-size80);
 }
 
-.ash-sessions-titlebar-left > .ash-window-mode-control {
+.ash-sessions-titlebar-left > .ash-sessions-workspace-mode {
 	margin-left: auto;
 }
 

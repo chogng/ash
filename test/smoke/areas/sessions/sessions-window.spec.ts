@@ -1278,7 +1278,7 @@ test('Sessions navigation retains its own selection and hover skin across naviga
 test('Browser Code opens Sessions and reloads the routed workbench', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-	const activityBar = page.locator('[data-part="activitybar"]');
+	const activityBar = page.locator('.ash-sessions-activity-content');
 	await expect(activityBar).toBeVisible();
 	await activityBar.getByRole('button', { name: 'Creator', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
@@ -1404,28 +1404,30 @@ test('Electron Code Sessions Activity Bar follows its position setting with fixe
 	};
 	try {
 		await updateSettings('default');
-		await expect(page.locator('[data-part="activitybar"]')).toHaveClass(/ash-sessions-activitybar/u);
+		await expect(page.locator('[data-part="activitybar"]')).toHaveCount(0);
 		await expect(page.locator('.ash-workbench-activitybar, .ash-activity-bar-content')).toHaveCount(0);
 		const activityNavigation = page.locator('.ash-sessions-activity-content');
 		await expectActivityIconSize(activityNavigation, 16);
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		const collaboration = page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Collab' });
-		const projects = page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Projects' });
+		const collaboration = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Collab' });
+		const projects = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects' });
 		await collaboration.click();
 		await expect(collaboration.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'collab');
 		await expect(page.locator('.ash-sessions-list-controls')).toBeHidden();
-		await projects.click();
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 		await expect(projects.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'projects');
+		await projects.click();
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
-		await page.locator('[data-part="activitybar"]').getByRole('button', { name: 'New', exact: true }).click();
+		await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New', exact: true }).click();
 		await expect(page.locator('.ash-sessions-list-controls')).toBeVisible();
-		const chatButton = page.locator('[data-part="activitybar"] button').first();
+		const chatButton = page.locator('.ash-sessions-activity-content button').first();
 		await expect(chatButton).toBeVisible();
 		await chatButton.click({ button: 'right' });
 		await page.keyboard.press('Escape');
 		await updateSettings('top');
-		await expect(page.locator('[data-part="activitybar"]')).toBeHidden();
+		await expect(page.locator('[data-part="activitybar"]')).toHaveCount(0);
 		await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
 		await expectActivityIconSize(activityNavigation, 16);
 		await page.reload();
@@ -1439,7 +1441,7 @@ test('Electron Code Sessions Activity Bar follows its position setting with fixe
 		await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
 		await expectActivityIconSize(activityNavigation, 16);
 		await updateSettings('default');
-		await expect(page.locator('[data-part="activitybar"]')).toBeVisible();
+		await expect(page.locator('.ash-sessions-activity-content')).toBeVisible();
 		await expectActivityIconSize(activityNavigation, 16);
 	} finally {
 		await (async source => {
@@ -1461,7 +1463,7 @@ test('Electron Sessions account menu opens the Sessions settings page', { tag: [
 		})();
 	}
 	const page = await workbench.openAgentsWindow(target.kind);
-	const accountButton = page.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last();
+	const accountButton = page.locator('.ash-sessions-activity-bottom button').last();
 	await accountButton.click();
 	await expect(accountButton).toHaveAttribute('aria-expanded', 'true');
 	await page.getByRole('menuitem', { name: 'Settings' }).click();
@@ -1546,7 +1548,7 @@ test('Sessions and IDE layout styles switch independently', { tag: ['@electron-u
 		await updateSettings({ 'workbench.layoutStyle': 'modern', 'sessions.layoutStyle': 'modern' });
 		await expect(sessionsWindow).toHaveAttribute('data-layout-style', 'modern');
 		await expect.poll(gap).toBe(0);
-		await expect(sessionsPage.locator('[data-part="activitybar"]')).toHaveCSS('border-top-left-radius', '0px');
+		await expect(sessionsPage.locator('[data-part="activitybar"]')).toHaveCount(0);
 		await expect(sessionsPage.locator('.ash-sessions-content-card')).toHaveCSS('border-radius', '12px');
 		await updateSettings({ 'workbench.layoutStyle': 'flat' });
 		await expect(workbench.element).toHaveAttribute('data-layout-style', 'flat');
@@ -1562,7 +1564,7 @@ test('Sessions and IDE layout styles switch independently', { tag: ['@electron-u
 		await expect(sessionsWindow).toHaveAttribute('data-layout-style', 'modern');
 		await expect.poll(gap).toBe(0);
 		await expect(sessionsPage.locator('[data-part="sessions"]')).toHaveCSS('border-top-left-radius', '0px');
-		await expect(sessionsPage.locator('[data-part="activitybar"]')).toHaveCSS('border-top-left-radius', '0px');
+		await expect(sessionsPage.locator('[data-part="activitybar"]')).toHaveCount(0);
 		await expect(sessionsPage.locator('.ash-sessions-content-card')).toHaveCSS('border-radius', '12px');
 	} finally {
 		await (async source => {
@@ -1973,6 +1975,15 @@ focusTest('Sessions menus and history actions stay independent from Workbench', 
 test('Sessions titlebar aligns its platform actions and sidebar toggle', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
+	// History actions move into Go at narrow widths; expand the sidebar to check their full layout.
+	const sidebar = (await sessionsPage.locator('[data-part="sidebar"]').boundingBox())!;
+	for (const sash of await sessionsPage.getByRole('separator').all()) {
+		const bounds = await sash.boundingBox();
+		if (!bounds || bounds.height < 200 || Math.abs(bounds.x - sidebar.x - sidebar.width) > 8) continue;
+		await sash.focus();
+		for (let step = 0; step < 20; step++) await sash.press('ArrowRight');
+		break;
+	}
 	const toolbar = sessionsPage.locator('[data-part="titlebar"]').getByRole('toolbar', { name: 'Title bar left actions', exact: true });
 	const buttons = toolbar.getByRole('button');
 	const hasWindowMenu = process.platform !== 'darwin';
@@ -1991,14 +2002,12 @@ test('Sessions titlebar aligns its platform actions and sidebar toggle', { tag: 
 	await expect(sessionsPage.locator('.ash-sessions-surface-header')).toHaveCount(0);
 	expect(await buttons.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual([...(hasWindowMenu ? ['Application menu'] : []), 'Hide sidebar', 'Back', 'Forward']);
 	if (hasWindowMenu) {
-		const columnOffset = await sessionsPage.evaluate(() => {
+		const leadingInset = await sessionsPage.evaluate(() => {
 			const menu = document.querySelector<HTMLElement>('[data-action-id="ash.applicationMenu"] button')!;
-			const chat = document.querySelector<HTMLElement>('[data-part="activitybar"] button')!;
-			const menuBounds = menu.getBoundingClientRect();
-			const chatBounds = chat.getBoundingClientRect();
-			return menuBounds.x + menuBounds.width / 2 - (chatBounds.x + chatBounds.width / 2);
+			const content = document.querySelector<HTMLElement>('.ash-sessions-titlebar > .ash-workbench-part-content')!;
+			return menu.getBoundingClientRect().left - content.getBoundingClientRect().left;
 		});
-		expect(Math.abs(columnOffset)).toBeLessThanOrEqual(1);
+		expect(Math.round(leadingInset)).toBe(8);
 	}
 	const iconOffsets = await buttons.evaluateAll(buttons => buttons.map(button => {
 		const buttonBounds = button.getBoundingClientRect();
@@ -2334,7 +2343,7 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 	// Horizontal layouts place Accounts in the title bar, whose tooltip opens below.
 	await checkTooltip(accounts, 'Accounts', 'below', true);
 	await setPosition('Default');
-	await expect(page.locator('[data-part="activitybar"]')).toBeVisible();
+	await expect(page.locator('.ash-sessions-activity-content')).toBeVisible();
 	const originalAccounts = await accounts.elementHandle();
 	await page.setViewportSize({ width: 900, height: 600 });
 	await checkTooltip(chat, 'Chat', 'right');

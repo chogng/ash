@@ -51,7 +51,7 @@ Feature entry descriptors must express the retained product editor and conversat
 
 Sessions services and SessionsPart retain conversation identity, selection, live widgets, drafts, attachments and execution state. Creator's editor and working copy retain document identity, edits, history and save state. Features associate document and conversation identities through their owning contracts; a side View borrows the same editor content and selection. Showing, hiding or switching these hosts does not duplicate either model, discard unsent work, cancel a running Turn, archive a conversation or close a dirty document. Actual close and shutdown retain the existing save/discard/cancel lifecycle.
 
-PanelPart hosts optional tools such as terminal and build output. Presenter notes, bulk content tables, CMS editing and running previews remain content of the relevant EditorPane. ActivityBarPart owns the Creator product entry; Creator navigation selects its seven workspaces. TitlebarPart keeps window navigation and window-scoped actions.
+PanelPart hosts optional tools such as terminal and build output. Presenter notes, bulk content tables, CMS editing and running previews remain content of the relevant EditorPane. ActivityBar owns the Creator product entry; Creator navigation selects its seven workspaces. TitlebarPart keeps window navigation and window-scoped actions.
 
 Implementation must verify the composed entry path, independent host visibility, Creator selected state, retained editor and conversation state, focus and size restoration, and narrow-window behavior using Playwright in Browser, Electron UI and Electron. This specification records the target contract, not completed behavior tests.
 
@@ -138,14 +138,17 @@ Content
 The workbench omits the standard Activity Bar and Status Bar. A shared window Banner appears below the title bar for connection recovery and read-only or restricted workspace permissions. Its Sessions Activity Bar runs registered product commands. Part positions are fixed by the Agents Window rather than user settings.
 
 Contributions register localized titles, icons and commands in `Menus.ActivityBar`.
-`ActivityBarPart` owns profile-scoped command order and presentation. Selected
+`ActivityBar` owns profile-scoped command order and presentation. Selected
 items follow the entry context published by the Sessions layout service. Focusing a conversation inside Code keeps Code selected.
 Account actions remain outside the sortable group, and placement changes retain
 the same actions and order. At the default location, SidebarPart hosts labeled
-navigation above its active view and Accounts below it. The concrete layout hides
-the separate Activity Bar leaf while the sidebar is visible; closing or suppressing
-the sidebar restores the icon rail. ActivityBarPart retains action ownership and
-keyboard focus as its presentation moves between these hosts.
+navigation above its active view and Accounts below it. Navigation is a disposable
+component rather than a separate window Part; closing or suppressing the sidebar hides its
+navigation and Accounts together without reserving an icon rail. The titlebar
+workspace mode control follows the same sidebar visibility. The sidebar toggle
+remains available to restore navigation; on pages that omit the sidebar, it
+returns to the current workspace conversation before expanding. ActivityBar retains
+action ownership as its presentation moves between the configured hosts.
 
 Both workbenches open, hide and focus view containers through
 `IPaneCompositePartService`. Sidebar, Panel and Auxiliary Bar retain their

@@ -21,11 +21,17 @@ import { CompactTitlebarNavigationContext, SessionsWorkspaceModeContext } from '
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { observableFromEvent } from '../../../../base/common/observable.js';
 import { Event } from '../../../../base/common/event.js';
+import { SideBarVisibleContext } from '../../../../workbench/common/contextkeys.js';
 
 /** Window chrome and primary product actions for the dedicated Sessions Workbench. */
 export class TitlebarPart extends WebTitlebarPart {
 	private readonly activityActions: WorkbenchToolBar;
 	private activityActionViewItemProvider: ActionViewItemProvider | undefined;
+
+	public override get minimumHeight(): number {
+		// Align this row with the whole-pixel center of macOS inset window buttons.
+		return environment.runtime === 'electron' && environment.os === 'mac' ? Math.max(super.minimumHeight, 36) : super.minimumHeight;
+	}
 
 	constructor(
 		container: HTMLElement,
@@ -70,10 +76,25 @@ export class TitlebarPart extends WebTitlebarPart {
 		});
 		const activeMode = observableFromEvent(this, modeChanged, () =>
 			contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code' ? 'code' as const : 'agents' as const);
-		this._register(instantiationService.createInstance(WindowModeControl, left, activeMode, {
+		const modeHost = h(container.ownerDocument, 'div');
+		modeHost.className = 'ash-sessions-workspace-mode';
+		left.append(modeHost);
+		this._register(instantiationService.createInstance(WindowModeControl, modeHost, activeMode, {
 			agents: 'sessions.open.chat',
 			code: 'sessions.open.code',
 		}));
+		const updateModeVisibility = (): void => {
+			const visible = contextKeys.getValue<boolean>(SideBarVisibleContext.key) !== false;
+			if (!visible && modeHost.contains(container.ownerDocument.activeElement)) {
+				menubar.domNode.querySelector<HTMLElement>('[data-action-id="ash.sessions.toggleSidebar"] button')?.focus();
+			}
+			modeHost.hidden = !visible;
+		};
+		const sidebarKeys = new Set([SideBarVisibleContext.key]);
+		this._register(contextKeys.onDidChangeContext(event => {
+			if (event.affectsSome(sidebarKeys)) updateModeVisibility();
+		}));
+		updateModeVisibility();
 		const right = h(container.ownerDocument, 'div');
 		right.className = 'ash-sessions-titlebar-right';
 		this.contentDomNode.append(right);

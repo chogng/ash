@@ -1,9 +1,4 @@
-.ash-sessions-activitybar {
-	background: var(--ash-titleBar-background);
-}
-
 .ash-sessions-activity-content {
-	/* The navigation content moves into sidebar hosts without its Part root. */
 	--ash-sessions-activity-bar-icon-size: var(--ash-spacing-size160);
 	display: flex;
 	min-height: 0;

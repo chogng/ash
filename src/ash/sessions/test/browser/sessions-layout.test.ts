@@ -57,7 +57,6 @@ class TestSessionsPart extends Part {
 	}
 
 	override get minimumWidth(): number {
-		if (this.id === 'activitybar') return 44;
 		if (this.id === "sidebar") return 180;
 		if (this.id === "sessions") return 320;
 		if (this.id === "auxiliarybar") return 180;
@@ -66,7 +65,6 @@ class TestSessionsPart extends Part {
 	}
 
 	override get maximumWidth(): number {
-		if (this.id === 'activitybar') return 44;
 		return this.id === "sidebar" || this.id === "auxiliarybar" ? 640 : Number.POSITIVE_INFINITY;
 	}
 
@@ -261,7 +259,7 @@ test("Sessions layout owns a fixed Sessions-first Part topology", () => {
 	layout.layout(new Dimension(1_200, 800));
 
 	assert.deepEqual(layout.getPartSize("titlebar"), new Dimension(1_200, WorkbenchWindowBarHeight));
-	assert.equal(layout.getPartSize('activitybar').width, 44);
+	assert.equal(container.querySelector('[data-part="activitybar"]'), null);
 	assert.equal(Math.abs(layout.getPartSize("sidebar").width - 240) <= 1, true);
 	assert.equal(Math.abs(layout.getPartSize("auxiliarybar").width - 240) <= 1, true);
 	assert.equal(layout.getPartSize("sessions").height, 800 - WorkbenchWindowBarHeight);
@@ -338,7 +336,7 @@ test("Sessions layout toggles the sidebar and auxiliary Part while keeping the p
 	assert.equal(changes.at(-1)?.partId, "auxiliarybar");
 	assert.equal(changes.at(-1)?.visible, false);
 	assert.throws(() => layout.hidePart("sessions"), /Required Sessions Part/);
-	assert.throws(() => layout.hidePart('activitybar'), /Required Sessions Part/);
+	assert.throws(() => layout.hidePart('titlebar'), /Required Sessions Part/);
 
 	subscription.dispose();
 	layout.dispose();
@@ -362,7 +360,7 @@ test('Sessions compound composition changes lay out Parts once at the completed 
 		assert.deepEqual(sessions.layouts, []);
 		assert.deepEqual(completed, []);
 	});
-	assert.deepEqual(sessions.layouts, [new Dimension(1_200 - 44 - 4, 800 - WorkbenchWindowBarHeight - 4)]);
+	assert.deepEqual(sessions.layouts, [new Dimension(1_200 - 4, 800 - WorkbenchWindowBarHeight - 4)]);
 	assert.deepEqual(completed, [new Dimension(1_200, 800)]);
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();
@@ -399,7 +397,7 @@ test('Sessions entry changes preserve navigation width when replacing the only v
 	}
 });
 
-test('Sessions Activity Bar position changes the grid visibility and frame edge', () => {
+test('Sessions navigation collapses with the sidebar without reserving an icon rail', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const container = h(dom.window.document, 'main');
 	dom.window.document.body.append(container);
@@ -410,21 +408,22 @@ test('Sessions Activity Bar position changes the grid visibility and frame edge'
 	});
 	try {
 		layout.layout(new Dimension(1_200, 800));
-		assert.equal(layout.isPartVisible('activitybar'), false);
+		assert.equal(container.querySelector('[data-part="activitybar"]'), null);
 		assert.equal(parts.get('sidebar')!.domNode.parentElement?.style.paddingLeft, '6px');
 		const expandedWidth = layout.getPartSize('sessions').width;
 		layout.setActivityBarLocation(ActivityBarPosition.DEFAULT);
-		assert.equal(layout.isPartVisible('activitybar'), false, 'Expanded navigation shares the sidebar');
-		assert.equal(parts.get('activitybar')!.domNode.parentElement?.style.paddingLeft, '');
 		assert.equal(parts.get('sidebar')!.domNode.parentElement?.style.paddingLeft, '0px');
 		assert.equal(layout.getPartSize('sessions').width >= expandedWidth, true);
 		layout.hidePart('sidebar');
-		assert.equal(layout.isPartVisible('activitybar'), true, 'Collapsing the sidebar retains product navigation');
-		assert.equal(layout.getPartSize('activitybar').width, 44);
+		assert.equal(layout.getPartSize('sessions').width, 1_200);
+		assert.equal(layout.domNode.querySelector<HTMLElement>('.ash-sessions-content-card')!.style.left, '0px');
+		layout.setActivityBarLocation(ActivityBarPosition.BOTTOM);
+		layout.setActivityBarLocation(ActivityBarPosition.DEFAULT);
+		layout.setPanelPosition(Position.RIGHT);
+		assert.equal(container.querySelector('[data-part="activitybar"]'), null, 'Position changes and grid rebuilds do not create a separate navigation Part');
+		assert.equal(layout.getPartSize('sessions').width, 1_200);
 		layout.showPart('sidebar');
-		assert.equal(layout.isPartVisible('activitybar'), false);
 		layout.setActivityBarLocation(ActivityBarPosition.HIDDEN);
-		assert.equal(layout.isPartVisible('activitybar'), false);
 		assert.equal(parts.get('sidebar')!.domNode.parentElement?.style.paddingLeft, '6px');
 	} finally {
 		layout.dispose();
@@ -441,8 +440,8 @@ test("Sessions layout validates its complete Part set", () => {
 
 	assert.throws(() => createLayout(container, parts), /missing Parts: auxiliarybar/);
 	parts.set('auxiliarybar', new TestSessionsPart('auxiliarybar', dom.window.document.body));
-	parts.delete('activitybar');
-	assert.throws(() => createLayout(container, parts), /missing Parts: activitybar/);
+	parts.delete('panel');
+	assert.throws(() => createLayout(container, parts), /missing Parts: panel/);
 
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();
@@ -481,6 +480,8 @@ test("Sessions layout restores its profile-scoped geometry and auxiliary visibil
 
 	assert.equal(Math.abs(restored.getPartSize("sidebar").width - 320) <= 1, true);
 	assert.equal(restored.isPartVisible('sidebar'), false);
+	assert.equal(restoredContainer.querySelector('[data-part="activitybar"]'), null, 'Restoring a closed sidebar does not create an icon rail');
+	assert.equal(restored.getPartSize('sessions').width + restored.getPartSize('editor').width, 1_100);
 	assert.equal(Math.abs(restored.getPartSize("auxiliarybar").width - 360) <= 1, true);
 	assert.equal(restored.isPartVisible("auxiliarybar"), false);
 	assert.equal(restored.isPartVisible('editor'), true);

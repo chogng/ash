@@ -242,8 +242,7 @@ test('Sessions reports browser errors and rejected promises once without rethrow
 
 test('Sessions navigation icons and surface controls follow the selected component', async ({ page }) => {
 	const activityBar = page.locator('[data-part="activitybar"]');
-	await expect(activityBar).toBeHidden();
-	await expect(activityBar).toHaveClass(/ash-sessions-activitybar/u);
+	await expect(activityBar).toHaveCount(0);
 	await expect(page.locator('.ash-workbench-activitybar, .ash-activity-bar-content')).toHaveCount(0);
 	const activityNavigation = page.locator('.ash-sessions-activity-content');
 	await expectActivityIconSize(activityNavigation, 16);
@@ -266,10 +265,14 @@ test('Sessions navigation icons and surface controls follow the selected compone
 	await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 	await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
-	await projects.click();
 	await expect(projects.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'projects');
-	await expect(projects).toHaveAttribute('aria-current', 'page');
+	await projects.click();
+	await expect(activityNavigation.locator('[data-action-id="sessions.open.projects"] button')).toHaveAttribute('aria-current', 'page');
+	await expect(activityNavigation).toBeHidden();
+	await expect(activityBar).toHaveCount(0);
 	await expect(collaboration).toHaveCount(0);
+	await expect(page.locator('.ash-window-mode-control')).toBeHidden();
+	await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
 	await chat.click();
 	await expect(chat).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-sessions-list-controls')).toBeVisible();
@@ -304,6 +307,7 @@ test('Sessions navigation icons and surface controls follow the selected compone
 		}
 		await surface.getByRole('searchbox').focus();
 		await expect(surface.getByRole('searchbox')).toHaveCSS('outline-style', 'solid');
+		await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
 	}
 });
 
@@ -770,7 +774,6 @@ test.describe('Sessions settings components', () => {
 
 	test('layout style retains icon sizes and closing settings restores Accounts focus', async ({ page }) => {
 		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
-		const activityBar = page.locator('[data-part="activitybar"]');
 		const activityNavigation = page.locator('.ash-sessions-activity-content');
 		const accounts = page.getByRole('button', { name: 'Accounts', exact: true });
 		await settings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Appearance' }).click();
@@ -811,11 +814,11 @@ test('Activity Bar uses fixed sizes across positions and preserves account owner
 	await expect(chatButton).toHaveCSS('height', '36px');
 	await expect(projectsIcon).toHaveCSS('width', '16px');
 	await expectActivityIconSize(activityNavigation, 16);
-	await expect(activityBar).toBeHidden();
+	await expect(activityBar).toHaveCount(0);
 	await chatButton.click({ button: 'right' });
 	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 	await page.getByRole('menuitemcheckbox', { name: 'Top' }).click();
-	await expect(activityBar).toBeHidden();
+	await expect(activityBar).toHaveCount(0);
 	const topHost = page.locator('.ash-sessions-activity-host.top');
 	await expect(topHost).toBeVisible();
 	await expectActivityIconSize(activityNavigation, 16, true);
@@ -835,7 +838,7 @@ test('Activity Bar uses fixed sizes across positions and preserves account owner
 	await page.locator('.ash-sessions-activity-host.bottom button').first().click({ button: 'right' });
 	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 	await page.getByRole('menuitemcheckbox', { name: 'Default' }).click();
-	await expect(activityBar).toBeHidden();
+	await expect(activityBar).toHaveCount(0);
 	await expectActivityIconSize(activityNavigation, 16);
 	await chatButton.click({ button: 'right' });
 	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
@@ -856,7 +859,7 @@ test('Activity Bar uses fixed sizes across positions and preserves account owner
 	await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 	await page.getByRole('menuitemcheckbox', { name: 'Hidden' }).click();
 	await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeHidden();
-	await expect(activityBar).toBeHidden();
+	await expect(activityBar).toHaveCount(0);
 });
 
 test('Sessions titlebar reserves its dimensions and orders component actions', async ({ page }) => {
@@ -879,6 +882,7 @@ test('Sessions titlebar reserves its dimensions and orders component actions', a
 	expect(titlebarActionNames).toEqual(expectedTitlebarActions);
 	await expect(titlebar).toHaveCSS('height', '35px');
 	await expect(titlebar).toHaveCSS('border-bottom-width', '0px');
+	await expect(titlebar.locator('.ash-workbench-part-content')).toHaveCSS('padding-left', '8px');
 	const titlebarBounds = await titlebar.boundingBox();
 	const buttonBounds = await titlebarButtons.evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().toJSON()));
 	expect(buttonBounds.every((button, index) => button.right < titlebarBounds!.x + titlebarBounds!.width / 2 && (index === 0 || button.left > buttonBounds[index - 1].left))).toBe(true);
@@ -892,24 +896,39 @@ test('Sessions titlebar colors resolve under light and dark themes', async ({ pa
 });
 
 
-test('Sessions navigation geometry centers icons and enables the component actions', async ({ page }) => {
-	await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
-	await expect(page.locator("[data-part='activitybar']")).toBeVisible();
-	const activityButtons = page.locator("[data-part='activitybar'] button");
-	expect(await activityButtons.locator('.ash-icon').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['add', 'projects', 'symbol-color', 'account']);
-	await expect(page.locator('.ash-sessions-activity-bottom button')).toHaveCount(1);
-	const chatButton = activityButtons.first();
-	const chatButtonBounds = await chatButton.boundingBox();
-	const chatIconBounds = await chatButton.locator('.ash-icon').boundingBox();
-	expect(chatButtonBounds).not.toBeNull();
-	expect(chatIconBounds).not.toBeNull();
-	expect(chatButtonBounds!.width).toBe(36);
-	expect(chatButtonBounds!.height).toBe(36);
-	expect(Math.abs(chatIconBounds!.x + chatIconBounds!.width / 2 - (chatButtonBounds!.x + chatButtonBounds!.width / 2))).toBeLessThanOrEqual(1);
-	expect(Math.abs(chatIconBounds!.y + chatIconBounds!.height / 2 - (chatButtonBounds!.y + chatButtonBounds!.height / 2))).toBeLessThanOrEqual(1);
-	await expect(activityButtons.nth(1)).toBeEnabled();
-	await expect(activityButtons.nth(2)).toBeEnabled();
-	await expect(activityButtons.nth(3)).toBeEnabled();
+for (const locale of ['en', 'zh-CN']) test(`Sessions collapsed sidebar hides all navigation and gives its width to the conversation (${locale})`, async ({ page }) => {
+	await page.goto(`/sessions.html?locale=${locale}`);
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const chinese = locale === 'zh-CN';
+	const toggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const sessions = page.locator('[data-part="sessions"]');
+	const navigation = page.locator('.ash-sessions-activity-content');
+	const accounts = page.locator('.ash-sessions-activity-bottom');
+	const modes = page.locator('.ash-window-mode-control');
+	await expect(modes).toBeVisible();
+	const sidebarWidth = (await sidebar.boundingBox())!.width;
+	const expanded = (await sessions.boundingBox())!;
+	await toggle.click();
+	await expect(sidebar).toBeHidden();
+	await expect(page.locator('[data-part="activitybar"]')).toHaveCount(0);
+	await expect(navigation).toBeHidden();
+	await expect(accounts).toBeHidden();
+	await expect(modes).toBeHidden();
+	await expect(page.getByRole('toolbar', { name: chinese ? '界面模式' : 'Workspace mode', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: chinese ? '新建' : 'New', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: chinese ? '账户' : 'Accounts', exact: true })).toHaveCount(0);
+	await expect.poll(async () => Math.round((await sessions.boundingBox())!.width - expanded.width)).toBe(Math.round(sidebarWidth));
+	await expect.poll(async () => Math.round((await sessions.boundingBox())!.x)).toBe(0);
+	await expect(toggle).toHaveAttribute('aria-label', chinese ? '显示侧边栏' : 'Show sidebar');
+	await toggle.focus();
+	await toggle.press('Enter');
+	await expect(sidebar).toBeVisible();
+	await expect(navigation).toBeVisible();
+	await expect(modes).toBeVisible();
+	await expect(page.getByRole('button', { name: chinese ? '账户' : 'Accounts', exact: true })).toBeVisible();
+	if (!chinese) { await expectActivityIconSize(navigation, 16); }
+	await expect.poll(async () => Math.round((await sessions.boundingBox())!.width)).toBe(Math.round(expanded.width));
 });
 
 

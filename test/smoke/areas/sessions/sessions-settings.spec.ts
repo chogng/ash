@@ -25,7 +25,7 @@ test('Sessions Settings command queries reuse search and restore saved values af
 	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	let sessionsPage = await workbench.openAgentsWindow(target.kind);
 	const openQuery = async (): Promise<void> => {
-		const launcher = sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last();
+		const launcher = sessionsPage.locator('.ash-sessions-activity-bottom button').last();
 		await expect(launcher).toBeVisible();
 		await launcher.focus();
 		await expect(launcher).toBeFocused();
@@ -81,7 +81,7 @@ test('Sessions Settings command queries reuse search and restore saved values af
 	await expect.poll(async () => JSON.parse((await readUserSettings(sessionsPage)).content)['[plaintext]']?.['editor.fontSize']).toBe(24);
 	expect(JSON.parse((await readUserSettings(sessionsPage)).content)['editor.fontSize']).toBeUndefined();
 	await sharedSettings.locator('.ash-modal-editor-close').click();
-	await sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last().focus();
+	await sessionsPage.locator('.ash-sessions-activity-bottom button').last().focus();
 	await sessionsPage.keyboard.press('Control+Alt+P');
 	const groupedSettings = sessionsPage.locator('.ash-editor-group .ash-settings-editor');
 	await expect(groupedSettings).toBeVisible();
@@ -107,7 +107,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 	await expect(group.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	let sessionsPage = await workbench.openAgentsWindow(target.kind);
 	const openSettings = async (): Promise<void> => {
-		await sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last().click();
+		await sessionsPage.locator('.ash-sessions-activity-bottom button').last().click();
 		await sessionsPage.getByRole('menuitem', { name: 'Settings', exact: true }).click();
 	};
 	await openSettings();
@@ -230,7 +230,7 @@ test('Sessions setting menus copy their current registered value as JSON', async
 	try {
 		const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
 		const openSettings = async (): Promise<void> => {
-			const accounts = sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last();
+			const accounts = sessionsPage.locator('.ash-sessions-activity-bottom button').last();
 			// The saved custom menu style also applies to the Sessions account menu.
 			await accounts.click();
 			await sessionsPage.getByRole('menuitem', { name: 'Settings', exact: true }).click();
@@ -298,7 +298,7 @@ test('Sessions setting menus copy their current registered value as JSON', async
 		await expect(settings).toHaveCount(0);
 		await expect(sessionsPage.locator('.ash-context-view-menu')).toHaveCount(0);
 		await expect(sessionsPage.getByRole('tooltip').filter({ hasText: 'Configured in local user settings.' })).toHaveCount(0);
-		await expect(sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last()).toBeFocused();
+		await expect(sessionsPage.locator('.ash-sessions-activity-bottom button').last()).toBeFocused();
 	} finally {
 		if ('windows' in application) {
 			await application.evaluate(() => { (globalThis as typeof globalThis & { restoreSessionsCopy(): void; }).restoreSessionsCopy(); });
@@ -334,9 +334,9 @@ test('Workbench and Sessions keep one settings document across edits and window 
 
 	let sessionsPage = await workbench.openAgentsWindow(target.kind);
 	await expect(sessionsPage.locator('.ash-sessions-window')).toHaveAttribute('data-layout-style', 'flat');
-	await expect(sessionsPage.locator('[data-part="activitybar"]')).not.toHaveClass(/compact/u);
+	await expect(sessionsPage.locator('.ash-sessions-activity-content')).not.toHaveClass(/compact/u);
 	await expect(sessionsPage.locator('[data-part="sidebar"]')).not.toHaveClass(/sidebar-right/u);
-	const accounts = sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last();
+	const accounts = sessionsPage.locator('.ash-sessions-activity-bottom button').last();
 	if ('windows' in application && process.platform === 'darwin') {
 		await captureElectronMenu(application, () => accounts.click(), { label: 'Settings' });
 	} else {
@@ -354,7 +354,7 @@ test('Workbench and Sessions keep one settings document across edits and window 
 	await expect(sessionsPage.locator('.ash-sessions-window')).toHaveAttribute('data-layout-style', 'modern');
 
 	if (target.kind === 'browser') {
-		await sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last().click();
+		await sessionsPage.locator('.ash-sessions-activity-bottom button').last().click();
 		await sessionsPage.getByRole('menuitem', { name: 'Return to Workbench', exact: true }).click();
 		await workbench.waitForReady();
 	}
