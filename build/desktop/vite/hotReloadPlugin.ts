@@ -36,7 +36,12 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotRel
 		// Chokidar suppresses change events within 50 ms; completed-write delivery preserves rapid saves.
 		config: () => ({
 			server: {
-				watch: { awaitWriteFinish: { stabilityThreshold: 75, pollInterval: 10 } },
+				watch: {
+					// Chokidar reads this override after selecting FSEvents. Pass an
+					// explicit opt-in before backend selection, preserving native defaults.
+					...(process.env.CHOKIDAR_USEPOLLING && !/^(?:false|0)$/iu.test(process.env.CHOKIDAR_USEPOLLING) ? { usePolling: true } : {}),
+					awaitWriteFinish: { stabilityThreshold: 75, pollInterval: 10 },
+				},
 			},
 		}),
 		configureServer(server) {

@@ -101,7 +101,7 @@
 后续按[SDK 能力开放原则](docs/editor-extensions.md#sdk-能力开放原则)，从现有扩展的实际阻碍选择最小能力；[能力边界与待复核需求](docs/editor-extensions.md#现有能力与待复核需求)用于定位，不作为逐项补齐 API 的实施队列。Academy 等现有扩展用于验收已选行为：
 
 - [ ] **独立准备 · PDF 查看、批注与 AI 阅读 Plugin**：方案归 [PDF Viewer](extensions/pdf-viewer/docs/pdf-content.md)。先核对已有批注保存／恢复与实际 AI 文字、页面图读取链，再选一个最小阅读场景复用工具和 Skill；仅对证实的阻碍补接线或最小 SDK 能力。不引入通用文档编辑；仓库外开发链不再作为下一项 SDK 功能需求，F5／`.ashx` 继续暂停。本轮仅记录方案，功能、Skill 和 Plugin 打包留待单独实施。
-- [ ] **复核 · macOS 原生监听故障来源**：已复现原生监听注册／注销阻塞及注册成功却不送事件，并以隔离 helper、限时终止和限定目录轮询恢复修复 Ash 卡住的问题；系统 `fseventsd` 长期高 CPU 的来源仍未证实，不能认定由 Ash 引起。保留 `.build/file-watcher-reproduction-before.json`、`.build/file-watcher-deletion-reproduction.json`，后续需另取现场证据；本轮未重启系统服务。
+- [ ] **复核 · macOS 原生监听故障来源**：已取得 SIGUSR1 客户端快照，并复现、修复 Ash Rust 构建监听的根目录订阅：同一 10000 次缓存文件创建／删除，旧方案给 daemon 该客户端 10001 条事件，原生 manifest 文件监听为 0；原子保存／缺失恢复／清理回归、真实监听入口审计及开发启动已通过。尚未复现原 PID 355 的 19.3G footprint、notify 热点和注册锁等待，不能将本次订阅修复称为该长期失控的完整根因；旧内存状态已不存在。原故障再次出现时，先取 sample、客户端状态与同步文件操作，按 PID 和计数增量关联。证据及复现入口见 [.build/hmr-investigation/report.md](.build/hmr-investigation/report.md)。
 - [ ] **功能 · 文献检索扩展**：后续实现查询、元数据获取及向文献管理扩展入库的工具／Skill 链路，PDF 阅读复用独立查看器；作者接入遵循本节扩展 SDK 任务。Agent 结构化文档写入仍按下方 Work 文档服务契约另行实施。尚未新增检索代码或迁仓。
 - [ ] **Academy 作者侧迁移**：先以 Academy 现有声明、标签和注册接线确定具体作者阻碍，再由 Manifest、TS SDK 或构建工具承担必要的 Rust 接线，使普通作者无需手写 Rust 即可开发编辑器、提供 Agent 工具并附带 Skill；不借迁移预建通用 API。高级编辑器能力使用明确的公开客户端契约；Agent 结构化写入依赖下方 Work 文档服务任务，不另建模型或编辑历史。确有原生算法需求时再选用 Rust／WASM 等组件。
 - [ ] **本地开发与源码调试**：按用户当前要求暂停，待明确恢复后实施；只读调查已确认可复用现有 F5／DebugService／Rust DAP 链，独立 Node DAP adapter 需要“受管子进程＋私有 socket”启动组合。隔离 Ash 开发实例显式加载开发目录，开发授权与正式安装信任分开；补 TS Source Map、源码断点、单步、变量、构建／重载及诊断。暂停预算归开发会话，普通调用的取消、撤权、deadline 与晚回复墓碑继续生效；不能只扩大 Host RPC 超时。验证暂停超过 30 秒后不误重启、恢复不续旧权限、停止／断连释放宿主和 adapter；Rust/V8 Inspector 另按实际宿主实现。
