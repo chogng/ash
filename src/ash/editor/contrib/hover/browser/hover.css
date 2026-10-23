@@ -25,6 +25,31 @@
 	padding: 0;
 }
 
+.stanza-editor-hover.interactive > .stanza-editor-hover-content {
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size100);
+}
+
+.stanza-editor-hover-content.markdown-hover {
+	box-sizing: border-box;
+	max-width: min(480px, calc(100vw - 32px));
+	white-space: normal;
+}
+
+.stanza-editor-hover-content.markdown-hover p {
+	margin: 0;
+}
+
+.stanza-editor-hover-content.markdown-hover p + p {
+	margin-top: var(--ash-spacing-size60);
+}
+
+.stanza-editor-hover-content.markdown-hover pre {
+	max-height: 240px;
+	margin: var(--ash-spacing-size80) 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
 :is(.hc-black, .hc-light) .stanza-editor-hover {
 	box-shadow: none;
 	border-color: var(--ash-contrastBorder);

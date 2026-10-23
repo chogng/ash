@@ -8,6 +8,8 @@ import type { ITerminalOutputSnapshot } from '../../../../platform/terminal/comm
 export interface ResolvedChatContext {
 	readonly name: string;
 	readonly content: string;
+	/** UTF-16 offsets in the untrimmed submitted text, replacing the visible attachment label. */
+	readonly reference?: { readonly start: number; readonly end: number; };
 	/** Images hold a URL; instructions hold an authorized backend path; tool selections hold a JSON array of disabled names. */
 	readonly kind?: 'image' | 'instruction' | 'toolSelection';
 }
@@ -24,6 +26,12 @@ export interface ChatContextAttachment {
 	/** Position of the visible reference in the message; older saved drafts may omit it. */
 	readonly reference?: { readonly start: number; readonly end: number; };
 	resolve(): Promise<ResolvedChatContext>;
+}
+
+/** Carry composer positions alongside the captured content without changing the shared snapshot. */
+export async function resolveChatContextAttachment(attachment: ChatContextAttachment): Promise<ResolvedChatContext> {
+	const snapshot = await attachment.resolve();
+	return attachment.reference ? { ...snapshot, reference: attachment.reference } : snapshot;
 }
 
 /** A host-owned producer borrows the destination draft's cancellation signal. */

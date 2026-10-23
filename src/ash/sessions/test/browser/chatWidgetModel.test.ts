@@ -1,5 +1,6 @@
 import { TestConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -20,6 +21,8 @@ import type { ILanguageModelsService } from '../../../workbench/contrib/chat/com
 import type { ILanguageModelsConfigurationService } from '../../contrib/cowork/common/languageModelsConfiguration.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import type { ISession } from '../../services/sessions/common/session.js';
+import { resolveChatContextAttachment, type ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
+import { resetNlsResolver, setNlsMessages } from '../../../nls.js';
 
 function snapshot(threadId: string, sequence = 1, waiting = false): ThreadRead {
 	const usage = { modelInvocations: 0, inputTokens: { reported: 0, complete: true }, outputTokens: { reported: 0, complete: true }, cachedInputTokens: { reported: 0, complete: true }, cacheWriteInputTokens: { reported: 0, complete: true }, reasoningTokens: { reported: 0, complete: true } };
@@ -72,6 +75,106 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 async function turnTask(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
 async function waitFor(condition: () => boolean): Promise<void> { for (let i = 0; i < 200 && !condition(); i++) await turnTask(); assert.ok(condition(), 'expected deferred operation reached'); }
 function approval(requestId: string): AgentInteractionOffer { return { connectionGeneration: 1, sessionId: 'session', threadId: 'A', turnId: 'turn-A', interaction: { requestId, request: { type: 'approval', request: { reason: requestId, capabilities: [{ kind: 'fileWrite', scope: '/owned/file' }] } } } }; }
+
+for (const kind of ['Code', 'Cowork'] as const) {
+	for (const route of ['start', 'queue', 'steer'] as const) {
+		test(`${kind} ${route} interleaves text and typed snapshots in composer order`, async () => {
+			const f = fixture(kind, undefined, route !== 'start');
+			using resources = f.resources;
+			await f.model.initialize();
+			const text = ' \nBefore🙂 log.txt\nBetween image.png\nAfter log.txt\nDone  \n';
+			const first = text.indexOf('log.txt');
+			const image = text.indexOf('image.png');
+			const last = text.lastIndexOf('log.txt');
+			const contexts = [
+				{ name: 'log.txt', content: 'Second captured version', reference: { start: last, end: last + 7 } },
+				{ name: 'image.png', content: 'data:image/png;base64,captured', kind: 'image' as const, reference: { start: image, end: image + 9 } },
+				{ name: 'log.txt', content: 'First captured version', reference: { start: first, end: first + 7 } },
+			];
+			await f.model.send(text, route === 'queue' ? 'plan' : 'agent', undefined, contexts);
+			const requests = route === 'start' ? f.starts : route === 'queue' ? f.queues : f.steers;
+			assert.equal(requests.length, 1);
+			assert.deepEqual(requests[0].input, [
+				{ type: 'text', text: ' \nBefore🙂 ' },
+				{ type: 'context', name: 'log.txt', content: 'First captured version' },
+				{ type: 'text', text: '\nBetween ' },
+				{ type: 'image', url: 'data:image/png;base64,captured' },
+				{ type: 'text', text: '\nAfter ' },
+				{ type: 'context', name: 'log.txt', content: 'Second captured version' },
+				{ type: 'text', text: '\nDone  \n' },
+			]);
+		});
+	}
+}
+
+test('resolved attachments carry positions without mutating shared snapshots or following completion order', async () => {
+	const first = new DeferredPromise<{ name: string; content: string; }>();
+	const second = new DeferredPromise<{ name: string; content: string; }>();
+	const attachments: ChatContextAttachment[] = [
+		{ id: 'first', kind: 'file', name: 'same.txt', reference: { start: 0, end: 8 }, resolve: () => first.p },
+		{ id: 'second', kind: 'file', name: 'same.txt', reference: { start: 9, end: 17 }, resolve: () => second.p },
+	];
+	const resolving = Promise.all(attachments.map(resolveChatContextAttachment));
+	await second.complete({ name: 'same.txt', content: 'Second' });
+	const snapshot = Object.freeze({ name: 'same.txt', content: 'First' });
+	await first.complete(snapshot);
+	assert.deepEqual(await resolving, [
+		{ ...snapshot, reference: attachments[0].reference },
+		{ name: 'same.txt', content: 'Second', reference: attachments[1].reference },
+	]);
+	assert.equal('reference' in snapshot, false);
+});
+
+test('legacy contexts retain prefix placement and adjacent inline attachments omit empty text items', async () => {
+	const f = fixture('Code');
+	using resources = f.resources;
+	await f.chat.startTurn({
+		sessionId: 'session', threadId: 'A', expectedSequence: 1, mode: 'agent', text: 'a b ', contexts: [
+			{ name: 'b', content: 'B', reference: { start: 2, end: 3 } },
+			{ name: 'legacy', content: 'Without a position' },
+			{ name: 'a', content: 'A', reference: { start: 0, end: 1 } },
+		]
+	});
+	assert.deepEqual(f.starts[0].input, [
+		{ type: 'context', name: 'legacy', content: 'Without a position' },
+		{ type: 'context', name: 'a', content: 'A' },
+		{ type: 'context', name: 'b', content: 'B' },
+	]);
+});
+
+test('invalid attachment spans fail before start queue or steering can dispatch', async () => {
+	const f = fixture('Code');
+	using resources = f.resources;
+	for (const reference of [{ start: -1, end: 2 }, { start: 0.5, end: 2 }, { start: 0, end: 4 }, { start: 1, end: 1 }, { start: NaN, end: 2 }]) {
+		const options = { sessionId: 'session', threadId: 'A', expectedSequence: 1, mode: 'agent' as const, approvalMode: 'manual' as const, text: 'abc', contexts: [{ name: 'bad', content: 'Captured', reference }] };
+		await assert.rejects(f.chat.startTurn(options), /attachment position/);
+		await assert.rejects(f.chat.queueTurn(options), /attachment position/);
+		await assert.rejects(f.chat.steerTurn({ ...options, turnId: 'turn-A' }), /attachment position/);
+	}
+	await assert.rejects(f.chat.startTurn({
+		sessionId: 'session', threadId: 'A', expectedSequence: 1, mode: 'agent', text: 'abc', contexts: [
+			{ name: 'a', content: 'A', reference: { start: 0, end: 2 } },
+			{ name: 'b', content: 'B', reference: { start: 1, end: 3 } },
+		]
+	}), /attachment position/);
+	assert.deepEqual([f.starts, f.queues, f.steers], [[], [], []]);
+});
+
+test('invalid attachment positions explain recovery in Chinese', async () => {
+	const f = fixture('Code');
+	using resources = f.resources;
+	const messages = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8'));
+	setNlsMessages('zh-CN', messages);
+	try {
+		await assert.rejects(f.chat.startTurn({
+			sessionId: 'session', threadId: 'A', expectedSequence: 1, mode: 'agent', text: 'abc', contexts: [
+				{ name: 'bad', content: 'Captured', reference: { start: 0, end: 4 } },
+			]
+		}), { message: '附件位置已与这条消息不匹配。请移除附件后重新添加。' });
+	} finally {
+		resetNlsResolver();
+	}
+});
 
 test('Code transcript updates preserve live body revisions across stale reads and same-ID navigation', async () => {
 	const original = messageHistory('A', 1, 'Committed body');
@@ -601,6 +704,7 @@ for (const steering of ['afterOutput', 'early', 'contextOnly'] as const) test(`e
 		{ type: 'userImageAttachment', clientId: 'original-command', itemId: 'image', turnId: turn.turnId, attachment: image },
 		{ type: 'userAudioAttachment', clientId: 'original-command', itemId: 'audio', turnId: turn.turnId, attachment: audio },
 		{ type: 'userMessage', clientId: 'original-command', itemId: 'original-input', turnId: turn.turnId, text: 'Original' },
+		{ type: 'userMessage', clientId: 'original-command', itemId: 'following-input', turnId: turn.turnId, text: 'Following original text' },
 		...(steering === 'afterOutput' ? [{ type: 'agentMessage' as const, itemId: 'reply', turnId: turn.turnId, text: 'Answer' }] : []),
 		{ type: 'userContext', clientId: 'steering-command', itemId: 'steer-context', turnId: turn.turnId, name: 'Later context', content: 'Must not replay' },
 		...(steering !== 'contextOnly' ? [
@@ -618,6 +722,7 @@ for (const steering of ['afterOutput', 'early', 'contextOnly'] as const) test(`e
 		sessionId: 'session', threadId: 'A', beforeTurnId: turn.turnId, commandId: 'same-edit', title: read.thread.title, input: [
 			{ type: 'context', name: 'Original file', content: 'Accepted snapshot' },
 			{ type: 'imageAttachment', attachment: image }, { type: 'audioAttachment', attachment: audio }, { type: 'text', text: 'Edited\nrequest' },
+			{ type: 'text', text: 'Following original text' },
 		]
 	}]);
 	await assert.rejects(f.chat.rewriteRequest({ sessionId: 'session', threadId: 'A', turnId: turn.turnId, itemId: 'steer', text: 'Changed steering', commandId: 'invalid-edit' }), /no longer available/);

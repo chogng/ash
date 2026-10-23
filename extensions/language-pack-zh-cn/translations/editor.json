@@ -756,6 +756,7 @@
     "color.editor.hoverForeground": "编辑器悬浮提示的前景色。",
     "color.editor.inactiveLineHighlightBackground": "编辑器未聚焦时，主光标所在行的背景色。",
     "color.editor.inactiveSelectionBackground": "未聚焦编辑器中选区的背景色。",
+    "color.editor.selectionBackground": "编辑器选区的背景色。",
     "color.editor.inlayHintForeground": "编辑器行内提示的前景色。",
     "color.editor.inlineCompletionForeground": "编辑器行内补全的前景色。",
     "color.editor.inputBackground": "编辑器控件输入框的背景色。",

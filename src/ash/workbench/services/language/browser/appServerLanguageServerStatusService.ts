@@ -318,8 +318,9 @@ export class AppServerLanguageServerStatusService extends Disposable implements 
 	}
 
 	private serverLabel(server: Server): string {
-		if (!server.dirId) return server.id;
-		return `${server.id} — ${this.workspace.getWorkspace().folders.find(folder => folder.id === server.dirId)?.name || server.dirId}`;
+		const folders = this.workspace.getWorkspace().folders;
+		if (!server.dirId || folders.length === 1 && folders[0].id === server.dirId) return server.id;
+		return `${server.id} — ${folders.find(folder => folder.id === server.dirId)?.name || server.dirId}`;
 	}
 
 	private description(server: Server): string {

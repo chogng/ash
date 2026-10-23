@@ -196,7 +196,7 @@ export class ChatService extends Disposable implements IChatService {
 		for (const item of turn.items) {
 			if (!('clientId' in item) || item.clientId !== firstMessage.clientId) continue;
 			switch (item.type) {
-				case 'userMessage': input.push({ type: 'text', text: options.text }); break;
+				case 'userMessage': input.push({ type: 'text', text: item.itemId === firstMessage.itemId ? options.text : item.text }); break;
 				case 'userContext': input.push({ type: 'context', name: item.name, content: item.content }); break;
 				case 'userImage': input.push({ type: 'image', url: item.url }); break;
 				case 'userImageAttachment': input.push({ type: 'imageAttachment', attachment: item.attachment }); break;
@@ -378,10 +378,7 @@ export class ChatService extends Disposable implements IChatService {
 			threadId: options.threadId,
 			turnId: options.turnId,
 			expectedSequence: options.expectedSequence,
-			input: [
-				...(options.contexts ?? []).map(toContextInput),
-				...(options.text.trim() ? [{ type: "text" as const, text: options.text }] : []),
-			],
+			input: messageInput(options.text, options.contexts),
 		}, options.signal);
 		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: false, requestSequence: options.expectedSequence });
 	}
@@ -480,9 +477,29 @@ function toContextInput(context: ResolvedChatContext): AgentInput {
 function turnInput(options: StartTurnOptions): AgentInput[] {
 	return [
 		...(options.skills ?? []).map(skill => ({ type: "skill" as const, skill })),
-		...(options.contexts ?? []).map(toContextInput),
-		...(options.text.trim() ? [{ type: "text" as const, text: options.text }] : []),
+		...messageInput(options.text, options.contexts),
 	];
+}
+
+function messageInput(text: string, contexts: readonly ResolvedChatContext[] = []): AgentInput[] {
+	// Contexts without a composer position, including older drafts, retain their prefix placement.
+	const input = contexts.filter(context => !context.reference).map(toContextInput);
+	const inline = contexts.filter(context => context.reference).sort((a, b) => a.reference!.start - b.reference!.start);
+	let offset = 0;
+	for (const context of inline) {
+		const { start, end } = context.reference!;
+		if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < offset || end <= start || end > text.length) {
+			throw new Error(localize('chat.context.invalidReference', 'An attachment position no longer matches this message. Remove the attachment and add it again.'));
+		}
+		const before = text.slice(offset, start);
+		// Core rejects empty text items. Preserve meaningful spans verbatim, but omit whitespace-only gaps.
+		if (before.trim()) input.push({ type: 'text', text: before });
+		input.push(toContextInput(context));
+		offset = end;
+	}
+	const after = text.slice(offset);
+	if (after.trim()) input.push({ type: 'text', text: after });
+	return input;
 }
 
 function toTurnChangeSummary(summary: TurnChangeSetSummaryDto): TurnChangeSetSummary {

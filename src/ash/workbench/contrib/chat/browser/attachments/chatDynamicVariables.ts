@@ -6,18 +6,18 @@ import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.j
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { TextModelChangeReason } from '../../../../../editor/common/core/textChange.js';
-import { InjectedTextCursorStops, TrackedRangeStickiness } from '../../../../../editor/common/model.js';
 import type { IModelContentChange } from '../../../../../editor/common/model/mirrorTextModel.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import type { IChatInputEditor } from '../widget/input/chatInputEditorRegistry.js';
 
 type InlineContext = ChatContextAttachment & { readonly reference: { readonly start: number; readonly end: number; }; };
 
+export const dynamicVariableDecorationType = 'chat-dynamic-variable';
+
 /** Owns context snapshots bound to references in the message text. */
 export class ChatDynamicVariableModel extends Disposable {
 	private references: readonly InlineContext[] = [];
 	private text: string;
-	private decorations: string[] = [];
 	private readonly changes = this._register(new Emitter<void>());
 	readonly onDidChangeReferences = this.changes.event;
 	private readonly removed = this._register(new Emitter<ChatContextAttachment>());
@@ -54,7 +54,7 @@ export class ChatDynamicVariableModel extends Disposable {
 		}
 		this._register(addDisposableListener(input.element, 'keydown', event => this.handleKey(event), true));
 		this._register(toDisposable(() => {
-			if (model && !model.isDisposed()) model.deltaDecorations(this.decorations, []);
+			if (!model || !model.isDisposed()) input.renderContextReferences?.([], () => { });
 			this.history.clear();
 		}));
 	}
@@ -132,25 +132,7 @@ export class ChatDynamicVariableModel extends Disposable {
 	}
 
 	private refresh(): void {
-		const model = this.input.getModel?.();
-		if (model) {
-			this.decorations = model.deltaDecorations(this.decorations, this.references.map(context => ({
-				range: Range.fromPositions(model.getPositionAt(context.reference.start), model.getPositionAt(context.reference.end)),
-				options: {
-					description: 'chat-context-reference',
-					inlineClassName: context.kind === 'image' ? 'ash-chat-image-reference' : context.kind === 'file' || context.kind === 'codeSelection' ? 'ash-chat-code-reference' : 'ash-chat-context-reference',
-					stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-					...(context.kind === 'image' ? {
-						before: { content: '\uFFFC', widthInEm: 2, inlineClassName: 'ash-chat-image-reference-space', cursorStops: InjectedTextCursorStops.None },
-						after: { content: '\uFFFC', widthInEm: 2, inlineClassName: 'ash-chat-image-reference-space', cursorStops: InjectedTextCursorStops.None },
-					} : context.kind === 'file' || context.kind === 'codeSelection' ? {} : {
-						...(context.resource || context.terminalSnapshot ? { before: { content: '\uFFFC', widthInEm: 2, inlineClassName: 'ash-chat-context-reference-space', cursorStops: InjectedTextCursorStops.None } } : {}),
-						after: { content: '\uFFFC', widthInEm: 2, inlineClassName: 'ash-chat-context-reference-space', cursorStops: InjectedTextCursorStops.None },
-					}),
-				},
-			})));
-		}
-		this.input.renderContextReferences?.(this.references.filter(context => context.kind !== 'file' && context.kind !== 'codeSelection'), id => {
+		this.input.renderContextReferences?.(this.references, id => {
 			const context = this.references.find(context => context.id === id);
 			const reference = context?.reference;
 			if (!reference) return;

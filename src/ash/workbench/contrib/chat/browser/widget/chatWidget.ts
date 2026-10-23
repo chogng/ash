@@ -24,7 +24,7 @@ import { ChatListWidget } from "./chatListWidget.js";
 import type { ChatInputState } from "./input/chatInput.js";
 import type { ModelReasoningEffort } from "../../../../services/chat/common/modelCatalog.js";
 import type { IChatListItem } from "./chatListItems.js";
-import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
+import { resolveChatContextAttachment, type ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
 import { getActiveWindow, h } from "../../../../../base/browser/dom.js";
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { AgentsVoiceWidget } from '../../../agentsVoice/browser/agentsVoiceWidget.js';
@@ -391,7 +391,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.submittedMessage = true;
 		this.updateConversationState();
 		try {
-			const resolvedContexts = await Promise.all(contexts.map(context => context.resolve()));
+			const resolvedContexts = await Promise.all(contexts.map(resolveChatContextAttachment));
 			if (this.isDisposed || submissionSignal?.aborted || generation !== model.composerGeneration) throw canceled();
 			if (appSource) this.appContextId(appSource);
 			await model.send(text, mode, skills, resolvedContexts, appSource ? { source: { sessionId: appSource.sessionId, threadId: appSource.threadId }, signal: submissionSignal } : submissionSignal ? { signal: submissionSignal } : undefined);

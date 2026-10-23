@@ -92,6 +92,10 @@ import { PreferencesService as BrowserPreferencesService } from "../../../workbe
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../workbench/services/chat/browser/chatService.js";
+import { IHostService } from '../../../workbench/services/host/browser/host.js';
+import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
+import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
+import { BrowserImageEditorService } from '../../../workbench/services/imageEditor/browser/browserImageEditorService.js';
 import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from "../../../workbench/services/chat/common/chatService.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
@@ -133,6 +137,8 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), createCodeEditorServices(inputResources)));
 	services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
+	services.registerInstance(IHostService, new TestHostService());
+	services.registerSingleton(IImageEditorService, () => services.createInstance(BrowserImageEditorService));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(IContextViewService, contextView);
@@ -216,6 +222,7 @@ const testStorageEnvironment = new JSDOM('', { url: 'https://ash.test/' });
 const storageResources = new DisposableStore();
 const testStorages: InstanceType<typeof BrowserStorageService>[] = [];
 const { ChatWidget, openChatMarkdownLink } = await import("../../../workbench/contrib/chat/browser/widget/chatWidget.js");
+const { CoworkWidget } = await import('../../contrib/cowork/browser/widget/coworkWidget.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
 const { NewCoworkInputWidget } = await import('../../contrib/cowork/browser/newCoworkInput.js');
 const { readNewChatDraftState, writeNewChatDraftState } = await import('../../contrib/chat/common/newChatDraftState.js');
@@ -4362,6 +4369,41 @@ test('Chat context usage refresh ignores an estimate from an older connection', 
 	await oldRead.complete({ ...sample, context: { ...sample.context, estimatedTokens: 100 } });
 	await nextTask();
 	assert.equal(contextUsage()?.estimatedTokens, 400);
+});
+
+for (const kind of ['Code', 'Cowork'] as const) test(`${kind} widget submits inline snapshots in text order despite reversed reads`, async () => {
+	const activeSession = session('session-1', 'thread-1');
+	const fake = fakeApi({ sessions: [activeSession] });
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	using contextView = new BrowserContextViewService(document.body);
+	const services = createInputServices(contextView, chat);
+	const createInput = (container: HTMLElement, delegate: ChatInputDelegate) => services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible' as const, modelPickerPosition: 'leading' as const });
+	using widget = kind === 'Code'
+		? new ChatWidget(document.body, 'ordered-snapshots', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService))
+		: new CoworkWidget(document.body, 'ordered-snapshots', model, () => { }, services.get(ICommandService), undefined, undefined, undefined, createInput, services, services.get(IQuickInputService), notifications, services.get(IChatWidgetService));
+	widget.setVisible(true);
+	const first = new DeferredPromise<{ name: string; content: string; }>();
+	const second = new DeferredPromise<{ name: string; content: string; }>();
+	widget.appendToDraft(' \nBefore🙂 ');
+	widget.addContext({ id: 'first', kind: 'file', name: 'same.txt', resolve: () => first.p });
+	widget.appendToDraft('Between ');
+	widget.addContext({ id: 'second', kind: 'file', name: 'same.txt', resolve: () => second.p });
+	widget.appendToDraft('Done  \n');
+	const sending = widget.acceptInput();
+	await second.complete({ name: 'same.txt', content: 'Second captured version' });
+	assert.equal(fake.turnStartRequests.length, 0);
+	await first.complete({ name: 'same.txt', content: 'First captured version' });
+	await sending;
+	assert.deepEqual(fake.turnStartRequests[0]?.input, [
+		{ type: 'text', text: ' \nBefore🙂 ' },
+		{ type: 'context', name: 'same.txt', content: 'First captured version' },
+		{ type: 'text', text: ' \n\nBetween ' },
+		{ type: 'context', name: 'same.txt', content: 'Second captured version' },
+		{ type: 'text', text: ' \n\nDone  \n' },
+	]);
 });
 
 test('Chat footer permission changes use the current model and confirm full access', async () => {

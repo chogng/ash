@@ -1,3 +1,8 @@
+import { BrowserImageEditorService } from '../../../src/ash/workbench/services/imageEditor/browser/browserImageEditorService.js';
+import { IImageEditorService } from '../../../src/ash/workbench/services/imageEditor/common/imageEditorService.js';
+import { IHostService } from '../../../src/ash/workbench/services/host/browser/host.js';
+import { TestHostService } from '../../../src/ash/workbench/services/host/test/browser/testHostService.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { SearchSettingsModel } from '../../../src/ash/workbench/contrib/search/browser/searchSettingsModel.js';
 import { SettingsSectionRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/settingsSectionRenderer.js';
 import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
@@ -127,6 +132,11 @@ const resources = new DisposableStore();
 if (!new URLSearchParams(location.search).has('realAudio')) resources.add(installTestDictationAudio(window));
 const configuration = resources.add(new WorkbenchConfigurationService({ source: '{"dictation.backend":"cloud"}' }));
 const services = resources.add(new InstantiationService());
+services.registerInstance(IEditorService, { onDidVisibleEditorsChange: Event.None, onDidActiveEditorChange: Event.None } as unknown as IEditorService);
+const notifications = resources.add(new TestNotificationService());
+services.registerInstance(INotificationService, notifications);
+services.registerInstance(IHostService, new TestHostService());
+services.registerSingleton(IImageEditorService, () => services.createInstance(BrowserImageEditorService));
 const modelChanges = resources.add(new Emitter<void>());
 let credentialStorage: SecretStorageStatus = 'available';
 let credentialStorageMode: SecretStorageMode | undefined;
@@ -237,7 +247,6 @@ services.registerSingleton(ISpeechService, () => services.createInstance(SpeechS
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
 services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
-services.registerInstance(IEditorService, { onDidVisibleEditorsChange: Event.None, onDidActiveEditorChange: Event.None } as unknown as IEditorService);
 services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 const codeContainer = document.createElement('div');
 codeContainer.style.cssText = 'width:600px;height:220px';
@@ -250,7 +259,6 @@ services.get(IKeybindingService);
 
 const dictationSession = resources.add(services.createInstance(DictationInput, editor, preview, () => true, async () => { }, 'chat'));
 const contextViews = services.get(IContextViewService);
-const notifications = resources.add(new TestNotificationService());
 const secondInput = resources.add(services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, contextViews, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, {
 	create: (options: ChatInputEditorOptions) => services.createInstance(ChatInputEditor, options),
 }, [], { modePicker: 'visible', modelPickerPosition: 'leading' }));

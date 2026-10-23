@@ -81,6 +81,28 @@ test("language-server status service publishes channels and only projects active
 	assert.deepEqual(output.activeChannel?.entries, []);
 });
 
+for (const multiRoot of [false, true]) {
+	test(`language-server output labels disambiguate only multiple workspace roots (${multiRoot ? 'multi-root' : 'single-root'})`, () => {
+		const events = new FakeServerEvents();
+		using resources = new DisposableStore();
+		const services = workbenchInstantiationService(resources);
+		const output = services.get(IOutputService);
+		const folders = [
+			{ id: '3dad1685'.repeat(8), name: 'ash', uri: URI.file('/ash'), index: 0 },
+			...(multiRoot ? [{ id: 'api', name: 'api', uri: URI.file('/api'), index: 1 }] : []),
+		];
+		using workspace = new TestWorkspaceService({ id: 'output-labels', folders });
+		using service = createService(services, events, { workspace });
+		for (const folder of folders) {
+			events.fire({ method: 'language/serverMessage', params: { server: 'rust-analyzer', dirId: folder.id, severity: 'log', source: 'stderr', show: false, message: 'ready' } });
+		}
+		assert.deepEqual(output.channels.map(channel => ({ id: channel.id, label: channel.label })), folders.map(folder => ({
+			id: `language-server.rust-analyzer.${folder.id}`,
+			label: multiRoot ? `rust-analyzer — ${folder.name}` : 'rust-analyzer',
+		})));
+	});
+}
+
 test('progress keeps the server and directory visible when concurrent tasks finish', async () => {
 	const events = new FakeServerEvents();
 	using resources = new DisposableStore();

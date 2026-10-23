@@ -481,8 +481,7 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions): Promise<void> {
-		const input = text.trim();
-		if (!input && !contexts?.length) return;
+		if (!text.trim() && !contexts?.length) return;
 		this.assertAIEnabled();
 		const operation = this.captureOperation(options);
 		const stateRequest = ++this.stateRequest;
@@ -515,7 +514,8 @@ export class ChatWidgetModel extends Disposable {
 				sessionId: active.session.sessionId,
 				threadId: active.threadId,
 				expectedSequence: thread.sequence,
-				text: input,
+				// Reference offsets belong to the exact composer text, including leading whitespace.
+				text,
 				mode,
 				// An unknown/default choice stays with the backend authority; only conversation choices override it.
 				approvalMode: this.selectedApprovalModes.get().get(this.composerIdentity) ?? this._thread?.turns.at(-1)?.approvalMode,

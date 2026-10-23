@@ -43,6 +43,8 @@ import { registerCodebaseSymbolsWorkspaceSymbolProvider } from '../../../src/ash
 import type { ICodebaseSymbolsService } from '../../../src/ash/platform/codebaseSymbols/common/codebaseSymbolsService.js';
 import { ITerminalService, type ITerminalInstance } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
+import { IOutputService } from '../../../src/ash/workbench/services/output/common/output.js';
+import '../../../src/ash/workbench/contrib/output/browser/outputServices.js';
 import { TERMINAL_VIEW_ID } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
 import { SEARCH_VIEW_ID } from '../../../src/ash/workbench/contrib/search/common/constants.js';
 import { XtermTerminal } from '../../../src/ash/workbench/contrib/terminal/browser/xterm/xtermTerminal.js';
@@ -80,6 +82,7 @@ import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
+import type { ITextModel } from '../../../src/ash/editor/common/model.js';
 import { Selection } from '../../../src/ash/editor/common/core/selection.js';
 import { Range } from '../../../src/ash/editor/common/core/range.js';
 import { registerChatContextActions } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatContextActions.js';
@@ -116,7 +119,7 @@ import { HoverService, IHoverService } from '../../../src/ash/platform/hover/bro
 import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDelegate.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
+	interface Window { ashChatInputIntegration: { changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; addDeferredContext(content: string): void; releaseReferencePreview(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -182,7 +185,7 @@ document.body.append(destinations);
 const recordDestination = (value: unknown): void => { destinations.textContent = JSON.stringify([...JSON.parse(destinations.textContent!), value]); };
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IOpenerService, { open: async (resource, options) => { recordDestination({ resource: resource.toString(), options }); return true; } } as IOpenerService);
-services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === 'git.getRepositoryContexts' || id === 'workbench.action.chat.attachSelection' || id === 'workbench.action.chat.attachScreenshot' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services, resource); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
+services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === 'git.getRepositoryContexts' || id === 'editor.action.showHover' || id === 'editor.action.selectAll' || id === 'workbench.action.chat.attachSelection' || id === 'workbench.action.chat.attachScreenshot' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services, resource); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
 const contextKeys = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contextKeys);
 services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
@@ -382,6 +385,10 @@ services.registerInstance(IHistoryService, { getHistory: () => [{ resource: URI.
 const openedEditors = document.createElement('output');
 openedEditors.setAttribute('aria-label', 'Opened editor count');
 openedEditors.textContent = '0';
+const savedContentEditors = document.createElement('output');
+savedContentEditors.setAttribute('aria-label', 'Opened saved content');
+savedContentEditors.textContent = '[]';
+document.body.append(savedContentEditors);
 document.body.append(openedEditors);
 const activeEditorChanged = resources.add(new Emitter<void>());
 let activeEditor: IResourceEditorInput | undefined;
@@ -389,7 +396,10 @@ services.registerInstance(IEditorService, {
 	...emptyEditorServiceState,
 	onDidActiveEditorChange: activeEditorChanged.event,
 	get activeEditor() { return activeEditor; },
-	openEditor: async () => { openedEditors.textContent = String(Number(openedEditors.textContent) + 1); },
+	openEditor: async (input, options) => {
+		openedEditors.textContent = String(Number(openedEditors.textContent) + 1);
+		savedContentEditors.textContent = JSON.stringify([...JSON.parse(savedContentEditors.textContent!), { resource: input.resource.toString(), label: input.label, text: input.initialText, readOnly: input.readOnly, pinned: options?.pinned }]);
+	},
 	focusActiveEditor() { },
 } satisfies IEditorService);
 const contextPicks = new ChatContextPickService();
@@ -579,10 +589,25 @@ if (inlineCode) {
 	source.id = 'code-selection-source';
 	source.style.cssText = 'width:600px;height:200px;margin-top:24px';
 	document.body.append(source);
-	const model = resources.add(new TextModel('first\nsecond\nconst unsaved = 42;\nreturn unsaved;\nlast', {
+	let model: ITextModel = resources.add(new TextModel('first\nsecond\nconst unsaved = 42;\nreturn unsaved;\nlast', {
 		resource: URI.file('/workspace/example.ts'), languageId: 'typescript',
 		...(snapshotFixture ? { tokenization: { syntaxProviderRegistry: languageFeatures.syntaxProvider } } : {}),
 	}));
+	if (new URLSearchParams(location.search).has('outputSelection')) {
+		const output = services.get(IOutputService);
+		const label = new URLSearchParams(location.search).has('multiRootOutput') ? 'rust-analyzer — ash' : 'rust-analyzer';
+		const channel = resources.add(output.createChannel({ id: `language-server.rust-analyzer.${'3dad1685'.repeat(8)}`, label, kind: 'log' }));
+		channel.append({ text: 'first\nsecond\nSelected log entry\nAnother log entry\nlast' });
+		const appendOutput = document.createElement('button');
+		appendOutput.id = 'append-output-log';
+		appendOutput.textContent = 'Append output';
+		appendOutput.onclick = () => channel.append({ text: 'Later log entry\n' });
+		document.body.append(appendOutput);
+		model = await channel.loadModel();
+		// The label must belong to the selected model, even when another channel is active.
+		resources.add(output.createChannel({ id: 'other', label: 'Other channel' }));
+		output.selectChannel('other');
+	}
 	const editor = resources.add(services.createInstance(CodeEditorWidget, { container: source, model }));
 	editor.layout({ width: 600, height: 200 });
 	const add = document.createElement('button');
@@ -686,6 +711,7 @@ function renderModels(): void {
 	part.render({ ...state, interaction: undefined });
 }
 part.render(state);
+let releaseReferencePreview: (() => void) | undefined;
 window.ashChatInputIntegration = {
 	changeTools: () => { toolsChanged = true; toolCatalogChanges.fire(); },
 	setActiveDiff: (original, modified, text) => {
@@ -730,6 +756,11 @@ window.ashChatInputIntegration = {
 	holdNextHistoryRead: () => { holdHistoryRead = true; },
 	releaseHistorySearch: query => historyWaits.get(query)?.(),
 	addHistoryContext: () => part.addContext({ id: 'history-context', kind: 'file', name: 'draft.txt', resource: URI.parse('file:///workspace/draft.txt'), resolve: async () => ({ name: 'draft.txt', content: 'synthetic context' }) }),
+	addDeferredContext: content => {
+		const pending = new Promise<{ name: string; content: string; }>(resolve => { releaseReferencePreview = () => resolve({ name: 'draft.txt', content }); });
+		part.addContext({ id: 'deferred-context', kind: 'file', name: 'draft.txt', resource: URI.file('/workspace/draft.txt'), resolve: () => pending });
+	},
+	releaseReferencePreview: () => releaseReferencePreview?.(),
 	setHistorySkill: digest => part.render({ ...state, skillSelectors: [{ name: 'commit', description: 'Commit the synthetic change', source: 'user', skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest } } }] }),
 	modelState: () => ({ selectedModel, automatic, preferences: models.map(({ model, selectedAcceleration, accelerationOptions, longContext }) => ({ model, selectedAcceleration, accelerationOptions, longContext })), preferenceWrites }),
 	setModelsAvailable: available => { if (available) { models = hiddenModels ?? models; hiddenModels = undefined; } else { hiddenModels = models; models = []; } renderModels(); modelChanged.fire(); },

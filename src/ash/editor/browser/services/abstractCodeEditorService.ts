@@ -7,6 +7,7 @@ import { type ITextResourceEditorInput } from '../../../platform/editor/common/e
 import { type ICodeEditor, type IDiffEditor } from '../editorBrowser.js';
 import { isThemeColor, type IDecorationRenderOptions, type IThemeDecorationRenderOptions } from '../../common/editorCommon.js';
 import { OverviewRulerLane, type IModelDecorationOptions, type InjectedTextOptions, type ITextModel } from '../../common/model.js';
+import { colorCssVariable } from '../../../platform/theme/common/colorUtils.js';
 import { type ICodeEditorOpenHandler, type ICodeEditorService } from './codeEditorService.js';
 
 /** Owns editor discovery and the state shared by all code editor instances. */
@@ -446,6 +447,6 @@ function addCss(target: string[], name: string, value: string | number | { id: s
 	if (value === undefined) {
 		return;
 	}
-	const text = isThemeColor(value) ? `var(--vscode-${value.id.replace(/\./g, '-')})` : String(value);
+	const text = isThemeColor(value) ? `var(${colorCssVariable(value.id)})` : String(value);
 	target.push(`${name}:${text}`);
 }

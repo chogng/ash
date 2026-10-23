@@ -31,6 +31,8 @@
 		"--ash-charts-purple",
 		"--ash-charts-red",
 		"--ash-charts-yellow",
+		"--ash-chat-slashCommandBackground",
+		"--ash-chat-slashCommandForeground",
 		"--ash-chat-tabBackground",
 		"--ash-collaboration-selection0Background",
 		"--ash-collaboration-selection1Background",
