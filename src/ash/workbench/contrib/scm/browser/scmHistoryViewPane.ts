@@ -15,6 +15,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
+import { getActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
@@ -818,7 +819,13 @@ export class SCMHistoryViewPane extends ViewPane {
 				if (options) void this.openCommitChange(element.model.historyItem, element.change, options);
 			} else if (element.kind === 'more') void this.loadMore();
 		}));
-		resources.add(addDisposableListener(tree.element, 'keydown', event => this.onHistoryKeyDown(event), true));
+		// The shared tree prevents native pointer focus, which can retain :focus-visible.
+		resources.add(addDisposableListener(tree.element, 'pointerdown', () => tree.element.classList.add('pointer-navigation'), true));
+		resources.add(addDisposableListener(tree.element, 'blur', () => tree.element.classList.remove('pointer-navigation')));
+		resources.add(addDisposableListener(tree.element, 'keydown', event => {
+			tree.element.classList.remove('pointer-navigation');
+			this.onHistoryKeyDown(event);
+		}, true));
 		resources.add(this.onDidChangeBodyVisibility(visible => { if (visible) this.loadMoreIfVisible(); }));
 		resources.add(tree.onDidScroll(() => {
 			this.updateSelection();
@@ -1037,12 +1044,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		if (repository) {
 			const actions = h(document, 'div');
 			actions.className = 'ash-scm-graph-actions';
-			resources.add(new MenuWorkbenchToolBar(actions, this.menuService, this.contextMenuService, MenuId.SCMHistoryItemContext, {
-				ariaLabel: localize('scm.history.commitActions', 'Commit actions'),
-				contextKeyService: scope,
-				menuOptions: { arg: menuTarget },
-				toolbarOptions: { primaryGroup: 'inline' },
-			}));
+			this.renderInlineActions(actions, MenuId.SCMHistoryItemContext, menuTarget, scope, resources, localize('scm.history.commitActions', 'Commit actions'));
 			resources.add(addDisposableListener(actions, 'click', event => event.stopPropagation()));
 			resources.add(addDisposableListener(actions, 'dblclick', event => event.stopPropagation()));
 			overlay.append(actions);
@@ -1057,6 +1059,19 @@ export class SCMHistoryViewPane extends ViewPane {
 			if (menuTarget) { this.showHistoryMenu(menuTarget, scope, item, event); }
 		}));
 		return rendered;
+	}
+
+	private renderInlineActions(container: HTMLElement, menuId: MenuId, target: SCMHistoryItemViewModelTreeElement | SCMHistoryItemChangeViewModelTreeElement | undefined, scope: IScopedContextKeyService, resources: DisposableStore, ariaLabel: string): void {
+		const menu = resources.add(this.menuService.createMenu(menuId, scope));
+		const toolbar = resources.add(new WorkbenchToolBar(container, this.contextMenuService, { ariaLabel }));
+		const update = (): void => {
+			// Secondary actions remain available through the row's context menu.
+			const { primary } = getActionBarActions(menu.getActions({ arg: target }), 'inline');
+			toolbar.setActions(primary);
+			toolbar.element.hidden = primary.length === 0;
+		};
+		resources.add(menu.onDidChange(update));
+		update();
 	}
 
 	private updateCommitRow(row: HistoryItemRow, model: ISCMHistoryItemViewModel): void {
@@ -1257,10 +1272,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			const menuTarget = { repository, historyItemViewModel, historyItemChange: change, graphColumns: historyItemViewModel.outputSwimlanes, type: 'historyItemChangeViewModel' } satisfies SCMHistoryItemChangeViewModelTreeElement;
 			const actions = h(document, 'div');
 			actions.className = 'ash-scm-graph-actions';
-			resources.add(new MenuWorkbenchToolBar(actions, this.menuService, this.contextMenuService, MenuId.SCMHistoryItemChangeContext, {
-				ariaLabel: localize('scm.history.fileActions', 'History file actions'),
-				contextKeyService: scope, menuOptions: { arg: menuTarget }, toolbarOptions: { primaryGroup: 'inline' },
-			}));
+			this.renderInlineActions(actions, MenuId.SCMHistoryItemChangeContext, menuTarget, scope, resources, localize('scm.history.fileActions', 'History file actions'));
 			resources.add(addDisposableListener(actions, 'click', event => event.stopPropagation()));
 			resources.add(addDisposableListener(actions, 'dblclick', event => event.stopPropagation()));
 			domNode.append(actions);

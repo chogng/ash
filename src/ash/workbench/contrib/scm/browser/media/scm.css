@@ -300,9 +300,13 @@
 		display var(--ash-animation-durationFast) allow-discrete;
 }
 
+/* A remembered row focus reveals actions only while the tree has keyboard focus. */
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay > .ash-scm-graph-actions,
 .ash-scm-graph-actions:has(button[aria-expanded="true"]),
-.ash-scm-graph-commit:is(:focus-within, .focused)
+.ash-scm-graph-commit:is(
+		:focus-within,
+		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay
 	> .ash-scm-graph-actions {
@@ -367,7 +371,11 @@
 	--scm-graph-row-background: var(--ash-list-hoverBackground);
 }
 
-.ash-scm-graph-change-row:is(:hover, :focus-within, .focused)
+.ash-scm-graph-change-row:is(
+		:hover,
+		:focus-within,
+		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+	)
 	> .ash-scm-graph-actions {
 	display: flex;
 	opacity: 1;
@@ -831,7 +839,10 @@
 }
 
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay::before,
-.ash-scm-graph-commit:is(:focus-within, .focused)
+.ash-scm-graph-commit:is(
+		:focus-within,
+		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay::before,
 .ash-scm-graph-overlay:has(button[aria-expanded="true"])::before {
@@ -850,17 +861,27 @@
 	:is(.ash-scm-section-actions, .ash-scm-change-actions),
 .ash-scm-section-heading:focus-within > .ash-scm-section-actions,
 .ash-scm-change:focus-within > .ash-scm-change-actions,
-.ash-scm-graph-commit:is(:focus-within, .focused)
+.ash-scm-graph-commit:is(
+		:focus-within,
+		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay
 	> .ash-scm-graph-actions,
-.ash-scm-graph-change-row:is(:focus-within, .focused) > .ash-scm-graph-actions,
+.ash-scm-graph-change-row:is(
+		:focus-within,
+		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+	)
+	> .ash-scm-graph-actions,
 :is(
 	.ash-scm-section-actions,
 	.ash-scm-change-actions,
 	.ash-scm-graph-actions
 ):has(button[aria-expanded="true"]),
-.ash-scm-graph-commit:is(:focus-within, .focused)
+.ash-scm-graph-commit:is(
+		:focus-within,
+		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay::before,
 .ash-scm-graph-overlay:has(button[aria-expanded="true"])::before {

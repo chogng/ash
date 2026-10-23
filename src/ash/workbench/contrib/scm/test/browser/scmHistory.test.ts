@@ -621,6 +621,51 @@ suite('scmHistory browser component', () => {
 		await retainedActions?.dispose();
 	});
 
+	test('history actions reveal on hover or keyboard focus without following retained row focus', async function () {
+		const { page } = browserTests;
+		await page.goto('/scmHistory.html?changes');
+		const tree = page.locator('.ash-scm-graph-tree');
+		const commit = tree.getByRole('treeitem', { name: /History metadata:/u });
+		const row = commit.locator('.ash-scm-graph-row');
+		const actions = row.locator('.ash-scm-graph-actions');
+		const retainedActions = await actions.elementHandle();
+		const outside = page.locator('#outside');
+		try {
+			for (let theme = 0; theme < 4; theme++) {
+				await page.evaluate(index => window.ashSCMHistoryIntegration.setTheme(index), theme);
+				await commit.locator('.ash-scm-graph-subject').click({ position: { x: 3, y: 8 } });
+				await outside.hover();
+				await expect(commit.locator('.ash-scm-graph-commit')).toHaveClass(/focused/u);
+				await expect(actions).toBeHidden();
+				await expect(actions).toHaveCSS('pointer-events', 'none');
+				await tree.press('Home');
+				await expect(actions).toBeVisible();
+				await outside.click();
+				await expect(actions).toBeHidden();
+				await row.hover({ position: { x: 80, y: 10 } });
+				await expect(actions).toBeVisible();
+				expect(await retainedActions!.evaluate(element => element.isConnected)).toBe(true);
+				await outside.hover();
+				await expect(actions).toBeHidden();
+			}
+			await tree.press('Home');
+			if (await commit.getAttribute('aria-expanded') === 'false') { await tree.press('ArrowRight'); }
+			await tree.press('ArrowRight');
+			const file = tree.locator('.ash-scm-graph-change-row').first();
+			const fileActions = file.locator('.ash-scm-graph-actions');
+			await expect(fileActions).toBeVisible();
+			await outside.click();
+			await expect(fileActions).toBeHidden();
+			await file.locator('.ash-scm-graph-change').click();
+			await outside.hover();
+			await expect(fileActions).toBeHidden();
+			await file.hover();
+			await expect(fileActions).toBeVisible();
+		} finally {
+			await retainedActions?.dispose();
+		}
+	});
+
 	test('floating history actions preserve the complete keyboard focus outline across themes', async function () {
 		const { page } = browserTests;
 
