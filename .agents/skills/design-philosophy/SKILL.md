@@ -5,7 +5,7 @@ description: The Ash design philosophy — a shared Values→Principles→Moves 
 
 # Ash Design Philosophy
 
-This skill is the **canonical Ash workbench design philosophy** — the single source of truth for how we reason about UI, for both developers and agents.
+This skill defines the **IDE Workbench visual rules**. For Agent Window surfaces, including shared widgets hosted there, use [Sessions style](../../../src/ash/sessions/STYLE.md). Shared controls and theme infrastructure do not require the two windows to share visual values; choose the owning surface before applying the rules below.
 
 As more and more of the UI is implemented via agents and tooling, the pixels increasingly take care of themselves, and the scarce, human part becomes the design judgment behind them.
 

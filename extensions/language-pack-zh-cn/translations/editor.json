@@ -43,6 +43,7 @@
     "size.cornerRadius.medium": "内层表面的圆角半径。",
     "size.cornerRadius.large": "突出表面的圆角半径。",
     "size.cornerRadius.xLarge": "大型表面的圆角半径。",
+    "size.cornerRadius.xxLarge": "超大型表面的圆角半径。",
     "size.cornerRadius.circle": "圆形按钮、圆点和胶囊形元素的圆角半径。",
     "size.lxiconFontSize": "标准 Lxicon 字形大小。",
     "size.lxiconFontSize.compact": "紧凑 Lxicon 字形大小。",

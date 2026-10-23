@@ -62,6 +62,12 @@ export const cornerRadiusXLarge = length(
 	localize("size.cornerRadius.xLarge", "Radius for large surfaces."),
 );
 
+export const cornerRadiusXXLarge = length(
+	"cornerRadius.xxLarge",
+	16,
+	localize("size.cornerRadius.xxLarge", "Radius for extra-large surfaces."),
+);
+
 // An oversized radius lets CSS clamp rounding to the element's bounds without knowing its dimensions.
 export const cornerRadiusCircle = length(
 	"cornerRadius.circle",

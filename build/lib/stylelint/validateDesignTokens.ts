@@ -5,7 +5,7 @@ export interface DesignTokenSuggestion {
 }
 
 const spacingRamp = [0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32, 36, 40];
-const radiusRamp = [2, 4, 6, 8, 12, 9999];
+const radiusRamp = [2, 4, 6, 8, 12, 16, 9999];
 const fontRamp = [10, 11, 12, 13, 18, 26];
 
 /** Advisory checks identify design decisions; they never rewrite CSS or fail a build. */
