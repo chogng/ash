@@ -10,7 +10,7 @@ import { installMainChannelTestClient } from '../../../automation/mainProcessIpc
 import { developmentAshPackagePath } from '../../../../src/ash/platform/environment/node/developmentArtifacts.js';
 import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { RemoteAgentConnection } from '../../../../src/ash/platform/remote/common/remoteAgentApi.js';
-import type { RemoteTunnel } from '../../../../src/ash/platform/remote/common/remoteTunnelService.js';
+import type { SshPortForward } from '../../../../src/ash/platform/remote/electron-main/sshPortForwardingService.js';
 
 test('SSH Desktop edits, searches, forwards ports and recovers the same terminal after transport loss', { tag: ['@electron-app-server', '@darwin'] }, async ({ }, testInfo) => {
 	test.setTimeout(240_000);
@@ -37,7 +37,7 @@ test('SSH Desktop edits, searches, forwards ports and recovers the same terminal
 		const indicator = page.locator('[data-statusbar-item-id="ash.status.remote"]');
 		const readyLabel = `Remote connection to SSH host ${fixture.host} is ready`;
 		const connection = () => page.evaluate(async () => await (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:remote:connection') as RemoteAgentConnection);
-		const tunnels = () => page.evaluate(() => globalThis.ashTestMainProcess.call<RemoteTunnel[]>('remotePortForwarding', 'ash:remote:tunnel:list'));
+		const tunnels = () => page.evaluate(() => globalThis.ashTestMainProcess.call<SshPortForward[]>('remotePortForwarding', 'ash:remote:tunnel:list'));
 		await test.step('Initialize the production Desktop SSH connection', async () => {
 			await expect(indicator).toHaveAttribute('aria-label', readyLabel);
 			expect(await connection()).toMatchObject({ kind: 'ssh', host: fixture.host, authority: `ssh+${fixture.host}` });

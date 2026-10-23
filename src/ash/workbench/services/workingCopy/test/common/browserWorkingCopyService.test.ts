@@ -15,7 +15,7 @@ suiteTeardown(() => uriIdentityServices.dispose());
 
 test("BrowserWorkingCopyService indexes and unregisters format-specific copies", () => {
 	using service = uriIdentityServices.createInstance(BrowserWorkingCopyService);
-	using copy = new FakeWorkingCopy(URI.file("C:\\project\\paper.ash-academic"));
+	using copy = new FakeWorkingCopy(URI.file("C:\\project\\paper.ash-academy"));
 	const registered: IWorkingCopy[] = [];
 	const unregistered: IWorkingCopy[] = [];
 	using registeredListener = service.onDidRegister(value => registered.push(value));

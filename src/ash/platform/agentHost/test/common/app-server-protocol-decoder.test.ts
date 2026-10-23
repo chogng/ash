@@ -27,6 +27,20 @@ function usageResponse() {
 	return { jsonrpc: '2.0', id: 1, result };
 }
 
+test('Skill catalog decoding preserves author metadata and rejects non-string values', () => {
+	const skill = {
+		id: { source: 'builtin:skill-source:ash-release', name: 'create-instructions' },
+		description: 'Create project instructions.', sourceKind: 'builtIn',
+		contentDigest: `sha256:${'a'.repeat(64)}`, enablement: 'enabled', compatibility: { type: 'compatible' },
+		metadata: { author: 'Ash', version: '1.0.0', 'updated-at': '2026-10-22' },
+	};
+	const response = { jsonrpc: '2.0', id: 1, result: { generation: 1, skills: [skill], diagnostics: [] } };
+	assert.deepEqual(decodeAppServerResponse('skills/list', response), response);
+	assert.throws(() => decodeAppServerResponse('skills/list', {
+		...response, result: { ...response.result, skills: [{ ...skill, metadata: { author: 42 } }] },
+	}), AppServerProtocolDecodeError);
+});
+
 test('warmed record checks preserve nested optional fields, false, zero and allowed extensions', () => {
 	for (let warm = 0; warm < 3; warm++) {
 		const response = usageResponse();
@@ -391,7 +405,7 @@ test('generated DAP start decoder admits connection descriptors and rejects inva
 
 test('extension package location and execution platform survive the generated catalog response', () => {
 	const extension = { id: 'test.debugger', name: 'debugger', publisher: 'test', version: '1.0.0', displayName: 'Debugger', sourceKind: 'plugin', manifestJson: '{}', manifestSha256: 'sha256:' + 'a'.repeat(64), packageSha256: 'sha256:' + 'b'.repeat(64), extensionLocation: 'file:///installed/package%20with%20spaces', targetPlatform: 'darwin-arm64' };
-	const response = { jsonrpc: '2.0', id: 1, result: { generation: 1, extensions: [extension], diagnostics: [] } };
+	const response = { jsonrpc: '2.0', id: 1, result: { status: 'updated', generation: 1, extensions: [extension], diagnostics: [] } };
 	assert.deepEqual(decodeAppServerResponse('extensions/list', response), response);
 	for (const field of ['extensionLocation', 'targetPlatform']) {
 		assert.throws(() => decodeAppServerResponse('extensions/list', { ...response, result: { ...response.result, extensions: [{ ...extension, [field]: 1 }] } }), AppServerProtocolDecodeError);

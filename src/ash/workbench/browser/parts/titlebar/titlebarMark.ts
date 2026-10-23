@@ -1,6 +1,5 @@
 import './titlebarMark.css';
-import ashMarkSvg from '../../media/ash-mark.svg?raw';
-import { registerLxicon } from '../../../../base/common/lxiconsUtil.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { getLxiconDefinition, registerLxicon } from '../../../../base/common/lxiconsUtil.js';
 
-export const ashTitlebarMark = registerLxicon('ash-titlebar-mark', () =>
-	ashMarkSvg.replace('<svg ', '<svg class="ash-titlebar-mark" '));
+export const ashTitlebarMark = registerLxicon('ash-titlebar-mark', getLxiconDefinition(Lxicon.ashMark.id)!);

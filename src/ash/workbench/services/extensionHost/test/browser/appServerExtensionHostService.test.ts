@@ -24,6 +24,7 @@ import { IEditorService } from '../../../editor/common/editorService.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IWorkingCopyService } from '../../../workingCopy/common/workingCopyService.js';
 import { IViewsService } from '../../../views/common/viewsService.js';
+import { IPaneCompositePartService } from '../../../panecomposite/browser/panecomposite.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
@@ -51,7 +52,11 @@ import { createHash } from 'node:crypto';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService, UnavailableRemoteConnectionApi } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+import { TestViewDescriptorService, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewRegistry } from '../../../../common/views.js';
+import { ITimelineService } from '../../../../contrib/timeline/common/timeline.js';
+import { TimelineService } from '../../../../contrib/timeline/common/timelineService.js';
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import assert from "node:assert/strict";
 import { suite, test } from "mocha";
@@ -106,6 +111,48 @@ import { ExtensionResourceLoaderService } from '../../../../../platform/extensio
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
+
+test('a missing tree container isolates one registration while the fleet commits and activates other extensions', async () => {
+	const initial = snapshot(1, 'acme.run', [
+		{ kind: 'treeDataProvider', registrationId: 'missing-tree', viewId: 'acme.missing', title: 'Missing tree', containerId: 'missing.container' },
+		{ kind: 'treeDataProvider', registrationId: 'sibling-tree', viewId: 'acme.sibling', title: 'Sibling tree' },
+	]);
+	const healthy = { ...initial.extensions[0]!, id: 'acme.healthy', registrations: [{ kind: 'treeDataProvider' as const, registrationId: 'tree', viewId: 'acme.healthy', title: 'Healthy tree' }] };
+	const dormant = { ...dormantSnapshot(['*']).extensions[0]!, id: 'acme.lazy' };
+	const fleet = { ...initial, extensions: [...initial.extensions, healthy, dormant] };
+	const api = new FakeExtensionHostApi(fleet);
+	const activation = deferred<ExtensionHostFleetSnapshot>();
+	api.activationResult = activation.promise;
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using registry = new WorkbenchViewRegistry();
+	using container = registry.registerViewContainer({ id: 'test.trees', title: 'Trees', location: ViewContainerLocation.Sidebar, isDefault: true });
+	using descriptors = new TestViewDescriptorService({ registry }, services.get(IContextKeyService));
+	using treeServices = services.createChild();
+	treeServices.registerInstance(IViewDescriptorService, descriptors);
+	using host = treeServices.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	const failures: string[] = [];
+	using failed = host.onDidFail(failure => failures.push(`${failure.extensionId}: ${failure.message}`));
+	await host.start();
+	await waitFor(() => api.activations.length === 1);
+	assert.equal(host.currentSnapshot.fleetGeneration, 1);
+	assert.deepEqual(host.currentSnapshot.extensions.map(runtime => runtime.id), ['acme.demo', 'acme.healthy', 'acme.lazy']);
+	assert.equal(host.state, 'degraded');
+	assert.deepEqual(failures, ['acme.demo: No container for tree view: acme.missing']);
+	assert.ok(descriptors.getViewDescriptorById('acme.sibling'));
+	assert.ok(descriptors.getViewDescriptorById('acme.healthy'));
+	assert.equal(api.activations[0]!.extensionId, 'acme.lazy');
+	assert.deepEqual(api.activations[0]!.event, { type: 'startupFinished' });
+	using recovered = registry.registerViewContainer({ id: 'missing.container', title: 'Recovered', location: ViewContainerLocation.Sidebar });
+	api.current = { ...fleet, generation: 2, extensions: fleet.extensions.slice(0, 2) };
+	api.emitChanged(2);
+	await waitFor(() => host.currentSnapshot.fleetGeneration === 2);
+	assert.equal(host.state, 'ready');
+	assert.ok(descriptors.getViewDescriptorById('acme.missing'));
+	await host.stop();
+	activation.resolve({ ...api.current, extensions: [...api.current.extensions, { ...dormant, lifecycle: 'ready', incarnation: 4, registrations: [] }] });
+	assert.equal(descriptors.getViewDescriptorById('acme.healthy'), null);
+});
 
 for (const stopBeforeReady of [false, true]) test(`provider activation waits for declarative identity and configuration${stopBeforeReady ? ' and stays stopped after a late catalog' : ''}`, async () => {
 	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run'));
@@ -233,7 +280,7 @@ test('extension backend client operations reach the admitted capability owner', 
 	const result = await api.clientHandler!({ operation: 'backendState', capability: 'catalog', after: 0 }, signal, source);
 	assert.equal(result.result, 'value');
 	if (result.result !== 'value') { assert.fail('Expected backend state'); }
-	assert.deepEqual(JSON.parse(JSON.stringify(result.value)), { sequence: 0, connection: 'ready', generation: 1, reset: false, events: [], folders: services.get(IWorkspaceContextService).getWorkspace().folders.map(folder => ({ id: folder.id, name: folder.name, uri: folder.uri.toString() })) });
+	assert.deepEqual(JSON.parse(JSON.stringify(result.value)), { sequence: 0, connection: 'ready', generation: 1, reset: false, editorFoldersChanged: false, events: [], folders: services.get(IWorkspaceContextService).getWorkspace().folders.map(folder => ({ id: folder.id, name: folder.name, uri: folder.uri.toString() })) });
 	assert.equal(requests.length, 1);
 });
 
@@ -1029,6 +1076,7 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 }
 
 class ProviderSink<TProvider> {
+	readonly onDidWriteTerminalData = Event.None;
 	readonly onDidStartTask = Event.None;
 	readonly onDidChangeTaskRun = Event.None;
 	readonly onWillNewSession = Event.None;
@@ -1132,6 +1180,7 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 		},
 	});
 	services.registerSingleton(ISpeechService, () => new SpeechService(undefined));
+	services.registerSingleton(ITimelineService, () => services.createInstance(TimelineService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	services.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
 	services.registerInstance(IAdapterManager, services.resources.add(new AdapterManager()));
@@ -1153,6 +1202,15 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerInstance(IFileDialogService, { pickFolderAndOpen: async () => assert.fail('Unexpected folder open'), pickWorkspaceAndOpen: async () => assert.fail('Unexpected workspace open'), pickFileToSave: async () => undefined, showOpenDialog: async () => assert.fail('Unexpected folder picker'), showSaveDialog: async () => undefined, showSaveConfirm: async () => 2 });
 	services.registerInstance(IWorkingCopyService, { get: () => assert.fail('Unexpected working copy request') } as unknown as IWorkingCopyService);
 	services.registerInstance(IViewsService, { openView: async () => assert.fail('Unexpected view open') } as unknown as IViewsService);
+	services.registerInstance(IViewDescriptorService, services.resources.add(new TestViewDescriptorService({ registry: services.resources.add(new WorkbenchViewRegistry()) }, services.get(IContextKeyService))));
+	services.registerInstance(IPaneCompositePartService, {
+		onDidPaneCompositeOpen: Event.None, onDidPaneCompositeClose: Event.None,
+		getProgressIndicator: () => undefined,
+		getActivePaneComposite: () => undefined, getLastActivePaneCompositeId: () => undefined,
+		getPartId: () => assert.fail('UI Parts are outside this extension-host scenario'),
+		openPaneComposite: async () => assert.fail('Unexpected pane open'),
+		hideActivePaneComposite: () => assert.fail('Unexpected pane hide'),
+	});
 	services.registerInstance(IClipboardService, { writeText: async () => assert.fail('Unexpected clipboard write') } as unknown as IClipboardService);
 	services.registerInstance(IOpenerService, { open: async () => assert.fail('Unexpected external open') } as unknown as IOpenerService);
 	services.registerInstance(ICodeEditorService, { listDiffEditors: () => assert.fail('Unexpected diff editor request'), listCodeEditors: () => [], onCodeEditorAdd: Event.None, onCodeEditorRemove: Event.None } as unknown as ICodeEditorService);

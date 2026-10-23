@@ -16,16 +16,16 @@
 
 .ash-extension-editor .extension-detail-header {
 	display: grid;
-	grid-template-columns: 128px minmax(0, 1fr);
-	gap: 32px;
+	grid-template-columns: 96px minmax(0, 1fr);
+	gap: var(--ash-spacing-size240);
 	align-items: start;
-	margin-bottom: 24px;
+	margin-bottom: var(--ash-spacing-size160);
 }
 
 .ash-extension-editor .extension-detail-icon {
 	display: flex;
-	width: 128px;
-	height: 128px;
+	width: 96px;
+	height: 96px;
 	align-items: center;
 	justify-content: center;
 	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
@@ -46,6 +46,28 @@
 	min-width: 0;
 }
 
+.ash-extension-editor .extension-detail-identity-row {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size200);
+}
+
+.ash-extension-editor .extension-detail-identity {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-extension-editor .extension-detail-enablement {
+	flex-shrink: 0;
+}
+
+.ash-extension-editor .extension-detail-enablement[hidden] {
+	display: none;
+}
+
 .ash-extension-editor h1 {
 	margin: 0 0 8px;
 	font-size: var(--ash-fontSize-heading1);
@@ -64,6 +86,15 @@
 	margin: 8px 0;
 }
 
+.ash-extension-editor .extension-detail-heading p:empty {
+	display: none;
+}
+
+.ash-extension-editor .extension-detail-identity > h1,
+.ash-extension-editor .extension-detail-identity > p {
+	margin: 0;
+}
+
 .ash-extension-editor .extension-metadata {
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-body2);
@@ -78,6 +109,10 @@
 	flex-wrap: wrap;
 	gap: 8px;
 	margin-top: 16px;
+}
+
+.ash-extension-editor .extension-actions:empty {
+	display: none;
 }
 
 .ash-extension-editor .extension-detail-tabs {

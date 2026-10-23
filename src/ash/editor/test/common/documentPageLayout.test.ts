@@ -8,12 +8,12 @@ import { createDefaultDocumentSchema } from '../../../../../extensions/academy/c
 import { DocumentTextModel } from '../../../../../extensions/academy/common/model/documentTextModel.js';
 import { DocumentTransaction } from '../../../../../extensions/academy/common/model/documentTransaction.js';
 import { serializeDocument, deserializeDocument } from '../../../../../extensions/academy/common/model/documentSerialization.js';
-import { createAcademicDocumentSchema, createEmptyAcademicDocument } from '../../../../../extensions/academy/browser/contrib/academic/common/schema.js';
+import { createAcademyDocumentSchema, createEmptyAcademyDocument } from '../../../../../extensions/academy/browser/contrib/academy/common/schema.js';
 
-for (const academic of [false, true]) {
-	test(`Page settings validate, persist and undo atomically in ${academic ? 'Academic' : 'general'} documents`, () => {
-		const schema = academic ? createAcademicDocumentSchema() : createDefaultDocumentSchema();
-		const initial = academic ? createEmptyAcademicDocument(schema) : schema.createDocument([schema.createNode('paragraph')]);
+for (const academy of [false, true]) {
+	test(`Page settings validate, persist and undo atomically in ${academy ? 'Academy' : 'general'} documents`, () => {
+		const schema = academy ? createAcademyDocumentSchema() : createDefaultDocumentSchema();
+		const initial = academy ? createEmptyAcademyDocument(schema) : schema.createDocument([schema.createNode('paragraph')]);
 		using model = DocumentTextModel.create(schema, initial);
 		const version = model.getVersionId();
 		for (const attrs of ([{ pageSize: 'unknown' }, { pageMargin: '72' }, { pageMargin: 0 }, { pageMargin: 145 }, { pageMargin: NaN }] as readonly DocumentAttributes[])) {
@@ -32,9 +32,9 @@ for (const academic of [false, true]) {
 	});
 }
 
-for (const academic of [false, true]) {
-	test(`Pagination intent rejects invalid files and remote changes without advancing ${academic ? 'Academic' : 'general'} history`, () => {
-		const schema = academic ? createAcademicDocumentSchema() : createDefaultDocumentSchema();
+for (const academy of [false, true]) {
+	test(`Pagination intent rejects invalid files and remote changes without advancing ${academy ? 'Academy' : 'general'} history`, () => {
+		const schema = academy ? createAcademyDocumentSchema() : createDefaultDocumentSchema();
 		const paragraph = schema.createNode('paragraph', { id: 'body', content: [schema.createText('正文😀', { id: 'text' })] });
 		const initial = schema.createDocument([paragraph]);
 		using model = DocumentTextModel.create(schema, initial);

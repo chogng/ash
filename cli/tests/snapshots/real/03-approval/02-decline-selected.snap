@@ -21,7 +21,7 @@ expression: screen
 
 
 ○ Waiting for approval · 0s · esc to interrupt
-                                                                 /permission to change permissions
+
 ┌Approval required─────────────────────────────────────────────────────────────────────────────────┐
 │the action requires user approval                                                                 │
 │File read  ·  <FIXTURE>/profile/worktrees│

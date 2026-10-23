@@ -89,14 +89,13 @@ VS Code also has three declaration files absent from Ash. There are no case-only
 path differences. Missing paths enter implementation only when an Ash
 production caller reaches their responsibility.
 
-The following seven Ash-only paths were confirmed on 2026-09-25 to retain
-their current responsibilities:
+The following Ash-only paths retain the responsibilities confirmed on 2026-09-25:
 
-| Path                                                                              | Responsibility                                        |
-| --------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `environment.ts`                                                                  | Runtime environment facts shared by Base and Platform |
-| `jsonValue.ts`                                                                    | General JSON value validation                         |
-| `icon.ts`, `lxicons.ts`, `lxiconsLibrary.ts`, `lxiconsUtil.ts`, `productIcons.ts` | Ash icon contracts and generated product icon catalog |
+| Path                                                           | Responsibility                                        |
+| -------------------------------------------------------------- | ----------------------------------------------------- |
+| `environment.ts`                                               | Runtime environment facts shared by Base and Platform |
+| `jsonValue.ts`                                                 | General JSON value validation                         |
+| `icon.ts`, `lxicons.ts`, `lxiconsLibrary.ts`, `lxiconsUtil.ts` | Ash icon contracts and built-in font catalog          |
 
 `workbench/contrib/git/browser/gitService.ts` was also confirmed as the owner
 of Ash Git repository selection. Its URI containment check uses the Base

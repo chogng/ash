@@ -8,7 +8,7 @@
 }
 .ash-chat-empty {
 	color: var(--ash-description-foreground);
-	font-size: 12px;
+	font-size: var(--ash-fontSize-label1);
 }
 .ash-chat-empty {
 	padding: 20px 4px;
@@ -17,13 +17,13 @@
 .ash-chat-item {
 	margin: 0 0 16px;
 	color: var(--ash-foreground);
-	font-size: 13px;
+	font-size: var(--ash-fontSize-body1);
 	line-height: 1.5;
 }
 .ash-chat-item-label {
 	margin-bottom: 4px;
 	color: var(--ash-description-foreground);
-	font-size: 11px;
+	font-size: var(--ash-fontSize-label2);
 	font-weight: var(--ash-fontWeight-semiBold);
 	text-transform: uppercase;
 }

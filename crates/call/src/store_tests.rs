@@ -198,8 +198,8 @@ fn shared_document() -> crate::CallDocument {
     crate::CallDocument {
         server_url: "https://documents.example".into(),
         room_id: "document-example".into(),
-        schema_id: "stanza-academic-v1".into(),
-        content_type: "application/vnd.ash.academic-document+json".into(),
+        schema_id: "stanza-academy-v1".into(),
+        content_type: "application/vnd.ash.academy-document+json".into(),
         title: "Research notes".into(),
     }
 }

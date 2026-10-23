@@ -16,6 +16,7 @@ import type { ServicesAccessor } from '../../platform/instantiation/common/insta
 import { getVisibleViewContextKey } from './contextkeys.js';
 import { IViewsService } from '../services/views/common/viewsService.js';
 import type Severity from '../../base/common/severity.js';
+import type { IProgressIndicator } from '../../platform/progress/common/progress.js';
 
 export enum TreeItemCollapsibleState {
 	None = 0,
@@ -141,6 +142,7 @@ export interface IView {
 	setExpanded(expanded: boolean): boolean;
 	isVisible(): boolean;
 	setVisible(visible: boolean): void;
+	getProgressIndicator(): IProgressIndicator | undefined;
 }
 
 /** Runtime operations available without depending on the browser implementation. */

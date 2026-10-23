@@ -68,6 +68,34 @@ arbitrary third-party Renderer execution. The existing package and authorization
 remain authoritative. `.ashx` packaging is separate migration work;
 the current package declaration is still used by the local installer.
 
+Browser extensions can declare `contributes.imageEditors` and register each entry
+with `window.registerImageEditorProvider`. Its public provider supplies an
+`ImageEditorView`: HTML, immutable package assets registered with `asWebviewUri`,
+and JSON initialization state. This uses the existing versioned capability
+registration/invocation path. A manifest entry alone cannot execute a view.
+`window.showImageEditor` accepts screen or code-selection input for the calling
+extension's own registered editor. Accepted views belong to that registration and
+window, independently of the initiating command's RPC deadline.
+
+The view runs in an opaque sandbox. It requests initialization with
+`{ type: 'initialize' }`, receives `ImageEditorInput`, and posts `{ type: 'ready' }`
+after rendering. Input contains screen pixels or an immutable `CodeImageSnapshot`,
+semantic theme values and provider state. Feature verbosity preferences belong
+to the extension's state. The view exposes no
+service container, editor objects, internal CSS names or IPC. A view posts
+`{ type: 'complete', result: ImageEditorCompletion }`; the host validates PNG output
+before performing copy, save or attachment. `{ type: 'completed', accepted, error }`
+reports completion or a cancelled save dialog to the same view. Registration
+retirement cancels active interactions. Other execution hosts do not currently
+grant the `imageEditor` capability.
+
+`ImageEditorView.html` may contain standalone inline HTML, styles and scripts.
+Optional Blob scripts and styles must be registered with `asWebviewUri`; any
+number may appear in document order. No particular bundler or paired script/CSS
+output is required. Disposing the returned Provider registration closes its
+active views even while the extension remains enabled. Code-image interactions
+use the destination Chat draft's cancellation and image-attachment checks.
+
 The declared completion API supports simple replacement ranges, text/snippet insertion and
 additional text edits. Resolve callbacks, command-bearing items, insert/replace ranges and
 unsupported completion kinds are excluded. Configuration `update(key, value, target)`

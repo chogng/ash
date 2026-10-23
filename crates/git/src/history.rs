@@ -1,7 +1,11 @@
+use sha2::Digest;
+use std::collections::VecDeque;
 use std::ffi::OsString;
+use std::io::Read;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::SystemTime;
 
 use crate::GitChangeStatus;
 use crate::GitClient;
@@ -9,6 +13,88 @@ use crate::GitError;
 use crate::GitRepository;
 use crate::GitResult;
 use crate::path::path_from_git_bytes;
+
+// Only derived immutable comparisons are retained. Replacement refs and shallow
+// boundaries can change a commit's interpretation without changing its object ID.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct HistoryVersion {
+    repository: GitRepository,
+    metadata: Vec<(Option<SystemTime>, SystemTime)>,
+    shallow: [u8; 32],
+    configuration: [u8; 32],
+}
+
+pub(crate) fn history_version(repository: &GitRepository) -> Option<HistoryVersion> {
+    if std::env::var_os("GIT_REPLACE_REF_BASE").is_some()
+        || repository
+            .common_dir()
+            .join("refs/replace")
+            .try_exists()
+            .ok()?
+    {
+        return None;
+    }
+    let read_metadata = |path: &Path| -> Option<Vec<u8>> {
+        match std::fs::File::open(path) {
+            Ok(file) => {
+                let mut bytes = Vec::new();
+                file.take(1024 * 1024 + 1).read_to_end(&mut bytes).ok()?;
+                (bytes.len() <= 1024 * 1024).then_some(bytes)
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(Vec::new()),
+            Err(_) => None,
+        }
+    };
+    let packed_refs = read_metadata(&repository.common_dir().join("packed-refs"))?;
+    if packed_refs
+        .windows(b"refs/replace/".len())
+        .any(|part| part == b"refs/replace/")
+    {
+        return None;
+    }
+    let metadata = [
+        repository.git_dir().to_owned(),
+        repository.common_dir().join("objects"),
+    ]
+    .iter()
+    .map(|path| {
+        let metadata = std::fs::metadata(path).ok()?;
+        Some((metadata.created().ok(), metadata.modified().ok()?))
+    })
+    .collect::<Option<Vec<_>>>()?;
+    let mut configuration = sha2::Sha256::new();
+    for path in [
+        repository.common_dir().join("config"),
+        repository.git_dir().join("config.worktree"),
+        repository.common_dir().join("info/grafts"),
+    ] {
+        configuration.update(sha2::Sha256::digest(read_metadata(&path)?));
+    }
+    Some(HistoryVersion {
+        repository: repository.clone(),
+        metadata,
+        shallow: sha2::Sha256::digest(read_metadata(&repository.common_dir().join("shallow"))?)
+            .into(),
+        configuration: configuration.finalize().into(),
+    })
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct HistoryCache {
+    entries: VecDeque<HistoryComparison>,
+}
+
+#[derive(Debug)]
+struct HistoryComparison {
+    version: HistoryVersion,
+    object_id: String,
+    base: Option<String>,
+    rename_argument: String,
+    maximum_bytes: usize,
+    parent: Option<String>,
+    changes: Vec<GitCommitChange>,
+    bytes: usize,
+}
 
 /// One path changed by a commit relative to its first parent.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -135,42 +221,65 @@ impl GitClient {
         object_id: &str,
     ) -> GitResult<(Option<String>, Vec<GitCommitChange>)> {
         validate_object_id(object_id)?;
-        let parent_object_id = self.first_parent(repository, object_id).await?;
-        let output = if let Some(parent) = parent_object_id.as_deref() {
-            self.run_query(
+        if let Some(cached) = self.cached_history_changes(repository, object_id, None) {
+            return Ok(cached);
+        }
+        let version = history_version(repository);
+        // Read the first parent and paths together. Separate rev-list and diff
+        // processes add a cold-start penalty to every newly expanded commit.
+        let output = self
+            .run_query(
                 repository.worktree_root(),
                 [
-                    OsString::from("diff"),
-                    OsString::from("--name-status"),
-                    OsString::from(self.rename_argument()),
-                    OsString::from("-z"),
-                    OsString::from(parent),
-                    OsString::from(object_id),
-                    OsString::from("--"),
+                    "show",
+                    "--first-parent",
+                    "--diff-merges=first-parent",
+                    "--no-notes",
+                    "--no-show-signature",
+                    "--no-decorate",
+                    "--root",
+                    "--name-status",
+                    &self.rename_argument(),
+                    "-z",
+                    "--format=format:%H%x00%P%x00",
+                    object_id,
+                    "--",
                 ],
             )
-            .await?
-        } else {
-            self.run_query(
-                repository.worktree_root(),
-                [
-                    OsString::from("diff-tree"),
-                    OsString::from("--root"),
-                    OsString::from("--no-commit-id"),
-                    OsString::from("--name-status"),
-                    OsString::from(self.rename_argument()),
-                    OsString::from("-r"),
-                    OsString::from("-z"),
-                    OsString::from(object_id),
-                    OsString::from("--"),
-                ],
-            )
-            .await?
-        };
-        Ok((
-            parent_object_id,
-            parse_commit_changes(&output.stdout, &output.command)?,
-        ))
+            .await?;
+        let mut fields = output.stdout.splitn(3, |byte| *byte == 0);
+        if fields.next() != Some(object_id.as_bytes()) {
+            return Err(GitError::invalid_output(
+                &output.command,
+                "commit changes did not begin with the requested object",
+            ));
+        }
+        let parents = fields
+            .next()
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+            .ok_or_else(|| {
+                GitError::invalid_output(&output.command, "commit changes omitted parents")
+            })?;
+        let parent_object_id = parents.split_ascii_whitespace().next().map(str::to_owned);
+        if let Some(parent) = &parent_object_id {
+            validate_object_id(parent).map_err(|_| {
+                GitError::invalid_output(&output.command, "commit parent was invalid")
+            })?;
+        }
+        let paths = fields.next().ok_or_else(|| {
+            GitError::invalid_output(&output.command, "commit changes omitted paths")
+        })?;
+        let changes =
+            parse_commit_changes(paths.strip_prefix(b"\n").unwrap_or(paths), &output.command)?;
+        self.cache_history_changes(
+            repository,
+            version,
+            object_id,
+            None,
+            parent_object_id.clone(),
+            &changes,
+        );
+        Ok((parent_object_id, changes))
     }
 
     /// Compares immutable commits; the base may be a ref selected by the user.
@@ -182,6 +291,15 @@ impl GitClient {
         mode: GitComparisonMode,
     ) -> GitResult<(String, Vec<GitCommitChange>)> {
         validate_object_id(object_id)?;
+        // A full OID returned with the expanded history item has already been
+        // resolved. Ref names still resolve on every request so branch moves win.
+        if mode == GitComparisonMode::Direct && validate_object_id(base_reference).is_ok() {
+            if let Some((Some(base), changes)) =
+                self.cached_history_changes(repository, object_id, Some(base_reference))
+            {
+                return Ok((base, changes));
+            }
+        }
         let base = self.resolve_commit(repository, base_reference).await?;
         let base = match mode {
             GitComparisonMode::Direct => base,
@@ -194,6 +312,12 @@ impl GitClient {
                 base
             }
         };
+        if let Some((Some(base), changes)) =
+            self.cached_history_changes(repository, object_id, Some(&base))
+        {
+            return Ok((base, changes));
+        }
+        let version = history_version(repository);
         let output = self
             .run_query(
                 repository.worktree_root(),
@@ -208,7 +332,91 @@ impl GitClient {
                 ],
             )
             .await?;
-        Ok((base, parse_commit_changes(&output.stdout, &output.command)?))
+        let changes = parse_commit_changes(&output.stdout, &output.command)?;
+        self.cache_history_changes(
+            repository,
+            version,
+            object_id,
+            Some(&base),
+            Some(base.clone()),
+            &changes,
+        );
+        Ok((base, changes))
+    }
+
+    fn cached_history_changes(
+        &self,
+        repository: &GitRepository,
+        object_id: &str,
+        base: Option<&str>,
+    ) -> Option<(Option<String>, Vec<GitCommitChange>)> {
+        let version = history_version(repository)?;
+        let mut cache = self
+            .history_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let index = cache.entries.iter().position(|entry| {
+            entry.version == version
+                && entry.object_id == object_id
+                && (entry.base.as_deref() == base
+                    || (base.is_some() && entry.parent.as_deref() == base))
+                && entry.rename_argument == self.rename_argument()
+                && entry.maximum_bytes == self.limits().max_output_bytes()
+        })?;
+        let entry = cache.entries.remove(index)?;
+        let result = (entry.parent.clone(), entry.changes.clone());
+        cache.entries.push_back(entry);
+        Some(result)
+    }
+
+    fn cache_history_changes(
+        &self,
+        repository: &GitRepository,
+        version: Option<HistoryVersion>,
+        object_id: &str,
+        base: Option<&str>,
+        parent: Option<String>,
+        changes: &[GitCommitChange],
+    ) {
+        const MAXIMUM_BYTES: usize = 2 * 1024 * 1024;
+        let Some(version) =
+            version.filter(|version| history_version(repository).as_ref() == Some(version))
+        else {
+            return;
+        };
+        let bytes = changes
+            .iter()
+            .map(|change| {
+                std::mem::size_of::<GitCommitChange>()
+                    + change.path.as_os_str().len()
+                    + change
+                        .original_path
+                        .as_ref()
+                        .map_or(0, |path| path.as_os_str().len())
+            })
+            .sum::<usize>();
+        if bytes > MAXIMUM_BYTES {
+            return;
+        }
+        let mut cache = self
+            .history_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        while cache.entries.len() >= 16
+            || cache.entries.iter().map(|entry| entry.bytes).sum::<usize>() + bytes > MAXIMUM_BYTES
+        {
+            cache.entries.pop_front();
+        }
+        cache.entries.push_back(HistoryComparison {
+            version,
+            object_id: object_id.into(),
+            base: base.map(str::to_owned),
+            rename_argument: self.rename_argument(),
+            maximum_bytes: self.limits().max_output_bytes(),
+            parent,
+            changes: changes.to_vec(),
+            bytes,
+        });
     }
 
     pub async fn commit_message(
@@ -270,33 +478,6 @@ impl GitClient {
         Ok(GitCommitFile { original, modified })
     }
 
-    async fn first_parent(
-        &self,
-        repository: &GitRepository,
-        object_id: &str,
-    ) -> GitResult<Option<String>> {
-        let output = self
-            .run_query(
-                repository.worktree_root(),
-                ["rev-list", "--parents", "-n", "1", object_id],
-            )
-            .await?;
-        let text = std::str::from_utf8(&output.stdout).map_err(|_| {
-            GitError::invalid_output(&output.command, "commit parent output was not UTF-8")
-        })?;
-        let mut fields = text.split_whitespace();
-        let commit = fields.next().ok_or_else(|| {
-            GitError::invalid_output(&output.command, "commit parent output was empty")
-        })?;
-        if commit != object_id {
-            return Err(GitError::invalid_output(
-                &output.command,
-                "commit parent output did not begin with the requested object",
-            ));
-        }
-        Ok(fields.next().map(str::to_string))
-    }
-
     async fn read_file_at_object(
         &self,
         repository: &GitRepository,
@@ -304,6 +485,23 @@ impl GitClient {
         object_id: &str,
         maximum_bytes: usize,
     ) -> GitResult<Option<Vec<u8>>> {
+        if self.uses_system_executable()
+            && !path
+                .as_os_str()
+                .as_encoded_bytes()
+                .iter()
+                .any(|byte| matches!(byte, 0 | b'\n'))
+        {
+            if let Some(version) = history_version(repository) {
+                match self
+                    .read_history_batch(repository, path, object_id, version, maximum_bytes)
+                    .await
+                {
+                    Err(GitError::InvalidOutput { .. } | GitError::IndexChanged) => {}
+                    result => return result,
+                }
+            }
+        }
         let mut object = OsString::from(object_id);
         object.push(":");
         object.push(path);

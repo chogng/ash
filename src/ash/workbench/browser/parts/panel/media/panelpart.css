@@ -6,22 +6,17 @@
 	background: var(--ash-panel-background);
 }
 
-.ash-workbench-layout[data-panel-position="top"] .ash-workbench-panel,
-.ash-sessions-workbench-layout[data-panel-position="top"] .ash-workbench-panel {
+.ash-workbench-layout[data-panel-position="top"] .ash-workbench-panel {
 	border-top: 0;
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
-.ash-workbench-layout[data-panel-position="left"] .ash-workbench-panel,
-.ash-sessions-workbench-layout[data-panel-position="left"]
-	.ash-workbench-panel {
+.ash-workbench-layout[data-panel-position="left"] .ash-workbench-panel {
 	border-top: 0;
 	border-right: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
-.ash-workbench-layout[data-panel-position="right"] .ash-workbench-panel,
-.ash-sessions-workbench-layout[data-panel-position="right"]
-	.ash-workbench-panel {
+.ash-workbench-layout[data-panel-position="right"] .ash-workbench-panel {
 	border-top: 0;
 	border-left: var(--ash-strokeThickness) solid var(--ash-border);
 }

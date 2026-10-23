@@ -63,15 +63,15 @@ explicitly prepared backend, rather than compiling it again for every profile;
 the runtime required by startup's Tunnel services and builds Desktop once;
 UI and connected tests reuse those artifacts with separate test profiles.
 
-The pinned Bun 1.4.3 dependency owns single-run, no-emit type checking for
+The pinned Bun 1.4.4 runtime owns single-run, no-emit type checking for
 Renderer, Common, Protocol, Extensions, Memories, Stanza, build tools, unit-runner
 tools, browser integration, smoke automation and scenario sources. Existing pnpm
 entrypoints retain their generated-input prehooks. Checks run sequentially;
 each Bun process uses all CPU cores by default. To limit contention on a shared
-machine, a direct check can use `./node_modules/bun/bin/bun.exe check -p <config> --threads 4 --all`.
+machine, a direct check can use `./node_modules/.bin/bun check -p <config> --threads 4 --all`.
 Bun does not write JavaScript or `.tsbuildinfo` files. TS7 7.0.2 retains
 Main/Preload and unit/extension-test JavaScript compilation and
-`typecheck:web:watch` (Bun 1.4.3 has no standalone check watch mode). Vite/Rolldown
+`typecheck:web:watch` (Bun 1.4.4 has no standalone check watch mode). Vite/Rolldown
 and the scenario runner's esbuild retain bundling. Node, Mocha and Playwright
 retain test execution; pnpm retains dependency management. Build tools keep
 the TS6 JavaScript Compiler API provided by the `typescript` compatibility alias.
@@ -84,26 +84,23 @@ dependency-tree watcher, which can receive FSEvents overflows from build caches
 and runtime output. `[host] Input changed:` identifies the triggering input;
 Electron restarts only when validated Main/Preload output contents change.
 
-Bun also runs the product-icon generator, localization generator, CSS checker,
-TypeScript/JavaScript formatter and Prettier through their existing pnpm scripts.
-Prettier retains its pinned version, formatting rules and ignore list; its CLI
-runs directly from the installed workspace package without invoking a package
-executor or downloading tools. The formatting CI job installs dependencies with
-`--ignore-scripts`, then runs
-`pnpm rebuild bun` to initialize the pinned executable without running other
-dependency build scripts. Desktop build, packaging, launch and test runners
-continue to use Node.
+Bun also runs the product-icon generator, localization generator, CSS checker
+and TypeScript/JavaScript formatter through their existing pnpm scripts.
+Configuration and documentation use the pinned `bun fmt`, retaining
+`.prettierrc.toml` and `.editorconfig`. Full checks, sparse incremental snapshots
+and the VS Code stdin formatter explicitly read both `.gitignore` and
+`.prettierignore`; Markdown code fences are left to their owning language formatter.
+VS Code uses the recommended Custom Local Formatters extension to invoke the
+workspace Bun executable. `pnpm test:format` compares that configured stdin
+command with file formatting for JSON, JSONC, YAML, Markdown, CSS and HTML.
+The `bun: runtime:1.4.4` dependency lets pnpm install the official native runtime
+directly, with platform archives and SHA-256 checksums in `pnpm-lock.yaml`.
+There is no npm Bun installer or Bun dependency patch. The formatting CI job
+installs dependencies with `--ignore-scripts`; native runtimes need no rebuild.
+Desktop build, packaging, launch and test runners continue to use Node.
 
-On Windows x64 (2026-10-13), Prettier 3.9.9 checking `package.json`,
-`build/**/*.json`, `docs/**/*.md` and `src/**/*.css` took median process times of
-7.389 s under Node 24.21.0 and 6.247 s under Bun 1.4.3. One warmup preceded five
-alternating runs per runtime with a warm filesystem cache. Both reported the
-same existing formatting violations and exit code. Separate JSON, JSONC, YAML,
-Markdown, CSS and HTML fixtures produced identical formatted bytes, diagnostics,
-ignore behavior and check/write/parse-error exit codes. Commands, logs and hashes
-are in `.build/benchmarks/bun-review/`. This sample does not measure the complete
-formatting job or other operating systems. Browser-extension preparation stays
-on Node: its Bun run changed the compressed Markdown webview resource bytes.
+Browser-extension preparation stays on Node: the earlier Bun 1.4.3 comparison
+changed the compressed Markdown webview resource bytes.
 
 The TS/JS formatter asks Git for literal requested paths before reading file
 status; without arguments it enumerates only the owned source roots.

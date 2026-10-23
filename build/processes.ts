@@ -210,7 +210,10 @@ export class ProcessRun {
 
 async function processes(): Promise<Map<number, ProcessIdentity>> {
 	if (process.platform === 'win32') {
-		const query = execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,CreationDate | Where-Object { $_.CreationDate } | Select-Object ProcessId,ParentProcessId,@{n="Started";e={$_.CreationDate.ToUniversalTime().Ticks.ToString()}} | ConvertTo-Json -Compress'], { windowsHide: true, timeout: 15_000, maxBuffer: 8 * 1024 * 1024 });
+		// A PowerShell 7 runner's module path is incompatible with the built-in
+		// Windows PowerShell used here. Let that host discover its own CIM modules.
+		const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== 'PSMODULEPATH'));
+		const query = execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,CreationDate | Where-Object { $_.CreationDate } | Select-Object ProcessId,ParentProcessId,@{n="Started";e={$_.CreationDate.ToUniversalTime().Ticks.ToString()}} | ConvertTo-Json -Compress'], { env: environment, windowsHide: true, timeout: 45_000, maxBuffer: 8 * 1024 * 1024 });
 		query.child.stdin?.end();
 		const { stdout } = await query;
 		const entries = JSON.parse(stdout) as { ProcessId: number; ParentProcessId: number; Started: string; }[];
@@ -240,14 +243,26 @@ export async function withProcessRun(cwd: string, action: (run: ProcessRun, envi
 	const onTerminate = (): void => interrupt('SIGTERM');
 	process.on('SIGINT', onInterrupt);
 	process.on('SIGTERM', onTerminate);
+	let actionFailed = false;
+	let actionFailure: unknown;
 	try {
 		await action(run, { ...process.env, ASH_SMOKE_RUN_DIRECTORY: directory });
 	} catch (error) {
 		// Worker cleanup also stops the run; only an observed signal makes
 		// a subsequent operation failure part of cancellation.
-		if (interruption === undefined) throw error;
+		if (interruption === undefined) {
+			actionFailed = true;
+			actionFailure = error;
+			throw error;
+		}
 	} finally {
-		try { await run.close(); if (interruption) process.exitCode = interruption; }
+		try {
+			try { await run.close(); if (interruption) process.exitCode = interruption; }
+			catch (error) {
+				if (actionFailed) throw new AggregateError([actionFailure, error], 'Process action and cleanup failed');
+				throw error;
+			}
+		}
 		finally {
 			process.off('SIGINT', onInterrupt);
 			process.off('SIGTERM', onTerminate);

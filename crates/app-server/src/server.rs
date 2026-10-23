@@ -3732,6 +3732,9 @@ impl AppServer {
             Some(ClientMethod::ConnectorOAuthRevoke) => self
                 .connector_processor
                 .connector_oauth_revoke(&request.params),
+            Some(ClientMethod::ConnectorSetEnabled) => self
+                .connector_processor
+                .connector_set_enabled(&request.params),
             Some(ClientMethod::ConnectorDisconnect) => self
                 .connector_processor
                 .connector_disconnect(&request.params),

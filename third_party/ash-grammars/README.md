@@ -1,10 +1,17 @@
 # Ash grammar artifacts
 
 `runtime-lock.json` is the published manifest from
-[ash-grammars v0.1.0](https://github.com/chogng/ash-grammars/releases/tag/v0.1.0).
-Its SHA-256 is `7ad7fffe45603b08291de99055da40d867508d0f15eaccfe9df500b46a55e50e`.
+[ash-grammars v0.1.1](https://github.com/chogng/ash-grammars/releases/tag/v0.1.1).
+Its SHA-256 is `df63982135ba3ea1e03e8d3a56edadefc755551e03c32f8f4e9288379a297561`.
 The Rust dependency pins that release's binding revision in `Cargo.toml` and
 `Cargo.lock`. The manifest pins the source identity and every platform/WASM archive.
+
+Version 0.1.1 fixes the Properties external scanner's shared EOF state. Concurrent
+parsers could serialize an empty EOF state and repeatedly reduce zero-width tokens,
+causing unbounded native allocation during background indexing (including `.cfg`
+files). The scanner now owns and serializes its state per parser. The producer
+covers this with deterministic scanner contract tests and concurrent native parses;
+Ash consumes the published libraries and WASM without a local source patch.
 
 `build/lib/grammars.py` downloads, validates and atomically extracts these archives
 under `third_party/.cache/ash-grammars`. It checks cached metadata against the

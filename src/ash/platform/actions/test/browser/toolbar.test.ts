@@ -53,7 +53,7 @@ test("toolbar submenu items retain toolbar button semantics", async () => {
 	assert.equal(button.hasAttribute("role"), false);
 	assert.equal(button.getAttribute("aria-haspopup"), "menu");
 	assert.ok(button.querySelector(
-		".ash-dropdown-menu-indicator > svg.ash-icon",
+		".ash-dropdown-menu-indicator > .ash-icon",
 	));
 	button.click();
 	assert.ok(shownOptions);

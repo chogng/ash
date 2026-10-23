@@ -23,7 +23,10 @@
 	gap: 4px;
 	padding: 0 4px;
 	border: var(--ash-strokeThickness) solid transparent;
-	border-radius: var(--ash-cornerRadius-small);
+	border-radius: var(
+		--ash-button-border-radius,
+		var(--ash-cornerRadius-small)
+	);
 	color: var(--ash-button-foreground);
 	background: transparent;
 	font: inherit;

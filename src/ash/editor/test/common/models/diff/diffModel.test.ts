@@ -38,7 +38,7 @@ test("DiffModel publishes only version-pinned computation results", async () => 
 	assert.equal(readyState.originalVersion, original.version);
 	assert.equal(readyState.modifiedVersion, modified.version);
 	assert.equal(readyState.quitEarly, false);
-	assert.equal(model.diff?.rows[0]?.kind, "modified");
+	assert.equal(model.diff?.rows.get(0)?.kind, "modified");
 });
 
 test('DiffModel preserves an early-stop result for the current source versions', async () => {
@@ -67,8 +67,8 @@ test("DiffModel exposes a computation result without owning its sources", async 
 	assert.equal(model.original, original);
 	assert.equal(model.modified, modified);
 	assert.equal(model.diff?.rows.length, 2);
-	assert.equal(model.diff?.rows[0]?.kind, "unchanged");
-	assert.equal(model.diff?.rows[1]?.kind, "modified");
+	assert.equal(model.diff?.rows.get(0)?.kind, "unchanged");
+	assert.equal(model.diff?.rows.get(1)?.kind, "modified");
 	model.dispose();
 	assert.equal(original.getText(), "same\nold");
 	assert.equal(modified.getText(), "same\nnew");
@@ -111,7 +111,7 @@ test('DiffModel cancels stale work when computation options change', async () =>
 	assert.equal(model.state.kind, 'loading');
 	second.resolve({ identical: false, quitEarly: false, changes: [], moves: [] });
 	await waitForReady(model);
-	assert.equal(model.diff?.rows[0]?.kind, 'unchanged');
+	assert.equal(model.diff?.rows.get(0)?.kind, 'unchanged');
 });
 
 interface ControlledRequest {

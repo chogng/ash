@@ -5,7 +5,7 @@ import { Position } from '../../common/core/position.js';
 import { createDefaultDocumentSchema, DocumentSchema } from "../../../../../extensions/academy/common/model/documentSchema.js";
 import { createDeleteReferenceCommand, createInsertCitationCommand, createInsertReferenceCommand, createUpdateReferenceCommand } from "../../../../../extensions/academy/browser/contrib/citation/common/citationCommands.js";
 import { buildReferenceIndex, createReferenceIndexPlugin, REFERENCE_INDEX_KEY } from "../../../../../extensions/academy/browser/contrib/citation/common/references.js";
-import { createAcademicDocumentSchema, createEmptyAcademicDocument } from "../../../../../extensions/academy/browser/contrib/academic/common/schema.js";
+import { createAcademyDocumentSchema, createEmptyAcademyDocument } from "../../../../../extensions/academy/browser/contrib/academy/common/schema.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { createDocumentDecoration, DocumentDecorationSet } from "../../../../../extensions/academy/common/model/documentDecoration.js";
 import { buildDocumentOutline } from "../../../../../extensions/academy/common/model/documentOutline.js";
@@ -443,7 +443,7 @@ test("TextModel retains one empty logical line for an empty schema-backed docume
 	assert.deepEqual(model.lineDocument.facets.values, []);
 });
 
-test("DocumentSchema enforces ordered content terms for custom academic nodes", () => {
+test("DocumentSchema enforces ordered content terms for custom academy nodes", () => {
 	const schema = new DocumentSchema({
 		topNodeType: "article",
 		nodes: {
@@ -469,9 +469,9 @@ test("DocumentSchema enforces ordered content terms for custom academic nodes", 
 	assert.throws(() => new DocumentSchema({ topNodeType: "article", nodes: { article: { kind: "root", content: [{ type: "missing" }] }, text: { kind: "text" } } }), /unknown child/);
 });
 
-test("Stanza Academic schema composes title, abstract, and section wrappers", () => {
-	const schema = createAcademicDocumentSchema();
-	const empty = createEmptyAcademicDocument(schema);
+test("Stanza Academy schema composes title, abstract, and section wrappers", () => {
+	const schema = createAcademyDocumentSchema();
+	const empty = createEmptyAcademyDocument(schema);
 	assert.deepEqual(empty.content.map(node => node.type), ["title", "abstract"]);
 	schema.validate(empty);
 
@@ -486,7 +486,7 @@ test("Stanza Academic schema composes title, abstract, and section wrappers", ()
 });
 
 test("Stanza builds an outline across nested structured nodes", () => {
-	const schema = createAcademicDocumentSchema();
+	const schema = createAcademyDocumentSchema();
 	const title = schema.createNode("title", { id: "outline-title", content: [schema.createNode("heading", { id: "outline-title-heading", content: [schema.createText("Paper title", { id: "outline-title-text" })] })] });
 	const abstract = schema.createNode("abstract", { id: "outline-abstract", content: [schema.createNode("paragraph", { id: "outline-abstract-paragraph", content: [schema.createText("Summary", { id: "outline-abstract-text" })] })] });
 	const sectionHeading = schema.createNode("heading", { id: "outline-section-heading", content: [schema.createText("Introduction", { id: "outline-section-text" })] });
@@ -501,8 +501,8 @@ test("Stanza builds an outline across nested structured nodes", () => {
 	]);
 });
 
-test("Academic citation nodes insert, select, delete, and export as inline atoms", () => {
-	const schema = createAcademicDocumentSchema();
+test("Academy citation nodes insert, select, delete, and export as inline atoms", () => {
+	const schema = createAcademyDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "citation-paragraph", content: [schema.createText("Read ", { id: "citation-before" }), schema.createText("now", { id: "citation-after" })] });
 	const document = schema.createDocument([paragraph], "citation-document");
 	using model = DocumentTextModel.create(schema, document);
@@ -523,7 +523,7 @@ test("Academic citation nodes insert, select, delete, and export as inline atoms
 });
 
 test("Citation references compose a bibliography and resolve duplicate and missing keys", () => {
-	const schema = createAcademicDocumentSchema();
+	const schema = createAcademyDocumentSchema();
 	const citation = schema.createNode("citation", { id: "reference-citation", attrs: { key: "smith-2024" } });
 	const missingCitation = schema.createNode("citation", { id: "missing-citation", attrs: { key: "missing-2024" } });
 	const paragraph = schema.createNode("paragraph", { id: "reference-paragraph", content: [citation, schema.createText(" and "), missingCitation] });
@@ -546,7 +546,7 @@ test("Citation references compose a bibliography and resolve duplicate and missi
 });
 
 test("Citation reference command creates and appends a bibliography", () => {
-	const schema = createAcademicDocumentSchema();
+	const schema = createAcademyDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "reference-command-paragraph", content: [schema.createText("Body")] });
 	const document = schema.createDocument([paragraph], "reference-command-document");
 	using model = DocumentTextModel.create(schema, document, { plugins: [createReferenceIndexPlugin()] });
@@ -567,7 +567,7 @@ test("Citation reference command creates and appends a bibliography", () => {
 });
 
 test("Citation insertion trims keys and reference insertion rejects normalized duplicates", () => {
-	const schema = createAcademicDocumentSchema();
+	const schema = createAcademyDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { content: [schema.createText("Body", { id: "trim-body" })] });
 	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph]));
 	const selection = textSelection({ nodeId: "trim-body", offset: 4 });
@@ -587,7 +587,7 @@ test("Citation insertion trims keys and reference insertion rejects normalized d
 });
 
 test("Reference rename updates all nested citation keys atomically and preserves identities and labels", () => {
-	const schema = createAcademicDocumentSchema();
+	const schema = createAcademyDocumentSchema();
 	const explicit = schema.createNode("citation", { id: "rename-explicit", attrs: { key: "old", label: "[Custom label]", source: "keep" } });
 	const implicit = schema.createNode("citation", { id: "rename-implicit", attrs: { key: "old" } });
 	const unrelated = schema.createNode("citation", { id: "rename-unrelated", attrs: { key: "other", label: "[Other]" } });
@@ -637,7 +637,7 @@ test("Reference rename updates all nested citation keys atomically and preserves
 });
 
 test("Reference label-only edits preserve keys and reject blank, missing, colliding and ambiguous keys without mutation", () => {
-	const schema = createAcademicDocumentSchema();
+	const schema = createAcademyDocumentSchema();
 	const reference = schema.createNode("reference", { attrs: { key: "old" }, content: [schema.createNode("paragraph", { id: "label-only-paragraph", content: [schema.createText("Before")] })] });
 	const other = schema.createNode("reference", { attrs: { key: " occupied " }, content: [schema.createNode("paragraph")] });
 	const citation = schema.createNode("citation", { attrs: { key: "old", label: "" } });
@@ -677,7 +677,7 @@ test("Reference label-only edits preserve keys and reject blank, missing, collid
 });
 
 test("Reference key-only edits preserve formatted label runs and empty labels stay empty", () => {
-	const schema = createAcademicDocumentSchema();
+	const schema = createAcademyDocumentSchema();
 	const paragraph = schema.createNode('paragraph', { content: [schema.createText('Styled', { marks: [{ type: 'strong', attrs: {} }] }), schema.createText(' entry')] });
 	const reference = schema.createNode('reference', { attrs: { key: 'old' }, content: [paragraph] });
 	const empty = schema.createNode('reference', { attrs: { key: 'empty' }, content: [schema.createNode('paragraph')] });
@@ -693,7 +693,7 @@ test("Reference key-only edits preserve formatted label runs and empty labels st
 });
 
 test("Reference deletion keeps remaining definitions and last deletion leaves unresolved citations through history and codec", () => {
-	const schema = createAcademicDocumentSchema();
+	const schema = createAcademyDocumentSchema();
 	const first = schema.createNode("reference", { attrs: { key: "first" }, content: [schema.createNode("paragraph", { content: [schema.createText("First")] })] });
 	const last = schema.createNode("reference", { attrs: { key: "last" }, content: [schema.createNode("paragraph", { content: [schema.createText("Last")] })] });
 	const bibliography = schema.createNode("bibliography", { content: [first, last] });
@@ -725,7 +725,7 @@ test("Reference deletion keeps remaining definitions and last deletion leaves un
 });
 
 test('References reuse a bibliography inside a section and last deletion keeps its owner editable', () => {
-	const schema = createAcademicDocumentSchema();
+	const schema = createAcademyDocumentSchema();
 	for (const inSection of [false, true]) {
 		const reference = schema.createNode('reference', { attrs: { key: 'one' }, content: [schema.createNode('paragraph')] });
 		const bibliography = schema.createNode('bibliography', { content: [reference] });
@@ -797,13 +797,13 @@ test("Block documents round-trip through a versioned serialization envelope", ()
 
 test("Document v2 rejects a conflicting kind even when both schemas accept the tree", () => {
 	const general = createDefaultDocumentSchema();
-	const academic = createAcademicDocumentSchema();
-	for (const schema of [general, academic]) {
+	const academy = createAcademyDocumentSchema();
+	for (const schema of [general, academy]) {
 		const document = createDocument(schema);
 		const encoded = serializeDocument(document, schema);
 		assert.deepEqual(JSON.parse(encoded), { format: "ash.document", version: 2, documentType: schema.documentType, document });
 		assert.deepEqual(deserializeDocument(encoded, schema), document);
-		const other = schema === general ? academic : general;
+		const other = schema === general ? academy : general;
 		other.validate(document);
 		assert.throws(() => deserializeDocument(encoded, other), /Structured document type/u);
 		for (const documentType of [undefined, null, "unknown", 1, {}]) {
@@ -812,8 +812,8 @@ test("Document v2 rejects a conflicting kind even when both schemas accept the t
 	}
 });
 
-test("Legacy Academic documents upgrade on serialization without losing IDs, attributes or marks", () => {
-	const schema = createAcademicDocumentSchema();
+test("Legacy Academy documents upgrade on serialization without losing IDs, attributes or marks", () => {
+	const schema = createAcademyDocumentSchema();
 	const document = schema.createDocument([
 		schema.createNode("paragraph", {
 			id: "legacy-paragraph", attrs: { alignment: "center" },
@@ -824,7 +824,7 @@ test("Legacy Academic documents upgrade on serialization without losing IDs, att
 	const migrated = deserializeDocument(JSON.stringify(legacy), schema);
 	assert.deepEqual(migrated, document);
 	assert.ok(Object.isFrozen(migrated));
-	assert.deepEqual(JSON.parse(serializeDocument(migrated, schema)), { ...legacy, version: 2, documentType: "academic" });
+	assert.deepEqual(JSON.parse(serializeDocument(migrated, schema)), { ...legacy, version: 2, documentType: "academy" });
 	assert.throws(() => deserializeDocument({ ...legacy, documentType: "general" }, schema), /Legacy/u);
 	assert.throws(() => deserializeDocument({ ...legacy, document: { ...document, content: [{ type: "unknown" }] } }, schema), DocumentSerializationError);
 });

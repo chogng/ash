@@ -21,7 +21,9 @@ export default defineConfig(({ mode, command }) => {
 	const repositoryRoot = desktopRoot;
 	const webAppServerEnabled = process.env.ASH_WEB_APP_SERVER === "1";
 	const webOnly = mode === "web";
-	const developmentPort = webAppServerEnabled ? 5174 : 5173;
+	const agentsWindow = process.env.ASH_DEV_AGENTS_WINDOW === '1';
+	// Separate Web origins allow parallel IDE/Agents debugging; Desktop keeps its renderer port.
+	const developmentPort = (webAppServerEnabled ? 5174 : 5173) + (webOnly && agentsWindow ? 2 : 0);
 	const sourceRoot = resolve(desktopRoot, "src/ash/code");
 	const sessionsWebEntry = 'browser/sessions/sessions';
 	const moduleUrl = (path: string): string => `/@fs/${normalizePath(resolve(repositoryRoot, 'src/ash', path))}`;
@@ -34,7 +36,7 @@ export default defineConfig(({ mode, command }) => {
 		<link rel="apple-touch-icon" href="/ash-192.png" />
 		<link rel="icon" href="/favicon.ico" type="image/x-icon" />
 		<link rel="manifest" href="/manifest.json" />
-		<title>Ash Code Sessions</title>
+		<title>Ash Sessions</title>
 	</head>
 	<body>
 		<main id="app"></main>
@@ -65,7 +67,7 @@ export default defineConfig(({ mode, command }) => {
 		</script>
 	</body>
 </html>`;
-	const browserEntryPath = process.env.ASH_DEV_AGENTS_WINDOW === '1'
+	const browserEntryPath = agentsWindow
 		? `/${sessionsWebEntry}.html`
 		: '/browser/workbench/workbench.html';
 	const browserEntry = "browser/workbench/workbench";
@@ -88,7 +90,7 @@ export default defineConfig(({ mode, command }) => {
 		[electronEntry]: resolve(sourceRoot, `${electronEntry}.html`),
 		...sessionsInputs,
 		...remoteRuntimeInstallInput,
-		'electron-browser/screenshot/screenshot': resolve(sourceRoot, 'electron-browser/screenshot/screenshot.html'),
+		'electron-browser/imageView/imageView': resolve(sourceRoot, 'electron-browser/imageView/imageView.html'),
 	};
 
 	return {
@@ -164,6 +166,9 @@ export default defineConfig(({ mode, command }) => {
 			host: "127.0.0.1",
 			port: developmentPort,
 			strictPort: true,
+			// Ash owns runtime diagnostics. Vite's console forwarding can throw on HMR
+			// disconnect and feed those failures back through the window error handler.
+			forwardConsole: false,
 			// Transform the product entry graphs while the host starts, before its first navigation.
 			warmup: {
 				clientFiles: Object.entries(inputs)

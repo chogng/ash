@@ -6,6 +6,7 @@ use ash_app_server_protocol::protocol::connectors::ConnectorDeviceOAuthPollResul
 use ash_app_server_protocol::protocol::connectors::ConnectorDeviceOAuthStartParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorDisconnectParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthCancelParams;
+use ash_app_server_protocol::protocol::connectors::ConnectorSetEnabledParams;
 
 use super::Command;
 use super::ConnectorChoices;
@@ -17,6 +18,7 @@ impl Command {
     pub(crate) const fn request_name(&self) -> &'static str {
         match self {
             Self::ConnectDeviceOAuth { .. } => "ash-tui-connect-device-oauth",
+            Self::SetEnabled { .. } => "ash-tui-connector-enablement",
             Self::Disconnect { .. } => "ash-tui-disconnect-connector",
         }
     }
@@ -31,6 +33,23 @@ where
             connector_id,
             connection_generation,
         } => connect_device_oauth(client, connector_id, connection_generation),
+        Command::SetEnabled {
+            connector_id,
+            enabled,
+        } => {
+            let catalog = client
+                .list_connectors()
+                .map_err(|error| error.to_string())?;
+            client
+                .set_connector_enabled(ConnectorSetEnabledParams {
+                    command_id: new_command_id("connector-enablement").to_string(),
+                    expected_generation: catalog.generation,
+                    connector_id,
+                    enabled,
+                })
+                .map_err(|error| error.to_string())?;
+            load_selection(client)
+        }
         Command::Disconnect { connector_id } => disconnect(client, connector_id),
     }
     .map(Event::PickerUpdated)

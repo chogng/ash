@@ -22,6 +22,7 @@ use ash_app_server_protocol::protocol::connectors::ConnectorOAuthRefreshParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthStartParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthStartResult;
 use ash_app_server_protocol::protocol::connectors::ConnectorSecretDto;
+use ash_app_server_protocol::protocol::connectors::ConnectorSetEnabledParams;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_secrets::SecretValue;
 use connectors::ConnectorAccount;
@@ -292,6 +293,25 @@ impl ConnectorRequestProcessor {
         result(&command_result_dto(outcome))
     }
 
+    pub(super) fn connector_set_enabled(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ConnectorSetEnabledParams = decode(params)?;
+        let outcome = self
+            .connector_service()?
+            .authority()
+            .apply(connectors::ConnectorCommandRequest {
+                command_id: ConnectorCommandId::new(params.command_id)
+                    .map_err(|_| invalid_params())?,
+                expected_generation: ConnectorSnapshotGeneration::new(params.expected_generation),
+                connector_id: ConnectorId::new(params.connector_id)
+                    .map_err(|_| invalid_params())?,
+                command: connectors::ConnectorAuthorityCommand::SetEnabled {
+                    enabled: params.enabled,
+                },
+            })
+            .map_err(|error| connector_error(error.into()))?;
+        result(&command_result_dto(outcome))
+    }
+
     pub(super) fn connector_disconnect(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ConnectorDisconnectParams = decode(params)?;
         let service = self.connector_service()?;
@@ -431,6 +451,7 @@ fn connector_dto(
             .map(|id| id.as_str().to_string()),
         definition_digest: entry.definition().digest().as_str().to_string(),
         connection_generation: entry.connection().generation().get(),
+        enabled: entry.connection().enabled(),
         state,
         available_actions,
         oauth_methods: [

@@ -138,7 +138,7 @@ fn default_client_capabilities() -> ClientCapabilities {
                 dynamic_registration: Some(true),
             }),
             diagnostic: Some(DiagnosticWorkspaceClientCapabilities {
-                refresh_support: Some(false),
+                refresh_support: Some(true),
             }),
             workspace_edit: Some(WorkspaceEditClientCapabilities {
                 document_changes: Some(true),

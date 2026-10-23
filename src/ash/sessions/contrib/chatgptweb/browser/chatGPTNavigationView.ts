@@ -16,7 +16,6 @@ import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -29,6 +28,7 @@ import type { ChatGPTConversation } from './chatGPTClient.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { IChatGPTService, chatGPTNavigationContainerId, type ChatGPTState } from './chatGPTService.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
+import '../../../../base/browser/ui/button/button.css';
 import './media/chatGPTNavigationView.css';
 
 interface ConversationGroup {
@@ -73,7 +73,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 		}));
 		const newChat = document.createElement('button');
 		newChat.type = 'button';
-		newChat.className = 'ash-chatgpt-new-chat';
+		newChat.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-new-chat';
 		newChat.textContent = localize('sessions.chatgpt.newChat', 'New chat');
 		this._register(addDisposableListener(newChat, 'click', () => { chat.newChat(); editors.focusActiveEditor(); }));
 		const search = document.createElement('input');
@@ -212,6 +212,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 
 /** One ordinary ViewPane per group, with content-sized rows and no custom header implementation. */
 export class ChatGPTNavigationView extends ViewPane {
+	private readonly loadingProgress = this._register(new MutableDisposable());
 	private readonly rows = this._register(new DisposableStore());
 	private conversations: readonly ChatGPTConversation[] = [];
 	private menuGeneration = 0;
@@ -242,6 +243,10 @@ export class ChatGPTNavigationView extends ViewPane {
 	public override get maximumSize(): number { return this.minimumSize; }
 
 	public render(conversations: readonly ChatGPTConversation[], state: ChatGPTState, query: string): void {
+		if (state.busy && !this.loadingProgress.value) {
+			const progress = this.getProgressIndicator().show(true, 150);
+			this.loadingProgress.value = toDisposable(() => progress.done());
+		} else if (!state.busy) this.loadingProgress.clear();
 		if (conversations.length !== this.conversations.length || conversations.some((conversation, index) => conversation !== this.conversations[index])) {
 			this.rows.clear();
 			this.conversations = conversations;
@@ -260,7 +265,8 @@ export class ChatGPTNavigationView extends ViewPane {
 			}
 		}
 		const gap = parseFloat(getWindow(this.contentElement).getComputedStyle(this.contentElement).rowGap) || 0;
-		this.minimumBodySize = count * listRowHeight + Math.max(0, count - 1) * gap;
+		const rowHeight = 22;
+		this.minimumBodySize = count * rowHeight + Math.max(0, count - 1) * gap;
 	}
 
 	private createRow(conversation: ChatGPTConversation): HTMLElement {
@@ -269,7 +275,7 @@ export class ChatGPTNavigationView extends ViewPane {
 		row.className = 'ash-chatgpt-navigation-row';
 		row.dataset.conversation = conversation.id;
 		const item = document.createElement('button');
-		item.className = 'ash-chatgpt-conversation';
+		item.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-conversation';
 		item.type = 'button';
 		item.textContent = conversation.title;
 		item.title = conversation.title;

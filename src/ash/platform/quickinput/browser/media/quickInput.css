@@ -157,6 +157,12 @@
 	border-radius: var(--ash-cornerRadius-small);
 }
 
+/* Absolute rows need the same inset as content-sized rows inside the padded list. */
+.ash-quick-pick-list-virtualized .ash-list-row {
+	margin-left: var(--ash-spacing-size60);
+	margin-right: calc(var(--ash-scrollbar-size) + var(--ash-spacing-size60));
+}
+
 .ash-quick-pick-row-content {
 	display: flex;
 	min-height: 34px;
@@ -390,7 +396,7 @@
 	background: var(--ash-toolbar-hoverBackground);
 }
 
-.ash-quick-pick-row-action.icon-only svg.ash-icon {
+.ash-quick-pick-row-action.icon-only .ash-icon {
 	width: var(--ash-lxiconFontSize);
 	height: var(--ash-lxiconFontSize);
 }

@@ -1,4 +1,5 @@
 import { localize, localize2 } from '../../../../nls.js';
+import type { SkillDescriptor } from '../../../../platform/agentHost/common/appServerApi.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
@@ -17,6 +18,20 @@ import { isCancellationError } from '../../../../base/common/errors.js';
 import type { McpServerRuntimeState } from '../../../../platform/mcp/common/mcpServerStatusService.js';
 import type { ConnectorState, IConnectorService } from '../../../../platform/connectors/common/connectorService.js';
 import type { IMcpServerManagementService, McpServerConfiguration, McpServerConfigurationSnapshot } from '../../../../platform/mcp/common/mcpServerManagementService.js';
+
+/** The sidebar and detail header share the same concise, localized Skill description. */
+export function getSkillSummary(skill: SkillDescriptor): string {
+	if (skill.id.source === 'builtin:skill-source:ash-release') {
+		if (skill.id.name === 'create-instructions') {
+			return localize({ bundle: 'ash.extensions', key: 'skillCreateInstructionsSummary' }, 'Create and update Ash project instructions.');
+		}
+		if (skill.id.name === 'skill-creator') {
+			return localize({ bundle: 'ash.extensions', key: 'skillCreatorSummary' }, 'Create and update Ash skills.');
+		}
+	}
+	const description = (skill.metadata?.['short-description'] || skill.description).replace(/\s+/gu, ' ').trim();
+	return description.match(/^.*?(?:[。！？]|[.!?](?:\s|$))/u)?.[0].trim() ?? description;
+}
 
 /** Selection uses the catalog's actions; account and server mutations stay with their domain owners. */
 export async function addConnection(connectors: IConnectorService, mcp: IMcpServerManagementService, quickInput: IQuickInputService, dialogs: IDialogService, signal: AbortSignal): Promise<ExtensionsCapabilityTarget | undefined> {
@@ -48,7 +63,7 @@ export async function addConnection(connectors: IConnectorService, mcp: IMcpServ
 	const selected = await pickConnectionItem(quickInput,
 		localize({ bundle: 'ash.extensions', key: 'connectionChooseService' }, 'Choose a service account'),
 		localize({ bundle: 'ash.extensions', key: 'connectionSearchServices' }, 'Search services to sign in or authorize with an API token'),
-		catalog.connectors.map(connector => ({ label: connector.displayName, description: describeConnectorState(connector.state), detail: connector.description, connector })), signal);
+		catalog.connectors.map(connector => ({ label: connector.displayName, description: describeConnectorState(connector.state, connector.enabled), detail: connector.description, connector })), signal);
 	if (!selected || signal.aborted) { return undefined; }
 	// Selection can outlive a catalog update. Use fresh permissions and a matching generation for authorization.
 	const current = await connectors.list();
@@ -56,7 +71,7 @@ export async function addConnection(connectors: IConnectorService, mcp: IMcpServ
 	const connector = current.connectors.find(entry => entry.id === selected.connector.id);
 	if (!connector) { throw new Error(localize({ bundle: 'ash.extensions', key: 'connectorMissing' }, 'This connection is no longer available. Refresh Connections.')); }
 	if (!connector.canConnectOAuth && !connector.canConnectApiToken) {
-		await dialogs.info(connector.displayName, [describeConnectorState(connector.state), connector.state.status === 'unavailable' ? connector.state.reason : ''].filter(Boolean).join('\n\n'));
+		await dialogs.info(connector.displayName, [describeConnectorState(connector.state, connector.enabled), connector.state.status === 'unavailable' ? connector.state.reason : ''].filter(Boolean).join('\n\n'));
 		return { kind: 'connector', connectorId: connector.id };
 	}
 	const authorization = await dialogs.prompt<'oauth' | 'token'>({
@@ -219,7 +234,8 @@ export function describeMcpServerState(state: McpServerRuntimeState): string {
 	}
 }
 
-export function describeConnectorState(state: ConnectorState): string {
+export function describeConnectorState(state: ConnectorState, enabled = true): string {
+	if (!enabled && state.status === 'connected') { return localize({ bundle: 'ash.extensions', key: 'mcpDisconnected' }, 'Disconnected'); }
 	switch (state.status) {
 		case 'disconnected': return localize({ bundle: 'ash.extensions', key: 'mcpDisconnected' }, 'Disconnected');
 		case 'connecting': return localize({ bundle: 'ash.extensions', key: 'connectorConnecting' }, 'Connecting');
@@ -441,7 +457,8 @@ export function describePluginPermission(permission: PluginPermission): string {
 
 
 /** Resolve current authority at invocation time; rows and editors never retain a policy revision. */
-export async function changeExtensionEnablement(input: ExtensionsInput, enablement: IGlobalExtensionEnablementService, management: IExtensionManagementService, plugins: IPluginManagementService, packages: IExtensionApi): Promise<void> {
+export async function changeExtensionEnablement(input: ExtensionsInput, enablement: IGlobalExtensionEnablementService, management: IExtensionManagementService, plugins: IPluginManagementService, packages: IExtensionApi, options: { readonly enabled?: boolean; } = {}): Promise<void> {
+	const enabled = options.enabled;
 	if (input.source === ExtensionsInputSource.BuiltIn) {
 		const descriptor = (await packages.list('cached', { includeDisabled: true })).extensions.find(value => value.id === input.summary.id);
 		if (!descriptor) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
@@ -453,11 +470,11 @@ export async function changeExtensionEnablement(input: ExtensionsInput, enableme
 			}
 			const provider = catalog.providers.find(value => value.id === descriptor.id);
 			if (!provider) { throw new Error(localize({ bundle: 'ash.extensions', key: 'backendUnavailable' }, 'This provider is unavailable on the connected backend.')); }
-			await management.setBuiltInProviderEnabled(provider.id, !provider.enabled, catalog.revision);
+			await management.setBuiltInProviderEnabled(provider.id, enabled ?? !provider.enabled, catalog.revision);
 			return;
 		}
 		const extension = { id: input.summary.id };
-		if (enablement.getDisabledExtensions().some(value => value.id === extension.id.toLowerCase())) { await enablement.enableExtension(extension); }
+		if (enabled ?? enablement.getDisabledExtensions().some(value => value.id === extension.id.toLowerCase())) { await enablement.enableExtension(extension); }
 		else { await enablement.disableExtension(extension); }
 		return;
 	}
@@ -465,14 +482,15 @@ export async function changeExtensionEnablement(input: ExtensionsInput, enableme
 		const catalog = await plugins.list();
 		const plugin = catalog.packages.find(value => value.id === input.summary.id && value.version === input.summary.version);
 		if (!plugin) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
-		if (plugin.enabled) { await plugins.disable(plugin, catalog.revision); }
-		else { await plugins.enable(plugin, catalog.revision); }
+		const nextEnabled = enabled ?? !plugin.enabled;
+		if (nextEnabled) { await plugins.enable(plugin, catalog.revision); }
+		else { await plugins.disable(plugin, catalog.revision); }
 		return;
 	}
 	const catalog = await management.listEditorExtensions();
 	const extension = catalog.extensions.find(value => value.installationId === input.installationId);
 	if (!extension) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
-	await management.setEditorExtensionPolicy(extension, extension.enabled ? 'disable' : 'enable', catalog.revision);
+	await management.setEditorExtensionPolicy(extension, (enabled ?? !extension.enabled) ? 'enable' : 'disable', catalog.revision);
 }
 
 export async function reviewExtensionExecution(extension: ExtensionsEditorExtensionPolicy, management: IExtensionManagementService, dialogs: IDialogService): Promise<void> {

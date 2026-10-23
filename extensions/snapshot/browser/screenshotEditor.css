@@ -1,0 +1,315 @@
+@font-face {
+	font-family: "Ash Snapshot Icons";
+	src: url("../media/AshSnapshotIcons.woff2") format("woff2");
+	font-display: block;
+}
+
+.ash-screenshot-overlay {
+	position: fixed;
+	inset: 0;
+	box-sizing: border-box;
+	width: 100vw;
+	height: 100vh;
+	max-width: none;
+	max-height: none;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	color: var(--snapshot-foreground);
+	background: var(--snapshot-background);
+	font: var(--snapshot-font-size) sans-serif;
+	overflow: hidden;
+}
+.ash-screenshot-overlay::backdrop {
+	background: var(--snapshot-background);
+}
+.ash-screenshot-overlay [hidden] {
+	display: none;
+}
+.ash-screenshot-surface {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	touch-action: none;
+	user-select: none;
+	cursor: crosshair;
+}
+.ash-screenshot-image {
+	display: block;
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+}
+.ash-screenshot-selection {
+	position: fixed;
+	box-sizing: border-box;
+	border: var(--snapshot-border-width) solid var(--snapshot-focus-border);
+	outline: var(--snapshot-border-width) solid var(--snapshot-contrast-border);
+	cursor: move;
+}
+.ash-screenshot-handle {
+	position: absolute;
+	box-sizing: border-box;
+	width: 8px;
+	height: 8px;
+	background: var(--snapshot-background);
+	border: var(--snapshot-border-width) solid var(--snapshot-focus-border);
+}
+.ash-screenshot-handle-nw {
+	left: -4px;
+	top: -4px;
+	cursor: nwse-resize;
+}
+.ash-screenshot-handle-n {
+	left: calc(50% - 4px);
+	top: -4px;
+	cursor: ns-resize;
+}
+.ash-screenshot-handle-ne {
+	right: -4px;
+	top: -4px;
+	cursor: nesw-resize;
+}
+.ash-screenshot-handle-e {
+	right: -4px;
+	top: calc(50% - 4px);
+	cursor: ew-resize;
+}
+.ash-screenshot-handle-se {
+	right: -4px;
+	bottom: -4px;
+	cursor: nwse-resize;
+}
+.ash-screenshot-handle-s {
+	left: calc(50% - 4px);
+	bottom: -4px;
+	cursor: ns-resize;
+}
+.ash-screenshot-handle-sw {
+	left: -4px;
+	bottom: -4px;
+	cursor: nesw-resize;
+}
+.ash-screenshot-handle-w {
+	left: -4px;
+	top: calc(50% - 4px);
+	cursor: ew-resize;
+}
+.ash-screenshot-overlay:not([data-tool="select"]) .ash-screenshot-selection {
+	pointer-events: none;
+}
+.ash-screenshot-overlay:not([data-tool="select"]) .ash-screenshot-handle {
+	display: none;
+}
+.ash-screenshot-toolbar,
+.ash-screenshot-instructions,
+.ash-screenshot-dimensions {
+	position: fixed;
+	z-index: 2;
+	box-sizing: border-box;
+	color: var(--snapshot-foreground);
+	background: var(--snapshot-panel-background);
+	border: var(--snapshot-border-width) solid var(--snapshot-border);
+	border-radius: var(--snapshot-large-radius);
+	box-shadow: var(--snapshot-shadow);
+}
+.ash-screenshot-instructions {
+	top: 24px;
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: var(--snapshot-spacing-2);
+	padding: var(--snapshot-spacing-2) var(--snapshot-spacing-3);
+	max-width: calc(100vw - 16px);
+}
+.ash-screenshot-overlay.has-selection .ash-screenshot-instructions {
+	display: none;
+}
+.ash-screenshot-dimensions {
+	padding: var(--snapshot-spacing-1) var(--snapshot-spacing-2);
+	font-size: var(--snapshot-label-font-size);
+	pointer-events: none;
+	white-space: nowrap;
+}
+.ash-screenshot-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--snapshot-spacing-2);
+	max-width: calc(100vw - 16px);
+	max-height: calc(100vh - 16px);
+	overflow-y: auto;
+	padding: var(--snapshot-spacing-2);
+}
+.ash-screenshot-tool-row {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: var(--snapshot-spacing-1);
+}
+.ash-screenshot-overlay button {
+	padding: var(--snapshot-spacing-1) var(--snapshot-spacing-2);
+	border: var(--snapshot-border-width) solid transparent;
+	border-radius: var(--snapshot-small-radius);
+	color: inherit;
+	background: transparent;
+	font: inherit;
+	cursor: pointer;
+}
+.ash-screenshot-overlay .ash-screenshot-icon-button {
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 24px;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+}
+.ash-screenshot-icon {
+	width: 16px;
+	height: 16px;
+	font: 400 16px/1 "Ash Snapshot Icons";
+	font-synthesis: none;
+	pointer-events: none;
+}
+.ash-screenshot-icon::before {
+	content: attr(data-glyph);
+}
+.ash-screenshot-overlay button:hover {
+	background: var(--snapshot-hover-background);
+}
+.ash-screenshot-overlay button.selected {
+	color: var(--snapshot-button-foreground);
+	background: var(--snapshot-button-background);
+}
+.ash-screenshot-overlay button.primary {
+	color: var(--snapshot-button-foreground);
+	background: var(--snapshot-button-background);
+}
+.ash-screenshot-overlay button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+.ash-screenshot-overlay button:focus-visible,
+.ash-screenshot-overlay input:focus-visible,
+.ash-screenshot-overlay select:focus-visible,
+.ash-screenshot-help textarea:focus-visible {
+	outline: var(--snapshot-border-width) solid var(--snapshot-focus-border);
+	outline-offset: -1px;
+}
+.ash-screenshot-tool-row input[type="color"] {
+	box-sizing: border-box;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: var(--snapshot-border-width) solid var(--snapshot-input-border);
+	border-radius: var(--snapshot-small-radius);
+	background: var(--snapshot-input-background);
+}
+.ash-screenshot-overlay select,
+.ash-screenshot-fields input,
+.ash-screenshot-text {
+	box-sizing: border-box;
+	min-width: 0;
+	padding: var(--snapshot-spacing-1) var(--snapshot-spacing-2);
+	color: var(--snapshot-input-foreground);
+	background: var(--snapshot-input-background);
+	border: var(--snapshot-border-width) solid var(--snapshot-input-border);
+	border-radius: var(--snapshot-small-radius);
+	font: inherit;
+}
+.ash-screenshot-tool-row select {
+	height: 24px;
+	padding-block: 0;
+}
+.ash-screenshot-fields {
+	flex-basis: 100%;
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--snapshot-spacing-2);
+	margin-top: var(--snapshot-spacing-2);
+}
+.ash-screenshot-fields label {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: var(--snapshot-spacing-1);
+	min-width: 60px;
+	font-size: var(--snapshot-label-font-size);
+}
+.ash-screenshot-fields input {
+	width: 100%;
+}
+.ash-screenshot-text {
+	position: fixed;
+	z-index: 3;
+	width: 240px;
+}
+.ash-screenshot-status {
+	position: fixed;
+	left: 8px;
+	bottom: 8px;
+	max-width: calc(100vw - 16px);
+	font-size: var(--snapshot-label-font-size);
+	padding: var(--snapshot-spacing-1) var(--snapshot-spacing-2);
+	border-radius: var(--snapshot-small-radius);
+	color: var(--snapshot-foreground);
+	background: var(--snapshot-panel-background);
+	pointer-events: none;
+}
+.ash-screenshot-status:empty {
+	display: none;
+}
+.ash-screenshot-help {
+	box-sizing: border-box;
+	width: min(720px, calc(100vw - 32px));
+	padding: var(--snapshot-spacing-4);
+	border: var(--snapshot-border-width) solid var(--snapshot-border);
+	border-radius: var(--snapshot-large-radius);
+	color: var(--snapshot-foreground);
+	background: var(--snapshot-panel-background);
+}
+.ash-screenshot-help h2 {
+	margin: 0 0 var(--snapshot-spacing-3);
+	font-size: var(--snapshot-heading-font-size);
+}
+.ash-screenshot-help textarea {
+	box-sizing: border-box;
+	width: 100%;
+	height: min(480px, 60vh);
+	resize: none;
+	color: var(--snapshot-foreground);
+	background: var(--snapshot-background);
+	border: var(--snapshot-border-width) solid var(--snapshot-input-border);
+	padding: var(--snapshot-spacing-2);
+	font: inherit;
+	line-height: 1.5;
+}
+.ash-screenshot-overlay.dragging .ash-screenshot-toolbar {
+	visibility: hidden;
+}
+[data-color-scheme="hcDark"] .ash-screenshot-toolbar,
+[data-color-scheme="hcLight"] .ash-screenshot-toolbar,
+[data-color-scheme="hcDark"] .ash-screenshot-instructions,
+[data-color-scheme="hcLight"] .ash-screenshot-instructions {
+	box-shadow: none;
+	border-color: var(--snapshot-contrast-border);
+}
+
+.ash-screenshot-shade {
+	position: fixed;
+	background: var(--snapshot-selection-mask);
+	pointer-events: none;
+}
+
+.ash-screenshot-surface:focus-visible {
+	outline: var(--snapshot-border-width) solid var(--snapshot-focus-border);
+	outline-offset: -1px;
+}

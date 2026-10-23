@@ -78,7 +78,7 @@ test('Cowork and Code retain separate editors while transferring the selected dr
 	await composer.locator('input[type="file"]').setInputFiles({ name: 'brief.txt', mimeType: 'text/plain', buffer: Buffer.from('Presentation brief') });
 	await expect(composer.locator('.ash-chat-code-reference')).toHaveText('brief.txt');
 	const identity = await conversation.locator('.ash-cowork').getAttribute('data-untitled-session-id');
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(conversation.locator('.ash-chat')).toBeVisible();
 	await expect(conversation.locator('.ash-cowork')).toHaveCount(0);
 	await editor.waitForEditorContents(text => text === 'Prepare a presentation brief.txt ');
@@ -95,7 +95,8 @@ test('Cowork and Code retain separate editors while transferring the selected dr
 	await editor.waitForEditorContents(text => text === 'Updated presentation brief brief.txt ');
 	await expect(composer.locator('.ash-chat-code-reference')).toHaveText('brief.txt');
 	expect(await editor.input.evaluate((input, previous) => input === previous, coworkInput)).toBe(true);
-	await navigation.getByRole('button', { name: 'Collaboration', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
 	await expect(conversation.locator('.ash-cowork')).toBeVisible();
 	await expect(page.locator('[data-part="sidebar"] [data-view-container-id="ash.collaboration"]')).toBeVisible();
 	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();

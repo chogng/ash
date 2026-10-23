@@ -14,7 +14,6 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { Checkbox } from '../../../../base/browser/ui/toggle/toggle.js';
 import { defaultCheckboxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { observeElementSize, observeResize } from '../../../../base/browser/observer.js';
-import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import { basename } from '../../../../base/common/resources.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { Range } from '../../../../editor/common/core/range.js';
@@ -252,7 +251,8 @@ export class BreakpointsView extends ViewPane {
 		if (!this.contentElement.isConnected || breakpoints.isCollapsed()) return;
 		// Measure intrinsic children rather than the allocated body, so removing rows can shrink it.
 		const contentHeight = Math.ceil([...this.contentElement.children].reduce((height, child) => height + child.getBoundingClientRect().height, 0));
-		const minimum = Math.min(contentHeight, 9 * listRowHeight);
+		const rowHeight = 22;
+		const minimum = Math.min(contentHeight, 9 * rowHeight);
 		const container = this.views.getActiveViewPaneContainerWithId(WorkbenchViewContainerId.Debug);
 		const fillSpace = container?.panes.every(pane => pane.id === this.id || !pane.isBodyVisible()) ?? false;
 		const maximum = fillSpace ? Number.POSITIVE_INFINITY : contentHeight;

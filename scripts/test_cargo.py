@@ -253,6 +253,47 @@ class CodeModeHostTests(unittest.TestCase):
         self.assertEqual(main([*arguments, "--lib"]), 0)
         self.assertEqual(len(prepare.call_args_list), 5)
 
+    @patch.dict(
+        "scripts.cargo.os.environ", {"ASH_TGREP_PATH": "/runtime/tgrep"}, clear=True
+    )
+    @patch("scripts.cargo.default_target")
+    @patch("scripts.cargo.subprocess.run")
+    @patch("scripts.cargo.prepare_test_executable", return_value="/runtime/watch_probe")
+    @patch("build.lib.cargo_inputs.resolve_v8_cargo_env", return_value={})
+    @patch("scripts.cargo.cargo_command_packages")
+    def test_real_tui_embedded_server_gets_only_the_macos_watcher_host(
+        self, packages, resolve_v8, prepare, run, target
+    ) -> None:
+        packages.return_value = {
+            "ash-cli",
+            "ash-file-watcher",
+            "ash-app-server-runtime",
+            "ash-code-mode",
+        }
+        run.return_value = subprocess.CompletedProcess([], 0)
+        for triple in ("aarch64-apple-darwin", "x86_64-unknown-linux-gnu"):
+            with self.subTest(target=triple):
+                prepare.reset_mock()
+                target.return_value = triple
+                self.assertEqual(
+                    main(["test", "-p", "ash-cli", "--test", "tui_real_scenarios"]), 0
+                )
+                environment = run.call_args.kwargs["env"]
+                if "apple-darwin" in triple:
+                    prepare.assert_called_once()
+                    self.assertEqual(prepare.call_args.args[3], "ash-file-watcher")
+                    self.assertEqual(
+                        prepare.call_args.kwargs,
+                        {"target_name": "watch_probe", "target_kind": "example"},
+                    )
+                    self.assertEqual(
+                        environment["ASH_FILE_WATCHER_TEST_HOST"],
+                        "/runtime/watch_probe",
+                    )
+                else:
+                    prepare.assert_not_called()
+                    self.assertNotIn("ASH_FILE_WATCHER_TEST_HOST", environment)
+
     @patch("scripts.cargo.subprocess.run")
     def test_uses_reported_executable_with_the_test_build_settings(self, run) -> None:
         run.return_value = subprocess.CompletedProcess(

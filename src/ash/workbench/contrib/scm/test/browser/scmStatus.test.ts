@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -7,7 +8,7 @@ import { ISCMViewService, type ISCMProvider, type ISCMStatusBarCommand } from '.
 import { ScmStatusContribution } from '../../browser/activity.js';
 import { SCMService } from '../../common/scmService.js';
 import { SCMViewService } from '../../browser/scmViewService.js';
-import { IStatusbarService, StatusbarAlignment, StatusbarService } from '../../../../services/statusbar/browser/statusbar.js';
+import { IStatusbarService, StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
 
 test('SCM status renders provider commands on their declared side and follows updates', async () => {
 	using fixture = createFixture();

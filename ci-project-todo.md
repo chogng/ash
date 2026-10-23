@@ -5,7 +5,7 @@
 ## 已进入 main
 
 - `74004ce68`：Python/source layout 与 protocol preparation 修复。
-- `c46f5b567`：Academic CI 使用真实 `electron-ui` project，并保留 connected editor 覆盖。
+- `c46f5b567`：Academy CI 使用真实 `electron-ui` project，并保留 connected editor 覆盖。
 - `e08faa321`：只排除三个生成 JSON 的格式检查，保留手写 JSON 覆盖。
 - `1a49304ba`：assets Bazel label 与结构验证。
 - `9c44c645e`：issue template 末尾空行修正。

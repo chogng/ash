@@ -10,7 +10,7 @@ Schema／命令／事务／历史／行投影／codec 位于本包的 `common/`�
 
 ## 快速理解
 
-Academy 复用 Stanza 的有序逻辑行作为内容主轴。Code 与 Academic 共用 `TextModel`、`LineId`、UTF-16 offset、version 和 history；富文档把文字样式、原子对象、行语义、连续区域与对象关系附着到行上，不再为代码文件或论文制造 BlockTree。
+Academy 复用 Stanza 的有序逻辑行作为内容主轴。Code 与 Academy 共用 `TextModel`、`LineId`、UTF-16 offset、version 和 history；富文档把文字样式、原子对象、行语义、连续区域与对象关系附着到行上，不再为代码文件或论文制造 BlockTree。
 
 | 场景                     | 当前模型                                                       | 明确边界                                                                            |
 | ------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -29,7 +29,7 @@ Academy 复用 Stanza 的有序逻辑行作为内容主轴。Code 与 Academic �
 - 持久字体与排版属性属于 mark；syntax token、diagnostic、搜索、diff 和主题颜色属于 decoration。
 - inline object 与 block-display object 都是 atom。一个 atom 必须指向恰好一个 `U+FFFC`，每个 `U+FFFC` 也必须有一个 atom。
 - `TextModel` 的一次提交只产生一个 version 与一个 undo entry。同步 mutation 不等待 Worker、Rust、App Server、文件系统或语言服务。
-- Code 与 Academic 可以使用不同 widget、输入 profile 和 codec，但不能创建不同的内容 authority。
+- Code 与 Academy 可以使用不同 widget、输入 profile 和 codec，但不能创建不同的内容 authority。
 
 ## Line-first snapshot
 
@@ -94,43 +94,43 @@ Block atom 所在逻辑行只能包含该 atom。视觉高度、公式编号、�
 
 ## Transaction、mapping 与 history
 
-`TextModel.applyEdits()` 处理受限文本 profile，并在同一 mutation boundary 更新 TextBuffer、LineId、tracked ranges、history、version 和事件。`TextModel.dispatch()` 当前处理 schema-backed Academic transaction，在提交前完成 schema、selection、plugin 与 projection validation，再一次性替换 document compatibility value 与 line snapshot。
+`TextModel.applyEdits()` 处理受限文本 profile，并在同一 mutation boundary 更新 TextBuffer、LineId、tracked ranges、history、version 和事件。`TextModel.dispatch()` 当前处理 schema-backed Academy transaction，在提交前完成 schema、selection、plugin 与 projection validation，再一次性替换 document compatibility value 与 line snapshot。
 
-当前 `DocumentTransaction` 是 Academic browser commands、clipboard、collaboration 和 serialization 的兼容输入，不是第二个 browser model。`projectDocumentToLines()` 在每次成功 transaction 中把 schema value 转成单版本 line snapshot；如果 atom、mark、region 或 relation 违反 line-first 约束，commit 在发布 version 前失败。
+当前 `DocumentTransaction` 是 Academy browser commands、clipboard、collaboration 和 serialization 的兼容输入，不是第二个 browser model。`projectDocumentToLines()` 在每次成功 transaction 中把 schema value 转成单版本 line snapshot；如果 atom、mark、region 或 relation 违反 line-first 约束，commit 在发布 version 前失败。
 
 Schema transaction compatibility 尚未迁移成直接的 `LineDocumentTransaction` step vocabulary。完成迁移前，新增富语义必须同时提供 schema 表达与 line projection，不能只写入松散 sidecar。
 
 ## Browser projection 与输入 profile
 
-`CodeEditorWidget` 投影普通代码文件的逻辑行、visual wrapping、selection、caret、token 和 decoration。`RichTextEditorWidget` 当前投影 schema compatibility value，并通过同一个 `TextModel` 提交 Academic commands；它不得拥有第二套文本、版本或 history。 `DocumentEditorPane` 获取并持有工作副本引用，负责保存、另存为、回退及释放引用；Workbench 范围的 `DocumentEditorTextModelService` 按资源共享模型与工作副本，最后一个引用释放时才销毁模型。控件通过 `setModel` 接收模型，使用模型自身的 schema，并仅释放自己的监听和视图。
+`CodeEditorWidget` 投影普通代码文件的逻辑行、visual wrapping、selection、caret、token 和 decoration。`RichTextEditorWidget` 当前投影 schema compatibility value，并通过同一个 `TextModel` 提交 Academy commands；它不得拥有第二套文本、版本或 history。 `DocumentEditorPane` 获取并持有工作副本引用，负责保存、另存为、回退及释放引用；Workbench 范围的 `DocumentEditorTextModelService` 按资源共享模型与工作副本，最后一个引用释放时才销毁模型。控件通过 `setModel` 接收模型，使用模型自身的 schema，并仅释放自己的监听和视图。
 
 输入语义由 profile/widget 决定：
 
-| 输入             | Code                   | Academic prose                | Academic code region |
-| ---------------- | ---------------------- | ----------------------------- | -------------------- |
-| Enter            | split source line      | 创建下一段                    | split source line    |
-| Shift+Enter      | profile command        | 插入 hard-break atom          | profile command      |
-| Tab              | indentation/completion | profile navigation/formatting | code indentation     |
-| Backspace/Delete | text command           | atom 边界整对象删除           | text command         |
+| 输入             | Code                   | Academy prose                 | Academy code region |
+| ---------------- | ---------------------- | ----------------------------- | ------------------- |
+| Enter            | split source line      | 创建下一段                    | split source line   |
+| Shift+Enter      | profile command        | 插入 hard-break atom          | profile command     |
+| Tab              | indentation/completion | profile navigation/formatting | code indentation    |
+| Backspace/Delete | text command           | atom 边界整对象删除           | text command        |
 
-当前 Academic widget 的 `DocumentPoint` selection 仍属于 compatibility path。目标 `LinePoint` selection 和 atom-aware command mapping 是 Proposed，迁移时必须保持 clipboard、IME、stored marks 与 collaboration history 行为。
+当前 Academy widget 的 `DocumentPoint` selection 仍属于 compatibility path。目标 `LinePoint` selection 和 atom-aware command mapping 是 Proposed，迁移时必须保持 clipboard、IME、stored marks 与 collaboration history 行为。
 
 ## Code region
 
-Academic `codeBlock` 当前投影为父 `TextModel` 中的连续 code region。所有 source line、language attrs、version 和 undo history 都属于父模型。
+Academy `codeBlock` 当前投影为父 `TextModel` 中的连续 code region。所有 source line、language attrs、version 和 undo history 都属于父模型。
 
 - 不创建第二个 `TextModel` 或 embedded-editor factory；
 - 输入转换成 owning TextModel 的 transaction；
-- Academic code-region rendering 不 import `CodeEditorPane`、`CodeEditorWidget` 或 `workbench/contrib/codeEditor`；
+- Academy code-region rendering 不 import `CodeEditorPane`、`CodeEditorWidget` 或 `workbench/contrib/codeEditor`；
 - 高亮、gutter 与 line layout 如果复用 Code 实现，只能作为父模型 region projection。
 
 ## Profile、codec 与持久化
 
-Workbench `EditorProfile` 组合 schema/semantic vocabulary、empty document factory、node/atom views、toolbar actions、plugins 与 collaboration schema identity。Profile 在 pane 生命周期内固定。Academic 的文件关联、编辑器名称和 profile 由独立 Rust 扩展 `ash.academy` 经共享宿主注入；Schema、NodeView 和引用实现位于 `extensions/academy/browser`。客户端组件须与 executable 声明的源码摘要匹配。停用时撤下注册与路由并冻结旧视图，原 tab 保留工作副本；显式重开经新注册取得同一模型与历史。扩展不创建第二份 TextModel 或 history。
+Workbench `EditorProfile` 组合 schema/semantic vocabulary、empty document factory、node/atom views、toolbar actions、plugins 与 collaboration schema identity。Profile 在 pane 生命周期内固定。Academy 的文件关联、编辑器名称和 profile 由独立 Rust 扩展 `ash.academy` 经共享宿主注入；Schema、NodeView 和引用实现位于 `extensions/academy/browser`。客户端组件须与 executable 声明的源码摘要匹配。停用时撤下注册与路由并冻结旧视图，原 tab 保留工作副本；显式重开经新注册取得同一模型与历史。扩展不创建第二份 TextModel 或 history。
 
 协作边界与 VS Code 的 Editor/Workbench 分层一致：Editor 定义文档事务、快照、远端选区和同步连接契约；Workbench 定义房间输入、邀请、成员角色与凭证管理。DocumentEditorPane 创建房间工具栏并选择连接方式，将已打开的连接交给 Widget；切换文档时取消房间请求并释放连接。
 
-Code codec 只读写 LF/CRLF 文本，并把 `languageId` 等信息放在文档 metadata 或宿主资源状态中。结构化文件读取严格校验版本化包络；纯文本和损坏 JSON 不隐式导入。Academic 配置登记独立内容类型，备份沿用该类型。Academic codec 必须保存 lines、marks、atoms、facets、regions、relations、assets、references 与 document metadata；当前 production codec 仍使用 versioned schema serialization envelope，迁移到直接 line serialization 时必须提供兼容 migration。
+Code codec 只读写 LF/CRLF 文本，并把 `languageId` 等信息放在文档 metadata 或宿主资源状态中。结构化文件读取严格校验版本化包络；纯文本和损坏 JSON 不隐式导入。Academy 配置登记独立内容类型，备份沿用该类型。Academy codec 必须保存 lines、marks、atoms、facets、regions、relations、assets、references 与 document metadata；当前 production codec 仍使用 versioned schema serialization envelope，迁移到直接 line serialization 时必须提供兼容 migration。
 
 `DocumentEditorTextModelService` 解析 resource 为 caller-owned `TextModelWorkingCopyReference`。`DocumentWorkingCopy` 适配 dirty/revert/conflict、expected-revision save 和 untitled Save As；Workbench transport 不拥有 model mutation。
 
@@ -164,11 +164,11 @@ Invalid schema、selection、step、plugin state 或 line snapshot 在 commit �
 | Symbol/file                                                                | Responsibility                                                          | 修改时同步检查                                            |
 | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------- |
 | `src/ash/editor/common/model/lineDocument.ts`                              | LineId、五类 store、snapshot freeze 与 validation                       | codec、projection、atom/region/relation tests             |
-| `extensions/academy/common/model/lineDocumentProjection.ts`                | schema compatibility value → line semantics                             | schema、serialization、Academic model tests               |
+| `extensions/academy/common/model/lineDocumentProjection.ts`                | schema compatibility value → line semantics                             | schema、serialization、Academy model tests                |
 | `src/ash/editor/common/model/textModel.ts`                                 | TextBuffer、LineId mapping、version、history 与唯一 mutation boundary   | cursor、worker mirror、language version gate、model tests |
 | `extensions/academy/common/model/textModelBlockState.ts`                   | schema transaction compatibility、selection、plugin 与 document history | transaction、collaboration、atomic commit tests           |
 | `extensions/academy/common/model/documentTransaction.ts`                   | compatibility steps、mapping 与 metadata                                | selection、decoration、rebase、serialization              |
-| `extensions/academy/browser/widget/richTextEditor/richTextEditorWidget.ts` | Academic compatibility projection 与 input                              | DOM selection、IME、clipboard、node views                 |
+| `extensions/academy/browser/widget/richTextEditor/richTextEditorWidget.ts` | Academy compatibility projection 与 input                               | DOM selection、IME、clipboard、node views                 |
 | `src/ash/editor/browser/widget/codeEditor/codeEditorWidget.ts`             | Code profile browser surface                                            | input、viewport、accessibility、contributions             |
 
 ## 验证与修改影响

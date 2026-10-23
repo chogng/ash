@@ -1,4 +1,5 @@
 import type { Event } from '../../../../base/common/event.js';
+import type { IProgressIndicator } from '../../../../platform/progress/common/progress.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IPaneComposite } from '../../../common/panecomposite.js';
 import type { IView, IViewContainerDescriptor, IViewDescriptor, IViewPaneContainer, ViewContainerLocation } from '../../../common/views.js';
@@ -23,6 +24,7 @@ export interface IViewsService {
 	closeView(id: string): void;
 	getActiveViewWithId<T extends IView>(id: string): T | null;
 	getViewWithId<T extends IView>(id: string): T | null;
+	getViewProgressIndicator(id: string): IProgressIndicator | undefined;
 	focusView(id: string): Promise<boolean>;
 }
 

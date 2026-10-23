@@ -1,14 +1,14 @@
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultToggleStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { observeElementSize } from '../../../../base/browser/observer.js';
 import { IMarkdownRendererService } from '../../../../platform/markdown/browser/markdownRenderer.js';
-import { Range } from '../../../../editor/common/core/range.js';
 import { createObjectUrl } from '../../../../base/browser/fileAccess.js';
 import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { Switch } from '../../../../base/browser/ui/toggle/toggle.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
-import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -26,7 +26,7 @@ import { IExtensionApi, type ExtensionDescriptor } from '../../../../platform/ex
 import { toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../base/common/uri.js';
-import { changeExtensionEnablement, configureMcpServer, describeConnectorState, describeMcpServerState, describePluginPermission, extensionEnablementLabel, promptConnectorApiToken, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
+import { changeExtensionEnablement, configureMcpServer, describeConnectorState, describeMcpServerState, describePluginPermission, getSkillSummary, promptConnectorApiToken, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
 import type { ParsedPromptFile } from '../../chat/common/promptSyntax/promptFileParser.js';
 import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
 import { ILanguageModelToolsService } from '../../chat/common/tools/languageModelToolsService.js';
@@ -81,22 +81,54 @@ function describeExtensionCapabilities(details: ExtensionsPackageDetails): strin
 	return [notice, ...details.capabilities.map(capability => `${capability.kind}: ${capability.id}${capability.permissions.length ? '\n' + localize({ bundle: 'ash.extensions', key: 'localExtensionPermissions' }, 'Requested permissions: {0}', capability.permissions.join(', ')) : ''}`)].filter(Boolean).join('\n');
 }
 
+/** Shared detail header; domain services supply identity, actions, status and switch behavior. */
+class ExtensionDetailHeader extends Disposable {
+	public readonly element = h(mainWindow.document, 'header');
+	public readonly title = h(mainWindow.document, 'h1');
+	public readonly publisher = h(mainWindow.document, 'p');
+	public readonly metadata = h(mainWindow.document, 'p');
+	public readonly description = h(mainWindow.document, 'p');
+	public readonly actions = h(mainWindow.document, 'div');
+	public readonly status = h(mainWindow.document, 'p');
+	public readonly icon = h(mainWindow.document, 'div');
+	public readonly iconImage = h(mainWindow.document, 'img');
+	public readonly iconText = h(mainWindow.document, 'span');
+	public readonly enablement: Switch;
+
+	constructor() {
+		super();
+		this.element.className = 'extension-detail-header';
+		this.icon.className = 'extension-detail-icon'; this.icon.setAttribute('aria-hidden', 'true');
+		this.iconImage.alt = ''; this.iconImage.hidden = true;
+		this.icon.append(this.iconText, this.iconImage);
+		this._register(addDisposableListener(this.iconImage, 'error', () => { this.iconImage.hidden = true; this.iconText.hidden = false; }));
+		const heading = h(mainWindow.document, 'div'); heading.className = 'extension-detail-heading';
+		const identityRow = h(mainWindow.document, 'div'); identityRow.className = 'extension-detail-identity-row';
+		const identity = h(mainWindow.document, 'div'); identity.className = 'extension-detail-identity';
+		this.publisher.className = 'extension-detail-publisher'; this.publisher.hidden = true;
+		this.metadata.className = 'extension-metadata';
+		identity.append(this.title, this.publisher, this.metadata);
+		identityRow.append(identity);
+		const descriptionRow = h(mainWindow.document, 'div'); descriptionRow.className = 'extension-detail-description';
+		descriptionRow.append(this.description);
+		this.enablement = this._register(new Switch(identityRow, defaultToggleStyles));
+		this.enablement.element.classList.add('extension-detail-enablement');
+		this.enablement.element.hidden = true;
+		this.actions.className = 'extension-actions';
+		this.status.setAttribute('role', 'status');
+		heading.append(identityRow, descriptionRow, this.actions, this.status);
+		this.element.append(this.icon, heading);
+	}
+}
+
 /** A retained editor presents package metadata while the backend owns installed state and authority. */
 export class ExtensionEditor extends EditorPane {
 	public readonly id = 'ash.extensions.editor';
 	private domNode!: HTMLElement;
 	private scrollable!: ScrollableElement;
-	private title!: HTMLElement;
-	private metadata!: HTMLElement;
-	private description!: HTMLElement;
+	private header!: ExtensionDetailHeader;
 	private capabilities!: HTMLElement;
 	private contentHeading!: HTMLElement;
-	private status!: HTMLElement;
-	private actions!: HTMLElement;
-	private icon!: HTMLElement;
-	private iconImage!: HTMLImageElement;
-	private iconText!: HTMLElement;
-	private publisher!: HTMLElement;
 	private tabs!: TabList<DetailTab>;
 	private readonly tabPrefix = generateUuid();
 	private selectedTab = DetailTab.Details;
@@ -138,7 +170,7 @@ export class ExtensionEditor extends EditorPane {
 		super('ash.extensions.editor', theme, storage);
 		const refresh = () => {
 			if (!this.working && this.currentInput && this.currentSignal && !this.currentSignal.aborted) {
-				void this.setInput(this.currentInput, this.currentSignal).catch(error => { if (!this.isDisposed) { this.status.textContent = error instanceof Error ? error.message : String(error); } });
+				void this.setInput(this.currentInput, this.currentSignal).catch(error => { if (!this.isDisposed) { this.header.status.textContent = error instanceof Error ? error.message : String(error); } });
 			}
 		};
 		this._register(extensions.onDidChangeInstalled(refresh));
@@ -157,23 +189,10 @@ export class ExtensionEditor extends EditorPane {
 		this.scrollable.setContent(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		super.create(this.scrollable.element);
-		const header = h(mainWindow.document, 'header'); header.className = 'extension-detail-header';
-		this.icon = h(mainWindow.document, 'div'); this.icon.className = 'extension-detail-icon'; this.icon.setAttribute('aria-hidden', 'true');
-		this.iconText = h(mainWindow.document, 'span');
-		this.iconImage = h(mainWindow.document, 'img'); this.iconImage.alt = ''; this.iconImage.hidden = true;
-		this.icon.append(this.iconText, this.iconImage);
-		this._register(addDisposableListener(this.iconImage, 'error', () => { this.iconImage.hidden = true; this.iconText.hidden = false; }));
-		const heading = h(mainWindow.document, 'div'); heading.className = 'extension-detail-heading';
-		this.title = h(mainWindow.document, 'h1');
-		this.publisher = h(mainWindow.document, 'p'); this.publisher.className = 'extension-detail-publisher'; this.publisher.hidden = true;
-		this.metadata = h(mainWindow.document, 'p'); this.metadata.className = 'extension-metadata';
-		this.description = h(mainWindow.document, 'p');
-		this.actions = h(mainWindow.document, 'div'); this.actions.className = 'extension-actions';
-		this.status = h(mainWindow.document, 'p'); this.status.setAttribute('role', 'status');
+		this.header = this._register(new ExtensionDetailHeader());
+		const header = this.header.element;
 		this.contentHeading = h(mainWindow.document, 'h2');
 		this.capabilities = h(mainWindow.document, 'div'); this.capabilities.className = 'extension-capabilities';
-		heading.append(this.title, this.publisher, this.metadata, this.description, this.actions, this.status);
-		header.append(this.icon, heading);
 		const tabHost = h(mainWindow.document, 'div'); tabHost.className = 'extension-detail-tabs';
 		this.tabs = this._register(new TabList<DetailTab>(tabHost, { ariaLabel: localize({ bundle: 'ash.extensions', key: 'detailTabs' }, 'Extension details'), presentation: 'flush', onActivate: tab => this.selectTab(tab) }));
 		const body = h(mainWindow.document, 'div'); body.className = 'extension-detail-body';
@@ -194,7 +213,7 @@ export class ExtensionEditor extends EditorPane {
 		this.domNode.append(header, tabHost, body);
 		// The host owns the viewport allocation; document height follows its rendered content.
 		this._register(observeElementSize(container, dimension => this.layout(dimension)));
-		this.title.tabIndex = -1;
+		this.header.title.tabIndex = -1;
 		const scope = this._register(this.contextKeys.createScoped(this.domNode)); scope.createKey('extensionsDetailsFocused', true);
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			this._register(AccessibleViewRegistry.register({
@@ -202,7 +221,7 @@ export class ExtensionEditor extends EditorPane {
 				getProvider: () => {
 					const focused = mainWindow.document.activeElement;
 					if (!this.currentInput || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected plugin, skill, service account or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information moves below the content in a narrow editor. Open package opens the owning package for installation and permissions. Disable skill affects only that skill. Service account details offer sign-in, API token connection, disconnect or sign-out according to the service. Associated MCP status appears in the account details; Open MCP server details shows its tools and diagnostics. Disconnect keeps the package installed. MCP server details show runtime status and diagnostics, with Edit, Enable or Disable, Connect, Disconnect and Remove for independent servers. Enablement is saved; connection actions control the running instance. Operations refresh the owning service state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected plugin, skill, service account or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information moves below the content in a narrow editor. Open package opens the owning package for installation and permissions. The switch at the right of the header identity enables or disables the selected resource. Press Space to toggle it. For a service account, the switch connects or disconnects while preserving authorization and credentials. Service account details offer sign-in, API token connection, disconnect or sign-out according to the service. Associated MCP status appears in the account details; Open MCP server details shows its tools and diagnostics. Disconnect keeps the package installed. MCP server details show runtime status and diagnostics, with Edit, Connect, Disconnect and Remove for independent servers; the header switch controls saved enablement. Enablement is saved; connection actions control the running instance. Operations refresh the owning service state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 				},
 			}));
 		}
@@ -214,13 +233,14 @@ export class ExtensionEditor extends EditorPane {
 		this.currentInput = input; this.currentSignal = signal;
 		const version = ++this.loadVersion;
 		this.actionResources.clear();
+		this.header.enablement.element.hidden = true;
 		this.documentResources.clear(); this.readme.replaceChildren(); this.instructions.replaceChildren(); this.instructionsLoader = undefined; this.instructionsPending = undefined;
-		this.iconImage.removeAttribute('src'); this.iconImage.hidden = true; this.iconText.hidden = false;
-		this.title.textContent = input.getName();
-		this.iconText.textContent = [...input.getName()].slice(0, 2).join('').toUpperCase();
-		this.publisher.textContent = ''; this.publisher.hidden = true;
-		this.metadata.textContent = input instanceof ExtensionsInput ? `${input.summary.id} · ${input.summary.version}` : '';
-		this.description.textContent = input instanceof ExtensionsInput ? input.summary.description : '';
+		this.header.iconImage.removeAttribute('src'); this.header.iconImage.hidden = true; this.header.iconText.hidden = false;
+		this.header.title.textContent = input.getName();
+		this.header.iconText.textContent = [...input.getName()].slice(0, 2).join('').toUpperCase();
+		this.header.publisher.textContent = ''; this.header.publisher.hidden = true;
+		this.header.metadata.textContent = input instanceof ExtensionsInput ? `${input.summary.id} · ${input.summary.version}` : '';
+		this.header.description.textContent = input instanceof ExtensionsInput ? input.summary.description : '';
 		this.renderOverview();
 		this.featuresLabel = input instanceof ExtensionsCapabilityInput ? input.target.kind === 'connector' ? localize({ bundle: 'ash.extensions', key: 'connectionMcpServer' }, 'MCP server') : input.target.kind === 'skill' ? localize({ bundle: 'ash.extensions', key: 'detailDiagnostics' }, 'Diagnostics') : localize({ bundle: 'ash.extensions', key: 'mcpToolsHeading' }, 'Tools') : input.source === ExtensionsInputSource.Local ? localize({ bundle: 'ash.extensions', key: 'pluginPermissionsHeading' }, 'Permissions') : localize({ bundle: 'ash.extensions', key: 'detailFeatures' }, 'Features');
 		this.hasInstructions = input instanceof ExtensionsCapabilityInput && input.target.kind === 'skill'; this.renderTabs();
@@ -233,9 +253,9 @@ export class ExtensionEditor extends EditorPane {
 		}]);
 		this.capabilities.textContent = '';
 		this.contentHeading.textContent = localize({ bundle: 'ash.extensions', key: 'capabilities' }, 'Capabilities');
-		this.status.textContent = localize({ bundle: 'ash.extensions', key: 'loading' }, 'Loading Extensions…');
+		this.header.status.textContent = localize({ bundle: 'ash.extensions', key: 'loading' }, 'Loading Extensions…');
 		const button = (label: string, action: () => Promise<void>, enabled = true, presentation: 'primary' | 'secondary' = 'secondary', allowWhileWorking = false) => {
-			const control = this.actionResources.add(new Button(this.actions, {
+			const control = this.actionResources.add(new Button(this.header.actions, {
 				...defaultButtonStyles,
 				label,
 				presentation,
@@ -243,9 +263,9 @@ export class ExtensionEditor extends EditorPane {
 			}));
 			this.actionResources.add(control.onDidClick(() => {
 				if (this.working) { if (allowWhileWorking) { void action(); } return; }
-				this.working = true;
+				this.working = true; this.header.enablement.busy = true;
 				this.domNode.setAttribute('aria-busy', 'true');
-				void action().catch(error => { if (!this.isDisposed && version === this.loadVersion) { this.status.textContent = error instanceof Error ? error.message : String(error); } }).finally(() => { this.working = false; if (!this.isDisposed) { this.domNode.setAttribute('aria-busy', 'false'); } });
+				void action().catch(error => { if (!this.isDisposed && version === this.loadVersion) { this.header.status.textContent = error instanceof Error ? error.message : String(error); } }).finally(() => { this.working = false; if (!this.isDisposed) { this.header.enablement.busy = false; this.domNode.setAttribute('aria-busy', 'false'); } });
 			}));
 			return control;
 		};
@@ -260,11 +280,11 @@ export class ExtensionEditor extends EditorPane {
 				if (catalogResult.status === 'rejected') { throw catalogResult.reason; }
 				const catalog = catalogResult.value;
 				const connector = catalog.connectors.find(entry => entry.id === target.connectorId);
-				if (!connector) { this.status.textContent = localize({ bundle: 'ash.extensions', key: 'connectorMissing' }, 'This connection is no longer available. Refresh Connections.'); return; }
-				this.title.textContent = connector.displayName;
-				this.metadata.textContent = connector.id;
-				this.description.textContent = [connector.description, localize({ bundle: 'ash.extensions', key: 'connectionAccountDescription' }, 'This connection uses a service account. Account authorization and the associated MCP server have separate statuses.')].filter(Boolean).join('\n\n');
-				this.status.textContent = describeConnectorState(connector.state);
+				if (!connector) { this.header.status.textContent = localize({ bundle: 'ash.extensions', key: 'connectorMissing' }, 'This connection is no longer available. Refresh Connections.'); return; }
+				this.header.title.textContent = connector.displayName;
+				this.header.metadata.textContent = connector.id;
+				this.header.description.textContent = [connector.description, localize({ bundle: 'ash.extensions', key: 'connectionAccountDescription' }, 'This connection uses a service account. Account authorization and the associated MCP server have separate statuses.')].filter(Boolean).join('\n\n');
+				this.header.status.textContent = describeConnectorState(connector.state, connector.enabled);
 				const mcpSnapshot = mcpResult.status === 'fulfilled' ? mcpResult.value : undefined;
 				const mcpServer = mcpSnapshot?.servers.find(server => server.id === connector.mcpServerId);
 				const mcpState = mcpServer ? describeMcpServerState(mcpServer.state) : mcpSnapshot
@@ -287,7 +307,7 @@ export class ExtensionEditor extends EditorPane {
 					label: localize({ bundle: 'ash.extensions', key: 'connectionAccount' }, 'Service account'), rows: [
 						{ label: localize({ bundle: 'ash.extensions', key: 'connectorAccountId' }, 'Account ID'), value: account?.id ?? '' },
 						{ label: localize({ bundle: 'ash.extensions', key: 'connectorAccountName' }, 'Account name'), value: account?.displayName ?? '' },
-						{ label: localize({ bundle: 'ash.extensions', key: 'mcpState' }, 'Status'), value: describeConnectorState(connector.state) },
+						{ label: localize({ bundle: 'ash.extensions', key: 'mcpState' }, 'Status'), value: describeConnectorState(connector.state, connector.enabled) },
 					]
 				}, {
 					label: localize({ bundle: 'ash.extensions', key: 'connectionMcpServer' }, 'MCP server'), rows: [
@@ -307,9 +327,9 @@ export class ExtensionEditor extends EditorPane {
 					if (signal.aborted || this.isDisposed || refreshVersion !== this.loadVersion) { return; }
 					if (failure !== undefined) {
 						const message = failure instanceof Error ? failure.message : String(failure);
-						this.status.textContent = `${this.status.textContent} · ${message}`;
+						this.header.status.textContent = `${this.header.status.textContent} · ${message}`;
 						alert(message);
-					} else { announceStatus(this.status.textContent ?? ''); }
+					} else { announceStatus(this.header.status.textContent ?? ''); }
 					this.focus();
 				};
 				if (connector.canConnectOAuth) {
@@ -322,7 +342,18 @@ export class ExtensionEditor extends EditorPane {
 						await this.connectors.connectApiToken(connector, catalog.generation, token);
 					}));
 				}
-				if (connector.canDisconnect) { button(localize({ bundle: 'ash.extensions', key: 'mcpDisconnect' }, 'Disconnect'), () => apply(() => this.connectors.disconnect(connector, catalog.generation))); }
+				this.renderEnablement({
+					label: localize({ bundle: 'ash.extensions', key: 'connectService' }, 'Connect service'),
+					checked: connector.enabled && (connector.state.status === 'connected' || connector.state.status === 'connecting'),
+					enabled: connector.state.status === 'connected' || connector.canConnectOAuth || connector.canConnectApiToken,
+					change: async checked => {
+						if (connector.state.status === 'connected') { await this.connectors.setEnabled(connector, catalog.generation, checked); return; }
+						if (connector.canConnectOAuth) { await this.connectors.connectOAuth(connector, catalog.generation); return; }
+						const token = await promptConnectorApiToken(this.dialogs, connector.displayName);
+						if (!token || signal.aborted || this.isDisposed || version !== this.loadVersion) { return false; }
+						await this.connectors.connectApiToken(connector, catalog.generation, token);
+					},
+				});
 				if (connector.canRefreshOAuth) { button(localize({ bundle: 'ash.extensions', key: 'refresh' }, 'Refresh'), () => apply(() => this.connectors.refreshOAuth(connector))); }
 				if (connector.canRevokeOAuth) { button(localize({ bundle: 'ash.extensions', key: 'mcpSignOut' }, 'Sign out'), () => apply(() => this.connectors.revokeOAuth(connector, catalog.generation))); }
 				const mcpServerId = connector.mcpServerId;
@@ -338,10 +369,18 @@ export class ExtensionEditor extends EditorPane {
 				const snapshot = await this.prompts.readSkillManagement(target.sessionId);
 				if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 				const skill = snapshot.catalog.skills.find(skill => skill.id.source === target.source && skill.id.name === target.name);
-				if (!skill) { this.status.textContent = localize({ bundle: 'ash.extensions', key: 'skillMissing' }, 'This skill is no longer available. Refresh Skills.'); return; }
-				this.metadata.textContent = localize({ bundle: 'ash.extensions', key: 'skillSource' }, 'Source: {0}', skill.id.source);
-				this.description.textContent = skill.description;
+				if (!skill) { this.header.status.textContent = localize({ bundle: 'ash.extensions', key: 'skillMissing' }, 'This skill is no longer available. Refresh Skills.'); return; }
+				this.header.description.textContent = skill.description;
 				this.renderOverview();
+				this.header.description.textContent = getSkillSummary(skill);
+				const author = skill.metadata?.author;
+				const skillVersion = skill.metadata?.version;
+				const updated = skill.metadata?.['updated-at'];
+				this.header.metadata.textContent = [
+					author ? localize({ bundle: 'ash.extensions', key: 'detailDeveloper' }, 'Developer: {0}', author) : '',
+					skillVersion ? localize({ bundle: 'ash.extensions', key: 'detailVersionValue' }, 'Version: {0}', skillVersion) : '',
+					updated ? localize({ bundle: 'ash.extensions', key: 'detailUpdated' }, 'Updated: {0}', updated) : '',
+				].filter(Boolean).join(' · ');
 				this.renderInfo([{
 					label: localize({ bundle: 'ash.extensions', key: 'skillDetails' }, 'Skill details'), rows: [
 						{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: skill.id.name },
@@ -349,7 +388,7 @@ export class ExtensionEditor extends EditorPane {
 						{ label: localize({ bundle: 'ash.extensions', key: 'detailCompatibility' }, 'Compatibility'), value: skill.compatible ? localize({ bundle: 'ash.extensions', key: 'skillCompatible' }, 'Compatible') : localize({ bundle: 'ash.extensions', key: 'skillCompatibilityUnknown' }, 'Compatibility unknown') },
 					]
 				}]);
-				this.status.textContent = skill.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
+				this.header.status.textContent = '';
 				this.capabilities.textContent = [
 					skill.compatible ? localize({ bundle: 'ash.extensions', key: 'skillCompatible' }, 'Compatible') : localize({ bundle: 'ash.extensions', key: 'skillCompatibilityUnknown' }, 'Compatibility unknown'),
 					localize({ bundle: 'ash.extensions', key: 'skillInvoke' }, 'Invoke enabled skills with ${0} in chat.', skill.id.name),
@@ -365,23 +404,10 @@ export class ExtensionEditor extends EditorPane {
 					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { this.renderDocument(this.instructions, parsed.body?.getContent() ?? '', { prompt: parsed }); }
 				};
 				if (this.selectedTab === DetailTab.Instructions) { this.selectTab(DetailTab.Instructions); }
-				button(skill.enabled ? localize({ bundle: 'ash.extensions', key: 'disableSkill' }, 'Disable skill') : localize({ bundle: 'ash.extensions', key: 'enableSkill' }, 'Enable skill'), async () => {
-					await this.prompts.setSkillEnablement(skill.id, !skill.enabled, snapshot.revision, target.sessionId);
-					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.setInput(input, signal); this.focus(); }
+				this.renderEnablement({
+					label: localize({ bundle: 'ash.extensions', key: 'enableSkill' }, 'Enable skill'), checked: skill.enabled,
+					change: checked => this.prompts.setSkillEnablement(skill.id, checked, snapshot.revision, target.sessionId)
 				});
-				button(localize({ bundle: 'ash.extensions', key: 'openSkillInstructions' }, 'Open instructions'), async () => {
-					const cancellation = new CancellationTokenSource();
-					const cancel = (): void => cancellation.cancel();
-					signal.addEventListener('abort', cancel, { once: true });
-					this.actionResources.add(toDisposable(() => { signal.removeEventListener('abort', cancel); cancellation.dispose(true); }));
-					const parsed = await this.prompts.parseNew(skill.uri, cancellation.token);
-					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) {
-						await this.editors.openEditor({ resource: skill.uri, languageId: 'markdown', label: `${skill.name}/SKILL.md`, readOnly: true, showBreadcrumbs: false }, {
-							pinned: true, selection: parsed.body ? Range.fromPositions(parsed.body.range.getStartPosition()) : undefined,
-						});
-					}
-				});
-				button(localize({ bundle: 'ash.extensions', key: 'refresh' }, 'Refresh'), async () => { await this.setInput(input, signal); });
 				return;
 			}
 			this.contentHeading.textContent = localize({ bundle: 'ash.extensions', key: 'mcpToolsHeading' }, 'Tools');
@@ -407,9 +433,9 @@ export class ExtensionEditor extends EditorPane {
 				: server?.state.status === 'unavailable' ? server.state.reason : '';
 			const catalog = catalogResult.status === 'fulfilled' ? catalogResult.value : undefined;
 			const tools = catalog?.filter(tool => tool.source === 'mcp' && tool.sourceDetails.includes(target.serverId)) ?? [];
-			this.title.textContent = configuredServer?.displayName || server?.displayName || capability?.id || target.serverId;
-			this.metadata.textContent = installation ? `${installation.package.id} · ${installation.package.version}` : target.serverId;
-			this.description.textContent = [localize({ bundle: 'ash.extensions', key: 'detailMcpDescription' }, 'Tools provided by {0}.', this.title.textContent), localize({ bundle: 'ash.extensions', key: 'connectionServerDescription' }, 'This connection uses an MCP server. Its status and tools are shown here; an account is optional.')].join('\n\n');
+			this.header.title.textContent = configuredServer?.displayName || server?.displayName || capability?.id || target.serverId;
+			this.header.metadata.textContent = installation ? `${installation.package.id} · ${installation.package.version}` : target.serverId;
+			this.header.description.textContent = [localize({ bundle: 'ash.extensions', key: 'detailMcpDescription' }, 'Tools provided by {0}.', this.header.title.textContent), localize({ bundle: 'ash.extensions', key: 'connectionServerDescription' }, 'This connection uses an MCP server. Its status and tools are shown here; an account is optional.')].join('\n\n');
 			this.renderOverview();
 			this.renderInfo([{
 				label: localize({ bundle: 'ash.extensions', key: 'detailServer' }, 'Server'), rows: [
@@ -429,7 +455,7 @@ export class ExtensionEditor extends EditorPane {
 					{ label: localize({ bundle: 'ash.extensions', key: 'mcpToolsHeading' }, 'Tools'), value: server ? String(server.toolCount) : '' },
 				]
 			}]);
-			this.status.textContent = [statusLabel, diagnostic,
+			this.header.status.textContent = [statusLabel, diagnostic,
 				installedResult.status === 'rejected' ? localize({ bundle: 'ash.extensions', key: 'mcpPackagesReadFailed' }, 'Could not load installed packages: {0}', String(installedResult.reason)) : '',
 				configurationResult.status === 'rejected' ? localize({ bundle: 'ash.extensions', key: 'mcpConfigurationReadFailed' }, 'Could not load MCP configuration: {0}', String(configurationResult.reason)) : '',
 			].filter(Boolean).join(' · ');
@@ -457,9 +483,9 @@ export class ExtensionEditor extends EditorPane {
 						if (signal.aborted || this.isDisposed || refreshVersion !== this.loadVersion) { return; }
 						if (failure !== undefined) {
 							const message = failure instanceof Error ? failure.message : String(failure);
-							this.status.textContent = `${this.status.textContent} · ${message}`;
+							this.header.status.textContent = `${this.header.status.textContent} · ${message}`;
 							alert(message);
-						} else { announceStatus(this.status.textContent ?? ''); }
+						} else { announceStatus(this.header.status.textContent ?? ''); }
 						this.focus();
 					}
 				};
@@ -468,8 +494,8 @@ export class ExtensionEditor extends EditorPane {
 					const cancel = button(localize({ bundle: 'ash.extensions', key: 'mcpCancelSignIn' }, 'Cancel sign-in'), async () => { loginCancellation?.abort(); }, false, 'secondary', true);
 					button(localize({ bundle: 'ash.extensions', key: 'mcpSignIn' }, 'Sign in'), () => apply(async () => {
 						loginCancellation = new AbortController(); cancel.enabled = true;
-						this.status.textContent = localize({ bundle: 'ash.extensions', key: 'mcpWaitingSignIn' }, 'Complete sign-in in your browser.');
-						announceStatus(this.status.textContent);
+						this.header.status.textContent = localize({ bundle: 'ash.extensions', key: 'mcpWaitingSignIn' }, 'Complete sign-in in your browser.');
+						announceStatus(this.header.status.textContent);
 						try {
 							const loginSignal = AbortSignal.any([operationSignal, loginCancellation.signal]);
 							try { await this.mcpManagement.login(configuredServer.id, {}, loginSignal); }
@@ -493,10 +519,10 @@ export class ExtensionEditor extends EditorPane {
 					const id = await configureMcpServer(this.mcpManagement, this.dialogs, configuration, configuredServer, operationSignal);
 					return id !== undefined;
 				}));
-				button(configuredServer.enablement === 'enabled'
-					? localize({ bundle: 'ash.extensions', key: 'mcpDisable' }, 'Disable')
-					: localize({ bundle: 'ash.extensions', key: 'mcpEnable' }, 'Enable'),
-					() => apply(() => this.mcpManagement.setEnablement(configuredServer.id, configuredServer.enablement !== 'enabled', configuration.revision)));
+				this.renderEnablement({
+					label: localize({ bundle: 'ash.extensions', key: 'enableMcpServer' }, 'Enable MCP server'), checked: configuredServer.enablement === 'enabled',
+					change: checked => this.mcpManagement.setEnablement(configuredServer.id, checked, configuration.revision)
+				});
 				button(localize({ bundle: 'ash.extensions', key: 'mcpConnect' }, 'Connect'), () => apply(() => this.mcpManagement.connect(configuredServer.id)), configuredServer.enablement === 'enabled');
 				button(localize({ bundle: 'ash.extensions', key: 'mcpDisconnect' }, 'Disconnect'), () => apply(() => this.mcpManagement.disconnect(configuredServer.id)), configuredServer.enablement === 'enabled');
 				button(localize({ bundle: 'ash.extensions', key: 'mcpRemoveServer' }, 'Remove MCP server'), () => apply(async () => {
@@ -510,6 +536,7 @@ export class ExtensionEditor extends EditorPane {
 					return true;
 				}));
 			}
+			if (!configuredServer) { this.renderEnablement({ label: localize({ bundle: 'ash.extensions', key: 'enableMcpServer' }, 'Enable MCP server'), checked: !!server && server.state.status !== 'disabled', enabled: false }); }
 			if (installation && capability) {
 				button(localize({ bundle: 'ash.extensions', key: 'openPackage' }, 'Open package'), async () => {
 					await this.editors.openEditor(new ExtensionsInput({ id: installation.package.id, version: installation.package.version, displayName: installation.package.id, description: '', packageType: 'plugin' }, installation.installationId));
@@ -522,36 +549,33 @@ export class ExtensionEditor extends EditorPane {
 			return;
 		}
 
-		const toggle = async () => {
-			await changeExtensionEnablement(input, this.enablement, this.extensions, this.plugins, this.editorExtensions);
-			if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.setInput(input, signal); this.focus(); }
-		};
+		const setEnabled = (checked: boolean) => changeExtensionEnablement(input, this.enablement, this.extensions, this.plugins, this.editorExtensions, { enabled: checked });
 		if (input.source === ExtensionsInputSource.BuiltIn) {
 			const catalog = await this.editorExtensions.list('cached', { includeDisabled: true });
 			if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 			const extension = catalog.extensions.find(value => value.sourceKind === 'builtIn' && value.id === input.summary.id);
 			if (!extension) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
 			const manifest = JSON.parse(extension.manifestJson);
+			this.header.status.textContent = '';
 			void this.loadPackageDocument(input, signal, version);
 			if ((manifest.ashRuntime?.kind === 'rust' && !manifest.browser) || !!manifest.ashLanguageServers) {
 				const catalog = await this.extensions.listBuiltInProviders();
 				if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 				const provider = catalog.providers.find(value => value.id === extension.id);
-				if (!provider) { this.status.textContent = localize({ bundle: 'ash.extensions', key: 'backendUnavailable' }, 'This provider is unavailable on the connected backend.'); return; }
-				this.status.textContent = provider.enabled ? provider.running ? localize({ bundle: 'ash.extensions', key: 'providerRunning' }, 'Enabled · running') : localize({ bundle: 'ash.extensions', key: 'providerStopped' }, 'Enabled · starts on demand') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
+				if (!provider) { this.header.status.textContent = localize({ bundle: 'ash.extensions', key: 'backendUnavailable' }, 'This provider is unavailable on the connected backend.'); return; }
 				this.capabilities.textContent = (manifest.ashRuntime?.capabilities ?? manifest.ashLanguageServers?.servers?.map((server: { id: string; }) => server.id) ?? []).join('\n');
 				if (!catalog.canChangeEnablement) {
-					this.status.textContent += '\n' + localize({ bundle: 'ash.extensions', key: 'providerEnablementReadOnly' }, 'This connection cannot enable or disable backend providers. Use an authorized desktop or remote host to manage this provider.');
+					this.header.status.textContent = localize({ bundle: 'ash.extensions', key: 'providerEnablementReadOnly' }, 'This connection cannot enable or disable backend providers. Use an authorized desktop or remote host to manage this provider.');
 				}
-				button(extensionEnablementLabel(provider.enabled), toggle, catalog.canChangeEnablement === true);
+				this.renderEnablement({ label: localize({ bundle: 'ash.extensions', key: 'enableExtension' }, 'Enable extension'), checked: provider.enabled, enabled: catalog.canChangeEnablement === true, change: setEnabled });
 				return;
 			}
 			const enabled = !this.enablement.getDisabledExtensions().some(value => value.id === extension.id.toLowerCase());
-			this.status.textContent = enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
 			this.capabilities.textContent = Object.keys(manifest.contributes ?? {}).join('\n');
 			if (manifest.contributes?.localizations?.length) {
-				this.status.textContent = localize({ bundle: 'ash.extensions', key: 'languagePackEnablement' }, 'Language packs are managed through the display language setting and cannot be disabled.');
-			} else { button(extensionEnablementLabel(enabled), toggle); }
+				this.header.status.textContent = localize({ bundle: 'ash.extensions', key: 'languagePackEnablement' }, 'Language packs are managed through the display language setting and cannot be disabled.');
+			}
+			this.renderEnablement({ label: localize({ bundle: 'ash.extensions', key: 'enableExtension' }, 'Enable extension'), checked: enabled, enabled: !manifest.contributes?.localizations?.length, change: setEnabled });
 			return;
 		}
 		if (input.source === ExtensionsInputSource.Local) {
@@ -559,7 +583,7 @@ export class ExtensionEditor extends EditorPane {
 			if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 			const plugin = catalog.packages.find(value => value.id === input.summary.id && value.version === input.summary.version);
 			if (!plugin) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
-			this.status.textContent = plugin.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
+			this.header.status.textContent = '';
 			this.contentHeading.textContent = localize({ bundle: 'ash.extensions', key: 'pluginPermissionsHeading' }, 'Permissions');
 			this.renderInfo([{
 				label: localize({ bundle: 'ash.extensions', key: 'detailInstallation' }, 'Installation'), rows: [
@@ -570,7 +594,7 @@ export class ExtensionEditor extends EditorPane {
 				]
 			}]);
 			this.capabilities.textContent = [localize({ bundle: 'ash.extensions', key: 'localExtensionDigest' }, 'Package digest: {0}', plugin.digest), ...plugin.permissions.map(describePluginPermission)].join('\n\n');
-			button(extensionEnablementLabel(plugin.enabled), toggle, plugin.enabled || !plugin.revoked);
+			this.renderEnablement({ label: localize({ bundle: 'ash.extensions', key: 'enableExtension' }, 'Enable extension'), checked: plugin.enabled, enabled: plugin.enabled || !plugin.revoked, change: setEnabled });
 			button(plugin.granted ? localize({ bundle: 'ash.extensions', key: 'revokeLocalExtension' }, 'Revoke permissions') : localize({ bundle: 'ash.extensions', key: 'grantLocalExtension' }, 'Grant permissions'), async () => { await reviewLocalExtensionPermissions(plugin, this.plugins, this.dialogs); if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.setInput(input, signal); } }, plugin.granted || !plugin.revoked);
 			button(localize({ bundle: 'ash.extensions', key: 'uninstall' }, 'Uninstall'), async () => {
 				const review = await this.dialogs.confirm({ title: localize({ bundle: 'ash.extensions', key: 'uninstallTitle' }, 'Uninstall extension'), message: localize({ bundle: 'ash.extensions', key: 'uninstallMessage' }, 'Uninstall {0} {1}?', plugin.id, plugin.version), primaryButton: localize({ bundle: 'ash.extensions', key: 'uninstall' }, 'Uninstall') });
@@ -580,8 +604,8 @@ export class ExtensionEditor extends EditorPane {
 				if (!selected) { return; }
 				await this.plugins.uninstall(selected, latest.revision);
 				if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
-				this.clearInput(); this.actions.replaceChildren();
-				this.status.textContent = localize({ bundle: 'ash.extensions', key: 'uninstalled' }, 'Uninstalled');
+				this.clearInput(); this.header.actions.replaceChildren();
+				this.header.status.textContent = localize({ bundle: 'ash.extensions', key: 'uninstalled' }, 'Uninstalled');
 			}, !plugin.enabled && !plugin.granted);
 			return;
 		}
@@ -594,9 +618,9 @@ export class ExtensionEditor extends EditorPane {
 			return undefined;
 		});
 		if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
-		this.title.textContent = details?.displayName ?? input.summary.displayName;
-		this.description.textContent = details?.description ?? input.summary.description;
-		this.metadata.textContent = [input.summary.id, input.summary.version, details?.license].filter(Boolean).join(' · ');
+		this.header.title.textContent = details?.displayName ?? input.summary.displayName;
+		this.header.description.textContent = details?.description ?? input.summary.description;
+		this.header.metadata.textContent = [input.summary.id, input.summary.version, details?.license].filter(Boolean).join(' · ');
 		this.renderOverview();
 		this.renderInfo([{
 			label: localize({ bundle: 'ash.extensions', key: 'detailInstallation' }, 'Installation'), rows: [
@@ -610,7 +634,7 @@ export class ExtensionEditor extends EditorPane {
 		if (input.summary.packageType === 'editorExtension' || input.summary.packageType === 'editor') { void this.loadPackageDocument(input, signal, version); }
 		this.capabilities.textContent = details ? describeExtensionCapabilities(details) : installation?.capabilities.map(capability => `${capability.kind}: ${capability.id}`).join('\n') ?? '';
 		const hasInstalled = installed.some(entry => entry.package.id === input.summary.id);
-		this.status.textContent = installation?.state === 'pendingRemoval' ? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending') : hasInstalled ? localize({ bundle: 'ash.extensions', key: 'installed' }, 'Installed · activation is separate') : '';
+		this.header.status.textContent = installation?.state === 'pendingRemoval' ? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending') : hasInstalled ? localize({ bundle: 'ash.extensions', key: 'installed' }, 'Installed · activation is separate') : '';
 
 		const mutate = async (operation: 'install' | 'update' | 'uninstall') => {
 			const result = await changeExtensionPackage(this.extensions, this.dialogs, operation, details, installation);
@@ -628,11 +652,10 @@ export class ExtensionEditor extends EditorPane {
 			if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 			const policy = catalog.extensions.find(value => value.installationId === installation.installationId);
 			if (policy) {
-				this.status.textContent = policy.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
-				button(extensionEnablementLabel(policy.enabled), async () => {
-					using target = new ExtensionsInput(input.summary, installation.installationId);
-					await changeExtensionEnablement(target, this.enablement, this.extensions, this.plugins, this.editorExtensions);
-					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.setInput(input, signal); this.focus(); }
+				this.header.status.textContent = '';
+				this.renderEnablement({
+					label: localize({ bundle: 'ash.extensions', key: 'enableExtension' }, 'Enable extension'), checked: policy.enabled,
+					change: async checked => { using target = new ExtensionsInput(input.summary, installation.installationId); await changeExtensionEnablement(target, this.enablement, this.extensions, this.plugins, this.editorExtensions, { enabled: checked }); }
 				});
 				if (policy.entrypoint !== null || policy.granted) {
 					button(policy.granted ? localize({ bundle: 'ash.extensions', key: 'revokeExtensionsExecution' }, 'Revoke execution authorization') : localize({ bundle: 'ash.extensions', key: 'grantExtensionsExecution' }, 'Authorize execution'), async () => { await reviewExtensionExecution(policy, this.extensions, this.dialogs); if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.setInput(input, signal); } });
@@ -642,10 +665,62 @@ export class ExtensionEditor extends EditorPane {
 		if (hasInstalled) { button(localize({ bundle: 'ash.extensions', key: 'showInstalled' }, 'Show installed versions'), () => this.commands.executeCommand('ash.extensions.installed', { query: input.summary.id })); }
 	}
 
+	private renderEnablement(options: { readonly label: string; readonly checked: boolean; readonly enabled?: boolean; readonly change?: (checked: boolean) => Promise<unknown>; }): void {
+		const input = this.currentInput!;
+		const signal = this.currentSignal!;
+		const version = this.loadVersion;
+		const control = this.header.enablement;
+		control.setAriaLabel(options.label);
+		control.checked = options.checked;
+		control.enabled = options.enabled !== false && options.change !== undefined;
+		control.element.hidden = false;
+		const change = options.change;
+		if (!change) { return; }
+		this.actionResources.add(control.onDidChange(checked => {
+			if (this.working) { control.checked = options.checked; return; }
+			this.working = true; control.busy = true;
+			this.domNode.setAttribute('aria-busy', 'true');
+			void (async () => {
+				let failure: unknown;
+				try {
+					let result: unknown;
+					try { result = await change(checked); } catch (error) { failure = error; }
+					if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
+					if (result === false && failure === undefined) { control.checked = options.checked; return; }
+					const refresh = this.setInput(input, signal);
+					const refreshVersion = this.loadVersion;
+					await refresh;
+					if (signal.aborted || this.isDisposed || refreshVersion !== this.loadVersion) { return; }
+					if (failure !== undefined) {
+						const message = failure instanceof Error ? failure.message : String(failure);
+						this.header.status.textContent = [this.header.status.textContent, message].filter(Boolean).join(' · ');
+						alert(message);
+					} else {
+						announceStatus(this.header.status.textContent || (control.checked ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled')));
+					}
+				} catch (error) {
+					if (!signal.aborted && !this.isDisposed && this.currentInput === input) {
+						this.header.status.textContent = error instanceof Error ? error.message : String(error);
+					}
+				} finally {
+					this.working = false;
+					if (!this.isDisposed) {
+						control.busy = false; this.domNode.setAttribute('aria-busy', 'false');
+						const focused = mainWindow.document.activeElement;
+						if (!signal.aborted && this.currentInput === input && !control.element.hidden
+							&& (focused === mainWindow.document.body || (focused && this.domNode.contains(focused)))) {
+							control.focus();
+						}
+					}
+				}
+			})();
+		}));
+	}
+
 	private renderOverview(): void {
 		this.overviewHeading.hidden = false; this.overview.hidden = false;
 		this.overviewHeading.textContent = localize({ bundle: 'ash.extensions', key: 'detailAbout' }, 'About');
-		this.overview.textContent = this.description.textContent;
+		this.overview.textContent = this.header.description.textContent;
 	}
 
 	private renderTabs(): void {
@@ -689,7 +764,7 @@ export class ExtensionEditor extends EditorPane {
 		this.documentResources.add(addDisposableListener(link, 'click', event => {
 			event.preventDefault();
 			const version = this.loadVersion;
-			void action().catch(error => { if (!this.isDisposed && version === this.loadVersion) { this.status.textContent = error instanceof Error ? error.message : String(error); } });
+			void action().catch(error => { if (!this.isDisposed && version === this.loadVersion) { this.header.status.textContent = error instanceof Error ? error.message : String(error); } });
 		}));
 	}
 
@@ -701,7 +776,7 @@ export class ExtensionEditor extends EditorPane {
 			sanitizerConfig: { allowedLinkSchemes: { augment: ['ash-extension-resource', ...(source && 'prompt' in source ? ['private'] : [])] }, remoteImageIsAllowed: () => false },
 			transformUri: source ? href => 'prompt' in source ? source.prompt.body?.resolveFilePath(href)?.toString() ?? href : /^[a-z][a-z\d+.-]*:/iu.test(href) ? href : URI.joinPath(source.resource, '..', href).toString() : undefined,
 			imageResourceLoader: source && 'api' in source ? async resource => new Blob([new Uint8Array(await source.api.resources.readExtensionResourceBytes(resource))]) : undefined,
-			actionHandler: href => { void this.opener.open(href, { allowCommands: false, fromUserGesture: true, allowContributedOpeners: true }).catch(error => { if (!this.isDisposed && version === this.loadVersion) { this.status.textContent = String(error); } }); },
+			actionHandler: href => { void this.opener.open(href, { allowCommands: false, fromUserGesture: true, allowContributedOpeners: true }).catch(error => { if (!this.isDisposed && version === this.loadVersion) { this.header.status.textContent = String(error); } }); },
 		}));
 		container.replaceChildren(document.element);
 	}
@@ -724,7 +799,7 @@ export class ExtensionEditor extends EditorPane {
 		} catch { return; }
 		if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 		const publisher = descriptor?.publisher ?? (typeof manifest.publisher === 'string' ? manifest.publisher : '');
-		this.publisher.textContent = publisher; this.publisher.hidden = !publisher;
+		this.header.publisher.textContent = publisher === 'ash' ? 'Ash' : publisher; this.header.publisher.hidden = !publisher;
 		if (Array.isArray(manifest.categories) && manifest.categories.length && manifest.categories.every(category => typeof category === 'string')) {
 			const section = h(mainWindow.document, 'section'); section.className = 'extension-info-section';
 			const heading = h(mainWindow.document, 'h2'); heading.textContent = localize({ bundle: 'ash.extensions', key: 'detailCategories' }, 'Categories');
@@ -758,16 +833,16 @@ export class ExtensionEditor extends EditorPane {
 				if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 				const mime = manifest.icon.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : `image/${manifest.icon.split('.').at(-1)!.toLowerCase().replace('jpg', 'jpeg')}`;
 				const object = createObjectUrl(mainWindow, new Blob([new Uint8Array(bytes)], { type: mime })); this.documentResources.add(object.registration);
-				this.iconImage.src = object.url.toString(); this.iconImage.hidden = false; this.iconText.hidden = true;
+				this.header.iconImage.src = object.url.toString(); this.header.iconImage.hidden = false; this.header.iconText.hidden = true;
 			} catch { /* Retain the package initials when its icon cannot be loaded. */ }
 		};
 		await Promise.allSettled([readme(), icon()]);
 	}
 
-	public clearInput(): void { this.currentInput = undefined; this.currentSignal = undefined; ++this.loadVersion; this.actionResources.clear(); this.documentResources.clear(); this.instructionsLoader = undefined; this.instructionsPending = undefined; }
+	public clearInput(): void { this.currentInput = undefined; this.currentSignal = undefined; this.header.enablement.element.hidden = true; ++this.loadVersion; this.actionResources.clear(); this.documentResources.clear(); this.instructionsLoader = undefined; this.instructionsPending = undefined; }
 	public layout(dimension: IDimension): void { this.domNode.classList.toggle('compact', dimension.width < 720); this.scrollable.layout(); }
 	public focus(): void {
-		const target = this.actions.querySelector<HTMLButtonElement>('button') ?? this.title;
+		const target = !this.header.enablement.element.hidden && this.header.enablement.enabled ? this.header.enablement.input : this.header.actions.querySelector<HTMLButtonElement>('button:not([disabled])') ?? this.header.title;
 		if (this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.Extensions)) { target.setAttribute('aria-description', localize({ bundle: 'ash.extensions', key: 'focusHint' }, 'Extensions. Use Tab to navigate and Alt+F1 for help.')); } else { target.removeAttribute('aria-description'); }
 		target.focus();
 	}

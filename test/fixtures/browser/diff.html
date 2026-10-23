@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<title>Frontend diff integration</title>
+		<style>
+			body { margin: 16px; font-family: system-ui, sans-serif; font-size: var(--ash-fontSize-body1); }
+			#single, #multi, #many, #timed-single, #timed-multi, #session-changes { height: 240px; width: 800px; }
+			textarea { width: 780px; height: 80px; }
+		</style>
+	</head>
+	<body>
+		<label>Modified text <textarea id="modified"></textarea></label>
+		<div id="single"></div>
+		<div id="multi"></div>
+		<div id="many"></div>
+		<div id="timed-single"></div>
+		<div id="timed-multi"></div>
+		<div id="session-changes"></div>
+		<script type="module" src="./diff.page.ts"></script>
+	</body>
+</html>

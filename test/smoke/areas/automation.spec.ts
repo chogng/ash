@@ -80,7 +80,7 @@ test('all smoke projects collect without fixture dependency cycles', async () =>
 		'--project=browser-app-server', '--project=electron-ui', '--project=electron-app-server', '--project=electron-pdf-corpus-app-server',
 	], { cwd: directory, env: { ...process.env, ASH_PLAYWRIGHT_SERVER: 'full' } });
 	expect(stdout).toContain('scm-history.spec.ts');
-	expect(stdout).toContain('pdf-academic-corpus.spec.ts');
+	expect(stdout).toContain('pdf-academy-corpus.spec.ts');
 	expect(stdout).toMatch(/Total: [1-9]\d* tests/u);
 });
 

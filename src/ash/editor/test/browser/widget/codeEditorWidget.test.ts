@@ -687,6 +687,27 @@ test('CodeEditorWidget exposes editor-owned scroll geometry', () => {
 	dom.window.close();
 });
 
+test('embedded editor content height shrinks below the viewport when lines are hidden', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('one\ntwo\nthree\nfour\nfive');
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
+	editor.layout({ width: 240, height: 300 });
+	const heights: number[] = [];
+	using listener = editor.onDidContentSizeChange(event => {
+		if (event.contentHeightChanged) heights.push(event.contentHeight);
+	});
+	assert.equal(editor.getContentHeight(), 100);
+	assert.equal(editor.view.currentLayout.contentSize.height, 300);
+	editor.setHiddenAreas([new Range(2, 1, 5, 1)]);
+	assert.equal(editor.getContentHeight(), 20);
+	assert.equal(editor.view.currentLayout.contentSize.height, 300);
+	editor.setHiddenAreas([]);
+	assert.equal(editor.getContentHeight(), 100);
+	assert.deepEqual(heights, [20, 100]);
+	dom.window.close();
+});
+
 test('common editor reveal modes scroll without changing selection or borrowing model ownership', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;

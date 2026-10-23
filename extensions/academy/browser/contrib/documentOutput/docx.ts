@@ -1,5 +1,5 @@
 import { createDefaultDocumentSchema } from '../../../common/model/documentSchema.js';
-import { createAcademicDocumentSchema } from '../academic/common/schema.js';
+import { createAcademyDocumentSchema } from '../academy/common/schema.js';
 import { localize } from 'ash:editor/nls.js';
 import { findDocumentNode, type DocumentNode, type DocumentAttributes, type DocumentMark } from '../../../common/model/document.js';
 import type { DocumentSchema } from '../../../common/model/documentSchema.js';
@@ -191,8 +191,8 @@ export async function importDocxDocument(bytes: Uint8Array, owner: Document, sig
 	const files = await unzipFiles(bytes, signal);
 	const snapshot = files.get('customXml/ash-document.json');
 	const type = snapshot ? JSON.parse(decode(snapshot)).documentType : 'general';
-	if (type !== 'general' && type !== 'academic') return fail('document profile');
-	const schema = type === 'academic' ? createAcademicDocumentSchema() : createDefaultDocumentSchema();
+	if (type !== 'general' && type !== 'academy') return fail('document profile');
+	const schema = type === 'academy' ? createAcademyDocumentSchema() : createDefaultDocumentSchema();
 	return { document: await importDocxParts(files, schema, owner, signal), documentType: schema.documentType };
 }
 

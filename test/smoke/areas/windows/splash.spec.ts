@@ -138,32 +138,57 @@ test('a cache from a different viewport renders colors until the current layout 
 	await expect.poll(async () => (await readSplash(page))?.layoutInfo?.width).toBe(await page.evaluate(() => innerWidth));
 });
 
-test('Sessions captures its own layout and removes its splash after reload', async ({ application, workbench, target }, testInfo) => {
-	const workbenchPage = workbench.page;
-	await expect.poll(async () => (await readSplash(workbenchPage))?.layoutInfo?.partBounds.length ?? 0).toBeGreaterThan(0);
-	const previous = (await readSplash(workbenchPage))!;
-	const actionId = target.kind === 'electron' ? 'workbench.action.chat.openAgentsWindow.titleBar' : 'ash.code.open-sessions';
-	let sessionPage: Page;
-	if ('windows' in application) {
-		const opened = application.waitForEvent('window');
-		await workbenchPage.locator(`[data-action-id="${actionId}"] button`).click();
-		sessionPage = await opened;
-	} else {
-		await workbenchPage.locator(`[data-action-id="${actionId}"] button`).click();
-		sessionPage = workbenchPage;
-	}
-	await expect(sessionPage.locator('.ash-sessions-window')).toBeVisible();
-	await expect.poll(async () => (await readSplash(sessionPage))?.layoutInfo?.partBounds.length ?? 0).toBeGreaterThan(0);
-	const snapshot = (await readSplash(sessionPage))!;
-	expect(snapshot.layoutInfo!.width).toBe(await sessionPage.evaluate(() => innerWidth));
-	expect(snapshot.layoutInfo!.height).toBe(await sessionPage.evaluate(() => innerHeight));
-	if (target.kind === 'electron') expect(await readSplash(workbenchPage)).toEqual(previous);
-	await sessionPage.reload();
-	await expect(sessionPage.locator('.ash-sessions-window')).toBeVisible();
-	await expect(sessionPage.locator('#ash-parts-splash')).toHaveCount(0);
-	await expect(sessionPage.locator('.ash-initial-shell-colors')).toHaveCount(0);
-	const marks = await sessionPage.evaluate(() => ({ shown: performance.getEntriesByName('ash.splash.shown')[0]?.startTime, removed: performance.getEntriesByName('ash.splash.removed')[0]?.startTime }));
-	expect(marks.shown).toBeDefined();
-	expect(marks.removed).toBeGreaterThanOrEqual(marks.shown!);
-	await sessionPage.screenshot({ path: testInfo.outputPath('sessions-layout.png') });
-});
+for (const [scheme, themeId] of [
+	['light', 'ash-light'], ['dark', 'ash-dark'],
+	['hcDark', 'ash-high-contrast-dark'], ['hcLight', 'ash-high-contrast-light'],
+] as const) {
+	test.describe(`Sessions startup splash (${scheme})`, () => {
+		test.use({ electronUserSettings: { 'workbench.colorTheme': themeId, 'window.autoDetectColorScheme': false, 'window.autoDetectHighContrast': false } });
+		test(`Sessions captures its own layout and removes its splash after reload (${scheme})`, { tag: scheme.startsWith('hc') ? ['@electron-app-server', '@browser-app-server'] : [] }, async ({ application, workbench, target }, testInfo) => {
+			const workbenchPage = workbench.page;
+			if (scheme === 'light' || scheme === 'dark') {
+				await workbench.setAppearance(application, scheme);
+			} else if (target.kind === 'browser') {
+				await workbenchPage.emulateMedia({ colorScheme: scheme === 'hcDark' ? 'dark' : 'light', forcedColors: 'active' });
+			}
+			await expect(workbench.element).toHaveAttribute('data-color-theme', themeId);
+			await expect.poll(async () => (await readSplash(workbenchPage))?.baseTheme).toBe(scheme);
+			await expect.poll(async () => (await readSplash(workbenchPage))?.layoutInfo?.partBounds.length ?? 0).toBeGreaterThan(0);
+			const previous = (await readSplash(workbenchPage))!;
+			const sessionPage = await workbench.openAgentsWindow(target.kind);
+			await expect(sessionPage.locator('.ash-sessions-window')).toBeVisible();
+			await expect(sessionPage.locator('#app')).toHaveAttribute('data-color-theme', themeId);
+			await expect.poll(async () => (await readSplash(sessionPage))?.layoutInfo?.partBounds.some(part => part.backgroundGradient !== undefined)).toBe(true);
+			const snapshot = (await readSplash(sessionPage))!;
+			expect(snapshot.layoutInfo!.width).toBe(await sessionPage.evaluate(() => innerWidth));
+			expect(snapshot.layoutInfo!.height).toBe(await sessionPage.evaluate(() => innerHeight));
+			if (target.kind === 'electron') expect(await readSplash(workbenchPage)).toEqual(previous);
+			const livePaint = await sessionPage.locator('[data-part="titlebar"]').evaluate(element => getComputedStyle(element).backgroundImage.replace('to right', '90deg'));
+			expect(livePaint).toContain('linear-gradient');
+			await sessionPage.addInitScript(() => {
+				const paints: string[][] = [];
+				Object.assign(window, { ashSplashPaints: paints });
+				const observer = new MutationObserver(records => {
+					for (const record of records) {
+						for (const node of record.addedNodes) {
+							if (node instanceof HTMLElement && node.id === 'ash-parts-splash') {
+								paints.push(Array.from(node.children, child => getComputedStyle(child).backgroundImage));
+							}
+						}
+					}
+				});
+				observer.observe(document, { childList: true, subtree: true });
+				window.addEventListener('pagehide', () => observer.disconnect(), { once: true });
+			});
+			await sessionPage.reload();
+			await expect(sessionPage.locator('.ash-sessions-window')).toBeVisible();
+			await expect(sessionPage.locator('#ash-parts-splash')).toHaveCount(0);
+			await expect(sessionPage.locator('.ash-initial-shell-colors')).toHaveCount(0);
+			expect(await sessionPage.evaluate(() => (window as unknown as { ashSplashPaints: string[][]; }).ashSplashPaints.flat())).toContain(livePaint);
+			const marks = await sessionPage.evaluate(() => ({ shown: performance.getEntriesByName('ash.splash.shown')[0]?.startTime, removed: performance.getEntriesByName('ash.splash.removed')[0]?.startTime }));
+			expect(marks.shown).toBeDefined();
+			expect(marks.removed).toBeGreaterThanOrEqual(marks.shown!);
+			await sessionPage.screenshot({ path: testInfo.outputPath('sessions-layout.png') });
+		});
+	});
+}

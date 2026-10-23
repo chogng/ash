@@ -101,16 +101,24 @@ def accept(
                     str(package),
                 )
                 run(
-                    str(ROOT / "node_modules/bun/bin/bun.exe"),
+                    str(
+                        ROOT
+                        / "node_modules/bun"
+                        / ("bun.exe" if os.name == "nt" else "bun")
+                    ),
                     "check",
                     "-p",
-                    "test/remote/tsconfig.json",
+                    "test/sanity/tsconfig.json",
                     "--all",
                 )
                 run(
-                    str(ROOT / "node_modules/bun/bin/bun.exe"),
+                    str(
+                        ROOT
+                        / "node_modules/bun"
+                        / ("bun.exe" if os.name == "nt" else "bun")
+                    ),
                     "build",
-                    "test/remote/remoteReleaseAcceptance.ts",
+                    "test/sanity/remoteReleaseAcceptance.ts",
                     "--target=node",
                     "--outfile",
                     str(script),

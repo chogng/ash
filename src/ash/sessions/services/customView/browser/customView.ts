@@ -6,6 +6,8 @@ import type { SyncDescriptor } from '../../../../platform/instantiation/common/d
 export interface ICustomViewDescriptor {
 	readonly id: string;
 	readonly ctor: SyncDescriptor<AbstractCustomView>;
+	/** Restores the workspace beneath this page without dismissing the Custom View. */
+	readonly entryCommand?: string;
 	readonly actions?: { readonly menuId: MenuId; readonly primaryActionId?: string; };
 }
 

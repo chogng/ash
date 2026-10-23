@@ -112,6 +112,7 @@ use serde_json::Value;
 
 use super::RpcError;
 use super::decode;
+use super::language_runtime::LanguageDocumentSnapshots;
 use super::result;
 
 const MAX_LANGUAGE_TARGET_BYTES: usize = 10 * 1024 * 1024;
@@ -360,6 +361,12 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
                 ash_lsp_manager::LanguageServerControl::Restart
             }
             LanguageServerControlActionDto::Stop => ash_lsp_manager::LanguageServerControl::Stop,
+            LanguageServerControlActionDto::Resume => {
+                ash_lsp_manager::LanguageServerControl::Resume
+            }
+            LanguageServerControlActionDto::Suspend => {
+                ash_lsp_manager::LanguageServerControl::Suspend
+            }
         };
         runtime
             .control_servers(
@@ -518,6 +525,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let request_id = service
             .request_workspace_diagnostics(language_id)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let documents = runtime.document_snapshots();
         let response = match runtime
             .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?
@@ -544,10 +552,12 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             else {
                 continue;
             };
-            let Ok(bytes) = file_system.read_file(&relative, MAX_LANGUAGE_TARGET_BYTES) else {
-                continue;
-            };
-            let Ok(text) = String::from_utf8(bytes) else {
+            let Some(text) = target_text(
+                &documents,
+                file_system.as_ref(),
+                &diagnostic.path,
+                &relative,
+            ) else {
                 continue;
             };
             let Some(range) = utf16_range(&text, diagnostic.range, diagnostic.encoding) else {
@@ -1204,6 +1214,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             ),
         }
         .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let documents = runtime.document_snapshots();
         let event = runtime
             .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -1226,16 +1237,14 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
                     .strip_prefix(dir.canonical_path())
                     .ok()?
                     .to_path_buf();
-                let text = if target.path == source_path {
-                    params.document.text.clone()
-                } else {
-                    String::from_utf8(
-                        file_system
-                            .read_file(&relative, MAX_LANGUAGE_TARGET_BYTES)
-                            .ok()?,
-                    )
-                    .ok()?
-                };
+                let text = dir_text(
+                    &source_path,
+                    &params.document.text,
+                    &documents,
+                    file_system.as_ref(),
+                    &target.path,
+                    &relative,
+                )?;
                 target_location(&relative, &text, target)
             })
             .collect();
@@ -1319,6 +1328,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         }
         .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let documents = runtime.document_snapshots();
         let event = runtime
             .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -1337,6 +1347,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
                     dir.canonical_path(),
                     &source_path,
                     &params.document.text,
+                    &documents,
                     file_system.as_ref(),
                     entry,
                 )
@@ -1377,6 +1388,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let request_id = service
             .request_workspace_symbols(language_id, &params.query)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let documents = runtime.document_snapshots();
         let event = runtime
             .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -1396,12 +1408,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
                     .strip_prefix(dir.canonical_path())
                     .ok()?
                     .to_path_buf();
-                let text = String::from_utf8(
-                    file_system
-                        .read_file(&relative, MAX_LANGUAGE_TARGET_BYTES)
-                        .ok()?,
-                )
-                .ok()?;
+                let text = target_text(&documents, file_system.as_ref(), &symbol.path, &relative)?;
                 Some(LanguageDirectorySymbolDto {
                     name: symbol.name,
                     symbol_kind: symbol.symbol_kind,
@@ -1465,6 +1472,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let request_id = service
             .request_rename(&source_path, revision, position, params.new_name)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let documents = runtime.document_snapshots();
         let event = runtime
             .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -1476,6 +1484,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             &dir,
             &source_path,
             &params.document.text,
+            &documents,
             self.context
                 .file_system_service_for(params.document.dir_id.as_deref())?
                 .as_ref(),
@@ -1535,6 +1544,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let request_id = service
             .request_code_actions(&source_path, revision, range, diagnostics, params.only)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let documents = runtime.document_snapshots();
         let event = runtime
             .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -1553,6 +1563,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
                         &dir,
                         &source_path,
                         &params.document.text,
+                        &documents,
                         file_system.as_ref(),
                         action,
                     )
@@ -1584,6 +1595,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let request_id = service
             .request_resolve_code_action(&source_path, revision, params.provider_data)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        let documents = runtime.document_snapshots();
         let event = runtime
             .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -1599,6 +1611,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             &dir,
             &source_path,
             &params.document.text,
+            &documents,
             self.context
                 .file_system_service_for(params.document.dir_id.as_deref())?
                 .as_ref(),
@@ -1721,6 +1734,7 @@ fn hierarchy_entry_to_dto(
     dir: &Path,
     source_path: &Path,
     source_text: &str,
+    documents: &LanguageDocumentSnapshots,
     file_system: &dyn ash_file_system::FileSystem,
     entry: LanguageHierarchyEntry,
 ) -> Option<LanguageHierarchyEntryDto> {
@@ -1728,6 +1742,7 @@ fn hierarchy_entry_to_dto(
     let item_text = dir_text(
         source_path,
         source_text,
+        documents,
         file_system,
         &entry.item.path,
         &item_relative,
@@ -1736,7 +1751,14 @@ fn hierarchy_entry_to_dto(
     let (from_relative, from_text) = match from_path {
         Some(path) => {
             let relative = path.strip_prefix(dir).ok()?.to_path_buf();
-            let text = dir_text(source_path, source_text, file_system, path, &relative)?;
+            let text = dir_text(
+                source_path,
+                source_text,
+                documents,
+                file_system,
+                path,
+                &relative,
+            )?;
             (Some(relative), Some(text))
         }
         None => (None, None),
@@ -1768,6 +1790,7 @@ fn hierarchy_entry_to_dto(
 fn dir_text(
     source_path: &Path,
     source_text: &str,
+    documents: &LanguageDocumentSnapshots,
     file_system: &dyn ash_file_system::FileSystem,
     absolute: &Path,
     relative: &Path,
@@ -1775,13 +1798,25 @@ fn dir_text(
     if absolute == source_path {
         Some(source_text.to_owned())
     } else {
+        target_text(documents, file_system, absolute, relative)
+    }
+}
+
+fn target_text(
+    documents: &LanguageDocumentSnapshots,
+    file_system: &dyn ash_file_system::FileSystem,
+    absolute: &Path,
+    relative: &Path,
+) -> Option<String> {
+    // Server coordinates refer to didOpen/didChange text until didClose returns the file to disk.
+    documents.text(absolute).or_else(|| {
         String::from_utf8(
             file_system
                 .read_file(relative, MAX_LANGUAGE_TARGET_BYTES)
                 .ok()?,
         )
         .ok()
-    }
+    })
 }
 
 fn service_range(range: LanguageRangeDto) -> LanguageLocationRange {
@@ -1801,6 +1836,7 @@ fn directory_edit_to_dto(
     dir: &ash_file_access::Dir,
     source_path: &Path,
     source_text: &str,
+    documents: &LanguageDocumentSnapshots,
     file_system: &dyn ash_file_system::FileSystem,
     edit: LanguageEdit,
 ) -> Result<LanguageDirectoryEditDto, RpcError> {
@@ -1815,6 +1851,7 @@ fn directory_edit_to_dto(
                     &mut virtual_text,
                     source_path,
                     source_text,
+                    documents,
                     file_system,
                     &document.path,
                     &relative,
@@ -1849,6 +1886,7 @@ fn directory_edit_to_dto(
                     &mut virtual_text,
                     source_path,
                     source_text,
+                    documents,
                     file_system,
                     &path,
                     &relative,
@@ -1872,6 +1910,7 @@ fn directory_edit_to_dto(
                     &mut virtual_text,
                     source_path,
                     source_text,
+                    documents,
                     file_system,
                     &source,
                     &source_relative,
@@ -1880,6 +1919,7 @@ fn directory_edit_to_dto(
                     &mut virtual_text,
                     source_path,
                     source_text,
+                    documents,
                     file_system,
                     &target,
                     &target_relative,
@@ -1924,6 +1964,7 @@ fn virtual_dir_text(
     states: &mut HashMap<std::path::PathBuf, Option<String>>,
     source_path: &Path,
     source_text: &str,
+    documents: &LanguageDocumentSnapshots,
     file_system: &dyn ash_file_system::FileSystem,
     absolute: &Path,
     relative: &Path,
@@ -1931,7 +1972,14 @@ fn virtual_dir_text(
     if let Some(state) = states.get(absolute) {
         return state.clone();
     }
-    let text = dir_text(source_path, source_text, file_system, absolute, relative);
+    let text = dir_text(
+        source_path,
+        source_text,
+        documents,
+        file_system,
+        absolute,
+        relative,
+    );
     states.insert(absolute.to_path_buf(), text.clone());
     text
 }
@@ -1978,6 +2026,7 @@ fn code_action_to_dto(
     dir: &ash_file_access::Dir,
     source_path: &Path,
     source_text: &str,
+    documents: &LanguageDocumentSnapshots,
     file_system: &dyn ash_file_system::FileSystem,
     action: LanguageCodeAction,
 ) -> Result<LanguageCodeActionDto, RpcError> {
@@ -1988,7 +2037,9 @@ fn code_action_to_dto(
         disabled_reason: action.disabled_reason,
         edit: action
             .edit
-            .map(|edit| directory_edit_to_dto(dir, source_path, source_text, file_system, edit))
+            .map(|edit| {
+                directory_edit_to_dto(dir, source_path, source_text, documents, file_system, edit)
+            })
             .transpose()?,
         provider_data: action.provider_data,
     })
@@ -2007,20 +2058,13 @@ pub(super) fn utf8_byte_range(
 
 fn absolute_byte_offset(text: &str, position: LanguageDocumentPosition) -> Option<usize> {
     let mut offset = 0usize;
-    for (index, line) in text.split_inclusive('\n').enumerate() {
+    for (index, line) in text.split('\n').enumerate() {
         if index == usize::try_from(position.row).ok()? {
             return Some(offset + usize::try_from(position.byte_offset).ok()?);
         }
-        offset += line.len();
+        offset += line.len() + 1;
     }
-    if text.ends_with('\n')
-        && usize::try_from(position.row).ok()? == text.lines().count()
-        && position.byte_offset == 0
-    {
-        Some(text.len())
-    } else {
-        None
-    }
+    None
 }
 
 pub(super) fn byte_range_to_utf16(

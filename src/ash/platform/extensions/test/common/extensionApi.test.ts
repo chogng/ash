@@ -208,16 +208,16 @@ test('small frozen resources share reads without sharing mutable bytes or retire
 
 
 test('language extension syntax follows backend enablement, including revocation and offline failure', async () => {
-	const base = packageSnapshot(1, 'vscode.rust', 'builtIn');
+	const base = packageSnapshot(1, 'ash.rust', 'builtIn');
 	const catalog = { ...base, extensions: [{ ...base.extensions[0]!, manifestJson: JSON.stringify({ ashLanguageServers: { version: 1, servers: [] } }) }] };
 	let enabled = true;
 	let offline = false;
 	const management = {
 		onDidChangeInstalled: Event.None,
-		listBuiltInProviders: async () => { if (offline) throw new Error('offline'); return { revision: 1, providers: [{ id: 'vscode.rust', enabled, running: false }] }; },
+		listBuiltInProviders: async () => { if (offline) throw new Error('offline'); return { revision: 1, providers: [{ id: 'ash.rust', enabled, running: false }] }; },
 	} as unknown as IExtensionManagementService;
 	const api = withEnabledBuiltInExtensions(packageApi(() => catalog, async () => new Uint8Array()), {
-		onDidChangeEnablement: Event.None, getDisabledExtensions: () => [{ id: 'vscode.rust' }],
+		onDidChangeEnablement: Event.None, getDisabledExtensions: () => [{ id: 'ash.rust' }],
 		enableExtension: async () => { throw new Error('must not duplicate backend policy'); }, disableExtension: async () => { throw new Error('must not duplicate backend policy'); },
 	}, management);
 	assert.equal((await api.list('cached')).extensions.length, 1);

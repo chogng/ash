@@ -13,6 +13,8 @@ import { type SparseMultilineTokens } from './tokens/sparseMultilineTokens.js';
 
 /** Tokenization state and operations owned by one text model. */
 export interface ITokenizationTextModelPart {
+	/** The same syntax and semantic ranges consumed by editor presentation. */
+	readonly renderedTokens: SemanticTokenSource;
 	/** Shared background syntax capability, present only for the Tree-sitter backend. */
 	readonly syntaxTree?: ISyntaxTreeTextModelPart;
 
@@ -103,7 +105,6 @@ export interface IModelTokenization extends ITokenizationTextModelPart, IDisposa
 	readonly lines: readonly { lineIndex: number; tokens: readonly LanguageToken[]; }[];
 	readonly onDidChange: Event<readonly { fromLineNumber: number; toLineNumber: number; }[] | undefined>;
 	readonly onDidEncounterError: Event<unknown>;
-	readonly renderedTokens: SemanticTokenSource;
 	readonly languageTokens: LanguageTokenizationSource & SemanticTokenModelSource;
 	readonly semanticTokens?: SemanticTokenModelSource & {
 		readonly onDidEncounterError: Event<unknown>;

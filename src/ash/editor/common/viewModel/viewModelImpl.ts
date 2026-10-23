@@ -77,7 +77,7 @@ export class ViewModel extends Disposable implements IViewModel {
 		if (!(model instanceof TextModel)) throw new TypeError('ViewModel requires the editor text model implementation');
 		const options = configuration.options;
 		const fontInfo = options.get(EditorOption.fontInfo);
-		const wrappingInfo = options.get(EditorOption.wrappingInfo);
+		const wrappingColumn = this.getWrappingColumn();
 		const lineBreaksComputerFactory: ILineBreaksComputerFactory = {
 			createLineBreaksComputer: (context, currentFontInfo, ...args) => (
 				configuration.options.get(EditorOption.wrappingStrategy) === 'advanced' ? domLineBreaksComputerFactory : monospaceLineBreaksComputerFactory
@@ -87,8 +87,8 @@ export class ViewModel extends Disposable implements IViewModel {
 			? this._register(new ViewModelLinesFromModelAsIs(model))
 			: this._register(new ViewModelLinesFromProjectedModel(model, lineBreaksComputerFactory, fontInfo, model.getOptions().tabSize, {
 				editorId,
-				wrapping: wrappingInfo.wrappingColumn > 0 ? EditorLineWrapping.On : EditorLineWrapping.Off,
-				wrapWidth: Math.max(0, wrappingInfo.wrappingColumn) * fontInfo.typicalHalfwidthCharacterWidth,
+				wrapping: wrappingColumn > 0 ? EditorLineWrapping.On : EditorLineWrapping.Off,
+				wrapWidth: Math.max(0, wrappingColumn) * fontInfo.typicalHalfwidthCharacterWidth,
 				wrappingIndent: options.get(EditorOption.wrappingIndent),
 			}));
 		this.coordinatesConverter = this.lines.createCoordinatesConverter();
@@ -116,7 +116,7 @@ export class ViewModel extends Disposable implements IViewModel {
 			this.lines.setWrappingSettings(
 				configuration.options.get(EditorOption.fontInfo),
 				configuration.options.get(EditorOption.wrappingStrategy),
-				configuration.options.get(EditorOption.wrappingInfo).wrappingColumn,
+				this.getWrappingColumn(),
 				configuration.options.get(EditorOption.wrappingIndent),
 				configuration.options.get(EditorOption.wordBreak),
 			);
@@ -659,6 +659,17 @@ export class ViewModel extends Disposable implements IViewModel {
 		}
 		this.withCollectedCursorEvents(callback);
 		this.previousSelections = this.cursor.getSelections();
+	}
+
+	private getWrappingColumn(): number {
+		const options = this.configuration.options;
+		const wrapping = options.get(EditorOption.wrappingInfo);
+		// Hidden panes have no text width yet. Wrapping them at the minimum
+		// column expands a document into one display row per character, only to
+		// discard that projection when the host assigns its real dimensions.
+		return wrapping.isViewportWrapping && options.get(EditorOption.layoutInfo).contentWidth <= 0
+			? -1
+			: wrapping.wrappingColumn;
 	}
 
 	private recreateCursorConfiguration(): void {

@@ -74,7 +74,7 @@ fn collaboration_authorities_reject_invalid_document_and_transaction_envelopes()
 
 #[test]
 fn collaboration_accepts_typed_v2_snapshots_and_rejects_invalid_kinds() {
-    for document_type in ["general", "academic"] {
+    for document_type in ["general", "academy"] {
         let mut rooms = InMemoryDocumentCollaborationRooms::default();
         let mut envelope: serde_json::Value = serde_json::from_str(&document("initial")).unwrap();
         envelope["version"] = 2.into();
@@ -103,7 +103,7 @@ fn collaboration_accepts_typed_v2_snapshots_and_rejects_invalid_kinds() {
     envelope["version"] = 2.into();
     assert!(crate::room::validate_document(&envelope.to_string()).is_err());
     envelope["version"] = 1.into();
-    envelope["documentType"] = "academic".into();
+    envelope["documentType"] = "academy".into();
     assert!(crate::room::validate_document(&envelope.to_string()).is_err());
 }
 

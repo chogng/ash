@@ -1,10 +1,5 @@
-.ash-sessions-activitybar {
-	background: var(--ash-titleBar-background);
-}
-
 .ash-sessions-activity-content {
-	/* The navigation content moves into sidebar hosts without its Part root. */
-	--ash-sessions-activity-bar-icon-size: 24px;
+	--ash-sessions-activity-bar-icon-size: var(--ash-spacing-size160);
 	display: flex;
 	min-height: 0;
 	flex-direction: column;
@@ -13,7 +8,6 @@
 	padding: var(--ash-spacing-size80) 0;
 }
 
-.ash-sessions-activity-content.compact,
 .ash-sessions-activity-content.horizontal {
 	--ash-sessions-activity-bar-icon-size: 16px;
 }
@@ -42,11 +36,6 @@
 	flex-direction: row;
 }
 
-.ash-sessions-activity-content.compact .ash-sessions-activity-top,
-.ash-sessions-activity-content.compact .ash-sessions-activity-bottom {
-	gap: var(--ash-spacing-size40);
-}
-
 .ash-sessions-activity-item {
 	/* Sessions deliberately keeps 36px targets in default vertical navigation.
 	 * Its hover, selection background and radius remain independent of Workbench. */
@@ -61,14 +50,9 @@
 	background: transparent;
 }
 
-.ash-sessions-activity-content.compact .ash-sessions-activity-item {
-	width: var(--ash-spacing-size280);
-	height: var(--ash-spacing-size280);
-	border-radius: var(--ash-cornerRadius-medium);
-}
-
 .ash-sessions-activity-content.horizontal .ash-sessions-activity-item {
 	width: var(--ash-spacing-size240);
+	min-width: var(--ash-spacing-size240);
 	height: var(--ash-spacing-size240);
 	min-height: var(--ash-spacing-size240);
 }
@@ -82,6 +66,7 @@
 .ash-sessions-activity-item .ash-icon {
 	width: var(--ash-sessions-activity-bar-icon-size);
 	height: var(--ash-sessions-activity-bar-icon-size);
+	font-size: var(--ash-sessions-activity-bar-icon-size);
 }
 
 .ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
@@ -96,6 +81,36 @@
 	gap: var(--ash-spacing-size80);
 }
 
-.ash-sessions-activity-content.compact .ash-sessions-navigation {
+.ash-sessions-activity-content.labeled {
+	align-items: stretch;
+	padding: var(--ash-spacing-size80);
+}
+
+.ash-sessions-activity-content.labeled .ash-sessions-activity-top,
+.ash-sessions-activity-content.labeled .ash-sessions-navigation,
+.ash-sessions-activity-content.labeled .ash-action-view-item {
+	min-width: 0;
+	width: 100%;
+}
+
+.ash-sessions-activity-content.labeled .ash-sessions-navigation {
 	gap: var(--ash-spacing-size40);
+}
+
+.ash-sessions-activity-bottom.labeled {
+	--ash-sessions-activity-bar-icon-size: var(--ash-spacing-size160);
+	padding: var(--ash-spacing-size80);
+}
+
+.ash-sessions-activity-content.labeled .ash-sessions-activity-item,
+.ash-sessions-activity-bottom.labeled .ash-sessions-activity-item {
+	display: flex;
+	width: 100%;
+	justify-content: flex-start;
+	padding: 0 var(--ash-spacing-size120);
+	font-size: var(--ash-fontSize-body1);
+}
+
+.ash-sessions-activity-item:not(.selected):not(:disabled):hover {
+	background: var(--ash-list-hoverBackground);
 }

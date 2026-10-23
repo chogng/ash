@@ -311,6 +311,7 @@ function testView(
 }
 
 class TestView implements IView {
+	public getProgressIndicator(): undefined { return undefined; }
 	private visible = true;
 	public get paneTitle(): string { return this.id; }
 	public hasFocus(): boolean { return false; }

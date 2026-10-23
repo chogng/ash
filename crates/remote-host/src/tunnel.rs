@@ -198,7 +198,7 @@ fn spawn_remote_tunnel(
     send: impl Fn(RemoteTunnelEvent) + Send + 'static,
 ) -> Result<RemoteTunnelProcess, String> {
     let tunnel_id = NEXT_TUNNEL_ID
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
             current.checked_add(1)
         })
         .map(RemoteTunnelId::new)

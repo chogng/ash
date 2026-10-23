@@ -21,6 +21,29 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CiWorkflowTests(unittest.TestCase):
+    def test_component_fixture_sources_select_the_blocking_screenshot_workflow(
+        self,
+    ) -> None:
+        for path in (
+            "src/ash/base/browser/ui/selectbox/selectbox.css",
+            "test/componentFixtures/blocks-ci-screenshots.md",
+            "test/componentFixtures/component-explorer-diff.json",
+            "build/lib/screenshotBlocksCi.ts",
+            ".github/workflows/component-fixtures.yml",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(
+                    ci_workflows.select([path], self.policy)["component-fixtures"]
+                )
+        workflow = (ROOT / ".github/workflows/component-fixtures.yml").read_text()
+        self.assertIn("pnpm test:component-fixtures:prepared", workflow)
+        self.assertIn("pnpm test:component-fixtures:screenshots:prepared", workflow)
+        self.assertIn("pnpm test:component-fixtures:compare:prepared", workflow)
+        self.assertIn("node build/lib/screenshotBlocksCi.ts", workflow)
+        self.assertIn("actions/upload-artifact@", workflow)
+        self.assertNotIn("continue-on-error", workflow)
+        self.assertNotIn("contents: write", workflow)
+
     def test_formatter_changes_select_their_behavior_test_owners(self) -> None:
         for path in (
             "build/format.ts",
@@ -28,6 +51,9 @@ class CiWorkflowTests(unittest.TestCase):
             ".prettierignore",
             ".prettierrc.toml",
             ".editorconfig",
+            ".gitignore",
+            ".vscode/settings.json",
+            ".vscode/extensions.json",
             "package.json",
             "pnpm-lock.yaml",
             "pnpm-workspace.yaml",
@@ -461,6 +487,7 @@ class CiWorkflowTests(unittest.TestCase):
             "cli/tests/stdio.rs",
             "cli/tests/support/ssh.rs",
             "crates/app-server-client/src/session_stdio.rs",
+            "crates/app-server-client-tests/src/session_tests.rs",
             "crates/remote-connections/src/ssh.rs",
             ".github/workflows/rust-warnings.yml",
         ):
@@ -481,6 +508,9 @@ class CiWorkflowTests(unittest.TestCase):
         self.assertIn("ASH_RG_PATH={ripgrep}", lifecycle)
         self.assertIn("-p ash-cli --test stdio --profile ci-test --locked", lifecycle)
         self.assertIn("-p ash-app-server-client -p ash-remote-connections", lifecycle)
+        self.assertIn(
+            "-p ash-app-server-client-tests --lib --profile ci-test --locked", lifecycle
+        )
         self.assertIn("--lib --profile ci-test --locked", lifecycle)
         stdio_run = lifecycle.split(
             "- name: Test real stdio, reconnect and OpenSSH process cleanup", 1

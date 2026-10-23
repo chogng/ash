@@ -51,7 +51,7 @@ export async function expectTabActionCentered(item: Locator): Promise<void> {
 	const geometry = await item.evaluate(element => {
 		const tab = element.getBoundingClientRect();
 		const button = element.querySelector('.ash-tab-primary-action button')!.getBoundingClientRect();
-		const icon = element.querySelector('.ash-tab-primary-action button svg')!.getBoundingClientRect();
+		const icon = element.querySelector('.ash-tab-primary-action button .ash-icon')!.getBoundingClientRect();
 		return {
 			buttonOffsetY: button.top + button.height / 2 - tab.top - tab.height / 2,
 			iconOffsetX: icon.left + icon.width / 2 - button.left - button.width / 2,

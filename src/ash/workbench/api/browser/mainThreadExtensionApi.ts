@@ -1,3 +1,4 @@
+import { MainThreadImageEditors } from './mainThreadImageEditors.js';
 import { MainThreadTreeViews } from './mainThreadTreeViews.js';
 import { IViewsService } from '../../services/views/common/viewsService.js';
 import { canLog, isLogLevel, log, LogLevel } from '../../../platform/log/common/log.js';
@@ -130,6 +131,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly outputLevelBindings = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly namedOutputCursors = new Map<string, ExtensionNamedOutputCursor>();
 	private readonly customEditors: MainThreadCustomEditors;
+	private imageEditors: MainThreadImageEditors | undefined;
 	private readonly documents: MainThreadDocuments;
 	private readonly diagnostics: MainThreadDiagnostics;
 	private readonly statusbar: MainThreadStatusBar;
@@ -215,7 +217,9 @@ export class MainThreadExtensionApi extends Disposable {
 			case 'scmUpdate': this.scmApi.set(source, operation.registrationId, operation.revision, operation.providers); return { result: 'done' };
 			case 'backendRequest': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, operation.method, operation.params, 0, signal, operation.progress) };
 			case 'backendState': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, undefined, {}, operation.after, signal, undefined, operation.waitForChange === true) };
-			case 'editorOperation': return { result: 'value', value: (this.treeViews?.handleChange(operation.payload, source) || this.handleOutput(source, operation.payload)) ? null : await (this.editorsApi ??= this._register(this.instantiation.createInstance(MainThreadEditors))).handle(operation.payload, signal, source) };
+			case 'editorOperation':
+				if (operation.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload) && 'method' in operation.payload && operation.payload.method === 'showImageEditor') { await (this.imageEditors ??= this._register(this.instantiation.createInstance(MainThreadImageEditors, this.invocationTimeoutMillis))).show(operation.payload, signal, source); return { result: 'value', value: null }; }
+				return { result: 'value', value: (this.treeViews?.handleChange(operation.payload, source) || this.handleOutput(source, operation.payload)) ? null : await (this.editorsApi ??= this._register(this.instantiation.createInstance(MainThreadEditors))).handle(operation.payload, signal, source) };
 			case 'addDebugBreakpoints':
 			case 'removeDebugBreakpoints':
 			case 'getDebugProtocolBreakpoint':
@@ -375,6 +379,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.updateOutputLevels(snapshot);
 		this.speechApi.update(snapshot);
 		this.customEditors.update(snapshot);
+		if (this.imageEditors || snapshot.extensions.some(owner => owner.registrations.some(registration => registration.kind === 'dataChannel' && registration.channelId === 'image.editor.v1'))) (this.imageEditors ??= this._register(this.instantiation.createInstance(MainThreadImageEditors, this.invocationTimeoutMillis))).update(snapshot);
 		this.diagnostics.update(snapshot);
 		this.documents.update(snapshot);
 		this.configurationApi.update(snapshot);
@@ -383,11 +388,11 @@ export class MainThreadExtensionApi extends Disposable {
 		this.debugApi.update(snapshot);
 		this.statusbar.update(snapshot);
 		this.scmApi.update(snapshot);
-		if (this.treeViews || snapshot.extensions.some(runtime => runtime.registrations.some(registration => registration.kind === 'treeDataProvider'))) {
-			(this.treeViews ??= this._register(this.instantiation.createInstance(MainThreadTreeViews, this.invocationTimeoutMillis))).update(snapshot);
-		}
+		const treeIssues = this.treeViews || snapshot.extensions.some(runtime => runtime.registrations.some(registration => registration.kind === 'treeDataProvider'))
+			? (this.treeViews ??= this._register(this.instantiation.createInstance(MainThreadTreeViews, this.invocationTimeoutMillis))).update(snapshot)
+			: [];
 		this.editorsApi?.updateSources(snapshot);
-		return this.activeContributions?.issues ?? [];
+		return [...this.activeContributions?.issues ?? [], ...treeIssues];
 	}
 
 	public clear(): void {
@@ -398,6 +403,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.contributionIdentity = undefined;
 		this.speechApi.clear();
 		this.customEditors.clear();
+		this.imageEditors?.clear();
 		this.documents.clear();
 		this.configurationApi.clear();
 		this.workspaceApi.clear();

@@ -6,7 +6,7 @@ mod memories;
 mod memory;
 pub use memory::MemoryRecording;
 
-#[cfg(any(test, feature = "in-process"))]
+#[cfg(feature = "in-process")]
 mod in_process;
 mod notification;
 mod session;
@@ -53,6 +53,7 @@ use ash_app_server_protocol::protocol::connectors::ConnectorOAuthCancelParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthRefreshParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthStartParams;
 use ash_app_server_protocol::protocol::connectors::ConnectorOAuthStartResult;
+use ash_app_server_protocol::protocol::connectors::ConnectorSetEnabledParams;
 use ash_app_server_protocol::protocol::dictation::DictationBackend;
 use ash_app_server_protocol::protocol::dictation::DictationModelParams;
 use ash_app_server_protocol::protocol::dictation::DictationModelStartParams;
@@ -180,11 +181,11 @@ use std::sync::{Arc, OnceLock};
 use zeroize::Zeroize;
 use zeroize::Zeroizing;
 
-#[cfg(any(test, feature = "in-process"))]
+#[cfg(feature = "in-process")]
 pub use ash_app_server::LocalConnectorRuntime;
-#[cfg(any(test, feature = "in-process"))]
+#[cfg(feature = "in-process")]
 pub use ash_app_server::SessionStateMode;
-#[cfg(any(test, feature = "in-process"))]
+#[cfg(feature = "in-process")]
 pub use in_process::{
     InProcessAppServer, InProcessClientOptions, InProcessTransport, open_in_process_app_server,
     start_in_process_client,
@@ -1056,6 +1057,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: ConnectorDisconnectParams,
     ) -> Result<ConnectorDisconnectResultDto, ClientError> {
         self.call(ClientMethod::ConnectorOAuthRevoke, params)
+    }
+
+    pub fn set_connector_enabled(
+        &mut self,
+        params: ConnectorSetEnabledParams,
+    ) -> Result<ConnectorCommandResultDto, ClientError> {
+        self.call(ClientMethod::ConnectorSetEnabled, params)
     }
 
     pub fn disconnect_connector(

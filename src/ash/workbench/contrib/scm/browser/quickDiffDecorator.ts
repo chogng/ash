@@ -2,7 +2,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { themeColorFromId } from '../../../../base/common/themables.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import { LineDiffKind, type LineDiffRow } from '../../../../editor/common/diff/lineDiff.js';
+import { LineDiffKind, LineDiffRows, type LineDiffRow } from '../../../../editor/common/diff/lineDiff.js';
 import { type ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { type IEditorDecorationsCollection } from '../../../../editor/common/editorCommon.js';
 
@@ -64,10 +64,8 @@ export class QuickDiffDecorator extends Disposable {
 		}
 		const byLine = new Map<number, QuickDiffDecorationMetadata>();
 		for (const comparison of comparisons) {
-			const rows = comparison.model.diff?.rows ?? [];
-			for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-				const row = rows[rowIndex]!;
-				if (row.kind === LineDiffKind.Unchanged) continue;
+			const rows = comparison.model.diff?.rows ?? LineDiffRows.empty;
+			for (const [rowIndex, row] of rows.changedEntries()) {
 				const lineIndex = row.modifiedLineIndex ?? deletionAnchor(rows, rowIndex, this.model.getLineCount());
 				const kind = decorationKindForRow(row);
 				const current = byLine.get(lineIndex);
@@ -85,13 +83,13 @@ export class QuickDiffDecorator extends Disposable {
 	}
 }
 
-function deletionAnchor(rows: readonly LineDiffRow[], rowIndex: number, lineCount: number): number {
+function deletionAnchor(rows: LineDiffRows, rowIndex: number, lineCount: number): number {
 	for (let index = rowIndex + 1; index < rows.length; index += 1) {
-		const lineIndex = rows[index]?.modifiedLineIndex;
+		const lineIndex = rows.get(index)?.modifiedLineIndex;
 		if (lineIndex !== undefined) return lineIndex;
 	}
 	for (let index = rowIndex - 1; index >= 0; index -= 1) {
-		const lineIndex = rows[index]?.modifiedLineIndex;
+		const lineIndex = rows.get(index)?.modifiedLineIndex;
 		if (lineIndex !== undefined) return lineIndex;
 	}
 	return Math.max(0, lineCount - 1);

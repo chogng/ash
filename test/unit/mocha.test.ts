@@ -87,6 +87,25 @@ test('a filter may select a test in only one of multiple isolated files', () => 
 	assert.match(result.output, /1 tests executed across 2 files; 0 failed files/);
 });
 
+test('default discovery and source filters include extension-owned units alongside host and architecture units', () => {
+	const paths = [
+		'src/ash/base/test/common/discovery.test.js',
+		'test/architecture/discovery.test.js',
+		'extensions/fixture/test/common/discovery.test.js',
+	];
+	for (const path of paths) {
+		const target = join(outputDirectory, path);
+		mkdirSync(dirname(target), { recursive: true });
+		writeFileSync(target, `import { test } from 'mocha'; test('owner discovery', () => {});`);
+	}
+	const discovered = run([]);
+	assert.equal(discovered.status, 0, discovered.output);
+	assert.match(discovered.output, /3 tests executed across 3 files; 0 failed files/);
+	const selected = run(['--run', paths[2].replace(/\.js$/u, '.ts')]);
+	assert.equal(selected.status, 0, selected.output);
+	assert.match(selected.output, /1 tests executed across 1 files; 0 failed files/);
+});
+
 test('invalid unit filters fail before copying outputs or starting the selected file', () => {
 	for (const args of [['--grep', ''], ['--grep', '   '], ['--grepp', 'selected'], ['--', '--grep', 'selected'], ['--workers', '0'], ['--workers', '-1'], ['--workers', '1.5'], ['--workers', 'NaN']]) {
 		const result = run(['--run', first, ...args], 'test/unit/run.ts', join(directory, 'missing-compiler-output'));

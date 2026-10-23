@@ -66,6 +66,7 @@ export interface ExtensionManifest {
 	readonly version: string;
 	readonly displayName: string;
 	readonly contributes: {
+		readonly imageEditors: readonly { readonly id: string; readonly displayName: string; readonly default?: boolean; readonly accessibilityHelp: string; }[];
 		readonly breakpoints: readonly { readonly language: string; readonly when?: string; }[];
 		readonly debugVisualizers: readonly { readonly id: string; readonly title: string; readonly command: string; readonly type?: string; }[];
 		readonly speechProviders: readonly { readonly name: string; readonly description?: string; }[];
@@ -136,6 +137,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		version,
 		displayName,
 		contributes: Object.freeze({
+			imageEditors: parseImageEditors(contributes.imageEditors),
 			speechProviders: parseSpeechProviders(contributes.speechProviders),
 			debugVisualizers: parseDebugVisualizers(contributes.debugVisualizers),
 			breakpoints: parseBreakpointContributions(contributes.breakpoints),
@@ -670,5 +672,19 @@ function parseBreakpointContributions(value: unknown): ExtensionManifest['contri
 		if (Object.keys(item).some(key => key !== 'language' && key !== 'when')) throw new TypeError(localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'));
 		if (item.when !== undefined && (typeof item.when !== 'string' || !ContextKeyExpr.deserialize(item.when))) throw new TypeError(localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'));
 		return Object.freeze({ language: languageId(item.language, 'contributes.breakpoints.language'), ...(item.when === undefined ? {} : { when: requiredString(item.when, 'contributes.breakpoints.when', 1024) }) });
+	}));
+}
+
+function parseImageEditors(value: unknown): ExtensionManifest['contributes']['imageEditors'] {
+	if (value === undefined) return Object.freeze([]);
+	if (!Array.isArray(value) || value.length > 16) throw new TypeError('Invalid image editor declarations');
+	const ids = new Set<string>();
+	return Object.freeze(value.map(item => {
+		const entry = record(item, 'image editor');
+		const id = requiredString(entry.id, 'image editor id', 128);
+		if (ids.has(id) || entry.default !== undefined && typeof entry.default !== 'boolean') throw new TypeError('Invalid image editor declaration');
+		ids.add(id);
+		if (entry.accessibilityHelp !== undefined && (typeof entry.accessibilityHelp !== 'string' || entry.accessibilityHelp.length > 16384)) throw new TypeError('Invalid image editor accessibility help');
+		return Object.freeze({ accessibilityHelp: entry.accessibilityHelp as string ?? '', id, displayName: requiredString(entry.displayName, 'image editor name', 256), ...(entry.default === undefined ? {} : { default: entry.default as boolean }) });
 	}));
 }

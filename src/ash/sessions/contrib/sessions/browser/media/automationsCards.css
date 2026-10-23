@@ -89,11 +89,11 @@
 }
 .ash-sessions-window .ash-automation-filters .ash-button {
 	color: var(--ash-description-foreground);
-	border-radius: var(--ash-cornerRadius-large);
 }
+
 .ash-sessions-window .ash-automation-filters .ash-button.checked {
 	color: var(--ash-foreground);
-	background: var(--ash-list-inactiveSelectionBackground);
+	background: var(--ash-sessions-selectionBackground);
 	border-color: var(--ash-contrastBorder, transparent);
 }
 .ash-sessions-window .ash-automation-search {

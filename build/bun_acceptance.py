@@ -154,7 +154,9 @@ def checkers(directory: Path) -> dict[str, str]:
     if resolver["exitCode"]:
         raise RuntimeError("Cannot resolve TS7")
     return {
-        "bun": str(ROOT / "node_modules/bun/bin/bun.exe"),
+        "bun": str(
+            ROOT / "node_modules/bun" / ("bun.exe" if os.name == "nt" else "bun")
+        ),
         "ts7": (directory / resolver["log"]).read_text(encoding="utf-8").strip(),
     }
 
@@ -247,7 +249,7 @@ def benchmark(directory: Path) -> None:
         )
     package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
     expected = {
-        "bun": package["devDependencies"]["bun"],
+        "bun": package["devDependencies"]["bun"].removeprefix("runtime:"),
         "ts7": package["devDependencies"]["@ash/typescript-compiler"].rsplit("@", 1)[1],
     }
     if any(

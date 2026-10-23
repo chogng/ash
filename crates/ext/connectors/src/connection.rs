@@ -51,6 +51,13 @@ impl ConnectorAccount {
         &self.credential_reference
     }
 
+    pub(crate) fn with_generation(&self, generation: ConnectorConnectionGeneration) -> Self {
+        Self {
+            connection_generation: generation,
+            ..self.clone()
+        }
+    }
+
     pub fn connection_generation(&self) -> ConnectorConnectionGeneration {
         self.connection_generation
     }
@@ -76,6 +83,7 @@ pub enum ConnectorConnectionState {
 pub struct ConnectorConnection {
     generation: ConnectorConnectionGeneration,
     state: ConnectorConnectionState,
+    enabled: bool,
 }
 
 impl ConnectorConnection {
@@ -83,11 +91,17 @@ impl ConnectorConnection {
         Self {
             generation: ConnectorConnectionGeneration::INITIAL,
             state: ConnectorConnectionState::Disconnected,
+            enabled: false,
         }
     }
 
     pub fn generation(&self) -> ConnectorConnectionGeneration {
         self.generation
+    }
+
+    /// Whether the authorized account may supply runtime capabilities.
+    pub fn enabled(&self) -> bool {
+        self.enabled
     }
 
     pub fn state(&self) -> &ConnectorConnectionState {
@@ -101,6 +115,7 @@ impl ConnectorConnection {
     pub fn restore(
         generation: ConnectorConnectionGeneration,
         state: ConnectorConnectionState,
+        enabled: bool,
     ) -> Result<Self, ConnectorError> {
         match &state {
             ConnectorConnectionState::Disconnected => {}
@@ -123,16 +138,37 @@ impl ConnectorConnection {
                 }
             }
         }
-        Ok(Self { generation, state })
+        Ok(Self {
+            generation,
+            state,
+            enabled,
+        })
     }
 
     pub(crate) fn apply(&self, update: ConnectorConnectionUpdate) -> Result<Self, ConnectorError> {
         match update {
+            ConnectorConnectionUpdate::Enablement {
+                generation,
+                enabled,
+            } => {
+                self.require_newer_generation(generation)?;
+                let ConnectorConnectionState::Connected(account) = &self.state else {
+                    return Err(invalid_transition(
+                        "Connector enablement requires an authorized account",
+                    ));
+                };
+                Ok(Self {
+                    generation,
+                    state: ConnectorConnectionState::Connected(account.with_generation(generation)),
+                    enabled,
+                })
+            }
             ConnectorConnectionUpdate::Begin { generation } => {
                 self.require_newer_generation(generation)?;
                 Ok(Self {
                     generation,
                     state: ConnectorConnectionState::Connecting,
+                    enabled: true,
                 })
             }
             ConnectorConnectionUpdate::Connected { account } => {
@@ -150,6 +186,7 @@ impl ConnectorConnection {
                 Ok(Self {
                     generation: self.generation,
                     state: ConnectorConnectionState::Connected(account),
+                    enabled: true,
                 })
             }
             ConnectorConnectionUpdate::Disconnect { generation } => {
@@ -157,6 +194,7 @@ impl ConnectorConnection {
                 Ok(Self {
                     generation,
                     state: ConnectorConnectionState::Disconnected,
+                    enabled: false,
                 })
             }
             ConnectorConnectionUpdate::Unavailable { generation, reason } => {
@@ -182,6 +220,7 @@ impl ConnectorConnection {
                 Ok(Self {
                     generation,
                     state: ConnectorConnectionState::Unavailable { reason },
+                    enabled: self.enabled,
                 })
             }
             ConnectorConnectionUpdate::DefinitionChanged {
@@ -198,6 +237,7 @@ impl ConnectorConnection {
                         account: account.clone(),
                         previous_definition,
                     },
+                    enabled: self.enabled,
                 })
             }
         }
@@ -224,6 +264,10 @@ impl ConnectorConnection {
 /// advances the catalog generation atomically.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ConnectorConnectionUpdate {
+    Enablement {
+        generation: ConnectorConnectionGeneration,
+        enabled: bool,
+    },
     Begin {
         generation: ConnectorConnectionGeneration,
     },

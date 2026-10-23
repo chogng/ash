@@ -150,6 +150,64 @@ test('old splash geometry is discarded without losing the saved theme colors', (
 	} finally { dom.window.close(); }
 });
 
+test('gradient cache retains only bounded, resolved paint data', () => {
+	const backgroundGradient = { angle: 90, stops: [{ color: '#abcdef', offset: 0 }, { color: '#ffffff', offset: 280 }] };
+	const layoutInfo = { version: 2, width: 1024, height: 768, partBounds: [{ ...drawing, backgroundGradient: { ...backgroundGradient, privateContent: 'discard' } }] };
+	assert.deepEqual(validatePartsSplash({ ...cached, layoutInfo }).layoutInfo!.partBounds[0], { ...drawing, backgroundGradient });
+	for (const gradient of [
+		'linear-gradient(to right, red, blue)',
+		{ ...backgroundGradient, angle: Number.NaN },
+		{ ...backgroundGradient, angle: 360 },
+		{ ...backgroundGradient, stops: [] },
+		{ ...backgroundGradient, stops: Array.from({ length: 33 }, () => backgroundGradient.stops[0]) },
+		{ ...backgroundGradient, stops: [{ color: 'url(secret)', offset: 0 }, backgroundGradient.stops[1]] },
+		{ ...backgroundGradient, stops: [{ color: '#abcdef', offset: Number.POSITIVE_INFINITY }, backgroundGradient.stops[1]] },
+		{ ...backgroundGradient, stops: [{ color: '#abcdef', offset: 65537 }, backgroundGradient.stops[1]] },
+	]) {
+		assert.throws(() => validatePartsSplash({ ...cached, layoutInfo: { ...layoutInfo, partBounds: [{ ...drawing, backgroundGradient: gradient }] } }), /splash gradient/);
+	}
+});
+
+test('startup capture restores the titlebar surface split and its separator, including a collapsed sidebar', async () => {
+	const dom = createDom();
+	try {
+		const ownerDocument = dom.window.document;
+		const root = ownerDocument.getElementById('app')!;
+		const part = ownerDocument.createElement('section');
+		part.className = 'ash-workbench-part';
+		part.style.backgroundColor = '#ffffff';
+		part.getBoundingClientRect = () => ({ left: 0, top: 0, right: 1024, bottom: 36, width: 1024, height: 36 } as DOMRect);
+		root.append(part);
+		using layoutChanged = new Emitter<{ width: number; height: number; }>();
+		using shutdown = new Emitter<IWillShutdownEvent>();
+		using themes = new TestThemeService(createColorTheme({ id: 'splash-gradient', label: 'Test', colorScheme: ColorScheme.Light }));
+		using services = new InstantiationService();
+		const saved: IPartsSplash[] = [];
+		services.registerInstance(IThemeService, themes);
+		services.registerInstance(ILayoutService, { mainContainer: root, onDidLayoutMainContainer: layoutChanged.event } as ILayoutService);
+		services.registerInstance(ILifecycleService, { phase: LifecyclePhase.Restored, when: () => Promise.resolve(), onWillShutdown: shutdown.event } as unknown as ILifecycleService);
+		services.registerInstance(ISplashStorageService, { saveWindowSplash: async splash => { saved.push(validatePartsSplash(JSON.parse(JSON.stringify(splash)))); } });
+		for (const sidebarWidth of [280, 0]) {
+			part.style.backgroundImage = `linear-gradient(to right, rgb(248, 248, 248) 0px ${sidebarWidth - 1}px, rgb(229, 229, 229) ${sidebarWidth - 1}px ${sidebarWidth}px, rgb(255, 255, 255) ${sidebarWidth}px)`;
+			using capture = services.createInstance(PartsSplash);
+			await Promise.resolve();
+			const splash = saved.at(-1)!;
+			assert.deepEqual(splash.layoutInfo!.partBounds[0].backgroundGradient, {
+				angle: 90,
+				stops: [
+					{ color: '#f8f8f8', offset: 0 }, { color: '#f8f8f8', offset: Math.max(0, sidebarWidth - 1) },
+					{ color: '#e5e5e5', offset: Math.max(0, sidebarWidth - 1) }, { color: '#e5e5e5', offset: sidebarWidth },
+					{ color: '#ffffff', offset: sidebarWidth },
+				],
+			});
+			showPartsSplash(ownerDocument, splash);
+			const region = ownerDocument.querySelector<HTMLElement>('#ash-parts-splash > div')!;
+			assert.equal(region.style.backgroundImage, `linear-gradient(90deg, rgb(248, 248, 248) 0px, rgb(248, 248, 248) ${Math.max(0, sidebarWidth - 1)}px, rgb(229, 229, 229) ${Math.max(0, sidebarWidth - 1)}px, rgb(229, 229, 229) ${sidebarWidth}px, rgb(255, 255, 255) ${sidebarWidth}px)`);
+			assert.equal(region.style.backgroundColor, 'rgb(255, 255, 255)');
+		}
+	} finally { dom.window.close(); }
+});
+
 test('capture and startup drawing preserve one-sided borders and independent elliptical corners', async () => {
 	const dom = createDom();
 	try {

@@ -125,7 +125,11 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 				['1_diff', [MultiDiffToggleCollapseUnchangedRegionsCommandId]],
 			],
 		);
-		const { MultiDiffEditorAllCollapsed } = await import('../../browser/multiDiffEditor.js');
+		const { MultiDiffEditorAllCollapsed, MultiDiffEditorHideUnchangedRegions } = await import('../../browser/multiDiffEditor.js');
+		contexts.setContext(MultiDiffEditorHideUnchangedRegions.key, true);
+		assert.equal(menus.getMenuActions(MenuId.EditorTitle)[1]![1][0]!.checked, true);
+		contexts.setContext(MultiDiffEditorHideUnchangedRegions.key, false);
+		assert.equal(menus.getMenuActions(MenuId.EditorTitle)[1]![1][0]!.checked, false);
 		let toggle = menus.getMenuActions(MenuId.EditorTitle)[0]![1][2]!;
 		assert.equal(toggle.checked, false);
 		assert.equal(toggle.tooltip, 'Collapse All Diffs');

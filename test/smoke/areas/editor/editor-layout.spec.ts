@@ -597,11 +597,11 @@ test.describe('welcome brand', () => {
 			await toggle.click();
 		}
 		await expect(auxiliaryBar).toBeVisible();
-		await expect(toggle.locator('svg[data-ash-icon-id="layout-sidebar-right-1"]')).toBeVisible();
+		await expect(toggle.locator('[data-ash-icon-id="layout-sidebar-right-1"]')).toBeVisible();
 		const expanded = await geometry();
 		await toggle.click();
 		await expect(auxiliaryBar).toBeHidden();
-		await expect(toggle.locator('svg[data-ash-icon-id="layout-sidebar-right-off-1"]')).toBeVisible();
+		await expect(toggle.locator('[data-ash-icon-id="layout-sidebar-right-off-1"]')).toBeVisible();
 		const collapsed = await geometry();
 		expect(expanded.editorWidth).toBeLessThan(collapsed.editorWidth);
 		expect(expanded.cardWidth).toBeGreaterThanOrEqual(160);

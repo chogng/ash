@@ -57,13 +57,24 @@ import { IOpenerService } from '../../../platform/opener/common/opener.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IChecksOperationService } from '../../contrib/changes/common/checksOperationService.js';
 import { ChecksOperationService } from '../../contrib/changes/browser/checksOperationService.js';
+import { IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
+import { AccessibilityService } from '../../../platform/accessibility/browser/accessibilityService.js';
+import { AnimatedCounterWidget } from '../../../workbench/browser/animatedCounterWidget.js';
+import { observableValue } from '../../../base/common/observable.js';
+
+test('Animated counters require the host accessibility service before creating DOM', () => {
+	using services = new InstantiationService();
+	const host = document.createElement('div');
+	assert.throws(() => services.createInstance(AnimatedCounterWidget, host, { count: observableValue('count', 1) }), /Unknown service: accessibilityService/);
+	assert.equal(host.childElementCount, 0);
+});
 
 for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and immutable review across refresh and ownership changes (${locale})`, async () => {
 	setNlsMessages(locale, productLanguagePackCatalogs.find(catalog => catalog.locale === locale)!.bundles);
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://changes.test' });
 	try {
 		using services = new InstantiationService();
-		registerChecksServices(services);
+		registerChecksServices(services, browser.window.document);
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 		using changed = new Emitter<void>();
@@ -128,7 +139,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		await old.complete({ changeSets: [] });
 		await settle();
 		assert.match(view.getAccessibleContent(), /main.ts: \+1 −1/u);
-		assert.equal(view.element.querySelector('.ash-sessions-changes-summary')!.textContent, locale === 'zh-CN' ? '1 项文件更改 · +1 −1' : '1 file changes · +1 −1');
+		assert.equal(view.element.querySelector('.ash-sessions-changes-summary')!.textContent, locale === 'zh-CN' ? '1 个文件 +1 −1' : '1 file +1 −1');
 		const accessibility = AccessibleViewRegistry.getImplementations().filter(provider => provider.name.startsWith('sessionsChanges.'));
 		for (const implementation of accessibility) {
 			using provider = implementation.getProvider(services)!;
@@ -230,7 +241,12 @@ function selected(id: string): SessionsViewSelection {
 	return { kind: 'session', active: { threadId: `${id}-thread`, session: { sessionId: id, title: id, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: `${id}-thread`, status: 'active', origin: { type: 'root' } }] } } };
 }
 
-function registerChecksServices(services: InstantiationService): void {
+function registerChecksServices(services: InstantiationService, document: Document): void {
+	services.registerSingleton(IAccessibilityService, accessor => new AccessibilityService({
+		root: document.body,
+		configurationService: accessor.get(IConfigurationService),
+		contextKeyService: accessor.get(IContextKeyService),
+	}));
 	services.registerSingleton(IChecksOperationService, () => services.createInstance(ChecksOperationService));
 	services.registerSingleton(ISessionChangesService, () => services.createInstance(SessionChangesService));
 	services.registerInstance(ISessionsManagementService, {
@@ -307,7 +323,7 @@ suite('Changes visibility lifecycle', () => {
 		const browser = new JSDOM('<!doctype html><body></body>');
 		using browserOwner = toDisposable(() => browser.window.close());
 		using services = new InstantiationService();
-		registerChecksServices(services);
+		registerChecksServices(services, browser.window.document);
 		using changed = new Emitter<void>();
 		using ledgerChanged = new Emitter<{ sessionId: string; threadId: string; }>();
 		using configuration = new WorkbenchConfigurationService();
@@ -361,7 +377,7 @@ suite('Changes visibility lifecycle', () => {
 		const browser = new JSDOM('<!doctype html><body></body>');
 		using browserOwner = toDisposable(() => browser.window.close());
 		using services = new InstantiationService();
-		registerChecksServices(services);
+		registerChecksServices(services, browser.window.document);
 		using changed = new Emitter<void>();
 		using ready = new Emitter<void>();
 		using ledgerChanged = new Emitter<{ sessionId: string; threadId: string; }>();

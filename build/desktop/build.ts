@@ -5,8 +5,8 @@ import { prepareGenerated } from '../prepare.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const sourceRoot = resolve(repositoryRoot, '.');
-// Use the pinned package executable on every platform, including Windows without a shell.
-const checker = resolve(sourceRoot, 'node_modules/bun/bin/bun.exe');
+// Run the pinned native runtime on every platform, including Windows without a shell.
+const checker = resolve(sourceRoot, 'node_modules/bun', process.platform === 'win32' ? 'bun.exe' : 'bun');
 const bundler = resolve(repositoryRoot, 'build/node_modules/vite/bin/vite.js');
 const config = resolve(import.meta.dirname, 'vite/vite.config.ts');
 const [command = 'all', ...extra] = process.argv.slice(2);

@@ -1,5 +1,7 @@
 import './media/teamsPanel.css';
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { h } from '../../../../base/browser/dom.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import type { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
@@ -246,13 +248,12 @@ export class TeamsPanel extends Disposable {
 	}
 
 	private button(parent: HTMLElement, label: string, action: () => void | Promise<void>): HTMLButtonElement {
-		const button = h(parent.ownerDocument, 'button');
-		button.type = 'button';
-		button.textContent = label;
-		button.setAttribute('aria-label', label);
-		parent.append(button);
-		this.renderListeners.add(addDisposableListener(button, 'click', () => { void action(); }));
-		return button;
+		return this.renderListeners.add(new Button(parent, {
+			...defaultButtonStyles,
+			label,
+			presentation: 'secondary',
+			onClick: () => { void action(); },
+		})).domNode;
 	}
 
 	private paragraph(parent: HTMLElement, text: string): void {

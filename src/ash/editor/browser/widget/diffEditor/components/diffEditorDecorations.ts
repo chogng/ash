@@ -1,6 +1,6 @@
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Range } from '../../../../common/core/range.js';
-import { LineDiffKind, type LineDiffRow } from '../../../../common/diff/lineDiff.js';
+import { type LineDiffRows, type LineDiffRow } from '../../../../common/diff/lineDiff.js';
 import { type IEditorDecorationsCollection } from '../../../../common/editorCommon.js';
 import { type IModelDeltaDecoration, type IModelDecorationOptions } from '../../../../common/model.js';
 import { CodeEditorWidget } from '../../codeEditor/codeEditorWidget.js';
@@ -20,13 +20,10 @@ export class DiffEditorDecorations extends Disposable {
 		}));
 	}
 
-	public update(rows: readonly LineDiffRow[], showInlineChanges: boolean, renderIndicators: boolean): void {
+	public update(rows: LineDiffRows, showInlineChanges: boolean, renderIndicators: boolean): void {
 		const original: IModelDeltaDecoration[] = [];
 		const modified: IModelDeltaDecoration[] = [];
-		for (const row of rows) {
-			if (row.kind === LineDiffKind.Unchanged) {
-				continue;
-			}
+		for (const [, row] of rows.changedEntries()) {
 			if (row.originalLineIndex !== undefined) {
 				original.push({
 					range: new Range(row.originalLineIndex + 1, 1, row.originalLineIndex + 1, 1),

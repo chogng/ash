@@ -1,6 +1,6 @@
 import { MainThreadLocalization } from '../../../api/browser/mainThreadLocalization.js';
 import type { ExtensionHostReconcileMode, IExtensionHostApi, ExtensionHostClientHandler, ExtensionHostFleetSnapshot, ExtensionHostRuntime, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
-import { normalizeExtensionHostInvocationRequest, normalizeExtensionHostPayload, normalizeExtensionHostSnapshot } from '../../../../platform/agentHost/browser/extensionHostProtocol.js';
+import { normalizeExtensionHostInvocationRequest, normalizeExtensionHostPayload, normalizeExtensionHostSnapshot, normalizeExtensionHostRegistrations } from '../../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { decodeAppServerServerRequestParams } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { Disposable, DisposableMap, combinedDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -196,6 +196,21 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 					return result;
 				});
 				this.workers.set(extension.id, worker);
+				worker.onDidChangeRegistrations(() => {
+					if (this.workers.get(extension.id) !== worker) return;
+					const current = this.snapshot.extensions.find(runtime => runtime.id === extension.id && runtime.incarnation === generation);
+					// Activation publishes its latest transport snapshot below, including
+					// changes that arrive while a sibling package is still starting.
+					if (!current) return;
+					const registrations = worker!.takeRegistrationSnapshot();
+					if (!registrations) return;
+					try {
+						const updated = Object.freeze({ ...current, registrations });
+						assertRemoteResolverOwnership(updated, false);
+						this.snapshot = { generation: this.snapshot.generation + 1, extensions: this.snapshot.extensions.map(runtime => runtime === current ? updated : runtime) };
+						this.changes.fire(++this.snapshotGeneration);
+					} catch (error) { this.retire(extension.id, generation, error as Error); }
+				});
 				if (!this.clientHandler) throw new Error('No extension client handler is registered');
 				const initialized = await this.clientHandler({ operation: 'readInitialization' }, new AbortController().signal, { extensionId: extension.id, activationGeneration: generation, incarnation: generation });
 				if (initialized.result !== 'initialization') throw new Error('Invalid extension initialization');
@@ -215,8 +230,13 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 		// Background SCM/status-bar publication can advance a retained runtime while another
 		// package activates. Carry its latest acknowledged registrations into the complete fleet.
 		this.snapshot = Object.freeze({
-			generation: this.snapshot.generation + 1, extensions: Object.freeze(runtimes.map(runtime =>
-				this.snapshot.extensions.find(current => current.id === runtime.id && current.activationGeneration === runtime.activationGeneration) ?? runtime))
+			generation: this.snapshot.generation + 1, extensions: Object.freeze(runtimes.map(runtime => {
+				const current = this.snapshot.extensions.find(candidate => candidate.id === runtime.id && candidate.activationGeneration === runtime.activationGeneration) ?? runtime;
+				const registrations = this.workers.get(runtime.id)?.takeRegistrationSnapshot();
+				const updated = registrations ? Object.freeze({ ...current, registrations }) : current;
+				assertRemoteResolverOwnership(updated, false);
+				return updated;
+			}))
 		});
 		this.snapshotGeneration++;
 		await this.refreshRemote(mode);
@@ -244,6 +264,17 @@ type WorkerRequest = Omit<Extract<BrowserExtensionHostRequest, { type: 'activate
 class BrowserExtensionWorker extends Disposable {
 	private readonly failures = this._register(new Emitter<Error>());
 	public readonly onDidFail = this.failures.event;
+	private readonly registrationChanges = this._register(new Emitter<void>());
+	readonly onDidChangeRegistrations = this.registrationChanges.event;
+	private registrationRevision = 0;
+	private registrationSnapshot: ExtensionHostRuntime['registrations'] | undefined;
+	// Buffer only until the fleet consumes the message. Keeping a second snapshot
+	// would later overwrite acknowledged SCM/status-bar revisions during refresh.
+	takeRegistrationSnapshot(): ExtensionHostRuntime['registrations'] | undefined {
+		const snapshot = this.registrationSnapshot;
+		this.registrationSnapshot = undefined;
+		return snapshot;
+	}
 	public readonly entryPoint: string;
 	private readonly worker: Worker;
 	private nextId = 1;
@@ -265,6 +296,19 @@ class BrowserExtensionWorker extends Disposable {
 		}));
 		const onMessage = (event: MessageEvent): void => {
 			const message = event.data;
+			if (message?.type === 'registrationsChanged') {
+				try {
+					const payload = normalizeExtensionHostPayload(message.snapshot);
+					if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new TypeError('Invalid browser registration snapshot');
+					const value = payload as Readonly<Record<string, JsonValue>>;
+					if (Object.keys(value).sort().join(',') !== 'registrations,revision' || !Number.isSafeInteger(value.revision) || (value.revision as number) <= 0 || !Array.isArray(value.registrations)) throw new TypeError('Invalid browser registration snapshot');
+					if ((value.revision as number) <= this.registrationRevision) return;
+					this.registrationSnapshot = normalizeExtensionHostRegistrations(value.registrations);
+					this.registrationRevision = value.revision as number;
+					this.registrationChanges.fire();
+				} catch (error) { this.fail(error as Error); }
+				return;
+			}
 			if (message?.type === 'webviewResource') {
 				if (typeof message.url !== 'string' || !URL.canParse(message.url) || !message.url.startsWith('blob:') || new URL(message.url).origin !== new URL(this.entryPoint).origin) {
 					this.fail(new TypeError('Invalid extension webview resource URL'));

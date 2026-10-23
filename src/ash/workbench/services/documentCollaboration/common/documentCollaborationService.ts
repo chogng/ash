@@ -1,5 +1,5 @@
 import type { DocumentCodec } from '../../documentEditor/common/documentCodec.js';
-import type { ChannelReference } from '../../../../platform/collaboration/common/channelService.js';
+import type { ChannelReference } from '../../../../platform/collab/common/channelService.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { DocumentNode } from '../../documentEditor/common/documentCodec.js';
 import type { Event } from '../../../../base/common/event.js';

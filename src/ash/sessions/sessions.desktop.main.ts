@@ -1,5 +1,5 @@
 import './contrib/providers/remoteAgentHost/browser/remoteAgentHost.contribution.js';
-import '../workbench/contrib/screenshot/electron-browser/screenshot.contribution.js';
+import '../workbench/services/imageEditor/electron-browser/nativeImageEditorService.js';
 import '../workbench/contrib/relauncher/browser/relauncher.contribution.js';
 import '../workbench/contrib/splash/electron-browser/splash.contribution.js';
 import { ElectronElevatedFileService } from '../workbench/services/files/electron-browser/elevatedFileService.js';
@@ -14,8 +14,10 @@ import './contrib/chatgptweb/browser/chatGPTWeb.contribution.js';
 import './sessions.common.main.js';
 import '../workbench/contrib/chat/electron-browser/actions/voiceChatActions.js';
 import { AgentsWindowInvitationContribution } from '../workbench/contrib/chat/electron-browser/agentSessions/agentsWindowInvitation.js';
+import { ChatScreenshotContribution } from '../workbench/contrib/chat/electron-browser/chatScreenshot.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../workbench/common/contributions.js';
 import { IInstantiationService } from '../platform/instantiation/common/instantiation.js';
+registerWorkbenchContribution('workbench.contrib.chatScreenshot', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(ChatScreenshotContribution));
 import '../workbench/contrib/terminal/electron-browser/terminal.contribution.js';
 import '../workbench/services/clipboard/electron-browser/clipboardService.js';
 import '../workbench/services/menubar/electron-browser/menubarService.js';

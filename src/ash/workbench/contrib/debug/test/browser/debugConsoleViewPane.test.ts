@@ -70,7 +70,7 @@ suite('Debug Console view input and filtering', () => {
 		await fixture.until(() => /42/.test(fixture.output.textContent!));
 		assert.match(fixture.output.textContent!, /42/);
 		const clear = fixture.view.partTitleProjection.actions!.querySelector<HTMLButtonElement>("[data-action-id='workbench.debug.panel.action.clearReplAction'] button")!;
-		assert.ok(clear.querySelector('svg'));
+		assert.ok(clear.querySelector('.ash-icon'));
 		clear.click();
 		await fixture.until(() => fixture.output.textContent === '');
 		assert.equal(fixture.output.textContent, '');
@@ -84,7 +84,7 @@ suite('Debug Console view input and filtering', () => {
 		await fixture.until(() => fixture.output.querySelectorAll('[role=treeitem]').length === 3);
 		fixture.setInput('draft');
 		const action = fixture.view.partTitleProjection.actions!.querySelector<HTMLButtonElement>("[data-action-id='repl.action.find'] button")!;
-		assert.equal(action.querySelector('svg')?.getAttribute('data-ash-icon-id'), 'search');
+		assert.equal(action.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'search');
 		action.click();
 		const find = fixture.output.querySelector<HTMLInputElement>('.ash-tree-find-widget input')!;
 		assert.equal(document.activeElement, find);

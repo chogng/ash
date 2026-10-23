@@ -5,6 +5,8 @@ applyTo: "src/ash/**/browser/**/*.{ts,css}"
 
 # Design philosophy
 
+These visual rules apply to the IDE Workbench. Agent Window surfaces, including shared controls hosted there, follow [Sessions style](../../src/ash/sessions/STYLE.md). Determine the owning surface before choosing a visual rule.
+
 When you touch a visual surface, reason about it in **design terms, not pixels**. Design-system spacing, radii, type roles, and colors use named tokens/ramps where available. Raw literals remain valid for structural measurements or when no token exists.
 
 Work in three layers - name the **feeling**, find the **principle** it breaks, then reach for the **move** that restores it:

@@ -188,8 +188,8 @@ test('Theme Editor connects its local file preview and isolates draft colors', {
 	await expect(preview.locator('#app')).toHaveCSS('--ash-sessions-activityBar-foreground', '#cc6600');
 	await popup.screenshot({ path: testInfo.outputPath('desktop-agent-window-theme-preview.png') });
 	const navigation = preview.locator('.ash-sessions-activity-content');
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(navigation.getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-current', 'page');
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	await previewWindows.getByRole('tab', { name: 'Workbench', exact: true }).click();
 	await expect(preview.getByRole('textbox', { name: 'palette.ts', exact: true })).toBeVisible();
 	await expect(preview.locator('#app')).toHaveCSS('--ash-editor-background', '#234567');

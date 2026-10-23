@@ -168,8 +168,12 @@ test('browser refresh preserves unchanged Workers and pending calls, and cleans 
 	const urls: string[] = [];
 	let digest = `sha256:${'a'.repeat(64)}`;
 	const invoked = new DeferredPromise<void>();
+	const statusUpdated = new DeferredPromise<void>();
+	const status = { kind: 'statusBar', registrationId: 'test.status', revision: 1, entries: [] };
 	let finishInvocation: (() => void) | undefined;
+	let activeWorker: WorkerFixture;
 	class WorkerFixture extends EventTarget {
+		constructor() { super(); activeWorker = this; }
 		postMessage(message: BrowserExtensionHostRequest): void {
 			queueMicrotask(() => {
 				if (message.type === 'activate') {
@@ -177,7 +181,7 @@ test('browser refresh preserves unchanged Workers and pending calls, and cleans 
 					const url = URL.createObjectURL(new Blob(['style']));
 					urls.push(url);
 					this.dispatchEvent(new MessageEvent('message', { data: { type: 'webviewResource', url } }));
-					this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: [] } }));
+					this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: [{ kind: 'dataChannel', registrationId: 'test.image', channelId: 'image.editor.v1' }, status] } }));
 				} else if (message.type === 'deactivate') {
 					order.push('deactivate');
 					this.dispatchEvent(new MessageEvent('message', { data: { type: 'releaseWebviewResource', url: urls.at(-1) } }));
@@ -185,6 +189,9 @@ test('browser refresh preserves unchanged Workers and pending calls, and cleans 
 				} else if (message.type === 'invoke') {
 					finishInvocation = () => this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: 'completed' } }));
 					void invoked.complete();
+				} else if (message.type === 'commandResult') {
+					assert.equal(message.success, true);
+					void statusUpdated.complete();
 				} else assert.fail(`Unexpected Worker request: ${message.type}`);
 			});
 		}
@@ -213,6 +220,7 @@ test('browser refresh preserves unchanged Workers and pending calls, and cleans 
 			resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 		}, remote, remote.instantiation);
 		const registration = api.registerClientHandler(async operation => {
+			if ((operation as { operation: string; }).operation === 'setStatusBarEntries') return { result: 'done' };
 			assert.deepEqual(operation, { operation: 'readInitialization' });
 			return { result: 'initialization', initialization: { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: null } };
 		});
@@ -232,11 +240,20 @@ test('browser refresh preserves unchanged Workers and pending calls, and cleans 
 		assert.equal(await (await fetch(urls[0]!)).text(), 'style');
 		finishInvocation!();
 		assert.equal(await pending, 'completed');
+		assert.equal((await api.list()).extensions.find(runtime => runtime.id === original.id)!.registrations.length, 2);
+		activeWorker!.dispatchEvent(new MessageEvent('message', { data: { type: 'registrationsChanged', snapshot: { revision: 1, registrations: [status] } } }));
+		assert.deepEqual((await api.list()).extensions.find(runtime => runtime.id === original.id)!.registrations, [status]);
+		activeWorker!.dispatchEvent(new MessageEvent('message', { data: { type: 'registrationsChanged', snapshot: { revision: 1, registrations: [{ kind: 'dataChannel', registrationId: 'late', channelId: 'image.editor.v1' }] } } }));
+		assert.deepEqual((await api.list()).extensions.find(runtime => runtime.id === original.id)!.registrations, [status], 'an old transport revision cannot revive a retired registration');
+		activeWorker!.dispatchEvent(new MessageEvent('message', { data: { type: 'clientRequest', id: 900, request: { operation: 'setStatusBarEntries', registrationId: 'test.status', revision: 2, entries: [] } } }));
+		await statusUpdated.p;
+		const refreshed = await api.reconcile('refresh');
+		assert.deepEqual(refreshed.extensions.find(runtime => runtime.id === original.id)!.registrations, [{ ...status, revision: 2 }], 'consumed registration messages cannot roll back later acknowledged status-bar state');
 		digest = `sha256:${'b'.repeat(64)}`;
 		const replacement = (await api.reconcile('restartFailed')).extensions.find(runtime => runtime.id === original.id)!;
 		assert.equal(replacement.lifecycle, 'ready');
 		assert.notEqual(replacement.activationGeneration, original.activationGeneration);
-		assert.deepEqual(catalogReads, ['cached', 'cached', 'cached'], 'each reconciliation reads current backend packages without repeating source discovery');
+		assert.deepEqual(catalogReads, ['cached', 'cached', 'cached', 'cached'], 'each reconciliation reads current backend packages without repeating source discovery');
 		assert.deepEqual(order, ['activate', 'deactivate', 'terminate', 'activate']);
 		await assert.rejects(fetch(urls[0]!));
 		await assert.rejects(api.invoke(invocation, new AbortController().signal), /retired activation/);

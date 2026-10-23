@@ -107,7 +107,9 @@ impl SqliteAuthority {
                     )
                     .map_err(sql_error)?;
             }
-            AuthorityEvent::Begin { .. } | AuthorityEvent::Unavailable { .. } => {}
+            AuthorityEvent::Begin { .. }
+            | AuthorityEvent::Unavailable { .. }
+            | AuthorityEvent::Enablement { .. } => {}
         }
         transaction
             .execute(
@@ -205,6 +207,11 @@ impl PersistedRecord {
                 account,
                 definition_digest,
                 ..
+            }
+            | AuthorityEvent::Enablement {
+                account,
+                definition_digest,
+                ..
             } => {
                 let state = if definition.digest() == *definition_digest {
                     ConnectorConnectionState::Connected(account.clone())
@@ -228,7 +235,14 @@ impl PersistedRecord {
                 (*generation, ConnectorConnectionState::Disconnected)
             }
         };
-        ConnectorConnection::restore(generation, state).map_err(domain_error)
+        let enabled = match self.event {
+            AuthorityEvent::Enablement { enabled, .. } => enabled,
+            AuthorityEvent::Disconnect { .. } => false,
+            AuthorityEvent::Begin { .. }
+            | AuthorityEvent::Complete { .. }
+            | AuthorityEvent::Unavailable { .. } => true,
+        };
+        ConnectorConnection::restore(generation, state, enabled).map_err(domain_error)
     }
 }
 
@@ -315,6 +329,20 @@ fn insert_event(
 ) -> Result<(), ConnectorAuthorityError> {
     let (kind, connection_generation, account_id, display_name, credential, digest, reason) =
         match event {
+            AuthorityEvent::Enablement {
+                account,
+                definition_digest,
+                enabled,
+                ..
+            } => (
+                if *enabled { "enable" } else { "disable" },
+                account.connection_generation(),
+                Some(account.account_id().as_str()),
+                Some(account.display_name()),
+                Some(account.credential_reference().as_str()),
+                Some(definition_digest.as_str()),
+                None,
+            ),
             AuthorityEvent::Begin {
                 generation,
                 definition_digest,
@@ -420,9 +448,8 @@ fn load_latest_records(
                 )?)
                 .map_err(domain_error)?,
             },
-            "complete" => AuthorityEvent::Complete {
-                connector_id: connector_id.clone(),
-                account: ConnectorAccount::new(
+            "complete" | "enable" | "disable" => {
+                let account = ConnectorAccount::new(
                     ConnectorAccountId::new(required(account, "account ID")?)
                         .map_err(domain_error)?,
                     required(display, "account display name")?,
@@ -430,13 +457,25 @@ fn load_latest_records(
                         .map_err(domain_error)?,
                     generation,
                 )
-                .map_err(domain_error)?,
-                definition_digest: ConnectorDefinitionDigest::new(required(
-                    digest,
-                    "definition digest",
-                )?)
-                .map_err(domain_error)?,
-            },
+                .map_err(domain_error)?;
+                let definition_digest =
+                    ConnectorDefinitionDigest::new(required(digest, "definition digest")?)
+                        .map_err(domain_error)?;
+                if kind == "complete" {
+                    AuthorityEvent::Complete {
+                        connector_id: connector_id.clone(),
+                        account,
+                        definition_digest,
+                    }
+                } else {
+                    AuthorityEvent::Enablement {
+                        connector_id: connector_id.clone(),
+                        account,
+                        definition_digest,
+                        enabled: kind == "enable",
+                    }
+                }
+            }
             "unavailable" => AuthorityEvent::Unavailable {
                 connector_id: connector_id.clone(),
                 generation,

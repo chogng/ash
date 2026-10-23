@@ -1,0 +1,93 @@
+name: Component Fixtures
+
+on:
+  workflow_call:
+    inputs:
+      baseline-ref:
+        type: string
+        default: HEAD
+  workflow_dispatch:
+    inputs:
+      baseline-ref:
+        description: Git ref used for the production-source comparison
+        type: string
+        default: HEAD
+
+permissions:
+  contents: read
+
+concurrency:
+  group: component-fixtures-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  component-fixtures:
+    name: Screenshots & Tests
+    # The committed pixel hashes are produced on Windows with the lockfile's Chromium.
+    runs-on: windows-2025
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024
+        with:
+          install: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version-file: scripts/pyproject.toml
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with:
+          workspaces: ". -> .build/cargo"
+          shared-key: component-fixtures
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Prepare the existing frontend toolchain
+        run: |
+          python -B scripts/install_python_tools.py
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install chromium
+          pnpm prepare:generated
+      - name: Check types and screenshot tooling
+        run: |
+          pnpm exec bun check -p test/componentFixtures/playwright/tsconfig.json --all
+          pnpm test:component-fixtures:unit
+          node --test build/lib/test/screenshotBlocksCi.test.ts build/lib/test/screenshotDiffReport.test.ts
+      - name: Run fixture behavior and stability tests
+        run: pnpm test:component-fixtures:prepared
+      - name: Capture current screenshots
+        id: capture
+        run: pnpm test:component-fixtures:screenshots:prepared
+      - name: Compare baseline production sources
+        env:
+          BASELINE_REF: ${{ inputs.baseline-ref }}
+        run: pnpm test:component-fixtures:compare:prepared --baseline-ref "$BASELINE_REF" --out .build/component-fixtures/comparison
+      - name: Write screenshot summary
+        if: ${{ always() }}
+        run: |
+          if [ -f .build/component-fixtures/comparison/report.md ]; then
+            head -n 5 .build/component-fixtures/comparison/report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          printf '\n[Download before/after images and the full report](%s/%s/actions/runs/%s#artifacts)\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+      - name: Check approved blocks-ci hashes
+        if: ${{ !cancelled() && steps.capture.outcome == 'success' }}
+        run: node build/lib/screenshotBlocksCi.ts .build/component-fixtures/screenshots/current/manifest.json test/componentFixtures/blocks-ci-screenshots.md ../../.build/component-fixtures/screenshots/current > .build/component-fixtures/blocks-ci-updated.md
+      - name: Upload screenshots, reports and proposed baselines
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: component-fixtures-windows
+          path: |
+            .build/component-fixtures/
+            .build/desktop/playwright/component-fixtures-*/
+          if-no-files-found: warn
+          retention-days: 14

@@ -93,6 +93,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	/** @deprecated Prefer the semantic pointer, accept, and collapse events. */
 	readonly onDidActivate: Event<TreeActivateEvent<TNode>> = this._onDidActivate.event;
 	readonly onDidChangeFind: Event<TreeFindResult<TNode>> = this._onDidChangeFind.event;
+	readonly onDidScroll: Event<number>;
 
 	constructor(container: HTMLElement, options: AbstractTreeOptions<T, TNode>) {
 		super();
@@ -135,6 +136,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		}));
 		this.element = this.list.element;
 		this.domNode = this.list.domNode;
+		this.onDidScroll = this.list.onDidScroll;
 		this.element.classList.add(
 			"ash-tree",
 			`ash-tree-indent-guides-${options.indentGuides ?? "none"}`,
@@ -624,7 +626,8 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 }
 
 function validateIndent(indent: number | undefined): void {
-	if (indent !== undefined && (!Number.isFinite(indent) || indent < 4 || indent > 40)) throw new RangeError("Tree indent must be between 4 and 40 pixels");
+	// Column-based renderers can supply their own indentation without changing the tree hierarchy.
+	if (indent !== undefined && indent !== 0 && (!Number.isFinite(indent) || indent < 4 || indent > 40)) throw new RangeError("Tree indent must be zero or between 4 and 40 pixels");
 }
 
 function treeRowPadding(level: number): string {

@@ -1,4 +1,3 @@
-import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import './media/timelinePane.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { observeIntersection } from '../../../../base/browser/observer.js';
@@ -188,6 +187,8 @@ export class TimelinePane extends ViewPane {
 		if (append && previous?.paging?.cursor === undefined) return;
 		const generation = this.generation;
 		const lifetime = new DisposableStore();
+		const progress = this.getProgressIndicator().show(true, 150);
+		lifetime.add(toDisposable(() => progress.done()));
 		const token = new CancellationTokenSource();
 		lifetime.add(toDisposable(() => token.dispose(true)));
 		this.pending.set(source, lifetime);
@@ -195,7 +196,8 @@ export class TimelinePane extends ViewPane {
 		this.render();
 		try {
 			const pageSize = this.configuration.getValue<number | null>('timeline.pageSize');
-			const request = this.timeline.getTimeline(source, uri, { cursor: append ? previous?.paging?.cursor : undefined, limit: pageSize ?? Math.max(1, Math.ceil(this.contentElement.clientHeight / listRowHeight)), cacheResults: true, resetCache: !append }, token);
+			const rowHeight = 22;
+			const request = this.timeline.getTimeline(source, uri, { cursor: append ? previous?.paging?.cursor : undefined, limit: pageSize ?? Math.max(1, Math.ceil(this.contentElement.clientHeight / rowHeight)), cacheResults: true, resetCache: !append }, token);
 			const result = await request?.result;
 			if (this.isDisposed || generation !== this.generation || this.pending.get(source) !== lifetime || token.token.isCancellationRequested) return;
 			if (result) {

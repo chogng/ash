@@ -64,6 +64,8 @@ pub enum LanguageServerState {
     /// Explicitly suspended while retaining its definition and document snapshots.
     /// Unlike retirement during replacement, language requests must not wait for a restart.
     UserStopped,
+    /// Idle process released while its definition remains available for demand activation.
+    Idle,
 }
 
 /// An explicit user action, independent of persistent enablement and crash recovery.
@@ -71,6 +73,10 @@ pub enum LanguageServerState {
 pub enum LanguageServerControl {
     Restart,
     Stop,
+    /// Activate only an automatically idle server; concurrent resumes are idempotent.
+    Resume,
+    /// Release only a ready server with no open documents or in-flight requests.
+    Suspend,
 }
 
 /// Document operation that failed after crossing the asynchronous service boundary.
@@ -117,6 +123,9 @@ pub enum LspManagerNotification {
         state: LanguageServerState,
     },
     Diagnostics(LanguageDiagnostics),
+    DiagnosticsRefresh {
+        server: String,
+    },
     ServerMessage {
         server: String,
         severity: LanguageServerMessageSeverity,
@@ -218,6 +227,9 @@ pub enum LanguageServiceEvent {
         state: LanguageServerState,
     },
     Diagnostics(LanguageDiagnostics),
+    DiagnosticsRefresh {
+        server: String,
+    },
     PulledDiagnostics(LanguagePulledDiagnostics),
     ServerMessage {
         server: String,
@@ -275,6 +287,9 @@ impl From<LspManagerEvent> for LanguageServiceEvent {
                     Self::ServerStateChanged { server, state }
                 }
                 LspManagerNotification::Diagnostics(diagnostics) => Self::Diagnostics(diagnostics),
+                LspManagerNotification::DiagnosticsRefresh { server } => {
+                    Self::DiagnosticsRefresh { server }
+                }
                 LspManagerNotification::ServerMessage {
                     server,
                     severity,
@@ -368,6 +383,9 @@ impl From<LanguageServiceEvent> for LspManagerEvent {
             }
             LanguageServiceEvent::Diagnostics(diagnostics) => {
                 Self::Notification(LspManagerNotification::Diagnostics(diagnostics))
+            }
+            LanguageServiceEvent::DiagnosticsRefresh { server } => {
+                Self::Notification(LspManagerNotification::DiagnosticsRefresh { server })
             }
             LanguageServiceEvent::PulledDiagnostics(result) => {
                 Self::RequestResult(LspManagerRequestResult::PulledDiagnostics(result))
@@ -1398,6 +1416,7 @@ struct DocumentState {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ManagedServerPhase {
     Stopped,
+    Idle,
     Starting,
     Ready,
     BackingOff,
@@ -1795,6 +1814,11 @@ impl Supervisor {
             }
             (ManagedServerPhase::Ready, LanguageServerEvent::Diagnostics(params)) => {
                 self.publish_diagnostics(params);
+            }
+            (ManagedServerPhase::Ready, LanguageServerEvent::DiagnosticsRefresh) => {
+                self.emit_notification(LspManagerNotification::DiagnosticsRefresh {
+                    server: server.to_string(),
+                });
             }
             (ManagedServerPhase::Ready, LanguageServerEvent::LogMessage(message)) => self
                 .emit_server_message(

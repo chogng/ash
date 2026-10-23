@@ -7,6 +7,8 @@ import { registerAction2 } from '../../../../platform/actions/common/actions.js'
 import { ExportAgentHostDebugLogsAction } from './actions/exportAgentHostDebugLogsAction.js';
 import { ChatSessionLinkOpener, registerChatCopyActions } from './actions/chatCopyActions.js';
 import { registerChatContextActions } from './actions/chatContextActions.js';
+import { IImageEditorService } from '../../../services/imageEditor/common/imageEditorService.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { registerChatCodeBlockActions } from './actions/chatCodeblockActions.js';
 import { PromptLanguageFeaturesProvider } from './promptSyntax/promptFileContributions.js';
 import './chat.shared.contribution.js';
@@ -39,7 +41,7 @@ registerChatOpenAgentDebugPanelAction();
 registerAction2(ExportAgentHostDebugLogsAction);
 registerChatCopyActions();
 registerWorkbenchContribution('workbench.contrib.chatSessionLinks', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatSessionLinkOpener));
-registerWorkbenchContribution('workbench.contrib.chatContextActions', WorkbenchPhase.BlockStartup, () => registerChatContextActions());
+registerWorkbenchContribution('workbench.contrib.chatContextActions', WorkbenchPhase.BlockStartup, accessor => registerChatContextActions(accessor.get(IImageEditorService), accessor.get(ICommandService)));
 registerChatCodeBlockActions();
 registerSkillActions();
 registerHookActions();

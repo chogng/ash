@@ -1,6 +1,6 @@
-# Desktop 测试结构
+# Ash 测试结构
 
-本目录只保存跨源码 owner 的测试基础设施和完整应用测试。单元与组件测试跟随实现放在 `src/ash/<owner>/test/<runtime>`。
+测试跟随被验证职责存放。Desktop 模块单测放在 `src/ash/<owner>/test/<runtime>`，扩展包单测放在 `extensions/<owner>/test/<runtime>`；本目录保存共享运行器、跨模块集成、应用场景及独立分发验收。
 
 ## 运行冒烟测试
 
@@ -22,22 +22,31 @@ pnpm test:desktop:smoke:ui
 
 ## 测试结构
 
-| 测试类型                   | 放置位置                     | 运行入口                          |
-| -------------------------- | ---------------------------- | --------------------------------- |
-| 单元与组件契约             | `src/ash/<owner>/test/common | browser                           | node | electron-*` | `pnpm test:unit` |
-| 仓库级架构约束             | `test/architecture`          | `pnpm test:unit`                  |
-| 单测入口与 Node loader     | `test/unit`                  | `pnpm test:unit`                  |
-| Editor 浏览器集成测试      | `test/integration/browser`   | `pnpm test:editor:browser`        |
-| Playwright 自动化驱动      | `test/automation`            | Browser/Electron smoke tests 共享 |
-| Browser Renderer 场景      | `test/smoke/areas/<area>`    | `pnpm test:smoke:browser`         |
-| Browser + App Server 场景  | `test/smoke/areas/<area>`    | `pnpm test:smoke:browser:full`    |
-| Electron Renderer 场景     | `test/smoke/areas/<area>`    | `pnpm test:smoke:ui`              |
-| Electron + App Server 场景 | `test/smoke/areas/<area>`    | `pnpm test:smoke:desktop`         |
-| 构建工具测试               | `../build/**/*.test.ts`      | `pnpm test:build-tools`           |
+| 职责                                   | 放置位置                            | 运行入口                                                                  |
+| -------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------- |
+| Desktop 模块单元与组件契约             | `src/ash/<owner>/test/<runtime>`    | `pnpm test:unit`                                                          |
+| 扩展包单元与组件契约                   | `extensions/<owner>/test/<runtime>` | `pnpm test:unit --runGlob 'extensions/*/test/**/*.test.js'`               |
+| 仓库级架构约束                         | `test/architecture`                 | `pnpm test:unit`                                                          |
+| Mocha 运行器、loader 与运行器回归      | `test/unit`                         | `pnpm test:unit`、`pnpm test:unit:runner`                                 |
+| 浏览器跨运行时集成                     | `test/integration/browser`          | `pnpm test:browser:integration`；Editor 子集用 `pnpm test:editor:browser` |
+| 组件 fixture 浏览、截图与样式顺序检查  | `test/componentFixtures`            | `pnpm component-explorer`、`pnpm test:component-fixtures`                 |
+| 完整应用场景                           | `test/smoke/areas/<area>`           | 下文列出的 `test:smoke:*` 目标                                            |
+| 应用启动、隔离、清理及功能驱动         | `test/automation`                   | 由 smoke 和 scenario 共享                                                 |
+| 一次性产品场景与录制                   | `test/scenario`                     | `pnpm scenario <scenario>`                                                |
+| Stanza 独立分发契约                    | `test/stanza`                       | `pnpm test:stanza`                                                        |
+| Remote 发布包的 Desktop bootstrap 验收 | `test/sanity`                       | `build/release/verify_remote.py`                                          |
+| Agent 任务质量评测与独立评分器         | `test/agent-eval`                   | [Agent 任务评测](agent-eval/README.md)                                    |
+| 跨套件 fixture                         | `test/fixtures`                     | 由所属测试显式引用                                                        |
+| 浏览器与服务端共享类型的编译契约       | `test/types`                        | `pnpm typecheck:common`                                                   |
+| 构建、打包和测试启动工具回归           | `build/**/*.test.ts`                | `pnpm test:build-tools`                                                   |
 
-`pnpm test:main` 依次运行构建工具测试和全部单元测试。仓库根 `package.json` 直接调用这里的公开测试命令。`test/unit/` 使用 Mocha，逐文件启动独立进程，并提供 `--run`、`--runGlob`、`--grep` 筛选。`pnpm test:unit` 编译后先验证 runner 的筛选和失败行为，再执行选择的用例；汇总执行数量不包含跳过项，没有执行任何用例时返回失败。清理、reporter 与 loader 也归此目录，由 `pnpm typecheck:test-unit` 检查。编辑器浏览器集成测试位于 `test/integration/browser/`，Browser 和连接后端的 Electron smoke 入口共用 `test/smoke/run.ts`；入口为每次运行编译同一个语言服务器 fixture，每个场景在自己的配置目录中启用它，运行结束后清理。`pnpm test:smoke:browser` 启动 5173 的 disconnected Browser Workbench；`pnpm test:smoke:browser:full` 为每个场景在独立端口启动生产 Web 服务和真实 App Server，使用该场景的工作区与配置目录。`pnpm test:smoke:ui` 启动禁用 App Server 的 Electron，适合快速验证 Renderer 和 Workbench；`pnpm test:smoke:desktop` 会额外组装 Rust 开发包并启动真实 App Server。仓库根目录 `pnpm run smoketest` 准备并运行完整 Electron + App Server 冒烟测试，`pnpm run smoketest-no-compile` 运行已准备好的同一套测试；`pnpm test:desktop:smoke:ui` 显式运行 Electron 快速模式，也可通过 `pnpm test:desktop:smoke:browser` 和 `pnpm test:desktop:smoke:browser:full` 运行 Browser 模式。CI 先运行对应的 `pretest:smoke:*` 准备步骤，再用 `test:smoke:*:no-compile` 运行已准备好的测试，便于重复排查偶发失败。
+`pnpm test:main` 依次运行样式检查、构建工具测试、全部单元测试和单测运行器回归。仓库根 `package.json` 直接调用这里的公开测试命令。`test/unit/` 使用 Mocha，逐文件启动独立进程，并提供 `--run`、`--runGlob`、`--grep` 筛选。`pnpm test:unit` 编译并发现 Desktop、扩展包与架构测试；汇总执行数量不包含跳过项，没有执行任何用例时返回失败。运行器自己的筛选、发现和失败行为由 `pnpm test:unit:runner` 单独验证。清理、reporter 与 loader 也归此目录，由 `pnpm typecheck:test-unit` 检查。`pnpm test:extensions` 运行宿主的扩展注册、协议与消费契约，扩展包自己的测试随包存放并由 `test:unit` 发现。
 
-新增测试时先选择拥有被验证 contract 的最窄源码模块，再按真实运行时选择 `common`、`browser`、`node`、`electron-browser` 或 `electron-main`。只有没有单一源码 owner 的全仓库约束才进入 `test/architecture`；跨多个用户操作的场景才进入 `test/smoke`。
+模块与组件测试跟随源码 owner，使用 Mocha `.test.ts`。布局、样式、焦点和组件输入通过 `test/unit/browser/context.ts` 使用真实 Chromium，仍由 `pnpm test:unit` 发现和执行；每个用例使用独立 BrowserContext。页面及 `.page.ts` harness 随组件存放，共享页面与 helper 放在 `test/fixtures/browser`。根目录 `test/integration/browser` 的 Playwright spec 保留进程、扩展包、传输、Worker、iframe 及宿主生命周期边界；同一文件混合的组件断言归回源码 owner。共享浏览器构建配置位于 `test/fixtures/browser/vite.config.ts`，运行器负责资源构建、服务及进程清理。组件可视化 fixture 跟随源码 owner，根目录的 `test/componentFixtures` 只负责发现与执行。`pnpm test:editor` 依次运行 Editor 单测、Editor 浏览器集成和 Stanza 分发测试；筛选用例时使用各自入口。
+
+Browser 和连接后端的 Electron smoke 入口共用 `test/smoke/run.ts`；入口为每次运行编译同一个语言服务器 fixture，每个场景在自己的配置目录中启用它，运行结束后清理。`pnpm test:smoke:browser` 启动 disconnected Browser Workbench；`pnpm test:smoke:browser:full` 为每个场景在独立端口启动生产 Web 服务和真实 App Server，使用该场景的工作区与配置目录。`pnpm test:smoke:ui` 启动禁用 App Server 的 Electron，适合快速验证 Renderer 和 Workbench；`pnpm test:smoke:desktop` 会额外组装 Rust 开发包并启动真实 App Server。仓库根目录 `pnpm run smoketest` 准备并运行完整 Electron + App Server 冒烟测试，`pnpm run smoketest-no-compile` 运行已准备好的同一套测试；`pnpm test:desktop:smoke:ui` 显式运行 Electron 快速模式，也可通过 `pnpm test:desktop:smoke:browser` 和 `pnpm test:desktop:smoke:browser:full` 运行 Browser 模式。CI 先运行对应的 `pretest:smoke:*` 准备步骤，再用 `test:smoke:*:no-compile` 运行已准备好的测试，便于重复排查偶发失败。
+
+新增测试时先选择拥有被验证 contract 的最窄源码模块或扩展包，再按真实运行时选择 `common`、`browser`、`node`、`electron-browser` 或 `electron-main`。例如 Settings 绑定属于 preferences，Git 的 manifest 与翻译属于 Git 扩展。只有没有单一源码 owner 的全仓库约束才进入 `test/architecture`；完整应用流程进入 `test/smoke`；最终分发包验收与开发构建场景分开。
 
 连接后端的 Code 场景在 Browser 和 Electron 中实际执行语言服务测试，覆盖补全、诊断随编辑更新、格式化及撤销、参数提示、内联提示和联动编辑。Memories 读写依赖桌面宿主权限；Browser 验证明确的权限拒绝和禁用状态。
 
@@ -45,7 +54,7 @@ pnpm test:desktop:smoke:ui
 
 `referenceManager.integration.spec.ts` 使用真实 Rust 文献管理、Academy 与 PDF Viewer 进程及独立客户端，覆盖 RIS／库持久化、引用插入与更新／撤销、中英文、冲突、停用恢复及可选 PDF 阅读。签名安装路径由 `signed_installed_reference_manager_uses_product_launcher_and_exact_revocable_consent` 使用测试分发验收；构建和环境变量见 [Reference Manager](../extensions/reference-manager/README.md)。
 
-Frontend CI 运行全部单元测试、Chromium 浏览器集成测试，以及 Browser、Electron UI 和连接真实 App Server 的完整 smoke suite；连接测试不再通过文件白名单或 grep 缩小范围。Academic Workbench 使用独立项目。需要联网下载出版社 PDF 的语料测试使用 `electron-pdf-corpus-app-server` 独立项目，不进入普通 smoke suite。PDF 查看器是可选扩展；该项目通过测试签名源安装并显式授权，必须提供 `ASH_PDF_VIEWER_DISTRIBUTION` 与 `ASH_PDF_VIEWER_TRUSTED_ROOT`，不复用用户 profile；前置与构建见 [PDF Viewer](../extensions/pdf-viewer/README.md)。
+Frontend CI 运行全部单元测试、Chromium 浏览器集成测试，以及 Browser、Electron UI 和连接真实 App Server 的完整 smoke suite；连接测试不再通过文件白名单或 grep 缩小范围。Academy Workbench 使用独立项目。需要联网下载出版社 PDF 的语料测试使用 `electron-pdf-corpus-app-server` 独立项目，不进入普通 smoke suite。PDF 查看器是可选扩展；该项目通过测试签名源安装并显式授权，必须提供 `ASH_PDF_VIEWER_DISTRIBUTION` 与 `ASH_PDF_VIEWER_TRUSTED_ROOT`，不复用用户 profile；前置与构建见 [PDF Viewer](../extensions/pdf-viewer/README.md)。
 
 真实 App Server 场景运行文件保存、BOM/CRLF、外部修改后的撤销，以及手动保存、未保存、延迟自动保存、切换编辑器自动保存后的重启恢复；Browser 还验证未保存内容在页面重载后的恢复。终端覆盖输入、工作区目录、面板关闭再打开、多实例输出隔离和 shell 退出后的重新启动。Search 验证大小写、正则、包含与排除条件及清除结果；Tasks 验证发现、执行、重跑、取消和实际输出；Settings 验证即时生效、重启保存和恢复默认。CI 配置覆盖 Linux Browser、macOS Electron 和 Windows Electron；终端进程在窗口重启后的恢复尚未实现，不属于当前覆盖。
 
@@ -53,7 +62,7 @@ Electron 自动化普通测试在本地和 CI 都隐藏窗口，`--debug` 显示
 
 测试声明通过 Playwright `tag` 指定适用目标：`@browser-ui`、`@browser-app-server`、`@electron-ui`、`@electron-app-server`，同一维度的标签表示可选目标；没有目标标签时覆盖所有目标。`@darwin`、`@linux`、`@win32` 限定操作系统，与目标标签同时生效。项目在采集阶段过滤不适用用例，自动 fixture 在工作区和应用启动前检查自定义配置。仅可从实际运行获知的条件继续使用正文 `test.skip`。
 
-组件布局和输入在 `test/integration/browser` 验证；Sessions Activity Bar、设置、画布、标题栏与 SCM history hover 使用隔离的浏览器页面，保留主题、辅助功能和非默认语言覆盖。Smoke 保留真实启动、跨窗口 IPC、宿主剪贴板、编辑器内容、配置持久化和重启链路。Academic workbench 与 document editing 已包含在常规 Electron 项目，CI 不额外重复运行。
+组件布局和输入在源码 owner 的 `.test.ts` 中通过真实浏览器验证；Sessions Activity Bar、设置、画布、标题栏与 SCM history hover 使用隔离的浏览器页面，保留主题、辅助功能和非默认语言覆盖。Smoke 保留真实启动、跨窗口 IPC、宿主剪贴板、编辑器内容、配置持久化和重启链路。Academy workbench 与 document editing 已包含在常规 Electron 项目，CI 不额外重复运行。
 
 ## 发布成品检查
 
@@ -64,14 +73,3 @@ Electron 自动化普通测试在本地和 CI 都隐藏窗口，`--debug` 显示
 三个 stable 晋级工作流都会重新检查已发布成品，下载通过的报告，并在签署 stable 更新信息前核对报告里的包哈希。Desktop 晋级还必须指定 `previous-version`：先安装旧版，再在同一安装位置安装候选版，共用配置和工作区，验证版本切换、重启及数据保留。该场景覆盖安装包升级；应用内自动检查、下载和安装更新的完整调用链，以及 Code/App Server 的更新选择与数据迁移，不在此场景覆盖范围内。首次 Desktop stable 晋级也需要一个可用于升级验证的旧发布版本。
 
 失败时会保留 JSON 报告、DOM/控制台诊断和 Playwright trace；排查不依赖截图。构建工具回归测试位于 `build/release/sanity.test.ts`。
-
-# Test layout
-
-Editor tests follow VS Code's two-layer layout with one shared editor browser suite:
-
-| Layer                                                                                           | Location                                                     | Purpose                                                                                                                                  |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Editor unit                                                                                     | `src/ash/editor/test` and editor contribution `test` folders | Code/Academic TextModel, command, controller, persistence, and projection contracts in Node/jsdom                                        |
-| Editor browser                                                                                  | `test/integration/browser`                                   | Code/Academic TextModel mount points, mode bundles, pane, input, save, worker, code-block range, and accessibility contracts in Chromium |
-| Editor architecture                                                                             | `test/architecture/editor-architecture.test.ts`              | Flat `common/browser/contrib/test` ownership, mode bundles, and synchronous-layer dependency rules                                       |
-| Run `pnpm test:editor`; it runs the editor unit tests and the single browser integration suite. |

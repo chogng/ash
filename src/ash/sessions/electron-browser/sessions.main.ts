@@ -179,7 +179,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				'sessions.contrib.automationsCustomView',
 				'workbench.contrib.nativeWindow',
 				OpenAgentsWindowSystemWideKeybindingContribution.ID,
-				'workbench.contrib.screenshotShortcut',
+				'workbench.contrib.chatScreenshot',
 				'workbench.contrib.agentsWindowInvitation',
 				'chat.edits.editorOverlay',
 				'chat.promptLanguageFeatures',

@@ -1,0 +1,58 @@
+.ash-component-explorer {
+	display: grid;
+	grid-template-columns: 280px minmax(0, 1fr);
+	height: 100vh;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80);
+}
+.ash-component-explorer aside,
+.ash-component-explorer section {
+	min-width: 0;
+	overflow: auto;
+}
+.ash-component-explorer section {
+	display: flex;
+	flex-direction: column;
+}
+.ash-component-explorer h1 {
+	font-size: var(--ash-fontSize-heading2);
+}
+.ash-component-explorer label,
+.ash-component-explorer input {
+	display: block;
+	width: 100%;
+}
+.ash-component-explorer ul {
+	list-style: none;
+	padding: 0;
+}
+.ash-component-explorer a {
+	display: block;
+	padding: var(--ash-spacing-size40);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.ash-component-explorer a[aria-current="page"] {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+.ash-component-explorer-actions {
+	display: flex;
+	gap: var(--ash-spacing-size80);
+	align-items: center;
+	padding-bottom: var(--ash-spacing-size80);
+}
+.ash-component-explorer iframe {
+	width: 100%;
+	min-height: 360px;
+	flex: 1;
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+}
+.ash-component-explorer details {
+	max-height: 240px;
+	overflow: auto;
+}
+.ash-component-explorer code {
+	overflow-wrap: anywhere;
+}

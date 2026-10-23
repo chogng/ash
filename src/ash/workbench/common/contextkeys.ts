@@ -2,6 +2,7 @@ import { RawContextKey } from '../../platform/contextkey/common/contextkey.js';
 import type { WorkbenchStateValue } from '../../platform/workspace/common/workspace.js';
 
 export const BannerFocused = new RawContextKey<boolean>('bannerFocused', false);
+export const StatusBarFocused = new RawContextKey<boolean>('statusBarFocused', false);
 
 /** Stable host capability for this window, independent of connection state. */
 export const AppServerAvailableContext = new RawContextKey<boolean>('appServerAvailable', false);

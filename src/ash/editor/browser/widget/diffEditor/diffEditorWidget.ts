@@ -10,7 +10,7 @@ import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { diffEditorDefaultOptions, type HideUnchangedRegionsOptions } from '../../../common/config/diffEditor.js';
 import { Range } from '../../../common/core/range.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
-import { LineDiffKind, type LineDiff, type LineDiffRow } from '../../../common/diff/lineDiff.js';
+import { LineDiffKind, LineDiffRows, type LineDiff, type LineDiffRow } from '../../../common/diff/lineDiff.js';
 import { LineRangeMapping, type RangeMapping } from '../../../common/diff/rangeMapping.js';
 import type { MovedText } from '../../../common/diff/linesDiffComputer.js';
 import { LineRange } from '../../../common/core/ranges/lineRange.js';
@@ -187,7 +187,7 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('diffEditor.renderIndicators')) {
-				this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
+				this.diffDecorations.update(this.displayedDiff?.rows ?? LineDiffRows.empty, this.showInlineChanges, this.diffOptions.renderIndicators);
 				this.layout({ width: this.viewportWidth, height: this.viewportHeight });
 			}
 			if (event.affectsConfiguration('diffEditor.renderMarginRevertIcon')
@@ -380,7 +380,7 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		this.modifiedLineNumbersMinChars = options.lineNumbersMinChars ?? this.modifiedLineNumbersMinChars;
 		this.element.classList.toggle('word-wrapped', this.wordWrap);
 		this.editors.updateOptions({ ...options, wordWrap: this.diffOptions.wordWrap });
-		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
+		this.diffDecorations.update(this.displayedDiff?.rows ?? LineDiffRows.empty, this.showInlineChanges, this.diffOptions.renderIndicators);
 		this.updateFeatures();
 		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
 	}
@@ -419,8 +419,8 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 			this.originalContainer.inert = inlineView || this.accessibleDiffViewer.isVisible;
 			if (inlineView && this.movedTextToCompare) {
 				this.clearComparedMove();
-				this.diffDecorations.update(this.model.diff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
-				this.overviewRuler.setRows(this.model.diff?.rows ?? []);
+				this.diffDecorations.update(this.model.diff?.rows ?? LineDiffRows.empty, this.showInlineChanges, this.diffOptions.renderIndicators);
+				this.overviewRuler.setRows(this.model.diff?.rows ?? LineDiffRows.empty);
 			}
 			this.updateFeatures();
 		}
@@ -455,7 +455,7 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 			const originalLayout = this.originalEditor.getLayoutInfo();
 			this.element.style.setProperty('--ash-diff-original-line-numbers-width', `${inlineView ? originalLayout.lineNumbersWidth : 0}px`);
 			this.element.style.setProperty('--ash-diff-original-line-numbers-left', `${modifiedLayout.lineNumbersLeft}px`);
-			this.diffViewZones.update(this.inlineView, this.wordWrap, this.displayedDiff?.rows ?? [], this.diffOptions.renderIndicators, this.viewModel.getComparedRange());
+			this.diffViewZones.update(this.inlineView, this.wordWrap, this.displayedDiff?.rows ?? LineDiffRows.empty, this.diffOptions.renderIndicators, this.viewModel.getComparedRange());
 			this.modifiedEditor.setScrollTop(scrollTop, ScrollType.Immediate);
 		} finally {
 			this.syncingScroll = wasSyncingScroll;
@@ -487,10 +487,10 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 	/** Reveals the first change in the resolved comparison without taking keyboard focus. */
 	public revealFirstDiff(): void {
 		const rows = this.model.diff?.rows;
-		const first = rows?.findIndex(row => row.kind !== LineDiffKind.Unchanged) ?? -1;
+		const first = this.model.diff?.hunks[0]?.rowStart ?? -1;
 		if (!rows || first < 0) return;
 		this.revealChangeRow(first);
-		const row = rows[first]!;
+		const row = rows.get(first)!;
 		const line = Math.min(this.model.modified.lineCount, (row.modifiedLineIndex ?? row.originalLineIndex ?? 0) + 1);
 		this.setPosition({ lineNumber: line, column: 1 });
 		if (row.modifiedLineIndex !== undefined) {
@@ -501,7 +501,7 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 	/** Selects one changed row in this comparison; the caller may announce collection-wide navigation. */
 	public revealChangeRow(rowIndex: number, announce = true): void {
 		const rows = this.model.diff?.rows;
-		if (!rows || !isNonNegativeSafeInteger(rowIndex) || rows[rowIndex]?.kind === LineDiffKind.Unchanged || !rows[rowIndex]) {
+		if (!rows || !isNonNegativeSafeInteger(rowIndex) || rows.get(rowIndex)?.kind === LineDiffKind.Unchanged || !rows.get(rowIndex)) {
 			throw new RangeError('Diff change row is outside the current result');
 		}
 		if (this.movedTextToCompare) {
@@ -510,9 +510,9 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		this.revealDiffRow(rows, rowIndex, announce);
 	}
 
-	private revealDiffRow(rows: readonly LineDiffRow[], rowIndex: number, announce: boolean): void {
+	private revealDiffRow(rows: LineDiffRows, rowIndex: number, announce: boolean): void {
 		this.activeChangeRow = rowIndex;
-		const row = rows[rowIndex];
+		const row = rows.get(rowIndex)!;
 		let signal = AccessibilitySignal.diffLineModified;
 		if (row.kind === LineDiffKind.Added) { signal = AccessibilitySignal.diffLineInserted; }
 		if (row.kind === LineDiffKind.Removed) { signal = AccessibilitySignal.diffLineDeleted; }
@@ -531,10 +531,10 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		} else if (this.inlineView) {
 			// A removed line lives in a zone after its preceding modified line, not at its original line number.
 			let precedingRow = rowIndex - 1;
-			while (precedingRow >= 0 && rows[precedingRow]!.modifiedLineIndex === undefined) {
+			while (precedingRow >= 0 && rows.get(precedingRow)!.modifiedLineIndex === undefined) {
 				precedingRow--;
 			}
-			const precedingLine = rows[precedingRow]?.modifiedLineIndex;
+			const precedingLine = rows.get(precedingRow)?.modifiedLineIndex;
 			const top = precedingLine === undefined
 				? this.modifiedEditor.getOption(EditorOption.padding).top
 				: this.modifiedEditor.getBottomForLineNumber(precedingLine + 1);
@@ -542,7 +542,7 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 			this.modifiedEditor.setScrollTop(Math.max(0, zoneTop - this.modifiedEditor.getLayoutInfo().height / 2), ScrollType.Immediate);
 		}
 		if (announce) {
-			const changedRows = rows.flatMap((candidate, index) => candidate.kind === LineDiffKind.Unchanged ? [] : [index]);
+			const changedRows = Array.from(rows.changedEntries(), ([index]) => index);
 			this.accessibilityStatusElement.textContent = localize(
 				'diffEditor.changeLocation', 'Change {0} of {1}, {2}',
 				changedRows.indexOf(rowIndex) + 1, changedRows.length, this.diffRowLocation(row),
@@ -571,16 +571,16 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 				: '';
 		this.updateIncompleteStatus();
 		this.updateFeatures();
-		this.diffDecorations.update(this.displayedDiff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
-		this.overviewRuler.setRows(this.displayedDiff?.rows ?? []);
+		this.diffDecorations.update(this.displayedDiff?.rows ?? LineDiffRows.empty, this.showInlineChanges, this.diffOptions.renderIndicators);
+		this.overviewRuler.setRows(this.displayedDiff?.rows ?? LineDiffRows.empty);
 		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
 	}
 
 	private updateFeatures(): void {
 		if (!this.diffOptions.showMoves && this.movedTextToCompare) {
 			this.clearComparedMove();
-			this.diffDecorations.update(this.model.diff?.rows ?? [], this.showInlineChanges, this.diffOptions.renderIndicators);
-			this.overviewRuler.setRows(this.model.diff?.rows ?? []);
+			this.diffDecorations.update(this.model.diff?.rows ?? LineDiffRows.empty, this.showInlineChanges, this.diffOptions.renderIndicators);
+			this.overviewRuler.setRows(this.model.diff?.rows ?? LineDiffRows.empty);
 		}
 		this.gutter.update(this.diffOptions.renderGutterMenu && !this.movedTextToCompare, { renderRevert: this.diffOptions.renderMarginRevertIcon && !this.inlineView });
 		const marginEnabled = this.diffOptions.renderMarginRevertIcon && this.gutter.width === 0 && !this.movedTextToCompare;
@@ -621,8 +621,8 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		if (!isNonNegativeSafeInteger(lineIndex)) throw new RangeError('Diff line index must be a non-negative safe integer');
 		const diff = this.model.diff;
 		if (!diff) throw new Error('Diff results are not ready');
-		const rowIndex = diff.rows.findIndex(row => row[side] === lineIndex);
-		if (rowIndex < 0) throw new RangeError('Diff line index is outside its source model');
+		const source = side === 'originalLineIndex' ? this.model.original : this.model.modified;
+		if (lineIndex >= source.lineCount) throw new RangeError('Diff line index is outside its source model');
 		const editor = side === 'originalLineIndex' ? this.originalEditor : this.modifiedEditor;
 		editor.revealRange(new Range(lineIndex + 1, 1, lineIndex + 1, 1), ScrollType.Immediate);
 	}
@@ -633,7 +633,7 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 			this.accessibilityStatusElement.textContent = localize('diffEditor.computing', 'Computing differences');
 			return undefined;
 		}
-		const changedRows = diff.rows.flatMap((row, index) => row.kind === LineDiffKind.Unchanged ? [] : [index]);
+		const changedRows = Array.from(diff.rows.changedEntries(), ([index]) => index);
 		if (changedRows.length === 0) {
 			this.accessibilityStatusElement.textContent = localize('diffEditor.noChanges', 'No differences');
 			return undefined;

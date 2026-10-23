@@ -79,7 +79,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		}, contextMenus, contextViews, accessibleViews, notifications, {
 			create: options => instantiationService.createInstance(ChatInputEditor, {
 				...options,
-				height: { minimum: 48, maximum: 240 },
+				height: { minimum: 32, maximum: 240 },
 			}),
 		}, [{
 			id: 'ash.chat.input.attach',
@@ -100,7 +100,6 @@ export class NewChatInputWidget extends ChatInputPart {
 		dragAndDrop.addOverlay(this.inputContainer, this.inputContainer);
 		const tipContainer = h(container.ownerDocument, 'div');
 		tipContainer.className = 'ash-sessions-chat-tip-slot';
-		this.element.insertBefore(tipContainer, this.inputContainer);
 		this.tips = this._register(instantiationService.createInstance(ChatInputTipPresenter, {
 			container: tipContainer,
 			isEligible: () => !this.submittedMessage && this.model.items.length === 0
@@ -110,13 +109,14 @@ export class NewChatInputWidget extends ChatInputPart {
 		}));
 		const footer = h(container.ownerDocument, 'div');
 		footer.className = 'ash-sessions-chat-input-footer';
-		this.permissionButton = h(container.ownerDocument, 'button');
+		this.permissionButton = h(container.ownerDocument, 'button', { className: 'ash-button ash-button-small ash-button-quiet' });
 		this.permissionButton.type = 'button';
 		this.permissionButton.setAttribute('aria-haspopup', 'menu');
 		this.permissionButton.setAttribute('aria-expanded', 'false');
 		footer.append(this.permissionButton);
 		this.createContextUsageToolbar(footer, contextMenus);
 		this.element.append(footer);
+		this.element.append(tipContainer);
 		this._register(instantiationService.createInstance(NewChatPermissionPicker, this.permissionButton, this.model));
 		this._register(AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(this.element, () => this.focus())));
 		this._register(addDisposableListener(this.inputContainer, 'focusin', event => {

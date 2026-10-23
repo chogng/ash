@@ -72,7 +72,10 @@ jobs:
           repository-cache: true
 
       - name: Test real TUI terminal scenarios
+        # Real-process deadlines require optimized programs. Fastbuild spends
+        # the startup budget hashing executables before rendering the first frame.
         run: >-
-          bazel test //cli:tui-real-scenarios --test_output=errors
+          bazel test //cli:tui-real-scenarios --compilation_mode=opt --test_output=streamed
           --test_env=PATH --test_env=ASH_RG_PATH --test_env=ASH_TGREP_PATH
-          --test_arg=--test-threads=4 --test_arg=--skip --test_arg=actual_tui_sandbox_
+          --test_arg=--nocapture --test_arg=--test-threads=4
+          --test_arg=--skip --test_arg=actual_tui_sandbox_

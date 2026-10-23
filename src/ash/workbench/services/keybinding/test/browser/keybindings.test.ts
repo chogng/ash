@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { createJsonCompletionProvider } from '../../../language/common/jsonLanguageFeatures.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
@@ -70,10 +71,7 @@ import {
 import {
 	CommandService,
 } from "../../../../../workbench/services/commands/common/commandService.js";
-import {
-	StatusbarAlignment,
-	StatusbarService,
-} from "../../../../../workbench/services/statusbar/browser/statusbar.js";
+import { StatusbarAlignment } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
 
 const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);

@@ -886,7 +886,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	getContentHeight(): number {
-		return this.currentModel ? this.view.currentLayout.contentSize.height : 0;
+		return this.currentModel ? this.viewModel.viewLayout.getContentHeight() : 0;
 	}
 
 	getContentWidth(): number {

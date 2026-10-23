@@ -79,7 +79,7 @@ import { IContextMenuService } from "../../../platform/contextview/browser/conte
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { InstantiationService } from "../../../platform/instantiation/common/instantiationService.js";
-import { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
+import { IQuickInputService, QuickInputType, type IQuickPick, type IQuickPickItem } from "../../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../../../workbench/services/commands/common/commandService.js";
 import type { IPaneComposite } from '../../../workbench/common/panecomposite.js';
 import { ViewContainerLocation, ViewsRegistry, WorkbenchViewRegistry } from "../../../workbench/common/views.js";
@@ -120,6 +120,7 @@ import { TestConfigurationFiles } from '../../../workbench/services/configuratio
 import { parseJsonDocument } from '../../../base/common/json.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
+import { ChatTipService as CoworkChatTipService, IChatTipService as ICoworkChatTipService } from '../../contrib/cowork/browser/chatTipService.js';
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
@@ -216,6 +217,7 @@ const storageResources = new DisposableStore();
 const testStorages: InstanceType<typeof BrowserStorageService>[] = [];
 const { ChatWidget, openChatMarkdownLink } = await import("../../../workbench/contrib/chat/browser/widget/chatWidget.js");
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
+const { NewCoworkInputWidget } = await import('../../contrib/cowork/browser/newCoworkInput.js');
 const { readNewChatDraftState, writeNewChatDraftState } = await import('../../contrib/chat/common/newChatDraftState.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 await import(
@@ -518,7 +520,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 		3,
 	);
 	assert.ok(toolbar?.querySelector(".ash-button-label"));
-	assert.ok(toolbar?.querySelector("svg.ash-icon"));
+	assert.ok(toolbar?.querySelector(".ash-icon"));
 	assert.ok(layoutToolbar?.querySelector(
 		`[data-action-id="${TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID}"]`,
 	));
@@ -751,7 +753,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 		['Agent', 'Plan', 'Debug', 'Multitask', 'Ask'],
 	);
 	assert.deepEqual(
-		[...modeMenu?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map(item => item.querySelector('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')?.getAttribute('data-ash-icon-id') ?? null),
+		[...modeMenu?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map(item => item.querySelector('.ash-menu-leading-slot .ash-icon-label-icon .ash-icon')?.getAttribute('data-ash-icon-id') ?? null),
 		['unlimited', 'plan', 'debug', 'multitask', 'chat-4'],
 	);
 	assert.deepEqual(
@@ -923,9 +925,28 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		};
 		const input = resources.add(services.createInstance(SessionsInputForTest, document.body, delegate, model));
 		input.render(model.inputState);
-		return { input, model, storage, notices, identity, [Symbol.dispose]() { resources.dispose(); } };
+		return { input, model, storage, notices, identity, services, delegate, [Symbol.dispose]() { resources.dispose(); } };
 	} catch (error) { resources.dispose(); throw error; }
 }
+
+test('Cowork composer submits the exact Skill reference through the shared input', async () => {
+	const canvas = browserEnvironment.window.HTMLCanvasElement.prototype;
+	const originalGetContext = canvas.getContext;
+	canvas.getContext = () => null;
+	using restoreCanvas = toDisposable(() => { canvas.getContext = originalGetContext; });
+	const submissions: { text: string; skills: Parameters<ChatInputDelegate['send']>[2]; }[] = [];
+	using fixture = await sessionsInputFixture(async (text, _mode, skills) => { submissions.push({ text, skills }); });
+	fixture.input.dispose();
+	fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
+	using input = fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model);
+	const skill = { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest' as const, digest: 'sha256:commit' } };
+	input.render({
+		...fixture.model.inputState,
+		skillSelectors: [{ name: 'commit', description: 'Draft a commit message', source: 'user', skill }],
+	});
+	await input.acceptInput('$commit staged changes');
+	assert.deepEqual(submissions, [{ text: '$commit staged changes', skills: [skill] }]);
+});
 
 test('Sessions custom composer footer displays and clears the shared context budget', async () => {
 	using fixture = await sessionsInputFixture();
@@ -1558,13 +1579,14 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 
 test("Chat history selects an active Thread through Quick Pick", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
+	using domCleanup = toDisposable(() => dom.window.close());
 	const api = fakeApi({
 		sessions: [
 			session("session-1", "thread-1", "First Chat"),
 			session("session-2", "thread-2", "Second Chat"),
 		],
 	}).api;
-	const services = new InstantiationService();
+	using services = new InstantiationService();
 	services.registerInstance(IConfigurationService, inputResources.add(new WorkbenchConfigurationService()));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
@@ -1592,9 +1614,7 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 	const picking = commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
 	await nextTask();
 	assert.deepEqual(
-		[...dom.window.document.querySelectorAll(
-			".ash-quick-pick-row-label",
-		)].map((label) => label.textContent),
+		currentQuickPickItems(quickInput).map(item => item.label),
 		["First Chat", "Second Chat"],
 	);
 	const input = dom.window.document.querySelector<HTMLInputElement>(
@@ -1620,7 +1640,6 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 		dom.window.document.querySelector(".ash-quick-pick"),
 		null,
 	);
-	dom.window.close();
 });
 
 test("ViewsService resolves, opens, and focuses contributed views", async () => {
@@ -1635,6 +1654,7 @@ test("ViewsService resolves, opens, and focuses contributed views", async () => 
 		element: h(testStorageEnvironment.window.document, "div"),
 		id: CHAT_VIEW_ID,
 		paneTitle: 'Chat',
+		getProgressIndicator: () => undefined,
 		focus: () => { focused++; view.element.focus(); },
 		hasFocus: () => view.element.contains(view.element.ownerDocument.activeElement),
 		isBodyVisible: () => true,
@@ -1682,6 +1702,7 @@ test("ViewsService resolves, opens, and focuses contributed views", async () => 
 	using enablement = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.chatEnablement']);
 	enablement.advance(WorkbenchPhase.BlockStartup);
 	services.registerInstance(IPaneCompositePartService, {
+		getProgressIndicator: () => undefined,
 		onDidPaneCompositeOpen: Event.None,
 		onDidPaneCompositeClose: Event.None,
 		openPaneComposite: async id => { assert.equal(id, CHAT_VIEW_CONTAINER_ID); return composite; },
@@ -3877,6 +3898,13 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	assert.fail("Timed out waiting for Chat view state");
 }
 
+function currentQuickPickItems(quickInput: IQuickInputService): readonly IQuickPickItem[] {
+	const picker = quickInput.currentQuickInput;
+	assert.equal(picker?.type, QuickInputType.QuickPick);
+	// Command tests observe the catalog; virtualized rows need a browser with layout.
+	return (picker as IQuickPick<IQuickPickItem>).items.filter((item): item is IQuickPickItem => !('type' in item));
+}
+
 function recordingDialogService(messages: IMessageDialogOptions[]): IDialogService {
 	return {
 		onWillShowDialog: Event.None,
@@ -3984,12 +4012,13 @@ test("Advisor command selects a model and the off switch preserves its settings"
 
 test("Chat Settings toggles Advisor while keeping its selected model", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
+	using domCleanup = toDisposable(() => dom.window.close());
 	const selected = { model: { provider: "openai", model: "reviewer" }, enabled: true, maxCalls: 5, maxOutputTokens: 4096 };
 	const fake = fakeApi({ advisorDefault: selected });
 	using chat = createChatService(fake.api);
 	using contextKeys = new ContextKeyService();
 	using quickInput = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
-	const services = new InstantiationService();
+	using services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(IChatService, chat);
@@ -4010,7 +4039,7 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 	using commands = new CommandService(services);
 	for (const enabled of [false, true]) {
 		await commands.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
-		const labels = [...dom.window.document.querySelectorAll(".ash-quick-pick-row-label")].map(element => element.textContent);
+		const labels = currentQuickPickItems(quickInput).map(item => item.label);
 		assert.ok(labels.includes(enabled ? "Turn Advisor on" : "Turn Advisor off"));
 		assert.ok(labels.includes("Clear saved Advisor model"));
 		const input = dom.window.document.querySelector<HTMLInputElement>(".ash-quick-pick-input input");
@@ -4021,11 +4050,11 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 		await waitFor(() => fake.savedAdvisorDefaults.length === (enabled ? 2 : 1));
 		assert.deepEqual(fake.savedAdvisorDefaults.at(-1), { ...selected, enabled });
 	}
-	dom.window.close();
 });
 
 test('Chat Settings saves a masked provider key through the model API and refreshes the catalog', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
+	using domCleanup = toDisposable(() => dom.window.close());
 	const fake = fakeApi({
 		providers: [
 			{ provider: 'ollama', connection: 'ollama', access: 'apiKey', active: false, configured: false, ready: true, displayName: 'Ollama', apiKeyPolicy: 'unsupported', apiKeyConfigured: false },
@@ -4036,7 +4065,7 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	using contextKeys = new ContextKeyService();
 	using quickInput = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 	const messages: IMessageDialogOptions[] = [];
-	const services = new InstantiationService();
+	using services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(IChatService, chat);
@@ -4066,9 +4095,9 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	await commands.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
 	choose('Manage Model Connections');
 	await waitFor(() => dom.window.document.querySelector('[role="dialog"][aria-label="Model connections"]') !== null);
-	const labels = [...dom.window.document.querySelectorAll('.ash-quick-pick-row-label')].map(element => element.textContent);
+	const labels = currentQuickPickItems(quickInput).map(item => item.label);
 	assert.deepEqual(labels, ['Save key for OpenAI']);
-	assert.match(dom.window.document.querySelector('.ash-quick-pick-row-description')?.textContent ?? '', /API key required/);
+	assert.equal(currentQuickPickItems(quickInput)[0]?.description, 'API key required');
 	choose('OpenAI');
 	await waitFor(() => dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input[type="password"]') !== null);
 	const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input[type="password"]');
@@ -4086,8 +4115,7 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	await commands.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
 	choose('Manage Model Connections');
 	await waitFor(() => dom.window.document.querySelector('[role="dialog"][aria-label="Model connections"]') !== null);
-	assert.equal(dom.window.document.querySelector('.ash-quick-pick-row-description')?.textContent, 'API key saved');
-	dom.window.close();
+	assert.equal(currentQuickPickItems(quickInput)[0]?.description, 'API key saved');
 });
 
 test("Advisor model choices include the fixed catalog before connection setup", async () => {

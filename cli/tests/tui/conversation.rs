@@ -185,6 +185,8 @@ fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     approve.type_text("请创建 approved-by-tui.txt");
     approve.enter();
     approve.wait_for_screen("Approval required");
+    // Tool preparation can outlast the transient tip; capture the persistent approval UI.
+    approve.wait_for_screen_to_omit("/permission to change permissions");
     approve.assert_snapshot("real/03-approval/00-approve-request");
     approve.down();
     approve.up();
@@ -241,6 +243,7 @@ fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     decline.wait_for_screen("> Save approval for this exact action");
     decline.down();
     decline.wait_for_screen("> Decline");
+    decline.wait_for_screen_to_omit("/permission to change permissions");
     decline.assert_snapshot("real/03-approval/02-decline-selected");
     decline.enter();
     decline_gate.wait_until_reached();

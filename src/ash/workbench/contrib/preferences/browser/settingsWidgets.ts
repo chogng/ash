@@ -29,7 +29,7 @@ import { IHoverService } from '../../../../platform/hover/browser/hoverService.j
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
 import type { JsonSchema } from '../../../../base/common/jsonSchema.js';
-import type { IBooleanSetting, IComplexSetting, INumberSetting, ISelectSetting, ISetting, IStringMapSetting, ITextSetting, SettingReference, SettingValueBinding, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
+import type { IBooleanSetting, IComplexSetting, INumberSetting, INumberWithOptionsSetting, ISelectSetting, ISetting, IStringMapSetting, ITextSetting, SettingReference, SettingValueBinding, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { configurationSettingBinding, SettingModel, type SettingState } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsSearchMenu } from './settingsSearchMenu.js';
 import { SettingsTreeIndicatorsLabel } from './settingsEditorSettingIndicators.js';
@@ -448,6 +448,90 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 			this.model.refresh();
 			this.input.value = String(this.model.state.value);
 			this.reportStatus(localize({ bundle: 'ash.settings', key: 'status.numberRange' }, '{0} must be between {1} and {2}.', this.descriptor.title, this.descriptor.minimum, this.descriptor.maximum), true);
+			return;
+		}
+		void this.updateSetting(value);
+	}
+}
+
+class NumberWithOptionsSettingWidget extends AbstractSettingWidget<INumberWithOptionsSetting, number | string | null> {
+	private readonly inputBox: InputBox;
+	private readonly select: SelectBox | undefined;
+
+	constructor(container: HTMLElement, descriptor: INumberWithOptionsSetting, options: SettingWidgetOptions,
+		@IConfigurationService configurationService: IConfigurationService,
+		@IContextViewService contextViewProvider: IContextViewService,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
+		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService);
+		const controls = h(this.domNode.ownerDocument, 'div');
+		controls.className = 'ash-setting-number-controls';
+		this.domNode.append(this.copyDomNode, controls);
+		this.inputBox = this._register(new InputBox(controls, {
+			inputBoxStyles: defaultInputBoxStyles, type: 'number', ariaLabel: descriptor.title, presentation: 'compact',
+		}));
+		this.inputBox.element.classList.add('ash-editor-setting-number');
+		this.inputBox.inputElement.dataset.configurationKey = descriptor.id;
+		if (descriptor.options.some(option => typeof option.value === 'string')) {
+			this.select = this._register(new SelectBox(controls, {
+				options: [], presentation: 'field', contextViewProvider,
+			}, defaultSelectBoxStyles));
+			this._register(this.select.onDidSelect(({ value }) => {
+				if (value === 'custom') {
+					this.inputBox.focus();
+				} else {
+					const option = this.descriptor.options[Number(value)];
+					if (option) void this.updateSetting(option.value);
+				}
+			}));
+		}
+		this.updateControl(descriptor);
+		this.bindState(state => this.renderState(state));
+		this._register(addDisposableListener(this.inputBox.inputElement, 'change', () => this.acceptValue()));
+	}
+
+	protected updateControl(descriptor: INumberWithOptionsSetting): void {
+		const input = this.inputBox.inputElement;
+		input.min = String(descriptor.minimum);
+		input.max = String(descriptor.maximum);
+		input.step = descriptor.integer ? '1' : 'any';
+		input.setAttribute('aria-label', descriptor.title);
+		input.setAttribute('aria-description', [
+			...(descriptor.options.some(option => option.value === null) ? [localize({ bundle: 'ash.settings', key: 'number.automaticHelp' }, 'Enter a number, or clear the field to use Automatic.')] : []),
+			...(this.select ? [localize({ bundle: 'ash.settings', key: 'number.modeHelp' }, 'Enter a number directly, or use the value mode list for other choices.')] : []),
+		].join(' '));
+		this.select?.setAriaLabel(localize({ bundle: 'ash.settings', key: 'number.mode' }, '{0}: Value mode', descriptor.title));
+		this.select?.setOptions([
+			{ value: 'custom', label: localize({ bundle: 'ash.settings', key: 'number.custom' }, 'Custom number') },
+			...descriptor.options.map((option, index) => ({ value: String(index), label: option.label })),
+		]);
+		this.renderState(this.model.state);
+	}
+
+	private renderState(state: SettingState<number | string | null>): void {
+		const index = this.descriptor.options.findIndex(option => option.value === state.value);
+		this.inputBox.value = typeof state.value === 'number' ? String(state.value) : '';
+		this.inputBox.inputElement.placeholder = index >= 0 ? this.descriptor.options[index].label : '';
+		this.inputBox.enabled = !state.isPending;
+		if (this.select) {
+			this.select.value = index < 0 ? 'custom' : String(index);
+			this.select.enabled = !state.isPending;
+		}
+	}
+
+	private acceptValue(): void {
+		const input = this.inputBox.inputElement;
+		// Empty input means automatic only when the server explicitly accepts null.
+		if (!input.value && !input.validity.badInput && this.descriptor.options.some(option => option.value === null)) {
+			void this.updateSetting(null);
+			return;
+		}
+		const value = input.valueAsNumber;
+		if (!Number.isFinite(value) || value < this.descriptor.minimum || value > this.descriptor.maximum || this.descriptor.integer && !Number.isInteger(value)) {
+			this.renderState(this.model.state);
+			this.reportStatus(this.descriptor.integer
+				? localize({ bundle: 'ash.settings', key: 'status.integerRange' }, '{0} must be a whole number between {1} and {2}.', this.descriptor.title, this.descriptor.minimum, this.descriptor.maximum)
+				: localize({ bundle: 'ash.settings', key: 'status.numberRange' }, '{0} must be between {1} and {2}.', this.descriptor.title, this.descriptor.minimum, this.descriptor.maximum), true);
 			return;
 		}
 		void this.updateSetting(value);
@@ -1090,6 +1174,8 @@ export function createSettingWidget(container: HTMLElement, setting: ISetting, o
 			return instantiationService.createInstance(BooleanSettingWidget, container, setting, options);
 		case 'number':
 			return instantiationService.createInstance(NumberSettingWidget, container, setting, options);
+		case 'numberWithOptions':
+			return instantiationService.createInstance(NumberWithOptionsSettingWidget, container, setting, options);
 		case 'select':
 			return instantiationService.createInstance(SelectSettingWidget, container, setting, options);
 		case 'text':

@@ -142,6 +142,63 @@ export interface LogOutputChannel extends OutputChannel { readonly logLevel: Log
 export interface Webview { html: string; readonly options: Readonly<Record<string, unknown>>; asWebviewUri(uri: Uri): Uri; postMessage(message: unknown): Promise<boolean>; readonly onDidReceiveMessage: Event<unknown>; }
 export interface WebviewPanel extends Disposable { readonly webview: Webview; readonly onDidDispose: Event<void>; }
 export interface CustomTextEditorProvider { resolveCustomTextEditor(document: TextDocument, panel: WebviewPanel, token: CancellationToken): ProviderResult<void>; }
+/** A read-only selection snapshot. The client retains ownership of the editor and its live model. */
+export interface CodeImageSnapshot {
+	readonly title: string;
+	readonly firstLine: number;
+	readonly lines: readonly (readonly { readonly text: string; readonly color: string; readonly italic: boolean; readonly bold: boolean; readonly underline: boolean; readonly strikethrough: boolean; }[])[];
+	readonly background: string;
+	readonly foreground: string;
+	readonly fontFamily: string;
+	readonly fontSize: number;
+	readonly tabSize: number;
+}
+export interface ImageEditorContext { readonly source: 'screen' | 'selection'; }
+/** Supplies an opaque sandboxed HTML view. Inline content is supported; optional Blob scripts and styles use asWebviewUri. */
+export interface ImageEditorView { html: string; asWebviewUri(uri: Uri): Uri; setState(state: JsonValue): void; }
+export interface ImageEditorProvider {
+	resolveImageEditor(context: ImageEditorContext, view: ImageEditorView, token: CancellationToken): ProviderResult<void>;
+}
+export type ImageEditorCompletion = { readonly kind: 'cancel' | 'retake'; } | { readonly kind: 'error'; readonly message: string; } | { readonly kind: 'copy' | 'save' | 'attach'; readonly image: Uint8Array; };
+/** Resolved appearance values independent of the host's CSS variable names. */
+export interface ImageEditorTheme {
+	readonly colors: {
+		readonly foreground: string;
+		readonly background: string;
+		readonly panelBackground: string;
+		readonly selectionMask: string;
+		readonly border: string;
+		readonly focusBorder: string;
+		readonly contrastBorder: string;
+		readonly inputBackground: string;
+		readonly inputForeground: string;
+		readonly inputBorder: string;
+		readonly hoverBackground: string;
+		readonly buttonForeground: string;
+		readonly buttonBackground: string;
+	};
+	readonly metrics: {
+		readonly fontSize: string;
+		readonly labelFontSize: string;
+		readonly headingFontSize: string;
+		readonly borderWidth: string;
+		readonly smallRadius: string;
+		readonly largeRadius: string;
+		readonly spacing: readonly [string, string, string, string];
+	};
+	readonly shadow: string;
+}
+/** Initialization sent to the view after it posts { type: 'initialize' }. Never grants host service access. */
+export interface ImageEditorInput {
+	readonly type: 'initialize';
+	/** Preferred explicit export action, determined by the interaction's entry point. */
+	readonly defaultAction: 'copy' | 'attach';
+	readonly image?: Uint8Array;
+	readonly code?: CodeImageSnapshot;
+	readonly state?: JsonValue;
+	readonly theme: ImageEditorTheme;
+	readonly colorScheme: 'light' | 'dark' | 'hcDark' | 'hcLight';
+}
 export interface ComparisonResource { resource: string; label?: string; initialText?: string; initialBytes?: number[]; contentType?: string; }
 export type ComparisonInput = { kind: 'diff' | 'binaryDiff'; label?: string; original: ComparisonResource; modified: ComparisonResource } | { kind: 'multiDiff'; resource: string; label?: string; items: { label?: string; binary?: boolean; original?: ComparisonResource; modified?: ComparisonResource }[] };
 export interface EditorOpenOptions { preserveFocus?: boolean; pinned?: boolean; revealIfOpened?: boolean; }
@@ -154,6 +211,10 @@ export namespace window {
 	function createOutputChannel(name: string, languageId?: string): OutputChannel; function createOutputChannel(name: string, options: { log: true }): LogOutputChannel;
 	function createStatusBarItem(id: string, alignment?: StatusBarAlignment, priority?: number): StatusBarItem; function createStatusBarItem(alignment?: StatusBarAlignment, priority?: number): StatusBarItem;
 	function registerCustomEditorProvider(viewType: string, provider: CustomTextEditorProvider): Disposable;
+	/** Available in the Browser extension host; declared by contributes.imageEditors. Uses the existing versioned capability registration and invocation lifecycle. */
+	function registerImageEditorProvider(viewType: string, provider: ImageEditorProvider): Disposable;
+	/** Accepts a view owned by this extension and window, independently of the initiating command. Copy/save stay in the host; Add to Chat attaches the result. */
+	function showImageEditor(viewType: string, options: ImageEditorContext): Promise<void>;
 	function openComparison(input: ComparisonInput, options?: EditorOpenOptions, sideBySide?: boolean): Promise<void>;
 	function registerTerminalProfileProvider(id: string, provider: TerminalProfileProvider): Disposable;
 	function registerTerminalLinkProvider<T extends TerminalLink>(provider: TerminalLinkProvider<T>): Disposable;
@@ -253,7 +314,8 @@ export interface SCMInput { value: string; placeholder: string; enabled: boolean
 export interface SCMStatusCommand { id: string; text: string; ariaLabel?: string; tooltip?: string; alignment?: 'left' | 'right'; priority?: number; compactGroup?: string; icon?: { id: string }; run?(): ProviderResult<void>; }
 export interface SCMObservable<T> { get(): T; readonly onDidChange: Event<T>; }
 export interface SCMHistoryProvider { historyItemRef: SCMObservable<unknown>; historyItemRemoteRef?: SCMObservable<unknown>; historyItemBaseRef?: SCMObservable<unknown>; readonly onDidChange: Event<unknown>; readonly onDidChangeHistoryItemRefs?: Event<unknown[]>; refresh?(): ProviderResult<void>; provideHistoryItemRefs?(...args: unknown[]): ProviderResult<unknown>; resolveHistoryItemRefsCommonAncestor?(...args: unknown[]): ProviderResult<unknown>; provideHistoryItems?(...args: unknown[]): ProviderResult<unknown>; resolveHistoryItemDetails?(...args: unknown[]): ProviderResult<unknown>; provideHistoryItemChanges?(...args: unknown[]): ProviderResult<unknown>; resolveHistoryItemChangeContents?(...args: unknown[]): ProviderResult<unknown>; resolveHistoryItemChatContext?(...args: unknown[]): ProviderResult<unknown>; resolveHistoryItemChangeRangeChatContext?(...args: unknown[]): ProviderResult<unknown>; }
-export interface SCMProvider { id: string; providerId: string; label: string; rootUri?: Uri; count?: number; readonly onDidChangeResources: Event<unknown>; groups: SCMResourceGroup[]; input: SCMInput; statusBarCommands: SCMStatusCommand[]; statusMessage: string; isBusy: boolean; activeRepositoryName?: string; historyProvider?: SCMHistoryProvider; mergeProvider?: { resolve(...args: unknown[]): ProviderResult<unknown>; complete(...args: unknown[]): ProviderResult<unknown> }; refresh(): ProviderResult<void>; activate(): ProviderResult<void>; }
+export interface SCMActionButton { command: { id: string; title: string; tooltip?: string; arguments?: unknown[] }; secondaryCommands?: { id: string; title: string; tooltip?: string; arguments?: unknown[] }[][]; enabled: boolean; }
+export interface SCMProvider { id: string; providerId: string; label: string; rootUri?: Uri; count?: number; readonly onDidChangeResources: Event<unknown>; groups: SCMResourceGroup[]; input: SCMInput; actionButton?: SCMActionButton; statusBarCommands: SCMStatusCommand[]; statusMessage: string; isBusy: boolean; activeRepositoryName?: string; historyProvider?: SCMHistoryProvider; mergeProvider?: { resolve(...args: unknown[]): ProviderResult<unknown>; complete(...args: unknown[]): ProviderResult<unknown> }; refresh(): ProviderResult<void>; activate(): ProviderResult<void>; }
 export interface SCMReadSignal { readonly aborted: boolean; addEventListener(type: 'abort', listener: () => void, options?: { once?: boolean }): void; removeEventListener(type: 'abort', listener: () => void): void; }
 export interface SCMProviderOptions { parseUri(value: string): Uri; decorations?: { readonly onDidChange?: Event<unknown>; provideDecorations(uri: Uri, token: CancellationToken): ProviderResult<unknown> }; quickDiff?: { provideOriginalResource(uri: Uri, signal: SCMReadSignal): ProviderResult<{ originalResource: string; label: string; text?: string; revision?: number } | null> }; multiDiff?: { metadata: unknown; resolve(resource: Uri): ProviderResult<unknown> }; }
 export namespace scm { function initialize(): void; function registerSCMProvider(provider: SCMProvider, options: SCMProviderOptions): Disposable; function selectRepository(id: string | undefined): void; }

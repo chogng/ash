@@ -1,10 +1,12 @@
 import { isObject } from '../../../../base/common/types.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import type { JsonSchema } from '../../../../base/common/jsonSchema.js';
+import { localize } from '../../../../nls.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationSettingSchema, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ConfigurationTarget, getConfigValueInTarget, merge, type IConfigurationOverrides, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import type { IBooleanSetting, INumberSetting, ISelectSetting, ISetting, ISettingsEditorModel, ITextSetting, SettingReference, SettingsStatus, SettingValueBinding } from './preferences.js';
+import type { IBooleanSetting, INumberSetting, INumberWithOptionsSetting, ISelectSetting, ISetting, ISettingsEditorModel, ITextSetting, SettingReference, SettingsStatus, SettingValueBinding } from './preferences.js';
 
 export interface SettingState<T> {
 	readonly id: string;
@@ -141,6 +143,11 @@ export class DefaultSettings {
 
 	constructor(registry: IConfigurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)) {
 		for (const configuration of registry.getRegisteredConfigurations()) {
+			const numeric = !configuration.setting && configuration.source ? contributedNumberSetting(configuration) : undefined;
+			if (numeric) {
+				this.settings.set(configuration.key, numeric);
+				continue;
+			}
 			const schema = configuration.setting ?? (configuration.source ? contributedSettingSchema(configuration) : undefined);
 			if (schema) {
 				this.settings.set(configuration.key, registeredSetting(configuration, schema));
@@ -159,6 +166,43 @@ export class DefaultSettings {
 		if (!setting) throw new RangeError(`Configuration '${key}' does not declare Settings metadata`);
 		return setting;
 	}
+}
+
+/** Keep nullable numbers and numeric-or-enum unions editable without changing their persisted schema. */
+function contributedNumberSetting(configuration: IRegisteredConfiguration): INumberWithOptionsSetting | undefined {
+	const schema = configuration.schema;
+	if (!schema || schema.enum) return undefined;
+	let numeric: JsonSchema | undefined;
+	const options: { value: string | null; label: string; }[] = [];
+	for (const branch of schema.anyOf ?? [schema]) {
+		if (branch.anyOf || branch.oneOf || branch.$ref) return undefined;
+		const types = Array.isArray(branch.type) ? branch.type : [branch.type];
+		for (const type of types) {
+			if (type === 'integer' || type === 'number') {
+				// Multiple numeric branches can describe disjoint ranges; leave those to the JSON editor.
+				if (numeric || branch.enum) return undefined;
+				numeric = { ...branch, type };
+			} else if (type === 'null') {
+				options.push({ value: null, label: localize({ bundle: 'ash.settings', key: 'number.automatic' }, 'Automatic') });
+			} else if (type === 'string' && branch.enum?.length && branch.enum.every(value => typeof value === 'string')) {
+				for (const [index, value] of branch.enum.entries()) {
+					options.push({ value: value as string, label: branch.enumDescriptions?.[index] ?? String(value) });
+				}
+			} else {
+				return undefined;
+			}
+		}
+	}
+	if (!numeric || !options.length) return undefined;
+	return {
+		...contributedSettingCopy(configuration),
+		valueType: 'numberWithOptions',
+		configuration: configuration as IRegisteredConfiguration<number | string | null>,
+		minimum: Math.max(schema.minimum ?? -Number.MAX_VALUE, numeric.minimum ?? -Number.MAX_VALUE),
+		maximum: Math.min(schema.maximum ?? Number.MAX_VALUE, numeric.maximum ?? Number.MAX_VALUE),
+		integer: numeric.type === 'integer',
+		options: options.filter((option, index) => options.findIndex(candidate => candidate.value === option.value) === index),
+	};
 }
 
 /** Standard extension schemas use the same controls as product settings. */

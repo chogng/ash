@@ -779,14 +779,11 @@ impl TuiProcess {
     pub fn wait_for_screen_to_omit(&mut self, unexpected: &str) {
         let deadline = Instant::now() + STATE_TIMEOUT;
         loop {
-            let (screen, revision) = {
-                let capture = self.capture.lock().unwrap();
-                (capture.screen(), capture.revision())
-            };
+            let screen = self.screen();
             if !screen.contains(unexpected) {
                 thread::sleep(Duration::from_millis(250));
-                let capture = self.capture.lock().unwrap();
-                if capture.revision() == revision && !capture.screen().contains(unexpected) {
+                // Active views can redraw identical text; stability concerns the visible frame.
+                if self.screen() == screen {
                     return;
                 }
             }

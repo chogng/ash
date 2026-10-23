@@ -2,7 +2,6 @@ import { ExplorerRootContext, ExplorerFolderContext } from '../../common/files.j
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import type { IAsyncDataTreeViewState } from '../../../../../base/browser/ui/tree/asyncDataTree.js';
 import { isRecord } from '../../../../../base/common/types.js';
-import { listRowHeight } from '../../../../../base/common/uiSizes.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { EditorOpenSource } from '../../../../../platform/editor/common/editor.js';
@@ -36,7 +35,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { explorerFileContribRegistry } from '../explorerFileContrib.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { localize } from '../../../../../nls.js';
-import { MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { DisposableMap, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { FileEditorInput } from '../editors/fileEditorInput.js';
 import { ResourceSchemeContext } from '../../../../common/contextkeys.js';
 import { PASTE_FILE_COMMAND_ID } from '../fileActions.js';
@@ -62,6 +61,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private initialization: Promise<void>;
 	private fileChangeProcessing: Promise<void> = Promise.resolve();
 	private readonly loadedNests = new Set<string>();
+	private readonly loadingProgress = this._register(new DisposableMap<ExplorerItem | undefined, IDisposable>());
 	private readonly scopedContext: IScopedContextKeyService;
 	private readonly hasContextResource: IContextKey<boolean>;
 	private readonly contextIsFile: IContextKey<boolean>;
@@ -122,7 +122,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			})),
 			scrolling: "managed",
 			configurationService,
-			getHeight: () => listRowHeight,
+			getHeight: () => 22,
 			findMode: 'filter',
 			compressionEnabled: configurationService.getValue<boolean>('explorer.compactFolders'),
 			// Keep workspace roots and their immediate children out of eager compact-chain resolution.
@@ -270,6 +270,10 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			if (event.element.kind === FileKind.File) void this.openFile(event);
 		}));
 		this._register(this.tree.onDidChangeLoadState(({ element, loading, error }) => {
+			if (loading) {
+				const operation = this.getProgressIndicator().show(true, 150);
+				this.loadingProgress.set(element, toDisposable(() => operation.done()));
+			} else this.loadingProgress.deleteAndDispose(element);
 			if (!loading) {
 				const retriedFailedElement = element === undefined
 					? this.treeErrorElement === undefined
@@ -544,6 +548,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	}
 
 	private async initialize(): Promise<void> {
+		this.loadingProgress.clearAndDisposeAll();
 		const generation = ++this.workspaceGeneration;
 		this.viewStateWorkspaceId = undefined;
 		this.loadedNests.clear();

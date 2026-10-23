@@ -151,4 +151,4 @@ The generator uses SVGO with multiple passes, removes fixed root dimensions whil
 
 ## Product icons
 
-`icons/*.svg` owns the product artwork. Run `pnpm icons:generate` after changes to update `icons/manifest.json` and `src/ash/base/common/productIcons.ts`; run `pnpm icons:check` to verify them.
+`icons/*.svg` owns the product artwork. Follow the [SVG icon font skill](../.agents/skills/svg-icon-font/SKILL.md) after source changes: run its `build_product_font.py` to rebuild both window profiles, append-only PUA mapping, source fingerprints, and generated TypeScript definitions; then run `pnpm icons:check`. The IDE profile preserves the original contours and stroke widths. The Agent Window profile uses 1.25px outlines at 16px. Shared WOFF2 files live beside `src/ash/base/browser/ui/lxicons/lxicon.ts`; ordinary product builds do not run the font compiler.

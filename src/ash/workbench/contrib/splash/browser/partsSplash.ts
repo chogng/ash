@@ -86,9 +86,33 @@ export class PartsSplash extends Disposable {
 			partBounds.push({
 				left, top, width, height,
 				background: Color.Format.CSS.formatHex(fill),
+				...captureBackgroundGradient(style.backgroundImage, rect.width, rect.height, fill),
 				borderRadii, borders,
 			});
 		}
 		return partBounds.length ? { layoutInfo: { version: 2, width: ownerWindow.innerWidth, height: ownerWindow.innerHeight, partBounds } } : {};
 	}
+}
+
+/** Keep only resolved paint data, rather than persisting CSS that could load external resources. */
+function captureBackgroundGradient(image: string, width: number, height: number, background: Color): Pick<NonNullable<IPartsSplash['layoutInfo']>['partBounds'][number], 'backgroundGradient'> {
+	const gradient = /^linear-gradient\((to right|to bottom|to left|to top|-?[\d.]+deg),\s*(.*)\)$/.exec(image);
+	if (!gradient) return {};
+	const directions: Readonly<Record<string, number>> = { 'to top': 0, 'to right': 90, 'to bottom': 180, 'to left': 270 };
+	const angle = ((directions[gradient[1]] ?? Number.parseFloat(gradient[1])) % 360 + 360) % 360;
+	const radians = angle * Math.PI / 180;
+	const length = Math.abs(width * Math.sin(radians)) + Math.abs(height * Math.cos(radians));
+	const stops: { color: string; offset: number; }[] = [];
+	// Computed rgb()/rgba() colors contain commas of their own, but no nested functions.
+	for (const entry of gradient[2].split(/,(?![^()]*\))/)) {
+		const stop = /^\s*(rgba?\([^)]*\)|#[\da-f]+|[a-z]+)\s+(-?[\d.]+(?:px|%))(?:\s+(-?[\d.]+(?:px|%)))?\s*$/i.exec(entry);
+		const color = stop && Color.Format.CSS.parse(stop[1]);
+		if (!stop || !color) return {};
+		for (const position of stop.slice(2).filter((value): value is string => value !== undefined)) {
+			const offset = Number.parseFloat(position) * (position.endsWith('%') ? length / 100 : 1);
+			// CSS fixes decreasing stop positions to the preceding stop (e.g. a collapsed sidebar).
+			stops.push({ color: Color.Format.CSS.formatHex(color.flatten(background)), offset: Math.max(stops.at(-1)?.offset ?? offset, offset) });
+		}
+	}
+	return stops.length >= 2 && stops.length <= 32 ? { backgroundGradient: { angle, stops } } : {};
 }

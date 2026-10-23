@@ -12,7 +12,8 @@ import { Emitter } from '../../../base/common/event.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { installEditorTestDom } from '../../../editor/test/browser/editorTestGlobals.js';
 import { MenuService } from '../../../platform/actions/common/menuService.js';
-import { CommandsRegistry } from '../../../platform/commands/common/commands.js';
+import { MenuId } from '../../../platform/actions/common/actions.js';
+import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { Part } from '../../../workbench/browser/part.js';
@@ -20,7 +21,7 @@ import { CommandService } from '../../../workbench/services/commands/common/comm
 import { registerLayoutActions } from '../../browser/layoutActions.js';
 import { DesktopWorkbenchLayout } from '../../browser/desktopWorkbench.js';
 import { Menus } from '../../browser/menus.js';
-import { CanGoBackContext, CanGoForwardContext } from '../../common/contextkeys.js';
+import { CanGoBackContext, CanGoForwardContext, SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { PanelMaximizedContext, PanelPositionContext } from '../../../workbench/common/contextkeys.js';
 import { Position } from '../../../workbench/services/layout/browser/layoutService.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
@@ -44,6 +45,7 @@ test('Sessions layout commands update menu state from their owners and release w
 	using contextKeys = new ContextKeyService();
 	using services = new InstantiationService();
 	using commands = new CommandService(services);
+	services.registerInstance(ICommandService, commands);
 	const parts = new Map(sessionsPartIds.map(id => [id, resources.add(new TestPart(browser.window.document.body, id))]));
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	let historyIndex = 1;
@@ -67,6 +69,7 @@ test('Sessions layout commands update menu state from their owners and release w
 	};
 	using actions = registerLayoutActions(layout, sessions, contextKeys);
 	using menu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarLeftLayout);
+	using layoutMenu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarRightLayout);
 	const state = (): unknown => menu.getActions().flatMap(([, actions]) => actions).filter(action => action.id !== 'ash.sessions.togglePanel').map(action => [action.label, action.tooltip, action.enabled, action.checked]);
 	const navigationState = (): unknown => [contextKeys.getValue(CanGoBackContext.key), contextKeys.getValue(CanGoForwardContext.key)];
 	try {
@@ -74,12 +77,28 @@ test('Sessions layout commands update menu state from their owners and release w
 		assert.equal(contextKeys.getValue(PanelPositionContext.key), 'bottom');
 		layout.setPanelPosition(Position.LEFT);
 		assert.equal(contextKeys.getValue(PanelPositionContext.key), 'left');
-		assert.equal(menu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
+		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
+		using goMenu = new MenuService(commands, contextKeys).createMenu(MenuId.MenubarGoMenu);
+		assert.deepEqual(goMenu.getActions().flatMap(([, actions]) => actions).filter(action => action.id.startsWith('ash.sessions.')).map(action => [action.id, action.enabled]), [
+			['ash.sessions.back', true], ['ash.sessions.forward', false],
+		]);
 		await commands.executeCommand('ash.sessions.toggleSidebar');
 		assert.equal(layout.isPartVisible('sidebar'), false);
 		assert.deepEqual(state(), [['Show sidebar', 'Show sidebar', true, false], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
 		layout.showPart('sidebar');
+		const opened: string[] = [];
+		using openChat = CommandsRegistry.register('sessions.open.chat', () => { opened.push('chat'); });
+		using openCode = CommandsRegistry.register('sessions.open.code', () => { opened.push('code'); });
+		contextKeys.setContext('sessions.activity.projectsSelected', true);
+		for (const mode of ['chat', 'code']) {
+			contextKeys.setContext(SessionsWorkspaceModeContext.key, mode);
+			layout.hidePart('sidebar');
+			await commands.executeCommand('ash.sessions.toggleSidebar');
+			assert.equal(layout.isPartVisible('sidebar'), true);
+			assert.equal(contextKeys.getValue('sessions.activity.projectsSelected'), true);
+		}
+		assert.deepEqual(opened, [], 'Expanding navigation never opens a different page');
 		await commands.executeCommand('ash.sessions.back');
 		assert.deepEqual(navigationState(), [false, true]);
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', false, undefined], ['Forward', 'Forward', true, undefined]]);
@@ -88,7 +107,7 @@ test('Sessions layout commands update menu state from their owners and release w
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
 		layout.toggleMaximizedPanel();
 		assert.equal(contextKeys.getValue(PanelMaximizedContext.key), true);
-		assert.equal(menu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
+		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
 		layout.toggleMaximizedPanel();
 		assert.equal(contextKeys.getValue(PanelMaximizedContext.key), false);
 		actions.dispose();

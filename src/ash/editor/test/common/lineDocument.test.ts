@@ -61,7 +61,7 @@ test('LineDocumentSnapshot keeps rich semantics orthogonal to ordered logical li
 			target: { kind: 'atom', atomId: 'image' },
 			attrs: { format: 'number' },
 		}],
-		metadata: { profile: 'academic' },
+		metadata: { profile: 'academy' },
 	});
 
 	assert.equal(snapshot.getText(), `${prose}\nconst answer = 42;\nreturn answer;\n\uFFFC\nSystem architecture`);
@@ -70,7 +70,7 @@ test('LineDocumentSnapshot keeps rich semantics orthogonal to ordered logical li
 	assert.deepEqual(snapshot.facets.forLine('prose').map(facet => facet.kind), ['outline']);
 	assert.equal(snapshot.regions.get('code')?.attrs.languageId, 'typescript');
 	assert.equal(snapshot.relations.get('caption-image')?.target.kind, 'atom');
-	assert.equal(snapshot.metadata.profile, 'academic');
+	assert.equal(snapshot.metadata.profile, 'academy');
 });
 
 test('LineDocumentSnapshot treats only CR and LF as physical line boundaries', () => {

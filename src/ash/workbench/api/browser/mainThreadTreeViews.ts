@@ -7,6 +7,7 @@ import { SyncDescriptor } from '../../../platform/instantiation/common/descripto
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { TreeView, TreeViewPane } from '../../browser/parts/views/treeView.js';
 import { IViewDescriptorService, TreeItemCollapsibleState, ViewContainerLocation, type ITreeItem } from '../../common/views.js';
+import type { ExtensionApiIssue } from './mainThreadExtensionApi.js';
 
 interface TreeBinding extends DisposableStore {
 	readonly identity: string;
@@ -26,7 +27,8 @@ export class MainThreadTreeViews extends Disposable {
 		@INotificationService private readonly notifications: INotificationService,
 	) { super(); }
 
-	public update(snapshot: ExtensionHostFleetSnapshot): void {
+	public update(snapshot: ExtensionHostFleetSnapshot): readonly ExtensionApiIssue[] {
+		const issues: ExtensionApiIssue[] = [];
 		const active = new Map<string, string>();
 		for (const runtime of snapshot.extensions) {
 			if (runtime.lifecycle !== 'ready' || runtime.incarnation === undefined) { continue; }
@@ -46,9 +48,16 @@ export class MainThreadTreeViews extends Disposable {
 				const key = `${runtime.id}\0${registration.registrationId}`;
 				if (this.bindings.has(key)) { continue; }
 				const source = { extensionId: runtime.id, activationGeneration: runtime.activationGeneration, incarnation: runtime.incarnation };
-				this.bindings.set(key, this.createBinding(registration, source, active.get(key)!));
+				try {
+					this.bindings.set(key, this.createBinding(registration, source, active.get(key)!));
+				} catch (error) {
+					// One window may lack an extension's container. Keep projecting the rest
+					// of the fleet and retry this registration on the next snapshot.
+					issues.push({ extensionId: runtime.id, registrationId: registration.registrationId, message: error instanceof Error ? error.message : String(error) });
+				}
 			}
 		}
+		return issues;
 	}
 
 	private createBinding(registration: ExtensionHostTreeDataProviderRegistration, source: ExtensionClientSource, identity: string): TreeBinding {

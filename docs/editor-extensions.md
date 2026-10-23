@@ -155,6 +155,17 @@ PDF.js 和 Worker 随扩展客户端打包，JS／CSS 摘要覆盖其字节。�
 
 ### 浏览器 Worker 与后端宿主的生命周期
 
+截图由预装的 [`ash.snapshot`](../extensions/snapshot/README.md) Browser 扩展拥有。
+普通 TS 扩展通过 `@ash/sdk` 的 `window.registerImageEditorProvider` 注册图片编辑器，
+内部沿既有 `image.editor.v1` capability 的注册、调用和撤销链接入；宿主只承载隔离视图、
+采集屏幕及执行输出。界面脚本不在 Workbench 或原生窗口的可信 realm 中执行。
+`window.showImageEditor` 可请求屏幕或代码选区输入；选区快照由客户端编辑器提供，
+扩展不能访问内部模型或复制其状态。公开接口与视图消息见 [TS SDK](../sdk/typescript/README.md)。
+`workbench/services/imageEditor` 拥有 Provider 注册与交互生命周期；
+`platform/imageView` 只负责系统取屏、隔离原生窗口和图像输出，不解释代码选区或 Chat 数据。
+Chat 通过图像服务注册附件接收逻辑，自己绑定草稿取消、截图命令和既有快捷键偏好；
+全局按键使用 `platform/globalKeybindings` 的窗口租约。SDK adapter 不导入 Chat 贡献或调用其命令。
+
 执行位置与 Provider 类型决定生命周期机制，不能因实现语言是 TS 或 Rust 就把它们合并：
 
 | 路径                                      | 启动与激活 owner                                | 当前机制                                                                                          |
@@ -192,6 +203,8 @@ Extensions（扩展）是 Ash 可选能力的统一管理和市场入口，覆�
 Academy 属于 Plugins，可标记为 Editor；Editor、Debugger、Language、Document 等属于功能标签，不增加顶级窗格。MCP 是接入协议，服务器配置和运行状态在 Connectors 中管理；连接账户不是必需条件。Connector 账号与 MCP 会话继续由不同领域 owner 持有，不因同一视图展示而合并身份或生命周期。
 
 扩展标题栏右侧提供全局刷新和“更多操作”菜单；菜单按浏览、扩展源和安装分组，复用命令面板中的浏览市场、显示已安装、管理内置插件、管理扩展源、从工作区安装和从 Git 安装命令。下方常驻一个搜索框，右侧内嵌清除和筛选图标。输入文字搜索 Marketplace；筛选菜单可选择已安装、Skills、Plugins、Connectors、内置插件和推荐，分别写入 `@installed`、`@skills`、`@plugins`、`@connectors`、`@builtin`、`@recommended`，并保留已有关键词。清除或按 Escape 移除关键词和筛选，返回三个分类与推荐。刷新重新读取当前分类，保留搜索、选中项和折叠状态。各窗格不再提供独立搜索或刷新；添加 MCP 等领域操作在悬停或键盘焦点进入时显示。技术类型、来源与授权在详情中保留，市场不常驻为额外窗格。
+
+Skill、Plugin、编辑器扩展、MCP 和服务账号共用详情头部模板：身份、来源与简介位于左侧，开关位于简介右侧，授权、配置、安装和卸载等动作位于下方。开关的保存中、取消、失败后重读所属服务和焦点恢复由同一逻辑负责。Skill、Plugin、编辑器扩展和独立 MCP 的开关控制各自领域的启用状态；服务账号的开关表示连接或取消连接，关闭时保留授权与凭据。缺少管理权限或由所属包控制的资源显示不可操作的状态开关。
 
 产品中的 Plugin 表达功能扩展，底层按 `Package → Capabilities → 各领域 Runtime` 分工；既有技术类型中的 Plugin bundle 名称不建立第二套包状态。一个包可提供多个 Skill、Connector 和编辑器能力：安装记录只有一份，能力可同时出现在不同分类中。单独禁用 Skill 或断开 Connector 不卸载包；包级卸载则在详情中说明其全部能力。
 
@@ -460,7 +473,7 @@ flowchart TD
 
 Ash JS API 提供已有命令、文档事件与快照、诊断集合、语言 Provider、Tasks/Debug 和 workspace/configuration 能力。`workspace.fs.readFile/stat/readDirectory` 对应 typed `readResourceFile/statResource/readResourceDirectory`，Rust SDK 提供同一组操作；Workbench 文件服务拥有资源 provider，App Server 验证调用窗口、工作区授权与身份。`stat.ctime` 当前无来源而为 0，写入与完整文件系统 API 仍不支持。打开的 dirty model 始终先于磁盘，改动保留版本、原文前置条件和已有撤销 owner。
 
-可选安装的 `ash.academy` 经声明式 `customEditors` 和 `editor.client.v1` 选择包内 Stanza Academic profile。扩展启用及精确授权决定新 editor 注册；停用后已打开 tab 保留模型、撤销与未保存内容并冻结编辑。schema、引用视图、分页和 DOCX／PDF 输出均由包拥有；共享宿主提供文档与生命周期机制，不向任意第三方开放内部 DOM/model API。PDF 阅读另由可选 `ash.pdf-viewer` 的资源 pane 提供，详见上面的独立能力边界。
+可选安装的 `ash.academy` 经声明式 `customEditors` 和 `editor.client.v1` 选择包内 Stanza Academy profile。扩展启用及精确授权决定新 editor 注册；停用后已打开 tab 保留模型、撤销与未保存内容并冻结编辑。schema、引用视图、分页和 DOCX／PDF 输出均由包拥有；共享宿主提供文档与生命周期机制，不向任意第三方开放内部 DOM/model API。PDF 阅读另由可选 `ash.pdf-viewer` 的资源 pane 提供，详见上面的独立能力边界。
 
 文本自定义编辑器通过 `customTextEditor` 注册，包声明决定 viewType、显示名称和 selector；provider 的标准 `resolveCustomTextEditor` 经统一 invocation 返回 HTML。Workbench 保留模型、readonly、撤销和消息路由。可信 Worker 的库资产沿有界对象 URL 传递，窗口在停用和关闭时回收；该路径只提供已实现的文本自定义编辑器能力。
 
@@ -723,7 +736,7 @@ Desktop 的 `NativeExtensionService` 在远端 Workbench 启动前选择本地�
 | Host snapshot normalization 与 transport                                                  | `platform/agentHost/browser/extensionHostProtocol.ts`、`extensionHostApi.ts` | 领域 provider ownership                           |
 | Host fleet 生命周期、刷新和连接状态                                                       | `IExtensionHostService` implementation                                       | 扩展 provider 注册、generated DTO 作为 domain API |
 | 扩展 API 的 Workbench 接入、原子注册、调用和 Output 生命周期                              | `workbench/api/browser`                                                      | 进程监管、WebSocket、App Server 协议定义          |
-| Renderer Host service 安装与启动阻塞                                                      | Code 产品入口选择的 `workbench/contrib/extensionHost`                        | 通用 Workbench 或 Academic 产品隐式安装           |
+| Renderer Host service 安装与启动阻塞                                                      | Code 产品入口选择的 `workbench/contrib/extensionHost`                        | 通用 Workbench 或 Academy 产品隐式安装            |
 | Commands、Language、Debug、Tasks、Testing、DataChannel、LinkPresentation 注册与调用 shape | 各自 Workbench domain owner                                                  | package 安装、进程监管                            |
 
 Frontend common contract 使用 Workbench 自己的 snapshot/descriptor/failure 类型；generated DTO 和

@@ -1,0 +1,56 @@
+.ash-window-mode-control {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	padding: var(--ash-spacing-size20);
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-toolbar-hoverBackground);
+	-webkit-app-region: no-drag;
+}
+
+.ash-window-mode-control > .ash-window-mode-button {
+	display: flex;
+	width: var(--ash-spacing-size320);
+	height: var(--ash-spacing-size280);
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: var(--ash-strokeThickness) solid transparent;
+	border-radius: var(
+		--ash-button-border-radius,
+		var(--ash-cornerRadius-medium)
+	);
+	background: transparent;
+	color: var(--ash-titleBar-foreground);
+	cursor: pointer;
+}
+
+.ash-window-mode-control > .ash-window-mode-button:hover {
+	background: var(--ash-toolbar-hoverBackground);
+}
+
+.ash-window-mode-control > .ash-window-mode-button[aria-pressed="true"] {
+	border-color: var(--ash-widget-border, transparent);
+	background: var(--ash-editor-background);
+}
+
+.ash-window-mode-control > .ash-window-mode-button:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-window-mode-button > .ash-icon {
+	width: var(--ash-spacing-size160);
+	height: var(--ash-spacing-size160);
+	font-size: var(--ash-spacing-size160);
+}
+
+.hc-black .ash-window-mode-button,
+.hc-light .ash-window-mode-button {
+	border-color: var(--ash-contrastBorder);
+}
+
+.hc-black .ash-window-mode-button[aria-pressed="true"],
+.hc-light .ash-window-mode-button[aria-pressed="true"] {
+	border-color: var(--ash-focusBorder);
+}

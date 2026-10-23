@@ -74,6 +74,8 @@ export interface SkillReference {
 export interface SkillDescriptor {
 	readonly id: SkillIdentity;
 	readonly description: string;
+	/** Author-declared display metadata; absent for catalogs without this optional data. */
+	readonly metadata?: Readonly<Record<string, string>>;
 	readonly contentDigest: string;
 	readonly enabled: boolean;
 	readonly compatible: boolean;

@@ -96,9 +96,16 @@
 	background: var(--ash-diffEditor-removedLineBackground);
 }
 
-.stanza-diff-editor.word-wrapped .stanza-diff-inline-original-line {
-	white-space: pre-wrap;
-	overflow-wrap: anywhere;
+/* The source editor supplies wrapping; each token keeps the display row's height. */
+.stanza-diff-inline-original-line span {
+	display: inline-block;
+	vertical-align: top;
+}
+
+.ash-diff-original-row {
+	box-sizing: border-box;
+	height: 1lh;
+	white-space: pre;
 }
 
 /* Grid rows use the deletion zone's measured display-line height. */
@@ -197,6 +204,7 @@
 .stanza-diff-editor .stanza-diff-insert-sign .ash-icon {
 	width: var(--ash-lxiconFontSize-compact);
 	height: var(--ash-lxiconFontSize-compact);
+	font-size: var(--ash-lxiconFontSize-compact);
 }
 
 [data-color-scheme="hcDark"] .stanza-diff-line-removed,

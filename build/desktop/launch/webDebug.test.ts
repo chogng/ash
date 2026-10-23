@@ -20,12 +20,12 @@ interface DebugState {
 for (const [serverName, browserName, port, connected] of [
 	['Ash Web (Chrome)', 'Ash Web Browser (Chrome)', 5173, false],
 	['Ash Web (Edge)', 'Ash Web Browser (Edge)', 5173, false],
-	['Ash Agents Web (Chrome)', 'Ash Agents Web Browser (Chrome)', 5173, false],
-	['Ash Agents Web (Edge)', 'Ash Agents Web Browser (Edge)', 5173, false],
+	['Ash Agents Web (Chrome)', 'Ash Agents Web Browser (Chrome)', 5175, false],
+	['Ash Agents Web (Edge)', 'Ash Agents Web Browser (Edge)', 5175, false],
 	['Ash Server (Web, Chrome)', 'Browser Debug', 5174, true],
 	['Ash Server (Web, Edge)', 'Browser Debug', 5174, true],
-	['Ash Agents Server (Web, Chrome)', 'Browser Debug', 5174, true],
-	['Ash Agents Server (Web, Edge)', 'Browser Debug', 5174, true],
+	['Ash Agents Server (Web, Chrome)', 'Browser Debug', 5176, true],
+	['Ash Agents Server (Web, Edge)', 'Browser Debug', 5176, true],
 ] as const) {
 	test(`${serverName} F5 releases its server and browser when ${connected ? 'the server' : 'either debug session'} stops and can launch again`, {
 		// The connected launch can compile the Rust backend before its first debugger starts.

@@ -40,6 +40,7 @@ struct Client {
     cancel_protected_commit: AtomicBool,
     cancel_clone_input: AtomicBool,
     configuration: Mutex<Value>,
+    configuration_reset: AtomicBool,
     shared_configuration: Mutex<Value>,
     snapshots: Mutex<Vec<Value>>,
     requests: Mutex<Vec<(String, Value)>>,
@@ -80,7 +81,7 @@ impl Client {
                     std::thread::sleep(Duration::from_millis(500));
                 }
                 ResultValue::Value {
-                    value: json!({"connection":"ready","sequence":self.editor_sequence.load(Ordering::Acquire),"generation":1,"reset":false,"editorFoldersChanged":after < self.editor_sequence.load(Ordering::Acquire),"events":[],"folders":[{"id":"workspace","name":"test","uri":url::Url::from_directory_path(&self.root).unwrap().to_string().trim_end_matches('/')} ]}),
+                    value: json!({"connection":"ready","sequence":self.editor_sequence.load(Ordering::Acquire),"generation":1,"reset":self.configuration_reset.load(Ordering::Acquire),"editorFoldersChanged":after < self.editor_sequence.load(Ordering::Acquire),"events":[],"folders":[{"id":"workspace","name":"test","uri":url::Url::from_directory_path(&self.root).unwrap().to_string().trim_end_matches('/')} ]}),
                 }
             }
             Operation::InspectConfiguration { section, .. } => ResultValue::Configuration {
@@ -167,7 +168,12 @@ impl Client {
                 self.snapshots.lock().unwrap().push(json!(providers));
                 ResultValue::Done
             }
-            Operation::BackendRequest { method, params, .. } => {
+            Operation::BackendRequest {
+                method,
+                params,
+                progress,
+                ..
+            } => {
                 self.requests
                     .lock()
                     .unwrap()
@@ -190,6 +196,21 @@ impl Client {
                         json!({"repositories":[{"id":"root","label":"test","path":"","dirId":"workspace"}]})
                     }
                     "status" => self.status(),
+                    "runTransport" => {
+                        let cancellable = self.configuration.lock().unwrap()["supportCancellation"]
+                            .as_bool()
+                            .unwrap_or(false);
+                        assert_eq!(
+                            progress.is_some(),
+                            cancellable && params["operation"]["kind"] != "push",
+                            "transport kind: {}",
+                            params["operation"]["kind"]
+                        );
+                        if let Some(progress) = progress {
+                            assert!(progress.cancellable);
+                        }
+                        json!({"status":self.status(),"outcome":{"kind":"completed"}})
+                    }
                     "catalog" => {
                         json!({"tags":[],"stashes":[],"remotes":["origin"],"upstreamReadOnly":false,"operation":null})
                     }
@@ -411,6 +432,7 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
             configuration: Mutex::new(
                 json!({"useEditorAsCommitInput":false,"enableSmartCommit":false,"suggestSmartCommit":false,"postCommitCommand":"none","autofetch":true,"autofetchPeriod":120}),
             ),
+            configuration_reset: AtomicBool::new(false),
             shared_configuration: Mutex::new(
                 json!({"revision":1,"gitConfigured":false,"git":{"autofetch":"off","autofetchPeriod":180,"rebaseWhenSync":false}}),
             ),
@@ -683,6 +705,24 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
         verify_history_references(&supervisor, &client);
         verify_workspace_comparisons(&supervisor, &client, language);
         verify_binary_comparisons(&supervisor, &client);
+        for cancellable in [false, true] {
+            client.configuration.lock().unwrap()["supportCancellation"] = json!(cancellable);
+            // A configuration change resets the client's cursor; editor-only changes do not.
+            client.configuration_reset.store(true, Ordering::Release);
+            let before = client.requests.lock().unwrap().len();
+            execute(
+                &supervisor,
+                &client,
+                invocation("git.fetch", "execute", json!({"arguments":["root"]})),
+            );
+            assert!(
+                client.requests.lock().unwrap()[before..]
+                    .iter()
+                    .any(|(method, _)| method == "runTransport")
+            );
+            client.configuration_reset.store(false, Ordering::Release);
+        }
+        client.configuration.lock().unwrap()["supportCancellation"] = json!(false);
         verify_terminal_helpers(&supervisor, &client, directory.path());
         supervisor.shutdown().unwrap();
         let reads = client.requests.lock().unwrap().len();

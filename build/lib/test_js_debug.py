@@ -2,6 +2,7 @@
 
 import hashlib
 import io
+import os
 import stat
 import tarfile
 import tempfile
@@ -51,10 +52,12 @@ class RuntimeTests(unittest.TestCase):
                 js_debug.copy_runtime(root, destination)
                 download.assert_not_called()
             self.assertEqual((destination / "LICENSE").read_text(), "MIT")
-            self.assertEqual(
-                stat.S_IMODE((destination / "src/dapDebugServer.js").stat().st_mode),
-                0o644,
-            )
+            adapter = destination / "src/dapDebugServer.js"
+            self.assertEqual(adapter.read_text(), "// adapter")
+            self.assertTrue(stat.S_ISREG(adapter.stat().st_mode))
+            # Windows chmod exposes the read-only flag, rather than POSIX group/other bits.
+            if os.name != "nt":
+                self.assertEqual(stat.S_IMODE(adapter.stat().st_mode), 0o644)
             self.assertEqual(
                 (destination.parent / "src/auto-attach.cjs").read_text(),
                 "auto-attach.cjs",

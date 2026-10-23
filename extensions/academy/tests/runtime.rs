@@ -32,7 +32,7 @@ impl Runtime {
 
 #[test]
 fn independent_provider_registers_localized_editors_and_rejects_unknown_requests() {
-    for (language, expected) in [("en", "Academic Document"), ("zh-CN", "学术论文文档")] {
+    for (language, expected) in [("en", "Academy Document"), ("zh-CN", "Academy 文档")] {
         let mut runtime = Runtime(
             Command::new(env!("CARGO_BIN_EXE_ash-academy"))
                 .stdin(Stdio::piped())
@@ -78,8 +78,8 @@ fn independent_provider_registers_localized_editors_and_rejects_unknown_requests
             json!({
                 "version":1,"clientModule":"dist/editor.js", "clientDigest":env!("ASH_EDITOR_CLIENT_DIGEST"), "editors":[{
                     "editorId":"stanza.editor.document", "displayName":expected,
-                    "selectors":["*.ash-academic","*.ash-paper"],"documentType":"academic",
-                    "contentType":"application/vnd.ash.academic-document+json"
+                    "selectors":["*.ash-academy","*.ash-paper"],"documentType":"academy",
+                    "contentType":"application/vnd.ash.academy-document+json"
                 }, {
                     "editorId":"ash.editor.document", "displayName":if language == "zh-CN" { "文档" } else { "Document" },
                     "selectors":["*.ash-doc"], "documentType":"general", "contentType":"application/vnd.ash.document+json"
@@ -99,9 +99,9 @@ fn independent_provider_registers_localized_editors_and_rejects_unknown_requests
         assert_eq!(
             translated["body"]["body"]["payload"]["editors"][0]["displayName"],
             if other == "zh-CN" {
-                "学术论文文档"
+                "Academy 文档"
             } else {
-                "Academic Document"
+                "Academy Document"
             }
         );
         let invalid = runtime.request(

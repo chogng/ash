@@ -3,8 +3,10 @@ import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child
 import { once } from 'node:events';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import test from 'node:test';
 import { promisify } from 'node:util';
+import { pathToFileURL } from 'node:url';
 import { isProcessRunning, ProcessRun, withProcessRun } from './processes.ts';
 
 const repository = resolve(import.meta.dirname, '..');
@@ -15,6 +17,26 @@ test('process runs propagate worker failures after cleanup', async () => {
 		await run.close();
 		throw failure;
 	}), error => error === failure);
+});
+
+test('a cleanup failure preserves the original worker failure', async () => {
+	const failure = new Error('worker failed before cleanup');
+	await assert.rejects(withProcessRun(repository, async (_run, environment) => {
+		await writeFile(join(environment.ASH_SMOKE_RUN_DIRECTORY!, 'resource-invalid.json'), '{');
+		throw failure;
+	}), error => error instanceof AggregateError && error.errors.includes(failure) && error.errors.some(item => item instanceof SyntaxError));
+});
+
+test('Windows process discovery ignores an inherited incompatible PowerShell module path', { skip: process.platform !== 'win32', timeout: 90_000 }, async t => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-process-modules-'));
+	t.after(() => rm(directory, { recursive: true, force: true }));
+	const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== 'PSMODULEPATH'));
+	const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', `
+import { ProcessRun } from ${JSON.stringify(pathToFileURL(join(repository, 'build/processes.ts')).href)};
+await new ProcessRun(process.cwd()).close();
+console.log('process-snapshot-ok');
+`], { cwd: repository, env: { ...environment, PSModulePath: join(directory, 'missing-modules') }, windowsHide: true, timeout: 60_000 });
+	assert.match(stdout, /process-snapshot-ok/u);
 });
 
 test('Windows cleanup ignores an exited process retained by another process handle', { skip: process.platform !== 'win32', timeout: 60_000 }, async t => {

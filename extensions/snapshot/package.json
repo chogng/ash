@@ -1,0 +1,123 @@
+{
+  "name": "snapshot",
+  "publisher": "ash",
+  "version": "0.1.0",
+  "type": "module",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "icon": "media/icon.png",
+  "engines": {
+    "ash": "*"
+  },
+  "browser": "./extension.ts",
+  "l10n": "l10n",
+  "activationEvents": [
+    "onCapability:image.editor.v1",
+    "onCommand:snapshot.code"
+  ],
+  "contributes": {
+    "imageEditors": [
+      {
+        "id": "snapshot.editor",
+        "displayName": "%displayName%",
+        "default": true,
+        "accessibilityHelp": "%capture.help%"
+      }
+    ],
+    "commands": [
+      {
+        "command": "snapshot.code",
+        "title": "%code.command%"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "snapshot.code",
+          "when": "editorHasSelection",
+          "group": "z_chat@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Snapshot",
+      "properties": {
+        "screenshot.globalShortcut": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "title": "%global.title%",
+          "description": "%global.description%"
+        },
+        "accessibility.verbosity.chatScreenshot": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "title": "%accessibility.title%",
+          "description": "%accessibility.description%"
+        },
+        "snapshot.code.padding": {
+          "type": "number",
+          "default": 32,
+          "minimum": 0,
+          "maximum": 128,
+          "scope": "application",
+          "description": "%code.padding%",
+          "title": "%code.padding.title%"
+        },
+        "snapshot.code.scale": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 4,
+          "scope": "application",
+          "description": "%code.scale%",
+          "title": "%code.scale.title%"
+        },
+        "snapshot.code.background": {
+          "type": "string",
+          "default": "#6366f1",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "scope": "application",
+          "description": "%code.background%",
+          "title": "%code.background.title%"
+        },
+        "snapshot.code.lineNumbers": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%code.lineNumbers%",
+          "title": "%code.lineNumbers.title%"
+        },
+        "snapshot.code.realLineNumbers": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%code.realLineNumbers%",
+          "title": "%code.realLineNumbers.title%"
+        },
+        "snapshot.code.windowControls": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%code.windowControls%",
+          "title": "%code.windowControls.title%"
+        },
+        "snapshot.code.windowTitle": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%code.windowTitle%",
+          "title": "%code.windowTitle.title%"
+        },
+        "snapshot.code.transparent": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "%code.transparent%",
+          "title": "%code.transparent.title%"
+        }
+      }
+    }
+  }
+}

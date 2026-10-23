@@ -17,7 +17,7 @@ import { applyDocumentTransaction, DocumentTransaction } from "../../../../../..
 import { serializeDocumentTransaction } from "../../../../../../../extensions/academy/common/model/documentTransactionSerialization.js";
 import type { DocumentCollaborationRemoteEnvelope } from '../../common/documentCollaborationService.js';
 import type { IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
-import type { IDocumentCollaborationApi } from "../../../../../platform/collaboration/common/documentCollaborationApi.js";
+import type { IDocumentCollaborationApi } from "../../../../../platform/collab/common/documentCollaborationApi.js";
 import { AppServerDocumentCollaborationService } from "../../browser/appServerDocumentCollaborationService.js";
 
 test("Stanza App Server collaboration adapter uses JSON-safe ordered versions and delivers room updates", async () => {

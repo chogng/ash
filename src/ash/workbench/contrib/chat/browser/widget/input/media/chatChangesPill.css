@@ -24,10 +24,10 @@
 	background: var(--ash-button-hoverBackground);
 }
 
-.ash-chat-changes-added {
-	color: var(--ash-charts-green);
+.ash-chat-changes-statistics .ash-changes-stats {
+	flex-wrap: nowrap;
 }
 
-.ash-chat-changes-removed {
-	color: var(--ash-charts-red);
+.ash-chat-changes-statistics.partial .ash-animated-counter::after {
+	content: "*";
 }

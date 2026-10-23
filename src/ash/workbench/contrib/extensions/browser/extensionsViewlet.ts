@@ -84,7 +84,7 @@ export class ExtensionsViewPaneContainer extends FilterViewPaneContainer {
 				: undefined,
 		}));
 		this.searchActions.element.classList.add('ash-toolbar', 'extensions-search-actions');
-		const help = localize({ bundle: 'ash.extensions', key: 'globalSearchHelp' }, 'Type to search the Marketplace. Use @installed to filter installed Skills, Plugins and Connections. Use the Filter extensions menu for installed categories, built-in plugins and recommendations. Clear Search removes the query and filters. Clear the search to return to installed categories. Enter searches immediately; Down moves to results; Escape clears the search. Refresh reloads all categories and preserves the search and pane expansion. The title bar More Actions menu provides marketplace, installed, source management and installation commands. Pane actions appear on hover or keyboard focus.');
+		const help = localize({ bundle: 'ash.extensions', key: 'globalSearchHelp' }, 'Type to search the Marketplace and installed Plugins, including built-in language servers. Use @installed to filter installed Skills, Plugins and Connections. Use the Filter extensions menu for installed categories, built-in plugins and recommendations. Clear Search removes the query and filters. Clear the search to return to installed categories. Enter searches immediately; Down moves to results; Escape clears the search. Refresh reloads all categories and preserves the search and pane expansion. The title bar More Actions menu provides marketplace, installed, source management and installation commands. Pane actions appear on hover or keyboard focus.');
 		this.search.inputElement.setAttribute('aria-description', help);
 
 		this._register(this.search.onDidChange(() => {
@@ -209,11 +209,22 @@ export class ExtensionsViewPaneContainer extends FilterViewPaneContainer {
 		const installedCategory = ({ '@skills': 'skills', '@plugins': 'plugins', '@connections': 'mcp', '@builtin': 'plugins', '@recommended': 'recommended' } as Record<string, string>)[token] ?? 'all';
 		const marketplace = !installed && !builtIn && (raw.length > 0 || this.searchOptions.mode === 'browse' || !!this.searchOptions.capabilityKind || !!this.searchOptions.languageId);
 		const category = marketplace && (this.searchOptions.view === 'skills' || this.searchOptions.view === 'mcp') ? this.searchOptions.view : 'view';
+		const searchPlugins = marketplace && this.searchOptions.mode !== 'browse' && category === 'view'
+			&& !!query && !this.searchOptions.capabilityKind && !this.searchOptions.languageId;
+		const marketplaceCategories = searchPlugins ? [category, 'plugins'] : [category];
 		this.contextKeys.bufferChangeEvents(() => {
 			this.contextKeys.setContext('extensionsMarketplaceVisible', marketplace);
 		});
-		this.filterChanged.fire(marketplace ? [category] : installedCategory === 'all' ? ['skills', 'plugins', 'mcp', 'recommended'] : [installedCategory]);
+		this.filterChanged.fire(marketplace ? marketplaceCategories : installedCategory === 'all' ? ['skills', 'plugins', 'mcp', 'recommended'] : [installedCategory]);
 		if (marketplace) {
+			// Installed providers must remain manageable even when the registry has no match.
+			if (searchPlugins) {
+				const plugins = this.getView('ash.extensions.plugins');
+				if (plugins instanceof ExtensionsListView) {
+					plugins.setSearch(query);
+					plugins.setExpanded(true);
+				}
+			}
 			const pane = this.getView(`ash.extensions.${category}`);
 			if (pane instanceof ExtensionsListView || pane instanceof SkillsViewPane || pane instanceof McpServersViewPane) { await pane.open({ ...this.searchOptions, mode: 'browse', query }); }
 		} else {

@@ -104,6 +104,7 @@ export class GettingStarted extends Disposable {
 		const mark = h(ownerDocument, 'div');
 		mark.className = 'ash-getting-started-mark';
 		mark.setAttribute('aria-hidden', 'true');
+		appendIcon(Lxicon.ashMark, mark);
 
 		const name = h(ownerDocument, 'div');
 		name.className = 'ash-getting-started-name';

@@ -1,5 +1,6 @@
+import ts from 'typescript';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, rename, stat, writeFile, lstat } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, stat, writeFile, lstat, realpath } from 'node:fs/promises';
 import { basename, delimiter, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
@@ -158,9 +159,37 @@ async function preparePackages(): Promise<boolean> {
 				module = Buffer.from(bundle.module, 'base64');
 				for (const source of bundle.sources) { compiledSources.add(source); }
 			} else {
+				const physicalPackageRoot = await realpath(packageRoot);
+				const withinPackage = (path: string, base = packageRoot): boolean => {
+					const location = relative(base, resolve(path)).replaceAll('\\', '/');
+					return location !== '..' && !location.startsWith('../') && !isAbsolute(location);
+				};
+				const assertPhysicalSource = async (path: string): Promise<void> => {
+					if (!withinPackage(await realpath(path.split('?')[0]), physicalPackageRoot)) throw new Error(`Extension import escapes its package through a symbolic link: ${path}`);
+				};
+				const entryPath = resolve(packageRoot, entry);
+				if (!withinPackage(entryPath)) throw new Error(`Extension entry escapes its package: ${entry}`);
+				await assertPhysicalSource(entryPath);
+				const assertDependency = (source: string, importer: string): void => {
+					if (source === '@ash/sdk') return;
+					if (source.startsWith('.') || isAbsolute(source)) {
+						if (!withinPackage(resolve(dirname(importer.split('?')[0]), source.split('?')[0]))) throw new Error(`Extension import escapes its package: ${source}`);
+					} else if (!Object.keys(manifest.dependencies ?? {}).some(name => source === name || source.startsWith(name + '/'))) {
+						throw new Error(`Extension import requires a declared dependency or @ash/sdk: ${source}`);
+					}
+				};
 				const sourcePlugin: import('vite').Plugin = {
 					name: 'ash-extension-sources',
 					enforce: 'pre',
+					async resolveId(source, importer) {
+						if (!importer || !withinPackage(importer.split('?')[0])) return;
+						assertDependency(source, importer);
+						if (source.startsWith('.') || isAbsolute(source)) {
+							const resolved = await this.resolve(source, importer, { skipSelf: true });
+							if (resolved && !resolved.external && isAbsolute(resolved.id)) await assertPhysicalSource(resolved.id);
+							return resolved;
+						}
+					},
 					async load(id) {
 						const path = id.split('?')[0];
 						if (isAbsolute(path) && !dependencies.has(path)) { dependencies.set(path, await fingerprintPaths([path])); }
@@ -169,7 +198,27 @@ async function preparePackages(): Promise<boolean> {
 						const path = id.split('?')[0];
 						if (isAbsolute(path) && !dependencies.has(path)) { dependencies.set(path, await fingerprintPaths([path])); }
 						const resource = relative(packageRoot, path).replaceAll('\\', '/');
-						if (!resource.startsWith('../') && /\.[cm]?[jt]sx?$/.test(path)) { compiledSources.add(resource); }
+						if (withinPackage(path) && /\.[cm]?[jt]sx?$/.test(path)) {
+							// Type-only imports are erased before Vite resolution, but remain part of the SDK boundary.
+							const source = ts.createSourceFile(path, _code, ts.ScriptTarget.Latest, true);
+							const imports = new Set<string>();
+							const visit = (node: ts.Node): void => {
+								if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) imports.add(node.moduleSpecifier.text);
+								if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteral(node.argument.literal)) imports.add(node.argument.literal.text);
+								ts.forEachChild(node, visit);
+							};
+							visit(source);
+							for (const dependency of imports) {
+								assertDependency(dependency, path);
+								// Resolve erased type imports too; otherwise a package-local symlink
+								// could hide a dependency on the host's private declarations.
+								if (dependency.startsWith('.') || isAbsolute(dependency)) {
+									const resolved = await this.resolve(dependency, path, { skipSelf: true });
+									if (resolved && !resolved.external && isAbsolute(resolved.id)) await assertPhysicalSource(resolved.id);
+								}
+							}
+							compiledSources.add(resource);
+						}
 					}
 				};
 				const result = await build({
@@ -197,7 +246,7 @@ async function preparePackages(): Promise<boolean> {
 								return `import { createApi } from ${facade}; export const bridge = createApi(globalThis.__ashConfiguration, globalThis.__ashInitialization);`;
 							}
 							if (id === '\0ash-browser-entry') {
-								return `import { __runtime } from ${JSON.stringify(resolve(root, 'resources/extension-host/host.mjs'))}; import { bridge } from '\0ash-api-bridge'; import * as extension from ${JSON.stringify(resolve(packageRoot, entry))}; export async function activate() { const context = __runtime.beginActivation(globalThis.__ashConfiguration.extensionId); await bridge.activate(context, extension.activate, extension, ['command', 'languageProvider', 'customTextEditor']); return JSON.parse(__runtime.sealActivation()); } export const invoke = (id, payload, requestId, operation) => __runtime.invoke(id, JSON.stringify(payload), requestId, operation).then(JSON.parse); export const cancel = id => __runtime.cancel(id); export const deactivate = () => __runtime.deactivate(() => { bridge.deactivate(); return extension.deactivate?.(); });`;
+								return `import { __runtime } from ${JSON.stringify(resolve(root, 'resources/extension-host/host.mjs'))}; import { bridge } from '\0ash-api-bridge'; import * as extension from ${JSON.stringify(resolve(packageRoot, entry))}; export async function activate() { __runtime.onRegistrationsChanged(snapshot => globalThis.__ashRegistrationsChanged(JSON.parse(snapshot)), true); const context = __runtime.beginActivation(globalThis.__ashConfiguration.extensionId); await bridge.activate(context, extension.activate, extension, ['command', 'languageProvider', 'customTextEditor', 'imageEditor']); return JSON.parse(__runtime.sealActivation()); } export const invoke = (id, payload, requestId, operation) => __runtime.invoke(id, JSON.stringify(payload), requestId, operation).then(JSON.parse); export const cancel = id => __runtime.cancel(id); export const deactivate = () => __runtime.deactivate(() => { bridge.deactivate(); return extension.deactivate?.(); });`;
 							}
 							if (!id.endsWith('?webview')) return;
 							const webview = await build({

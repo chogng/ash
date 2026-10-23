@@ -281,6 +281,7 @@ fn remote_server_forwards_the_terminal_lifecycle_over_stdio() {
     let mut client = session.client();
     let created = client
         .terminal_create(TerminalCreateParams {
+            lifetime_token: None,
             auto_replies: None,
             dir_id: None,
             rows: 24,
@@ -392,6 +393,7 @@ fn shared_backend_preserves_a_reconnectable_terminal_between_stdio_clients() {
     let mut first_client = first_session.client();
     let created = first_client
         .terminal_create(TerminalCreateParams {
+            lifetime_token: None,
             auto_replies: None,
             dir_id: None,
             rows: 24,
@@ -422,6 +424,7 @@ fn shared_backend_preserves_a_reconnectable_terminal_between_stdio_clients() {
     let attach_deadline = Instant::now() + Duration::from_secs(2);
     let attached = loop {
         match second_client.terminal_attach(TerminalAttachParams {
+            lifetime_token: None,
             dir_id: None,
             terminal_id: created.terminal_id.clone(),
             reconnect_token: lease.reconnect_token.clone(),

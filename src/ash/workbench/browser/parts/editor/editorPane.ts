@@ -9,7 +9,7 @@ import type { IFileService } from "../../../../platform/files/common/files.js";
 import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
-import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
+import type { IDocumentCollaborationApi } from "../../../../platform/collab/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import { type LanguageLocation, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
 import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";

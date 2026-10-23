@@ -1,0 +1,14 @@
+.ash-changes-stats {
+	display: inline-flex;
+	align-items: baseline;
+	gap: var(--ash-spacing-size40);
+	flex-wrap: wrap;
+}
+
+.ash-changes-stats-added {
+	color: var(--ash-charts-green);
+}
+
+.ash-changes-stats-removed {
+	color: var(--ash-charts-red);
+}

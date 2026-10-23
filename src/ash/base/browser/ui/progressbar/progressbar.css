@@ -1,3 +1,52 @@
 .ash-progress-bar {
 	inline-size: 100%;
 }
+
+.ash-progress-bar.thin {
+	position: absolute;
+	inset: 0 0 auto;
+	height: 2px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	appearance: none;
+	background: transparent;
+}
+
+.ash-progress-bar.thin[hidden] {
+	display: none;
+}
+
+.ash-progress-bar.thin::-webkit-progress-bar {
+	background: transparent;
+}
+
+.ash-progress-bar.thin::-webkit-progress-value {
+	background: currentColor;
+}
+
+.ash-progress-bar.thin::-moz-progress-bar {
+	background: currentColor;
+}
+
+.ash-progress-bar.thin:not([value]) {
+	background-image: linear-gradient(currentColor, currentColor);
+	background-size: 25% 100%;
+	background-repeat: no-repeat;
+	animation: ash-progress-bar 1.2s ease-in-out infinite;
+}
+
+@keyframes ash-progress-bar {
+	from {
+		background-position: -34% 0;
+	}
+	to {
+		background-position: 134% 0;
+	}
+}
+
+.ash-reduce-motion .ash-progress-bar.thin:not([value]) {
+	animation-name: none;
+	background-position: 50% 0;
+}

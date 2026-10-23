@@ -89,7 +89,7 @@ suite('DesktopLayoutController', () => {
 		const saved = workingSet('session:b', 'retained.ts');
 		const file = saved.groups[0]!.editors[0]!;
 		const page = (resource: string): typeof file => ({ input: { typeId: 'workbench.editorInput.resource', value: { resource } }, preview: false });
-		const mixed = { ...saved, groups: [{ ...saved.groups[0]!, editors: [page('ash-design:/canvas'), file, page('ash-library:/library')], activeEditorIndex: 1 }] };
+		const mixed = { ...saved, groups: [{ ...saved.groups[0]!, editors: [page('ash-design:/canvas'), file], activeEditorIndex: 1 }] };
 		using fixture = await createFixture([{ sessionResource: 'session:b', editorWorkingSet: mixed }]);
 		await fixture.open('b');
 		assert.deepEqual(fixture.editor.current, saved);
@@ -509,6 +509,7 @@ class LayoutFixture extends Disposable {
 			}
 		}));
 		this.services.registerInstance(IPaneCompositePartService, {
+			getProgressIndicator: () => undefined,
 			onDidPaneCompositeOpen: listener => this.panelOpened.event(id => listener({ composite: { id } as import('../../../../../workbench/browser/panecomposite.js').PaneComposite, viewContainerLocation: ViewContainerLocation.Panel })),
 			onDidPaneCompositeClose: Event.None,
 			getActivePaneComposite: () => undefined,

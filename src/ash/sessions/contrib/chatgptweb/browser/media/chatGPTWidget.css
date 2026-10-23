@@ -25,7 +25,6 @@
 	display: none;
 }
 
-:where(.ash-chatgpt-widget) button,
 :where(.ash-chatgpt-widget) input,
 :where(.ash-chatgpt-widget) textarea,
 :where(.ash-chatgpt-widget) select {
@@ -33,29 +32,10 @@
 	color: inherit;
 }
 
-:where(.ash-chatgpt-widget) button {
-	min-height: 36px;
-	padding: 6px 12px;
-	border: var(--ash-strokeThickness, 1px) solid transparent;
-	border-radius: var(--ash-cornerRadius-large, 8px);
-	background: transparent;
-	cursor: pointer;
-}
-
-.ash-chatgpt-widget button:hover,
-.ash-chatgpt-widget button[aria-current] {
-	background: var(--ash-list-hoverBackground, ButtonFace);
-}
-
-.ash-chatgpt-widget :is(button, input, textarea, select, a):focus-visible {
+.ash-chatgpt-widget :is(input, textarea, select, a):focus-visible {
 	outline: var(--ash-strokeThickness, 1px) solid
 		var(--ash-focusBorder, Highlight);
 	outline-offset: -1px;
-}
-
-.ash-chatgpt-widget button:disabled {
-	opacity: 0.5;
-	cursor: default;
 }
 
 .ash-chatgpt-main {
@@ -208,8 +188,7 @@
 	contain-intrinsic-size: auto 160px;
 }
 @media (forced-colors: active) {
-	.ash-chatgpt-widget
-		:is(button, .ash-chatgpt-composer, .ash-chatgpt-turn.user) {
+	.ash-chatgpt-widget :is(.ash-chatgpt-composer, .ash-chatgpt-turn.user) {
 		border: var(--ash-strokeThickness, 1px) solid CanvasText;
 	}
 }

@@ -16,9 +16,6 @@
 .ash-chatgpt-navigation * {
 	box-sizing: border-box;
 }
-
-.ash-chatgpt-navigation
-	:is(.ash-chatgpt-new-chat, .ash-chatgpt-conversation, .ash-action-label),
 .ash-chatgpt-navigation input {
 	font: inherit;
 	color: inherit;
@@ -26,28 +23,9 @@
 
 .ash-chatgpt-navigation
 	:is(.ash-chatgpt-new-chat, .ash-chatgpt-conversation, .ash-action-label) {
-	min-height: 36px;
-	padding: 6px 12px;
-	border: var(--ash-strokeThickness, 1px) solid transparent;
-	border-radius: var(--ash-cornerRadius-large, 8px);
-	background: transparent;
-	cursor: pointer;
+	min-height: var(--ash-spacing-size360);
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size120);
 	text-align: left;
-}
-
-.ash-chatgpt-navigation
-	:is(
-		.ash-chatgpt-new-chat,
-		.ash-chatgpt-conversation,
-		.ash-action-label
-	):hover,
-.ash-chatgpt-navigation
-	:is(
-		.ash-chatgpt-new-chat,
-		.ash-chatgpt-conversation,
-		.ash-action-label
-	)[aria-current] {
-	background: var(--ash-list-hoverBackground, ButtonFace);
 }
 
 .ash-chatgpt-navigation
@@ -58,6 +36,7 @@
 	)[aria-current] {
 	font-weight: var(--ash-fontWeight-semiBold, 600);
 	border-color: var(--ash-contrastBorder, transparent);
+	background: var(--ash-sessions-selectionBackground);
 }
 
 .ash-chatgpt-navigation input {
@@ -73,27 +52,10 @@
 	flex-shrink: 0;
 	margin-inline: 12px;
 }
-
-.ash-chatgpt-navigation
-	:is(
-		.ash-chatgpt-new-chat,
-		.ash-chatgpt-conversation,
-		.ash-action-label,
-		input
-	):focus-visible {
+.ash-chatgpt-navigation input:focus-visible {
 	outline: var(--ash-strokeThickness, 1px) solid
 		var(--ash-focusBorder, Highlight);
 	outline-offset: -1px;
-}
-
-.ash-chatgpt-navigation
-	:is(
-		.ash-chatgpt-new-chat,
-		.ash-chatgpt-conversation,
-		.ash-action-label
-	):disabled {
-	opacity: 0.5;
-	cursor: default;
 }
 
 .ash-chatgpt-navigation-list {
@@ -132,9 +94,14 @@
 }
 
 .ash-chatgpt-navigation .ash-chatgpt-conversation {
+	display: block;
 	width: 100%;
 	flex-shrink: 0;
 	min-height: var(--ash-list-rowHeight, 22px);
+	/* Match the pane's row geometry when the Sessions host supplies 14px text. */
+	line-height: calc(
+		var(--ash-list-rowHeight) - 2 * var(--ash-strokeThickness)
+	);
 	padding-block: 0;
 	overflow: hidden;
 	white-space: nowrap;
@@ -211,7 +178,6 @@
 	min-height: 0;
 	padding: 0;
 	gap: 0;
-	border-radius: var(--ash-cornerRadius-small, 4px);
 }
 
 .ash-chatgpt-conversation-actions .ash-action-label-text {
@@ -229,8 +195,11 @@
 			.ash-chatgpt-conversation,
 			.ash-action-label
 		) {
-		border: var(--ash-strokeThickness, 1px) solid CanvasText;
+		min-height: var(--ash-spacing-size360);
+		padding: var(--ash-spacing-size60) var(--ash-spacing-size120);
+		text-align: left;
 	}
+
 	.ash-chatgpt-navigation-list button[aria-current] {
 		border: 2px solid Highlight;
 	}

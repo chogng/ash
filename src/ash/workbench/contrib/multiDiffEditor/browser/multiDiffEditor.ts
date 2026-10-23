@@ -58,6 +58,7 @@ import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/ed
 import { IResourceIconRenderer } from '../../../browser/labels.js';
 
 export const MultiDiffEditorAllCollapsed = new RawContextKey<boolean>('multiDiffEditorAllCollapsed', false);
+export const MultiDiffEditorHideUnchangedRegions = new RawContextKey<boolean>('multiDiffEditorHideUnchangedRegions', true);
 
 export interface MultiDiffEditorOptions {
 	/** A composed editor retains its own menu identity while reusing this comparison widget. */
@@ -92,6 +93,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 	private readonly workingCopiesEmitter = this._register(new Emitter<void>());
 	private readonly workingCopiesListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly collapseStateListener = this._register(new MutableDisposable<IDisposable>());
+	private readonly hideUnchangedRegionsListener = this._register(new MutableDisposable<IDisposable>());
 	public readonly onDidChangeWorkingCopies = this.workingCopiesEmitter.event;
 
 	public getWorkingCopies(): readonly IWorkingCopy[] {
@@ -159,6 +161,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		this.session.value = this.pendingSession.clearAndLeak();
 		this.workingCopiesListener.value = this.session.value?.onDidChangeWorkingCopies(() => this.workingCopiesEmitter.fire());
 		this.collapseStateListener.value = this.session.value?.editor?.onDidChangeCollapseState(() => this.updateCollapseContext());
+		this.hideUnchangedRegionsListener.value = this.session.value?.editor?.onDidChangeHideUnchangedRegions(() => this.updateCollapseContext());
 		this.updateCollapseContext();
 		this.workingCopiesEmitter.fire();
 		this.session.value?.show();
@@ -167,6 +170,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 
 	public override clearInput(): void {
 		this.collapseStateListener.clear();
+		this.hideUnchangedRegionsListener.clear();
 		this.workingCopiesListener.clear();
 		this.pendingSession.clear();
 		this.session.clear();
@@ -249,6 +253,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		// Retained hidden tabs must not overwrite the active editor's title state.
 		if (this.isVisible()) {
 			this.options.fileActions?.contextKeyService.setContext(MultiDiffEditorAllCollapsed.key, this.session.value?.editor?.allCollapsed ?? false);
+			this.options.fileActions?.contextKeyService.setContext(MultiDiffEditorHideUnchangedRegions.key, this.session.value?.editor?.collapseUnchangedRegions ?? true);
 		}
 	}
 
@@ -269,6 +274,7 @@ class MultiDiffEditorSession extends Disposable {
 	public get workingCopies(): readonly IWorkingCopy[] { return [...this.copies.values()]; }
 	public readonly editor: MultiDiffEditorWidget | undefined;
 	private readonly models = new Set<DiffModel>();
+	private readonly idleComparisons = new Map<DocumentDiffItem, number>();
 	private readonly itemResources = this._register(new MutableDisposable<DisposableStore>());
 	private readonly model: MultiDiffEditorModel;
 	private readonly inputsById = new Map<string, MultiDiffEditorInputItem>();
@@ -393,17 +399,16 @@ class MultiDiffEditorSession extends Disposable {
 		this.domNode.classList.remove('pending');
 	}
 
-	private async loadItem(input: MultiDiffEditorInputItem, modelService: ITextModelResourceService, computationService: IDocumentDiffProvider, configuration: IConfigurationService, owner: DisposableStore, signal: AbortSignal): Promise<DiffModel | undefined> {
-		const resources = owner.add(new DisposableStore());
+	private async loadItem(input: MultiDiffEditorInputItem, modelService: ITextModelResourceService, computationService: IDocumentDiffProvider, configuration: IConfigurationService, resources: DisposableStore, signal: AbortSignal): Promise<DiffModel | undefined> {
 		try {
 			const original = await modelService.acquire(input.original, signal);
-			if (this.isDisposed || signal.aborted || owner.isDisposed) {
+			if (this.isDisposed || signal.aborted || resources.isDisposed) {
 				original.dispose();
 				throw new Error('Multi-diff editor input loading was cancelled');
 			}
 			resources.add(original);
 			const modified = await modelService.acquire(input.modified, signal);
-			if (this.isDisposed || signal.aborted || owner.isDisposed) {
+			if (this.isDisposed || signal.aborted || resources.isDisposed) {
 				modified.dispose();
 				throw new Error('Multi-diff editor input loading was cancelled');
 			}
@@ -547,13 +552,40 @@ class MultiDiffEditorSession extends Disposable {
 		return input.items.map(item => {
 			const id = multiDiffEditorItemKey(item);
 			this.inputsById.set(id, item);
-			return resources.add(new DocumentDiffItem({
+			const loaded = resources.add(new MutableDisposable<DisposableStore>());
+			const comparison = resources.add(new DocumentDiffItem({
 				id, label: item.label, binary: item.binary,
 				originalUri: item.original.resource, modifiedUri: item.modified.resource,
 				originalLabel: item.original.label, modifiedLabel: item.modified.label,
 				readOnly: item.modified.readOnly,
-			}, item.binary ? undefined : () => this.loadItem(item, this.options.modelService, this.computationService, this.configuration, resources, abort.signal)));
+			}, item.binary ? undefined : () => {
+				const lifetime = new DisposableStore();
+				loaded.value = lifetime;
+				return this.loadItem(item, this.options.modelService, this.computationService, this.configuration, lifetime, abort.signal);
+			}, item.modified.readOnly === true ? {
+				onDidChange: comparison => this.updateComparisonCache(comparison),
+				release: () => loaded.clear(),
+			} : undefined));
+			resources.add(toDisposable(() => this.idleComparisons.delete(comparison)));
+			return comparison;
 		});
+	}
+
+	private updateComparisonCache(item: DocumentDiffItem): void {
+		this.idleComparisons.delete(item);
+		if (!item.isInUse && item.model) {
+			// UTF-16 source size is a cheap budget estimate; the item cap also bounds
+			// model, token and diff overhead for many small historical comparisons.
+			this.idleComparisons.set(item, 2 * (item.model.original.getValueLength() + item.model.modified.getValueLength()));
+		}
+		let bytes = 0;
+		for (const size of this.idleComparisons.values()) bytes += size;
+		for (const [candidate, size] of this.idleComparisons) {
+			if (this.idleComparisons.size <= 5 && bytes <= 16 * 1024 * 1024) break;
+			if (!candidate.release()) continue;
+			this.idleComparisons.delete(candidate);
+			bytes -= size;
+		}
 	}
 
 	private async refreshSource(): Promise<void> {

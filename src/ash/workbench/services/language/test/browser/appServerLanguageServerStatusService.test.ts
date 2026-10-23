@@ -8,7 +8,7 @@ import { ILanguageServerService, type LanguageServerControl, type LanguageServer
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
-import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+import { registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DisposableStore, Disposable } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../../output/common/output.js';
 import assert from "node:assert/strict";
@@ -255,6 +255,7 @@ test('language-server errors use localized notifications and reveal their output
 
 
 function createService(services: ReturnType<typeof workbenchInstantiationService>, events: IServerEventApi, options: { workspace?: TestWorkspaceService; read?: (dirId?: string) => Promise<LanguageServerSnapshot>; controls?: LanguageServerControl[]; menu?: (delegate: IContextMenuDelegate) => void; } = {}): AppServerLanguageServerStatusService {
+	registerTestWorkbenchInteractionServices(services.resources, services);
 	const scope = services.createChild();
 	scope.registerInstance(IServerEventApi, events);
 	if (options.workspace) scope.registerInstance(IWorkspaceContextService, options.workspace);

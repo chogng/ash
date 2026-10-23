@@ -8,7 +8,7 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import { localize } from '../../../../nls.js';
 import { URI } from '../../../../base/common/uri.js';
 
-export type SettingValueType = 'boolean' | 'number' | 'select' | 'text' | 'stringMap' | 'complex';
+export type SettingValueType = 'boolean' | 'number' | 'numberWithOptions' | 'select' | 'text' | 'stringMap' | 'complex';
 export type SettingsPresentation = 'editor' | 'general';
 
 export interface SettingValueBinding<T> {
@@ -53,6 +53,17 @@ export interface INumberSetting extends ISettingBase {
 	readonly maximum: number;
 }
 
+/** Numeric schemas can also accept an automatic value or named sizing modes. */
+export interface INumberWithOptionsSetting extends ISettingBase {
+	readonly valueType: 'numberWithOptions';
+	readonly configuration: IRegisteredConfiguration<number | string | null>;
+	readonly binding?: SettingValueBinding<number | string | null>;
+	readonly minimum: number;
+	readonly maximum: number;
+	readonly integer: boolean;
+	readonly options: readonly { readonly value: string | null; readonly label: string; }[];
+}
+
 export interface ISelectSetting extends ISettingBase {
 	readonly valueType: 'select';
 	readonly configuration: IRegisteredConfiguration<string | boolean>;
@@ -86,7 +97,7 @@ export interface IComplexSetting extends ISettingBase {
 	readonly configuration: IRegisteredConfiguration;
 }
 
-export type ISetting = IBooleanSetting | INumberSetting | ISelectSetting | ITextSetting | IStringMapSetting | IComplexSetting;
+export type ISetting = IBooleanSetting | INumberSetting | INumberWithOptionsSetting | ISelectSetting | ITextSetting | IStringMapSetting | IComplexSetting;
 
 export interface ISelectSettingOption {
 	readonly value: string | boolean;

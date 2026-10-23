@@ -3,7 +3,7 @@ import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../../
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
 import { type DiffModel } from '../../../../common/diff/diffModel.js';
-import { LineDiffKind, type LineDiff, type LineDiffHunk, type LineDiffRow } from '../../../../common/diff/lineDiff.js';
+import { type LineDiff, type LineDiffHunk, type LineDiffRow } from '../../../../common/diff/lineDiff.js';
 
 /** Reads one changed hunk at a time from the current versioned comparison. */
 export class AccessibleDiffViewer extends Disposable {
@@ -122,7 +122,7 @@ export class AccessibleDiffViewer extends Disposable {
 		this.nextDomNode.textContent = localize('diffEditor.accessibleViewer.next', 'Next difference');
 		this.closeDomNode.textContent = localize('diffEditor.accessibleViewer.close', 'Close');
 		const diff = this.getDiff();
-		const changedRows = diff?.rows.flatMap((row, index) => row.kind === LineDiffKind.Unchanged ? [] : [index]) ?? [];
+		const changedRows = diff ? Array.from(diff.rows.changedEntries(), ([index]) => index) : [];
 		if (!diff || changedRows.length === 0) {
 			this.currentRow = -1;
 			this.summaryDomNode.textContent = this.getAccessibleContent();
@@ -133,7 +133,7 @@ export class AccessibleDiffViewer extends Disposable {
 		}
 		const position = Math.max(0, changedRows.indexOf(this.currentRow));
 		this.summaryDomNode.textContent = localize('diffEditor.accessibleViewer.position', 'Difference {0} of {1}', position + 1, changedRows.length);
-		this.contentDomNode.value = this.rowContent(diff.rows[changedRows[position]!]!).join('\n');
+		this.contentDomNode.value = this.rowContent(diff.rows.get(changedRows[position]!)!).join('\n');
 		this.previousDomNode.disabled = false;
 		this.nextDomNode.disabled = false;
 	}

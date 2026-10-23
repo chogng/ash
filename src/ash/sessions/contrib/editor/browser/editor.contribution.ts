@@ -90,7 +90,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		};
 		this._register(MenusRegistry.appendMenuItems([
 			{
-				id: Menus.TitleBarLeftLayout,
+				id: Menus.TitleBarRightLayout,
 				item: {
 					command: { ...toggleSidePane, icon: Lxicon.layoutSidebarRight2 },
 					when: codeWhen, group: 'navigation', order: 4,

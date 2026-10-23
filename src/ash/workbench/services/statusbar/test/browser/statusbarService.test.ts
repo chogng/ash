@@ -1,6 +1,7 @@
+import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { StatusbarAlignment, StatusbarService } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
+import { StatusbarAlignment } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
 
 test("status bar entries are grouped and ordered by alignment", () => {
 	using service = new StatusbarService();

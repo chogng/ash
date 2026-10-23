@@ -390,9 +390,6 @@ fn git_operations_declare_repository_access_and_validate_selectors() {
     for method in [
         "git/command",
         "git/catalog",
-        "git/compareChanges",
-        "git/commitMessage",
-        "git/commitDetails",
         "git/indexDiff",
         "git/indexEdit",
         "git/fetch",
@@ -424,6 +421,21 @@ fn git_operations_declare_repository_access_and_validate_selectors() {
             definition(method)
                 .serialization_scope(&serde_json::json!({"repositoryId":12}))
                 .is_err()
+        );
+    }
+    for method in [
+        "git/commitChanges",
+        "git/compareChanges",
+        "git/commitMessage",
+        "git/commitDetails",
+        "git/commitFile",
+    ] {
+        assert_eq!(
+            definition(method)
+                .serialization_scope(&serde_json::json!({"repositoryId":"repo-1"}))
+                .unwrap(),
+            None,
+            "{method} must not wait for repository mutation admission"
         );
     }
     assert_eq!(

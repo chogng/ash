@@ -59,7 +59,7 @@ import './contrib/opener/browser/opener.contribution.js';
 import './contrib/snippets/browser/snippets.contribution.js';
 import './contrib/scrollLocking/browser/scrollLocking.contribution.js';
 import { registerCallView } from './contrib/call/browser/call.contribution.js';
-import { registerCollaborationViews } from './contrib/collaboration/browser/collaboration.contribution.js';
+import { registerCollabViews } from './contrib/collab/browser/collab.contribution.js';
 import './contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import '../editor/editor.code.all.js';
 import './contrib/codeEditor/browser/codeEditor.contribution.js';
@@ -80,7 +80,7 @@ import { AppServerSyntaxProviders } from './services/language/browser/appServerS
 import { IRendererHostService } from '../platform/renderer/common/rendererHost.js';
 import { Disposable } from '../base/common/lifecycle.js';
 
-registerCollaborationViews();
+registerCollabViews();
 registerCallView();
 
 registerWorkbenchContribution(

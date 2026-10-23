@@ -1,6 +1,10 @@
 ---
 name: skill-creator
 description: Creates or updates concise, valid Agent Skills for Ash. Use when the user asks to design, scaffold, validate, or revise a SKILL.md workflow or its scripts, references, and assets.
+metadata:
+  author: Ash
+  version: "1.0.0"
+  updated-at: "2026-10-22"
 ---
 
 # Skill creator

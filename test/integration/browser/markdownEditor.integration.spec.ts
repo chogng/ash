@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { startMarkdownExtension } from '../../fixtures/markdownExtension.js';
-import { createLargeMarkdownDocument } from './markdownLargeDocument.js';
+import { createLargeMarkdownDocument } from '../../fixtures/browser/markdownLargeDocument.js';
 import { createHash } from 'node:crypto';
-import { trackDocumentStyles } from './documentStyles.js';
+import { trackDocumentStyles } from '../../fixtures/browser/documentStyles.js';
 import { captureDocumentStyles } from '../../fixtures/documentStyles.js';
 
 let parser: Awaited<ReturnType<typeof startMarkdownExtension>>;

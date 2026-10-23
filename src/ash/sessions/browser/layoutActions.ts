@@ -69,7 +69,7 @@ export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sess
 				precondition: sessionTools.isEqualTo(true),
 				keybinding: { primary: new Keybinding([logicalKey('`', { ctrlKey: true })]), when: sessionTools.isEqualTo(true) },
 				menu: [
-					{ id: Menus.TitleBarLeftLayout, group: 'navigation', order: 3, when: sessionTools.isEqualTo(true) },
+					{ id: Menus.TitleBarRightLayout, group: 'navigation', order: 3, when: sessionTools.isEqualTo(true) },
 					{ id: MenuId.MenubarViewMenu, group: '2_code_layout', order: 3, when: sessionTools.isEqualTo(true) },
 					{ id: MenuId.PanelTitle, group: 'navigation', order: 100, when: sessionTools.isEqualTo(true) },
 				],
@@ -106,32 +106,17 @@ export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sess
 				order: 0,
 			},
 		},
-		{
-			id: Menus.TitleBarLeftLayout,
-			item: {
-				command: {
-					id: 'ash.sessions.back',
-					title: localize2({ bundle: 'ash', key: 'sessions.navigation.back' }, 'Back'),
-					icon: Lxicon.arrowLeft,
-					precondition: CanGoBackContext.isEqualTo(true),
-				},
-				group: 'navigation',
-				order: 1,
-			},
-		},
-		{
-			id: Menus.TitleBarLeftLayout,
-			item: {
-				command: {
-					id: 'ash.sessions.forward',
-					title: localize2({ bundle: 'ash', key: 'sessions.navigation.forward' }, 'Forward'),
-					icon: Lxicon.arrowRight,
-					precondition: CanGoForwardContext.isEqualTo(true),
-				},
-				group: 'navigation',
-				order: 2,
-			},
-		},
 	]));
+	for (const [id, title, icon, precondition, order] of [
+		['ash.sessions.back', localize2({ bundle: 'ash', key: 'sessions.navigation.back' }, 'Back'), Lxicon.chevronLeft, CanGoBackContext.isEqualTo(true), 1],
+		['ash.sessions.forward', localize2({ bundle: 'ash', key: 'sessions.navigation.forward' }, 'Forward'), Lxicon.chevronRight, CanGoForwardContext.isEqualTo(true), 2],
+	] as const) {
+		const command = { id, title, icon, precondition };
+		disposables.add(MenusRegistry.appendMenuItems([
+			{ id: Menus.TitleBarLeftLayout, item: { command, group: 'navigation', order } },
+			{ id: MenuId.MenubarGoMenu, item: { command, group: 'navigation', order } },
+		]));
+	}
+
 	return disposables;
 }

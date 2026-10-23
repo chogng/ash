@@ -3,14 +3,14 @@ import { execFile } from 'node:child_process';
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from 'node:util';
-import { createAcademicDocumentSchema } from "../../extensions/academy/browser/contrib/academic/common/schema.js";
+import { createAcademyDocumentSchema } from "../../extensions/academy/browser/contrib/academy/common/schema.js";
 import { serializeDocument } from "../../extensions/academy/common/model/documentSerialization.js";
 
 export interface TestWorkspace {
 	readonly directory: string;
 	readonly file: string;
 	readonly rustFile: string;
-	readonly academicFile: string;
+	readonly academyFile: string;
 	readonly largeFile: string;
 	readonly pdfFile: string;
 }
@@ -32,13 +32,13 @@ export async function createTestWorkspace(options: TestWorkspaceOptions = {}): P
 	const file = join(directory, "main.ts");
 	const rustFile = join(directory, "main.rs");
 	const rustManifest = join(directory, "Cargo.toml");
-	const academicFile = join(directory, "paper.ash-academic");
+	const academyFile = join(directory, "paper.ash-academy");
 	const largeFile = join(directory, "large.ts");
 	const pdfFile = join(directory, "paper.pdf");
 	await writeFile(file, "const value = 1;\n", "utf8");
 	await writeFile(rustManifest, "[package]\nname = \"ash-smoke-workspace\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[[bin]]\nname = \"ash-smoke-workspace\"\npath = \"main.rs\"\n", "utf8");
 	await writeFile(rustFile, "fn main() {\n    let message = String::from(\"hello\");\n    message.\n}\n", "utf8");
-	await writeFile(academicFile, createAcademicDocument(), "utf8");
+	await writeFile(academyFile, createAcademyDocument(), "utf8");
 	if (options.includeLargeFile) await writeFile(largeFile, "let value = 1;\n".repeat(300_001), "utf8");
 	await writeFile(pdfFile, createPdfDocument());
 	if (options.gitRepository) {
@@ -65,7 +65,7 @@ export async function createTestWorkspace(options: TestWorkspaceOptions = {}): P
 			}
 		}
 	}
-	return { directory, file, rustFile, academicFile, largeFile, pdfFile };
+	return { directory, file, rustFile, academyFile, largeFile, pdfFile };
 }
 
 /** Removes one test workspace created by {@link createTestWorkspace}. */
@@ -73,10 +73,10 @@ export async function disposeTestWorkspace(workspace: TestWorkspace): Promise<vo
 	await rm(workspace.directory, { force: true, recursive: true });
 }
 
-function createAcademicDocument(): string {
-	const schema = createAcademicDocumentSchema();
+function createAcademyDocument(): string {
+	const schema = createAcademyDocumentSchema();
 	const title = schema.createNode("title", {
-		content: [schema.createNode("heading", { content: [schema.createText("Academic draft")] })],
+		content: [schema.createNode("heading", { content: [schema.createText("Academy draft")] })],
 	});
 	const abstract = schema.createNode("abstract", {
 		content: [schema.createNode("paragraph", { content: [schema.createText("A structured document for editor tests.")] })],

@@ -57,7 +57,7 @@ for (const locale of ['en', 'zh-CN']) {
 
 test('Code Sessions runs Quick Diff commands through its editor services', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const commands = new QuickAccess(page);
 	await commands.runCommand('workbench.action.files.newUntitledFile');
 	const editor = page.locator('[data-part="editor"]');
@@ -76,7 +76,7 @@ test('Code Sessions runs Quick Diff commands through its editor services', async
 
 test('Code Sessions starts with dialog dependencies and confirms closing a dirty editor', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const commands = new QuickAccess(page);
 	await commands.runCommand('workbench.action.files.newUntitledFile');
 	const editors = page.locator('[data-part="editor"]');
@@ -102,12 +102,12 @@ test('Code sessions restore editor tabs through Back, Forward and reopening with
 	let page = await workbench.openAgentsWindow(target.kind);
 	let navigation = page.locator('.ash-sessions-activity-content');
 	let editors = page.locator('[data-part="editor"]');
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await page.locator('.ash-sessions-list-add').click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('[data-action-id="sessions.newSession"] button').click();
 	const commands = new QuickAccess(page);
 	await commands.runCommand('workbench.action.files.newUntitledFile');
 	await expect(editors.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
-	await page.locator('.ash-sessions-list-add').click();
+	await page.locator('[data-action-id="sessions.newSession"] button').click();
 	await editors.getByRole('tab', { name: 'Untitled-1', exact: true }).press('Delete');
 	await commands.runCommand('workbench.action.files.newUntitledFile');
 	await expect(editors.getByRole('tab', { name: 'Untitled-2', exact: true })).toBeVisible();
@@ -125,7 +125,7 @@ test('Code sessions restore editor tabs through Back, Forward and reopening with
 	page = await workbench.reopenAgentsWindow(application, page);
 	navigation = page.locator('.ash-sessions-activity-content');
 	editors = page.locator('[data-part="editor"]');
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(editors.getByRole('tab', { name: 'Untitled-2', exact: true })).toBeVisible();
 });
 
@@ -134,7 +134,7 @@ test('Code panel stays below the main region and retains its views across sessio
 	let navigation = page.locator('.ash-sessions-activity-content');
 	let panel = page.locator('[data-part="panel"]');
 	const sidebar = page.locator('[data-part="sidebar"]');
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	let toggle = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Toggle Code panel', exact: true });
 	await expect(panel).toBeHidden();
 	const sidebarBefore = await sidebar.boundingBox();
@@ -148,7 +148,7 @@ test('Code panel stays below the main region and retains its views across sessio
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(panel).toBeHidden();
 	await expect(toggle).toHaveCount(0);
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panel).toBeVisible();
 	expect((await panel.boundingBox())?.height).toBe(panelBefore?.height);
 	page = await workbench.reopenAgentsWindow(application, page);
@@ -157,7 +157,7 @@ test('Code panel stays below the main region and retains its views across sessio
 	toggle = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Toggle Code panel', exact: true });
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(panel).toBeHidden();
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panel).toBeVisible();
 	await toggle.click();
 	await expect(panel).toBeHidden();
@@ -169,7 +169,7 @@ test('Code panel stays below the main region and retains its views across sessio
 focusTest('Code connects layout commands to View, Add tab and the panel shortcut', async ({ application, target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const editor = page.locator('[data-part="editor"]');
 	const title = editor.locator('.ash-editor-title-control:visible');
 	const content = editor.locator('.ash-editor-group:visible > .ash-editor-group-content');
@@ -221,7 +221,7 @@ focusTest('Code connects layout commands to View, Add tab and the panel shortcut
 
 test('Code shares its tabs across all four editor and Details states', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	let editor = page.locator('[data-part="editor"]');
 	let title = editor.locator('.ash-editor-title-control:visible');
 	let content = editor.locator('.ash-editor-group:visible > .ash-editor-group-content');
@@ -268,7 +268,7 @@ test('Code shares its tabs across all four editor and Details states', async ({ 
 	content = editor.locator('.ash-editor-group:visible > .ash-editor-group-content');
 	details = page.locator('[data-part="auxiliarybar"]');
 	changes = title.getByRole('tab', { name: 'Changes', exact: true });
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(content).toBeVisible();
 	await expect(details).toBeVisible();
 	await expect(changes).toHaveAttribute('aria-selected', 'true');
@@ -314,7 +314,7 @@ test.describe('Sessions from an Electron Workbench', () => {
 		const navigation = page.locator('.ash-sessions-activity-content');
 		await expect(auxiliary).toBeHidden();
 		await expect(page.getByText('Session details', { exact: true })).toHaveCount(0);
-		await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await expect(auxiliary).toBeVisible();
 		await expect(editors).toBeVisible();
 		await expect(editors.locator('.ash-editor-group:visible > .ash-editor-group-content')).toBeHidden();
@@ -348,7 +348,7 @@ test.describe('Sessions from an Electron Workbench', () => {
 			await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 			await expect(auxiliary).toBeHidden();
 			await expect(editors).toBeHidden();
-			await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await expect(editors).toBeVisible();
 			await editor.waitForEditorContents(text => text === 'const value = 42;\n');
 			expect(await editor.input.evaluate((element, original) => element === original, input)).toBe(true);
@@ -356,7 +356,7 @@ test.describe('Sessions from an Electron Workbench', () => {
 		} else {
 			await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 			await expect(auxiliary).toBeHidden();
-			await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await expect(files).toHaveAttribute('aria-selected', 'true');
 		}
 		expect(failures).toEqual([]);
@@ -368,7 +368,7 @@ browserTest('Browser Sessions production embedder owns its container and release
 	const failures: string[] = [];
 	page.on('pageerror', error => failures.push((error.stack ?? error.message).slice(0, 5000)));
 	await page.goto('/browser/sessions/sessions.html');
-	await expect(page.locator('.ash-sessions-list-add')).toBeVisible();
+	await expect(page.locator('[data-action-id="sessions.newSession"] button')).toBeVisible();
 	const moduleUrl = await page.evaluate(() => performance.getEntriesByType('resource').find(entry =>
 		/\/sessions\.web\.main\.internal-[^/]+\.js$/u.test(entry.name),
 	)?.name);
@@ -402,7 +402,7 @@ browserTest('Browser Sessions production embedder owns its container and release
 	};
 	await mount(false);
 	const container = page.locator('#sessions-host');
-	await expect(container.locator('.ash-sessions-list-add')).toBeVisible();
+	await expect(container.locator('[data-action-id="sessions.newSession"] button')).toBeVisible();
 	await expect(page.locator('#app')).toHaveText('Host content');
 	await page.evaluate(() => document.dispatchEvent(new Event('close-sessions')));
 	await expect(container).toBeEmpty();
@@ -422,7 +422,7 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 	const tabs = page.locator('[data-part="editor"] .ash-editor-title-control');
 	await expect(auxiliary).toBeHidden();
 	await expect(page.getByText('Session details', { exact: true })).toHaveCount(0);
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(tabs.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await expect(auxiliary.locator('[data-view-id="sessions.files.explorer.empty"]').getByRole('status')).toHaveText('Folders and files will appear here.');
 	await expect(auxiliary.locator('[data-view-id="ash.explorer"]')).toHaveCount(0);
@@ -445,7 +445,7 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 		await new Workbench(page).waitForReady();
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
 		await page.goto('/browser/sessions/sessions.html');
-		await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
 		const colors = await emptyMessage.evaluate(element => ({
 			text: getComputedStyle(element).color,
@@ -459,12 +459,12 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 	await expect(auxiliary.getByRole('button', { name: 'Review all changes', exact: true })).toBeDisabled();
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	await expect(auxiliary).toBeHidden();
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(tabs.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await page.setViewportSize({ width: 1_000, height: 760 });
 	await expect(auxiliary).toBeVisible();
 	await page.reload();
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(tabs.getByRole('tab', { name: 'Changes', exact: true })).toHaveAttribute('aria-selected', 'true');
 	expect(failures).toEqual([]);
 });

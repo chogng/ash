@@ -1,3 +1,4 @@
+import '../../../services/language/common/languageServerLifecycleService.js';
 import type { ISetting, ISettingsGroup, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { localize } from '../../../../nls.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
@@ -100,14 +101,6 @@ export const SettingsNavigation = [
 		description: localize({ bundle: 'ash.settings', key: 'groups.workbench.description' }, 'Configure the Workbench appearance, layout, and startup.'),
 		categories: [
 			{
-				id: 'screenshot',
-				label: localize({ bundle: 'ash.settings', key: 'categories.screenshot.label' }, 'Screenshot'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.screenshot.description' }, 'Allow the screenshot shortcut to work while Ash is in the background.'),
-				keywords: ['screenshot', 'screen capture', 'background', 'global', 'shortcut'],
-				presentation: 'general',
-				groups: [{ id: 'screenshot-preferences', label: localize({ bundle: 'ash.settings', key: 'categories.screenshot.label' }, 'Screenshot'), description: '', settings: ['screenshot.*'] }],
-			},
-			{
 				id: 'appearance',
 				label: localize({ bundle: 'ash.settings', key: 'categories.appearance.label' }, 'Appearance'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.appearance.description' }, 'Customize the visual appearance of Ash.'),
@@ -182,7 +175,7 @@ export const SettingsNavigation = [
 					id: 'startup-windows',
 					label: localize('settings.workbench.startup.windows.label', 'Startup windows'),
 					description: localize('settings.workbench.startup.windows.description', 'Choose which windows Ash reopens.'),
-					settings: ['window.restoreWindows', 'window.newWindowDimensions', 'window.restoreFullscreen'],
+					settings: ['window.startupWindow', 'window.restoreWindows', 'window.newWindowDimensions', 'window.restoreFullscreen'],
 				}, {
 					id: 'startup-editor',
 					label: localize('settings.workbench.startup.group.label', 'Startup editor'),
@@ -302,7 +295,12 @@ export const SettingsNavigation = [
 				label: localize({ bundle: 'ash.settings', key: 'categories.editor-language.label' }, 'Language servers'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.editor-language.description' }, 'Configure language servers and inspect their logs.'),
 				presentation: 'editor',
-				groups: [],
+				groups: [{
+					id: 'language-server-lifecycle',
+					label: localize({ bundle: 'ash.settings', key: 'lsp.idle.groupTitle' }, 'Analysis cache and memory'),
+					description: localize({ bundle: 'ash.settings', key: 'lsp.idle.groupDescription' }, 'Started servers stay running by default to reuse their in-memory analysis. Rust computes analysis on demand by default. Its analysis cache is lost when the server stops; Cargo build artifacts on disk do not restore this cache.'),
+					settings: ['languageServers.autoSuspend', 'languageServers.idleTimeoutMinutes'],
+				}],
 			},
 			{
 				id: 'editor-search',

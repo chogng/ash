@@ -38,7 +38,7 @@
 }
 
 .ash-canvas-viewport.pointer-cursor {
-	cursor: var(--ash-canvas-pointer-cursor);
+	cursor: var(--ash-canvas-pointer-cursor, default);
 }
 
 .ash-canvas-viewport.hand-tool {

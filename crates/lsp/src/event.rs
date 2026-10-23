@@ -14,6 +14,8 @@ pub struct WorkspaceConfiguration(pub serde_json::Value);
 #[non_exhaustive]
 pub enum LanguageServerEvent {
     Diagnostics(PublishDiagnosticsParams),
+    /// Pull diagnostics changed, including after initial workspace loading.
+    DiagnosticsRefresh,
     LogMessage(LogMessageParams),
     ShowMessage(ShowMessageParams),
     DynamicCapabilitiesChanged(LanguageServerCapabilitySnapshot),

@@ -147,24 +147,24 @@
 	font-size: 1.25em;
 }
 
-.ash-academic-title,
-.ash-academic-abstract,
-.ash-academic-section {
+.ash-academy-title,
+.ash-academy-abstract,
+.ash-academy-section {
 	max-width: 860px;
 	margin: 0 auto 20px;
 }
 
-.ash-academic-title {
+.ash-academy-title {
 	padding-bottom: 16px;
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
-.ash-academic-abstract {
+.ash-academy-abstract {
 	padding: 12px 16px;
 	border-left: 3px solid var(--ash-border);
 }
 
-.ash-academic-section {
+.ash-academy-section {
 	margin-bottom: 28px;
 }
 

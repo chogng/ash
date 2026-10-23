@@ -20,6 +20,10 @@ pub(crate) enum ConnectorSelectionAction {
         connector_id: String,
         connection_generation: u64,
     },
+    SetEnabled {
+        connector_id: String,
+        enabled: bool,
+    },
     Disconnect {
         connector_id: String,
     },
@@ -44,10 +48,11 @@ pub(crate) fn connector_choices(catalog: &ConnectorListResult) -> ConnectorChoic
         .iter()
         .zip(&catalog.connectors)
         .filter(|(_, connector)| {
-            matches!(
-                connector.state,
-                ConnectorConnectionStateDto::Connected { .. }
-            )
+            connector.enabled
+                && matches!(
+                    connector.state,
+                    ConnectorConnectionStateDto::Connected { .. }
+                )
         })
         .map(|(item, _)| item.clone())
         .collect::<Vec<_>>();
@@ -55,10 +60,11 @@ pub(crate) fn connector_choices(catalog: &ConnectorListResult) -> ConnectorChoic
         .iter()
         .zip(&catalog.connectors)
         .filter(|(_, connector)| {
-            !matches!(
-                connector.state,
-                ConnectorConnectionStateDto::Connected { .. }
-            )
+            !connector.enabled
+                || !matches!(
+                    connector.state,
+                    ConnectorConnectionStateDto::Connected { .. }
+                )
         })
         .map(|(item, _)| item.clone())
         .collect::<Vec<_>>();
@@ -88,7 +94,18 @@ fn connector_item(
     actions: &mut BTreeMap<ListSelectionItemId, ConnectorSelectionAction>,
 ) -> ListSelectionItem {
     let item_id = ListSelectionItemId::new(format!("connector-{index}"));
-    if connector
+    if matches!(
+        connector.state,
+        ConnectorConnectionStateDto::Connected { .. }
+    ) {
+        actions.insert(
+            item_id.clone(),
+            ConnectorSelectionAction::SetEnabled {
+                connector_id: connector.id.clone(),
+                enabled: !connector.enabled,
+            },
+        );
+    } else if connector
         .available_actions
         .contains(&ConnectorAvailableActionDto::Disconnect)
     {
@@ -121,7 +138,16 @@ fn connector_item(
         .with_description(format!(
             "{}  ·  {}",
             connector.description,
-            state_label(&connector.state)
+            if !connector.enabled
+                && matches!(
+                    connector.state,
+                    ConnectorConnectionStateDto::Connected { .. }
+                )
+            {
+                "not connected".into()
+            } else {
+                state_label(&connector.state)
+            }
         ))
 }
 

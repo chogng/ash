@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width,initial-scale=1" />
+		<!-- The opaque image iframe uses inline package assets; the wrapper never inserts package HTML into its own document. -->
+		<meta
+			http-equiv="Content-Security-Policy"
+			content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; font-src 'self' data:; connect-src 'self' ws: wss:"
+		/>
+		<title>Ash</title>
+	</head>
+	<body>
+		<script type="module" src="./imageView.ts"></script>
+	</body>
+</html>

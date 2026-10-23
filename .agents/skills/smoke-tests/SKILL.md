@@ -48,7 +48,7 @@ pnpm run test:smoke:ui:no-compile test/smoke/areas/windows/home.spec.ts --list
 pnpm run smoketest --grep "<test title>"
 ```
 
-A grep pattern can select more than one test. Check the selected list when the title is not unique. Before launching product processes, the runner collects tests and prints the selected count. Invalid options, empty grep patterns, misplaced separators, and zero matches fail; they must never trigger a fallback to the full suite. An unfiltered command intentionally selects the entire owning project. The runner exits nonzero if a selected test fails. Packaged Windows/macOS verification, release Desktop verification, and the Academic CI smoke step use this same entrypoint; packaged verification keeps its fixed spec selection.
+A grep pattern can select more than one test. Check the selected list when the title is not unique. Before launching product processes, the runner collects tests and prints the selected count. Invalid options, empty grep patterns, misplaced separators, and zero matches fail; they must never trigger a fallback to the full suite. An unfiltered command intentionally selects the entire owning project. The runner exits nonzero if a selected test fails. Packaged Windows/macOS verification, release Desktop verification, and the Academy CI smoke step use this same entrypoint; packaged verification keeps its fixed spec selection.
 
 Use `--debug` for interactive debugging. The runner rejects Playwright's `--ui` mode because it bypasses the collection-only preflight.
 

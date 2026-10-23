@@ -465,7 +465,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					const bytes = await this.loadResource(resources, catalog.generation, extension.id, theme.path);
 					const directory = theme.path.slice(0, theme.path.lastIndexOf('/') + 1);
 					productIconThemes.push(await ProductIconThemeData.load(theme.id, theme.label, parseJsonc(new TextDecoder('utf-8', { fatal: true }).decode(bytes), 'Product icon theme ' + theme.id),
-						path => this.loadResource(resources, catalog.generation, extension.id, directory + path), document));
+						path => this.loadResource(resources, catalog.generation, extension.id, directory + path)));
 					if (this.isDisposed) return;
 				}
 				problemMatchers.push(...manifest.contributes.problemMatchers);

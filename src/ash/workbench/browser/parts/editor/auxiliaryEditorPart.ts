@@ -5,9 +5,9 @@ import { mainWindow } from '../../../../base/browser/window.js';
 import { Disposable, DisposableStore, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { IAuxiliaryWindow } from "../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
-import { IStatusbarService, StatusbarService } from "../../../services/statusbar/browser/statusbar.js";
+import { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { StatusbarHeight } from "../workbenchPartDimensions.js";
-import { StatusbarPart } from "../statusbar/statusbarPart.js";
+import { StatusbarPart, StatusbarService } from "../statusbar/statusbarPart.js";
 import type { IAuxiliaryTitlebarPart } from "../titlebar/titlebarPart.js";
 import type { IEditorPart } from "./editorPart.js";
 import { EditorStatusContribution } from "./editorStatus.js";
@@ -82,9 +82,10 @@ export class AuxiliaryEditorPart extends Disposable {
 			creation.titlebar.updateOptions({ compact: false });
 			this._register(creation.titlebar.onDidChange!(() => window.layout()));
 			const statusbarService = this._register(new StatusbarService(rootStatusbar));
-			const statusbarPart = this._register(instantiationService.createInstance(StatusbarPart, window.container, statusbarService));
 			const statusServices = this._register(instantiationService.createChild());
+			statusServices.registerInstance(IStatusbarService, statusbarService);
 			statusServices.registerInstance(IAccessibilityService, accessibility);
+			const statusbarPart = this._register(statusServices.createInstance(StatusbarPart, window.container));
 			this._register(statusServices.createInstance(EditorStatusContribution, creation.part, statusbarService));
 			let compact: boolean | undefined;
 			const updateWindowChrome = (): void => {

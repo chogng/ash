@@ -1,8 +1,9 @@
 import type { ColorIdentifier } from '../../../../platform/theme/common/colorRegistry.js';
-import { Emitter, type Event } from "../../../../base/common/event.js";
+import { type Event } from "../../../../base/common/event.js";
 import type { Icon } from "../../../../base/common/icon.js";
-import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import type { IStatusbarEntryContainer } from '../../../browser/parts/statusbar/statusbarPart.js';
 
 /** The side of the status bar that owns an entry. */
 export enum StatusbarAlignment {
@@ -71,6 +72,8 @@ export interface IStatusbarStyleOverride {
 }
 
 export interface IStatusbarService {
+	/** Resolves the live status bar in a Workbench window without duplicating its view state. */
+	getPart(container: HTMLElement): IStatusbarEntryContainer;
 	readonly onDidChangeStyle: Event<void>;
 	readonly style: IStatusbarStyleOverride | undefined;
 	overrideStyle(style: IStatusbarStyleOverride): IDisposable;
@@ -88,136 +91,3 @@ export interface IStatusbarService {
 
 export const IStatusbarService =
 	createServiceIdentifier<IStatusbarService>("statusbarService");
-
-interface IStoredStatusbarEntry extends IStatusbarEntryItem {
-	readonly order: number;
-}
-
-/** Default window-scoped status bar entry service. */
-export class StatusbarService extends Disposable
-	implements IStatusbarService {
-	private readonly _onDidChangeEntries = this._register(new Emitter<void>());
-	private readonly entries = new Map<string, IStoredStatusbarEntry>();
-	private nextOrder = 0;
-	private readonly styles = new Set<IStatusbarStyleOverride>();
-	private readonly styleChanges = this._register(new Emitter<void>());
-	readonly onDidChangeStyle = this.styleChanges.event;
-
-	get style(): IStatusbarStyleOverride | undefined {
-		return [...this.styles].sort((left, right) => left.priority - right.priority).at(0);
-	}
-
-	overrideStyle(style: IStatusbarStyleOverride): IDisposable {
-		this.assertNotDisposed();
-		const stored = { ...style };
-		this.styles.add(stored);
-		this.styleChanges.fire();
-		return toDisposable(() => { if (this.styles.delete(stored)) this.styleChanges.fire(); });
-	}
-
-	readonly onDidChangeEntries = this._onDidChangeEntries.event;
-
-	constructor(private readonly parent?: IStatusbarService) {
-		super();
-		if (parent) this._register(parent.onDidChangeEntries(() => this._onDidChangeEntries.fire()));
-		this._register(toDisposable(() => {
-			this.entries.clear();
-			this.styles.clear();
-		}));
-	}
-
-	addEntry(
-		entry: IStatusbarEntry,
-		options: IStatusbarEntryOptions,
-	): IStatusbarEntryAccessor {
-		if (this.isDisposed) {
-			throw new ReferenceError("StatusbarService is already disposed");
-		}
-		if (!options.id) {
-			throw new Error("A status bar entry requires a non-empty id");
-		}
-		if (this.entries.has(options.id)) {
-			throw new Error(`Status bar entry already exists: ${options.id}`);
-		}
-
-		const priority = options.priority ?? 0;
-		if (!Number.isFinite(priority)) {
-			throw new Error("Status bar entry priority must be finite");
-		}
-
-		let stored: IStoredStatusbarEntry = {
-			id: options.id,
-			alignment: options.alignment,
-			priority,
-			compactGroup: options.compactGroup,
-			entry: { ...entry },
-			order: this.nextOrder++,
-		};
-		this.entries.set(stored.id, stored);
-		this._onDidChangeEntries.fire();
-
-		return new StatusbarEntryAccessor(
-			(nextEntry) => {
-				if (this.isDisposed || this.entries.get(stored.id) !== stored) return;
-				stored = {
-					...stored,
-					entry: { ...nextEntry },
-				};
-				this.entries.set(stored.id, stored);
-				this._onDidChangeEntries.fire();
-			},
-			() => {
-				if (this.isDisposed || this.entries.get(stored.id) !== stored) return;
-				this.entries.delete(stored.id);
-				this._onDidChangeEntries.fire();
-			},
-		);
-	}
-
-	getEntries(
-		alignment: StatusbarAlignment,
-	): readonly IStatusbarEntryItem[] {
-		const shared = this.parent?.getEntries(alignment).filter(item => item.entry.showInAllWindows) ?? [];
-		const local = [...this.entries.values()]
-			.filter((item) => item.alignment === alignment)
-			.sort(compareEntries)
-			.map(({ id, entry, priority, compactGroup, alignment: itemAlignment }) => ({
-				id,
-				entry,
-				priority,
-				compactGroup,
-				alignment: itemAlignment,
-			}));
-		return [...shared, ...local].sort((a, b) => b.priority - a.priority);
-	}
-}
-
-class StatusbarEntryAccessor extends Disposable
-	implements IStatusbarEntryAccessor {
-	private readonly _update: (entry: IStatusbarEntry) => void;
-	private active = true;
-
-	constructor(
-		update: (entry: IStatusbarEntry) => void,
-		remove: () => void,
-	) {
-		super();
-		this._update = update;
-		this._register(toDisposable(() => {
-			this.active = false;
-			remove();
-		}));
-	}
-
-	update(entry: IStatusbarEntry): void {
-		if (!this.active) return;
-		this._update(entry);
-	}
-}
-
-function compareEntries(
-	first: IStoredStatusbarEntry,
-	second: IStoredStatusbarEntry,
-): number {
-	return second.priority - first.priority || first.order - second.order;
-}

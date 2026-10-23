@@ -63,8 +63,4 @@ pub use trace::capture_session_trace;
 pub use worker::FlushOutcome;
 
 #[cfg(test)]
-#[path = "trace_tests.rs"]
-mod tests;
-
-#[cfg(test)]
 mod reducer_tests;

@@ -136,12 +136,17 @@ export async function invokeExtensionHost(transport: ExtensionHostInvokeTranspor
 	}
 }
 
+export function normalizeExtensionHostRegistrations(value: unknown): readonly ExtensionHostRegistration[] {
+	const registrations = boundedArray(value, 'Extension Host registrations', 2048).map(normalizeRegistration);
+	assertUnique(registrations.map(registration => registration.registrationId), 'Extension Host registration IDs');
+	return Object.freeze(registrations);
+}
+
 function normalizeRuntime(value: unknown): ExtensionHostRuntime {
 	const runtime = exactRecord(value, "Extension Host runtime", ["activationGeneration", "failure", "id", "incarnation", "lifecycle", "outputEvents", "packageDigest", "registrations", "runtimeApiVersion", "stderr", "version"], ["activation"]);
-	const registrations = boundedArray(runtime.registrations, "Extension Host registrations", 2048).map(normalizeRegistration);
+	const registrations = normalizeExtensionHostRegistrations(runtime.registrations);
 	const outputEvents = boundedArray(runtime.outputEvents, "Extension Host Output events", 4096).map(normalizeOutputEvent);
 	if (utf8Length(JSON.stringify(outputEvents)) > MAX_OUTPUT_EVENT_BYTES) throw new RangeError("Extension Host Output event history is too large");
-	assertUnique(registrations.map(registration => registration.registrationId), "Extension Host registration IDs");
 	assertStrictlyIncreasing(outputEvents.map(event => event.sequence), "Extension Host Output event sequences");
 	const lifecycle = stringEnum(runtime.lifecycle, "Extension Host lifecycle", LIFECYCLES);
 	const incarnation = optionalPositiveSafeInteger(runtime.incarnation, "Extension Host incarnation");

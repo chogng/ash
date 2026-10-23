@@ -10,5 +10,10 @@ export namespace Icon {
 	}
 }
 
-/** Produces SVG markup for the browser renderer. */
-export type IconDefinition = () => string;
+/** A native font glyph resolved by the product icon theme. */
+export interface IconDefinition {
+	readonly fontCharacter: string;
+	readonly font?: { readonly id: string; readonly definition: { readonly weight?: string; readonly style?: string; }; };
+	/** Prepared glyph layers retain independent animation without carrying SVG artwork. */
+	readonly layers?: readonly { readonly id: string; readonly fontCharacter: string; readonly origin: readonly [number, number]; }[];
+}

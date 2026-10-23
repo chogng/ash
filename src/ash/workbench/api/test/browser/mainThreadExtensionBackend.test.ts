@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../browser/parts/statusbar/statusbarPart.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { mock } from 'node:test';
@@ -9,7 +10,7 @@ import { TestNotificationService } from '../../../services/notification/test/com
 import { CommandService } from '../../../services/commands/common/commandService.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { ProgressService } from '../../../services/progress/browser/progressService.js';
-import { StatusbarService } from '../../../services/statusbar/browser/statusbar.js';
+
 import type { IProgressService } from '../../../../platform/progress/common/progress.js';
 import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
@@ -149,7 +150,7 @@ for (const retire of [false, true]) test(`backend cancellation retains its exact
 		using statusbar = new StatusbarService();
 		using notifications = new TestNotificationService();
 		using commands = new CommandService({ get() { throw new Error('Unexpected command service request'); }, getOptional() { return undefined; } });
-		using progress = new ProgressService(statusbar, notifications, commands);
+		using progress = new ProgressService(statusbar, notifications, commands, {} as never, {} as never, {} as never);
 		const value = fixture('builtIn', async (method, params) => {
 			if (method === 'git/transport') return operation.p;
 			assert.equal(method, 'git/transport/cancel');

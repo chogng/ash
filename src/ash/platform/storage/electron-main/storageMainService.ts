@@ -165,31 +165,17 @@ export class StorageMainService extends Disposable implements IApplicationStorag
 	}
 }
 
-/** Retires the old product dimension; Code wins collisions regardless of file order. */
+/** Removes the retired Code product dimension from v1 storage identities. */
 function migrateStorage(candidates: readonly unknown[]): ReadonlyMap<string, IStorageSnapshot> {
-	const sources = new Map<string, { applicationId: string; snapshot: IStorageSnapshot; }>();
+	const storages = new Map<string, IStorageSnapshot>();
 	for (const candidate of candidates) {
-		if (!isRecord(candidate) || !isRecord(candidate.identity) || !['code', 'academic'].includes(candidate.identity.applicationId as string)) {
+		if (!isRecord(candidate) || !isRecord(candidate.identity) || candidate.identity.applicationId !== 'code') {
 			throw new TypeError('Invalid legacy Desktop storage identity');
 		}
 		const snapshot = validateStorageSnapshot(candidate);
-		const key = JSON.stringify([candidate.identity.applicationId, snapshot.identity.scope, snapshot.identity.id]);
-		if (sources.has(key)) { throw new TypeError('Duplicate Desktop storage identity'); }
-		sources.set(key, { applicationId: candidate.identity.applicationId as string, snapshot });
-	}
-	const storages = new Map<string, IStorageSnapshot>();
-	for (const applicationId of ['code', 'academic']) {
-		for (const { applicationId: sourceApplicationId, snapshot: source } of sources.values()) {
-			if (sourceApplicationId !== applicationId) { continue; }
-			const key = storageIdentityKey(source.identity);
-			const target = storages.get(key);
-			storages.set(key, {
-				...source,
-				isNew: false,
-				revision: target ? Math.max(target.revision, source.revision) + 1 : source.revision,
-				entries: Object.assign(Object.create(null), source.entries, target?.entries),
-			});
-		}
+		const key = storageIdentityKey(snapshot.identity);
+		if (storages.has(key)) { throw new TypeError('Duplicate Desktop storage identity'); }
+		storages.set(key, { ...snapshot, isNew: false });
 	}
 	return storages;
 }

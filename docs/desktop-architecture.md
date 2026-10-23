@@ -1400,7 +1400,7 @@ window 的捕获阶段记录取消后，真实网页焦点往返通过，未修�
 本轮正常入口验证：
 
 - BrowserView 单测 153 项、21 个文件通过；最后地址解析／建议改动另有 7 项定向单测通过。
-- Chromium `browserView.integration.spec.ts` 12 项通过，包含双语历史、模型替换、导航命令条件、搜索设置即时更新、接受／取消／失焦，以及双语各 1000／500／240px 布局和菜单键盘操作。
+- Chromium 地址栏组件回归 12 项通过（现归入 [BrowserUrlBarWidget 源码测试](../src/ash/workbench/contrib/browserView/test/electron-browser/widgets/browserUrlBarWidget.test.ts)），包含双语历史、模型替换、导航命令条件、搜索设置即时更新、接受／取消／失焦，以及双语各 1000／500／240px 布局和菜单键盘操作。
 - 真实 macOS Electron 10 项通过，覆盖双语导航／键盘、下载、网站权限、分享、选择与批注附件、分栏及关闭释放；补强的双语键盘场景另有 2 项通过，验证 F6 返回地址栏、建议列表 Escape 后真实网页获得焦点、Tab 输入及命令面板往返。
 - 正常 Desktop 构建、Renderer／automation 类型检查、定向 TS 格式及 `git diff --check` 通过。日志保存在 `.build/browser-view-implementation-20261018/`；早期失败单独保留，未用后续通过结果覆盖。
 

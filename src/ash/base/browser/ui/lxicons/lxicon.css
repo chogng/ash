@@ -1,16 +1,50 @@
-svg.ash-icon {
-	width: 16px;
-	height: 16px;
+@font-face {
+	font-family: "Ash UI Icons";
+	src: url("./lxicon.woff2") format("woff2");
+	font-weight: 400;
+	font-style: normal;
+	font-display: block;
+}
+
+@font-face {
+	font-family: "Ash UI Variable";
+	src: url("./lxicon-variable.woff2") format("woff2");
+	font-weight: 400 700;
+	font-style: normal;
+	font-display: block;
+}
+
+.ash-icon {
+	display: inline-flex;
+	width: 1em;
+	height: 1em;
 	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	font-family: var(--ash-icon-font-family, "Ash UI Icons");
+	font-size: var(--ash-lxiconFontSize, 16px);
+	font-weight: var(--ash-icon-font-weight, 400);
+	font-style: var(--ash-icon-font-style, normal);
+	font-synthesis: none;
+	line-height: 1;
+	text-decoration: none;
+	text-transform: none;
+	vertical-align: middle;
+	user-select: none;
 	pointer-events: none;
 }
 
-svg.ash-icon [stroke="#000"],
-svg.ash-icon [stroke="black"] {
-	stroke: currentColor;
+.ash-icon-font:not(.ash-icon-layered)::before,
+.ash-icon-font-layer::before {
+	content: attr(data-ash-icon-character);
+	visibility: inherit;
 }
 
-svg.ash-icon [fill="#000"],
-svg.ash-icon [fill="black"] {
-	fill: currentColor;
+.ash-icon-layered {
+	position: relative;
+}
+
+.ash-icon-font-layer {
+	position: absolute;
+	inset: 0;
 }

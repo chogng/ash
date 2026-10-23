@@ -5,7 +5,7 @@ import '../services/configuration/common/jsonEditingService.js';
 import { IWorkspaceEditingService, WorkspaceTransitionCommittedError } from '../services/workspaces/common/workspaceEditing.js';
 import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../platform/browserView/common/browserPasswordService.js';
 import { IWorkspacesService } from '../../platform/workspaces/common/workspaces.js';
-import { IChannelService } from "../../platform/collaboration/common/channelService.js";
+import { IChannelService } from "../../platform/collab/common/channelService.js";
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../services/treeSitter/browser/treeSitterLibraryService.js';
 import { ITreeSitterLibraryService } from '../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import { UserSettings } from '../../platform/configuration/common/configurationModels.js';
@@ -177,10 +177,7 @@ import { IUserThemeService, type IUserThemeService as IUserThemeServiceContract,
 import {
 	ViewContainerLocation,
 } from "../common/views.js";
-import {
-	IStatusbarService,
-	StatusbarService,
-} from "../services/statusbar/browser/statusbar.js";
+import { IStatusbarService } from "../services/statusbar/browser/statusbar.js";
 import type { IWebWorkspaceClient } from '../services/workspaces/browser/appServerWebWorkspaceClient.js';
 import { IHostService } from '../services/host/browser/host.js';
 import { BrowserHostService } from '../services/host/browser/browserHostService.js';
@@ -219,7 +216,7 @@ import { PanelPart } from "./parts/panel/panelPart.js";
 import { SidebarPart } from "./parts/sidebar/sidebarPart.js";
 import { ActivitybarPart } from "./parts/activitybar/activitybarPart.js";
 import { GlobalCompositeBar } from './parts/globalCompositeBar.js';
-import { StatusbarPart } from "./parts/statusbar/statusbarPart.js";
+import { StatusbarPart, StatusbarService } from "./parts/statusbar/statusbarPart.js";
 import { BannerPart } from './parts/banner/bannerPart.js';
 import { IBannerService } from '../services/banner/browser/bannerService.js';
 import {
@@ -295,6 +292,8 @@ import { TextModelResolverService } from '../services/textmodelResolver/common/t
 import { IBulkEditService } from "../../editor/browser/services/bulkEditService.js";
 import { getBrowserTextModelService } from "../services/textmodelResolver/browser/browserTextModelService.js";
 import { getBrowserTextResourceStore } from "../contrib/codeEditor/browser/browserTextResourceStore.js";
+import { ILanguageServerLifecycleService } from '../services/language/common/languageServerLifecycleService.js';
+import { AppServerLanguageLifecycleService } from '../services/language/browser/appServerLanguageLifecycleService.js';
 import { AppServerLanguageProviders } from "../services/language/browser/appServerLanguageProviders.js";
 import { DiffService } from "../services/diff/browser/diffService.js";
 import { IDiffService } from "../services/diff/common/diffService.js";
@@ -792,6 +791,9 @@ export class Workbench extends Disposable {
 		// Only the desktop host may inspect directory grants. Web language requests
 		// are authorized by the server for the authenticated workspace.
 		const checkWorkspaceTrust = !!nativeHostApi;
+		services.registerInstance(ILanguageServerService, api.languageServers);
+		const languageLifecycle = this._register(services.createInstance(AppServerLanguageLifecycleService));
+		services.registerInstance(ILanguageServerLifecycleService, languageLifecycle);
 		const languageProviders = api.hasAppServer ? this._register(services.createInstance(AppServerLanguageProviders, api.language, { checkWorkspaceTrust })) : undefined;
 		const diffService = services.createInstance(DiffService);
 		services.registerInstance(IDiffService, diffService);
@@ -825,7 +827,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAppServerSkillApi, api.skills);
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IInstructionService, api.instructions);
-		services.registerInstance(ILanguageServerService, api.languageServers);
 		services.registerInstance(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
 		const workbenchState = workspaceContext.getWorkbenchState();
 		const workbenchWindow = this._register(new WorkbenchWindow({
@@ -852,8 +853,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(INotificationService, notificationService);
 		const statusbarService = this._register(new StatusbarService());
 		services.registerInstance(IStatusbarService, statusbarService);
-		const progressService = this._register(services.createInstance(ProgressService));
-		services.registerInstance(IProgressService, progressService);
+		services.registerSingleton(IProgressService, () => services.createInstance(ProgressService), { instantiation: InstantiationType.Delayed });
 		if (!services.has(IClipboardService)) {
 			services.registerSingleton(IClipboardService, () => services.createInstance(BrowserClipboardService), { instantiation: InstantiationType.Delayed });
 		}
@@ -1003,7 +1003,10 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAccountPolicyService, accountPolicies);
 		const policies = this._register(new MultiplexPolicyService([systemPolicies, accountPolicies]));
 		services.registerInstance(IPolicyService, policies);
-		serviceContributionReady.push(configuration.initialize(fileService, policies, workingCopyService).then(() => {
+		// Language-server initialization consumes extension-contributed defaults too.
+		// Starting earlier can launch expensive server work with upstream defaults.
+		serviceContributionReady.push(Promise.all([configuration.initialize(fileService, policies, workingCopyService), extensionReady]).then(() => {
+			languageLifecycle.start();
 			languageProviders?.start();
 			languageDiagnosticsService.start();
 		}));
@@ -1016,7 +1019,6 @@ export class Workbench extends Disposable {
 			}));
 		services.registerInstance(IAccessibilityService, accessibilityService);
 		services.registerSingleton(ILanguageServerStatusService, () => services.createInstance(AppServerLanguageServerStatusService));
-		services.get(ILanguageServerStatusService);
 		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, workbenchRoot, notificationService.model, feedbackHost, notificationActionRunner, statusbarService, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
@@ -1213,7 +1215,7 @@ export class Workbench extends Disposable {
 		const panel = this._register(services.createInstance(PanelPart, workbenchRoot));
 		this.editor = editorParts;
 		const auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, workbenchRoot));
-		const statusbar = this._register(services.createInstance(StatusbarPart, workbenchRoot, statusbarService));
+		const statusbar = this._register(services.createInstance(StatusbarPart, workbenchRoot));
 		const banner = this._register(services.createInstance(BannerPart, workbenchRoot, (visible: boolean) => {
 			if (visible) layoutService.showPart('banner');
 			else layoutService.hidePart('banner');
@@ -1270,6 +1272,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(instantiationService.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
+		services.get(ILanguageServerStatusService);
 		this._register(services.createInstance(ViewDragAndDropController, workbenchRoot));
 		// Extension adapters require the completed editor and view service graph.
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });

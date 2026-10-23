@@ -3,9 +3,18 @@ import { getWindow, isHTMLElement } from '../../../../base/browser/dom.js';
 import { isFiniteNumber, isNonNegativeSafeInteger } from '../../../../base/common/numbers.js';
 import { type IMultiDiffEditorModel, validateDocumentDiffItems } from './model.js';
 import { type IWorkbenchUIElementFactory } from './workbenchUIElementFactory.js';
+import { isConfigured, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
 export const DEFAULT_LINE_HEIGHT = 20;
 export const DEFAULT_OVERSCAN_ROW_COUNT = 8;
+
+/** Multi-file comparisons start compact; an explicit preference still takes precedence. */
+export function hideUnchangedRegions(configuration: IConfigurationService): boolean {
+	const setting = configuration.inspect<boolean>('diffEditor.hideUnchangedRegions.enabled');
+	return isConfigured(setting) || setting.memoryValue !== undefined || setting.policyValue !== undefined
+		? configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled')
+		: true;
+}
 
 /** Inputs supplied by an editor host; file models remain owned by that host. */
 export interface IMultiDiffEditorWidgetOptions {

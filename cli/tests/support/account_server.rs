@@ -10,7 +10,9 @@ use std::time::Instant;
 
 use ash_app_server::AppServerOptions;
 use ash_app_server::open_app_server;
+use ash_app_server_daemon::ManagedConnectionContract;
 use ash_app_server_daemon::ManagedEndpoint;
+use ash_app_server_protocol::protocol::initialize::ProtocolVersion;
 use ash_secrets::DeleteSecretOutcome;
 use ash_secrets::MemorySecretStore;
 use ash_secrets::ProfileSecretStore;
@@ -61,7 +63,13 @@ pub fn run() {
         )
         .unwrap(),
     );
-    let mut endpoint = ManagedEndpoint::bind(&profile).unwrap();
+    let mut endpoint = ManagedEndpoint::bind(
+        &profile,
+        ManagedConnectionContract::Agent {
+            protocol_version: ProtocolVersion::current(),
+        },
+    )
+    .unwrap();
     let deadline = Instant::now() + Duration::from_secs(120);
     let mut workers = Vec::new();
     let shutdown_streams = Arc::new(Mutex::new(BTreeMap::new()));

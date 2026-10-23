@@ -2,7 +2,7 @@
 	min-height: 28px;
 	padding: 6px 10px;
 	border: var(--ash-strokeThickness) solid var(--ash-border);
-	border-radius: var(--ash-cornerRadius-medium);
+	border-radius: var(--ash-cornerRadius-large);
 	color: var(--ash-button-foreground, var(--ash-foreground));
 	background: var(--ash-button-background, var(--ash-input-background));
 	box-shadow: 0 1px 1px

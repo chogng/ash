@@ -175,3 +175,39 @@ fn editor_discovery_skips_known_repositories_but_detects_unknown_workspace_paths
         }
     }
 }
+
+#[test]
+fn primary_action_only_synchronizes_outstanding_commits() {
+    let mut repository = repository(Some(status("first", 1)));
+    repository.draft.clear();
+    for (ahead, behind, expected) in [
+        (0, 0, "commit"),
+        (1, 0, "sync"),
+        (0, 1, "sync"),
+        (2, 3, "sync"),
+    ] {
+        repository.status.as_mut().unwrap().head = Head::Branch {
+            name: "main".into(),
+            object_id: "commit".into(),
+            upstream: Some(crate::model::Upstream {
+                name: "origin/main".into(),
+                ahead,
+                behind,
+            }),
+        };
+        assert_eq!(crate::scm::primary_action(&repository), expected);
+        repository.draft = "Keep committing a draft".into();
+        assert_eq!(crate::scm::primary_action(&repository), "commit");
+        repository.draft.clear();
+    }
+    repository.status.as_mut().unwrap().head = Head::Branch {
+        name: "feature".into(),
+        object_id: "commit".into(),
+        upstream: None,
+    };
+    assert_eq!(crate::scm::primary_action(&repository), "publish");
+    repository.status.as_mut().unwrap().head = Head::Detached {
+        object_id: "commit".into(),
+    };
+    assert_eq!(crate::scm::primary_action(&repository), "commit");
+}

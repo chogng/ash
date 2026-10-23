@@ -4,43 +4,28 @@ import { Icon, type IconDefinition } from '../../../common/icon.js';
 import { getLxiconDefinition } from '../../../common/lxiconsUtil.js';
 import { setAriaAttribute } from '../aria/aria.js';
 import { h } from '../../dom.js';
-import { createTrustedTypesPolicy } from '../../trustedTypes.js';
-
-const prototypesByDocument = new WeakMap<Document, Map<IconDefinition, SVGElement>>();
 const iconResolversByDocument = new WeakMap<Document, (icon: Icon) => IconDefinition | undefined>();
-const artworkAttributes = new WeakMap<SVGElement, readonly string[]>();
-const iconPolicy = createTrustedTypesPolicy('ashIcon', { createHTML: value => value });
+const mountedIcons = new WeakSet<HTMLSpanElement>();
 
-/** Mounts one SVG icon with consistent accessibility metadata. */
-export function appendIcon(icon: Icon, container: HTMLElement): SVGElement {
-	const element = createLxicon(resolveDefinition(icon, container.ownerDocument), container.ownerDocument);
-	artworkAttributes.set(element, artworkAttributeNames(element));
-	element.setAttribute('data-ash-icon-id', icon.id);
+/** Mounts a decorative font icon whose node survives product-theme changes. */
+export function appendIcon(icon: Icon, container: HTMLElement): HTMLSpanElement {
+	const definition = resolveDefinition(icon, container.ownerDocument);
+	const element = h(container.ownerDocument, 'span');
+	element.classList.add('ash-icon', `ash-icon-${icon.id}`);
+	setAriaAttribute(element, 'hidden', true);
+	element.dataset.ashIconId = icon.id;
 	container.append(element);
+	renderDefinition(element, definition);
 	return element;
 }
 
-/** Binds a window's theme artwork and updates mounted SVGs without replacing their DOM nodes. */
+/** Updates a document's mounted icons without replacing consumer-owned nodes. */
 export function setIconResolver(document: Document, resolver: (icon: Icon) => IconDefinition | undefined): void {
 	iconResolversByDocument.set(document, resolver);
-	for (const element of document.querySelectorAll<SVGElement>('svg.ash-icon[data-ash-icon-id]')) {
-		const previousAttributes = artworkAttributes.get(element);
-		if (!previousAttributes) continue;
-		const id = element.getAttribute('data-ash-icon-id')!;
-		const definition = resolver(Icon.fromId(id)) ?? getLxiconDefinition(id);
-		if (!definition) {
-			for (const attribute of previousAttributes) { element.removeAttribute(attribute); }
-			artworkAttributes.set(element, []);
-			element.replaceChildren();
-			continue;
-		}
-		const artwork = createLxicon(definition, document);
-		for (const attribute of previousAttributes) element.removeAttribute(attribute);
-		for (const attribute of [...artwork.attributes]) {
-			if (isArtworkAttribute(attribute.name)) element.setAttribute(attribute.name, attribute.value);
-		}
-		artworkAttributes.set(element, artworkAttributeNames(artwork));
-		element.replaceChildren(...[...artwork.childNodes].map(child => child.cloneNode(true)));
+	for (const element of document.querySelectorAll<HTMLSpanElement>('span.ash-icon[data-ash-icon-id]')) {
+		if (!mountedIcons.has(element)) continue;
+		const id = element.dataset.ashIconId!;
+		renderDefinition(element, resolver(Icon.fromId(id)) ?? getLxiconDefinition(id));
 	}
 }
 
@@ -50,41 +35,38 @@ export function getRegisteredIcon(id: string, document: Document): Icon | undefi
 	return definition ? icon : undefined;
 }
 
-/** Materializes repository or theme supplied SVG artwork in the target document. */
-function createLxicon(definition: IconDefinition, document: Document): SVGElement {
-	let prototypes = prototypesByDocument.get(document);
-	if (!prototypes) {
-		prototypes = new Map();
-		prototypesByDocument.set(document, prototypes);
+function renderDefinition(element: HTMLSpanElement, definition: IconDefinition | undefined): void {
+	element.classList.remove('ash-icon-default-font', 'ash-icon-font', 'ash-icon-layered');
+	element.removeAttribute('data-ash-icon-character');
+	for (const property of ['--ash-icon-font-family', '--ash-icon-font-weight', '--ash-icon-font-style']) element.style.removeProperty(property);
+	element.replaceChildren();
+	mountedIcons.add(element);
+	if (!definition) {
+		return;
 	}
-	let prototype = prototypes.get(definition);
-	if (!prototype) {
-		const template = h(document, 'template');
-		const source = definition().trim();
-		template.innerHTML = iconPolicy?.createHTML?.(source) ?? source;
-		const candidate = template.content.firstElementChild;
-		if (template.content.childElementCount !== 1 || candidate?.namespaceURI !== 'http://www.w3.org/2000/svg') {
-			throw new TypeError('Icon definition did not produce one SVG element');
+	element.classList.add('ash-icon-font');
+	element.dataset.ashIconCharacter = definition.fontCharacter;
+	if (definition.layers) {
+		element.classList.add('ash-icon-layered');
+		for (const layer of definition.layers) {
+			const glyph = h(element.ownerDocument, 'span', { className: 'ash-icon-font-layer' });
+			glyph.dataset.ashIconLayer = layer.id;
+			glyph.dataset.ashIconCharacter = layer.fontCharacter;
+			glyph.style.transformOrigin = `${layer.origin[0] * 100}% ${layer.origin[1] * 100}%`;
+			element.append(glyph);
 		}
-		prototype = candidate as SVGElement;
-		prototype.classList.add('ash-icon');
-		setAriaAttribute(prototype, 'hidden', true);
-		prototype.setAttribute('focusable', 'false');
-		prototypes.set(definition, prototype);
 	}
-	return prototype.cloneNode(true) as SVGElement;
+	if (definition.font) {
+		element.style.setProperty('--ash-icon-font-family', JSON.stringify(definition.font.id));
+		element.style.setProperty('--ash-icon-font-weight', definition.font.definition.weight ?? 'normal');
+		element.style.setProperty('--ash-icon-font-style', definition.font.definition.style ?? 'normal');
+	} else {
+		element.classList.add('ash-icon-default-font');
+	}
 }
 
 function resolveDefinition(icon: Icon, document: Document): IconDefinition {
 	const definition = iconResolversByDocument.get(document)?.(icon) ?? getLxiconDefinition(icon.id);
 	if (!definition) throw new ReferenceError(`Unknown icon '${icon.id}'`);
 	return definition;
-}
-
-function artworkAttributeNames(element: SVGElement): readonly string[] {
-	return [...element.attributes].map(attribute => attribute.name).filter(isArtworkAttribute);
-}
-
-function isArtworkAttribute(name: string): boolean {
-	return name !== 'class' && name !== 'style' && name !== 'aria-hidden' && name !== 'focusable' && name !== 'data-ash-icon-id';
 }

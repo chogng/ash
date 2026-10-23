@@ -94,6 +94,10 @@ pub struct LanguageServersResult {
 pub enum LanguageServerControlActionDto {
     Restart,
     Stop,
+    /// Idempotently reactivate an automatically idle process; respect explicit user stop.
+    Resume,
+    /// Release a ready process only when it has no open documents or requests.
+    Suspend,
 }
 
 /// Controls only this connection's server in an authorized workspace directory. Omitting
@@ -983,6 +987,8 @@ pub struct LanguageServerProgressNotification {
 pub enum LanguageServerStateDto {
     Starting,
     Ready,
+    /// Automatically released; demand language work can reactivate it.
+    Idle,
     BackingOff {
         attempt: u32,
         #[serde(rename = "retryAfterMillis")]
@@ -1085,6 +1091,16 @@ pub enum LanguageServerFeatureDto {
     FoldingRanges,
     PullDiagnostics,
     WorkspaceDiagnostics,
+}
+
+/// Requests new diagnostic pulls for open documents owned by this connection and server.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LanguageDiagnosticsRefreshNotification {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    pub server: String,
 }
 
 /// Capabilities negotiated by this connection's exact server incarnation.

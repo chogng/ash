@@ -5,6 +5,7 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { generateProtocol, protocolSourceDirectories } from '../protocol/generate.ts';
 import { pythonCommand } from '../python.ts';
 import { LiveBuilder } from './liveBuild.ts';
+import { watchNativeFile } from '../lib/watchNativeFile.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const terminalCrates = new Set<string>(JSON.parse(readFileSync(resolve(repositoryRoot, 'build/source-layout.json'), 'utf8')).terminalCrates);
@@ -65,19 +66,32 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 	let stopped = false;
 	let building = false;
 	const cancellation = new AbortController();
-	const watchers: FSWatcher[] = [];
+	const watchers: Pick<FSWatcher, 'close'>[] = [];
 	const watchStarted = Date.now();
 	const observedFiles = new Map<string, string>();
 	const environment = options.environment ?? process.env;
 	const liveDirectory = options.javascriptRuntime !== 'packaged-node' && environment.ASH_RUST_LIVE_DIRECTORY?.trim();
 	const liveBuilder = liveDirectory ? new LiveBuilder(repositoryRoot, environment) : undefined;
 
-	// The Rust author SDK remains a backend build input after leaving crates/.
-	for (const source of [sharedRustSource, rustSdkSource]) {
-		const ignoredTarget = relativeWatchedDirectory(source, targetDirectory);
-		watchers.push(watch(source, { recursive: true }, (event, file) => requestBuild(source, file, event, fileName => shouldRebuildAppServer(fileName, ignoredTarget))));
+	try {
+		// The Rust author SDK remains a backend build input after leaving crates/.
+		for (const source of [sharedRustSource, rustSdkSource]) {
+			const ignoredTarget = relativeWatchedDirectory(source, targetDirectory);
+			watchers.push(watch(source, { recursive: true }, (event, file) => requestBuild(source, file, event, fileName => shouldRebuildAppServer(fileName, ignoredTarget))));
+		}
+		if (process.platform === 'darwin') {
+			// libuv filters non-recursive directory events after FSEvents delivers
+			// them. A root-directory watch therefore also subscribes to build caches.
+			for (const file of ['Cargo.toml', 'Cargo.lock']) {
+				watchers.push(watchNativeFile(resolve(repositoryRoot, file), event => requestBuild(repositoryRoot, file, event, shouldRebuildWorkspaceManifest), error => console.error(`[app-server] Manifest watcher failed: ${file}`, error)));
+			}
+		} else {
+			watchers.push(watch(repositoryRoot, (event, file) => requestBuild(repositoryRoot, file, event, shouldRebuildWorkspaceManifest)));
+		}
+	} catch (error) {
+		stop();
+		throw error;
 	}
-	watchers.push(watch(repositoryRoot, (event, file) => requestBuild(repositoryRoot, file, event, shouldRebuildWorkspaceManifest)));
 	console.log('[app-server] Watching Rust App Server sources');
 	if (buildRequested) void drainBuilds();
 	return stop;

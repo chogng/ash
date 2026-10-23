@@ -15,14 +15,14 @@
         "priority": "default",
         "selector": [
           {
-            "filenamePattern": "*.ash-academic",
-            "mimeType": "application/vnd.ash.academic-document+json"
+            "filenamePattern": "*.ash-academy",
+            "mimeType": "application/vnd.ash.academy-document+json"
           },
           {
             "filenamePattern": "*.ash-paper"
           }
         ],
-        "documentType": "academic"
+        "documentType": "academy"
       },
       {
         "viewType": "ash.editor.document",

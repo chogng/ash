@@ -531,3 +531,68 @@ fn app_server_device_oauth_cancel_consumes_the_flow_and_revokes_connecting_state
     );
     assert_eq!(replay["error"]["code"], -32038);
 }
+
+#[test]
+fn connector_enablement_roundtrips_retained_authorization_without_secret_projection() {
+    let server = server();
+    let mut connection = server.connection();
+    call(
+        &server,
+        &mut connection,
+        1,
+        "initialize",
+        serde_json::json!({
+            "clientInfo": { "name": "connector-enablement-test", "version": "1" }, "capabilities": {}
+        }),
+    );
+    let connected = call(
+        &server,
+        &mut connection,
+        2,
+        "connector/connect/apiToken",
+        serde_json::json!({
+            "commandId": "saved-account", "expectedGeneration": 1,
+            "connectorId": "acme/github:connector:account", "connectionGeneration": 1,
+            "accountId": "octocat", "accountDisplayName": "Octocat", "apiToken": "retained-secret"
+        }),
+    );
+    assert_eq!(connected["result"]["generation"], 3);
+    for (request_id, enabled, expected_generation) in [(3, false, 3), (5, true, 4)] {
+        let changed = call(
+            &server,
+            &mut connection,
+            request_id,
+            "connector/enablement/set",
+            serde_json::json!({
+                "commandId": format!("enablement-{request_id}"), "expectedGeneration": expected_generation,
+                "connectorId": "acme/github:connector:account", "enabled": enabled
+            }),
+        );
+        assert_eq!(changed["result"]["generation"], expected_generation + 1);
+        let list = call(
+            &server,
+            &mut connection,
+            request_id + 1,
+            "connector/list",
+            serde_json::json!({}),
+        );
+        let connector = &list["result"]["connectors"][0];
+        assert_eq!(connector["enabled"], enabled);
+        assert_eq!(connector["state"]["status"], "connected");
+        assert_eq!(connector["state"]["account"]["id"], "octocat");
+        assert_eq!(connector["credentialCleanupPending"], false);
+        assert!(!list.to_string().contains("retained-secret"));
+        assert!(!list.to_string().contains("credentialReference"));
+    }
+    let stale = call(
+        &server,
+        &mut connection,
+        7,
+        "connector/enablement/set",
+        serde_json::json!({
+            "commandId": "stale-enablement", "expectedGeneration": 3,
+            "connectorId": "acme/github:connector:account", "enabled": false
+        }),
+    );
+    assert!(stale.get("error").is_some());
+}

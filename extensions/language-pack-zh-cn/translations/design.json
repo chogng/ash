@@ -751,11 +751,21 @@
     "projects.createTitle": "创建项目",
     "projects.close": "关闭",
     "projects.cancel": "取消",
+    "projects.reloadMerge": "重载并合并",
+    "projects.editConflict": "此项目已在其他窗口中更改。重载并合并可保留草稿，并包含已保存的更改。",
+    "projects.chooseValue": "选择要保留的值",
+    "projects.keepDraft": "保留草稿",
+    "projects.useSaved": "使用已保存的值",
+    "projects.savedValue": "已保存的值：{0}",
+    "projects.nameConflict": "两个版本都修改了项目名称。",
+    "projects.descriptionConflict": "两个版本都修改了项目目标。",
+    "projects.resolveConflict": "草稿已保留。请为每处冲突选择要保留的值，然后保存。",
+    "projects.merged": "已将最新更改和资料合并到草稿。请检查并保存项目。",
     "projects.save": "保存更改",
     "projects.create": "创建项目",
     "projects.verbosityInvalid": "项目辅助功能提示设置必须为布尔值。",
     "projects.verbosityTitle": "项目无障碍帮助",
     "projects.verbosityDescription": "当项目获得焦点时，播报如何打开无障碍帮助。",
-    "projects.help": "项目将工作整理为具名空间。使用 Tab 前往搜索、排序和新建项目。在项目卡片内使用方向键、Home 和 End，按 Enter 打开项目。创建项目时填写名称与目标，也可以选择文件夹。在项目中，编辑详情可修改名称和目标。添加文件支持图片、PDF、文档和其他类型。使用文件夹可添加文件夹引用。文件保留在原位置，移除仅解除项目中的引用。打开文件可使用对应编辑器；打开文件夹可选择其中的文件。Escape 关闭创建弹窗并恢复焦点。面包屑中的项目返回项目列表。<keybinding:editor.action.accessibleView> 朗读当前项目与资料名称。"
+    "projects.help": "项目将工作整理为具名空间。标题栏的侧栏开关可隐藏或显示全局导航，并保留当前项目页面。使用 Tab 前往搜索、排序和新建项目。在项目卡片内使用方向键、Home 和 End，按 Enter 打开项目。创建项目时填写名称与目标，也可以选择文件夹。在项目中，编辑详情可修改名称和目标。如果其他窗口更改了项目，重载并合并可保留草稿并包含已保存的资料。若两个版本修改了同一字段，请选择要保留的值，然后保存。添加文件支持图片、PDF、文档和其他类型。使用文件夹可添加文件夹引用。文件保留在原位置，移除仅解除项目中的引用。打开文件可使用对应编辑器；打开文件夹可选择其中的文件。Escape 关闭创建弹窗并恢复焦点。面包屑中的项目返回项目列表。<keybinding:editor.action.accessibleView> 朗读当前项目与资料名称。"
   }
 }

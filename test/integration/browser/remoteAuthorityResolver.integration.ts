@@ -3,7 +3,7 @@ import { Event } from '../../../src/ash/base/common/event.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { createDisconnectedAppServerApi } from '../../../src/ash/platform/agentHost/browser/appServerApi.js';
 import { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
-import { createBuiltinExtensionFixture } from './builtinExtensionsFixture.js';
+import { createBuiltinExtensionFixture } from '../../fixtures/browser/builtinExtensionsFixture.js';
 import { IExtensionApi, type ExtensionSourceKind } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { WebWorkerExtensionHost } from '../../../src/ash/workbench/services/extensions/browser/webWorkerExtensionHost.js';

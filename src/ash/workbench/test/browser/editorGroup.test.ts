@@ -25,7 +25,7 @@ test('EditorGroupView retains its dirty pane when a disabled editor fails to reo
 		const { EditorPaneMatch } = await import('../../browser/parts/editor/editorPane.js');
 		const { EditorPaneRegistry } = await import('../../browser/editor.js');
 		const registry = new EditorPaneRegistry();
-		const resource = URI.file('/draft.ash-academic');
+		const resource = URI.file('/draft.ash-academy');
 		let dirty = true;
 		const copy: IWorkingCopy = {
 			...toDisposable(() => { }), resource, backupKind: 'structuredDocument', get isDirty() { return dirty; }, hasExternalChange: false,

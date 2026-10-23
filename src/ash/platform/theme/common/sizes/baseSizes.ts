@@ -1,5 +1,4 @@
 import { localize } from "../../../../nls.js";
-import { defaultToolbarActionSize, listRowHeight } from "../../../../base/common/uiSizes.js";
 import { registerSize } from "../sizeRegistry.js";
 import { size } from "../sizeUtils.js";
 
@@ -61,6 +60,12 @@ export const cornerRadiusXLarge = length(
 	"cornerRadius.xLarge",
 	12,
 	localize("size.cornerRadius.xLarge", "Radius for large surfaces."),
+);
+
+export const cornerRadiusXXLarge = length(
+	"cornerRadius.xxLarge",
+	16,
+	localize("size.cornerRadius.xxLarge", "Radius for extra-large surfaces."),
 );
 
 // An oversized radius lets CSS clamp rounding to the element's bounds without knowing its dimensions.
@@ -178,10 +183,10 @@ export const tabHeight = length(
 	24,
 	localize("size.tab.height", "Standard height for TabList tabs."),
 );
-// Keep CSS row sizing tied to the same constant used by list and tree layout calculations.
+// CSS defaults; row delegates and action hosts own the corresponding layout geometry.
 length(
 	"list.rowHeight",
-	listRowHeight,
+	22,
 	localize("size.list.rowHeight", "Standard height for single-line list and tree rows."),
 );
 
@@ -223,7 +228,7 @@ export const toolbarItemGap = length(
 
 export const toolbarActionSize = length(
 	"toolbar.actionSize",
-	defaultToolbarActionSize,
+	22,
 	localize("size.toolbar.actionSize", "Standard square hit area for toolbar icon actions."),
 );
 

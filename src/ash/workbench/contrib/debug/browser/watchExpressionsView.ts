@@ -1,7 +1,7 @@
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
@@ -16,6 +16,7 @@ interface DebugWatchResult { readonly expression: string; readonly result?: IDeb
 
 /** Watch owns drafts and evaluation results; durable definitions remain in Rust. */
 export class WatchExpressionsView extends ViewPane {
+	private readonly loadingProgress = this._register(new MutableDisposable());
 	private readonly watchElement: HTMLUListElement;
 	private readonly watchForm: HTMLFormElement;
 	private readonly watchInput: HTMLInputElement;
@@ -101,6 +102,7 @@ export class WatchExpressionsView extends ViewPane {
 			// A stopped event first invalidates the old frame. DebugService publishes
 			// the completed selection before Watch evaluates user expressions.
 			++this.refreshGeneration;
+			this.loadingProgress.clear();
 			this.watchResults = [];
 			this.render();
 		}));
@@ -110,6 +112,7 @@ export class WatchExpressionsView extends ViewPane {
 		this.refresh();
 	}
 	private refresh(): void {
+		this.loadingProgress.clear();
 		const generation = ++this.refreshGeneration;
 		this.watchResults = [];
 		this.render();
@@ -150,7 +153,13 @@ export class WatchExpressionsView extends ViewPane {
 		const expressions = this.debug.watchExpressions;
 		if (!session || session.state !== "stopped") { this.watchResults = expressions.map(expression => ({ expression })); this.render(); return; }
 		const frameId = this.debug.getViewModel().focusedStackFrame?.id;
-		const results = await session.evaluateWatchExpressions(expressions, frameId);
+		const loading = session.evaluateWatchExpressions(expressions, frameId);
+		const progress = this.getProgressIndicator().show(true, 150);
+		const handle = toDisposable(() => progress.done());
+		this.loadingProgress.value = handle;
+		const finish = (): void => { if (this.loadingProgress.value === handle) this.loadingProgress.clear(); };
+		void loading.then(finish, finish);
+		const results = await loading;
 		if (!this.isCurrentInspection(session, generation) || this.debug.getViewModel().focusedStackFrame?.id !== frameId || this.debug.watchExpressions !== expressions) return;
 		this.watchResults = Object.freeze(results);
 		this.announcements.announce(session.id, results);

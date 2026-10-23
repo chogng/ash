@@ -15,7 +15,7 @@ import { ISessionsManagementService } from "../services/sessions/common/sessions
 import { ChatWidget, resolveMarkdownWorkspaceResource } from "../../workbench/contrib/chat/browser/widget/chatWidget.js";
 import { ChatViewTitleControl } from "../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewTitleControl.js";
 import { addDisposableListener, h, isHTMLElement } from "../../base/browser/dom.js";
-import { type ChatContextAttachment, type IChatContextTarget } from "../../workbench/services/chat/common/chatContextService.js";
+import { type ChatContextAttachment, type ChatImageCapture, type IChatContextTarget } from "../../workbench/services/chat/common/chatContextService.js";
 import { IOpenerService } from "../../platform/opener/common/opener.js";
 import { IEditorService } from "../../workbench/services/editor/common/editorService.js";
 import { IFileService } from '../../platform/files/common/files.js';
@@ -232,7 +232,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		void this.migrateSessionsOrientation();
 		this.ensureConversationForVisibleChat();
 		let restoringRevision = sessionService.navigationRevision;
-		void sessionService.initialize().then(async () => {
+		const restoring = sessionService.initialize().then(async () => {
 			if (this.viewDisposed) return;
 			if (restored && sessionService.navigationRevision === restoringRevision) {
 				const opening = sessionService.openThread(restored.sessionId, restored.threadId);
@@ -252,6 +252,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			this.saveViewState();
 			this.notifications.error(localize('chat.selection.restoreFailed', 'Could not restore the Chat selection: {0}', String(error)));
 		});
+		void this.getProgressIndicator().showWhile(restoring, 150);
 	}
 
 	private restoreViewState(raw: string | undefined): { readonly sessionId: string; readonly threadId: string; } | undefined {
@@ -348,9 +349,9 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.activePane?.addContext(attachment);
 	}
 
-	captureScreenshot(): Promise<void> {
+	captureScreenshot(capture?: ChatImageCapture): Promise<void> {
 		this.ensureConversationForVisibleChat();
-		return this.activePane?.captureScreenshot() ?? Promise.resolve();
+		return this.activePane?.captureScreenshot(capture) ?? Promise.resolve();
 	}
 
 	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {

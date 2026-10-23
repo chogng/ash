@@ -1,6 +1,6 @@
 import type { ILanguageApi } from '../../../../platform/language/common/languageApi.js';
 import type { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { addToValueTree, isConfigured, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { JsonValue } from '../../../../base/common/jsonValue.js';
 import type { JsonValue as ProtocolJsonValue } from '../../../../../../.build/protocol/typescript/index.js';
 
@@ -15,9 +15,24 @@ export class AppServerLanguageSupport {
 	static async read(api: ILanguageApi, workspace: IWorkspaceContextService, configuration: IConfigurationService): Promise<AppServerLanguageSupport> {
 		const folders = workspace.getWorkspace().folders;
 		const entries = await Promise.all(folders.map(async folder => {
-			// The configuration owner has already merged profile, workspace and folder JSONC.
-			// Send an empty section on removal so the previous runtime override is retired.
-			const settings = { 'rust-analyzer': protocolJsonValue(configuration.getValue<JsonValue>('rust-analyzer', { resource: folder.uri }) ?? {}) };
+			const overrides = { resource: folder.uri };
+			const rust: Record<string, JsonValue> = {};
+			// The catalog documents upstream defaults; sending them all would override
+			// explicit App Server launch options. Only Ash's memory default is implicit.
+			const keys = configuration.keys();
+			const registered = new Set(keys.default);
+			for (const key of new Set(['rust-analyzer.cachePriming.enable', ...keys.user, ...keys.workspace, ...keys.workspaceFolder, ...keys.memory ?? [], ...keys.policy])) {
+				if (!key.startsWith('rust-analyzer.')) continue;
+				if (key !== 'rust-analyzer.cachePriming.enable' && registered.has(key)) {
+					// keys() includes every folder; inspect only the current directory's layer.
+					const inspected = configuration.inspect<JsonValue>(key, overrides);
+					if (!isConfigured(inspected) && inspected.memoryValue === undefined && inspected.policyValue === undefined) continue;
+				}
+				const value = configuration.getValue<JsonValue | undefined>(key, overrides);
+				if (value !== undefined) addToValueTree(rust, key.slice('rust-analyzer.'.length), structuredClone(value), message => { throw new Error(message); });
+			}
+			// An empty section on removal retires the previous runtime override.
+			const settings = { 'rust-analyzer': protocolJsonValue(rust) };
 			const result = await api.servers({ ...(folders.length > 1 ? { dirId: folder.id } : {}), settings });
 			return [folder.id, result.servers.map(server => ({
 				id: server.id,

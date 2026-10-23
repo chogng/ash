@@ -38,7 +38,12 @@ rust_test(
     ] + glob(["tests/snapshots/**/*.snap"]),
     deps = all_crate_deps(normal = True, normal_dev = True) + [":cli"],
     edition = "2024",
-    env = {"ASH_USE_INMEMORY_SECRETSTORAGE": "1"},
+    # Fastbuild leaves the embedded App Server unoptimized; its constructor
+    # needs the same stack budget as a host process rather than libtest's 2 MiB.
+    env = {
+        "ASH_USE_INMEMORY_SECRETSTORAGE": "1",
+        "RUST_MIN_STACK": "8388608",
+    },
     env_inherit = ["PATH", "ASH_RG_PATH", "ASH_TGREP_PATH"],
     rustc_env = {
         "CARGO_BIN_EXE_ash": "$(rlocationpath :ash)",

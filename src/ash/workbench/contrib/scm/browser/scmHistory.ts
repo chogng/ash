@@ -1,5 +1,5 @@
 import './media/scm.css';
-import { getWindow, h, svg as createSvgElement } from '../../../../base/browser/dom.js';
+import { getWindow, h, isHTMLElement, svg as createSvgElement } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -16,12 +16,11 @@ import type { IScopedContextKeyService } from '../../../../platform/contextkey/b
 import { IContextMenuService, type IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import type { IHoverService, IManagedHover } from '../../../../platform/hover/browser/hoverService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import { localize, getNLSLanguage } from '../../../../nls.js';
 import { findLastIdx } from "../../../../base/common/arraysFind.js";
 import { registerColor } from '../../../../platform/theme/common/colorUtils.js';
 import { chartsBlue, chartsPurple } from '../../../../platform/theme/common/colors/chartsColors.js';
-import { SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId, type ISCMHistoryItemDetails, type ISCMHistoryItem, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel } from '../common/history.js';
+import { SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId, type ISCMHistoryItemDetails, type ISCMHistoryItem, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel, type ISCMHistoryItemGraphNode } from '../common/history.js';
 import '../../../common/theme.js';
 
 registerColor('scmGraph.historyItemRefColor', {
@@ -34,7 +33,7 @@ registerColor('scmGraph.historyItemHoverLabelForeground', {
 	dark: 'panel.background', light: 'panel.background', hcDark: 'panel.background', hcLight: 'panel.background',
 }, { description: 'History item hover label foreground color.', owner: 'workbench.scm' });
 
-const LaneHeight = listRowHeight;
+const LaneHeight = 22;
 const LaneWidth = 11;
 const CurveRadius = 5;
 const ColorCount = 8;
@@ -198,6 +197,19 @@ export function renderSCMHistoryItemGraph(historyItemViewModel: ISCMHistoryItemV
 	return svg;
 }
 
+/** Continues a commit's outgoing lanes through an independently selectable child row. */
+export function renderSCMHistoryGraphPlaceholder(columns: readonly ISCMHistoryItemGraphNode[], document: Document = globalThis.document): SVGSVGElement {
+	const svg = createSvgElement(document, 'svg');
+	svg.classList.add('ash-scm-graph-graph');
+	svg.setAttribute('aria-hidden', 'true');
+	for (const [index, lane] of columns.entries()) {
+		appendPath(svg, `M ${LaneWidth * (index + 1)} 0 V ${LaneHeight}`, lane.color);
+	}
+	svg.style.width = `${LaneWidth * (Math.max(columns.length, 1) + 1) + 4}px`;
+	svg.style.height = `${LaneHeight}px`;
+	return svg;
+}
+
 function appendPath(svg: SVGSVGElement, data: string, colorIndex: number): SVGPathElement {
 	const path = createSvgElement(svg.ownerDocument, "path");
 	path.classList.add("ash-scm-graph-path");
@@ -256,6 +268,7 @@ export function setupHistoryItemHover(
 ): { readonly hover: IManagedHover; readonly focus: () => void; } {
 	const lifetime = options.resources.add(new MutableDisposable<DisposableStore>());
 	let toolbar: WorkbenchToolBar | undefined;
+	let returnFocus: HTMLElement | undefined;
 	const hover = options.resources.add(hoverService.setupHover({
 		target: options.target,
 		content: () => {
@@ -273,9 +286,22 @@ export function setupHistoryItemHover(
 		anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
 		anchorPosition: AnchorPosition.Below,
 		gap: 8,
-		onDidHide: () => { lifetime.clear(); toolbar = undefined; },
+		onDidHide: () => {
+			lifetime.clear();
+			toolbar = undefined;
+			const target = returnFocus;
+			returnFocus = undefined;
+			// A row anchors the card, while an active-descendant tree owns keyboard focus.
+			if (target?.isConnected && target.ownerDocument.activeElement === target.ownerDocument.body) target.focus();
+		},
 	}));
-	return { hover, focus: () => toolbar?.focus() };
+	return {
+		hover, focus: () => {
+			const active = options.target.ownerDocument.activeElement;
+			returnFocus = isHTMLElement(active) ? active : undefined;
+			toolbar?.focus();
+		}
+	};
 }
 
 interface SCMHistoryItemHoverOptions {

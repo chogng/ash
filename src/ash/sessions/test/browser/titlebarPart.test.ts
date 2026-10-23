@@ -14,9 +14,13 @@ import { installEditorTestDom } from '../../../editor/test/browser/editorTestGlo
 import { IMenuService, MenusRegistry } from '../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../platform/actions/common/menuService.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
-import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { BrowserContextViewService } from '../../../platform/contextview/browser/contextViewService.js';
+import { HoverService, IHoverService } from '../../../platform/hover/browser/hoverService.js';
+import { TestConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { resetNlsResolver, setNlsResolver } from '../../../nls.js';
 import { Part } from '../../../workbench/browser/part.js';
 import { registerLayoutActions } from '../../browser/layoutActions.js';
@@ -43,6 +47,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 	using contextKeys = new ContextKeyService();
 	using services = new InstantiationService();
 	using commands = new CommandService(services);
+	services.registerInstance(ICommandService, commands);
 	const menus = new MenuService(commands, contextKeys);
 	using resources = new DisposableStore();
 	using fileCommand = MenusRegistry.appendMenuItem(Menus.MenubarFileMenu, { command: { id: 'test.sessions.titlebar', title: 'Test command' } });
@@ -81,6 +86,10 @@ test('Sessions titlebar initializes localized actions and closes the application
 		navigateBack() { },
 		navigateForward() { },
 	};
+	using configuration = new TestConfigurationService();
+	using contextViews = new BrowserContextViewService(browser.window.document.body);
+	using hovers = new HoverService(configuration, contextViews, contextMenus);
+	services.registerInstance(IHoverService, hovers);
 	setNlsResolver((bundle, key, fallback) => {
 		if (bundle === 'ash.regions' && key === 'applicationMenu') { return '应用程序菜单'; }
 		if (bundle === 'ash.regions' && key === 'titleBarLeftActions') { return '标题栏左侧操作'; }
@@ -89,38 +98,55 @@ test('Sessions titlebar initializes localized actions and closes the application
 	});
 	services.registerInstance(IMenuService, menus);
 	services.registerInstance(IContextMenuService, contextMenus);
+	services.registerInstance(IContextKeyService, contextKeys);
 	const titlebar = registerTestComponentServices(services).createInstance(TitlebarPart, browser.window.document.body, 'application-menu');
 	const parts = new Map<SessionsPartId, Part>(sessionsPartIds.map(id => [id, id === 'titlebar' ? titlebar : resources.add(new TestPart(browser.window.document.body, id))]));
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	using actions = registerLayoutActions(layout, sessions, contextKeys);
 	const menuButton = (): HTMLButtonElement => titlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button')!;
+	const modeHost = titlebar.domNode.querySelector<HTMLElement>('.ash-sessions-workspace-mode')!;
+	const chatMode = modeHost.querySelector<HTMLButtonElement>('button')!;
 	try {
+		assert.equal(modeHost.hidden, false);
 		menuButton().click();
 		assert.equal(menuButton().getAttribute('aria-expanded'), 'true');
 		changed.fire();
-		assert.equal(closedMenus, 0);
+		assert.equal(closedMenus, 0, 'Unchanged session state must keep the application menu open');
 		assert.equal(menuButton().getAttribute('aria-expanded'), 'true');
 		layout.hidePart('sidebar');
 		assert.equal(closedMenus, 1);
 		assert.equal(menuButton().getAttribute('aria-expanded'), 'false');
+		assert.equal(modeHost.hidden, true);
+		layout.showPart('sidebar');
+		assert.equal(modeHost.hidden, false);
+		assert.equal(modeHost.querySelector('button'), chatMode, 'Expanding retains the workspace controls');
+		chatMode.focus();
+		layout.hidePart('sidebar');
+		assert.equal(modeHost.hidden, true);
+		assert.equal(browser.window.document.activeElement, titlebar.domNode.querySelector('[data-action-id="ash.sessions.toggleSidebar"] button'));
 		layout.showPart('sidebar');
 		menuButton().click();
 
 		assert.equal(closedMenus, 1);
-		assert.deepEqual([...titlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['应用程序菜单', '隐藏侧栏', 'Back', 'Forward', 'Toggle Code panel']);
+		assert.deepEqual([...titlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['应用程序菜单', '隐藏侧栏', 'Back', 'Forward', 'Chat / Agents', 'Code', 'Toggle Code panel']);
 		assert.equal(titlebar.domNode.querySelector('[role="toolbar"]')?.getAttribute('aria-label'), '标题栏左侧操作');
 		titlebar.dispose();
 		assert.equal(closedMenus, 2);
 		using systemMenuTitlebar = registerTestComponentServices(services).createInstance(TitlebarPart, browser.window.document.body, 'actions-only');
-		assert.deepEqual([...systemMenuTitlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['隐藏侧栏', 'Back', 'Forward', 'Toggle Code panel']);
+		assert.deepEqual([...systemMenuTitlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['隐藏侧栏', 'Back', 'Forward', 'Chat / Agents', 'Code', 'Toggle Code panel']);
 		const sidebarToggle = systemMenuTitlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.sessions.toggleSidebar"] button')!;
 		sidebarToggle.click();
 		assert.equal(systemMenuTitlebar.domNode.querySelector('[data-action-id="ash.sessions.toggleSidebar"] button')!.getAttribute('aria-pressed'), 'false');
 		systemMenuTitlebar.dispose();
+		using collapsedTitlebar = registerTestComponentServices(services).createInstance(TitlebarPart, browser.window.document.body, 'actions-only');
+		assert.equal(collapsedTitlebar.domNode.querySelector<HTMLElement>('.ash-sessions-workspace-mode')!.hidden, true, 'A titlebar created with a collapsed sidebar starts without workspace controls');
+		collapsedTitlebar.dispose();
 		actions.dispose();
 		assert.equal(changed.hasListeners(), false);
 		layout.dispose();
 		resources.dispose();
+		hovers.dispose();
+		contextViews.dispose();
 		assert.equal(browser.window.document.body.childElementCount, 0);
 	} finally {
 		actions.dispose();

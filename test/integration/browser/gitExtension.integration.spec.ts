@@ -1,6 +1,6 @@
-import { attachRustGit } from './rustGitProcessFixture.js';
+import { attachRustGit } from '../../fixtures/browser/rustGitProcessFixture.js';
 import { expect, test, type Page } from '@playwright/test';
-import { expectVisibleFocusOutline } from './focusOutline.js';
+import { expectVisibleFocusOutline } from '../../fixtures/browser/focusOutline.js';
 
 let stopRust: (() => Promise<void>) | undefined;
 test.beforeEach(async ({ page }) => { stopRust = await attachRustGit(page); });

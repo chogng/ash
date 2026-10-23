@@ -1,9 +1,8 @@
 import { IActivityService } from '../../../../workbench/services/activity/common/activity.js';
-import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import "./media/sidebarPart.css";
 import { h } from '../../../../base/browser/dom.js';
-import { DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
@@ -22,17 +21,18 @@ import { ITeamsManagementService } from '../../../services/teams/common/teamsMan
 import { SESSION_SIDEBAR_DEFAULT_WIDTH } from '../../../common/layoutConstants.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
-import { IGitHubService } from '../../../contrib/github/browser/githubService.js';
 import { IWorkbenchLayoutService } from '../../../../workbench/services/layout/browser/layoutService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
 export const SESSIONS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.chats';
+export const CODE_NAVIGATION_CONTAINER_ID = 'sessions.navigation.code';
 export const TEAMS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.teams';
 
 export function registerSessionsNavigation(listRoles: () => Promise<readonly TeamRoleOption[]>): IDisposable {
 	const registrations = new DisposableStore();
 	for (const [id, title, key, ctorDescriptor] of [
-		[SESSIONS_NAVIGATION_CONTAINER_ID, 'Chat', 'sessions.activity.chat', new SyncDescriptor(SessionsNavigationView)],
+		[SESSIONS_NAVIGATION_CONTAINER_ID, localize('sessions.activity.chat', 'Chat'), 'sessions.activity.chat', new SyncDescriptor(SessionsNavigationView, ['chat'])],
+		[CODE_NAVIGATION_CONTAINER_ID, localize({ bundle: 'ash', key: 'sessions.mode.code' }, 'Code'), 'sessions.mode.code', new SyncDescriptor(SessionsNavigationView, ['code'])],
 		[TEAMS_NAVIGATION_CONTAINER_ID, 'Agent Teams', 'sessions.activity.teams', new SyncDescriptor(TeamsNavigationView, [listRoles])],
 	] as const) {
 		registrations.add(SessionsViewRegistry.registerViewContainer({ id, title, localizationKey: { bundle: 'ash', key }, location: ViewContainerLocation.Sidebar, order: 0 }));
@@ -44,10 +44,19 @@ export function registerSessionsNavigation(listRoles: () => Promise<readonly Tea
 class SessionsNavigationView extends ViewPane {
 	private list: SessionsList;
 	private hiddenListState: ReturnType<SessionsList['getViewState']> | undefined;
-	constructor(parent: HTMLElement, options: IViewPaneOptions, @ISessionsManagementService management: ISessionsManagementService, @ISessionsService sessions: ISessionsService, @IGitHubService github: IGitHubService, @ISessionGroupsService groups: ISessionGroupsService, @IInstantiationService instantiation: IInstantiationService) {
+	constructor(mode: 'chat' | 'code', parent: HTMLElement, options: IViewPaneOptions, @ISessionsManagementService management: ISessionsManagementService, @IInstantiationService instantiation: IInstantiationService) {
 		super(parent, options);
 		this.contentElement.classList.add('ash-sessions-navigation-view');
-		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), management, sessions, localize('sessions.activity.chat', 'Chat'), localize('chat.sessions.new', 'New Session'), github, groups);
+		const loading = this._register(new MutableDisposable());
+		const updateLoading = (): void => {
+			if (management.state === 'loading' && !loading.value) {
+				const progress = this.getProgressIndicator().show(true, 150);
+				loading.value = toDisposable(() => progress.done());
+			} else if (management.state !== 'loading') loading.clear();
+		};
+		this._register(management.onDidChange(updateLoading));
+		updateLoading();
+		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), options.title, mode);
 		this.list = lists.get();
 		this.contentElement.append(this.list.element);
 		this._register(lists.onDidChange(list => {
@@ -62,6 +71,9 @@ class SessionsNavigationView extends ViewPane {
 	public override setVisible(visible: boolean): void {
 		if (!visible && this.isVisible()) { this.hiddenListState = this.list.getViewState(); }
 		super.setVisible(visible);
+		// Retain the view model while only the current mode contributes sidebar rows and tab stops.
+		if (visible) this.contentElement.append(this.list.element);
+		else this.list.element.remove();
 		if (visible && this.hiddenListState) {
 			this.list.restoreViewState({ ...this.hiddenListState, focus: undefined });
 			this.hiddenListState = undefined;
@@ -89,6 +101,7 @@ class TeamsNavigationView extends ViewPane {
 export class SidebarPart extends WorkbenchSidebarPart {
 	private readonly topActivityBarHost: HTMLDivElement;
 	private readonly bottomActivityBarHost: HTMLDivElement;
+	public get activityBarAccountHost(): HTMLElement { return this.bottomActivityBarHost; }
 	override get minimumWidth(): number { return 240; }
 	override get maximumWidth(): number { return 520; }
 	override get preferredWidth(): number {
@@ -127,8 +140,12 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		this.contentDomNode.insertBefore(this.getComposite(id)!.element, this.bottomActivityBarHost);
 	}
 	override setActivityBarLocation(location: ActivityBarPosition): HTMLElement | undefined {
-		this.topActivityBarHost.hidden = location !== ActivityBarPosition.TOP;
-		this.bottomActivityBarHost.hidden = location !== ActivityBarPosition.BOTTOM;
+		const integrated = location === ActivityBarPosition.DEFAULT;
+		this.topActivityBarHost.classList.toggle('integrated', integrated);
+		this.bottomActivityBarHost.classList.toggle('integrated', integrated);
+		this.topActivityBarHost.hidden = !integrated && location !== ActivityBarPosition.TOP;
+		this.bottomActivityBarHost.hidden = !integrated && location !== ActivityBarPosition.BOTTOM;
+		if (integrated) { return this.topActivityBarHost; }
 		if (location === ActivityBarPosition.TOP) { return this.topActivityBarHost; }
 		if (location === ActivityBarPosition.BOTTOM) { return this.bottomActivityBarHost; }
 		return undefined;

@@ -27,7 +27,7 @@
 	align-self: center;
 }
 
-.ash-chatgpt-widget .ash-chatgpt-round-button {
+.ash-chatgpt-widget .ash-button.ash-chatgpt-round-button {
 	flex: 0 0 auto;
 	display: grid;
 	place-items: center;
@@ -43,11 +43,6 @@
 .ash-chatgpt-round-button .ash-icon {
 	width: var(--ash-lxiconFontSize);
 	height: var(--ash-lxiconFontSize);
-}
-
-.ash-chatgpt-widget .ash-chatgpt-send {
-	background: var(--ash-button-background);
-	color: var(--ash-button-foreground);
 }
 
 .ash-chatgpt-dictation.active {
@@ -103,11 +98,6 @@
 	overflow-wrap: anywhere;
 }
 
-.ash-chatgpt-widget .ash-chatgpt-input-attachment button {
-	min-height: 28px;
-	padding: var(--ash-spacing-size40);
-}
-
 .ash-chatgpt-input-attachment .ash-icon {
 	width: var(--ash-lxiconFontSize);
 	height: var(--ash-lxiconFontSize);
@@ -123,14 +113,6 @@
 	overflow: auto;
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
-}
-
-.ash-chatgpt-widget .ash-chatgpt-send:hover {
-	background: var(--ash-button-hoverBackground);
-}
-
-.ash-chatgpt-widget .ash-chatgpt-send:disabled {
-	cursor: default;
 }
 
 :is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])

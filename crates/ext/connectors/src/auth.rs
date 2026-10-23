@@ -81,7 +81,7 @@ impl ConnectorCredentialService {
         definition: &ConnectorDefinition,
         invoke: impl FnOnce(SecretValue) -> Result<T, ConnectorOAuthError>,
     ) -> Option<Result<T, ConnectorOAuthError>> {
-        self.authority.with_authorized_invocation(
+        self.authority.with_account_invocation(
             connector_id,
             connection_generation,
             &definition.digest(),

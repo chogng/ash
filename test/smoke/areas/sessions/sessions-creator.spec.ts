@@ -15,13 +15,13 @@ test('Sessions mode and page-tab activation reuse Parts while retaining the conv
 	await chat.waitForEditorFocus();
 	await chat.waitForTypeInEditor('Retained conversation draft');
 	const parts = await page.locator('[data-part]').elementHandles();
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await new QuickAccess(page).runCommand('workbench.action.files.newUntitledFile');
 	const document = new Editor(page.locator('[data-part="editor"]'));
 	await document.waitForEditorFocus();
 	await document.waitForTypeInEditor('Retained dirty document');
 	await chat.waitForEditorFocus();
-	await expect(navigation.getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
 	const creatorNavigation = page.locator('.ash-creator-navigation');
 	await creatorNavigation.getByRole('button', { name: 'Design', exact: true }).focus();
@@ -32,21 +32,22 @@ test('Sessions mode and page-tab activation reuse Parts while retaining the conv
 	await creatorNavigation.getByRole('button', { name: 'Design', exact: true }).press('Enter');
 	await expect(page.locator('[data-part="sidebar"]')).toContainText('Layers');
 	await expect(page.locator('[data-part="auxiliarybar"]')).toContainText('Page');
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
-	await page.locator('[data-part="editor"]').getByRole('tab', { name: 'Creator', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
 	await expect(navigation.getByRole('button', { name: 'Creator', exact: true })).toHaveAttribute('aria-current', 'page');
+	await creatorNavigation.getByRole('button', { name: 'Design', exact: true }).click();
 	await expect(page.locator('[data-part="sidebar"]')).toContainText('Layers');
-	await navigation.getByRole('button', { name: 'Library', exact: true }).focus();
-	// Creator hides its tab strip; use the entry action to reveal the retained Library page.
-	await navigation.getByRole('button', { name: 'Library', exact: true }).press('Enter');
-	await expect(navigation.getByRole('button', { name: 'Library', exact: true })).toHaveAttribute('aria-current', 'page');
-	await expect(page.locator('[data-part="sidebar"]').getByRole('navigation', { name: 'Library categories' })).toBeVisible();
-	await expect(page.locator('[data-part="auxiliarybar"]')).toContainText('Asset details');
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).focus();
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).press('Enter');
+	await expect(navigation.getByRole('button', { name: 'Projects', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('.ash-projects')).toBeVisible();
+	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
 	for (const part of parts) {
 		try { expect(await part.evaluate(element => element.isConnected && element === element.ownerDocument!.querySelector(`[data-part="${(element as HTMLElement).dataset.part}"]`))).toBe(true); }
 		finally { await part.dispose(); }
 	}
-	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await chat.waitForEditorContents(text => text === 'Retained conversation draft');
 	await document.waitForEditorContents(text => text === 'Retained dirty document');
 	await expect(page.getByRole('dialog', { name: 'Save Changes', exact: true })).toHaveCount(0);
@@ -62,7 +63,7 @@ test('Sessions Creator opens seven workspaces and retains each canvas independen
 	await expect(creator.locator('.ash-creator-mode-card')).toHaveCount(7);
 	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
 	await expect(page.locator('[data-part="editor"] .ash-creator')).toBeVisible();
-	await expect(page.locator('[data-part="creator"], [data-part="library"]')).toHaveCount(0);
+	await expect(page.locator('[data-part="creator"], [data-part="projects"]')).toHaveCount(0);
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
 	const design = creator.getByRole('button', { name: 'Design', exact: true });
 	await design.focus();
@@ -179,7 +180,7 @@ test('Sessions Creator Make runs preview and prepares a Code draft with source a
 	await expect(make.frameLocator('iframe').locator('[data-design-kind="rectangle"]')).toHaveCount(1);
 	await make.getByRole('textbox', { name: 'Describe what to build' }).fill('Add a sign-in form to this page');
 	await make.getByRole('button', { name: 'Build with Agent', exact: true }).click();
-	await expect(navigation.getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	const prepared = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 	await expect(prepared.lines.last()).toHaveText('Add a sign-in form to this page');
 	await expect(prepared.element.locator('.ash-chat-code-reference')).toHaveText('creator.html');

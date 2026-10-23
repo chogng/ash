@@ -5,7 +5,7 @@ import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
-import { createServer, normalizePath } from "vite";
+import { createServer, normalizePath, resolveConfig } from "vite";
 import { analyzeHotReloadModule, unsafeHotReloadChangeReason } from "./hotReloadAnalysis.ts";
 import { hotReloadPlugin, type AshHotReloadPlugin } from "./hotReloadPlugin.ts";
 
@@ -30,6 +30,23 @@ test("Vite hot reload emits a valid Windows file URL for setup", () => {
 	const htmlTags = plugin.transformIndexHtml.handler();
 
 	assert.deepEqual(htmlTags, [{ tag: "script", attrs: { type: "module", src: "/@fs/C:/workspace/build/desktop/vite/setup-dev.ts" }, injectTo: "head-prepend" }]);
+});
+
+test("Vite preserves native watch defaults and applies only explicit polling overrides", async () => {
+	const previous = process.env.CHOKIDAR_USEPOLLING;
+	try {
+		for (const override of [undefined, "", "0", "false", "FALSE", "1", "true"]) {
+			if (override === undefined) delete process.env.CHOKIDAR_USEPOLLING;
+			else process.env.CHOKIDAR_USEPOLLING = override;
+			const config = await resolveConfig({ configFile: false, plugins: [hotReloadPlugin()] }, "serve");
+			assert.notEqual(config.server.watch, null);
+			assert.equal(config.server.watch?.usePolling, override === "1" || override === "true" ? true : undefined, `override: ${override}`);
+			assert.equal(config.server.watch?.useFsEvents, undefined, "Default native backend selection remains owned by Vite");
+		}
+	} finally {
+		if (previous === undefined) delete process.env.CHOKIDAR_USEPOLLING;
+		else process.env.CHOKIDAR_USEPOLLING = previous;
+	}
 });
 
 test("Vite hot reload supports explicit prototype-patch opt in", () => {

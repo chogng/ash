@@ -45,7 +45,7 @@ test("find opens, highlights matches, navigates, and restores focus", () => {
 	assert.equal(fixture.find.getState().isRevealed, true);
 	assert.equal(fixture.searchInput.value, "alpha");
 	assert.equal(fixture.findElement.querySelector(".stanza-editor-find-result")?.textContent, "1 of 2");
-	assert.equal(fixture.findElement.querySelector('svg[data-ash-icon-id="find-selection"]')?.getAttribute('aria-hidden'), 'true');
+	assert.equal(fixture.findElement.querySelector('[data-ash-icon-id="find-selection"]')?.getAttribute('aria-hidden'), 'true');
 	assert.deepEqual(fixture.model.getAllDecorations().filter(decoration => decoration.options.className === 'findMatch' || decoration.options.className === 'currentFindMatch').map(decoration => decoration.range).sort(Range.compareRangesUsingStarts), [
 		new Range(1, 1, 1, 6),
 		new Range(1, 12, 1, 17),

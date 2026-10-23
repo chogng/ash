@@ -101,7 +101,7 @@ const test = base.extend<{ taskScenario: TaskScenario; taskKind: 'process' | 'sh
 			mockModel.selectDirectory(directory);
 			const page = workbench.page;
 
-			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await page.locator('.ash-sessions-list-item').filter({ hasText: 'Mock Agent Task Regression' }).click();
 			const active = page.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork)');
 			await active.locator('.ash-chat-input-model-action').press('ArrowDown');

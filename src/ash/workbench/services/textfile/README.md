@@ -20,8 +20,8 @@ or forwarding exports. Rust filesystem transport remains in
 | Bootstrap-text versus file-system resolution                          | `ITextFileService.resolve`                                    | ✅                                                        |
 | Text save transport and cancellation                                  | `ITextFileService.save`                                       | ✅                                                        |
 | URI-to-`TextModel` references                                         | `ITextModelService`                                           | ✅, editor-owned                                          |
-| Editor model references                                               | Code and Academic TextModel services                          | ✅, editor-domain-owned                                   |
-| Format-specific dirty state, snapshot saves and explicit reverts      | Code/Academic TextModel services                              | ✅, editor-domain-owned                                   |
+| Editor model references                                               | Code and Academy TextModel services                           | ✅, editor-domain-owned                                   |
+| Format-specific dirty state, snapshot saves and explicit reverts      | Code/Academy TextModel services                               | ✅, editor-domain-owned                                   |
 | Shared working-copy lifecycle and resource indexing                   | `IWorkingCopyService`                                         | ✅, Workbench-owned contract, editor-owned implementation |
 | CRLF/LF source-line-ending preservation                               | `ITextModelService`                                           | ✅, editor-owned                                          |
 | Workspace external-change invalidation and clean-model reload         | `IFileService` → `ITextFileService` → `ITextModelService`     | ✅, background checks skip dirty text models              |
@@ -145,7 +145,7 @@ the latter reports an unknown outcome. Clients without this capability and Turns
 without a product connection use the explicit disk execution path. Same-directory
 child Turns inherit their parent's exact connection before tool workers run. Isolated
 checkouts and background executions use filesystem documents; completing the parent
-does not discard a running child's binding. Academic does not advertise this text
+does not discard a running child's binding. Academy does not advertise this text
 capability.
 
 Agent updates appear as review hunks in existing Code editors. Accept adopts a hunk

@@ -4,38 +4,55 @@ import { type DiffModel } from '../../../common/diff/diffModel.js';
 import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/monospaceLineBreaksComputer.js';
 
 export interface DiffRowLayout {
-	readonly offsets: readonly number[];
+	readonly height: number;
+	getOffset(rowIndex: number): number;
 }
 
-/** Estimates paired row heights for continuous multi-file scrolling and change navigation. */
+/** Retains only wrapping exceptions; unwrapped offsets are constant-time arithmetic. */
 export function computeDiffRowLayout(model: DiffModel, lineHeight: number, wrapping?: { readonly fontInfo: FontInfo; readonly column: number; }): DiffRowLayout {
-	const rows = model.diff?.rows ?? [];
-	const offsets = [0];
-	if (!wrapping) {
-		for (let i = 0; i < rows.length; i++) offsets.push((i + 1) * lineHeight);
-		return { offsets };
-	}
+	const rows = model.diff?.rows;
+	const length = rows?.length ?? 0;
+	if (!wrapping || !rows) return { height: length * lineHeight, getOffset: index => index * lineHeight };
 	const factory = new MonospaceLineBreaksComputerFactory('([{', ' \t})]?|/&.,;!?:');
-	const compute = (source: typeof model.original, lineIndices: readonly (number | undefined)[]): readonly number[][] => {
-		const computer = factory.createLineBreaksComputer({
-			getLineContent: line => source.getLineContent(line),
-			getLineInjectedText: () => null,
-		}, wrapping.fontInfo, source.getOptions().tabSize, wrapping.column, WrappingIndent.None, 'normal', false);
-		for (const index of lineIndices) if (index !== undefined) computer.addRequest(index + 1, null);
-		const breaks = computer.finalize();
-		let next = 0;
-		return lineIndices.map(index => {
-			if (index === undefined) return [0];
-			return breaks[next++]?.breakOffsets ?? [source.getLineContent(index + 1).length];
-		});
-	};
-	const original = compute(model.original, rows.map(row => row.originalLineIndex));
-	const modified = compute(model.modified, rows.map(row => row.modifiedLineIndex));
-	for (let i = 0; i < rows.length; i++) {
-		const height = Math.max(original[i]!.length, modified[i]!.length) * lineHeight;
-		offsets.push(offsets[i]! + height);
+	const wrappedRows: number[] = [];
+	const extraHeights: number[] = [];
+	let extraHeight = 0;
+	// Bound temporary line-break requests even when a comparison has millions of lines.
+	for (let start = 0; start < length; start += 256) {
+		const end = Math.min(length, start + 256);
+		const batch = Array.from({ length: end - start }, (_, offset) => rows.get(start + offset)!);
+		const compute = (source: typeof model.original, side: 'originalLineIndex' | 'modifiedLineIndex'): number[] => {
+			const computer = factory.createLineBreaksComputer({
+				getLineContent: line => source.getLineContent(line), getLineInjectedText: () => null,
+			}, wrapping.fontInfo, source.getOptions().tabSize, wrapping.column, WrappingIndent.None, 'normal', false);
+			for (const row of batch) if (row[side] !== undefined) computer.addRequest(row[side]! + 1, null);
+			const breaks = computer.finalize();
+			let next = 0;
+			return batch.map(row => row[side] === undefined ? 1 : breaks[next++]?.breakOffsets.length ?? 1);
+		};
+		const original = compute(model.original, 'originalLineIndex');
+		const modified = compute(model.modified, 'modifiedLineIndex');
+		for (let offset = 0; offset < batch.length; offset++) {
+			const extra = (Math.max(original[offset]!, modified[offset]!) - 1) * lineHeight;
+			if (!extra) continue;
+			extraHeight += extra;
+			wrappedRows.push(start + offset);
+			extraHeights.push(extraHeight);
+		}
 	}
-	return { offsets };
+	return {
+		height: length * lineHeight + extraHeight,
+		getOffset: index => {
+			let low = 0;
+			let high = wrappedRows.length;
+			while (low < high) {
+				const middle = (low + high) >>> 1;
+				if (wrappedRows[middle]! < index) low = middle + 1;
+				else high = middle;
+			}
+			return index * lineHeight + (extraHeights[low - 1] ?? 0);
+		},
+	};
 }
 
 export interface ICompressedVirtualizedItemRange {

@@ -698,19 +698,19 @@ impl GitService {
 
     pub(crate) fn commit_changes(
         &self,
+        repository: &GitRepository,
         object_id: &str,
     ) -> Result<GitServiceCommitChanges, GitServiceError> {
         self.ensure_readable()?;
         let runtime = &self.runtime;
         run(runtime, async {
-            let repository = self.open_repository().await?;
             let (parent_object_id, changes) = self
                 .client()
-                .commit_changes(&repository, object_id)
+                .commit_changes(repository, object_id)
                 .await
                 .map_err(GitServiceError::Git)?;
             Ok(GitServiceCommitChanges {
-                repository,
+                repository: repository.clone(),
                 parent_object_id,
                 changes,
             })
@@ -769,6 +769,7 @@ impl GitService {
 
     pub(crate) fn commit_file(
         &self,
+        repository: &GitRepository,
         object_id: &str,
         path: &Path,
         comparison_base: Option<&str>,
@@ -776,15 +777,16 @@ impl GitService {
         self.ensure_readable()?;
         let runtime = &self.runtime;
         run(runtime, async {
-            let repository = self.open_repository().await?;
-            let dir_prefix = self.repository_prefix(&repository)?;
+            // The repository runtime already owns its discovered identity. Opening
+            // it again for every historical path adds an unrelated Git process.
+            let dir_prefix = self.repository_prefix(repository)?;
             let repository_path = dir_prefix.join(path);
             let (parent_object_id, changes) = match comparison_base {
                 Some(base) => {
                     let (base, changes) = self
                         .client()
                         .compare_changes(
-                            &repository,
+                            repository,
                             object_id,
                             base,
                             ash_git::GitComparisonMode::Direct,
@@ -795,7 +797,7 @@ impl GitService {
                 }
                 None => self
                     .client()
-                    .commit_changes(&repository, object_id)
+                    .commit_changes(repository, object_id)
                     .await
                     .map_err(GitServiceError::Git)?,
             };
@@ -808,7 +810,7 @@ impl GitService {
                 .filter(|path| path.strip_prefix(&dir_prefix).is_ok());
             self.client()
                 .commit_file(
-                    &repository,
+                    repository,
                     object_id,
                     parent_object_id.as_deref(),
                     change.path(),

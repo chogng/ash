@@ -4,6 +4,10 @@ import { GlobalKeybindingsMainService, type IGlobalShortcutRegistry } from '../.
 import type { INativeSystemWideKeybinding } from '../../../native/common/nativeHost.js';
 import { validateSystemWideKeybindings } from '../../../native/common/nativeHost.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { EventEmitter } from 'node:events';
+import type { BrowserWindow } from 'electron';
+import { GLOBAL_KEYBINDING_TRIGGER_CHANNEL, validateGlobalKeybindingRequest, validateGlobalKeybindingResult } from '../../common/globalKeybindings.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -31,6 +35,42 @@ class TestShortcuts implements IGlobalShortcutRegistry {
 function binding(accelerator: string): INativeSystemWideKeybinding {
 	return { accelerator, commandId: 'workbench.action.openAgentsWindow', userSettingsLabel: accelerator };
 }
+
+test('renderer shortcut leases preserve failed replacements and release on navigation, crash and disposal', () => {
+	const shortcuts = new TestShortcuts();
+	const messages: unknown[] = [];
+	using service = new GlobalKeybindingsMainService({ shortcuts, activeWindowId: () => 1, runCommand: () => assert.fail('Renderer leases dispatch to their owning renderer'), onError: error => { throw error; } });
+	using lifetime = new DisposableStore();
+	const contents = Object.assign(new EventEmitter(), { isDestroyed: () => false, send: (...args: unknown[]) => messages.push(args) });
+	const window = { id: 1, webContents: contents, isDestroyed: () => false } as unknown as BrowserWindow;
+	const route = service.createWindowRoutes(window, lifetime)[0];
+	const update = (accelerator: string) => route.invoke(route.validate({ id: 'image.capture', commandId: 'test.image.capture', accelerator, label: accelerator, global: true }));
+	assert.deepEqual(update('Control+Shift+A'), { available: true, activeLabel: 'Control+Shift+A' });
+	shortcuts.unavailable.add('Control+Shift+B');
+	assert.deepEqual(update('Control+Shift+B'), { available: false, activeLabel: 'Control+Shift+A' });
+	shortcuts.callbacks.get('Control+Shift+A')!();
+	assert.deepEqual(messages, [[GLOBAL_KEYBINDING_TRIGGER_CHANNEL, { id: 'image.capture' }]]);
+	contents.emit('did-start-navigation', {}, 'file:///workbench.html#selection', true, true);
+	assert.equal(shortcuts.callbacks.size, 1);
+	contents.emit('did-start-navigation', {}, 'file:///workbench.html', false, true);
+	assert.equal(shortcuts.callbacks.size, 0);
+	update('Control+Shift+A');
+	contents.emit('render-process-gone');
+	assert.equal(shortcuts.callbacks.size, 0);
+	update('Control+Shift+A');
+	lifetime.dispose();
+	assert.equal(shortcuts.callbacks.size, 0);
+	assert.equal(contents.listenerCount('render-process-gone'), 0);
+	assert.throws(() => update('Control+Shift+A'), /scope has closed/);
+});
+
+test('global keybinding IPC binds named leases to bounded commands and actual registration results', () => {
+	const request = { id: 'image.capture', commandId: 'test.image.capture', accelerator: 'Command+Control+A', label: 'Control+Command+A', global: true };
+	assert.equal(validateGlobalKeybindingRequest(request), request);
+	for (const invalid of [{ ...request, windowId: 3 }, { ...request, accelerator: 'Command+Control+A;other' }, { ...request, global: 1 }, { ...request, commandId: '' }]) assert.throws(() => validateGlobalKeybindingRequest(invalid));
+	assert.deepEqual(validateGlobalKeybindingResult({ available: false, activeLabel: 'Control+Command+B' }), { available: false, activeLabel: 'Control+Command+B' });
+	assert.throws(() => validateGlobalKeybindingResult({ available: 'yes', activeLabel: '' }));
+});
 
 test('global shortcut opens in the active window and releases with its last owner', async () => {
 	const shortcuts = new TestShortcuts();

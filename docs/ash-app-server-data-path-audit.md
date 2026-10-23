@@ -296,7 +296,7 @@ UTF-8 本身继续由运行时提供的 TextEncoder／TextDecoder 执行，VSBuf
 
 ```sh
 pnpm test:unit:prepared --run src/ash/platform/agentHost/test/browser/appServerSocketTransport.test.ts --run src/ash/platform/agentHost/test/browser/appServerProtocolClient.test.ts --run src/ash/platform/agentHost/test/electron-browser/appServerMessagePortTransport.test.ts
-./node_modules/bun/bin/bun.exe check -p tsconfig.renderer.json --all
+./node_modules/.bin/bun check -p tsconfig.renderer.json --all
 ```
 
 单测的正式准备步骤已运行；最终 prepared 运行编译当前源码并执行上述 53 个测试。Renderer 类型检查覆盖 4,163 个文件通过，修改文件的 TypeScript formatter 和文档检查也通过。本批没有改变后端线上协议或生成 DTO，未进行真实 Desktop 交互延迟／RSS 对比。
@@ -389,7 +389,7 @@ whitespace 检查通过。中文资源准备检查为 0 缺失条目。Rust 重�
 
 ```sh
 pnpm test:unit:prepared --run src/ash/sessions/test/browser/chatViewPane.test.ts --run src/ash/platform/agentHost/test/browser/appServerAgentService.test.ts
-./node_modules/bun/bin/bun.exe check -p tsconfig.renderer.json --all
+./node_modules/.bin/bun check -p tsconfig.renderer.json --all
 just test ash-app-server --lib thread_read_and_subscribe_keep_transients_within_the_visible_running_history
 just test ash-app-server --lib thread_subscription
 just test ash-core --lib thread_history_

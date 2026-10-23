@@ -25,7 +25,7 @@ you work with agents from the command line.
 ## Desktop and terminal
 
 **Ash** combines the editor and project tools with a dedicated Agents
-window. Code and structured academic documents open in the same workspace.
+window. Code and Academy documents open in the same workspace.
 
 **Ash Code** provides an interactive terminal interface, saved sessions, and
 commands for asking questions or running tasks without an interactive UI. Once

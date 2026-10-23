@@ -91,8 +91,8 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 			await search.press('Enter');
 			await code.locator('[data-view-id="ash.extensions.plugins"]').getByRole('option').filter({ hasText: 'acme/account-smoke' }).click();
 			const packageDetails = code.locator('.ash-extension-editor:visible').filter({ hasText: 'acme/account-smoke' });
-			await packageDetails.getByRole('button', { name: 'Enable', exact: true }).click();
-			await expect(packageDetails.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
+			await packageDetails.getByRole('switch').press('Space');
+			await expect(packageDetails.getByRole('switch')).toBeChecked();
 			await workbench.dialogs.confirm(application, 'Account smoke', 'Grant permissions', () => packageDetails.getByRole('button', { name: 'Grant permissions', exact: true }).click());
 			await expect(packageDetails.getByRole('button', { name: 'Revoke permissions', exact: true })).toBeVisible();
 			let page = window === 'Code' ? code : await workbench.openAgentsWindow(target.kind);
@@ -129,6 +129,9 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 			await page.screenshot({ path: accountImage });
 			await testInfo.attach('Authorized service account', { path: accountImage, contentType: 'image/png' });
 			if (durable) {
+				await details.getByRole('switch').press('Space');
+				await expect(details.getByRole('status')).toHaveText('Disconnected');
+				await expect(details.locator('.extension-detail-info')).toContainText('smoke-user');
 				// Desktop restarts both application and backend; Browser reloads its page.
 				// The Desktop fixture persists synthetic secrets independently of the memory store.
 				({ workbench, application } = await runningApplication.reload('quit'));
@@ -141,6 +144,10 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 				await expect(pane.getByRole('option').filter({ hasText: 'acme/account-smoke' })).toHaveCount(0);
 				await pane.getByRole('option').filter({ hasText: 'Smoke service account' }).click();
 				details = page.locator('.ash-extension-editor:visible');
+				await expect(details.getByRole('status')).toHaveText('Disconnected');
+				await expect(details.getByRole('switch')).not.toBeChecked();
+				await expect(details.locator('.extension-detail-info')).toContainText('smoke-user');
+				await details.getByRole('switch').press('Space');
 				await expect(details.getByRole('status')).toHaveText('Connected · Smoke user');
 				const restoredImage = testInfo.outputPath(`account-restored-${window}.png`);
 				await page.screenshot({ path: restoredImage });
@@ -156,7 +163,7 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 				await pane.getByRole('option').filter({ hasText: 'Smoke service account' }).click();
 				await expect(details.getByRole('status')).toHaveText('Connected · Smoke user');
 			}
-			await details.getByRole('button', { name: 'Disconnect', exact: true }).click();
+			await details.getByRole('switch').press('Space');
 			await expect(details.getByRole('status')).toHaveText('Disconnected');
 		});
 	}
@@ -255,9 +262,9 @@ for (const window of ['Code', 'Agents']) {
 	test(`Built-in extension details open in the registered Editor in ${window}`, { tag: ['@electron-app-server'] }, async ({ target, workbench }, testInfo) => {
 		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await new QuickAccess(page).runCommand('ash.extensions.manageBuiltIn');
-		const extensions = page.locator('[data-view-id="ash.extensions.view"]');
+		const extensions = page.locator('[data-view-id="ash.extensions.plugins"]');
 		for (const id of ['ash.markdown-language-features', 'ash.markdown-math']) {
-			await extensions.getByRole('option').filter({ hasText: id }).click();
+			await extensions.locator(`[data-package-id="${id}"]`).click();
 			// Details inputs retain their panes; only the selected extension is visible.
 			const editor = page.locator('.ash-extension-editor:visible');
 			await expect(editor.locator('.extension-detail-header h1')).toBeVisible();
@@ -267,7 +274,8 @@ for (const window of ['Code', 'Agents']) {
 			await expect(editor).not.toContainText(id.replace('ash.', 'vscode.'));
 			await editor.getByRole('tab', { name: 'Features', exact: true }).click();
 			await expect(editor.getByRole('tabpanel', { name: 'Features', exact: true })).toBeVisible();
-			await expect(editor.getByRole('status')).toHaveText(/^Enabled · (running|starts on demand)$/u);
+			await expect(editor.getByRole('switch')).toBeChecked();
+			await expect(editor.locator('.extension-detail-header [role="status"]')).toBeEmpty();
 			if (id === 'ash.markdown-math') {
 				await expect(editor.getByRole('tabpanel', { name: 'Features', exact: true })).toContainText('math.render.v2');
 			}
@@ -280,20 +288,24 @@ for (const window of ['Code', 'Agents']) {
 }
 
 for (const window of ['Code', 'Agents']) {
-	test(`Skills command opens a readonly SKILL.md snapshot from the shared backend in ${window}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+	test(`Skills command shows metadata and readonly instructions from the shared backend in ${window}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
-		await page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').filter({ hasText: 'skill-creator' }).click();
-		await page.locator('.ash-extension-editor').getByRole('button', { name: 'Open instructions', exact: true }).click();
-		await expect(page.getByRole('tab', { name: 'skill-creator/SKILL.md', exact: true })).toBeVisible();
-		const editor = page.getByRole('region', { name: 'skill-creator/SKILL.md', exact: true });
-		const input = editor.locator('.stanza-editor-input');
-		await expect(editor.locator('.view-lines')).toContainText('name: skill-creator');
-		await expect(input).toHaveAttribute('aria-readonly', 'true');
-		await input.focus();
-		await page.keyboard.insertText('forbidden edit');
-		await expect(editor.locator('.view-lines')).toContainText('name: skill-creator');
-		await expect(editor.locator('.view-lines')).not.toContainText('forbidden edit');
+		const row = page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').filter({ hasText: 'skill-creator' });
+		await expect(row.locator('.extension-description')).toHaveText('Create and update Ash skills.');
+		await expect(row.locator('.extension-metadata')).toHaveText('Ash · Enabled');
+		await expect(row).not.toContainText('builtin:skill-source:ash-release');
+		await row.click();
+		const editor = page.locator('.ash-extension-editor');
+		await expect(editor.locator('.extension-metadata')).toHaveText('Developer: Ash · Version: 1.0.0 · Updated: 2026-10-22');
+		await expect(editor.locator('.extension-detail-description > p')).toHaveText('Create and update Ash skills.');
+		await expect(editor.locator('.extension-actions')).toBeHidden();
+		await editor.getByRole('tab', { name: 'Instructions', exact: true }).focus();
+		await editor.getByRole('tab', { name: 'Instructions', exact: true }).press('Enter');
+		const instructions = editor.getByRole('tabpanel', { name: 'Instructions', exact: true });
+		await expect(instructions.getByRole('heading', { name: 'Skill creator', exact: true })).toBeVisible();
+		await expect(instructions).toContainText('Create a Skill that adds reusable procedural knowledge');
+		await expect(instructions.locator('textarea, input, [contenteditable="true"]')).toHaveCount(0);
 	});
 }
 
@@ -334,8 +346,9 @@ test('Skill enablement updates Chat completion and survives a window reload', { 
 	let skills = page.locator('.ash-extension-editor');
 	const list = page.locator('[data-view-id="ash.extensions.skills"]').getByRole('listbox');
 	await list.getByRole('option').filter({ hasText: 'skill-creator' }).click();
-	await skills.getByRole('button', { name: 'Disable skill', exact: true }).click();
-	await expect(skills.getByRole('button', { name: 'Enable skill', exact: true })).toBeEnabled();
+	await skills.getByRole('switch').press('Space');
+	await expect(skills.getByRole('switch')).not.toBeChecked();
+	await expect(skills.getByRole('switch')).toBeEnabled();
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
@@ -352,14 +365,16 @@ test('Skill enablement updates Chat completion and survives a window reload', { 
 	const restored = page.locator('[data-view-id="ash.extensions.skills"]').getByRole('listbox');
 	await expect(restored.getByRole('option').filter({ hasText: 'skill-creator' })).toContainText('Disabled');
 	await restored.getByRole('option').filter({ hasText: 'skill-creator' }).click();
-	await skills.getByRole('button', { name: 'Enable skill', exact: true }).click();
-	await expect(skills.getByRole('button', { name: 'Disable skill', exact: true })).toBeEnabled();
+	await skills.getByRole('switch').press('Space');
+	await expect(skills.getByRole('switch')).toBeChecked();
+	await expect(skills.getByRole('switch')).toBeEnabled();
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	editor = page.locator('.ash-chat-input-editor');
 	await editor.locator('.stanza-editor-input').focus();
 	await page.keyboard.press('ControlOrMeta+A');
+	await page.keyboard.press('Backspace');
 	await page.keyboard.insertText('$');
 	await page.keyboard.press('Control+Space');
 	await expect(editor.getByRole('option', { name: /^\$skill-creator /u })).toBeVisible();
@@ -371,7 +386,7 @@ test('Extensions view tab uses the extensions icon', async ({ workbench }) => {
 		await page.getByRole('button', { name: 'Show Primary Side Bar', exact: true }).click();
 	}
 	const extensionManagementTab = page.getByRole('tab', { name: 'Extensions', exact: true });
-	await expect(extensionManagementTab.locator('svg[data-ash-icon-id="extensions"]')).toBeVisible();
+	await expect(extensionManagementTab.locator('[data-ash-icon-id="extensions"]')).toBeVisible();
 	await extensionManagementTab.click();
 	const extensions = page.locator('[data-view-id="ash.extensions.view"] .ash-extensions');
 	await expect(extensions).toBeVisible();
@@ -451,7 +466,7 @@ exports.activate = async function(context) {
 		await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
 		await page.getByRole('listbox', { name: 'Installed Extensions', exact: true }).locator('[data-package-id="acme/standard-smoke"]').click();
 		const details = page.locator('.ash-extension-editor:visible').filter({ hasText: 'acme/standard-smoke' });
-		const action = () => details.getByRole('button', { name: button, exact: true }).click();
+		const action = () => button === 'Enable' || button === 'Disable' ? details.getByRole('switch').press('Space') : details.getByRole('button', { name: button, exact: true }).click();
 		if (button === 'Grant permissions' || button === 'Revoke permissions') {
 			const review = await workbench.dialogs.confirm(application, 'Standard extension smoke', button, action);
 			expect(review.detail).toContain('Read workspace files');
@@ -460,7 +475,7 @@ exports.activate = async function(context) {
 			await workbench.dialogs.confirm(application, 'Uninstall extension', button, action);
 		} else {
 			await action();
-			await expect(details.getByRole('button', { name: button === 'Enable' ? 'Disable' : 'Enable', exact: true })).toBeVisible();
+			await expect(details.getByRole('switch')).toBeChecked({ checked: button === 'Enable' });
 		}
 	};
 	await absent();

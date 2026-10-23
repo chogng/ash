@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { test } from 'node:test';
-import { getFileInfo, resolveConfig } from 'prettier';
 import { format, verifyFormatting } from './format.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
+const bun = join(repositoryRoot, 'node_modules/bun', process.platform === 'win32' ? 'bun.exe' : 'bun');
 
 test('TypeScript formatting preserves long imports and short calls while inserting tabs and semicolons', () => {
 	const declaration = "import { firstLongImportedName, secondLongImportedName, thirdLongImportedName } from './a/module/with/a/long/path.js';";
@@ -80,42 +80,91 @@ test('the CLI checks without writing, fixes both languages, and leaves generated
 	for (const name of excluded) {
 		assert.equal(readFileSync(join(directory, name), 'utf8'), input);
 	}
-	for (const path of [join(directory, 'types.d.mts'), 'src/ash/base/common/productIcons.ts', 'src/ash/base/browser/dompurify/dompurify.js', 'src/ash/base/common/marked/marked.js']) {
+	for (const path of [join(directory, 'types.d.mts'), 'src/ash/base/common/lxiconsLibrary.ts', 'src/ash/base/browser/dompurify/dompurify.js', 'src/ash/base/common/marked/marked.js']) {
 		const unsupported = spawnSync(process.execPath, [join(repositoryRoot, 'build/format.ts'), '--check', path], { cwd: repositoryRoot, encoding: 'utf8' });
 		assert.equal(unsupported.status, 1);
 		assert.match(unsupported.stderr, /No first-party TypeScript or JavaScript sources matched/);
 	}
 });
 
-test('Prettier owns configuration and prose but excludes code, generated contracts, fixtures, and locks', async () => {
-	const ignored = ['build/lib/formatter.ts', 'build/script.js', '.build/protocol/typescript/protocol.ts', '.build/protocol/json/schema.json', 'generated/example.json', 'third_party/v8/runtime-lock.json', 'test/fixtures/example.json', 'src/ash/base/browser/dompurify/cgmanifest.json', 'src/ash/base/common/marked/cgmanifest.json', '.pytest_cache/README.md', 'pnpm-lock.yaml'];
-	for (const file of ignored) {
-		assert.equal((await getFileInfo(resolve(repositoryRoot, file), { ignorePath: join(repositoryRoot, '.prettierignore') })).ignored, true, file);
+test('Bun selects configuration and prose while excluding code, generated inputs, fixtures, and locks', t => {
+	const directory = mkdtempSync(join(repositoryRoot, 'test/.formatter-test-'));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const ignored = ['code.ts', 'script.js', '.build/schema.json', 'generated/example.json', 'vendor/example.json', 'output/state.json', '.playwright-test/capture.yml', 'fixtures/example.json', 'test-data/example.json', 'testData/example.json', 'snapshots/example.md', '.pytest_cache/README.md', 'pnpm-lock.yaml', 'AGENTS.md', 'SKILL.md', 'example_prompt.md', 'example_instructions.md'];
+	const included = ['file [with spaces].json', 'docs/notes.md', 'workflow.yml'];
+	for (const name of [...ignored, ...included]) {
+		const path = join(directory, name);
+		mkdirSync(dirname(path), { recursive: true });
+		writeFileSync(path, 'unformatted input\n');
 	}
-	for (const file of ['package.json', 'docs/build.md', '.github/workflows/frontend.yml']) {
-		assert.equal((await getFileInfo(resolve(repositoryRoot, file), { ignorePath: join(repositoryRoot, '.prettierignore') })).ignored, false, file);
+	const copied = ['src/ash/base/browser/dompurify/cgmanifest.json', 'src/ash/base/common/marked/cgmanifest.json'];
+	const files = [...ignored, ...included].map(name => relative(repositoryRoot, join(directory, name)).replaceAll('\\', '/'));
+	const checked = spawnSync(bun, ['fmt', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--list-files', '--', ...files, ...copied], { cwd: repositoryRoot, encoding: 'utf8' });
+	assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+	assert.deepEqual(checked.stdout.trim().split(/\r?\n/).sort(), included.map(name => relative(repositoryRoot, join(directory, name)).replaceAll('\\', '/')).sort());
+	for (const file of files.slice(0, ignored.length)) {
+		const formatted = spawnSync(bun, ['fmt', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--stdin-filepath', file], { cwd: repositoryRoot, input: 'unformatted input\n', encoding: 'utf8' });
+		assert.equal(formatted.status, 0, formatted.stdout + formatted.stderr);
+		assert.equal(formatted.stdout, 'unformatted input\n', `Editor stdin preserves ignored files: ${file}`);
 	}
-	assert.equal((await resolveConfig(join(repositoryRoot, 'docs/build.md')))?.embeddedLanguageFormatting, 'off');
 });
 
-test('Prettier leaves generated JSON to its owning serializers and checks neighboring handwritten files', async t => {
+test('Bun leaves generated JSON to its owning serializers and checks neighboring handwritten files', t => {
 	const generated = new Map<string, string>();
 	const handwritten: string[] = [];
 	const input = '{"manual":true}\n';
 	for (const file of ['build/lib/stylelint/ash-known-variables.json', 'crates/config/schema.json', 'crates/model-provider-info/models.schema.json']) {
 		const path = resolve(repositoryRoot, file);
 		generated.set(file, readFileSync(path, 'utf8'));
-		assert.equal((await getFileInfo(path, { ignorePath: join(repositoryRoot, '.prettierignore') })).ignored, true, file);
 		const directory = mkdtempSync(join(dirname(path), '.formatter-test-'));
 		t.after(() => rmSync(directory, { recursive: true, force: true }));
 		const neighbor = join(directory, 'handwritten.json');
 		writeFileSync(neighbor, input);
-		assert.equal((await getFileInfo(neighbor, { ignorePath: join(repositoryRoot, '.prettierignore') })).ignored, false, neighbor);
 		handwritten.push(relative(repositoryRoot, neighbor).replaceAll('\\', '/'));
 	}
-	const checked = spawnSync(process.execPath, [join(repositoryRoot, 'node_modules/prettier/bin/prettier.cjs'), '--list-different', ...generated.keys(), ...handwritten], { cwd: repositoryRoot, encoding: 'utf8', windowsHide: true });
+	const checked = spawnSync(bun, ['fmt', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--list-different', ...generated.keys(), ...handwritten], { cwd: repositoryRoot, encoding: 'utf8', windowsHide: true });
 	assert.equal(checked.status, 1, checked.stdout + checked.stderr);
 	assert.deepEqual(checked.stdout.trim().split(/\r?\n/).sort(), [...handwritten].sort());
 	for (const [file, contents] of generated) assert.equal(readFileSync(resolve(repositoryRoot, file), 'utf8'), contents);
 	for (const file of handwritten) assert.equal(readFileSync(resolve(repositoryRoot, file), 'utf8'), input);
+});
+
+test('the configured editor command and CI formatter produce identical bytes for every configuration language', t => {
+	const settings = JSON.parse(readFileSync(join(repositoryRoot, '.vscode/settings.json'), 'utf8'));
+	const editor = settings['simpleLspClient.formatters'].bun;
+	const directory = mkdtempSync(join(repositoryRoot, 'test/.formatter-test-'));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const cases = [
+		['json', join(directory, 'file [with spaces].json'), '{"value":1,"nested":{"enabled":true}}\n'],
+		['jsonc', join(repositoryRoot, '.vscode', `${basename(directory)}.jsonc`), '{\n// retained comment\n"value":1,\n"nested":{"enabled":true},\n}\n'],
+		['yaml', join(directory, 'workflow.yml'), 'name:   example\non: [push,pull_request]\n'],
+		['markdown', join(directory, 'notes.md'), '#   Heading\n\n```ts\nconst value=1\n```\n'],
+		['css', join(directory, 'style.css'), '.example{color:red;padding:0  1px}\n'],
+		['html', join(directory, 'index.html'), '<main><p>example</p><p>text</p></main>\n'],
+		['json', join(directory, 'literal $(printf path) & %NAME%.json'), '{"value":1,"nested":{"enabled":true}}\n'],
+	];
+	t.after(() => rmSync(cases[1][1], { force: true }));
+	for (const [language, file, input] of cases) {
+		assert.ok(editor.filetypes.includes(language), language);
+		// Resolve the same language override the editor uses, including single-language settings.
+		const group = settings['[json][jsonc][yaml][markdown][css][html]'];
+		assert.equal(settings[`[${language}]`]?.['editor.defaultFormatter'] ?? group['editor.defaultFormatter'], 'wdomitrz.simple-lsp-client');
+		writeFileSync(file, input);
+		const template = editor.cmd;
+		assert.ok(Array.isArray(template), 'The editor must pass arguments without a shell.');
+		assert.equal(template[0], '${workspaceFolder}/node_modules/bun/bun');
+		const command = template.map((argument: string) => argument.replaceAll('${workspaceFolder}', repositoryRoot).replaceAll('${file}', file));
+		assert.equal(command.at(-1), file, 'The file name must remain one literal argument.');
+		const formatted = spawnSync(command[0], command.slice(1), { cwd: repositoryRoot, input, encoding: 'utf8' });
+		assert.equal(formatted.status, 0, formatted.stdout + formatted.stderr);
+		assert.notEqual(formatted.stdout, input, language);
+		assert.equal(readFileSync(file, 'utf8'), input, 'Editor formatting must use the unsaved buffer without writing files.');
+		const written = spawnSync(bun, ['fmt', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--write', '--', file], { cwd: repositoryRoot, encoding: 'utf8' });
+		assert.equal(written.status, 0, written.stdout + written.stderr);
+		assert.equal(readFileSync(file, 'utf8'), formatted.stdout, language);
+		const checked = spawnSync(bun, ['fmt', '--ignore-path', '.gitignore', '--ignore-path', '.prettierignore', '--check', '--', file], { cwd: repositoryRoot, encoding: 'utf8' });
+		assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+		if (language === 'jsonc') assert.ok(formatted.stdout.includes('\n\t"value": 1,'), 'Workspace JSON keeps tab indentation.');
+		if (language === 'markdown') assert.ok(formatted.stdout.includes('```ts\nconst value=1\n```'), 'Fenced code retains its owning language formatting.');
+	}
 });

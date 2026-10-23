@@ -39,6 +39,10 @@ impl ConnectorCommandId {
 /// Typed mutation accepted by the durable Connector authority.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ConnectorAuthorityCommand {
+    /// Pauses or resumes runtime use without removing account authorization or credentials.
+    SetEnabled {
+        enabled: bool,
+    },
     BeginConnect {
         generation: ConnectorConnectionGeneration,
     },
@@ -120,6 +124,9 @@ pub(crate) fn command_digest(request: &ConnectorCommandRequest) -> String {
     digest.update(COMMAND_DIGEST_DOMAIN);
     update_field(&mut digest, request.connector_id.as_str());
     match &request.command {
+        ConnectorAuthorityCommand::SetEnabled { enabled } => {
+            update_field(&mut digest, if *enabled { "enable" } else { "disable" });
+        }
         ConnectorAuthorityCommand::BeginConnect { generation } => {
             update_field(&mut digest, "begin");
             update_field(&mut digest, &generation.get().to_string());

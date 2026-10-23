@@ -4,7 +4,7 @@ import { expect, test, writeEditorExtensionFixture } from '../../../automation/t
 
 test.use({ actionTimeout: 10_000 });
 
-test('an admitted extension tree reads, renames, checks, refreshes and retires in Ash', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, application, workbench }) => {
+test('an admitted extension tree survives a missing sibling container, reads, renames, checks, refreshes and retires in Ash', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, application, workbench }) => {
 	test.setTimeout(120_000);
 	const root = join(testWorkspace.directory, 'tree-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
@@ -21,6 +21,8 @@ test('an admitted extension tree reads, renames, checks, refreshes and retires i
 	await writeEditorExtensionFixture(root, `
 const ash = require('@ash/sdk'); const { commands, views } = ash;
 exports.activate = context => {
+ context.subscriptions.push(views.registerTreeDataProvider({ getChildren: () => [], getTreeItem: item => item },
+  { id: 'acme.missingTree', title: 'Unavailable tree', containerId: 'acme.missingContainer' }));
  const changes = new ash.EventEmitter(); const node = { label: 'Provider item', checked: 0 };
  context.subscriptions.push(changes, views.registerTreeDataProvider({
   onDidChangeTreeData: changes.event,
@@ -47,12 +49,13 @@ exports.activate = context => {
 	};
 	await manage();
 	await workbench.dialogs.confirm(application, 'Extension tree smoke', 'Grant permissions', () => details.getByRole('button', { name: 'Grant permissions', exact: true }).click());
-	await details.getByRole('button', { name: 'Enable', exact: true }).click();
-	await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeVisible();
+	await details.getByRole('switch').press('Space');
+	await expect(details.getByRole('switch')).toBeChecked();
 	await workbench.openExplorer();
 	const pane = page.locator('[data-view-id="acme.treeSmoke"]');
 	const label = pane.locator('.ash-custom-tree-label');
 	await expect(label).toHaveText('Provider item');
+	await expect(page.locator('[data-view-id="acme.missingTree"]')).toHaveCount(0);
 	const checkbox = pane.getByRole('checkbox');
 	await checkbox.focus();
 	await checkbox.press('Space');
@@ -67,6 +70,6 @@ exports.activate = context => {
 	await workbench.quickaccess.runCommand('acme.treeSmoke.refresh');
 	await expect(label).toHaveText('Provider refreshed');
 	await manage();
-	await details.getByRole('button', { name: 'Disable', exact: true }).click();
+	await details.getByRole('switch').press('Space');
 	await expect(pane).toHaveCount(0);
 });

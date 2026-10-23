@@ -227,9 +227,8 @@ suite('Desktop storage owner', () => {
 				const file = join(directory, 'state.json');
 				const identity = { scope: StorageScope.WORKSPACE, id: 'research' };
 				const storages = [
-					{ identity: { ...identity, applicationId: 'academic' }, revision: 5, isNew: false, entries: { editors: entry('paper'), layout: entry('academic') } },
-					{ identity: { ...identity, applicationId: 'code' }, revision: 2, isNew: false, entries: { layout: entry('code') } },
-					{ identity: { applicationId: 'academic', scope: StorageScope.PROFILE, id: 'sessions' }, revision: 1, isNew: false, entries: { sidebar: entry('360') } },
+					{ identity: { ...identity, applicationId: 'code' }, revision: 2, isNew: false, entries: { editors: entry('paper'), layout: entry('code') } },
+					{ identity: { applicationId: 'code', scope: StorageScope.PROFILE, id: 'sessions' }, revision: 1, isNew: false, entries: { sidebar: entry('360') } },
 					{ identity: { ...application, applicationId: 'code' }, revision: 3, isNew: false, entries: { fonts: entry('cache') } },
 				];
 				const source = JSON.stringify({ version: 1, storages: reversed ? storages.reverse() : storages });
@@ -237,7 +236,7 @@ suite('Desktop storage owner', () => {
 				using storage = new StorageMainService(file);
 				await storage.initialize();
 				assert.deepEqual({ ...(await storage.getItems(identity)).entries }, { editors: entry('paper'), layout: entry('code') });
-				assert.equal((await storage.getItems(identity)).revision, 6);
+				assert.equal((await storage.getItems(identity)).revision, 2);
 				assert.deepEqual({ ...(await storage.getItems({ scope: StorageScope.PROFILE, id: 'sessions' })).entries }, { sidebar: entry('360') });
 				assert.deepEqual({ ...(await storage.getItems(application)).entries }, { fonts: entry('cache') });
 				assert.equal(await readFile(`${file}.v1`, 'utf8'), source);

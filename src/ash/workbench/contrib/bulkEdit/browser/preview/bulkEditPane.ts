@@ -123,7 +123,9 @@ export class BulkEditPane extends ViewPane {
 		if (this.activePreview || this.model) { this.discard(); }
 		const inputId = ++this.inputId;
 		const previousFocus = this.element.ownerDocument.activeElement;
-		const model = await this.instantiation.invokeFunction(BulkFileOperations.create, edits, signal);
+		const loading = this.instantiation.invokeFunction(BulkFileOperations.create, edits, signal);
+		void this.getProgressIndicator().showWhile(loading, 150);
+		const model = await loading;
 		if (inputId !== this.inputId || signal.aborted || this.isDisposed) {
 			model.dispose();
 			return undefined;

@@ -14,6 +14,14 @@ test('Desktop and Web development warmup reads existing source files', async () 
 	}
 });
 
+test('Desktop and Web keep console diagnostics independent of the HMR connection', async () => {
+	const path = resolve(import.meta.dirname, 'vite.config.ts');
+	for (const mode of ['development', 'web']) {
+		const { config } = (await loadConfigFromFile({ command: 'serve', mode }, path))!;
+		assert.equal(config.server!.forwardConsole, false);
+	}
+});
+
 test('Web development and builds use only browser entries and preserve Desktop output', async () => {
 	const path = resolve(import.meta.dirname, 'vite.config.ts');
 	const web = (await loadConfigFromFile({ command: 'serve', mode: 'web' }, path))!.config;

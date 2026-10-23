@@ -1332,3 +1332,146 @@ fn git_observations_overlap_but_do_not_overtake_a_queued_write() {
     });
     server.close_connection(connection);
 }
+
+#[test]
+fn immutable_git_history_bypasses_repository_write_admission() {
+    use ash_file_access::Dir;
+    use ash_file_access::Grant;
+    use ash_file_access::GrantSource;
+    use ash_file_access::Permission;
+    use ash_file_access::Permissions;
+    let root = tempfile::tempdir().unwrap();
+    let git = |arguments: &[&str]| {
+        let output = std::process::Command::new("git")
+            .args(arguments)
+            .current_dir(root.path())
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    };
+    git(&["init", "--initial-branch=main"]);
+    std::fs::write(root.path().join("fresh.txt"), "fresh\n").unwrap();
+    git(&["add", "fresh.txt"]);
+    git(&[
+        "-c",
+        "user.name=History test",
+        "-c",
+        "user.email=history@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "-m",
+        "History fixture",
+    ]);
+    let object_id = git(&["rev-parse", "HEAD"]);
+    let authorization = Grant::for_environment(
+        Dir::open_local(root.path()).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::MutateRepository]),
+    )
+    .authorize(Permission::MutateRepository)
+    .unwrap();
+    let server = Arc::new(server().with_git_root(authorization).unwrap());
+    let mut connection = server.connection();
+    let initialized = server.handle_json(&mut connection, &json!({"jsonrpc":"2.0", "id":1,
+        "method":"initialize", "params":{"clientInfo":{"name":"git-history-test","version":"1"},"capabilities":{}}}).to_string());
+    assert!(serde_json::from_str::<Value>(&initialized).unwrap()["result"].is_object());
+    let git = server.git_runtime_service().unwrap();
+    let repository_id = git.repositories().repositories[0].id.clone();
+    let held = server
+        .request_scheduler
+        .acquire(
+            99,
+            RequestSerializationScope::Repository {
+                common_dir: git.common_dir_for(None).unwrap(),
+                access: SerializationAccess::Exclusive,
+            },
+        )
+        .unwrap();
+    thread::scope(|scope| {
+        let requests = RequestDispatcher::start(scope).unwrap();
+        let (sent, received) = mpsc::channel();
+        for (id, method, params) in [
+            (
+                2,
+                "git/commitChanges",
+                json!({"objectId":object_id,"repositoryId":repository_id}),
+            ),
+            (
+                3,
+                "git/compareChanges",
+                json!({"objectId":object_id,"baseReference":"main","mode":"direct"}),
+            ),
+            (4, "git/commitMessage", json!({"objectId":object_id})),
+            (5, "git/commitDetails", json!({"objectId":object_id})),
+            (
+                6,
+                "git/commitFile",
+                json!({"objectId":object_id,"path":"fresh.txt"}),
+            ),
+            // No admission scope must not bypass input/authorization checks.
+            (
+                7,
+                "git/commitChanges",
+                json!({"objectId":object_id,"repositoryId":""}),
+            ),
+            (
+                8,
+                "git/commitFile",
+                json!({"objectId":object_id,"path":"../outside"}),
+            ),
+        ] {
+            let sent = sent.clone();
+            requests
+                .dispatch(
+                    Arc::clone(&server),
+                    &connection,
+                    json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}).to_string(),
+                    move |response| {
+                        sent.send(serde_json::from_str::<Value>(&response).unwrap())
+                            .unwrap();
+                        Ok(())
+                    },
+                )
+                .unwrap();
+        }
+        let mut responses = Vec::new();
+        for _ in 0..7 {
+            match received.recv_timeout(Duration::from_secs(3)) {
+                Ok(response) => responses.push(response),
+                Err(_) => break,
+            }
+        }
+        let completed_while_held = responses.len() == 7;
+        // Release before joining so a regression reports a failure without hanging.
+        drop(held);
+        requests.finish().unwrap();
+        assert!(
+            completed_while_held,
+            "history waited behind a repository mutation: {responses:?}"
+        );
+        responses.sort_by_key(|response| response["id"].as_u64());
+        assert_eq!(
+            responses[0]["result"]["changes"].as_array().unwrap().len(),
+            1
+        );
+        assert!(
+            responses[1]["result"]["changes"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(responses[1]["result"]["baseObjectId"], object_id);
+        assert_eq!(responses[2]["result"]["message"], "History fixture");
+        assert_eq!(responses[3]["result"]["statistics"]["files"], 1);
+        assert_eq!(responses[4]["result"]["original"]["kind"], "missing");
+        assert_eq!(responses[4]["result"]["modified"]["text"], "fresh\n");
+        for response in &responses[5..] {
+            assert_eq!(response["error"]["code"], -32602, "{response}");
+        }
+    });
+    server.close_connection(connection);
+}

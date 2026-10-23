@@ -25,6 +25,13 @@ export class UnicodeHighlighterController extends Disposable {
 	private update(): void {
 		if (this.lastVersion === this.model.version) return;
 		const version = this.lastVersion = this.model.version;
+		// Printable ASCII, tabs and line endings cannot produce a warning. Avoid
+		// starting a dedicated editor Worker and cloning this document just to return [].
+		// The model's check excludes ASCII control characters, which still need scanning.
+		if (!this.model.mightContainNonBasicASCII()) {
+			this.decorations.replaceAll([]);
+			return;
+		}
 		void this.compute(version);
 	}
 

@@ -52,7 +52,7 @@ App Server initialize 仍在独立协议连接上
 
 ```text
 just test ash-app-server-daemon --lib
-just test ash-app-server --test managed_initialize --test managed_lifecycle
+just verify ash-app-server --process-tests --test managed_initialize --test managed_lifecycle
 ```
 
 Windows 身份与终止测试位于 `src/process/windows_tests.rs`，须在 Windows 执行实测。

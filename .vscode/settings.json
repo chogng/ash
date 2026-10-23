@@ -19,8 +19,23 @@
 		"editor.formatOnSave": true
 	},
 	"[json][jsonc][yaml][markdown][css][html]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode",
+		"editor.defaultFormatter": "wdomitrz.simple-lsp-client",
 		"editor.formatOnSave": true
+	},
+	"simpleLspClient.formatters": {
+		"bun": {
+			"cmd": [
+				"${workspaceFolder}/node_modules/bun/bun",
+				"fmt",
+				"--ignore-path",
+				".gitignore",
+				"--ignore-path",
+				".prettierignore",
+				"--stdin-filepath",
+				"${file}"
+			],
+			"filetypes": ["json", "jsonc", "yaml", "markdown", "css", "html"]
+		}
 	},
 	"bazel.commandLine.queryExpression": "//...:*",
 	"bazel.queriesShareServer": false,
@@ -29,6 +44,7 @@
 		"NODE_GYP_FORCE_PYTHON": "${workspaceFolder}\\scripts\\.venv\\Scripts\\python.exe"
 	},
 	"rust-analyzer.cargo.targetDir": ".build/rust-analyzer",
+	"rust-analyzer.cachePriming.enable": false,
 	"rust-analyzer.cargo.allTargets": false,
 	"rust-analyzer.cargo.buildScripts.enable": false,
 	"rust-analyzer.check.workspace": false,
@@ -51,8 +67,5 @@
 		"--message-format=json",
 		"--target-dir",
 		".build/rust-analyzer"
-	],
-	"[jsonc]": {
-		"editor.defaultFormatter": "vscode.json-language-features"
-	}
+	]
 }

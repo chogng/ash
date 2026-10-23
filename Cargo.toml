@@ -78,6 +78,7 @@ members = [
     "crates/app-server-diff-live",
     "crates/app-server-daemon",
     "crates/app-server-client",
+    "crates/app-server-client-tests",
     "crates/app-server-test-client",
     "crates/app-server-protocol",
     "crates/app-server-protocol-noop-macros",
@@ -349,7 +350,7 @@ allocation-counter = "=0.8.1"
 anyhow = "1"
 ansi-to-tui = "7.0.0"
 arboard = { version = "3", features = ["wayland-data-control"] }
-clipboard-win = "5.4.1"
+clipboard-win = "5.4.3"
 base64 = "0.22"
 bm25 = "2.3.2"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
@@ -465,7 +466,7 @@ tokenizers = { version = "0.23.1", default-features = false, features = ["fancy-
 toml = "0.9"
 ropey = { version = "1.6.1", default-features = false, features = ["simd"] }
 tree-sitter = "0.26.11"
-ash-grammars = { git = "https://github.com/chogng/ash-grammars", rev = "35c271b712d1bc9633ea2f1c91f078e4c3c85a95" }
+ash-grammars = { git = "https://github.com/chogng/ash-grammars", rev = "1b0906dd92167820aad912a6c4a509e2b58bc661" }
 unicode-segmentation = "1"
 unicode-width = "0.2"
 uds_windows = "1.2.1"

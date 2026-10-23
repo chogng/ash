@@ -7,6 +7,7 @@ import { ExtensionSettingBinding } from './extensionSettingBinding.js';
 import { GitHubSettingsModel } from '../../github/browser/githubSettingsModel.js';
 import { TraceSettingsModel } from '../../trace/browser/traceSettingsModel.js';
 import { SettingsSectionRenderer } from './settingsSectionRenderer.js';
+import { SnapshotSettingsRenderer } from './snapshotSettingsRenderer.js';
 import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
@@ -256,6 +257,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		const traceSettings = this._register(this.instantiationService.createInstance(TraceSettingsModel));
 		const sandboxSettings = this._register(this.instantiationService.createInstance(SandboxSettingsModel));
 		this.contents.push(
+			this._register(this.instantiationService.createInstance(SnapshotSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(BrowserPasswordSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, sandboxSettings, AccessibleViewProviderId.SandboxSettings, AccessibilityVerbositySettingId.SandboxSettings)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings)),

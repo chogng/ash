@@ -22,6 +22,7 @@ import '../workbench/contrib/commands/common/commands.contribution.js';
 import '../workbench/contrib/extensions/browser/extensions.contribution.js';
 import '../workbench/contrib/chat/browser/aiCustomization/customizationMarketplace.contribution.js';
 import '../workbench/contrib/preferences/browser/preferences.contribution.js';
+import '../workbench/contrib/authentication/browser/authentication.contribution.js';
 import '../workbench/contrib/language/browser/languageServers.contribution.js';
 import '../workbench/contrib/format/browser/format.contribution.js';
 import '../workbench/contrib/inlayHints/browser/inlayHintsAccessibilty.js';
@@ -60,7 +61,7 @@ import './contrib/creator/contrib/brand/browser/brand.contribution.js';
 import './contrib/creator/contrib/sites/browser/sites.contribution.js';
 import './contrib/creator/contrib/make/browser/make.contribution.js';
 import './contrib/creator/contrib/prototype/browser/prototype.contribution.js';
-import './contrib/library/browser/library.contribution.js';
+import './contrib/projects/browser/projects.contribution.js';
 import './contrib/symphony/browser/symphony.contribution.js';
 import './contrib/automations/browser/automations.contribution.js';
 import './contrib/sessions/browser/sessions.contribution.js';
@@ -69,13 +70,14 @@ import '../workbench/contrib/codeEditor/browser/codeEditor.contribution.js';
 import '../workbench/contrib/snippets/browser/snippets.contribution.js';
 import '../workbench/contrib/scm/browser/scm.service.contribution.js';
 import '../workbench/contrib/scm/browser/quickDiff.contribution.js';
+import './contrib/search/browser/search.contribution.js';
 import '../workbench/contrib/mediaPreview/browser/mediaPreview.contribution.js';
 import '../workbench/contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js';
 import { registerTerminalView } from '../workbench/contrib/terminal/browser/terminal.contribution.js';
 // Connected App tools use the same Task owner and Terminal execution services as Code.
 import '../workbench/contrib/tasks/browser/task.contribution.js';
 import { registerOutputView } from '../workbench/contrib/output/browser/output.contribution.js';
-import { registerCollaborationViews } from '../workbench/contrib/collaboration/browser/collaboration.contribution.js';
+import { registerCollabViews } from '../workbench/contrib/collab/browser/collab.contribution.js';
 import { registerCallView } from '../workbench/contrib/call/browser/call.contribution.js';
 import { SessionsViewRegistry } from './common/views.js';
 import { Lxicon } from '../base/common/lxicons.js';
@@ -91,20 +93,28 @@ import { WebWorkerService } from '../platform/webWorker/browser/webWorkerService
 // Sessions has its own renderer entry and cannot rely on Code's shared editor service registrations.
 registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed);
 
-for (const [id, title, icon, activeIcon, order] of [
-	['chat', localize2({ bundle: 'ash', key: 'sessions.activity.chat' }, 'Chat'), Lxicon.chat2, Lxicon.chat2Filled, 10],
-	['collaboration', localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collaboration'), Lxicon.colab, Lxicon.colabFilled, 20],
-	['teams', localize2({ bundle: 'ash', key: 'sessions.activity.teams' }, 'Agent Teams'), Lxicon.agent, Lxicon.agent, 25],
-	['code', localize2({ bundle: 'ash', key: 'sessions.mode.code' }, 'Code'), Lxicon.code, Lxicon.code, 40],
-] as const) {
-	MenusRegistry.appendMenuItem(Menus.ActivityBar, {
-		command: { id: `sessions.open.${id}`, title, icon, toggled: { condition: ContextKeyExpr.has(`sessions.activity.${id}Selected`), icon: activeIcon } },
-		group: 'navigation', order,
-	});
-}
+MenusRegistry.appendMenuItem(Menus.ActivityBar, {
+	command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.has('sessions.activity.chatSelected') },
+	group: 'navigation', order: 10,
+});
+
+MenusRegistry.appendMenuItems([
+	{
+		id: Menus.CodeActivityBar,
+		item: { command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.has('sessions.activity.codeSelected') }, group: 'navigation', order: 10 },
+	},
+	{
+		id: Menus.CodeActivityBar,
+		item: { command: { id: 'sessions.open.collaboration', title: localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collab'), icon: Lxicon.collab, toggled: ContextKeyExpr.has('sessions.activity.collaborationSelected') }, group: 'navigation', order: 30 },
+	},
+	{
+		id: Menus.CodeActivityBar,
+		item: { command: { id: 'sessions.open.teams', title: localize2({ bundle: 'ash', key: 'sessions.activity.teams' }, 'Agent Teams'), icon: Lxicon.agent, toggled: ContextKeyExpr.has('sessions.activity.teamsSelected') }, group: 'navigation', order: 35 },
+	},
+]);
 
 registerTerminalView(SessionsViewRegistry);
 registerOutputView(SessionsViewRegistry);
 
-registerCollaborationViews(SessionsViewRegistry, accessor => accessor.get(ICommandService).executeCommand('sessions.open.collaboration'));
+registerCollabViews(SessionsViewRegistry, accessor => accessor.get(ICommandService).executeCommand('sessions.open.collaboration'));
 registerCallView(SessionsViewRegistry);

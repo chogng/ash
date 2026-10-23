@@ -8,7 +8,7 @@ const sourceExtensions = /\.(?:[cm]?[jt]s|[jt]sx)$/;
 const excludedDirectories = /(?:^|\/)(?:node_modules|generated|vendor|dist|out|fixtures|test-data|testData|typings)(?:\/|$)/;
 const sourceRoots = ['src/', 'build/', 'extensions/', 'test/', 'services/', 'sdk/typescript/', 'examples/extensions/', 'crates/external-js-ext/', 'resources/extension-host/'];
 const copiedSourceRoots = ['src/ash/base/browser/dompurify/', 'src/ash/base/common/marked/'];
-const generatedSources = new Set(['src/ash/base/common/productIcons.ts']);
+const generatedSources = new Set(['src/ash/base/common/lxiconsLibrary.ts']);
 
 export function format(fileName: string, text: string, options: ts.FormatCodeSettings = JSON.parse(readFileSync(resolve(repositoryRoot, 'tsfmt.json'), 'utf8'))): string {
 	const absolutePath = resolve(fileName);

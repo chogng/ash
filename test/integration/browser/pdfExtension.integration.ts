@@ -25,7 +25,7 @@ import workbenchMessages from '../../../extensions/language-pack-zh-cn/translati
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/toolbar/toolbar.css';
-import { bindTestColorTheme } from './themeFixture.js';
+import { bindTestColorTheme } from '../../fixtures/browser/themeFixture.js';
 
 const locale = new URLSearchParams(location.search).get('locale') ?? 'en';
 setNlsMessages(locale, locale === 'zh-CN' ? { ash: { ...editorMessages.ash, ...workbenchMessages.ash } } : {});

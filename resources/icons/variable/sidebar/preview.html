@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Ash 侧栏图标 · 可变字重预览</title>
+		<style>
+			@font-face {
+			  font-family: "Ash Sidebar Variable";
+			  src: url("./AshSidebarVariable.woff2") format("woff2");
+			  font-weight: 400 700;
+			  font-style: normal;
+			  font-display: block;
+			}
+			:root {
+			  color-scheme: light dark;
+			  --page: light-dark(#ffffff, #1e1e1e);
+			  --side: light-dark(#f7f7f7, #252526);
+			  --ink: light-dark(#353535, #eeeeee);
+			  --muted: light-dark(#727272, #ababab);
+			  --line: light-dark(#e6e6e6, #454545);
+			  --selected: light-dark(#ececec, #383838);
+			  --focus: light-dark(#0759ad, #78b7ff);
+			  --weight: 400;
+			  --icon-size: 16px;
+			  font-family: system-ui, sans-serif;
+			  color: var(--ink);
+			  background: var(--page);
+			}
+			* { box-sizing: border-box; }
+			body { margin: 0; }
+			button, input, select { font: inherit; accent-color: var(--ink); }
+			button, select { color: inherit; background: var(--page); }
+			button:focus-visible, select:focus-visible, input:focus-visible {
+			  outline: 2px solid var(--focus);
+			  outline-offset: 3px;
+			}
+			.layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; }
+			.sidebar { padding: 24px 8px; background: var(--side); border-right: 1px solid var(--line); }
+			.sidebar-label { margin: 0 16px 20px; color: var(--muted); font-size: 12px; }
+			.navigation { display: grid; gap: 4px; }
+			.nav-row {
+			  height: 36px; display: flex; align-items: center; gap: 8px;
+			  padding: 0 12px; border-radius: 8px; font-size: 13px;
+			}
+			.nav-row.active { background: var(--selected); }
+			.glyph {
+			  font-family: "Ash Sidebar Variable";
+			  font-size: var(--icon-size);
+			  font-weight: var(--weight);
+			  font-variation-settings: "wght" var(--weight);
+			  font-synthesis: none;
+			  font-style: normal;
+			  line-height: 1;
+			  display: inline-block;
+			  width: 1em; height: 1em;
+			  flex-shrink: 0;
+			}
+			.nav-row:not(.active) .glyph { color: var(--muted); }
+			main { max-width: 960px; width: 100%; padding: 48px; }
+			h1 { margin: 0 0 10px; font-size: 24px; font-weight: 600; }
+			.subtitle { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.6; }
+			.controls { display: grid; gap: 16px; margin: 36px 0; }
+			.range-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 13px; }
+			output { font-variant-numeric: tabular-nums; color: var(--muted); }
+			input[type="range"] { width: 100%; margin: 0; }
+			.presets { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+			.presets button, select { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; }
+			.presets button { cursor: pointer; }
+			.presets button[aria-pressed="true"] { background: var(--selected); border-color: var(--muted); }
+			.size-label { margin-left: auto; font-size: 12px; display: flex; gap: 8px; align-items: center; }
+			.comparison { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+			th { color: var(--muted); font-weight: 400; font-size: 12px; text-align: center; padding: 12px 8px; }
+			td { height: 66px; text-align: center; padding: 10px 8px; border-top: 1px solid var(--line); }
+			th:first-child, td:first-child { text-align: left; }
+			td .glyph, td img { vertical-align: middle; }
+			.reference { width: var(--icon-size); height: var(--icon-size); }
+			.enlarged { font-size: 48px; }
+			.source-note { margin-top: 20px; font-size: 12px; color: var(--muted); line-height: 1.7; }
+			.steps { display: grid; grid-template-columns: repeat(5, 1fr); margin-top: 32px; gap: 16px; }
+			.step { display: grid; justify-items: center; gap: 12px; }
+			.step .glyph { font-size: 32px; }
+			.step span:last-child { color: var(--muted); font-size: 11px; }
+			.error { color: var(--ink); border: 1px solid var(--line); padding: 12px; }
+			@media (prefers-color-scheme: dark) { .reference { filter: invert(1); } }
+			@media (max-width: 760px) {
+			  .layout { grid-template-columns: 170px minmax(0, 1fr); }
+			  main { padding: 28px 20px; }
+			  h1 { font-size: 20px; }
+			  .comparison th, .comparison td { padding-inline: 2px; }
+			  .size-label { margin-left: 0; }
+			}
+			@media (max-width: 520px) {
+			  .layout { grid-template-columns: 1fr; }
+			  .sidebar { border-right: 0; border-bottom: 1px solid var(--line); padding-block: 16px; }
+			  .sidebar-label { margin-bottom: 12px; }
+			  .navigation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+			  main { padding: 28px 16px; }
+			  .steps { gap: 8px; }
+			}
+		</style>
+	</head>
+	<body>
+		<div class="layout">
+			<aside class="sidebar" aria-label="侧栏图标效果">
+				<p class="sidebar-label">Ash · 字重试验</p>
+				<div class="navigation">
+					<div class="nav-row active">
+						<span class="glyph" aria-hidden="true">&#xe001;</span
+						><span>New</span>
+					</div>
+					<div class="nav-row">
+						<span class="glyph" aria-hidden="true">&#xe003;</span
+						><span>Projects</span>
+					</div>
+					<div class="nav-row">
+						<span class="glyph" aria-hidden="true">&#xe002;</span
+						><span>Code</span>
+					</div>
+					<div class="nav-row">
+						<span class="glyph" aria-hidden="true">&#xe004;</span
+						><span>Automations</span>
+					</div>
+				</div>
+			</aside>
+			<main>
+				<h1>看看哪种粗细更合适</h1>
+				<p class="subtitle">
+					同一份可变字体，连续改变图标轮廓。侧栏保留 36px 行高。
+				</p>
+				<p class="error" id="font-error" role="alert" hidden>
+					字体未能加载，请通过本地预览服务打开此页面。
+				</p>
+				<div class="controls">
+					<label class="range-label" for="weight"
+						><span>图标字重</span
+						><output id="weight-value" for="weight"
+							>400 · 1.00px</output
+						></label
+					>
+					<input
+						id="weight"
+						type="range"
+						min="400"
+						max="700"
+						step="1"
+						value="400"
+					/>
+					<div class="presets" aria-label="字重预设">
+						<button
+							type="button"
+							data-weight="400"
+							aria-pressed="true"
+						>
+							常规 · 1px
+						</button>
+						<button
+							type="button"
+							data-weight="550"
+							aria-pressed="false"
+						>
+							加强 · 1.25px
+						</button>
+						<button
+							type="button"
+							data-weight="700"
+							aria-pressed="false"
+						>
+							粗 · 1.5px
+						</button>
+						<label class="size-label" for="size"
+							>尺寸<select id="size">
+								<option value="16">16px</option>
+								<option value="20">20px</option>
+								<option value="24">24px</option>
+							</select></label
+						>
+					</div>
+				</div>
+				<table class="comparison" aria-label="原 SVG 与可变字体比较">
+					<thead>
+						<tr>
+							<th>图标</th>
+							<th>原 SVG</th>
+							<th>当前字重</th>
+							<th>放大观察</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>New</td>
+							<td>
+								<img
+									class="reference"
+									src="./reference/add.svg"
+									alt="原始 New 图标"
+								/>
+							</td>
+							<td>
+								<span class="glyph" aria-label="可变 New 图标"
+									>&#xe001;</span
+								>
+							</td>
+							<td>
+								<span class="glyph enlarged" aria-hidden="true"
+									>&#xe001;</span
+								>
+							</td>
+						</tr>
+						<tr>
+							<td>Projects</td>
+							<td>
+								<img
+									class="reference"
+									src="./reference/projects.svg"
+									alt="原始 Projects 图标"
+								/>
+							</td>
+							<td>
+								<span
+									class="glyph"
+									aria-label="可变 Projects 图标"
+									>&#xe003;</span
+								>
+							</td>
+							<td>
+								<span class="glyph enlarged" aria-hidden="true"
+									>&#xe003;</span
+								>
+							</td>
+						</tr>
+						<tr>
+							<td>Code</td>
+							<td>
+								<img
+									class="reference"
+									src="./reference/code.svg"
+									alt="原始 Code 图标"
+								/>
+							</td>
+							<td>
+								<span class="glyph" aria-label="可变 Code 图标"
+									>&#xe002;</span
+								>
+							</td>
+							<td>
+								<span class="glyph enlarged" aria-hidden="true"
+									>&#xe002;</span
+								>
+							</td>
+						</tr>
+						<tr>
+							<td>Automations</td>
+							<td>
+								<img
+									class="reference"
+									src="./reference/clockface.svg"
+									alt="原始 Automations 图标"
+								/>
+							</td>
+							<td>
+								<span
+									class="glyph"
+									aria-label="可变 Automations 图标"
+									>&#xe004;</span
+								>
+							</td>
+							<td>
+								<span class="glyph enlarged" aria-hidden="true"
+									>&#xe004;</span
+								>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="steps" aria-label="五档连续插值比较">
+					<div class="step">
+						<span
+							class="glyph"
+							style="--weight:400"
+							aria-hidden="true"
+							>&#xe002;</span
+						><span>400</span>
+					</div>
+					<div class="step">
+						<span
+							class="glyph"
+							style="--weight:475"
+							aria-hidden="true"
+							>&#xe002;</span
+						><span>475</span>
+					</div>
+					<div class="step">
+						<span
+							class="glyph"
+							style="--weight:550"
+							aria-hidden="true"
+							>&#xe002;</span
+						><span>550</span>
+					</div>
+					<div class="step">
+						<span
+							class="glyph"
+							style="--weight:625"
+							aria-hidden="true"
+							>&#xe002;</span
+						><span>625</span>
+					</div>
+					<div class="step">
+						<span
+							class="glyph"
+							style="--weight:700"
+							aria-hidden="true"
+							>&#xe002;</span
+						><span>700</span>
+					</div>
+				</div>
+				<p class="source-note">
+					线宽数值以 16px
+					图标为基准。此原型只有字重轴，放大时轮廓等比例缩放；尚未加入光学尺寸修正。
+				</p>
+			</main>
+		</div>
+		<script>
+			const root = document.documentElement;
+			const slider = document.getElementById("weight");
+			const size = document.getElementById("size");
+			const output = document.getElementById("weight-value");
+			const buttons = [...document.querySelectorAll("[data-weight]")];
+			function updateWeight() {
+			  const value = Number(slider.value);
+			  const stroke = (1 + (value - 400) / 600).toFixed(2);
+			  root.style.setProperty("--weight", value);
+			  output.value = `${value} · ${stroke}px`;
+			  slider.setAttribute("aria-valuetext", `字重 ${value}，16px 时设计线宽 ${stroke}px`);
+			  for (const button of buttons) button.setAttribute("aria-pressed", String(Number(button.dataset.weight) === value));
+			}
+			slider.addEventListener("input", updateWeight);
+			for (const button of buttons) button.addEventListener("click", () => { slider.value = button.dataset.weight; updateWeight(); });
+			size.addEventListener("change", () => root.style.setProperty("--icon-size", `${size.value}px`));
+			updateWeight();
+			document.fonts.load('400 16px "Ash Sidebar Variable"', "\ue001\ue002\ue003\ue004").then(fonts => {
+			  if (!fonts.length) throw new Error("Variable font unavailable");
+			  document.body.dataset.fontReady = "true";
+			}).catch(() => { document.getElementById("font-error").hidden = false; });
+		</script>
+	</body>
+</html>

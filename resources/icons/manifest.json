@@ -82,6 +82,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "ash-mark",
+      "file": "ash-mark.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "ask",
       "file": "ask.svg",
       "rendering": "symbolic"
@@ -292,13 +297,13 @@
       "rendering": "symbolic"
     },
     {
-      "id": "colab",
-      "file": "colab.svg",
+      "id": "collab",
+      "file": "collab.svg",
       "rendering": "symbolic"
     },
     {
-      "id": "colab-filled",
-      "file": "colab-filled.svg",
+      "id": "collab-filled",
+      "file": "collab-filled.svg",
       "rendering": "symbolic"
     },
     {
@@ -419,6 +424,16 @@
     {
       "id": "diff",
       "file": "diff.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "diff-line-add",
+      "file": "diff-line-add.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "diff-line-delete",
+      "file": "diff-line-delete.svg",
       "rendering": "symbolic"
     },
     {
@@ -572,13 +587,33 @@
       "rendering": "symbolic"
     },
     {
+      "id": "find-next",
+      "file": "find-next.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "find-previous",
+      "file": "find-previous.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "fold",
       "file": "fold.svg",
       "rendering": "symbolic"
     },
     {
+      "id": "folder",
+      "file": "folder.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "folder-downloaded",
       "file": "folder-downloaded.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "folder-open",
+      "file": "folder-open.svg",
       "rendering": "symbolic"
     },
     {
@@ -907,6 +942,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "menu-submenu",
+      "file": "menu-submenu.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "mic",
       "file": "mic.svg",
       "rendering": "symbolic"
@@ -1097,6 +1137,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "replace-match",
+      "file": "replace-match.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "replace-matches",
+      "file": "replace-matches.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "repo-fetch",
       "file": "repo-fetch.svg",
       "rendering": "symbolic"
@@ -1142,6 +1192,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "search-selection",
+      "file": "search-selection.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "settings",
       "file": "settings.svg",
       "rendering": "symbolic"
@@ -1154,6 +1209,11 @@
     {
       "id": "snapshot",
       "file": "snapshot.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "sort",
+      "file": "sort.svg",
       "rendering": "symbolic"
     },
     {
@@ -1349,6 +1409,16 @@
     {
       "id": "unpin",
       "file": "unpin.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "verified",
+      "file": "verified.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "verified-filled",
+      "file": "verified-filled.svg",
       "rendering": "symbolic"
     },
     {

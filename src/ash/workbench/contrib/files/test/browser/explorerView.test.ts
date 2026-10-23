@@ -348,11 +348,13 @@ test("ExplorerView opens workspace files on single click", async () => {
 		pauseSourceRead = true;
 		const oldSelection = explorerService.select(URI.file('/project/src/main.ts'), 'force');
 		await waitFor(() => completeSourceRead !== undefined);
+		await waitFor(() => pane.element.querySelector<HTMLProgressElement>('progress')?.hidden === false);
 		activeEditor = { resource: URI.file('/project/README.md'), label: 'README.md' };
 		activeEditorChanges.fire();
 		await waitFor(() => explorerService.getContext()[0]?.name === 'README.md');
 		completeSourceRead!();
 		await oldSelection;
+		await waitFor(() => pane.element.querySelector<HTMLProgressElement>('progress')?.hidden === true);
 		assert.equal(explorerService.getContext()[0]?.name, 'README.md');
 		pane.element.querySelector('.ash-tree')!.dispatchEvent(new browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 		assert.equal(explorerService.getContext()[0]?.name, 'README.md');

@@ -101,6 +101,30 @@ interface TestNode {
 	readonly collapsed?: boolean;
 }
 
+test('ObjectTree supports unindented graph content and reports viewport scrolling', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const commit: TestNode = { id: 'commit', label: 'Commit', expanded: true };
+		const file: TestNode = { id: 'file', label: 'File', expanded: false };
+		using tree = new ObjectTree<TestNode>(dom.window.document.body, {
+			indent: 0,
+			modelOptions: { identityProvider: { getId: element => element.id } },
+			renderElement: element => h(dom.window.document, 'span', element.label),
+		});
+		tree.setChildren([{ element: commit, collapsed: false, children: [{ element: file }] }]);
+		tree.setFocus('file');
+		tree.setSelection(['file']);
+		assert.equal(tree.element.style.getPropertyValue('--ash-tree-indent'), '0px');
+		assert.equal(tree.element.querySelector('[data-tree-id="file"]')?.getAttribute('aria-level'), '2');
+		assert.deepEqual(tree.selection, [file]);
+		const positions: number[] = [];
+		using listener = tree.onDidScroll(position => positions.push(position));
+		tree.element.scrollTop = 31;
+		tree.element.dispatchEvent(new dom.window.Event('scroll'));
+		assert.deepEqual(positions, [31]);
+	} finally { dom.window.close(); }
+});
+
 test('Async trees preserve modifier-click selection when multiple selection is enabled', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {

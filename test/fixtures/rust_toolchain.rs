@@ -8,7 +8,10 @@ pub fn configure(root: &Path, linker: cc::Tool) {
         include_str!("../../rust-toolchain.toml"),
     )
     .unwrap();
-    let libraries = linker.env().iter().find(|(name, _)| name == "LIB")
+    let libraries = linker
+        .env()
+        .iter()
+        .find(|(name, _)| name == "LIB")
         .expect("MSVC toolchain supplies SDK and runtime libraries");
     std::fs::create_dir_all(root.join(".cargo")).unwrap();
     std::fs::write(

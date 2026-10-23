@@ -279,6 +279,49 @@ fn ash_capability_contract_retires_previous_grants_without_losing_enablement() {
 }
 
 #[test]
+fn rust_publisher_migration_preserves_disablement_and_is_durable() {
+    for already_migrated in [false, true] {
+        let profile = tempfile::tempdir().unwrap();
+        let path = profile.path().join("editor-policy.json");
+        let mut disabled = vec!["vscode.rust", "ash.github-authentication"];
+        if already_migrated {
+            disabled.push("ash.rust");
+        }
+        std::fs::write(
+            &path,
+            serde_json::to_vec(&serde_json::json!({
+                "schemaVersion": 2, "revision": 5, "records": {},
+                "disabledExtensions": disabled
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let policy = EditorExtensionPolicy::open(path.clone()).unwrap();
+        assert!(!policy.is_extension_enabled("ash.rust"));
+        assert!(!policy.is_extension_enabled("ash.github-authentication"));
+        assert!(policy.is_extension_enabled("vscode.rust"));
+        assert_eq!(policy.generation(), 6);
+        let persisted: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(
+            persisted["disabledExtensions"],
+            serde_json::json!(["ash.github-authentication", "ash.rust"])
+        );
+        assert_eq!(persisted["records"], serde_json::json!({}));
+        let reopened = EditorExtensionPolicy::open(path.clone()).unwrap();
+        assert_eq!(reopened.generation(), 6);
+        assert!(!reopened.is_extension_enabled("ash.rust"));
+        reopened
+            .set_built_in_enablement("ash.rust", EditorExtensionPolicyAction::Enable, 6)
+            .unwrap();
+        let enabled = EditorExtensionPolicy::open(path).unwrap();
+        assert!(enabled.is_extension_enabled("ash.rust"));
+        assert!(!enabled.is_extension_enabled("ash.github-authentication"));
+        assert_eq!(enabled.generation(), 7);
+    }
+}
+
+#[test]
 fn built_in_disablement_is_persistent_and_does_not_grant_execution() {
     let profile = tempfile::tempdir().unwrap();
     let path = profile.path().join("editor-policy.json");

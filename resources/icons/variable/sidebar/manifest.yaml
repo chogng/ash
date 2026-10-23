@@ -1,0 +1,18 @@
+family: Ash Sidebar Variable
+units_per_em: 1024
+axis:
+  name: Weight
+  tag: wght
+  min: 400
+  default: 400
+  max: 700
+preview_positions: [400, 475, 550, 625, 700]
+glyphs:
+  - name: add
+    unicode: E001
+  - name: code
+    unicode: E002
+  - name: projects
+    unicode: E003
+  - name: clockface
+    unicode: E004

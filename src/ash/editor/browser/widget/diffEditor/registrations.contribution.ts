@@ -1,13 +1,12 @@
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
 import { type IModelDecorationOptions } from '../../../common/model.js';
 
-const diffInsertIcon = registerIcon('diff-insert', () =>
-	'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 8h8M8 4v8"/></svg>',
+const diffInsertIcon = registerIcon('diff-insert', Lxicon.diffLineAdd,
 	'Inserted diff line',
 );
 
-export const diffRemoveIcon = registerIcon('diff-remove', () =>
-	'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 8h8"/></svg>',
+export const diffRemoveIcon = registerIcon('diff-remove', Lxicon.diffLineDelete,
 	'Removed diff line',
 );
 
@@ -39,12 +38,14 @@ export const diffLineDeleteDecorationBackgroundWithIndicator: IModelDecorationOp
 
 export const diffAddDecoration: IModelDecorationOptions = Object.freeze({
 	description: 'diff-inline-change',
-	inlineClassName: 'stanza-diff-inline-added',
+	className: 'stanza-diff-inline-added',
+	shouldFillLineOnLineBreak: true,
 });
 
 export const diffDeleteDecoration: IModelDecorationOptions = Object.freeze({
 	description: 'diff-inline-change',
-	inlineClassName: 'stanza-diff-inline-removed',
+	className: 'stanza-diff-inline-removed',
+	shouldFillLineOnLineBreak: true,
 });
 
 // The border marks the measured character boundary. Expanding a collapsed range

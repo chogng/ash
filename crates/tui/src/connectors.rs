@@ -13,6 +13,10 @@ pub(crate) enum Command {
         connector_id: String,
         connection_generation: u64,
     },
+    SetEnabled {
+        connector_id: String,
+        enabled: bool,
+    },
     Disconnect {
         connector_id: String,
     },

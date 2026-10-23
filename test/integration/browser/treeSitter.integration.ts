@@ -1,8 +1,8 @@
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
-import { rustSyntaxFixture, disconnectRustSyntaxFixture, reconnectRustSyntaxFixture } from './rustSyntaxHostFixture.js';
+import { rustSyntaxFixture, disconnectRustSyntaxFixture, reconnectRustSyntaxFixture } from '../../fixtures/browser/rustSyntaxHostFixture.js';
 import { createDisconnectedSyntaxApi } from '../../../src/ash/platform/syntax/browser/syntaxApi.js';
 import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
-import { createBuiltinExtensionFixture } from './builtinExtensionsFixture.js';
+import { createBuiltinExtensionFixture } from '../../fixtures/browser/builtinExtensionsFixture.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import chinese from '../../../extensions/language-pack-zh-cn/translations/editor.json' with { type: 'json' };
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';

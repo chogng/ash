@@ -30,15 +30,15 @@ Extensions 使用一个“连接”列表，服务账号和独立 MCP 服务器�
 无效绑定时后者为 `null`。该只读关联与实际 materialization 使用同一身份函数，未连接账号也可用于去重；
 前端只按精确标识去重，运行状态独立读取 MCP snapshot，不能从账号已连接推断 MCP 已连接。
 
-| 用户场景                             | 系统发生什么                                                             | 不会自动发生什么                     |
-| ------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------ |
-| 安装 GitHub Extensions Plugin bundle | Manager 只安装一次，Connector/MCP consumer 分别读取 exact capabilities   | 不连接 GitHub、不启动 MCP            |
-| 启用 legacy GitHub Plugin            | 兼容 contribution 提供 GitHub Connector declaration                      | 不建立远端安装旁路                   |
-| 查看未连接的 GitHub                  | Connector 以 `Connect` candidate 出现在 discovery                        | 不向 Agent 暴露 GitHub tools         |
-| 完成 GitHub OAuth                    | 认证 owner 保存 secret，并向 Connector 发布 non-secret account/reference | Connector 不读取 token bytes         |
-| Connector 成为 connected             | ready MCP binding 可以由 host materialize                                | 不绕过 MCP policy 或 Tool approval   |
-| 用户断开 GitHub                      | connection generation 前进，ready binding 立即撤销                       | 不删除 Plugin package 或 Thread 历史 |
-| 用户直接配置 MCP server              | 经过配置、凭据和策略解析后直接进入 MCP runtime                           | 不必须伪造 Plugin 或 Connector       |
+| 用户场景                             | 系统发生什么                                                             | 不会自动发生什么                                  |
+| ------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------- |
+| 安装 GitHub Extensions Plugin bundle | Manager 只安装一次，Connector/MCP consumer 分别读取 exact capabilities   | 不连接 GitHub、不启动 MCP                         |
+| 启用 legacy GitHub Plugin            | 兼容 contribution 提供 GitHub Connector declaration                      | 不建立远端安装旁路                                |
+| 查看未连接的 GitHub                  | Connector 以 `Connect` candidate 出现在 discovery                        | 不向 Agent 暴露 GitHub tools                      |
+| 完成 GitHub OAuth                    | 认证 owner 保存 secret，并向 Connector 发布 non-secret account/reference | Connector 不读取 token bytes                      |
+| Connector 成为 connected             | ready MCP binding 可以由 host materialize                                | 不绕过 MCP policy 或 Tool approval                |
+| 用户取消连接 GitHub                  | 保存 `enabled = false`，推进 connection generation，撤销 ready binding   | 保留账号授权、凭据、Plugin package 和 Thread 历史 |
+| 用户直接配置 MCP server              | 经过配置、凭据和策略解析后直接进入 MCP runtime                           | 不必须伪造 Plugin 或 Connector                    |
 
 ## 1. 结论
 
@@ -152,10 +152,14 @@ device；browser host 与 TUI 可执行 device flow，user code 复制到 clipbo
 connection generation；任何状态变化都必须同时推进 snapshot generation。这样晚到的 OAuth callback、
 旧 refresh result 或旧 UI command 不能重新激活已撤销的 binding。
 
+连接意图由 `ConnectorConnection.enabled` 与账号授权一起保存在 Connector authority。Desktop 详情头部的共享开关和 TUI 的连接切换调用 `connector/enablement/set`：关闭后保留 account 与 credential reference，但 `ready_entries`、runtime admission 和 MCP materialization 均停止提供该连接；重新打开复用原授权和凭据。每次切换都推进 connection 与 snapshot generation，并排空旧代次的调用；重启从 SQLite 事件恢复相同意图。授权定义变化仍要求重新授权。
+
+OAuth refresh/revoke 可以在连接关闭时通过账号生命周期租约访问原凭据。显式退出登录、撤权及 `connector/disconnect` 的遗留凭据清理流程继续清除授权；共享连接开关仅改变运行意图。
+
 ## 5. 安全与失败语义
 
 - Connector snapshot 只持有 credential reference，不持有 secret bytes。
-- disconnected、connecting 和 unavailable entry 都不能输出 ready runtime binding。
+- disabled、disconnected、connecting 和 unavailable entry 都不能输出 ready runtime binding。
 - connect/revoke command 必须由 durable authority 按 expected generation 复核，不能信任客户端 snapshot。
 - MCP tool 仍经过普通 registry collision、policy、approval、durable Tool Call/Result 和 recovery。
 - Extensions/Plugin 验证只证明 declaration/package 合法，不证明外部服务可信或未来调用已批准。

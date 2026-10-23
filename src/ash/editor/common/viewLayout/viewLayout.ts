@@ -258,6 +258,7 @@ export class ViewLayout extends Disposable {
 	private currentLayout: EditorViewportLayout;
 	private pendingReason: EditorViewportChangeReason | undefined;
 	private isPublishing = false;
+	private reportedContentHeight: number;
 
 	public readonly onDidChange: Event<EditorViewportChange> = this.changeEmitter.event;
 	public readonly onDidScroll: Event<ScrollEvent>;
@@ -291,6 +292,7 @@ export class ViewLayout extends Disposable {
 		this.onDidScroll = this.scrollable.onScroll;
 		this.scrollable.setScrollDimensions(this.readScrollDimensions(), false);
 		this.currentLayout = this.createLayout();
+		this.reportedContentHeight = this.getContentHeight();
 		this._register(this.scrollable.onScroll(() => this.acceptScrollableChange()));
 	}
 
@@ -315,7 +317,8 @@ export class ViewLayout extends Disposable {
 	}
 
 	public getContentHeight(): number {
-		return this.currentLayout.contentSize.height;
+		// Embedded editors must be able to shrink below their previous viewport.
+		return this.linesLayout.getLinesTotalHeight();
 	}
 
 	public getScrollHeight(): number {
@@ -547,16 +550,19 @@ export class ViewLayout extends Disposable {
 		if (this.isPublishing) return;
 		const previous = this.currentLayout;
 		const next = this.createLayout();
-		if (layoutsEqual(previous, next)) return;
+		const contentHeight = this.getContentHeight();
+		const previousContentHeight = this.reportedContentHeight;
+		this.reportedContentHeight = contentHeight;
 		this.currentLayout = next;
-		if (!sizesEqual(previous.contentSize, next.contentSize)) {
+		if (previous.contentSize.width !== next.contentSize.width || previousContentHeight !== contentHeight) {
 			this.contentSizeEmitter.fire(new ContentSizeChangedEvent(
 				previous.contentSize.width,
-				previous.contentSize.height,
+				previousContentHeight,
 				next.contentSize.width,
-				next.contentSize.height,
+				contentHeight,
 			));
 		}
+		if (layoutsEqual(previous, next)) return;
 		this.changeEmitter.fire(Object.freeze({
 			reason: this.pendingReason ?? EditorViewportChangeReason.Scroll,
 			layout: next,

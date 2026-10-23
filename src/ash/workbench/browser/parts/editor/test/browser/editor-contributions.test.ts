@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../statusbar/statusbarPart.js';
 import { IFileTextModelService } from '../../../../../services/textmodelResolver/common/textModelResourceService.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
@@ -16,7 +17,7 @@ import { URI } from "../../../../../../base/common/uri.js";
 import { InMemoryConfigurationService } from "../../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import { BrowserWorkingCopyService } from "../../../../../services/workingCopy/browser/browserWorkingCopyService.js";
 import type { IWorkingCopy } from "../../../../../services/workingCopy/common/workingCopyService.js";
-import { StatusbarAlignment, StatusbarService } from "../../../../../services/statusbar/browser/statusbar.js";
+import { StatusbarAlignment } from "../../../../../services/statusbar/browser/statusbar.js";
 import { EditorAutoSaveConfiguration, EditorAutoSaveDelayConfiguration } from "../../../../../services/editor/common/editorConfiguration.js";
 import { EditorPane } from '../../editorPane.js';
 
@@ -34,7 +35,6 @@ import { registerAction2 } from '../../../../../../platform/actions/common/actio
 import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../services/localization/common/localizationCatalogs.js';
 const { createCodeEditorServices, createTestCodeEditor } = await import('../../../../../../editor/test/browser/testCodeEditor.js');
-const { IndentUsingSpaces } = await import('../../../../../../editor/contrib/indentation/browser/indentation.js');
 await import('../../../../../../editor/editor.code.all.js');
 registerAction2(ChangeLanguageAction);
 registerAction2(ChangeEOLAction);
@@ -356,7 +356,6 @@ const emptyFileModels = { onDidChangeEncoding: Event.None, getModel: () => null,
 const emptyQuickInput = {} as import('../../../../../../platform/quickinput/common/quickInput.js').IQuickInputService;
 
 test('Editor status actions update the real model and clear when the active editor closes', async () => {
-	using indentationCommand = new IndentUsingSpaces().register();
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using closeWindow = toDisposable(() => dom.window.close());
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;

@@ -100,6 +100,7 @@ impl LspManagerEventSink for AppServerLanguageEventSink {
             LspManagerEvent::Notification(
                 LspManagerNotification::ServerStateChanged { server, .. }
                 | LspManagerNotification::ServerMessage { server, .. }
+                | LspManagerNotification::DiagnosticsRefresh { server }
                 | LspManagerNotification::CapabilitiesChanged { server, .. },
             ) => Some(server.clone()),
             LspManagerEvent::Notification(LspManagerNotification::ServerProgress(progress)) => {
@@ -260,6 +261,19 @@ impl LspManagerEventSink for AppServerLanguageEventSink {
                 },
             );
         }
+        if let LspManagerEvent::Notification(LspManagerNotification::DiagnosticsRefresh {
+            server,
+        }) = &event
+        {
+            self.diagnostics.updates.publish_language_diagnostics_refresh(
+                self.diagnostics.connection_id,
+                ash_app_server_protocol::protocol::language::LanguageDiagnosticsRefreshNotification {
+                    dir_id: self.diagnostics.dir_id.clone(),
+                    server: server.clone(),
+                },
+            );
+            return;
+        }
         if let LspManagerEvent::Notification(LspManagerNotification::CapabilitiesChanged {
             server,
             capabilities,
@@ -319,6 +333,7 @@ pub(super) fn language_server_state_to_dto(state: &LanguageServerState) -> Langu
     match state {
         LanguageServerState::Starting => LanguageServerStateDto::Starting,
         LanguageServerState::Ready => LanguageServerStateDto::Ready,
+        LanguageServerState::Idle => LanguageServerStateDto::Idle,
         LanguageServerState::BackingOff {
             attempt,
             retry_after,
@@ -348,6 +363,21 @@ struct AppServerLanguageDocumentSnapshot {
     language_id: String,
     revision: ash_lsp_manager::LanguageDocumentRevision,
     text: String,
+}
+
+/// Reads the open editor snapshots owned by one connection and directory session.
+pub(super) struct LanguageDocumentSnapshots {
+    documents: Arc<Mutex<BTreeMap<PathBuf, AppServerLanguageDocumentSnapshot>>>,
+}
+
+impl LanguageDocumentSnapshots {
+    pub(super) fn text(&self, path: &Path) -> Option<String> {
+        self.documents
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(path)
+            .map(|snapshot| snapshot.text.clone())
+    }
 }
 
 struct LanguageDiagnosticPublisher {
@@ -555,6 +585,12 @@ impl LanguageRuntimeGuard {
         Self {
             runtime,
             connection,
+        }
+    }
+
+    pub(super) fn document_snapshots(&self) -> LanguageDocumentSnapshots {
+        LanguageDocumentSnapshots {
+            documents: Arc::clone(&self.selected_runtime().dir_state.documents),
         }
     }
 
@@ -960,7 +996,7 @@ impl AppServerLanguageRuntime {
                 .is_some_and(|current| current != root)
         {
             if !self.env_runtimes.contains_key(root) {
-                if action == ash_lsp_manager::LanguageServerControl::Stop {
+                if action != ash_lsp_manager::LanguageServerControl::Restart {
                     return Ok(());
                 }
                 let child = self.child_runtime();
@@ -1650,6 +1686,16 @@ impl AppServerLanguageRuntime {
             .ok_or_else(|| format!("no language server is available for '{language_id}'"))?;
         let deadline = Instant::now() + SERVER_START_TIMEOUT;
         loop {
+            // A renderer may already have observed Ready after explicitly resuming an idle
+            // server. Drain the same ordered state stream before deciding to start it again.
+            let queued = self
+                .receiver
+                .as_ref()
+                .map(|receiver| receiver.try_iter().collect::<Vec<_>>())
+                .unwrap_or_default();
+            for event in queued {
+                self.accept_state(&event);
+            }
             let version = self
                 .sources
                 .lock()
@@ -1674,6 +1720,20 @@ impl AppServerLanguageRuntime {
             }
             match self.dir_state.server_states.get(&server) {
                 Some(LanguageServerState::Ready) => return Ok(()),
+                Some(LanguageServerState::Idle) => {
+                    // Only demand work reaches this wait; syntax rendering uses its own service.
+                    self.manager
+                        .as_ref()
+                        .ok_or("language manager is unavailable")?
+                        .control_servers(
+                            ash_lsp_manager::LanguageServerControl::Resume,
+                            vec![
+                                ash_lsp_manager::LanguageServerName::new(server.clone())
+                                    .map_err(|error| error.to_string())?,
+                            ],
+                        )
+                        .map_err(|error| error.to_string())?;
+                }
                 Some(LanguageServerState::Failed(message)) => return Err(message.clone()),
                 Some(LanguageServerState::CrashLoop { message, .. }) => return Err(message.clone()),
                 Some(LanguageServerState::UserStopped) => {

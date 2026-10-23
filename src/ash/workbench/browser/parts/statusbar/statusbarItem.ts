@@ -14,7 +14,7 @@ export class StatusbarEntryItem extends Disposable {
 	readonly domNode: HTMLDivElement;
 	private readonly labelDomNode: HTMLAnchorElement;
 	private readonly hover = this._register(new MutableDisposable<IManagedHover>());
-	private iconDomNode: SVGElement | undefined;
+	private iconDomNode: HTMLSpanElement | undefined;
 	private textNode: Text | undefined;
 	private segmentDomNodes: HTMLElement[] = [];
 	private entry: IStatusbarEntry | undefined;

@@ -391,6 +391,27 @@ function menuAction(label: string): IAction {
 	return { id: label, label, tooltip: '', enabled: true, run() { } };
 }
 
+test('caller-styled menus render in the browser even when system menus are configured', () => {
+	using fixture = new SystemMenuFixture();
+	const anchor = fixture.document.querySelector<HTMLButtonElement>('#origin')!;
+	anchor.focus();
+	let runs = 0;
+	fixture.menus.showContextMenu({
+		getAnchor: () => anchor,
+		getActions: () => [{ ...menuAction('Settings'), run: () => { runs++; } }],
+		getMenuClassName: () => 'custom-account-menu',
+	});
+	assert.equal(fixture.popups.length, 0);
+	const menu = fixture.document.querySelector('.ash-menu.custom-account-menu')!;
+	assert.ok(menu);
+	const item = menu.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+	item.focus();
+	item.click();
+	assert.equal(runs, 1);
+	assert.equal(fixture.document.querySelector('.custom-account-menu'), null);
+	assert.deepEqual(fixture.events, ['show', 'hide']);
+});
+
 test('already canceled system requests do not display or disturb the current popup', async () => {
 	using fixture = new SystemMenuFixture();
 	const existing = fixture.show('Existing');

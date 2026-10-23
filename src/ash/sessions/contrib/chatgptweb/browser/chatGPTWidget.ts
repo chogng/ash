@@ -1,4 +1,6 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { type IRenderedMarkdown } from '../../../../base/browser/markdownRenderer.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -45,7 +47,12 @@ export class ChatGPTWidget extends Disposable {
 			this.followOutput = this.atBottom();
 			if (this.followOutput) { this.jumpButton.hidden = true; }
 		});
-		this.jumpButton = this.button(localize('sessions.chatgpt.latest', 'Latest message'), () => { this.scroll.scrollTop = this.scroll.scrollHeight; this.jumpButton.hidden = true; });
+		this.jumpButton = this._register(new Button(main, {
+			...defaultButtonStyles,
+			label: localize('sessions.chatgpt.latest', 'Latest message'),
+			presentation: 'secondary',
+			onClick: () => { this.scroll.scrollTop = this.scroll.scrollHeight; this.jumpButton.hidden = true; },
+		})).domNode;
 		this.jumpButton.classList.add('ash-chatgpt-jump');
 		this.jumpButton.hidden = true;
 		this.error.setAttribute('role', 'alert');
@@ -68,14 +75,6 @@ export class ChatGPTWidget extends Disposable {
 
 	private listen<K extends keyof HTMLElementEventMap>(element: HTMLElement, type: K, listener: (event: HTMLElementEventMap[K]) => void): void {
 		this._register(addDisposableListener(element, type, listener));
-	}
-
-	private button(label: string, action: () => void): HTMLButtonElement {
-		const button = document.createElement('button');
-		button.type = 'button';
-		button.textContent = label;
-		this.listen(button, 'click', action);
-		return button;
 	}
 
 	public focus(): void { this.input.focus(); }

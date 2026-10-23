@@ -1,5 +1,5 @@
 .ash-titlebar-center-adjacent-actions
-	.ash-action-view-item.icon:has(.ash-titlebar-mark)
+	.ash-action-view-item.icon:has(.ash-icon-ash-titlebar-mark)
 	> .ash-button {
 	width: auto;
 	padding-inline: var(--ash-spacing-size40);
@@ -7,13 +7,13 @@
 }
 
 .ash-titlebar-center-adjacent-actions
-	.ash-action-view-item.icon:has(.ash-titlebar-mark)
+	.ash-action-view-item.icon:has(.ash-icon-ash-titlebar-mark)
 	.ash-button-content {
 	gap: 0;
 }
 
 .ash-titlebar-center-adjacent-actions
-	.ash-action-view-item.icon:has(.ash-titlebar-mark)
+	.ash-action-view-item.icon:has(.ash-icon-ash-titlebar-mark)
 	.ash-icon-label-container {
 	display: inline-flex;
 	flex: 0 1 auto;
@@ -28,7 +28,7 @@
 }
 
 .ash-titlebar-center-adjacent-actions
-	.ash-action-view-item.icon:has(.ash-titlebar-mark)
+	.ash-action-view-item.icon:has(.ash-icon-ash-titlebar-mark)
 	.ash-button-label {
 	position: static;
 	width: auto;
@@ -37,7 +37,7 @@
 }
 
 .ash-titlebar-center-adjacent-actions
-	.ash-action-view-item.icon:has(.ash-titlebar-mark)
+	.ash-action-view-item.icon:has(.ash-icon-ash-titlebar-mark)
 	> .ash-button:is(:hover, :focus-visible)
 	.ash-icon-label-container {
 	max-width: 160px;
@@ -47,14 +47,14 @@
 
 .ash-workbench.ash-reduce-motion
 	.ash-titlebar-center-adjacent-actions
-	.ash-action-view-item.icon:has(.ash-titlebar-mark)
+	.ash-action-view-item.icon:has(.ash-icon-ash-titlebar-mark)
 	.ash-icon-label-container {
 	transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
 	.ash-titlebar-center-adjacent-actions
-		.ash-action-view-item.icon:has(.ash-titlebar-mark)
+		.ash-action-view-item.icon:has(.ash-icon-ash-titlebar-mark)
 		.ash-icon-label-container {
 		transition: none;
 	}

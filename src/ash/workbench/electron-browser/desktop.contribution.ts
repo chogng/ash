@@ -10,7 +10,11 @@ import { IInstantiationService } from '../../platform/instantiation/common/insta
 import { registerWorkbenchContribution, WorkbenchPhase } from '../common/contributions.js';
 import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
-import { RESTORE_WINDOWS_SETTING, WINDOW_ZOOM_LEVEL_SETTING, WINDOW_ZOOM_PER_WINDOW_SETTING, NEW_WINDOW_DIMENSIONS_SETTING, RESTORE_FULLSCREEN_SETTING, parseNewWindowDimensions, parseRestoreFullscreen, parseRestoreWindowsSetting, type RestoreWindowsSetting } from '../../platform/window/common/window.js';
+import {
+	DEFAULT_STARTUP_WINDOW, STARTUP_WINDOW_SETTING, RESTORE_WINDOWS_SETTING, WINDOW_ZOOM_LEVEL_SETTING,
+	WINDOW_ZOOM_PER_WINDOW_SETTING, NEW_WINDOW_DIMENSIONS_SETTING, RESTORE_FULLSCREEN_SETTING,
+	parseNewWindowDimensions, parseRestoreFullscreen, parseRestoreWindowsSetting, parseStartupWindow, type RestoreWindowsSetting,
+} from '../../platform/window/common/window.js';
 import { localize } from '../../nls.js';
 import { NativeWindow } from './window.js';
 import {
@@ -58,6 +62,26 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		valueType: 'boolean',
 		title: localize({ bundle: 'ash', key: 'workbench.zoomPerWindowTitle' }, 'Zoom per window'),
 		description: localize({ bundle: 'ash', key: 'workbench.zoomPerWindowDescription' }, 'Adjust zoom independently for each window. Disable to apply zoom to all windows.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
+	key: STARTUP_WINDOW_SETTING,
+	defaultValue: DEFAULT_STARTUP_WINDOW,
+	parse: parseStartupWindow,
+	scope: ConfigurationScope.APPLICATION,
+	schema: { type: 'string', enum: ['default', 'ide', 'agents'] },
+	setting: {
+		valueType: 'select',
+		get title() { return localize('window.startupWindow.title', 'Open on startup'); },
+		get description() { return localize('window.startupWindow.description', 'Choose which window opens when Ash starts. Takes effect next launch. Opening a project directly takes priority.'); },
+		get options() {
+			return [
+				{ value: 'default', label: localize('window.startupWindow.default', 'Same as last time (default)') },
+				{ value: 'ide', label: localize('window.startupWindow.ide', 'IDE') },
+				{ value: 'agents', label: localize('window.startupWindow.agents', 'Agent window') },
+			] as const;
+		},
 	},
 });
 

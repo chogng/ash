@@ -56,7 +56,7 @@ pub enum ConnectorOAuthMethodDto {
     Device,
 }
 
-/// One runtime-free Connector catalog entry and its account-state projection.
+/// One runtime-free Connector catalog entry with saved connection intent and retained account state.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectorDto {
@@ -70,10 +70,23 @@ pub struct ConnectorDto {
     pub definition_digest: String,
     #[ts(type = "number")]
     pub connection_generation: u64,
+    /// Runtime connection intent; disabling preserves the authorized account and credentials.
+    pub enabled: bool,
     pub state: ConnectorConnectionStateDto,
     pub available_actions: Vec<ConnectorAvailableActionDto>,
     pub oauth_methods: Vec<ConnectorOAuthMethodDto>,
     pub credential_cleanup_pending: bool,
+}
+
+/// Retry-safe change to runtime connection intent, independent of account authorization.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConnectorSetEnabledParams {
+    pub command_id: String,
+    #[ts(type = "number")]
+    pub expected_generation: u64,
+    pub connector_id: String,
+    pub enabled: bool,
 }
 
 /// Exact non-secret projection of the durable Connector authority.

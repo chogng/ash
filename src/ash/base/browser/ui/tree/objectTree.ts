@@ -106,6 +106,7 @@ export class ObjectTree<TNode> extends Disposable {
 	/** @deprecated Prefer the semantic pointer, accept, and collapse events. */
 	readonly onDidActivate: Event<ObjectTreeActivateEvent<TNode>> = this._onDidActivate.event;
 	readonly onDidChangeFind: Event<ObjectTreeFindResult<TNode>> = this._onDidChangeFind.event;
+	readonly onDidScroll: Event<number>;
 
 	public updateOptions(options: Pick<ObjectTreeOptions<TNode>, "indent" | "indentGuides" | "twistieAdditionalCssClass" | "smoothScrolling">): void {
 		this.tree.updateOptions({ ...options, twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element) : undefined });
@@ -145,6 +146,7 @@ export class ObjectTree<TNode> extends Disposable {
 		}));
 		this.element = this.tree.element;
 		this.domNode = this.tree.domNode;
+		this.onDidScroll = this.tree.onDidScroll;
 		this._register(this.model.onDidChange(({ kind, node, visibleSplice }) => {
 			if (kind === "rerender" && node) {
 				this.onWillRender?.();

@@ -78,7 +78,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 			create: options => instantiationService.createInstance(ChatInputEditor, {
 				...options,
 				placeholder: '',
-				height: { minimum: 48, maximum: 240 },
+				height: { minimum: 32, maximum: 240 },
 			}),
 		}, [{
 			id: 'ash.chat.input.attach',
@@ -97,7 +97,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		dragAndDrop.addOverlay(this.inputContainer, this.inputContainer);
 		const tipContainer = h(container.ownerDocument, 'div');
 		tipContainer.className = 'ash-sessions-cowork-tip-slot';
-		this.element.insertBefore(tipContainer, this.inputContainer);
+		this.element.append(tipContainer);
 		this.tips = this._register(instantiationService.createInstance(ChatInputTipPresenter, {
 			container: tipContainer,
 			isEligible: () => !this.submittedMessage && this.model.items.length === 0

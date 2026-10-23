@@ -63,7 +63,7 @@ test("LabelActionViewItem owns compact icon-and-text action markup", () => {
 	assert.ok(label);
 	assert.equal(label.classList.contains("ash-button"), false);
 	assert.equal(label.querySelector(".ash-action-label-text")?.textContent, "cmd");
-	assert.ok(label.querySelector(".ash-action-label-icon > svg.ash-icon"));
+	assert.ok(label.querySelector(".ash-action-label-icon > .ash-icon"));
 	assert.equal(label.getAttribute("aria-label"), "Active terminal: cmd");
 	assert.equal(label.tabIndex, 0);
 	label.click();

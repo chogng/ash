@@ -1,6 +1,6 @@
 .ash-markdown {
 	color: var(--ash-foreground);
-	font-size: 13px;
+	font-size: var(--ash-fontSize-body1);
 	line-height: 1.55;
 	overflow-wrap: anywhere;
 }

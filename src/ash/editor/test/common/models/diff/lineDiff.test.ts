@@ -1,9 +1,22 @@
+import { DetailedLineRangeMapping } from '../../../../common/diff/rangeMapping.js';
+import { LineRange } from '../../../../common/core/ranges/lineRange.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DefaultLinesDiffComputer } from '../../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import { toLineDiff, LineDiffKind, type LineDiff } from '../../../../common/diff/lineDiff.js';
 
 suite('Frontend line diff', () => {
+	test('projects a million unchanged lines without expanding their runs', () => {
+		const diff = toLineDiff({ changes: [new DetailedLineRangeMapping(new LineRange(500001, 500002), new LineRange(500001, 500003), undefined)], moves: [] }, 1000000, 1000001);
+		assert.equal(diff.rows.length, 1000001);
+		assert.deepEqual([...diff.rows.unchangedRanges()], [[0, 500000], [500002, 1000001]]);
+		assert.deepEqual([...diff.rows.changedEntries()].map(([index, row]) => [index, row.kind]), [[500000, 'modified'], [500001, 'added']]);
+		assert.deepEqual([diff.rows.get(499999)?.originalLineIndex, diff.rows.get(500002)?.originalLineIndex, diff.rows.get(1000000)?.modifiedLineIndex], [499999, 500001, 1000000]);
+		assert.equal(diff.rows.get(-1), undefined);
+		assert.equal(diff.rows.get(1000001), undefined);
+		assert.deepEqual([...diff.rows.alignmentEntries()].map(([index]) => index), [499999, 500000, 500001, 1000000]);
+	});
+
 	test('returns standard line and character mappings with whitespace options', () => {
 		const computer = new DefaultLinesDiffComputer();
 		const options = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
@@ -27,7 +40,7 @@ suite('Frontend line diff', () => {
 
 	test('aligns insertions, removals and replacements into complete hunks', async () => {
 		const diff = await compute('same\nold\nremoved\nlast', 'same\nnew\nlast\nadded');
-		assert.deepEqual(diff.rows.map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
+		assert.deepEqual(Array.from(diff.rows).map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
 			['unchanged', 0, 0], ['modified', 1, 1], ['removed', 2, undefined], ['unchanged', 3, 2], ['added', undefined, 3],
 		]);
 		assert.deepEqual(diff.hunks, [
@@ -53,7 +66,7 @@ suite('Frontend line diff', () => {
 				]), [[2, reversed ? 9 : 2, 2, reversed ? 2 : 9]]);
 				assert.deepEqual(await computer.computeDiffAsync(before, after, options, new AbortController().signal), result);
 				const diff = toLineDiff(result, before.length, after.length);
-				assert.deepEqual(diff.rows.filter(row => row.kind !== LineDiffKind.Unchanged).map(row => reversed
+				assert.deepEqual(Array.from(diff.rows).filter(row => row.kind !== LineDiffKind.Unchanged).map(row => reversed
 					? before[row.originalLineIndex!] : after[row.modifiedLineIndex!]), added);
 			}
 		}
@@ -99,22 +112,22 @@ suite('Frontend line diff', () => {
 		const result = computer.computeDiff(original, modified, options);
 		assert.deepEqual(await computer.computeDiffAsync(original, modified, options, new AbortController().signal), result);
 		const diff = toLineDiff(result, original.length, modified.length);
-		assert.deepEqual(diff.rows.map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
+		assert.deepEqual(Array.from(diff.rows).map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
 			['unchanged', 0, 0], ['added', undefined, 1], ['added', undefined, 2], ['added', undefined, 3], ['modified', 1, 4], ['unchanged', 2, 5],
 		]);
 		assert.equal(diff.hunks.length, 1);
-		const declaration = diff.rows[4]!;
+		const declaration = diff.rows.get(4)!;
 		assert.deepEqual(declaration.originalChanges.map(range => original[1]!.slice(range.startColumn, range.endColumn)), ['const', 'files, ']);
 		assert.deepEqual(declaration.modifiedChanges.map(range => modified[4]!.slice(range.startColumn, range.endColumn)), ['using', '']);
 		const reversed = toLineDiff({ changes: result.changes.map(change => change.flip()), moves: [] }, modified.length, original.length);
-		assert.deepEqual(reversed.rows.map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
+		assert.deepEqual(Array.from(reversed.rows).map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
 			['unchanged', 0, 0], ['removed', 1, undefined], ['removed', 2, undefined], ['removed', 3, undefined], ['modified', 4, 1], ['unchanged', 5, 2],
 		]);
 	});
 
 	test('keeps inserted and removed neighbors separate from multiple edited declarations', async () => {
 		const diff = await compute('head\nconst alpha = loadAlpha();\nremovedOnly();\nconst beta = loadBeta();\ntail', 'head\nprepareWorkspace();\nusing alpha = loadAlpha();\nusing beta = loadBeta();\ntail');
-		assert.deepEqual(diff.rows.map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
+		assert.deepEqual(Array.from(diff.rows).map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
 			['unchanged', 0, 0], ['added', undefined, 1], ['modified', 1, 2], ['removed', 2, undefined], ['modified', 3, 3], ['unchanged', 4, 4],
 		]);
 		assert.equal(diff.hunks.length, 1);
@@ -124,8 +137,8 @@ suite('Frontend line diff', () => {
 		const original = 'const $source_name = new ExplorerDataSource(files);';
 		const modified = 'using $result_name = new WorkspaceContextService(files);';
 		const diff = await compute(original, modified);
-		assert.deepEqual(diff.rows[0]!.originalChanges.map(range => original.slice(range.startColumn, range.endColumn)), ['const $source_name', 'ExplorerDataSource']);
-		assert.deepEqual(diff.rows[0]!.modifiedChanges.map(range => modified.slice(range.startColumn, range.endColumn)), ['using $result_name', 'WorkspaceContextService']);
+		assert.deepEqual(diff.rows.get(0)!.originalChanges.map(range => original.slice(range.startColumn, range.endColumn)), ['const $source_name', 'ExplorerDataSource']);
+		assert.deepEqual(diff.rows.get(0)!.modifiedChanges.map(range => modified.slice(range.startColumn, range.endColumn)), ['using $result_name', 'WorkspaceContextService']);
 	});
 
 	test('highlights a rewritten loop continuously instead of keeping incidental punctuation matches', async () => {
@@ -133,10 +146,10 @@ suite('Frontend line diff', () => {
 		const modified = '\t\t\t\tconst pairs = yield* pairChangedLines(original.slice(originalIndex, originalMatch), modified.slice(modifiedIndex, modifiedMatch));';
 		const added = '\t\t\t\tfor (const [left, right] of pairs) {';
 		const diff = await compute(`${original}\nbody();`, `${modified}\n${added}\nbody();`);
-		assert.deepEqual(diff.rows.map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
+		assert.deepEqual(Array.from(diff.rows).map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
 			['modified', 0, 0], ['added', undefined, 1], ['unchanged', 1, 2],
 		]);
-		assert.deepEqual([diff.rows[0]!.originalChanges, diff.rows[0]!.modifiedChanges], [
+		assert.deepEqual([diff.rows.get(0)!.originalChanges, diff.rows.get(0)!.modifiedChanges], [
 			[{ startColumn: 4, endColumn: original.length }],
 			[{ startColumn: 4, endColumn: modified.length }],
 		]);
@@ -144,11 +157,11 @@ suite('Frontend line diff', () => {
 
 	test('groups neighboring argument renames but retains meaningful unchanged expressions between edits', async () => {
 		const argumentsDiff = await compute('call(first, second);', 'call(alpha, beta);');
-		assert.deepEqual([argumentsDiff.rows[0]!.originalChanges, argumentsDiff.rows[0]!.modifiedChanges], [
+		assert.deepEqual([argumentsDiff.rows.get(0)!.originalChanges, argumentsDiff.rows.get(0)!.modifiedChanges], [
 			[{ startColumn: 5, endColumn: 18 }], [{ startColumn: 5, endColumn: 16 }],
 		]);
 		const separated = await compute('first OLD middle OLD last', 'first NEW middle NEW last');
-		assert.deepEqual([separated.rows[0]!.originalChanges, separated.rows[0]!.modifiedChanges], [
+		assert.deepEqual([separated.rows.get(0)!.originalChanges, separated.rows.get(0)!.modifiedChanges], [
 			[{ startColumn: 6, endColumn: 9 }, { startColumn: 17, endColumn: 20 }],
 			[{ startColumn: 6, endColumn: 9 }, { startColumn: 17, endColumn: 20 }],
 		]);
@@ -171,7 +184,7 @@ suite('Frontend line diff', () => {
 		assert.ok(inner.length > 0 && inner.every(change => change.originalRange.startLineNumber === 3 && change.modifiedRange.startLineNumber === 9));
 		const move = diff.moves[0]!;
 		const displayed = toLineDiff({ changes: move.changes, moves: [move] }, original.length, modified.length, move.lineRangeMapping);
-		assert.deepEqual(displayed.rows.map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
+		assert.deepEqual(Array.from(displayed.rows).map(row => [row.kind, row.originalLineIndex, row.modifiedLineIndex]), [
 			['unchanged', 1, 7], ['modified', 2, 8], ['added', undefined, 9], ['unchanged', 3, 10], ['unchanged', 4, 11],
 		]);
 		assert.deepEqual(new DefaultLinesDiffComputer().computeDiff(original, modified, { ...options, computeMoves: false }).moves, []);
@@ -271,23 +284,23 @@ suite('Frontend line diff', () => {
 			['', 'text', ['modified']],
 			['\n', '', ['unchanged', 'removed']],
 		] as const) {
-			assert.deepEqual((await compute(original, modified)).rows.map(row => row.kind), kinds);
+			assert.deepEqual(Array.from((await compute(original, modified)).rows).map(row => row.kind), kinds);
 		}
 	});
 
 	test('reports separate UTF-16 ranges without splitting emoji or combining graphemes', async () => {
 		const diff = await compute('a😀 middle e\u0301 end', 'a🤖 middle o\u0308 end');
-		assert.deepEqual([diff.rows[0]!.originalChanges, diff.rows[0]!.modifiedChanges], [
+		assert.deepEqual([diff.rows.get(0)!.originalChanges, diff.rows.get(0)!.modifiedChanges], [
 			[{ startColumn: 1, endColumn: 3 }, { startColumn: 11, endColumn: 13 }],
 			[{ startColumn: 1, endColumn: 3 }, { startColumn: 11, endColumn: 13 }],
 		]);
 		const joined = await compute('x👩‍💻z', 'x👨‍💻z');
-		assert.deepEqual(joined.rows[0]!.originalChanges, [{ startColumn: 1, endColumn: 6 }]);
+		assert.deepEqual(joined.rows.get(0)!.originalChanges, [{ startColumn: 1, endColumn: 6 }]);
 	});
 
 	test('groups neighboring identifier edits without matching trailing whitespace to an interior space', async () => {
 		const diff = await compute('ab cd', 'aXb cYd ');
-		assert.deepEqual([diff.rows[0]!.originalChanges, diff.rows[0]!.modifiedChanges], [[
+		assert.deepEqual([diff.rows.get(0)!.originalChanges, diff.rows.get(0)!.modifiedChanges], [[
 			{ startColumn: 0, endColumn: 5 },
 		], [
 			{ startColumn: 0, endColumn: 8 },
@@ -301,7 +314,7 @@ suite('Frontend line diff', () => {
 			['  run(value); ', ' run(value);  ', [[[1, 2], [14, 14]], [[1, 1], [13, 14]]]],
 		] as const) {
 			const diff = await compute(original, modified);
-			assert.deepEqual([diff.rows[0]!.originalChanges, diff.rows[0]!.modifiedChanges].map(ranges => ranges.map(range => [range.startColumn, range.endColumn])), expected);
+			assert.deepEqual([diff.rows.get(0)!.originalChanges, diff.rows.get(0)!.modifiedChanges].map(ranges => ranges.map(range => [range.startColumn, range.endColumn])), expected);
 		}
 	});
 
@@ -314,10 +327,10 @@ suite('Frontend line diff', () => {
 			const original = Array.from({ length: random() % 16 + 1 }, () => vocabulary[random() % vocabulary.length]!);
 			const modified = Array.from({ length: random() % 16 + 1 }, () => vocabulary[random() % vocabulary.length]!);
 			const diff = await compute(original.join('\n'), modified.join('\n'));
-			const unchanged = diff.rows.filter(row => row.kind === LineDiffKind.Unchanged);
+			const unchanged = Array.from(diff.rows).filter(row => row.kind === LineDiffKind.Unchanged);
 			assert.equal(unchanged.length, longestCommonSubsequence(original, modified), JSON.stringify({ original, modified }));
-			assert.deepEqual(diff.rows.flatMap(row => row.originalLineIndex === undefined ? [] : [row.originalLineIndex]), original.map((_, index) => index));
-			assert.deepEqual(diff.rows.flatMap(row => row.modifiedLineIndex === undefined ? [] : [row.modifiedLineIndex]), modified.map((_, index) => index));
+			assert.deepEqual(Array.from(diff.rows).flatMap(row => row.originalLineIndex === undefined ? [] : [row.originalLineIndex]), original.map((_, index) => index));
+			assert.deepEqual(Array.from(diff.rows).flatMap(row => row.modifiedLineIndex === undefined ? [] : [row.modifiedLineIndex]), modified.map((_, index) => index));
 			assert.ok(unchanged.every(row => original[row.originalLineIndex!] === modified[row.modifiedLineIndex!]));
 		}
 	});

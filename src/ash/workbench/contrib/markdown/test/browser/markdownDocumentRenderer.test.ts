@@ -119,7 +119,7 @@ test("Markdown alerts and theme icons become accessible Ash presentation", () =>
 	const alert = markdown.element.querySelector("blockquote.ash-markdown-alert-warning");
 	assert.ok(alert);
 	assert.equal(alert.querySelector(".ash-markdown-alert-label")?.textContent, "Warning");
-	assert.equal(alert.querySelectorAll("svg.ash-icon").length, 2);
+	assert.equal(alert.querySelectorAll(".ash-icon").length, 2);
 	assert.equal(alert.querySelector(".ash-markdown-alert-icon")?.getAttribute("aria-hidden"), "true");
 	assert.equal(alert.querySelector("code")?.textContent, "$(info)");
 
@@ -140,7 +140,7 @@ test("Markdown supports all five GitHub alert severities", () => {
 	assert.deepEqual(alerts.map(alert => ({
 		severity: [...alert.classList].find(name => name.startsWith('ash-markdown-alert-') && name !== 'ash-markdown-alert'),
 		label: alert.querySelector('.ash-markdown-alert-label')?.textContent,
-		icon: alert.querySelector('svg.ash-icon')?.getAttribute('data-ash-icon-id'),
+		icon: alert.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'),
 	})), [
 		{ severity: 'ash-markdown-alert-note', label: 'Note', icon: 'info' },
 		{ severity: 'ash-markdown-alert-tip', label: 'Tip', icon: 'lightning' },
@@ -162,7 +162,7 @@ test("MarkdownString.appendText keeps literal theme icon syntax", () => {
 		ownerDocument: dom.window.document
 	});
 
-	assert.equal(markdown.element.querySelectorAll('svg.ash-icon').length, 1);
+	assert.equal(markdown.element.querySelectorAll('.ash-icon').length, 1);
 	const renderedText = (markdown.element.textContent ?? '').replaceAll('\u00a0', ' ');
 	assert.match(renderedText, /literal \$\(info\)/u);
 	markdown.dispose();

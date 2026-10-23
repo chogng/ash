@@ -54,10 +54,10 @@ test("SelectBox uses the default chevron trigger and trailing selected check ins
 	assert.ok(list);
 	assert.equal(list.style.getPropertyValue("--dropdown-trigger-width"), "192px");
 	const selected = list.querySelector<HTMLElement>(".ash-select-box-option-selected")!;
-	const check = selected.querySelector<HTMLElement>(":scope > .ash-select-box-option-check")!;
+	const check = selected.querySelector<HTMLElement>(".ash-select-box-option-check")!;
 	const expectedCheck = h(dom.window.document, "span");
 	appendIcon(Lxicon.check, expectedCheck);
-	assert.equal(selected.lastElementChild, check);
+	assert.equal(selected.querySelector('.ash-select-box-option-content')?.lastElementChild, check);
 	assert.equal(check.innerHTML, expectedCheck.innerHTML);
 	assert.equal(selected.getAttribute("aria-selected"), "true");
 	assert.equal(button.getAttribute('aria-activedescendant'), selected.id);
@@ -70,6 +70,13 @@ test("SelectBox uses the default chevron trigger and trailing selected check ins
 	assert.equal(dom.window.document.getElementById(activeId)?.textContent?.includes('On'), true);
 	selectBox.hide();
 	assert.equal(button.hasAttribute('aria-activedescendant'), false);
+	selectBox.value = undefined;
+	selectBox.show();
+	assert.equal(selectBox.value, undefined);
+	assert.equal(selectBox.selectedIndex, -1);
+	assert.equal(button.hasAttribute('aria-activedescendant'), false);
+	assert.equal(list.querySelector('.focused, [aria-selected="true"]'), null);
+	selectBox.hide();
 
 
 	selectBox.dispose();

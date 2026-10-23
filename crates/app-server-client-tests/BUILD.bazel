@@ -1,0 +1,35 @@
+load("@crates//:data.bzl", "DEP_DATA")
+load("@rules_rust//rust:defs.bzl", "rust_test")
+
+_CONTRACTS = DEP_DATA["crates/app-server-client-tests"]
+_CLIENT = "//crates/app-server-client"
+_TEST_CLIENT = "//crates/app-server-client:in-process-test-client"
+
+# Retain Cargo's dev-dependency graph while selecting its feature-enabled client.
+rust_test(
+    name = "app-server-client-tests-unit-tests",
+    aliases = {
+        (_TEST_CLIENT if label == _CLIENT else label): alias
+        for label, alias in _CONTRACTS["aliases"].items()
+        if label in _CONTRACTS["dev_deps"]
+    },
+    crate_name = "ash_app_server_client_tests",
+    crate_root = "src/lib.rs",
+    data = select({
+        "@platforms//os:macos": ["//crates/file-watcher:watch-probe-test-host"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        _TEST_CLIENT if label == _CLIENT else label
+        for label in _CONTRACTS["dev_deps"]
+    ],
+    edition = "2024",
+    env = select({
+        "@platforms//os:macos": {
+            "ASH_FILE_WATCHER_TEST_HOST": "$(rootpath //crates/file-watcher:watch-probe-test-host)",
+        },
+        "//conditions:default": {},
+    }),
+    rustc_env_files = ["//:workspace-version-env"],
+    srcs = glob(["src/**/*.rs"]),
+)

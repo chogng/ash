@@ -6,8 +6,7 @@ import { h } from '../../../../base/browser/dom.js';
 import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { type ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
-import { DisposableMap, DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { listRowHeight } from '../../../../base/common/uiSizes.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { localize } from '../../../../nls.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -32,6 +31,7 @@ interface TestTreeItem {
 
 /** Workspace cases and their results; script commands remain a separate task section. */
 export class TestingViewPane extends ViewPane {
+	private readonly busyProgress = this._register(new MutableDisposable());
 	private readonly tree: WorkbenchObjectTree<TestTreeItem>;
 	private readonly statusDomNode: HTMLElement;
 	private readonly outputDomNode: HTMLPreElement;
@@ -84,7 +84,7 @@ export class TestingViewPane extends ViewPane {
 			configurationService: configuration,
 			ariaLabel: localize('testing.tree', 'Tests'),
 			scrolling: 'managed',
-			getHeight: () => listRowHeight,
+			getHeight: () => 22,
 			modelOptions: { identityProvider: { getId: item => item.id }, defaultCollapseState: 'expanded' },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.label },
 			expandOnDoubleClick: false,
@@ -154,6 +154,10 @@ export class TestingViewPane extends ViewPane {
 		const results = this.testing.testResults;
 		this.resultsByKey = new Map(results.map(result => [result.key, result]));
 		const busy = this.testing.isDiscovering || this.testing.isRunningTests;
+		if (busy && !this.busyProgress.value) {
+			const progress = this.getProgressIndicator().show(true, 150);
+			this.busyProgress.value = toDisposable(() => progress.done());
+		} else if (!busy) this.busyProgress.clear();
 		this.runAllButton.enabled = !busy && this.testing.tests.length > 0;
 		this.runSelectedButton.enabled = !busy && this.selected.length > 0;
 		this.debugButton.enabled = !busy && this.selected.length === 1 && this.selected[0]?.test?.debuggable === true;

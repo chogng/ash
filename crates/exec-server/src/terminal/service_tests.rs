@@ -1441,7 +1441,7 @@ fn wait_shell_cwd(
     }
 }
 
-#[cfg(any(unix, windows))]
+#[cfg(unix)]
 fn read_shell_boundaries(
     service: &TerminalService,
     terminal_id: &str,
@@ -1489,7 +1489,7 @@ fn shell_status(service: &TerminalService, terminal_id: &str) -> TerminalReadRes
         .unwrap()
 }
 
-#[cfg(any(unix, windows))]
+#[cfg(unix)]
 fn wait_shell_events(service: &TerminalService, terminal_id: &str, count: usize) {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
@@ -1566,31 +1566,26 @@ fn windows_powershell_without_a_profile_reports_trusted_commands() {
         )
         .unwrap();
     let id = &created.terminal_id;
-    let deadline = Instant::now() + Duration::from_secs(10);
-    let mut saw_input_boundary = false;
-    loop {
-        saw_input_boundary |= read_shell_boundaries(&service, id)
-            .iter()
-            .any(|event| matches!(event, TerminalShellIntegrationEvent::CommandStart));
+    let mut observed = PowerShellObservation::default();
+    let startup = Instant::now();
+    // Allow a bounded cold start; subsequent commands keep the usual ten-second limit.
+    observed.wait_for_with_timeout(&service, id, Duration::from_secs(60), |state| {
         let status = shell_status(&service, id);
-        if saw_input_boundary
+        state.saw_input_boundary
             && status
                 .shell_integration
                 .as_ref()
                 .is_some_and(|integration| {
                     integration.has_rich_command_detection && integration.cwd_detection
                 })
-        {
-            break;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "PowerShell prompt did not report its input boundary and shell capabilities"
-        );
-        std::thread::sleep(Duration::from_millis(10));
-    }
+    });
+    eprintln!(
+        "Windows PowerShell startup: {:?}, cursor replies: {}",
+        startup.elapsed(),
+        observed.cursor_replies
+    );
     write_shell(&service, id, "Write-Output ('ASH_PS_' + 'READY')\r");
-    wait_shell_events(&service, id, 2);
+    observed.wait_for(&service, id, |state| state.events.len() >= 2);
     let status = shell_status(&service, id);
     assert_eq!(
         status.command_events[1].status,
@@ -1602,7 +1597,7 @@ fn windows_powershell_without_a_profile_reports_trusted_commands() {
         Some("Write-Output ('ASH_PS_' + 'READY')")
     );
     write_shell(&service, id, "Write-Error 'expected failure'\r");
-    wait_shell_events(&service, id, 4);
+    observed.wait_for(&service, id, |state| state.events.len() >= 4);
     let status = shell_status(&service, id);
     assert_eq!(
         status.command_events[3].status,
@@ -1804,7 +1799,7 @@ function global:prompt {
     service.close(1, id).unwrap();
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 #[derive(Default)]
 struct PowerShellObservation {
     bytes: Vec<u8>,
@@ -1812,10 +1807,12 @@ struct PowerShellObservation {
     output_sequence: u64,
     command_sequence: u64,
     cursor_replies: usize,
+    saw_input_boundary: bool,
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 impl PowerShellObservation {
+    #[cfg(unix)]
     fn prompt_count(&self) -> usize {
         self.bytes
             .windows(15)
@@ -1829,7 +1826,17 @@ impl PowerShellObservation {
         terminal_id: &str,
         ready: impl Fn(&Self) -> bool,
     ) {
-        let deadline = Instant::now() + Duration::from_secs(10);
+        self.wait_for_with_timeout(service, terminal_id, Duration::from_secs(10), ready);
+    }
+
+    fn wait_for_with_timeout(
+        &mut self,
+        service: &TerminalService,
+        terminal_id: &str,
+        timeout: Duration,
+        ready: impl Fn(&Self) -> bool,
+    ) {
+        let deadline = Instant::now() + timeout;
         loop {
             let result = service
                 .read(
@@ -1844,6 +1851,12 @@ impl PowerShellObservation {
                 .unwrap();
             self.output_sequence = result.next_sequence;
             self.command_sequence = result.next_command_sequence;
+            self.saw_input_boundary |= result.chunks.iter().any(|chunk| {
+                matches!(
+                    chunk.shell_integration,
+                    Some(TerminalShellIntegrationEvent::CommandStart)
+                )
+            });
             self.bytes
                 .extend(result.chunks.into_iter().flat_map(|chunk| chunk.data));
             self.events.extend(result.command_events);

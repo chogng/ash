@@ -1270,3 +1270,11 @@ exports.activate = context => context.subscriptions.push(ash.commands.register('
 	assert.equal((await read()).status, 'failure');
 	await h.request('shutdown').result;
 });
+
+test('image view SDK requires explicit host admission before registering an executable capability', async t => {
+	const h = await host(t, `const ash = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(ash.commands.register('test.node', () => { try { ash.window.registerImageEditorProvider('test.image', { resolveImageEditor() {} }); return 'registered'; } catch (error) { return error.message; } }));`, 'extension.cjs', ['command'], undefined, { manifest: { contributes: { commands: [{ command: 'test.node', title: 'Test' }], imageEditors: [{ id: 'test.image', displayName: 'Test Image' }] } } });
+	const response = await h.invoke('test.node', []).result;
+	assert.equal(response.status, 'success');
+	assert.match(response.body.body.payload, /admitted imageEditor capability/);
+	assert.equal(h.registrations.some(entry => entry.kind === 'dataChannel'), false);
+});

@@ -247,7 +247,7 @@
 	color: inherit;
 	background: transparent;
 	border: 0;
-	border-radius: var(--ash-cornerRadius-small);
+	border-radius: var(--ash-cornerRadius-large);
 }
 
 .ash-cowork-input-attachment-remove:hover {

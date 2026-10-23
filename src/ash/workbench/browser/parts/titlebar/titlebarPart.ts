@@ -3,6 +3,8 @@ import { getWCOTitlebarAreaRect, isStandalone, isWCOEnabled } from '../../../../
 import { isWeb } from '../../../../base/common/platform.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { localize } from '../../../../nls.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import "./titlebarpart.css";
 import { addDisposableListener, h, type IDimension } from "../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -227,6 +229,7 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 		const appIconDomNode = h(ownerDocument, "span");
 		appIconDomNode.className = "ash-titlebar-app-icon";
 		appIconDomNode.setAttribute("aria-hidden", "true");
+		appendIcon(Lxicon.ashMark, appIconDomNode);
 		this.titleDomNode.append(appIconDomNode);
 		if (this.menubar.domNode) {
 			this.menubar.domNode.classList.add("ash-titlebar-interactive-region");

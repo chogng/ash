@@ -23,7 +23,7 @@ export function createDisconnectedConnectorApi(unavailable: UnavailableOperation
 		list: () => unavailable("connectors.list"),
 		connectApiToken: () => unavailable("connectors.connectApiToken"),
 		connectOAuth: () => unavailable("connectors.connectOAuth"),
-		disconnect: () => unavailable("connectors.disconnect"),
+		setEnabled: () => unavailable("connectors.setEnabled"),
 		refreshOAuth: () => unavailable("connectors.refreshOAuth"),
 		revokeOAuth: () => unavailable("connectors.revokeOAuth"),
 	};
@@ -42,7 +42,7 @@ export function createAppServerConnectorApi(connection: AppServerProtocolClient,
 			if (connector?.oauthMethods.includes('device')) { return connectDeviceOAuth(connection, params, hostServices); }
 			throw new Error('Connector OAuth is unavailable in this host');
 		},
-		disconnect: params => appServerRequest(connection, "connector/disconnect", params),
+		setEnabled: params => appServerRequest(connection, "connector/enablement/set", params),
 		refreshOAuth: async connectorId => { await appServerRequest(connection, "connector/oauth/refresh", { connectorId }); },
 		revokeOAuth: params => appServerRequest(connection, "connector/oauth/revoke", params),
 	};

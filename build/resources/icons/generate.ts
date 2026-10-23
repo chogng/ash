@@ -1,6 +1,8 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from 'node:crypto';
+import { parseArgs } from 'node:util';
 import { optimize } from "svgo";
 import { generateToTs } from "./generate-to-ts.ts";
 
@@ -8,7 +10,7 @@ const repositoryDirectory = resolve(import.meta.dirname, "../../..");
 const iconDirectory = resolve(repositoryDirectory, "resources/icons");
 const defaultOutputs: IconOutputs = {
 	manifestFile: resolve(iconDirectory, "manifest.json"),
-	typescriptFile: resolve(repositoryDirectory, "src/ash/base/common/productIcons.ts"),
+	typescriptFile: resolve(repositoryDirectory, "src/ash/base/common/lxiconsLibrary.ts"),
 };
 const iconFilePattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.svg$/;
 const unsafeSvgPattern = /<(?:script|foreignObject)\b|\son[a-z]+\s*=|(?:href|xlink:href)\s*=/i;
@@ -51,6 +53,8 @@ export interface GeneratedIcon {
 	readonly rendering: IconRendering;
 	readonly sourcePath: string;
 	readonly svg: string;
+	readonly fontCharacter?: string;
+	readonly layers?: readonly { readonly id: string; readonly fontCharacter: string; readonly origin: readonly [number, number]; }[];
 }
 
 interface IconSourceUpdate {
@@ -60,7 +64,7 @@ interface IconSourceUpdate {
 }
 
 interface IconCompilation {
-	readonly icons: readonly GeneratedIcon[];
+	readonly icons: GeneratedIcon[];
 	readonly sourceUpdates: readonly IconSourceUpdate[];
 }
 
@@ -75,6 +79,30 @@ export async function generateIcons(options: GenerateIconsOptions = {}): Promise
 	const sourceHandling = options.sourceHandling ?? "write";
 	const outputs = options.outputs ?? defaultOutputs;
 	const compilation = await compileIcons(sourceDirectory);
+	if (outputs.typescriptFile) {
+		const path = resolve(sourceDirectory, 'font/manifest.json');
+		// A missing prepared font must never silently turn the catalog into SVG icons.
+		const font: { codepoints: Record<string, string>; sources: Record<string, string>; layers?: Record<string, readonly { id: string; glyph: string; origin: readonly [number, number]; }[]>; } = JSON.parse(await readFile(path, 'utf8'));
+		for (let i = 0; i < compilation.icons.length; i++) {
+			const icon = compilation.icons[i]!;
+			if (font.sources[icon.id] !== createHash('sha256').update(icon.svg.trim()).digest('hex')) {
+				throw new Error(`Icon font is stale for '${icon.id}'. Run 'pnpm icons:build'.`);
+			}
+			const point = font.codepoints[icon.id];
+			if (!point || !/^[E-F][0-9A-F]{3}$/u.test(point)) throw new TypeError(`Missing icon font codepoint: ${icon.id}`);
+			const preparedLayers = Object.hasOwn(font.layers ?? {}, icon.id) ? font.layers![icon.id] : undefined;
+			if (preparedLayers && !Array.isArray(preparedLayers)) throw new TypeError(`Invalid prepared font layers: ${icon.id}`);
+			const layers = preparedLayers?.map(layer => {
+				const point = font.codepoints[layer.glyph];
+				if (!/^[a-z][a-z0-9-]*$/u.test(layer.id) || !point || !/^[E-F][0-9A-F]{3}$/u.test(point)
+					|| !Array.isArray(layer.origin) || layer.origin.length !== 2 || layer.origin.some((value: number) => !Number.isFinite(value) || value < 0 || value > 1)) {
+					throw new TypeError(`Invalid prepared font layer: ${icon.id}`);
+				}
+				return { id: layer.id, fontCharacter: String.fromCodePoint(Number.parseInt(point, 16)), origin: layer.origin };
+			});
+			compilation.icons[i] = { ...icon, fontCharacter: String.fromCodePoint(Number.parseInt(point, 16)), ...(layers ? { layers } : {}) };
+		}
+	}
 	const generatedOutputs = compileOutputs(compilation.icons, outputs);
 	const staleOutputs = await findStaleOutputs(generatedOutputs);
 
@@ -203,14 +231,15 @@ function optimizeSvg(fileName: string, svg: string): string {
 		path: fileName,
 		multipass: true,
 		plugins: [
-			"preset-default",
-			{
-				name: "prefixIds",
+			// Layer IDs are build inputs for the animated brand glyphs.
+			iconName === 'ash-mark' ? { name: 'preset-default' as const, params: { overrides: { cleanupIds: false } } } : "preset-default",
+			...(iconName === 'ash-mark' ? [] : [{
+				name: "prefixIds" as const,
 				params: {
 					delim: "-",
 					prefix: `ash-${iconName}`,
 				},
-			},
+			}]),
 			"removeDimensions",
 		],
 	}).data.trim();
@@ -253,15 +282,28 @@ async function writeTextFile(path: string, content: string): Promise<void> {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-	const argumentsList = process.argv.slice(2);
-	if (argumentsList.length > 1 || (argumentsList.length === 1 && argumentsList[0] !== "--check")) {
-		throw new Error(`Expected --check or no arguments; received ${argumentsList.join(" ")}`);
-	}
-	if (argumentsList[0] === "--check") {
-		const report = await checkIcons();
+	const { values } = parseArgs({
+		options: {
+			check: { type: 'boolean' },
+			'catalog-only': { type: 'boolean' },
+			'source-directory': { type: 'string' },
+			'typescript-file': { type: 'string' },
+		}
+	});
+	if (values.check && values['catalog-only']) throw new Error('--check and --catalog-only are mutually exclusive');
+	const sourceDirectory = resolve(values['source-directory'] ?? iconDirectory);
+	const options: GenerateIconsOptions = {
+		sourceDirectory,
+		outputs: {
+			manifestFile: resolve(sourceDirectory, 'manifest.json'),
+			...(values['catalog-only'] ? {} : { typescriptFile: resolve(values['typescript-file'] ?? defaultOutputs.typescriptFile!) }),
+		},
+	};
+	if (values.check) {
+		const report = await checkIcons(options);
 		console.log(`Validated ${report.count} product icons and generated outputs.`);
 	} else {
-		const report = await generateIcons();
+		const report = await generateIcons(options);
 		const status = report.outputChanged || report.sourceChanged ? "Generated" : "Already generated";
 		console.log(`${status} ${report.count} product icons and generated outputs.`);
 	}

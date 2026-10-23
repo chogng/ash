@@ -78,7 +78,7 @@
 }
 
 .ash-agent-session-row.selected {
-	background: var(--ash-sessions-selectionBackground);
+	background: var(--ash-list-inactiveSelectionBackground);
 }
 
 .ash-agent-session-row:focus-visible,

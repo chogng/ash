@@ -283,3 +283,109 @@ fn failed_disconnect_cleanup_stays_pending_until_an_explicit_retry_succeeds() {
             .credential_cleanup_pending(&connector_id)
     );
 }
+
+#[test]
+fn runtime_enablement_preserves_credentials_across_restart_and_fences_old_calls() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = directory.path().join("connectors.sqlite3");
+    let definition = definition();
+    let connector_id = definition.id().clone();
+    let digest = definition.digest();
+    let secrets = Arc::new(MemorySecretStore::default());
+    let authority = ConnectorAuthority::open_sqlite(&database, [definition.clone()]).unwrap();
+    let service = ConnectorCredentialService::new(authority.clone(), secrets.clone());
+    service
+        .connect_api_token(ConnectorApiTokenConnectRequest {
+            command_id: ConnectorCommandId::new("enablement-connect").unwrap(),
+            expected_generation: authority.snapshot().generation(),
+            connector_id: connector_id.clone(),
+            connection_generation: crate::ConnectorConnectionGeneration::new(1),
+            account_id: ConnectorAccountId::new("octocat").unwrap(),
+            account_display_name: "Octocat".into(),
+            token: SecretValue::new(b"retained-token".to_vec()),
+        })
+        .unwrap();
+    let connected = authority.snapshot();
+    let connection = connected.entry(&connector_id).unwrap().connection();
+    let ConnectorConnectionState::Connected(account) = connection.state() else {
+        panic!("connected account");
+    };
+    let key = SecretKey::new(account.credential_reference().as_str()).unwrap();
+    let old_generation = connection.generation();
+    assert!(authority.authorizes(&connector_id, old_generation, &digest));
+    let request = crate::ConnectorCommandRequest {
+        command_id: ConnectorCommandId::new("enablement-disable").unwrap(),
+        expected_generation: connected.generation(),
+        connector_id: connector_id.clone(),
+        command: crate::ConnectorAuthorityCommand::SetEnabled { enabled: false },
+    };
+    authority.apply(request.clone()).unwrap();
+    assert_eq!(
+        authority.apply(request).unwrap().disposition,
+        ConnectorCommandDisposition::Replayed
+    );
+    let disabled = authority.snapshot();
+    let connection = disabled.entry(&connector_id).unwrap().connection();
+    assert!(!connection.enabled());
+    assert!(matches!(
+        connection.state(),
+        ConnectorConnectionState::Connected(_)
+    ));
+    assert_eq!(disabled.ready_entries().count(), 0);
+    assert!(!authority.authorizes(&connector_id, old_generation, &digest));
+    assert!(!authority.authorizes(&connector_id, connection.generation(), &digest));
+    assert!(
+        authority
+            .with_authorized_invocation(&connector_id, connection.generation(), &digest, || ())
+            .is_none()
+    );
+    assert!(
+        authority
+            .with_account_invocation(&connector_id, connection.generation(), &digest, || ())
+            .is_some()
+    );
+    assert_eq!(
+        secrets.load(&key).unwrap().unwrap().expose(),
+        b"retained-token"
+    );
+    assert!(!authority.credential_cleanup_pending(&connector_id));
+    drop(service);
+    drop(authority);
+    let reopened = ConnectorAuthority::open_sqlite(&database, [definition.clone()]).unwrap();
+    let disabled = reopened.snapshot();
+    assert!(
+        !disabled
+            .entry(&connector_id)
+            .unwrap()
+            .connection()
+            .enabled()
+    );
+    reopened
+        .apply(crate::ConnectorCommandRequest {
+            command_id: ConnectorCommandId::new("enablement-resume").unwrap(),
+            expected_generation: disabled.generation(),
+            connector_id: connector_id.clone(),
+            command: crate::ConnectorAuthorityCommand::SetEnabled { enabled: true },
+        })
+        .unwrap();
+    let resumed = reopened.snapshot();
+    let connection = resumed.entry(&connector_id).unwrap().connection();
+    assert!(connection.enabled());
+    assert_eq!(resumed.ready_entries().count(), 1);
+    assert!(reopened.authorizes(&connector_id, connection.generation(), &digest));
+    assert!(!reopened.authorizes(&connector_id, old_generation, &digest));
+    assert_eq!(
+        secrets.load(&key).unwrap().unwrap().expose(),
+        b"retained-token"
+    );
+    drop(reopened);
+    let reopened = ConnectorAuthority::open_sqlite(&database, [definition]).unwrap();
+    assert!(
+        reopened
+            .snapshot()
+            .entry(&connector_id)
+            .unwrap()
+            .connection()
+            .enabled()
+    );
+}

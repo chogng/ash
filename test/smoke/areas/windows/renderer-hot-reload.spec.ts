@@ -246,7 +246,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 				await page.evaluate(() => {
 					const evidence = globalThis.uiHotReloadEvidence;
 					evidence.previous = evidence.sidebar.element.querySelector('.ash-sessions-list')!;
-					evidence.previousButton = evidence.previous.querySelector<HTMLButtonElement>('.ash-sessions-list-add')!;
+					evidence.previousButton = evidence.previous.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 				});
 				const top = await host.locator('.ash-sessions-list-items').evaluate(element => element.scrollTop);
 				await patch('sidebar', 'this.domNode.className = "ash-sessions-list";', 'this.domNode.dataset.hotReloadVersion', version);
@@ -520,7 +520,7 @@ test('development Sessions applies successive CSS saves without reloading its pa
 
 	test.setTimeout(120_000);
 	const desktopDirectory = resolve(import.meta.dirname, '../../../..');
-	const sourceFile = resolve(desktopDirectory, 'src/ash/sessions/browser/parts/activitybar/media/activityBarPart.css');
+	const sourceFile = resolve(desktopDirectory, 'src/ash/sessions/browser/parts/titlebar/media/titlebarpart.css');
 	const original = await readFile(sourceFile, 'utf8');
 	let written = original;
 	const isBrowser = testInfo.project.name === 'browser-ui';
@@ -555,29 +555,28 @@ test('development Sessions applies successive CSS saves without reloading its pa
 			});
 			page = await electron.firstWindow();
 		}
-		const library = page.getByRole('button', { name: 'Library', exact: true });
-		await library.click();
-		await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
-		const icon = library.locator('svg');
-		await expect(icon).toHaveCSS('width', '24px');
+		// CSS delivery should not depend on the configured navigation presentation.
+		const titlebar = page.locator('.ash-sessions-titlebar-left');
+		await expect(titlebar).toBeVisible();
+		const stylesheet = page.locator('link[rel="stylesheet"][href*="/sessions/browser/parts/titlebar/media/titlebarpart.css"]');
 		await expect(page.locator('script[type="importmap"]')).toHaveCount(1);
-		await expect(page.locator('link[rel="stylesheet"][href*="activityBarPart.css"]')).toHaveCount(1);
-		await expect(page.locator('style[data-vite-dev-id$="activityBarPart.css"]')).toHaveCount(0);
+		await expect(stylesheet).toHaveCount(1);
+		await expect(page.locator('style[data-vite-dev-id$="titlebarpart.css"]')).toHaveCount(0);
 		await page.evaluate(() => { document.body.dataset.cssHotReloadRetained = 'true'; });
 		for (const size of ['18px', '20px']) {
-			written = `${original}\n.ash-sessions-activity-content { --ash-sessions-activity-bar-icon-size: ${size}; }\n`;
+			written = `${original}\n.ash-sessions-titlebar-left { column-gap: ${size}; }\n`;
 			if (size === '18px') {
 				const temporary = `${sourceFile}.ash-hot-reload`;
 				await writeFile(temporary, written);
 				await rename(temporary, sourceFile);
 			} else {
-				await writeFile(sourceFile, `${original}\n.ash-sessions-activity-content { --ash-sessions-activity-bar-icon-size: 19px; }\n`);
+				await writeFile(sourceFile, `${original}\n.ash-sessions-titlebar-left { column-gap: 19px; }\n`);
 				await writeFile(sourceFile, written);
 			}
-			await expect(icon).toHaveCSS('width', size);
-			await expect(page.locator('link[rel="stylesheet"][href*="activityBarPart.css"]')).toHaveCount(1);
+			await expect(titlebar).toHaveCSS('column-gap', size);
+			await expect(stylesheet).toHaveCount(1);
 			await expect(page.locator('body')).toHaveAttribute('data-css-hot-reload-retained', 'true');
-			await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
+			await expect(titlebar).toBeVisible();
 		}
 		expect(warmupErrors).toEqual([]);
 	} finally {

@@ -22,7 +22,7 @@
 
 `Ash Server (Web)` 只启动完整 Web 服务并输出认证链接，可手动在浏览器打开；带 `Chrome` 或 `Edge` 的配置在服务就绪后自动打开对应浏览器调试器。Ash 的 Agent 执行由 Rust App Server 承担，没有 VS Code 的独立 Node Agent Host 入口。Chrome 和 Edge 配置分别要求本机安装对应浏览器。
 
-浏览器仅前端模式打开 `http://127.0.0.1:5173/`。完整 Web 模式使用 5174 端口，须打开终端输出的认证链接。Stanza 页面为 `http://127.0.0.1:5199/`，仅启动编辑器，可通过 `globalThis.stanza.editor` 检查模型和编辑器。
+IDE Web 仅前端模式打开 `http://127.0.0.1:5173/`，完整 Web 模式使用 5174 端口。Agents Web 仅前端模式使用 5175，完整模式使用 5176，可与 IDE Web 同时启动和调试；完整模式须打开各自终端输出的认证链接。Stanza 页面为 `http://127.0.0.1:5199/`，仅启动编辑器，可通过 `globalThis.stanza.editor` 检查模型和编辑器。
 
 ### 日常 Web 开发
 
@@ -32,7 +32,7 @@
 4. 开发过程中执行 `pnpm test:web:dev --grep '<场景标题>'`，通过现有 Playwright Browser UI 项目直接验证 Vite 开发入口。
 5. 提交前按 [验证范围规则](../.github/instructions/testing.instructions.md#learnings) 检查是否仍需补充生产资源验证。需要时执行 `pnpm test:web --grep '<场景标题>'`，其前置步骤会构建 Web 和编译测试，无需先单独执行 `pnpm build:web`。已有匹配当前源码和构建模式的产物及已编译测试时，用 `pnpm test:smoke:browser:no-compile --grep '<场景标题>'`；相关输入未变且测试已经通过时直接复用结果。`pnpm start:web` 启动生产资源预览。
 
-F5 先准备生成资源，再由 VS Code 调试器直接启动 Vite；服务就绪后启动 Chrome 调试。Vite 输出显示在“调试控制台”，F5 配置关闭输出颜色，保证 VS Code 的 `serverReadyAction` 能匹配就绪地址。停止 Vite 或 Chrome 调试会一起结束这两个会话并释放服务端口。手动执行 `pnpm dev:web` 或运行 `Run Ash Web` 任务时，服务由对应终端或任务管理，需要用 `Ctrl+C` 或“终止任务”停止。F5 和手动启动共用 5173，选择一种启动方式；已有服务占用端口时启动会报错。
+F5 先准备生成资源，再由 VS Code 调试器直接启动 Vite；服务就绪后启动 Chrome 调试。Vite 输出显示在集成终端，F5 配置关闭输出颜色，保证 VS Code 的 `serverReadyAction` 能匹配就绪地址。停止 Vite 或 Chrome 调试会一起结束这两个会话并释放服务端口。手动执行 `pnpm dev:web` 或运行 `Run Ash Web` 任务时，服务由对应终端或任务管理，需要用 `Ctrl+C` 或“终止任务”停止。同一 Web 入口的 F5 和手动启动使用相同端口，选择一种启动方式；IDE 与 Agents 使用不同端口，可以同时调试。
 
 F5 生命周期回归测试使用已安装的 VS Code 和 Playwright。设置 `ASH_VSCODE_EXECUTABLE` 为 VS Code 可执行文件的绝对路径，再执行 `pnpm --dir build exec node --test desktop/launch/webDebug.test.ts`；它使用独立配置目录，验证停止任一调试会话、进程退出、端口释放、再次启动和端口占用失败。未提供该环境变量时，构建工具测试会跳过这一项。
 
@@ -42,13 +42,13 @@ Web 构建只包含浏览器 Workbench 与 Sessions 页面，输出到 `.build/d
 
 连接后端的 Web 和 Electron 源码启动器在选取可执行文件前检查并准备当前源码对应的开发包；这一顺序也适用于直接调用启动器或 Vite 的入口。输入未变化时复用开发包，准备失败则停止启动。Web 启动日志输出实际使用的后端文件路径，便于核对联调版本。
 
-Sessions Web 使用 `pnpm dev:web:agents`，直接打开终端输出的 Sessions 认证链接；F5 选择 `Ash Agents Server (Web, Chrome)`，准备前后端后自动打开该链接并连接 Chrome 调试器。只开发界面时使用 `pnpm dev:web:agents:ui` 或 `Ash Agents Web (Chrome)`，5173 根地址直接进入 Sessions。两种 Sessions 入口复用相同的浏览器页面、Vite 热更新和 Web 构建。切回 Workbench 后可继续使用同一浏览器会话。
+Sessions Web 使用 `pnpm dev:web:agents`，在 5176 端口启动，直接打开终端输出的 Sessions 认证链接；F5 选择 `Ash Agents Server (Web, Chrome)`，准备前后端后自动打开该链接并连接 Chrome 调试器。只开发界面时使用 `pnpm dev:web:agents:ui` 或 `Ash Agents Web (Chrome)`，5175 根地址直接进入 Sessions，F5 浏览器直接打开 Sessions 页面。两种 Sessions 入口复用相同的浏览器页面、Vite 热更新和 Web 构建。切回 Workbench 后可继续使用同一浏览器会话。
 
 完整 Web 开发由 Vite 管理 Rust 监听器和 Web 启动进程。保存 Rust 或 Cargo 文件后按变更范围同步协议，再编译并发布含独立 Node 的开发包；成功后通过 `ensure-selected` 切换受管后端。编译失败保留当前后端。Web 启动进程持续持有原入口，使重启后的监听地址和浏览器授权继续有效；页面重连时保留会话选择和未发送输入。停止 Vite 会释放监听器和入口授权；其他客户端共用的后端仍按共享生命周期管理。连接后端的 F5 配置通过 `serverReadyAction` 打开动态认证链接，停止服务器调试会同时停止其 `Browser Debug`；只停止浏览器调试时服务器继续运行，可在调试工具栏停止服务器。仅界面 F5 配置保留服务器与浏览器双向停止。
 
 F5 配置见 [launch.json](../.vscode/launch.json)。完成 [环境初始化](build.md#初始化) 后，F5 和手动启动共用仓库的 Python 环境，macOS 无需额外的 `uv run` 包装。
 
-当前使用 Code 工作台，共同装配代码与 Academic 文档编辑器；打开论文不需要切换模式，旧 Academic 模式数据在启动时迁移，见 [工作台与文档贡献](workbench.md)。停止开发启动器使用 `Ctrl+C`；退出 Web 启动器会撤销该入口的浏览器授权，不终止其他客户端正在使用的后端。
+当前使用 Code 工作台，共同装配代码与 Academy 文档编辑器；打开论文不需要切换模式，旧 Academy 模式数据在启动时迁移，见 [工作台与文档贡献](workbench.md)。停止开发启动器使用 `Ctrl+C`；退出 Web 启动器会撤销该入口的浏览器授权，不终止其他客户端正在使用的后端。
 
 ### 开发态热更新
 
@@ -203,7 +203,7 @@ iframe 通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来源
 
 测试入口会准备对应输入；完整 Web 测试不构建 Electron Main/Preload。Electron UI、Browser UI 和真实后端测试使用各自的 Playwright 项目，失败时查看报告和 trace。
 
-Academic 文件打开与保存已纳入 `pnpm test:desktop:app`，直接在 Code 工作台验证。旧模式迁移见 [工作台与文档贡献](workbench.md)。
+Academy 文件打开与保存已纳入 `pnpm test:desktop:app`，直接在 Code 工作台验证。旧模式迁移见 [工作台与文档贡献](workbench.md)。
 
 Agent Task 闭环回归位于 [task-agent.spec.ts](../test/smoke/areas/tasks/task-agent.spec.ts)，分别覆盖 process 与 shell Task。仅模型 Responses 使用回环 HTTP mock；聊天输入、Agent Core、一次性审批、TaskService、exec-server、PTY 和 Tasks/Terminal 均为真实产品路径。测试读取 Core 工具记录，确认发现、单次启动、Run ID 状态与输出查询、取消、进程退出及保留输出，并覆盖审批拒绝、启动失败、审批期间与运行中的命令权限撤销、窗口关闭后的进程清理、依赖完成前主 Task 不启动、后台 ready 状态、UTF-16 输出分页、终端复用后的 Run 输出隔离、依赖失败阻止主 Task 启动、取消多层并行依赖链、后台始终未 ready 和输出截断后的游标恢复；模型不生成 Task 或直接执行命令，不需要模型账户或密钥。
 

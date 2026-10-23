@@ -1536,9 +1536,9 @@ fn signed_installed_academy_uses_product_launcher_and_exact_revocable_consent() 
     signed_installed_editor_uses_product_launcher_and_exact_revocable_consent(
         "ASH_ACADEMY_DISTRIBUTION",
         "ASH_ACADEMY_TRUSTED_ROOT",
-        "academic",
+        "academy",
         "editor.client.v1",
-        [("en", "Academic Document"), ("zh-CN", "学术论文文档")],
+        [("en", "Academy Document"), ("zh-CN", "Academy 文档")],
     );
 }
 

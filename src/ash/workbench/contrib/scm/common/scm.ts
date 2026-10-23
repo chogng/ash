@@ -3,6 +3,7 @@ import type { IAction } from '../../../../base/common/actions.js';
 import type { Icon } from '../../../../base/common/icon.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
+import type { Command } from '../../../../editor/common/languages.js';
 import type { IEditorOptions } from '../../../../platform/editor/common/editor.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
@@ -45,6 +46,12 @@ export interface ISCMInput {
 	readonly buttonLabel: string;
 	readonly buttonTooltip: string;
 	accept(): Promise<string | undefined>;
+}
+
+export interface ISCMActionButtonDescriptor {
+	readonly command: Command & { shortTitle?: string; };
+	readonly secondaryCommands?: readonly (readonly Command[])[];
+	readonly enabled: boolean;
 }
 
 export interface ISCMStatusBarCommand {
@@ -90,6 +97,7 @@ export interface ISCMProvider {
 	readonly groups: readonly ISCMResourceGroup[];
 	readonly onDidChangeResources: Event<void>;
 	readonly input: ISCMInput;
+	readonly actionButton?: ISCMActionButtonDescriptor;
 	readonly activeRepositoryName: string | undefined;
 	readonly statusBarCommands: readonly ISCMStatusBarCommand[];
 	readonly statusMessage: string;

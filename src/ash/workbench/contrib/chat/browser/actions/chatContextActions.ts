@@ -1,4 +1,7 @@
 import { createUuid } from '../../../../../base/common/uuid.js';
+import { IImageEditorService } from '../../../../services/imageEditor/common/imageEditorService.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { ScreenshotCommandId } from '../../common/constants.js';
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
 import { EditorAction2 } from '../../../../../editor/browser/editorExtensions.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
@@ -33,12 +36,12 @@ import { IChatSessionNavigationService } from '../../../../services/chat/common/
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
-import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
-import type { ChatContextAttachment, IChatContextTarget } from '../../../../services/chat/common/chatContextService.js';
+import type { ChatContextAttachment, ChatImageCapture, IChatContextTarget } from '../../../../services/chat/common/chatContextService.js';
 
 /** Registers editor context commands for the lifetime of their Workbench host. */
-export function registerChatContextActions(): DisposableStore {
+export function registerChatContextActions(imageEditors: IImageEditorService, commands: ICommandService): DisposableStore {
 	const store = new DisposableStore();
+	store.add(imageEditors.registerAttachmentHandler(capture => commands.executeCommand(ScreenshotCommandId, capture)));
 	store.add(registerAction2(class AttachSelectionToChatAction extends EditorAction2 {
 		constructor() {
 			super({
@@ -69,13 +72,13 @@ export function registerChatContextActions(): DisposableStore {
 		}
 	}));
 
-	store.add(registerAction2(class AttachScreenshotToChatAction extends Action2 {
+	store.add(registerAction2(class CaptureScreenshotAction extends Action2 {
 		constructor() {
 			super({
-				id: 'workbench.action.chat.attachScreenshot',
-				title: localize2('chat.context.attachScreenshot', 'Chat: Add Screenshot'),
+				id: ScreenshotCommandId,
+				// Keep the stored command ID so existing custom shortcuts still apply.
+				title: localize2('chat.context.attachScreenshot', 'Screenshot: Capture Screen'),
 				f1: true,
-				precondition: ChatContextKeys.enabled.isEqualTo(true),
 				keybinding: {
 					primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyS,
 					mac: { primary: KeyMod.WinCtrl | KeyMod.CtrlCmd | KeyCode.KeyA },
@@ -84,9 +87,14 @@ export function registerChatContextActions(): DisposableStore {
 			});
 		}
 
-		override async run(accessor: ServicesAccessor): Promise<void> {
+		override async run(accessor: ServicesAccessor, capture?: ChatImageCapture): Promise<void> {
+			if (capture !== undefined && typeof capture !== 'function') throw new TypeError('Expected a host-owned image capture');
+			if (!capture) {
+				await accessor.get(IImageEditorService).show({}, new AbortController().signal);
+				return;
+			}
 			const target = await accessor.get(IViewsService).openView<IView & IChatContextTarget>(CHAT_VIEW_ID);
-			await target?.captureScreenshot();
+			await target?.captureScreenshot(capture);
 		}
 	}));
 

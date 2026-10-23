@@ -40,6 +40,12 @@ pub(super) struct CommandReceipt {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum AuthorityEvent {
+    Enablement {
+        connector_id: ConnectorId,
+        account: crate::ConnectorAccount,
+        definition_digest: ConnectorDefinitionDigest,
+        enabled: bool,
+    },
     Begin {
         connector_id: ConnectorId,
         generation: crate::ConnectorConnectionGeneration,
@@ -64,7 +70,8 @@ pub(super) enum AuthorityEvent {
 impl AuthorityEvent {
     pub(super) fn connector_id(&self) -> &ConnectorId {
         match self {
-            Self::Begin { connector_id, .. }
+            Self::Enablement { connector_id, .. }
+            | Self::Begin { connector_id, .. }
             | Self::Complete { connector_id, .. }
             | Self::Unavailable { connector_id, .. }
             | Self::Disconnect { connector_id, .. } => connector_id,
@@ -78,6 +85,12 @@ struct AuthorityState {
     retired_entries: BTreeMap<ConnectorId, ConnectorEntry>,
     in_flight: BTreeMap<InvocationKey, usize>,
     credential_cleanup_pending: BTreeSet<ConnectorId>,
+}
+
+#[derive(Clone, Copy)]
+enum InvocationKind {
+    Runtime,
+    Authorization,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -314,7 +327,9 @@ impl ConnectorAuthority {
             AuthorityEvent::Complete { connector_id, .. } => {
                 state.credential_cleanup_pending.remove(connector_id);
             }
-            AuthorityEvent::Begin { .. } | AuthorityEvent::Unavailable { .. } => {}
+            AuthorityEvent::Begin { .. }
+            | AuthorityEvent::Unavailable { .. }
+            | AuthorityEvent::Enablement { .. } => {}
         }
         state.snapshot = next_snapshot;
         drop(state);
@@ -401,10 +416,7 @@ impl ConnectorAuthority {
         };
         entry.definition().digest() == *definition_digest
             && entry.connection().generation() == connection_generation
-            && matches!(
-                entry.connection().state(),
-                ConnectorConnectionState::Connected(_)
-            )
+            && entry.is_ready()
     }
 
     /// Runs an invocation under an exact connection-generation lease.
@@ -419,8 +431,31 @@ impl ConnectorAuthority {
         definition_digest: &ConnectorDefinitionDigest,
         operation: impl FnOnce() -> T,
     ) -> Option<T> {
-        let lease =
-            self.acquire_invocation(connector_id, connection_generation, definition_digest)?;
+        let lease = self.acquire_invocation(
+            connector_id,
+            connection_generation,
+            definition_digest,
+            InvocationKind::Runtime,
+        )?;
+        let result = operation();
+        drop(lease);
+        Some(result)
+    }
+
+    /// Authentication providers may refresh or revoke a retained account while runtime use is paused.
+    pub(crate) fn with_account_invocation<T>(
+        &self,
+        connector_id: &ConnectorId,
+        connection_generation: crate::ConnectorConnectionGeneration,
+        definition_digest: &ConnectorDefinitionDigest,
+        operation: impl FnOnce() -> T,
+    ) -> Option<T> {
+        let lease = self.acquire_invocation(
+            connector_id,
+            connection_generation,
+            definition_digest,
+            InvocationKind::Authorization,
+        )?;
         let result = operation();
         drop(lease);
         Some(result)
@@ -431,6 +466,7 @@ impl ConnectorAuthority {
         connector_id: &ConnectorId,
         connection_generation: crate::ConnectorConnectionGeneration,
         definition_digest: &ConnectorDefinitionDigest,
+        kind: InvocationKind,
     ) -> Option<ConnectorInvocationLease> {
         let mut state = self
             .inner
@@ -444,6 +480,7 @@ impl ConnectorAuthority {
                 entry.connection().state(),
                 ConnectorConnectionState::Connected(_)
             )
+            || (matches!(kind, InvocationKind::Runtime) && !entry.connection().enabled())
         {
             return None;
         }
@@ -524,7 +561,14 @@ fn revoked_invocations(
     next: &ConnectorSnapshot,
 ) -> Vec<InvocationKey> {
     previous
-        .ready_entries()
+        .entries()
+        .iter()
+        .filter(|entry| {
+            matches!(
+                entry.connection().state(),
+                ConnectorConnectionState::Connected(_)
+            )
+        })
         .filter(|entry| {
             next.entry(entry.definition().id())
                 .is_none_or(|next_entry| {
@@ -564,7 +608,8 @@ fn connection_for_definition(
         | ConnectorConnectionState::Connecting
         | ConnectorConnectionState::Unavailable { .. } => ConnectorConnectionState::Disconnected,
     };
-    ConnectorConnection::restore(generation, state).map_err(domain_error)
+    ConnectorConnection::restore(generation, state, entry.connection().enabled())
+        .map_err(domain_error)
 }
 
 /// Blocking subscription to committed Connector authority generations.
@@ -596,6 +641,27 @@ pub(super) fn event_for_request(
         )
     })?;
     Ok(match &request.command {
+        ConnectorAuthorityCommand::SetEnabled { enabled } => {
+            let ConnectorConnectionState::Connected(account) = entry.connection().state() else {
+                return Err(ConnectorAuthorityError::new(
+                    ConnectorAuthorityErrorKind::InvalidCommand,
+                    "Connector enablement requires an authorized account",
+                ));
+            };
+            let generation = entry
+                .connection()
+                .generation()
+                .get()
+                .checked_add(1)
+                .ok_or_else(|| persistence_error("Connector connection generation exhausted"))?;
+            AuthorityEvent::Enablement {
+                connector_id: request.connector_id.clone(),
+                account: account
+                    .with_generation(crate::ConnectorConnectionGeneration::new(generation)),
+                definition_digest: entry.definition().digest(),
+                enabled: *enabled,
+            }
+        }
         ConnectorAuthorityCommand::BeginConnect { generation } => AuthorityEvent::Begin {
             connector_id: request.connector_id.clone(),
             generation: *generation,
@@ -626,6 +692,12 @@ pub(super) fn apply_event(
     event: &AuthorityEvent,
 ) -> Result<ConnectorSnapshot, ConnectorAuthorityError> {
     let update = match event {
+        AuthorityEvent::Enablement {
+            account, enabled, ..
+        } => ConnectorConnectionUpdate::Enablement {
+            generation: account.connection_generation(),
+            enabled: *enabled,
+        },
         AuthorityEvent::Begin { generation, .. } => ConnectorConnectionUpdate::Begin {
             generation: *generation,
         },

@@ -29,6 +29,7 @@ CONFIGURATION = (
     "tsfmt.json",
     ".prettierrc.toml",
     ".prettierignore",
+    ".gitignore",
     ".editorconfig",
     "pyproject.toml",
     "ruff.toml",
@@ -264,8 +265,12 @@ def scoped_commands(
         in {".json", ".jsonc", ".yml", ".yaml", ".md", ".css", ".html"}
     ]
     if ("typescript" in enabled and frontend) or ("config" in enabled and config):
-        # The pinned package uses this executable name on every supported host.
-        bun = str(REPOSITORY_ROOT / "node_modules/bun/bin/bun.exe")
+        # Invoke pnpm's native runtime directly, without a package-manager shim.
+        bun = str(
+            REPOSITORY_ROOT
+            / "node_modules/bun"
+            / ("bun.exe" if os.name == "nt" else "bun")
+        )
         if "typescript" in enabled and frontend:
             configured.append(
                 Command(
@@ -286,13 +291,12 @@ def scoped_commands(
                         "Configuration/documentation",
                         (
                             bun,
-                            str(
-                                REPOSITORY_ROOT
-                                / "node_modules/prettier/bin/prettier.cjs"
-                            ),
+                            "fmt",
                             mode,
                             "--config",
                             str(root / ".prettierrc.toml"),
+                            "--ignore-path",
+                            str(root / ".gitignore"),
                             "--ignore-path",
                             str(root / ".prettierignore"),
                             "--",

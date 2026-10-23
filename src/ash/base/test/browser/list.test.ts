@@ -321,6 +321,30 @@ test("List splice preserves focus and selection when rows move", () => {
 	dom.window.close();
 });
 
+test("List clears logical focus without discarding selection or leaving an active descendant", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const list = new List<string>(dom.window.document.body, {
+		renderItem: item => {
+			const label = h(dom.window.document, "span");
+			label.textContent = item;
+			return label;
+		},
+	});
+	list.items = ["First", "Second"];
+	list.setActiveIndex(1);
+	list.setSelection([1]);
+	const changes: number[] = [];
+	list.onDidChangeActive(event => changes.push(event.index));
+	list.setActiveIndex(-1);
+	assert.equal(list.activeItem, undefined);
+	assert.deepEqual(list.selection, ["Second"]);
+	assert.equal(list.element.hasAttribute('aria-activedescendant'), false);
+	assert.equal(list.element.querySelector('.focused'), null);
+	assert.deepEqual(changes, [-1]);
+	list.dispose();
+	dom.window.close();
+});
+
 test("ListView owns the managed scrollbar and reports its scroll position", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const view = new ListView<string>(dom.window.document.body, {
@@ -382,6 +406,37 @@ test("ListView renders only the managed viewport while preserving logical positi
 	assert.equal(view.indexAt(1_100), 50);
 	view.dispose();
 	dom.window.close();
+});
+
+test('List switches between virtual and content-sized rows without retaining pooled geometry', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		let fixedHeight = true;
+		const height = () => 22;
+		using list = new List<string>(dom.window.document.body, {
+			scrolling: 'managed',
+			get getHeight() { return fixedHeight ? height : undefined; },
+			renderItem: item => h(dom.window.document, 'span', undefined, item),
+		});
+		const viewport = list.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+		Object.defineProperties(viewport, {
+			clientWidth: { value: 100 }, clientHeight: { value: 44 }, scrollHeight: { value: 44 },
+		});
+		list.items = ['First', 'Second'];
+		list.layout(44);
+		assert.equal((list.element.children[1] as HTMLElement).style.top, '22px');
+		fixedHeight = false;
+		list.items = ['First with detail', 'Second with detail'];
+		for (const row of list.element.children) {
+			assert.equal((row as HTMLElement).style.position, '');
+			assert.equal((row as HTMLElement).style.top, '');
+			assert.equal((row as HTMLElement).style.height, '');
+		}
+		fixedHeight = true;
+		list.items = ['First', 'Second'];
+		assert.equal((list.element.children[1] as HTMLElement).style.top, '22px');
+		assert.equal((list.element.children[1] as HTMLElement).style.height, '22px');
+	} finally { dom.window.close(); }
 });
 
 test("ListView leaves attached rows untouched during scrolling but refreshes changed and returning rows", () => {

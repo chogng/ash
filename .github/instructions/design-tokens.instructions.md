@@ -5,7 +5,9 @@ applyTo: src/ash/**/*.css
 
 # Design tokens for sizing, spacing & radii
 
-> **These tokens are the *moves*, not the reasoning.** They implement the **design philosophy** (Values → Principles → Moves): reach for a token *after* naming the feeling and the principle it serves - a radius is an *elevation tier*, a font is a *type role*, not a number. See the [`design-philosophy` skill](../skills/design-philosophy/SKILL.md) for the full vocabulary, worked examples, and how to give UI feedback in design terms.
+Token registration and CSS variable naming are shared infrastructure. The role assignments and default values below describe the IDE Workbench; Agent Window assignments and overrides belong to [Sessions style](../../src/ash/sessions/STYLE.md). Keep window-specific values in the owning window's scope instead of changing shared defaults.
+
+> **These tokens are the *moves*, not the reasoning.** They implement the **design philosophy** (Values → Principles → Moves): reach for a token *after* naming the feeling and the principle it serves - the owning surface determines a radius or typography role. See the [`design-philosophy` skill](../skills/design-philosophy/SKILL.md) for the full vocabulary, worked examples, and how to give UI feedback in design terms.
 
 Ash ships a design-system **size** ramp. These tokens are registered in [baseSizes.ts](../../src/ash/platform/theme/common/sizes/baseSizes.ts) and emitted as `--ash-*` CSS variables. **When generating or editing CSS, use the token variable instead of a raw `px` value** wherever a token exists for that value. This keeps new UI visually consistent with the design system.
 
@@ -13,12 +15,12 @@ Ash ships a design-system **size** ramp. These tokens are registered in [baseSiz
 
 ## Rows and toolbar actions
 
-Use the semantic tokens below for row and action geometry, use `border-box` for icon action areas, reserve spacing tokens for spacing, and keep CSS and JS defaults in sync through [uiSizes.ts](../../src/ash/base/common/uiSizes.ts).
+Use the semantic tokens below for CSS row and action geometry, use `border-box` for icon action areas, and reserve spacing tokens for spacing. Each component owns its JS layout geometry: list/tree delegates supply row heights, and action hosts supply or measure action sizes. Keep those values consistent with the component's CSS, including local overrides; theme token registration is not a dependency of JS layout code.
 
 | Use | Size | CSS | JS |
 | --- | --- | --- | --- |
-| Single-line lists, trees, suggestions and dropdown options | 22px | `var(--ash-list-rowHeight)` | `listRowHeight` |
-| Standard toolbar icon actions | 22×22px | `var(--ash-toolbar-actionSize)` | `defaultToolbarActionSize` |
+| Single-line lists, trees, suggestions and dropdown options | 22px | `var(--ash-list-rowHeight)` | Component-owned row delegate |
+| Standard toolbar icon actions | 22×22px | `var(--ash-toolbar-actionSize)` | Host-supplied or measured action size |
 | Code-adjacent icon actions | 20×20px | Override `--ash-toolbar-actionSize` locally | Match the component's geometry |
 | Explicit roomy rows / actions | 24px / 24×24px | Override the corresponding token locally | Match the component's geometry |
 
@@ -60,9 +62,10 @@ Use for `padding`, `margin`, `gap`, and fixed `width`/`height` of spacers. The n
 | 6  | `--ash-cornerRadius-medium` | base / inner surfaces |
 | 8  | `--ash-cornerRadius-large` | prominent / outer surfaces |
 | 12 | `--ash-cornerRadius-xLarge` | very prominent surfaces |
+| 16 | `--ash-cornerRadius-xxLarge` | extra-large surfaces |
 | 9999 | `--ash-cornerRadius-circle` | fully rounded (pills, dots) |
 
-**Snap map** for off-scale literals (ties round **up**): `2→xSmall`, `3,4→small`, `5,6→medium`, `7,8→large`, `10,11,12→xLarge`, `14,16,18,20→xLarge`, `999→circle`.
+**Snap map** for off-scale literals (ties round **up**): `2→xSmall`, `3,4→small`, `5,6→medium`, `7,8→large`, `10,11,12→xLarge`, `14,16,18,20→xxLarge`, `999→circle`.
 
 - **Pills** (radius ≈ half the element height, e.g. `28h`/`14r`, `36h`/`18r`, `22×22`/`11r`) → `--ash-cornerRadius-circle`, **not** xLarge. The literal-nearest token would square them and lose the fully-rounded intent.
 - **Leave untouched:** `50%`, `0`, `0px`, `inherit`, and any `calc()`/`var()` expression. Preserve `!important`.

@@ -28,6 +28,18 @@
 `LspManagerEnablement::Disabled` 会保留最新文档快照但不启动 server。调用方必须显式提供
 `Enabled` 和非歧义 resolver/provider 结果，manager 才会把 resolved command 委托给 `ash-lsp` 启动。
 
+`LanguageServerControl::Suspend` 只释放没有匹配打开文档、没有在途请求的 Ready server；
+进程退出完成后才发布 `LanguageServerState::Idle`。它保留 definition，区别于显式用户 Stop，
+后者不会因语言请求自动恢复。Desktop 的本地用户设置 `languageServers.autoSuspend` 和
+`languageServers.idleTimeoutMinutes` 决定何时请求回收：默认关闭自动回收，让已启动的服务
+保留进程内分析结果。显式启用后，最后一个匹配编辑器关闭再等待 10 分钟；打开文件、
+语言请求和服务器 progress 会延后回收。已有显式设置不被默认值变更覆盖。关闭的缓存 TextModel 不算
+打开的编辑器。再次打开文件或执行语言功能时恢复 server；基础 Tree-sitter 语法服务不参与启停。
+恢复会重新建立进程内分析缓存，因此基础高亮、滚动和折叠不应触发 LSP 唤醒。
+Rust 默认关闭全项目缓存预热，以按需分析降低启动内存；其缓存容量按条目计数，线程数控制
+并发，均不是总内存字节上限。Cargo 磁盘产物不能恢复 RA 分析数据库，当前也没有磁盘检查点
+或对应的容量／过期清理设置。策略依据及用户设置见 [Rust 语言支持](../../extensions/rust/README.md#analysis-cache-and-memory)。
+
 manager 的事件流已经把两种语义分开：`LspManagerEvent::Notification` 只承载 server 状态、diagnostics、
 message、progress 和 capability 变化；`LspManagerEvent::RequestResult` 只承载带 request identity 的
 语言查询结果或失败。新代码统一使用 `Lsp*` API；`LanguageService*` 类型和旧的扁平事件 sink 只保留为

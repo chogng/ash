@@ -7,6 +7,7 @@ import type { IPaneComposite } from '../../../common/panecomposite.js';
 import { IViewDescriptorService, type IView, type IViewContainerDescriptor, type IViewDescriptor, type ViewContainerLocation } from '../../../common/views.js';
 import { IPaneCompositePartService } from '../../panecomposite/browser/panecomposite.js';
 import { IViewsService } from '../common/viewsService.js';
+import type { IProgressIndicator } from '../../../../platform/progress/common/progress.js';
 
 /** Descriptors own view identity, Parts own instances, and this service observes their runtime visibility and focus. */
 export class ViewsService extends Disposable implements IViewsService {
@@ -141,6 +142,10 @@ export class ViewsService extends Disposable implements IViewsService {
 	public getViewWithId<T extends IView>(id: string): T | null {
 		const container = this.descriptors.getViewContainerForView(id);
 		return (container && this.containers.get(container.id)?.getView(id)) as T | undefined ?? null;
+	}
+
+	public getViewProgressIndicator(id: string): IProgressIndicator | undefined {
+		return this.getViewWithId(id)?.getProgressIndicator();
 	}
 
 	private observeContainer(composite: IPaneComposite): void {

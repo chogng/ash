@@ -209,6 +209,86 @@ fn input_keeps_its_bottom_rule() {
                     self.assertNotIn("--lib", command)
                     self.assertNotIn("--test", command)
 
+    def test_verify_process_tests_keep_settings_and_only_change_the_test_runner(self):
+        options = [
+            "--process-tests",
+            "--test",
+            "managed_initialize",
+            "--test",
+            "managed_lifecycle",
+            "--filter",
+            "request_",
+            "--features",
+            "one,two",
+            "--profile",
+            "dev-small",
+        ]
+        self.assertEqual(self.execute(["verify", "example", *options]), 0)
+        settings = ["--profile", "dev-small", "--features", "one,two"]
+        self.assertEqual(
+            self.commands,
+            [
+                ["just", "check", "example", *settings],
+                [
+                    "just",
+                    "test-processes",
+                    "example",
+                    *settings,
+                    "--test",
+                    "managed_initialize",
+                    "--test",
+                    "managed_lifecycle",
+                    "request_",
+                ],
+                ["just", "rust-warnings", "example", *settings],
+            ],
+        )
+        self.commands.clear()
+        self.assertEqual(self.execute(["verify", "example", *options, "--plan"]), 0)
+        self.assertEqual(self.commands, [])
+        self.assertIn("just test-processes", self.output.getvalue())
+
+    def test_verify_process_tests_require_explicit_integration_targets(self):
+        for options in ([], ["--lib"]):
+            with self.subTest(options=options):
+                self.assertEqual(
+                    self.execute(["verify", "example", "--process-tests", *options]),
+                    1,
+                )
+                self.assertEqual(self.commands, [])
+        self.assertIn("requires explicit --test targets", self.errors.getvalue())
+
+    def test_verify_process_tests_preserve_failure_and_reject_zero_passes(self):
+        for exit_code, expected in [(23, 23), (0, 1)]:
+            with self.subTest(exit_code=exit_code):
+                self.commands.clear()
+
+                def external(command, kwargs):
+                    return subprocess.CompletedProcess(
+                        command,
+                        exit_code if command[1] == "test-processes" else 0,
+                        "test result: ok. 0 passed;\n",
+                        "",
+                    )
+
+                self.assertEqual(
+                    self.execute(
+                        [
+                            "verify",
+                            "example",
+                            "--process-tests",
+                            "--test",
+                            "managed_lifecycle",
+                        ],
+                        external,
+                    ),
+                    expected,
+                )
+                self.assertEqual(
+                    [command[1] for command in self.commands],
+                    ["check", "test-processes"],
+                )
+
     def test_test_output_is_utf8_even_with_a_legacy_host_encoding(self):
         diagnostic = "路径失败: café ✓\n"
         payload = diagnostic + "test result: ok. 1 passed; 0 failed;\n"

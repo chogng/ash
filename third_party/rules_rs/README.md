@@ -25,7 +25,7 @@ compatibility patches:
 
 GNU Cargo needs `libunwind.dll` beside its executable. Instead of patching the
 split `rules_rs` Cargo repository, `MODULE.bazel` uses upstream
-`rust_toolchain_tools_repository` to assemble the complete Rust 1.98.0 tools
+`rust_toolchain_tools_repository` to assemble the complete pinned Rust tools
 layout for each Windows CPU. Bazel's `override_repo` substitutes those repositories
 for the generated Cargo repositories, including the Cargo used by `cargo metadata`.
 The existing default GNU compiler registrations remain owned by `rules_rs`.

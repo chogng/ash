@@ -12,6 +12,7 @@ import type { Timeline, TimelineProvider, TimelineChangeEvent } from '../../comm
 import { TimelineService } from '../../common/timelineService.js';
 
 const views: IViewsService = {
+	getViewProgressIndicator: () => undefined,
 	onDidChangeViewContainerVisibility: Event.None, onDidChangeViewVisibility: Event.None, onDidChangeFocusedView: Event.None,
 	isViewContainerVisible: () => false, isViewContainerActive: () => false, openViewContainer: async () => null, closeViewContainer: () => { },
 	getVisibleViewContainer: () => null, getActiveViewPaneContainerWithId: () => null, getFocusedView: () => null, getFocusedViewName: () => '',

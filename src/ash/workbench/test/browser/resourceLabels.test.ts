@@ -74,9 +74,9 @@ test('ResourceLabels formats files and reacts to icon and decoration changes', (
 
 	decorationData = { letter: Lxicon.add, tooltip: 'Added' };
 	decorationUpdates.fire([resource]);
-	assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon svg')?.getAttribute('data-ash-icon-id'), 'add');
+	assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon .ash-icon')?.getAttribute('data-ash-icon-id'), 'add');
 	label.setFile(resource, { fileDecorations: { colors: true, badges: false } });
-	assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon svg'), null);
+	assert.equal(label.element.querySelector('.ash-icon-label-suffix-icon .ash-icon'), null);
 	assert.equal(label.element.getAttribute('aria-label'), 'main.ts, Added');
 
 
@@ -129,9 +129,9 @@ test('a label group updates icon visibility and releases all of its labels', () 
 		const first = labels.create(dom.window.document.body);
 		const coloredIcon = { ...Lxicon.home, color: { id: 'editor.foreground' } };
 		first.setLabel('Custom', undefined, { icon: coloredIcon });
-		assert.equal(first.element.querySelector<SVGElement>('svg')?.style.color, 'var(--ash-editor-foreground)');
+		assert.equal(first.element.querySelector<HTMLElement>('.ash-icon')?.style.color, 'var(--ash-editor-foreground)');
 		labels.setIconVisibility(false);
-		assert.equal(first.element.querySelector('svg'), null);
+		assert.equal(first.element.querySelector('.ash-icon'), null);
 		first.setFile(URI.file('/first.ts'));
 		const second = labels.create(dom.window.document.body);
 		second.setFile(URI.file('/second.ts'));

@@ -124,24 +124,18 @@ pub fn install_executable(
     let executable = staging.join("bin").join(&name);
     let mut output =
         std::fs::File::create(&executable).map_err(|_| CapabilityInstallError::Unavailable)?;
-    // Bound decompression independently from download size. ZIP must contain exactly the
-    // expected executable: directories, links, traversal and unrelated files are rejected.
+    // Bound decompression independently from download size. Select only the exact executable
+    // name from ZIP archives: upstream releases may also include debug symbols. No archive
+    // entry is extracted as a path, and the selected entry must be a regular file.
     let mut reader: Box<dyn Read + '_> = match release.format {
         ExecutableArchive::Gzip => Box::new(flate2::read::GzDecoder::new(response.body())),
         ExecutableArchive::Zip => {
             let mut zip = zip::ZipArchive::new(std::io::Cursor::new(response.body()))
                 .map_err(|_| CapabilityInstallError::Invalid)?;
-            if zip.len() != 1 {
-                return Err(CapabilityInstallError::Invalid);
-            }
             let mut entry = zip
-                .by_index(0)
+                .by_name(&name)
                 .map_err(|_| CapabilityInstallError::Invalid)?;
-            if entry.name().map_err(|_| CapabilityInstallError::Invalid)? != name
-                || entry.is_dir()
-                || entry.is_symlink()
-                || entry.size() > MAX_ARCHIVE_BYTES
-            {
+            if entry.is_dir() || entry.is_symlink() || entry.size() > MAX_ARCHIVE_BYTES {
                 return Err(CapabilityInstallError::Invalid);
             }
             let mut bytes = Vec::new();

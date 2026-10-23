@@ -253,6 +253,7 @@ fn remote_runtime_preserves_a_terminal_between_real_connections() {
     let first_pid = first_session.process_id().unwrap();
     let created = first_client
         .terminal_create(TerminalCreateParams {
+            lifetime_token: None,
             auto_replies: None,
             dir_id: None,
             rows: 24,
@@ -277,6 +278,7 @@ fn remote_runtime_preserves_a_terminal_between_real_connections() {
     let second_pid = second_session.process_id().unwrap();
     let attached = second_client
         .terminal_attach(TerminalAttachParams {
+            lifetime_token: None,
             dir_id: None,
             terminal_id: created.terminal_id.clone(),
             reconnect_token: first_lease.reconnect_token.clone(),

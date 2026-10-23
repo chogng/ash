@@ -12,12 +12,16 @@ pub fn primary_action(repository: &Repository) -> &'static str {
         })
     {
         "commit"
-    } else if repository
+    } else if let Some(upstream) = repository
         .status
         .as_ref()
-        .is_some_and(|status| status.head.upstream().is_some())
+        .and_then(|status| status.head.upstream())
     {
-        "sync"
+        if upstream.ahead > 0 || upstream.behind > 0 {
+            "sync"
+        } else {
+            "commit"
+        }
     } else {
         "publish"
     }
@@ -323,6 +327,42 @@ pub fn snapshot(
         },
         &[],
     );
+    let can_accept = primary != "commit"
+        || !changes.iter().any(|change| change.conflicted)
+            && (staged || smart && !changes.is_empty());
+    let command = |id: &str, title: String| json!({"id":id,"title":title,"arguments":[repository.descriptor.id]});
+    let secondary_commands = if primary == "commit" {
+        vec![
+            vec![
+                command("git.commitStaged", api.text("git.menu.commitStaged", &[])),
+                command("git.commitAll", api.text("git.menu.commitAll", &[])),
+            ],
+            vec![
+                command("git.commitAmend", api.text("git.menu.amend", &[])),
+                command(
+                    "git.commitSigned",
+                    api.text("git.commitSignedCommand.label", &[]),
+                ),
+            ],
+        ]
+    } else {
+        Vec::new()
+    };
+    let primary_command = command(
+        match primary {
+            "sync" => "git.sync",
+            "publish" => "git.publish",
+            _ => "git.commit",
+        },
+        format!(
+            "$({}) {label}",
+            match primary {
+                "sync" => "sync",
+                "publish" => "cloud",
+                _ => "check",
+            }
+        ),
+    );
     let count = match configuration.text("countBadge", "all") {
         "off" => 0,
         "tracked" => changes
@@ -355,7 +395,8 @@ pub fn snapshot(
         json!({"id":repository.descriptor.id,"providerId":"git","label":repository.descriptor.label,"rootUri":repository.root_uri,
         "count":count,"selected":selected,"selectionRevision":selection_revision,"groups":groups,
         "input":{"visible":configuration.boolean("showCommitInput",true),"buttonVisible":configuration.value("showActionButton").get(primary).and_then(Value::as_bool).unwrap_or(true),"value":repository.draft,
-            "validationMessage":input_validation,"placeholder":api.text("git.commitMessageOnBranch",&[if cfg!(target_os="macos") {"Cmd+Enter"} else {"Ctrl+Enter"},branch.unwrap_or("HEAD")]),"enabled":true,"canAccept":primary!="commit" || !changes.iter().any(|change|change.conflicted) && (staged || smart && !changes.is_empty()),"buttonLabel":label,"buttonTooltip":label},
+            "validationMessage":input_validation,"placeholder":api.text("git.commitMessageOnBranch",&[if cfg!(target_os="macos") {"Cmd+Enter"} else {"Ctrl+Enter"},branch.unwrap_or("HEAD")]),"enabled":true,"canAccept":can_accept,"buttonLabel":label,"buttonTooltip":label},
+        "actionButton":{"command":primary_command,"secondaryCommands":secondary_commands,"enabled":can_accept && !repository.is_busy()},
         "activeRepositoryName":branch,"statusMessage":status_message,"isBusy":repository.is_busy(),"statusBarCommands":statusbar,
         "timeline":{"label":api.text("git.timelineHistory",&[]),"resetKey":format!("{}:{}:{}",configuration.text("timeline.date","committed"),configuration.boolean("timeline.showAuthor",true),configuration.boolean("timeline.showUncommitted",false))},
         "hasHistory":true,"hasHistoryItemRefs":true,"hasHistoryMergeBase":true,"historyRef":history_ref,"historyRemoteRef":remote_ref,

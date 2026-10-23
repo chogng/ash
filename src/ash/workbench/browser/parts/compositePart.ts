@@ -1,13 +1,20 @@
+import './media/compositepart.css';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
-import { Emitter } from "../../../base/common/event.js";
-import { DisposableMap, MutableDisposable } from "../../../base/common/lifecycle.js";
+import { Emitter, Event } from "../../../base/common/event.js";
+import { DisposableMap, MutableDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { Part } from "../part.js";
 import type { IComposite } from '../../common/composite.js';
 import type { Composite } from '../composite.js';
 import { WorkbenchToolBar } from '../../../platform/actions/browser/toolbar.js';
 import { addDisposableListener, Dimension, type IDimension } from '../../../base/browser/dom.js';
 import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js';
+import { ProgressBar } from '../../../base/browser/ui/progressbar/progressbar.js';
+import { defaultProgressBarStyles } from '../../../platform/theme/browser/defaultStyles.js';
+import type { IProgressIndicator } from '../../../platform/progress/common/progress.js';
+import { ScopedProgressIndicator } from '../../services/progress/browser/progressIndicator.js';
+import { h } from '../../../base/browser/dom.js';
+import type { IDisposable } from '../../../base/common/lifecycle.js';
 
 /**
  * Workbench Part that retains and activates one PaneComposite at a time.
@@ -17,6 +24,7 @@ import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js'
  */
 export abstract class CompositePart<T extends Composite> extends Part {
 	private readonly composites = this._register(new DisposableMap<string, T>());
+	private readonly progressIndicators = this._register(new DisposableMap<string, IDisposable & { readonly indicator: IProgressIndicator; }>());
 	private activeComposite: T | undefined;
 	private readonly titleAreaListener = this._register(new MutableDisposable());
 	private readonly constraintsListener = this._register(new MutableDisposable());
@@ -54,6 +62,31 @@ export abstract class CompositePart<T extends Composite> extends Part {
 
 	getComposite(compositeId: string): T | undefined {
 		return this.composites.get(compositeId);
+	}
+
+	public getProgressIndicator(id: string): IProgressIndicator | undefined {
+		const composite = this.composites.get(id);
+		if (!composite) return undefined;
+		const existing = this.progressIndicators.get(id);
+		if (existing) return existing.indicator;
+		const host = h(this.domNode.ownerDocument, 'div');
+		host.className = 'ash-composite-progress';
+		this.titleDomNode.after(host);
+		const bar = new ProgressBar(host, defaultProgressBarStyles);
+		bar.element.classList.add('thin');
+		bar.element.setAttribute('aria-label', composite.getTitle() ?? id);
+		const part = this;
+		const indicator = new ScopedProgressIndicator(bar, {
+			get isActive() { return part.activeComposite === composite && composite.isVisible(); },
+			onDidChangeActive: Event.any(
+				Event.map(this.onDidCompositeOpen, () => undefined),
+				Event.map(this.onDidCompositeClose, () => undefined),
+			),
+		});
+		this.progressIndicators.set(id, Object.assign(toDisposable(() => {
+			indicator.dispose(); bar.dispose(); host.remove();
+		}), { indicator }));
+		return indicator;
 	}
 
 	protected createCompositeToolBar(container: HTMLElement, contextMenus: IContextMenuProvider, ariaLabel: string): void {
@@ -114,6 +147,7 @@ export abstract class CompositePart<T extends Composite> extends Part {
 			composite.setVisible(false);
 			if (visible) { this.compositeClosed.fire(composite); }
 		}
+		this.progressIndicators.deleteAndDispose(compositeId);
 		return this.composites.deleteAndDispose(compositeId);
 	}
 

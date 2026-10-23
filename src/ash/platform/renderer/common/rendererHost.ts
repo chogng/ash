@@ -13,7 +13,7 @@ import type { IGitHubService } from '../../github/common/githubService.js';
 import type { ILocalGitService } from '../../git/common/localGitService.js';
 import type { IBackupService } from '../../backup/common/backup.js';
 import type { INetworkDiagnosticsService } from '../../networkDiagnostics/common/networkDiagnosticsService.js';
-import type { IChannelService } from "../../collaboration/common/channelService.js";
+import type { IChannelService } from "../../collab/common/channelService.js";
 import type { ICallService } from '../../call/common/callService.js';
 import type { IVoiceCodeTranscriptionBackendService } from './dictation.js';
 import type { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../localTranscription/common/localTranscription.js';
@@ -33,7 +33,7 @@ import type { IAgentModelsService } from "../../agentHost/common/agentModels.js"
 import type { IAppServerSkillApi, IAppServerHookApi } from "../../agentHost/common/appServerApi.js";
 import type { ILanguageServerService } from "../../language/common/languageServerService.js";
 import type { ITerminalProcessService } from "../../terminal/common/terminal.js";
-import type { IDocumentCollaborationApi } from "../../collaboration/common/documentCollaborationApi.js";
+import type { IDocumentCollaborationApi } from "../../collab/common/documentCollaborationApi.js";
 import type { ICodebaseApi } from "../../codebase/common/codebaseApi.js";
 import type { IConnectorApi } from "../../connectors/common/connectorApi.js";
 import type { IToolSearchApi } from "../../toolSearch/common/toolSearchApi.js";

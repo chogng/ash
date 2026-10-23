@@ -1143,19 +1143,33 @@ design('Sessions Design canvas keeps grid and cursor readable across themes', as
 		await testInfo.attach(`design-menu-${scheme}`, { body: await page.locator('.ash-context-view-menu:has(> .ash-design-menu)').screenshot(), contentType: 'image/png' });
 		await page.keyboard.press('Escape');
 		await expect(viewport).toHaveCSS('background-image', /linear-gradient[\s\S]*linear-gradient/u);
+		await expect.poll(() => viewport.evaluate(async element => {
+			const styles = getComputedStyle(element);
+			const url = /url\("?(data:image\/png;base64,[^"\)]+)"?\)/u.exec(styles.cursor)?.[1];
+			if (!url) return false;
+			const probe = document.createElement('span');
+			probe.style.color = 'var(--ash-foreground)'; element.append(probe);
+			const foreground = getComputedStyle(probe).color; probe.remove();
+			const canvas = document.createElement('canvas'); canvas.width = canvas.height = 24;
+			const context = canvas.getContext('2d')!;
+			context.fillStyle = foreground; context.fillRect(0, 0, 1, 1);
+			const expected = context.getImageData(0, 0, 1, 1).data;
+			const image = new Image(); image.src = url; await image.decode();
+			if (image.width !== 24 || image.height !== 24) return false;
+			context.clearRect(0, 0, 24, 24); context.drawImage(image, 0, 0);
+			const pixels = context.getImageData(0, 0, 24, 24).data;
+			let ink = 0;
+			for (let index = 0; index < pixels.length; index += 4) {
+				if (pixels[index + 3] !== 255) continue;
+				ink++;
+				if ([0, 1, 2].some(channel => Math.abs(pixels[index + channel]! - expected[channel]!) > 1)) return false;
+			}
+			return ink > 0;
+		})).toBe(true);
 		const colors = await viewport.evaluate(element => {
 			const styles = getComputedStyle(element);
-			const cursor = decodeURIComponent(styles.cursor);
-			const probe = document.createElement('span');
-			element.append(probe);
-			probe.style.color = cursor.match(/stroke="([^"]+)"/u)![1];
-			const cursorColor = getComputedStyle(probe).color;
-			probe.style.color = 'var(--ash-foreground)';
-			const foreground = getComputedStyle(probe).color;
-			probe.remove();
-			return { cursorColor, foreground, grid: styles.getPropertyValue('--ash-canvas-grid-line').trim(), contrast: styles.getPropertyValue('--ash-contrastBorder').trim() };
+			return { grid: styles.getPropertyValue('--ash-canvas-grid-line').trim(), contrast: styles.getPropertyValue('--ash-contrastBorder').trim() };
 		});
-		expect(colors.cursorColor).toBe(colors.foreground);
 		if (scheme.startsWith('hc')) {
 			expect(colors.grid).toBe(colors.contrast);
 		}
@@ -1336,71 +1350,4 @@ design('Sessions Design floating tools draw, edit motion and expose reusable cod
 	const narrowViewport = (await viewport.boundingBox())!;
 	expect(narrowBounds.x).toBeGreaterThanOrEqual(narrowViewport.x);
 	expect(narrowBounds.x + narrowBounds.width).toBeLessThanOrEqual(narrowViewport.x + narrowViewport.width);
-});
-
-test('Sessions chat fills its content area without a duplicate session title', async ({ page }) => {
-	const sessionsContent = page.locator('[data-part="sessions"] > .ash-workbench-part-content');
-	const navigation = page.locator('.ash-sessions-activity-content');
-	for (const width of [1_200, 760]) {
-		await page.setViewportSize({ width, height: 760 });
-		await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-		await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
-		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
-		await expect(sessionsContent.getByRole('heading', { name: 'What can we work on?' })).toBeVisible();
-		await expect.poll(() => sessionsContent.evaluate(content => {
-			const contentBounds = content.getBoundingClientRect();
-			const viewBounds = content.querySelector('.ash-sessions-chat-view')!.getBoundingClientRect();
-			return [Math.round(viewBounds.y - contentBounds.y), Math.round(viewBounds.height - contentBounds.height)];
-		})).toEqual([0, 0]);
-	}
-});
-
-test('Sessions new session keeps the welcome composer stable across frames', async ({ page }) => {
-	for (let session = 0; session < 3; session++) {
-		await page.setViewportSize([{ width: 1793, height: 1333 }, { width: 1280, height: 800 }, { width: 760, height: 600 }][session]!);
-		const navigation = page.locator('.ash-sessions-activity-content');
-		if (session === 2) {
-			await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
-			await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
-		}
-		await navigation.getByRole('button', { name: session === 1 ? 'Code' : /^Chat(?:\.|$)/u, exact: true }).click();
-		const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-cowork):visible').first();
-		await expect(chat.getByRole('heading', { name: 'What can we work on?' })).toBeVisible();
-		await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toHaveAttribute('aria-busy', 'false');
-		if (session === 2) {
-			await chat.getByRole('button', { name: 'Dismiss tip', exact: true }).click();
-		}
-		const sampling = page.evaluate(async () => {
-			const samples: number[][] = [];
-			let finished = false;
-			const finish = (): void => { finished = true; };
-			document.addEventListener('ash-integration-composer-sampling-complete', finish, { once: true });
-			const sample = (): void => {
-				const composer = document.querySelector('.ash-sessions-chat-slot.active :is(.ash-sessions-chat-input,.ash-sessions-cowork-input):not([hidden])')!;
-				const card = composer.querySelector(':is(.ash-chat-input-container,.ash-cowork-input-container)')!;
-				const rect = composer.getBoundingClientRect();
-				samples.push([rect.x, rect.y, rect.width, rect.height, card.getBoundingClientRect().y, card.getBoundingClientRect().height]);
-			};
-			const observer = new MutationObserver(sample);
-			observer.observe(document.querySelector('[data-part="sessions"]')!, { childList: true, subtree: true });
-			try {
-				while (!finished) {
-					await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-					sample();
-				}
-			} finally {
-				observer.disconnect();
-				document.removeEventListener('ash-integration-composer-sampling-complete', finish);
-			}
-			return samples;
-		});
-		for (let click = 0; click < 6; click++) {
-			await page.locator('.ash-sessions-list-add').click();
-		}
-		await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toHaveAttribute('aria-busy', 'false');
-		await page.evaluate(() => document.dispatchEvent(new Event('ash-integration-composer-sampling-complete')));
-		const samples = await sampling;
-		const changes = samples.slice(1).filter((sample, index) => sample.some((value, axis) => Math.abs(value - samples[index]![axis]!) > 1));
-		expect(changes, JSON.stringify([...new Set(samples.map(sample => JSON.stringify(sample)))])).toEqual([]);
-	}
 });

@@ -10,7 +10,7 @@
 
 /* One composer is retained while navigation changes the surrounding Parts. */
 .ash-chat > .ash-chat-input-part.ash-sessions-chat-input.chat-composer {
-	--ash-chat-input-min-height: 112px;
+	--ash-chat-input-min-height: 0px;
 	--ash-chat-input-padding: var(--ash-spacing-size160);
 	--ash-chat-input-border: var(--ash-border);
 	--ash-chat-input-focus-border: var(--ash-border);
@@ -40,15 +40,14 @@
 	text-align: center;
 }
 
-.chat-composer .ash-sessions-chat-input-footer > button {
-	border: 0;
-	border-radius: var(--ash-cornerRadius-small);
-	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
-	background: transparent;
+.ash-sessions-chat-tip-slot {
 	color: var(--ash-description-foreground);
-	font: inherit;
 	font-size: var(--ash-fontSize-label1);
-	cursor: pointer;
+	line-height: 1.5;
+}
+
+.ash-sessions-chat-tip-slot:empty {
+	display: none;
 }
 
 /* Shared operational elements: visibility, file-drop positioning, and keyboard focus. */
@@ -85,15 +84,6 @@
 
 .ash-sessions-chat-input-footer .ash-chat-input-context-toolbar {
 	margin-inline-start: auto;
-}
-
-.ash-sessions-chat-input-footer > button:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: 2px;
-}
-
-.ash-sessions-chat-input-footer > button:hover {
-	background: var(--ash-toolbar-hoverBackground);
 }
 
 .ash-sessions-permission-menu {

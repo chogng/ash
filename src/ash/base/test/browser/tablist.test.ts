@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { resetNlsResolver, setNlsMessages } from "../../../nls.js";
 import { toDisposable } from "../../common/lifecycle.js";
 
-const customCloseIcon = registerLxicon("tablist-test-close", () => '<svg viewBox="0 0 16 16" data-test-icon="custom-close"><path d="M2 2h12v12H2z"/></svg>');
+const customCloseIcon = registerLxicon("tablist-test-close", { fontCharacter: 'A' });
 
 test("TabList owns manual selection semantics and roving focus", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
@@ -287,7 +287,7 @@ test("TabList renders IconLabel content, custom actions, and its standard close 
 	assert.equal(closeButton.title, "Close");
 	assert.equal(closeButton.getAttribute("aria-label"), "Close first");
 	assert.equal(closeButton.closest(".ash-action-view-item")?.getAttribute("data-action-id"), TAB_CLOSE_ACTION_ID);
-	assert.equal(closeButton.querySelector("svg.ash-icon")?.getAttribute("data-test-icon"), "custom-close");
+	assert.equal(closeButton.querySelector(".ash-icon")?.getAttribute("data-ash-icon-id"), "tablist-test-close");
 
 	selected.dispatchEvent(keyboardEvent(dom.window, "Delete"));
 	closeButton.click();

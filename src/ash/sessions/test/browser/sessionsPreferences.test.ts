@@ -32,7 +32,7 @@ import { IGitHubService } from '../../../platform/github/common/githubService.js
 import { IAccountPolicyService } from '../../../workbench/services/policies/common/accountPolicyService.js';
 import { IGitHubConnectionService } from '../../../workbench/services/accounts/common/gitHubConnectionService.js';
 import { GitHubReviewModel, IGitHubReviewModel } from '../../../workbench/contrib/github/browser/githubReviewModel.js';
-import '../../contrib/library/browser/library.contribution.js';
+import '../../contrib/projects/browser/projects.contribution.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -281,7 +281,6 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		editorRevealing = false;
 		editorReveals++;
 	});
-	await configuration.updateValue('sessions.activityBar.compact', true);
 	const opened = preferences.open();
 	await Promise.race([opened, Promise.resolve()]);
 	await preferences.open({ query: 'Preferences: Open User Settings (JSON)' });
@@ -301,10 +300,11 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await aiChanged;
 	assert.equal(configuration.getValue('chat.disableAIFeatures'), true);
 	await configuration.updateValue('chat.disableAIFeatures', undefined);
+	await configuration.updateValue('chat.disableAIFeatures', true);
 	const categoryButton = (id: string): HTMLButtonElement => window.document.querySelector<HTMLButtonElement>(`[data-settings-category-id="${id}"]`)!;
 	assert.equal(categoryButton('worktree'), null, 'unsupported worktree management is not offered as an empty page');
 	assert.equal(categoryButton('archived-chats'), null);
-	for (const id of ['execution-trace', 'appearance', 'browser', 'tab', 'code-intelligence', 'environment', 'keyboard-shortcuts', 'account', 'library', 'design', 'customize', 'general']) {
+	for (const id of ['execution-trace', 'appearance', 'browser', 'tab', 'code-intelligence', 'environment', 'keyboard-shortcuts', 'account', 'projects', 'design', 'customize', 'general']) {
 		await preferences.open({ section: id });
 		assert.equal(categoryButton(id).getAttribute('aria-current'), 'page', `reopening navigates to ${id}`);
 		assert.equal(categoryButton(id).getAttribute('aria-controls'), 'ash-sessions-settings-content');
@@ -330,10 +330,10 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	categoryButton('keyboard-shortcuts').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 	assert.equal(window.document.activeElement, categoryButton('general'));
 	await preferences.open({ section: 'general' });
-	const openCopyMenu = (category = 'Appearance', copyLabel = 'Copy Setting as JSON') => {
+	const openCopyMenu = (category = 'General', copyLabel = 'Copy Setting as JSON') => {
 		const dialog = window.document.querySelector<HTMLDialogElement>('dialog')!;
 		[...dialog.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === category)!.click();
-		const more = dialog.querySelector<HTMLButtonElement>('[data-settings-item-id="sessions.activityBar.compact"] .ash-setting-item-actions-trigger')!;
+		const more = dialog.querySelector<HTMLButtonElement>('[data-settings-item-id="chat.disableAIFeatures"] .ash-setting-item-actions-trigger')!;
 		more.focus();
 		more.click();
 		const menu = dialog.querySelector<HTMLElement>('[role="menu"]')!;
@@ -350,7 +350,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const firstMenu = openCopyMenu();
 	firstMenu.copy.click();
 	await Promise.resolve();
-	assert.deepEqual(copied, ['"sessions.activityBar.compact": true']);
+	assert.deepEqual(copied, ['"chat.disableAIFeatures": true']);
 	assert.equal(firstMenu.menu.isConnected, false);
 	assert.equal(window.document.activeElement, firstMenu.more);
 	const cancelledMenu = openCopyMenu();
@@ -410,17 +410,17 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const modelSearch = window.document.querySelector<HTMLInputElement>('.ash-sessions-settings-search input[type="search"]');
 	assert.ok(modelSearch);
 	await import('../../../workbench/contrib/preferences/browser/preferencesActions.js');
-	await commands.executeCommand('workbench.action.openSettings', 'sessions.activityBar.compact');
+	await commands.executeCommand('workbench.action.openSettings', 'chat.disableAIFeatures');
 	assert.equal(window.document.querySelector('.ash-sessions-settings-search input[type="search"]'), modelSearch);
-	assert.equal(modelSearch.value, 'sessions.activityBar.compact');
+	assert.equal(modelSearch.value, 'chat.disableAIFeatures');
 	assert.equal(window.document.activeElement, modelSearch);
 	assert.equal(window.document.querySelectorAll('.ash-sessions-settings-content-tree [data-settings-item-id]').length, 1);
 	await assert.rejects(commands.executeCommand('workbench.action.openSettings', { query: 'changed', target: 4 }));
-	assert.equal(modelSearch.value, 'sessions.activityBar.compact');
+	assert.equal(modelSearch.value, 'chat.disableAIFeatures');
 	await commands.executeCommand('workbench.action.openSettings', { query: '' });
 	assert.equal(modelSearch.value, '');
 	assert.equal(window.document.activeElement, modelSearch);
-	modelSearch.value = '@id:sessions.activityBar.compact';
+	modelSearch.value = '@id:chat.disableAIFeatures';
 	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
 	const filter = window.document.querySelector<HTMLButtonElement>('.ash-sessions-settings-search .ash-settings-search-filter');
 	assert.ok(filter);
@@ -432,18 +432,18 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.ok(modified);
 	modified.click();
 	assert.equal(filterMenu.isConnected, false);
-	assert.equal(modelSearch.value, '@id:sessions.activityBar.compact @modified');
+	assert.equal(modelSearch.value, '@id:chat.disableAIFeatures @modified');
 	assert.equal(window.document.activeElement, modelSearch);
-	assert.ok(window.document.querySelector('[data-settings-item-id="sessions.activityBar.compact"]'));
+	assert.ok(window.document.querySelector('[data-settings-item-id="chat.disableAIFeatures"]'));
 	assert.equal(window.document.querySelector('.ash-models-settings-model-row'), null);
 	modelSearch.focus();
-	await configuration.updateValue('sessions.activityBar.compact', undefined);
+	await configuration.updateValue('chat.disableAIFeatures', undefined);
 	assert.deepEqual(unexpectedErrors, [], 'configuration changes must refresh Preferences without listener errors');
-	assert.equal(window.document.querySelector('[data-settings-item-id="sessions.activityBar.compact"]'), null);
+	assert.equal(window.document.querySelector('[data-settings-item-id="chat.disableAIFeatures"]'), null);
 	assert.equal(window.document.querySelector<HTMLElement>('.ash-sessions-settings-empty')?.hidden, false);
 	assert.equal(window.document.activeElement, modelSearch);
-	await configuration.updateValue('sessions.activityBar.compact', true);
-	assert.ok(window.document.querySelector('[data-settings-item-id="sessions.activityBar.compact"]'));
+	await configuration.updateValue('chat.disableAIFeatures', true);
+	assert.ok(window.document.querySelector('[data-settings-item-id="chat.disableAIFeatures"]'));
 	modelSearch.value = '';
 	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
 	assert.equal(window.document.querySelectorAll('input[type="search"]').length, 2);
@@ -493,26 +493,26 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await opened;
 	assert.equal(closingMenu.menu.isConnected, false);
 	assert.equal(window.document.querySelector('dialog'), null);
-	await configuration.updateValue('sessions.activityBar.compact', false);
+	await configuration.updateValue('chat.disableAIFeatures', false);
 	assert.equal(window.document.querySelector('dialog'), null);
-	await configuration.updateValue('sessions.activityBar.compact', true);
+	await configuration.updateValue('chat.disableAIFeatures', true);
 	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
-		const reopened = preferences.open({ query: 'sessions.activityBar.compact' });
+		const reopened = preferences.open({ query: 'chat.disableAIFeatures' });
 		const reopenedSearch = window.document.querySelector<HTMLInputElement>('.ash-sessions-settings-search input[type="search"]')!;
-		assert.equal(reopenedSearch.value, 'sessions.activityBar.compact');
+		assert.equal(reopenedSearch.value, 'chat.disableAIFeatures');
 		assert.equal(window.document.activeElement, reopenedSearch);
 		await assert.rejects(commands.executeCommand('workbench.action.openSettings', { query: 1 }), /设置查询必须是字符串/u);
 		await assert.rejects(commands.executeCommand('workbench.action.openSettings', { target: 4 }), /此设置编辑器支持本地用户、工作区和文件夹设置/u);
-		assert.equal(reopenedSearch.value, 'sessions.activityBar.compact');
+		assert.equal(reopenedSearch.value, 'chat.disableAIFeatures');
 		assert.equal(window.document.querySelector('.ash-settings-search-filter')?.getAttribute('aria-label'), '筛选设置');
-		const reopenedMenu = openCopyMenu('外观', '复制设置为 JSON');
+		const reopenedMenu = openCopyMenu('通用', '复制设置为 JSON');
 		reopenedMenu.copy.click();
 		await Promise.resolve();
-		assert.deepEqual(copied, ['"sessions.activityBar.compact": true', '"sessions.activityBar.compact": true']);
+		assert.deepEqual(copied, ['"chat.disableAIFeatures": true', '"chat.disableAIFeatures": true']);
 		assert.equal(reopenedMenu.menu.isConnected, false);
 		assert.equal(window.document.activeElement, reopenedMenu.more);
 		const translatedDesign = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === '设计');

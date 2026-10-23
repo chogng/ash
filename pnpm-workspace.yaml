@@ -6,7 +6,6 @@ packages:
   - test/scenario
 engineStrict: true
 allowBuilds:
-  bun: true
   electron: true
   esbuild: true
   native-keymap: false
@@ -20,4 +19,3 @@ overrides:
   katex: 0.18.2
 patchedDependencies:
   "@vscode/tree-sitter-wasm@0.3.1": patches/@vscode__tree-sitter-wasm@0.3.1.patch
-  bun@1.4.3: patches/bun@1.4.3.patch

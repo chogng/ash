@@ -405,6 +405,7 @@ test("file views register after their host container", async () => {
 });
 
 class TestView implements IView {
+	public getProgressIndicator(): undefined { return undefined; }
 	private visible = true;
 	public get paneTitle(): string { return this.id; }
 	public hasFocus(): boolean { return false; }

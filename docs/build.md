@@ -120,7 +120,13 @@ Electron Rust watcher 仅把 `crates/app-server-diff/src/` 内的 `.rs` 修改�
 | `pnpm stylelint:update`                           | 用真实颜色、尺寸注册表更新变量清单，保留组件变量；审阅生成差异后再检查     |
 | `pnpm clean`                                      | 清理本地产物和 Python 缓存                                                 |
 
-格式化工具按语言选择：TS/JS 使用 [`tsfmt.json`](../tsfmt.json)，Rust 使用 [`rustfmt.toml`](../rustfmt.toml)，Python 使用固定版本 Ruff，配置与文档使用 [Prettier](../.prettierrc.toml)。前端与 Rust 格式化入口只处理第一方源码；检查命令不修改文件。修改后优先检查受影响的文件，完整格式检查见 [Formatting CI](../.github/workflows/format.yml)。
+格式化工具按语言选择：TS/JS 使用 [`tsfmt.json`](../tsfmt.json)，Rust 使用 [`rustfmt.toml`](../rustfmt.toml)，Python 使用固定版本 Ruff，配置与文档使用仓库锁定的 `bun fmt`，继续读取 [格式规则](../.prettierrc.toml)；全量、增量与编辑器入口均显式读取 [Git 排除规则](../.gitignore)和[格式化排除规则](../.prettierignore)。前端与 Rust 格式化入口只处理第一方源码；检查命令不修改文件。修改后优先检查受影响的文件，完整格式检查见 [Formatting CI](../.github/workflows/format.yml)。
+
+VS Code 配置与文档的保存格式化使用工作区推荐的 [Simple LSP Client](https://marketplace.visualstudio.com/items?itemName=wdomitrz.simple-lsp-client) 扩展的外部 formatter，以独立参数和 stdin 调用 `node_modules/bun/` 中的原生 Bun，文件名不经过 shell 解释。安装推荐扩展并完成 `pnpm install` 后，编辑器、增量脚本和 CI 使用同一 Bun 版本与规则；Markdown 内嵌代码保持原样，TS/JS 继续使用 TypeScript formatter。`pnpm test:format` 验证编辑器命令与 CI 的 JSON、JSONC、YAML、Markdown、CSS、HTML 输出一致。
+
+真实保存接线由 [`build/formatEditor.test.ts`](../build/formatEditor.test.ts) 验证：使用独立 VS Code profile 打开合成工作区，修改未保存内容后执行保存，并比较编辑器、磁盘与 Bun 的输出，同时验证忽略文件保持原样、空结果和大段中文正确保存，以及带 shell 语法的文件名不会执行命令。先用 VS Code CLI 的 `--extensions-dir <隔离目录> --install-extension wdomitrz.simple-lsp-client@0.1.22` 安装扩展，再设置 `ASH_VSCODE_EXECUTABLE` 为桌面可执行文件、`ASH_FORMATTER_EXTENSIONS` 为该扩展目录，运行 `node --test build/formatEditor.test.ts`。未指定 VS Code 时该测试显式跳过；报告、截图与 trace 写入 `.build/formatter-editor-validation/`。
+
+根 `package.json` 通过 `bun: "runtime:1.4.4"` 固定 Bun，由 pnpm 直接安装官方发布的原生 runtime；各平台归档与 SHA-256 校验值记录在 `pnpm-lock.yaml`。此路径不执行 npm `bun` 包的 postinstall，也不需要 Bun 补丁或 `pnpm rebuild bun`；`--ignore-scripts` 安装后即可使用。
 
 增量入口复用上述格式化器和排除规则；Rust 按文件读取，不递归格式化其他模块。提交前显式运行检查并修复所需文件，CI 保留全仓格式检查。Just 版本不符时检查会明确失败，本地和 CI 都读取 `.just-version`。修改格式规则后执行全仓检查。
 
@@ -161,7 +167,7 @@ Electron、Browser、编辑器的构建和测试命令，以及测试是否启�
 | `just snapshot <path.snap>...` | 定位所属 TUI 测试并按组运行；展示待审阅差异，有待审阅基线时返回非零退出码                          |
 | `just snapshot --pending`      | 汇总 TUI 的 `.snap.new`，按测试分组复跑并展示差异                                                  |
 
-`verify` 支持 `--lib` 或可重复的 `--test <target>`、`--filter <test-name>`、`--features <features>` 和 `--profile <profile>`；目标选择与过滤条件只传给测试，feature 与 profile 传给三个步骤。`verify` 和 `snapshot` 支持 `--plan`，只解析并展示命令，不编译或运行。路径可以使用仓库根目录下的相对路径或绝对路径。
+`verify` 支持 `--lib` 或可重复的 `--test <target>`、`--filter <test-name>`、`--features <features>` 和 `--profile <profile>`；目标选择与过滤条件只传给测试，feature 与 profile 传给三个步骤。对显式选择的集成测试，可加 `--process-tests` 使用独立进程测试入口，仍执行 check、测试通过数检查与 warning 检查。`verify` 和 `snapshot` 支持 `--plan`，只解析并展示命令，不编译或运行。路径可以使用仓库根目录下的相对路径或绝对路径。
 
 只有 trait 契约或测试设施、由消费方覆盖行为的包，可以在自己的 Cargo 清单中声明
 `[package.metadata.ash.verify]` 的 `test-packages` 列表。例如 `ash-core-api` 声明 `["ash-core"]`，
@@ -187,14 +193,17 @@ just snapshot crates/tui/snapshots/fullscreen/composer/composer_focused.snap --a
 
 `--accept` 必须显式列出已审阅文件，不能与 `--pending` 同用；接受后按组复跑测试。其他待审阅文件保留；目录中还有 `.snap.new` 时返回非零退出码并列出路径。
 
-Windows Cargo 的测试 Job 禁止子进程脱离。验证共享 App Server 独立于启动者存活时，使用 `just test-processes ash-app-server --test managed_lifecycle`，先由 Cargo 编译，再独立运行测试程序。此入口只接受显式选择的集成测试；普通测试使用 `just test`。
+Windows Cargo 的测试 Job 禁止子进程脱离。验证共享 App Server 独立于启动者存活时，使用 `just verify ash-app-server --process-tests --test managed_lifecycle`，先由 Cargo 编译，再独立运行测试程序；单独复跑测试使用 `just test-processes ash-app-server --test managed_lifecycle`。此入口只接受显式选择的集成测试；普通测试使用 `just test`。
 
 修改 TUI 后先运行受影响的单测，需要验证真实进程、终端信号或恢复时再运行 PTY 场景：
 
 ```sh
 just test-tui-unit session_manager
 just test-tui actual_tui_process_interrupts_an_inflight_http_stream
+ASH_USE_INMEMORY_SECRETSTORAGE=1 just test-tui -- --test-threads=4 --skip actual_tui_sandbox_
 ```
+
+整组 PTY 回归中的 Issues 场景会在测试进程内创建 App Server，因此需要为该进程设置测试密钥存储。macOS 所需的原生 watcher host 由 Cargo 包装器准备；真实沙箱场景由独立作业覆盖。
 
 涉及进程内 App Server 的会话测试需显式启用功能：`just test-tui-unit conversation_flow_tests --features in-process-tests`。两个入口都可用 `just --set tui_profile <profile> ...` 覆盖配置；PTY 入口的服务程序和测试会一起切换。首次构建服务程序仍需时间。日常启动验证用 `just build-code`，使用 `dev-small`。
 
@@ -206,13 +215,15 @@ just test-tui actual_tui_process_interrupts_an_inflight_http_stream
 
 #### Bazel TUI 场景测试
 
-运行迁移后的 CLI/TUI 场景：
+运行与 Linux CI 相同的 CLI/TUI 场景：
 
 ```sh
-bazel test //cli:tui-real-scenarios --test_output=errors --test_env=PATH
+bazel test //cli:tui-real-scenarios --compilation_mode=opt \
+  --test_output=errors --test_env=PATH --test_env=ASH_RG_PATH --test_env=ASH_TGREP_PATH \
+  --test_arg=--test-threads=4 --test_arg=--skip --test_arg=actual_tui_sandbox_
 ```
 
-`--test_env=PATH` 将固定版本 Node 的路径传给测试进程。`//cli:tui-real-scenarios` 运行同一组 CLI/TUI PTY 场景；先将锁定的 `rg`、`tgrep` 路径设为 `ASH_RG_PATH`、`ASH_TGREP_PATH`。Linux CI 无法运行的真实沙箱场景由 macOS 作业覆盖。
+`--test_env=PATH` 将固定版本 Node 的路径传给测试进程。`//cli:tui-real-scenarios` 运行同一组 CLI/TUI PTY 场景；先将锁定的 `rg`、`tgrep` 路径设为 `ASH_RG_PATH`、`ASH_TGREP_PATH`。优化构建使二进制摘要校验在既有启动预算内完成。Linux CI 无法运行的真实沙箱场景由 macOS 作业覆盖。
 
 Linux 构建需安装 `pkg-config` 和 `libwayland-dev`。Bazel 只导入宿主的 Wayland client 共享库，不把 pkg-config 返回的整个系统库目录加入链接路径，避免宿主 libc 覆盖固定工具链的 libc；运行时仍由操作系统提供 Wayland。
 
@@ -283,9 +294,9 @@ macOS 和 Windows 发布组包使用同一个准备入口，不再无条件重�
 
 `scripts/cargo.py` 的普通 check、test、clippy 命令默认使用共享 `ci-test` profile，包括 `just check`、`just test` 和 `just rust-warnings`；显式 `--profile`、`--release` 或 `-r` 优先。`ci-test` 只是编译配置名，不执行 CI 流水线。产品开发程序和协议生成器继续复用 `dev-small`，发布使用 release；普通 build/run 保留 Cargo 默认配置及现有工具的产物路径，保留各自的体积与调试约束。`just rust-warnings` 检查新生成与已缓存的编译警告，保持 `RUSTFLAGS` 与普通构建一致，避免生成另一套产物。
 
-单次纯类型检查使用锁定的 Bun 1.4.3：Renderer、Common、Protocol、Extensions、Memories、Stanza、构建工具和单元测试运行器工具均通过 `bun check -p <config> --all` 检查。Browser integration、Smoke automation 和 Scenario 的配置也都是 `noEmit`，其准备阶段使用 Bun 检查类型。现有 pnpm 入口继续准备协议、本地化等生成输入；多个检查顺序执行，避免大型 Bun 进程同时争抢 CPU。共享机器可对直接检查添加 `--threads 4`。Bun 不生成 JavaScript 或 `.tsbuildinfo`；对照测量与工具职责见 [构建工具说明](../build/README.md)。
+单次纯类型检查使用锁定的 Bun 1.4.4：Renderer、Common、Protocol、Extensions、Memories、Stanza、构建工具和单元测试运行器工具均通过 `bun check -p <config> --all` 检查。Browser integration、Smoke automation 和 Scenario 的配置也都是 `noEmit`，其准备阶段使用 Bun 检查类型。现有 pnpm 入口继续准备协议、本地化等生成输入；多个检查顺序执行，避免大型 Bun 进程同时争抢 CPU。共享机器可对直接检查添加 `--threads 4`。Bun 不生成 JavaScript 或 `.tsbuildinfo`；对照测量与工具职责见 [构建工具说明](../build/README.md)。
 
-Electron 主进程/preload、单元测试与扩展测试的 JavaScript 编译，以及开发 host watch 和 `typecheck:web:watch`，继续使用 TypeScript 7.0.2；Bun 1.4.3 尚不支持独立的 `bun check --watch`。工作区将编译器固定在 `@ash/typescript-compiler` npm 别名下，`pnpm exec tsc` 调用 TS7。Vite/Rolldown 和 Scenario 的 esbuild 继续打包，Node.js、Mocha 和 Playwright 继续执行测试，pnpm 管理依赖与锁文件。`typescript` 别名保留 `@typescript/typescript6@6.0.2` 兼容包提供的 TS6 JavaScript API，供本地化提取、热更新分析、格式化和架构测试使用；它提供独立的 `tsc6` 命令。升级时同步根目录和 `build/` 的编译器/API 依赖、`test/scenario/` 的编译器依赖及锁文件，并验证 host watch 的失败与恢复、preload 导入限制和 Web/Electron 启动。
+Electron 主进程/preload、单元测试与扩展测试的 JavaScript 编译，以及开发 host watch 和 `typecheck:web:watch`，继续使用 TypeScript 7.0.2；Bun 1.4.4 尚不支持独立的 `bun check --watch`。工作区将编译器固定在 `@ash/typescript-compiler` npm 别名下，`pnpm exec tsc` 调用 TS7。Vite/Rolldown 和 Scenario 的 esbuild 继续打包，Node.js、Mocha 和 Playwright 继续执行测试，pnpm 管理依赖与锁文件。`typescript` 别名保留 `@typescript/typescript6@6.0.2` 兼容包提供的 TS6 JavaScript API，供本地化提取、热更新分析、格式化和架构测试使用；它提供独立的 `tsc6` 命令。升级时同步根目录和 `build/` 的编译器/API 依赖、`test/scenario/` 的编译器依赖及锁文件，并验证 host watch 的失败与恢复、preload 导入限制和 Web/Electron 启动。
 
 前端与构建工具直接消费 `.build/protocol/typescript/` 的共享生成协议，产物不提交到 Git。正常前端、Rust Just 和打包入口自动准备协议：优先复用本地缓存或源码匹配的后端包，缺少匹配产物时需要 Rust 工具链重新生成。修改后端协议后可运行 `just generate-protocol`，再运行 `pnpm typecheck:protocol`；直接 Cargo 构建前必须先准备。协议生成器与开发后端统一使用 `dev-small` profile，复用相同配置的依赖产物；生成器的 `export` feature 仍保留独立编译变体。受版本控制的图标工厂使用 `pnpm icons:generate` 更新。
 
@@ -484,7 +495,7 @@ just dependency-security
 
 BM25 的同分候选由上游 HashSet 顺序决定。Ash 在自己的搜索入口按原始分数和工具名称排序，再截断候选并转换 reciprocal rank，保证重建索引、单条结果和排除项不会受到哈希遍历顺序影响；无需修改或复制 BM25 源码。
 
-2026-10-14 移除内置 Typst 编译器及其协议、字体、许可证和 citationberg patch。Academic 改为可停用的声明式扩展，继续复用 Stanza 编辑模型；PDF 阅读器保留。下述 2026-10-11 验证记录描述当时的依赖图，不表示现版本仍提供 Typst。
+2026-10-14 移除内置 Typst 编译器及其协议、字体、许可证和 citationberg patch。Academy 改为可停用的声明式扩展，继续复用 Stanza 编辑模型；PDF 阅读器保留。下述 2026-10-11 验证记录描述当时的依赖图，不表示现版本仍提供 Typst。
 
 2026-10-11 在 Windows 恢复发布版后，CLI 的 40 项、Code Mode runtime 的 19 项及 tokenizer 的 12 项库测试首轮通过；搜索同分排序修复后，`just test ash-tools -p ash-typst -p ash-v8-poc --features ash-v8-poc/sandbox --profile ci-test --lib` 通过 tools 的 39 项、Typst 的 11 项和 V8 sandbox 的 7 项测试。`just test-tui-unit render::highlight::tests` 的 4 项与 `just test-tui-unit app::extensions_tests` 的 24 项通过，合计 156 项消费者测试。已移除随序列化补丁及字体回补一起撤掉的专用测试和资源，保留真实高亮、排版、搜索及 XML 边界覆盖。
 
@@ -556,6 +567,28 @@ python -B scripts/check_blob_size.py --head HEAD
 相关文件变更推送到 main 后，性能检查在同一 runner 和工具链下对协议包前后版本各测三轮；耗时中位数同时增加超过 25% 和两秒时失败。具体触发条件和平台分工以工作流为准。
 
 ### 历史测量与适用范围
+
+#### 2026-10-22：客户端测试依赖成本
+
+在 macOS arm64、24 GiB 内存、Rust 1.99.1、`ci-test`、4 个 Cargo jobs 下，在实施拆分前，比较 `ash-app-server-client` 的 47 项测试与忽略目录中的轻量原型。原型保留协议、通知、trace、stdio 和事件通道的 32 项原有测试，隔离另 15 项内嵌 App Server 契约测试及其依赖；测量阶段未修改正式客户端源码或 manifest。第三方依赖沿用同一份锁定版本。两组交替测量各三轮，以下为中位数。
+
+| 场景                                      |       拆分前测试 |         轻量原型 |
+| ----------------------------------------- | ---------------: | ---------------: |
+| 独立空输出目录编译测试程序，`--no-run`    |        328.48 秒 |         85.35 秒 |
+| 修改同一个 MockTransport 单测后编译       |          2.73 秒 |          1.41 秒 |
+| 触碰服务端源码时间戳后编译                |          4.62 秒 |          0.59 秒 |
+| 已缓存、无源码改动的编译，`--no-run`      |          0.88 秒 |          0.54 秒 |
+| 已缓存，通过 `just test` 运行同一个单测   |          2.06 秒 |          0.56 秒 |
+| 已缓存，通过 `just test` 运行各自全部测试 | 7.19 秒（47 项） | 0.77 秒（32 项） |
+| 测试可执行程序体积                        |       211.12 MiB |        11.32 MiB |
+
+冷编译范围分别为 323.73–364.53 秒与 84.06–86.44 秒，使用新建的独立 Cargo 输出目录，保留系统和依赖源码缓存，不清空共享 `ci-test` 产物。`time` 报告的最大 RSS 中位数为 3170 与 2022 MiB，不是所有并发编译进程的内存总和。单测编辑将返回错误请求 ID 从 2 改为 3，编译日志确认两组都只重编客户端，并运行同一断言；每轮随后恢复原内容。服务端样本只改变时间戳，现有测试重编 runtime、host 和 client，原型没有编译单元失效；这不代表真实服务端功能编辑的重编译耗时。
+
+一次原始无改动样本被同期 UI 提交触发的 Git 构建标识更新干扰，未用于上述缓存比较。缓存命令复测固定 `ASH_BUILD_COMMIT`，三轮均确认没有发生编译；同期提交未改变 Rust 或 Cargo 输入。`just test` 的现有依赖图还会准备文件监听、Markdown Math、LLDB、Code Mode 和 managed lifecycle 辅助程序，其准备成本计入实际命令行，未计入 `--no-run` 编译行。
+
+结果支持为客户端提供独立的轻量测试入口，收益主要是减少冷编译依赖和避开服务端测试的运行成本；缓存充分时的纯编译差距较小。15 项服务端契约测试仍须保留，不能将原型数据解释为完整回归、产品构建或其他平台提速。拆分前 47 项和原型 32 项测试均实际通过。原始日志、Cargo timings、逐轮数据、原型与脚本位于 `.build/client-test-cost/`，汇总为 `summary.json`、`report.json` 和 `warm-commands.json`；普通客户端构建的三轮背景测量另见 `.build/build-health/ash-app-server-client-ci-test-gt2380ts/report.json`。
+
+随后将 32 项轻量测试保留在 `ash-app-server-client`，15 项内嵌服务端契约测试迁入仅含测试的 `ash-app-server-client-tests`。客户端不再通过无条件 `dev-dependencies` 或 `cfg(test)` 启用服务端实现；契约测试显式启用既有 `in-process` feature。`just test ash-app-server-client --lib` 使用 217 个本机依赖包，`just verify ash-app-server-client --lib` 通过既有 `test-packages` 配置执行两组测试，CI 的 `stdio-lifecycle` 作业显式运行契约测试包。Bazel 为该测试包提供单独的 feature 客户端目标。macOS arm64 上完整验证的 32 + 15 项测试、两个包的全目标 warning 检查、`just dependencies`（234 成员、89 项已审核多版本）和脚本测试（217 项，1 项按平台跳过）通过；Bazel 仅验证目标加载和直接依赖查询，未运行其编译或其他操作系统。上述计时仍是拆分前与原型的对照，未重新测量最终拆分后的完整冷编译成本。
 
 #### macOS arm64 开发构建（2026-10-01～16）
 
@@ -1003,7 +1036,7 @@ Rust `just verify ash-dev-build --features compiler` 为 22 项并通过 check�
 
 2026-10-20 在当前 macOS 检出复核上述失败所属的四个文件：`node --test build/builtin/editorClients.test.ts build/desktop/host.test.ts build/desktop/launch/electron.test.ts build/testRunners.test.ts`，22 项全部通过，无失败或跳过，用时 15.94 秒。包括仓库外 Academy SDK 类型检查、Host watch、两种 profile 的 Electron 启停和符号链接 fixture；Electron 使用受控 Node 进程替身，没有启动真实 Electron 窗口。该次未修改实现，也未重跑全量或 Windows；不能单独据此关闭验证缺口。日志为 `/tmp/ash-rust-todo-review-20261020.log`。
 
-2026-10-21，在当前 macOS arm64 检出 `a66ebb32a` 加本轮修改上完成本机整套补验。`pnpm --dir build run test:prepared` 首跑为 236 项、214 通过、6 失败、16 跳过；最终为 220 通过、0 失败、16 跳过，用时 16.04 秒。修复包括：独立 TS 作者测试从 PATH 定位 npm，兼容 pnpm 自带的无 npm Node；恢复测试夹具补齐当前 view catalog；Academic 场景收集遵守 disconnected browser 与 connected editor 的实际目标；CSS 竞态 fixture 用轮询消除原生事件合并对断言的影响。
+2026-10-21，在当前 macOS arm64 检出 `a66ebb32a` 加本轮修改上完成本机整套补验。`pnpm --dir build run test:prepared` 首跑为 236 项、214 通过、6 失败、16 跳过；最终为 220 通过、0 失败、16 跳过，用时 16.04 秒。修复包括：独立 TS 作者测试从 PATH 定位 npm，兼容 pnpm 自带的无 npm Node；恢复测试夹具补齐当前 view catalog；Academy 场景收集遵守 disconnected browser 与 connected editor 的实际目标；CSS 竞态 fixture 用轮询消除原生事件合并对断言的影响。
 
 Host 的真实监听缺口也在本机复现：递归目录事件漏收文件内容写入，延迟到达的初始条目又可能造成空编译。现按原有源码／协议／本地化根预先注册文件监听，以自适应目录时间戳轮询发现增删；同一待编译批次只发布一次未就绪。现有 Host／Electron 回归覆盖生成输入、正常与失败保存、编译中排队、配置修改、缓存排除与进程回收，并补新增文件、修改、删除和失败编译实际读取无效源码的断言。`pnpm build` 正常 Desktop 构建通过；build 146 文件、Renderer 4446 文件、automation 2994 文件类型检查通过。这里只确认行为，不宣称监听性能收益。
 
@@ -1013,7 +1046,7 @@ Host 的真实监听缺口也在本机复现：递归目录事件漏收文件内
 
 ### 2026-10-21：Windows 构建工具全量复核
 
-在当前 Windows 11 x64、build 22631 的普通权限进程中，以 `b2cbfdac794596616d6ed024085978b442dd5539` 加本轮修改验收，Node 为仓库固定的 `v24.21.0`。首先对原待办的四个文件复跑，22 项中 15 通过、5 失败、2 跳过，确认 SDK 导出、Host watcher、两种 Electron profile 和文件符号链接 fixture 均仍有失败。全量检查又暴露了 npm 定位、启动恢复 fixture 和 Academic 场景收集的旧接线问题。
+在当前 Windows 11 x64、build 22631 的普通权限进程中，以 `b2cbfdac794596616d6ed024085978b442dd5539` 加本轮修改验收，Node 为仓库固定的 `v24.21.0`。首先对原待办的四个文件复跑，22 项中 15 通过、5 失败、2 跳过，确认 SDK 导出、Host watcher、两种 Electron profile 和文件符号链接 fixture 均仍有失败。全量检查又暴露了 npm 定位、启动恢复 fixture 和 Academy 场景收集的旧接线问题。
 
 SDK 导出现在按相对路径识别并复制声明文件，避免 Windows 路径分隔符造成 `marked.d.ts` 等依赖遗漏；仓库外 Academy 类型检查验证了完整导出链。独立 TS 作者安装测试从 pnpm 提供的原 Node 路径定位 npm，避免把 `node_modules/.bin` 中的 Node 硬链接当作完整安装目录。所有安装仍只使用离线本地归档。
 

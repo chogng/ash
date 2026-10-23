@@ -39,14 +39,14 @@ export class Editor {
 
 	async foldAtLine(line: number): Promise<void> {
 		const gutter = this.gutterAtLine(line);
-		await gutter.locator('.ash-icon-folding-expanded').click();
-		await expect(gutter.locator('.ash-icon-folding-collapsed')).toBeVisible();
+		await gutter.locator('.stanza-editor-line-decoration.ash-icon-folding-expanded').click();
+		await expect(gutter.locator('.stanza-editor-line-decoration.ash-icon-folding-collapsed')).toBeVisible();
 	}
 
 	async unfoldAtLine(line: number): Promise<void> {
 		const gutter = this.gutterAtLine(line);
-		await gutter.locator('.ash-icon-folding-collapsed').click();
-		await expect(gutter.locator('.ash-icon-folding-expanded')).toBeVisible();
+		await gutter.locator('.stanza-editor-line-decoration.ash-icon-folding-collapsed').click();
+		await expect(gutter.locator('.stanza-editor-line-decoration.ash-icon-folding-expanded')).toBeVisible();
 	}
 
 	private gutterAtLine(line: number): Locator {

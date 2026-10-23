@@ -23,7 +23,7 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { observableValue } from '../../../../base/common/observable.js';
 import { ChangesSummaryWidget } from './changesSummaryWidget.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ChecksWidget } from './checksWidget.js';
 import { SessionSyncChangesActionViewItem } from './sessionSyncChanges.js';
 import { CreatePullRequestContextView } from './createPullRequestContextView.js';
@@ -58,6 +58,7 @@ export class ChangesViewPane extends ViewPane {
 	private request = 0;
 	private owner: string | undefined;
 	private loading = false;
+	private readonly loadingProgress = this._register(new MutableDisposable());
 	private readonly checks = this._register(new MutableDisposable<ChecksWidget>());
 	private readonly gitActions = this._register(new MutableDisposable<SessionSyncChangesActionViewItem>());
 	private readonly pullRequest = this._register(new MutableDisposable<CreatePullRequestContextView>());
@@ -125,7 +126,7 @@ export class ChangesViewPane extends ViewPane {
 		};
 		this._register(sessions.onDidChange(updatePullRequest));
 		updatePullRequest();
-		this._register(new ChangesSummaryWidget(this.statistics)).render(this.contentElement);
+		this._register(instantiation.createInstance(ChangesSummaryWidget, this.statistics)).render(this.contentElement);
 		const controls = h(container.ownerDocument, 'div', { className: 'ash-sessions-changes-view-actions' });
 		this.contentElement.append(controls);
 		this.changesetPicker = h(container.ownerDocument, 'select');
@@ -242,6 +243,7 @@ export class ChangesViewPane extends ViewPane {
 			this.pullRequest.clear();
 			this.gitActions.clear();
 			this.checks.clear();
+			this.loadingProgress.clear();
 			this.request++;
 			this.ownerEpoch++;
 		}
@@ -350,6 +352,7 @@ export class ChangesViewPane extends ViewPane {
 	private async refresh(): Promise<void> {
 		if (!this.isVisible() || this.isDisposed) { return; }
 		const request = ++this.request;
+		this.loadingProgress.clear();
 		this.loading = true;
 		this.saveTreeState();
 		this.changesetPicker.disabled = true;
@@ -381,6 +384,8 @@ export class ChangesViewPane extends ViewPane {
 			return;
 		}
 		this.statusDomNode.textContent = localize('sessions.changes.loading', 'Loading changes…');
+		const progress = this.getProgressIndicator().show(true, 150);
+		this.loadingProgress.value = toDisposable(() => progress.done());
 		try {
 			const active = selection.active;
 			const summaries = await this.chat.listTurnChanges(active.session.sessionId, active.threadId);
@@ -418,6 +423,7 @@ export class ChangesViewPane extends ViewPane {
 			this.statusDomNode.textContent = localize('sessions.changes.error', 'Could not load changes: {0}', error instanceof Error ? error.message : String(error));
 		} finally {
 			if (!this.isDisposed && request === this.request) {
+				this.loadingProgress.clear();
 				this.loading = false;
 				this.changesetPicker.disabled = !this.retry.domNode.hidden;
 				this.updatePreviewSelection();

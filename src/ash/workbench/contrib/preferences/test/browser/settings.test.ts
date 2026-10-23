@@ -1,10 +1,9 @@
 import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../../../../platform/browserView/common/browserPasswordService.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
-import { ScreenshotGlobalShortcutSetting } from '../../../screenshot/common/screenshot.js';
+import { ScreenshotGlobalShortcutSetting } from '../../../chat/common/constants.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { resolveKeybinding } from '../../../../../base/common/keybindings.js';
 import { IHostService } from '../../../../services/host/browser/host.js';
-import '../../../screenshot/browser/screenshot.contribution.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
@@ -16,6 +15,9 @@ import { createTestLanguageModelToolsService } from '../../../chat/test/common/t
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import gitMessages from '../../../../../../../extensions/git/package.nls.json' with { type: 'json' };
+import snapshotMessages from '../../../../../../../extensions/snapshot/package.nls.json' with { type: 'json' };
+import snapshotManifest from '../../../../../../../extensions/snapshot/package.json' with { type: 'json' };
+import { localizeManifest } from '../../../../../platform/extensionManagement/common/extensionNls.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import manifest from '../../../../../../../extensions/git/package.json' with { type: 'json' };
@@ -153,6 +155,7 @@ const { IAppServerRemoteAgentService: RemoteAgentServiceId } = await import('../
 const { IWorkspaceTrustApi: WorkspaceTrustApiId } = await import('../../../../../platform/workspace/common/workspaceTrust.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 configurationRegistry.updateConfigurations({ add: [...parseExtensionManifest(JSON.stringify(manifest).replace(/%([^%]+)%/g, (match, key) => (gitMessages as Record<string, string>)[key] ?? match), { id: 'ash.git', name: 'git', publisher: 'ash', version: '0.1.0' }).contributes.configuration], remove: [] });
+configurationRegistry.updateConfigurations({ add: [...parseExtensionManifest(JSON.stringify(localizeManifest(snapshotManifest, snapshotMessages)), { id: 'ash.snapshot', name: 'snapshot', publisher: 'ash', version: '0.1.0' }).contributes.configuration], remove: [] });
 const { EditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
 const { EditorPaneRegistry, EditorPanes } = await import('../../../../browser/editor.js');
 const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
@@ -527,6 +530,92 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	assert.equal(reopened.getValue('mediaPreview.video.loop'), false);
 	assert.equal(reopened.getValue('git.untrackedChanges'), 'separate');
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Rust numeric settings save numbers, automatic values and named modes directly (${locale})`, async () => {
+		using resources = new DisposableStore();
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		if (locale === 'zh-CN') setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		resources.add(toDisposable(resetNlsResolver));
+		const manifest = JSON.parse(await readFile('extensions/rust/package.json', 'utf8'));
+		const messages = JSON.parse(await readFile(`extensions/rust/package.nls${locale === 'en' ? '' : '.zh-CN'}.json`, 'utf8'));
+		const localized = JSON.stringify(manifest, (_key, value) => typeof value === 'string' ? value.replace(/%([^%]+)%/g, (match, key) => messages[key] ?? match) : value);
+		const registry = new ConfigurationRegistry();
+		registry.updateConfigurations({ add: [...parseExtensionManifest(localized, { id: 'vscode.rust', name: 'rust', publisher: 'vscode', version: manifest.version }).contributes.configuration], remove: [] });
+		const defaults = new DefaultSettings(registry);
+		for (const key of ['lru.capacity', 'numThreads', 'cachePriming.numThreads', 'procMacro.processes', 'completion.limit']) {
+			assert.equal(defaults.get(`rust-analyzer.${key}`).valueType, 'numberWithOptions', key);
+		}
+		const configuration = resources.add(new WorkspaceService({ registry }));
+		const root = h(browserEnvironment.window.document, 'div');
+		browserEnvironment.window.document.body.replaceChildren(root);
+		resources.add(toDisposable(() => root.remove()));
+		const contextView = resources.add(new BrowserContextViewService(root));
+		let actions: readonly IAction[] = [];
+		const errors: string[] = [];
+		const widgets = ['lru.capacity', 'numThreads'].map(key => {
+			const widget = resources.add(createSettingWidget(resources, root, defaults.get(`rust-analyzer.${key}`), {
+				configurationService: configuration, contextViewProvider: contextView,
+				contextMenuProvider: { showContextMenu: delegate => { actions = delegate.getActions(); } },
+				clipboardService: {
+					triggerPaste: () => undefined, read: async () => [], readText: async () => '', writeText: async () => { },
+					readFindText: async () => '', writeFindText: async () => { }, readImage: async () => new Uint8Array(),
+					readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
+				},
+				onOpenSettings: async () => { assert.fail('Numeric settings must not require JSON editing'); },
+				onStatus: (message, error) => { if (error) errors.push(message); },
+			}));
+			root.append(widget.domNode);
+			return widget;
+		});
+		const cache = widgets[0].domNode.querySelector<HTMLInputElement>('input')!;
+		const change = async (input: HTMLInputElement, value: string) => {
+			input.value = value;
+			input.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+			await nextTurn();
+		};
+		assert.equal(cache.type, 'number');
+		assert.equal(cache.placeholder, locale === 'zh-CN' ? '自动' : 'Automatic');
+		for (const value of [32, 0]) {
+			await change(cache, String(value));
+			assert.equal(JSON.parse((await configuration.read()).source)['rust-analyzer.lru.capacity'], value);
+		}
+		for (const value of ['-1', '65536', '1.5']) {
+			await change(cache, value);
+			assert.equal(cache.value, '0');
+			assert.equal(configuration.getValue('rust-analyzer.lru.capacity'), 0);
+		}
+		assert.equal(errors.length, 3);
+		assert.ok(errors[0].includes(locale === 'zh-CN' ? '整数' : 'whole number'));
+		await change(cache, '');
+		assert.equal(configuration.getValue('rust-analyzer.lru.capacity'), null);
+		assert.equal(JSON.parse((await configuration.read()).source)['rust-analyzer.lru.capacity'], undefined, 'automatic removes a redundant user override');
+		await change(cache, '32');
+		widgets[0].domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!.click();
+		await actions.find(action => action.id === 'settings.resetSetting')!.run();
+		await nextTurn();
+		assert.deepEqual(errors.slice(3), []);
+		assert.equal(JSON.parse((await configuration.read()).source)['rust-analyzer.lru.capacity'], undefined);
+		assert.equal(cache.value, '');
+		const threads = widgets[1].domNode.querySelector<HTMLInputElement>('input')!;
+		await change(threads, '4');
+		assert.equal(configuration.getValue('rust-analyzer.numThreads'), 4);
+		const mode = widgets[1].domNode.querySelector<HTMLButtonElement>('[role="combobox"]')!;
+		mode.click();
+		const choices = root.ownerDocument.getElementById(mode.getAttribute('aria-controls')!)!;
+		choices.querySelectorAll<HTMLElement>('[role="option"]')[3].click();
+		await nextTurn();
+		assert.equal(configuration.getValue('rust-analyzer.numThreads'), 'logical');
+		assert.equal(threads.value, '');
+		await change(threads, '2');
+		assert.equal(configuration.getValue('rust-analyzer.numThreads'), 2);
+		using reopened = new WorkspaceService({ registry, source: (await configuration.read()).source });
+		assert.equal(reopened.getValue('rust-analyzer.numThreads'), 2);
+		await configuration.write('{ "rust-analyzer.lru.capacity": 16, "rust-analyzer.numThreads": "physical" }');
+		assert.equal(cache.value, '16');
+		assert.equal(threads.placeholder, messages['numThreads.anyOf.2.enum.0']);
+	});
+}
 
 test('File exclusion Settings show defaults, persist disabled rules and reset through the widget', async () => {
 	using resources = new DisposableStore();
@@ -1137,7 +1226,6 @@ test('settingsLayout is the single projection from registered settings to catego
 		'general',
 		'github',
 		'network',
-		'screenshot',
 		'appearance',
 		'layout',
 		'debugging',
@@ -1206,6 +1294,15 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(configurationRegistry.getConfiguration('workbench.tips.enabled')?.defaultValue, true);
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'layout');
 	assert.equal(findSettingCategory(layout, StartupEditorConfigurationKey), 'startup');
+	assert.equal(findSettingCategory(layout, 'window.startupWindow'), 'startup');
+	const startupWindow = defaults.get('window.startupWindow');
+	assert.equal(startupWindow.valueType, 'select');
+	assert.equal(startupWindow.configuration.defaultValue, 'default');
+	assert.equal(startupWindow.configuration.scope, ConfigurationScope.APPLICATION);
+	if (startupWindow.valueType === 'select') {
+		assert.deepEqual(startupWindow.options.map(option => option.value), ['default', 'ide', 'agents']);
+	}
+	assert.throws(() => startupWindow.configuration.parse('unknown'), /Unknown startup window/);
 	assert.equal(findSettingCategory(layout, 'window.restoreWindows'), 'startup');
 	assert.equal(findSettingCategory(layout, 'window.newWindowDimensions'), 'startup');
 	assert.equal(findSettingCategory(layout, 'window.restoreFullscreen'), 'startup');
@@ -1214,6 +1311,9 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(chinese?.bundles['ash.settings']?.['categories.startup.label'], '启动');
 	assert.equal(chinese?.bundles.ash?.['settings.workbench.startup.group.label'], '启动时的编辑器');
 	assert.equal(chinese?.bundles.ash?.['window.restoreWindows.all'], '全部窗口');
+	assert.equal(chinese?.bundles.ash?.['window.startupWindow.title'], '启动时打开');
+	assert.equal(chinese?.bundles.ash?.['window.startupWindow.default'], '沿用上次（默认）');
+	assert.equal(chinese?.bundles.ash?.['window.startupWindow.agents'], 'Agent 窗口');
 	assert.equal(chinese?.bundles.ash?.['window.newWindowDimensions.title'], '新窗口尺寸');
 	assert.equal(chinese?.bundles.ash?.['window.restoreFullscreen.title'], '恢复全屏');
 	assert.equal(chinese?.bundles.ash?.['workbench.editor.restoreEditors.title'], '恢复编辑器');
@@ -1268,7 +1368,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, GitConfiguration.rebaseWhenSync), 'extension.ash.git');
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.rebaseWhenSync)?.defaultValue, false);
 	assert.equal(defaults.get(GitConfiguration.rebaseWhenSync).valueType, 'boolean');
-	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'select', 'text', 'stringMap', 'complex'].includes(setting.valueType)), true);
+	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'numberWithOptions', 'select', 'text', 'stringMap', 'complex'].includes(setting.valueType)), true);
 	assert.equal(defaults.get('git.ignoredRepositories').valueType, 'complex');
 	const themeSetting = defaults.get(WorkbenchConfiguration.colorTheme);
 	assert.equal(themeSetting.valueType, 'select');
@@ -1967,7 +2067,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'github', 'network', 'screenshot', 'appearance', 'layout', 'debugging', 'settings-editor', 'startup', 'browser'],
+		['general', 'github', 'network', 'appearance', 'layout', 'debugging', 'settings-editor', 'startup', 'browser'],
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="general"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
@@ -1984,18 +2084,31 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
 	await nextTurn();
 	await configuration.updateValue(AccessibilityVerbositySettingId.ChatScreenshot, false);
-	await preferences.openSettings({ section: 'screenshot' });
+	await preferences.openSettings({ section: 'extension.ash.snapshot' });
 	await nextTurn();
 	assert.equal(root.querySelector('[data-settings-item-id="screenshot.section"]'), null);
-	const screenshotSettings = root.querySelector<HTMLElement>('.ash-screenshot-settings')!;
-	assert.ok(screenshotSettings);
-	assert.deepEqual([...screenshotSettings.querySelectorAll<HTMLElement>('[data-settings-item-id]')].map(row => row.dataset.settingsItemId), [ScreenshotGlobalShortcutSetting]);
-	const globalScreenshot = screenshotSettings.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+	assert.equal(root.querySelector('[data-settings-category-id="screenshot"]'), null);
+	assert.equal(root.querySelector('[data-settings-category-id="extension.ash.snapshot"]')?.textContent, 'Snapshot');
+	const screenSettings = root.querySelector<HTMLElement>('[data-settings-tree-group-id="extension.ash.snapshot.group.screen"]')!;
+	const codeSettings = root.querySelector<HTMLElement>('[data-settings-tree-group-id="extension.ash.snapshot.group.code"]')!;
+	assert.ok(screenSettings);
+	assert.ok(codeSettings);
+	assert.ok(screenSettings.querySelector('[data-settings-item-id="snapshot.screen.shortcut"]')?.textContent?.includes('Not set'));
+	assert.ok(codeSettings.querySelector('[data-settings-item-id="snapshot.code.shortcut"]')?.textContent?.includes('Not set'));
+	assert.ok(codeSettings.textContent?.includes('Resolution scale'));
+	assert.equal(screenSettings.querySelector('[data-configuration-key="snapshot.code.padding"]'), null);
+	const globalScreenshot = root.querySelector<HTMLElement>(`[data-configuration-key="${ScreenshotGlobalShortcutSetting}"]`)!;
 	assert.ok(globalScreenshot);
-	assert.equal(globalScreenshot.checked, false);
+	assert.equal(globalScreenshot.getAttribute('aria-checked'), 'false');
 	globalScreenshot.click();
 	await nextTurn();
 	assert.equal(configuration.getValue(ScreenshotGlobalShortcutSetting), true);
+	const screenshotHints = root.querySelector<HTMLElement>(`[data-configuration-key="${AccessibilityVerbositySettingId.ChatScreenshot}"]`)!;
+	assert.ok(screenshotHints);
+	assert.equal(screenshotHints.getAttribute('aria-checked'), 'false');
+	screenshotHints.click();
+	await nextTurn();
+	assert.equal(configuration.getValue(AccessibilityVerbositySettingId.ChatScreenshot), true);
 	await preferences.openSettings({ section: 'accessibilitySignals' });
 	assert.equal(root.querySelector('[data-settings-category-id="accessibilitySignals"]')?.textContent, 'Accessibility Signals');
 	assert.ok(root.querySelector('[data-settings-item-id="accessibility.signalOptions.volume"]'));
@@ -2007,12 +2120,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(root.querySelector('[data-settings-item-id="workbench.reduceMotion"]'));
 	assert.ok(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`));
 	assert.ok(root.querySelector('[data-settings-item-id^="accessibility.verbosity."]'));
-	const screenshotHints = root.querySelector<HTMLInputElement>(`[data-settings-item-id="${AccessibilityVerbositySettingId.ChatScreenshot}"] input[type="checkbox"]`);
-	assert.ok(screenshotHints);
-	assert.equal(screenshotHints.checked, false);
-	screenshotHints.click();
-	await nextTurn();
-	assert.equal(configuration.getValue(AccessibilityVerbositySettingId.ChatScreenshot), true);
+	assert.equal(root.querySelector(`[data-settings-item-id="${AccessibilityVerbositySettingId.ChatScreenshot}"]`), null);
 	assert.equal(root.querySelector('[data-settings-item-id^="accessibility.signal"]'), null);
 	await preferences.openSettings({ section: 'terminal' });
 	assert.equal(root.querySelector('[data-settings-category-id="terminal"]')?.textContent, 'Terminal');

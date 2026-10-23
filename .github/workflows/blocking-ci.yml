@@ -78,6 +78,13 @@ jobs:
     if: fromJSON(needs.select.outputs.selection).frontend
     uses: ./.github/workflows/frontend.yml
 
+  component-fixtures:
+    needs: [select, blob-size-policy, cargo-deny, codespell, format]
+    if: fromJSON(needs.select.outputs.selection).component-fixtures
+    uses: ./.github/workflows/component-fixtures.yml
+    with:
+      baseline-ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+
   media:
     needs: [select, blob-size-policy, cargo-deny, codespell, format]
     if: fromJSON(needs.select.outputs.selection).media
@@ -114,6 +121,7 @@ jobs:
       - codespell
       - format
       - frontend
+      - component-fixtures
       - media
       - rust-build-health
       - rust-warnings

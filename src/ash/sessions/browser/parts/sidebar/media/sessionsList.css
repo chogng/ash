@@ -3,8 +3,8 @@
 	min-width: 0;
 	min-height: 0;
 	flex-direction: column;
-	gap: var(--ash-spacing-size160);
-	padding: var(--ash-spacing-size240) var(--ash-spacing-size120);
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size120);
 	background: var(--ash-sideBar-background);
 }
 
@@ -31,76 +31,11 @@
 	justify-content: flex-start;
 	min-width: 0;
 	width: 100%;
-	border-radius: var(--ash-cornerRadius-medium);
 }
 
 .ash-sessions-list-navigation .ash-button[aria-current="page"] {
 	color: var(--ash-foreground);
 	background: var(--ash-sessions-selectionBackground);
-}
-
-.ash-sessions-list-controls {
-	display: flex;
-	min-width: 0;
-	align-items: center;
-	gap: var(--ash-spacing-size80);
-}
-
-.ash-sessions-list-search {
-	display: flex;
-	min-width: 0;
-	height: 40px;
-	flex: 1 1 auto;
-	align-items: center;
-	gap: var(--ash-spacing-size80);
-	padding: 0 var(--ash-spacing-size120);
-	border-radius: var(--ash-cornerRadius-large);
-	color: var(--ash-description-foreground);
-	background: var(--ash-input-background);
-}
-
-.ash-sessions-list-search svg {
-	width: 16px;
-	height: 16px;
-	flex: 0 0 auto;
-}
-
-.ash-sessions-list-search input {
-	width: 100%;
-	min-width: 0;
-	border: 0;
-	outline: 0;
-	color: var(--ash-input-foreground);
-	background: transparent;
-}
-
-.ash-sessions-list-search:focus-within {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-}
-
-.ash-sessions-list-add {
-	display: grid;
-	width: 40px;
-	height: 40px;
-	flex: 0 0 auto;
-	place-items: center;
-	padding: 0;
-	border: 0;
-	border-radius: var(--ash-cornerRadius-large);
-	color: var(--ash-foreground);
-	background: var(--ash-input-background);
-	cursor: pointer;
-}
-
-.ash-sessions-list-add svg {
-	width: 20px;
-	height: 20px;
-}
-.ash-sessions-list-add:hover {
-	background: var(--ash-list-hoverBackground);
-}
-.ash-sessions-list-add:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }
 
 .ash-sessions-list-items {
@@ -115,12 +50,12 @@
 .ash-sessions-list-item {
 	display: flex;
 	min-width: 0;
-	min-height: 64px;
+	min-height: 48px;
 	align-items: center;
 	gap: var(--ash-spacing-size120);
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
 	border: 0;
-	border-radius: var(--ash-cornerRadius-xLarge);
+	border-radius: var(--ash-cornerRadius-large);
 	color: var(--ash-foreground);
 	background: transparent;
 	cursor: pointer;
@@ -128,20 +63,8 @@
 	text-align: left;
 }
 
-.ash-sessions-list-avatar {
-	display: grid;
-	width: 40px;
-	height: 40px;
-	flex: 0 0 auto;
-	place-items: center;
-	border-radius: 50%;
-	color: var(--ash-button-primaryForeground);
-	background: var(--ash-button-primaryBackground);
-}
-
-.ash-sessions-list-avatar svg {
-	width: 24px;
-	height: 24px;
+.ash-sessions-list-item.has-management {
+	min-height: 64px;
 }
 
 .ash-sessions-list-content {
@@ -185,6 +108,7 @@
 .ash-sessions-list-pr > .ash-icon {
 	width: 12px;
 	height: 12px;
+	font-size: var(--ash-lxiconFontSize-compact);
 }
 
 .ash-sessions-list-item:hover {
@@ -207,11 +131,79 @@
 	font-size: var(--ash-fontSize-label1);
 }
 
-.ash-sessions-list-items h3 {
-	margin: var(--ash-spacing-size160) var(--ash-spacing-size120)
-		var(--ash-spacing-size80);
-	font-size: var(--ash-fontSize-label1);
-	font-weight: var(--ash-fontWeight-semiBold);
+.ash-sessions-list-section,
+.ash-sessions-list-subgroup {
+	min-width: 0;
+	flex: 0 0 auto;
+}
+
+.ash-sessions-list-section + .ash-sessions-list-section {
+	margin-top: var(--ash-spacing-size160);
+}
+
+.ash-sessions-list-section h3 {
+	margin: 0;
+	font: inherit;
+}
+
+.ash-sessions-list-section-toggle {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	width: 100%;
+	min-width: 0;
+	min-height: 36px;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	border: 0;
+	border-radius: var(--ash-cornerRadius-large);
+	background: transparent;
 	color: var(--ash-description-foreground);
-	overflow-wrap: anywhere;
+	font: inherit;
+	font-size: var(--ash-fontSize-label1);
+	text-align: start;
+	cursor: pointer;
+}
+
+.ash-sessions-list-subgroup > h3 > .ash-sessions-list-section-toggle {
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-body1);
+}
+
+.ash-sessions-list-section-toggle:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-sessions-list-section-toggle:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-sessions-list-section-icon,
+.ash-sessions-list-item > .ash-icon {
+	display: inline-flex;
+	align-items: center;
+	flex: 0 0 auto;
+	width: 16px;
+	height: 16px;
+}
+
+.ash-sessions-list-section-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-sessions-list-section-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-sessions-list-subgroup > .ash-sessions-list-section-body {
+	padding-inline-start: var(--ash-spacing-size240);
+}
+
+.ash-sessions-list-section-body[hidden] {
+	display: none;
 }

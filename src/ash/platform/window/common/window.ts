@@ -87,6 +87,9 @@ export const DEFAULT_MENU_STYLE: MenuStyleConfiguration = isMacintosh ? 'system'
 export const DEFAULT_TITLE_BAR_STYLE: TitleBarStyleConfiguration = 'custom';
 export type RestoreWindowsSetting = 'preserve' | 'all' | 'folders' | 'one' | 'none';
 export const RESTORE_WINDOWS_SETTING = 'window.restoreWindows';
+export const STARTUP_WINDOW_SETTING = 'window.startupWindow';
+export type StartupWindow = 'default' | 'ide' | 'agents';
+export const DEFAULT_STARTUP_WINDOW: StartupWindow = 'default';
 export const NEW_WINDOW_DIMENSIONS_SETTING = 'window.newWindowDimensions';
 export const RESTORE_FULLSCREEN_SETTING = 'window.restoreFullscreen';
 export type NewWindowDimensions = 'default' | 'inherit' | 'offset' | 'maximized' | 'fullscreen';
@@ -104,6 +107,11 @@ export function parseRestoreFullscreen(value: unknown): boolean {
 export function parseRestoreWindowsSetting(value: unknown): RestoreWindowsSetting {
 	if (value === 'preserve' || value === 'all' || value === 'folders' || value === 'one' || value === 'none') return value;
 	throw new TypeError(`Unknown window restore setting: ${String(value)}`);
+}
+
+export function parseStartupWindow(value: unknown): StartupWindow {
+	if (value === 'default' || value === 'ide' || value === 'agents') return value;
+	throw new TypeError(`Unknown startup window: ${String(value)}`);
 }
 
 export function parseMenuStyle(value: unknown): MenuStyleConfiguration {

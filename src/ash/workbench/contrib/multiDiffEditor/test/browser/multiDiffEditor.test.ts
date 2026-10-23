@@ -351,6 +351,10 @@ test('Multi-diff pane acquires text models as files enter the viewport and relea
 	await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/lazy'), items, 'Lazy files'), new AbortController().signal);
 	assert.ok(acquired.length > 0 && acquired.length < 20);
 	assert.ok(acquired.every(resource => /\/lazy\/[0-9]\//.test(resource) && Number(resource.match(/\/lazy\/(\d+)\//)?.[1]) < 10));
+	const editable = pane.getControl()!.modifiedEditor.getModel()!;
+	editable.pushStackElement();
+	editable.pushEditOperations(null, [{ range: editable.getFullModelRange(), text: 'unsaved edit' }], () => null);
+	editable.pushStackElement();
 	const editor = requiredElement<HTMLElement>(parent, '.stanza-multi-diff-editor');
 	const content = requiredElement<HTMLElement>(editor, '.stanza-multi-diff-editor-content');
 	// jsdom has no layout; the scrollbar needs the viewport's real measured bounds.
@@ -370,6 +374,82 @@ test('Multi-diff pane acquires text models as files enter the viewport and relea
 		observer.observe(editor, { childList: true, subtree: true });
 	});
 	assert.ok(acquired.length < 30);
+	assert.equal(editable.getValue(), 'unsaved edit');
+	await editable.undo();
+	assert.equal(editable.getValue(), 'new 0', 'Virtualization must preserve undo in writable files');
+	await editable.redo();
+	assert.equal(editable.getValue(), 'unsaved edit');
+	pane.clearInput();
+	assert.deepEqual(released.slice().sort(), acquired.slice().sort());
+	dom.window.close();
+});
+
+test('Multi-diff evicts unused snapshots, reloads them for navigation and bounds retained references', async () => {
+	const dom = createTestDom();
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new BootstrapTextFiles()), {});
+	using resources = new DisposableStore();
+	const services = createCodeEditorServices(resources);
+	registerDialogs(services, resources);
+	const acquired: string[] = [];
+	const released: string[] = [];
+	const trackedModels: ITextModelResourceService = {
+		async acquire(input: TextModelInput, signal: AbortSignal): Promise<TextModelReference> {
+			const reference = await models.acquire(input, signal);
+			acquired.push(input.resource.toString());
+			let disposed = false;
+			const dispose = (): void => {
+				if (disposed) return;
+				disposed = true;
+				released.push(input.resource.toString());
+				reference.dispose();
+			};
+			return {
+				resource: reference.resource,
+				model: reference.model,
+				get isDirty() { return reference.isDirty; },
+				onDidChangeDirty: reference.onDidChangeDirty,
+				get hasExternalChange() { return reference.hasExternalChange; },
+				onDidChangeExternalChange: reference.onDidChangeExternalChange,
+				save: (signal, options) => reference.save(signal, options),
+				saveAs: (resource, signal) => reference.saveAs(resource, signal),
+				revert: signal => reference.revert(signal),
+				dispose,
+				[Symbol.dispose]: dispose,
+			};
+		},
+		dispose: () => models.dispose(),
+		[Symbol.dispose]: () => models.dispose(),
+	};
+	using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
+		modelService: trackedModels,
+		createComputationService: () => new PaneTestDiffComputationService(),
+	} satisfies MultiDiffEditorOptions);
+	pane.create(parent);
+	pane.layout({ width: 600, height: 240 });
+	const items = Array.from({ length: 12 }, (_, index) => ({
+		label: `file-${index}.ts`,
+		original: { resource: URI.parse(`git-change:/lazy/${index}/original`), initialText: `old ${index}` },
+		modified: { resource: URI.parse(`git-change:/lazy/${index}/modified`), initialText: `new ${index}`, readOnly: true },
+	}));
+	await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/lazy'), items, 'Lazy files'), new AbortController().signal);
+	assert.ok(acquired.length > 0 && acquired.length < 20);
+	assert.ok(acquired.every(resource => /\/lazy\/[0-9]\//.test(resource) && Number(resource.match(/\/lazy\/(\d+)\//)?.[1]) < 10));
+	const initial = pane.getControl()!.modifiedEditor.getModel()!;
+	pane.collapseAll();
+	for (let index = 1; index < items.length; index++) {
+		const location = await pane.nextChange();
+		assert.ok(location);
+		assert.equal(pane.getControl()!.modifiedEditor.getModel()!.getValue(), `new ${index}`);
+		pane.collapseAll();
+		assert.ok(acquired.length - released.length <= 10, 'At most five unused pairs may stay cached');
+	}
+	assert.ok(initial.isDisposed(), 'The first historical text model should be evicted');
+	await pane.nextChange();
+	const reloaded = pane.getControl()!.modifiedEditor.getModel()!;
+	assert.notEqual(reloaded, initial);
+	assert.equal(reloaded.getValue(), 'new 0');
 	pane.clearInput();
 	assert.deepEqual(released.slice().sort(), acquired.slice().sort());
 	dom.window.close();
@@ -474,6 +554,12 @@ test('Multi-diff collapse command updates mounted and remounted comparisons and 
 	const services = createCodeEditorServices(resources);
 	registerDialogs(services, resources);
 	const configuration = services.get(IConfigurationService);
+	const updateValue = configuration.updateValue.bind(configuration);
+	configuration.updateValue = async (key, value) => {
+		// Workbench removes writes equal to the user default without publishing a value change.
+		if (key === CodeEditorConfiguration.diffHideUnchangedRegionsEnabled && value === false && configuration.getValue(key) === false) return;
+		await updateValue(key, value);
+	};
 	using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(),
@@ -488,8 +574,11 @@ test('Multi-diff collapse command updates mounted and remounted comparisons and 
 	})), 'Hidden regions'), new AbortController().signal);
 	await pane.nextChange();
 	const regions = () => parent.querySelectorAll('.ash-diff-hidden-region');
-	assert.equal(regions().length, 0);
+	assert.equal(regions().length, 4, 'Multi-diff folds unchanged regions without changing the ordinary diff default');
 	assert.equal(configuration.getValue(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled), false);
+	await pane.toggleCollapseUnchangedRegions();
+	assert.equal(regions().length, 0);
+	assert.equal(configuration.inspect(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled).memoryValue, undefined);
 	await pane.toggleCollapseUnchangedRegions();
 	assert.equal(regions().length, 4);
 	assert.ok([...parent.querySelectorAll('.stanza-multi-diff-editor-header-toggle')].every(header => header.getAttribute('aria-expanded') === 'true'));

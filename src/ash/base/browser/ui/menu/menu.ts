@@ -4,6 +4,7 @@ import { type IAction, type IActionRunner, Separator, SubmenuAction } from "../.
 import { RunOnceScheduler } from "../../../common/async.js";
 import { addDisposableListener, isNode, h } from "../../dom.js";
 import { FocusNavigationBoundary, FocusNavigationDirection, focusFirst, focusLast, moveFocus } from "../../focus.js";
+import { isModifierKey } from "../../keyboardEvent.js";
 import type { ResolvedKeybinding } from "../../../common/keybindings.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import { Lxicon } from "../../../common/lxicons.js";
@@ -205,7 +206,7 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 		this.button.domNode.setAttribute("aria-expanded", "false");
 		const indicator = h(ownerDocument, "span");
 		indicator.className = "ash-submenu-indicator";
-		appendIcon(Lxicon.chevronRight, indicator);
+		appendIcon(Lxicon.menuSubmenu, indicator);
 		this.button.domNode.append(indicator);
 		this._register(addDisposableListener(container, "mouseenter", (event) => {
 			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
@@ -437,6 +438,14 @@ export class Menu extends Disposable {
 			if (isNode(event.relatedTarget) && this.contains(event.relatedTarget)) return;
 			this.setFocusedEntry(undefined);
 		}));
+		// Keyboard input may come from a sibling filter or an open submenu before focus returns here.
+		this._register(addDisposableListener(ownerDocument, "keydown", event => {
+			if (event.isComposing || isModifierKey(event)) return;
+			element.classList.remove("pointer-navigation");
+		}, true));
+		this._register(addDisposableListener(element, "pointerdown", () => {
+			element.classList.add("pointer-navigation");
+		}));
 		this._register(addDisposableListener(element, "mouseover", (event) => {
 			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
 		}));
@@ -447,6 +456,7 @@ export class Menu extends Disposable {
 			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
 			// Showing a menu under a resting pointer must not select an action.
 			if (!moved) return;
+			element.classList.add("pointer-navigation");
 			const entry = this.findEntry(event.target);
 			this.setFocusedEntry(entry?.action.enabled ? entry : undefined, true);
 		}));

@@ -43,6 +43,54 @@ fn request_position_uses_the_negotiated_encoding_without_splitting_unicode() {
 }
 
 #[test]
+fn empty_document_accepts_completion_insertions_and_formatting_edits() {
+    for encoding in [PositionEncodingKind::UTF8, PositionEncodingKind::UTF16] {
+        let position = Position::new(0, 0);
+        let range = Range::new(position, position);
+        let completions = project_completions(
+            LanguageRequestId::new(1),
+            absolute_test_path("empty.rs"),
+            LanguageDocumentRevision::INITIAL,
+            LanguageDocumentPosition::new(0, 0),
+            "",
+            &encoding,
+            false,
+            Some(CompletionResponse::Array(vec![
+                CompletionItem {
+                    label: "plain".into(),
+                    ..Default::default()
+                },
+                CompletionItem {
+                    label: "explicit".into(),
+                    text_edit: Some(CompletionTextEdit::Edit(TextEdit::new(
+                        range,
+                        "inserted".into(),
+                    ))),
+                    ..Default::default()
+                },
+            ])),
+        );
+        assert_eq!(completions.items.len(), 2, "{encoding:?}");
+        for item in completions.items {
+            assert_eq!(item.edit.unwrap().range.byte_range(), 0..0);
+        }
+
+        let formatting = project_formatting_edits(
+            LanguageRequestId::new(2),
+            absolute_test_path("empty.rs"),
+            LanguageDocumentRevision::INITIAL,
+            "",
+            &encoding,
+            Some(vec![TextEdit::new(range, "formatted".into())]),
+        )
+        .expect("insertion into an empty document is valid");
+        assert_eq!(formatting.edits[0].range.byte_range(), 0..0);
+        assert!(byte_offset_for_position("", Position::new(0, 1), &encoding).is_none());
+        assert!(byte_offset_for_position("", Position::new(1, 0), &encoding).is_none());
+    }
+}
+
+#[test]
 fn pull_diagnostic_projection_distinguishes_full_and_unchanged_reports() {
     let full = project_document_diagnostics(
         LanguageRequestId::new(2),

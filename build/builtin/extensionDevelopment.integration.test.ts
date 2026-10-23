@@ -18,7 +18,7 @@ test('real independent Academy development host gates local code, describes, rel
 	assert.equal(result.status, 0, result.stderr + result.stdout);
 	const events = result.stdout.trim().split('\n').map(line => JSON.parse(line));
 	assert.equal(events.filter(event => event.event === 'description').length, 3);
-	assert.equal(events.find(event => event.language === 'zh-CN').result.editors[0].displayName, '学术论文文档');
+	assert.equal(events.find(event => event.language === 'zh-CN').result.editors[0].displayName, 'Academy 文档');
 	assert.equal(events.at(-1).event, 'stopped');
 	assert.ok(events.some(event => event.event === 'status' && event.registrations.some((item: { registrationId: string; }) => item.registrationId === 'editor.client.v1')));
 });

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { EditorInputSerializers } from '../../../../services/editor/common/editorInputSerializer.js';
-import { ExtensionsInput, ExtensionsCapabilityInput } from '../../common/extensionsInput.js';
+import { ExtensionsInput, ExtensionsCapabilityInput, ExtensionsInputSource } from '../../common/extensionsInput.js';
 
 test('Extensions tabs restore the selected installation without persisting capability authority', () => {
 	const summary = { id: 'demo@vendor', version: '1.2.3', displayName: 'Demo', description: 'A skill bundle', packageType: 'plugin' };
@@ -48,4 +48,40 @@ test('Capability tabs restore Skill, Connector and MCP identities without catalo
 	assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'ash.extensions.capabilityInput', value: { kind: 'skill', name: 'review', source: 12 } }), TypeError);
 	assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'ash.extensions.capabilityInput', value: { kind: 'connector', connectorId: 12 } }), TypeError);
 	assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'ash.extensions.capabilityInput', value: { kind: 'other' } }), TypeError);
+});
+
+test('legacy built-in Rust tabs restore and persist the Ash identity', () => {
+	const summary = { id: 'vscode.rust', version: '10.0.0', displayName: 'rust', description: '', packageType: 'editorExtension' };
+	const saved = { typeId: 'ash.extensions.input', value: { ...summary, source: 'builtIn' } };
+	using restored = EditorInputSerializers.deserialize(saved) as ExtensionsInput;
+	using current = new ExtensionsInput({ ...summary, id: 'ash.rust' }, undefined, ExtensionsInputSource.BuiltIn);
+	assert.deepEqual(restored.summary, current.summary);
+	assert.equal(restored.source, ExtensionsInputSource.BuiltIn);
+	assert.equal(restored.resource.path, '/builtIn/ash.rust');
+	assert.equal(restored.resource.query, '10.0.0');
+	assert.ok(restored.matches(current));
+	assert.equal(saved.value.id, 'vscode.rust');
+	const migrated = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(restored)));
+	assert.deepEqual(migrated, { typeId: saved.typeId, value: { ...summary, id: 'ash.rust', source: 'builtIn' } });
+	using reopened = EditorInputSerializers.deserialize(migrated) as ExtensionsInput;
+	assert.deepEqual(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(reopened))), migrated);
+	assert.ok(reopened.matches(current));
+});
+
+test('Rust tab migration is restricted to the exact legacy built-in identity', () => {
+	for (const [source, id] of [
+		[undefined, 'vscode.rust'],
+		['registry', 'vscode.rust'],
+		['local', 'vscode.rust'],
+		['builtIn', 'ash.rust'],
+		['builtIn', 'vscode.rust-extra'],
+		['builtIn', 'vscode.css'],
+	]) {
+		const value = { id, version: '1.0.0', displayName: 'Rust', description: '', packageType: 'editorExtension', source, installationId: 'installed-version' };
+		using restored = EditorInputSerializers.deserialize({ typeId: 'ash.extensions.input', value }) as ExtensionsInput;
+		assert.equal(restored.summary.id, id);
+		assert.equal(restored.source, source ?? ExtensionsInputSource.Registry);
+		assert.equal(restored.installationId, value.installationId);
+	}
+	assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'ash.extensions.input', value: { id: 12, source: 'builtIn' } }), TypeError);
 });

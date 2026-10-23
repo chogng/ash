@@ -209,10 +209,9 @@ impl Api {
                 (method, params)
             };
             let value = match token {
-                Some(token)
-                    if wire_method == "runTransport"
-                        && (configuration.boolean("showProgress", true) || cancellable) =>
-                {
+                // Ordinary operations publish busy state through SCM; a notification is
+                // needed only when it owns a cancellation control.
+                Some(token) if wire_method == "runTransport" && cancellable => {
                     self.client.request_backend_with_progress(
                         "git.repository",
                         wire_method,

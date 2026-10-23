@@ -97,9 +97,11 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 		await mkdir(join(directory, 'extensions/theme-defaults/themes'), { recursive: true });
 		await writeFile(join(directory, 'extensions/theme-defaults/package.json'), JSON.stringify({ publisher: 'test', name: 'theme-defaults', version: '1.0.0' }));
 		await mkdir(join(directory, 'extensions/git/browser'), { recursive: true });
-		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', browser: 'browser/main.ts', contributes: { commands: [{ command: 'test.browser.command', title: 'Ash browser command' }] } }));
+		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', browser: 'browser/main.ts', contributes: { commands: [{ command: 'test.browser.command', title: 'Ash browser command' }, { command: 'test.browser.disposeImage', title: 'Dispose image editor' }], imageEditors: [{ id: 'test.image', displayName: 'Image' }] } }));
 		await writeFile(join(directory, 'extensions/git/browser/main.ts'), `import { marker } from './helper.js'; import { commands, window, workspace } from '@ash/sdk';
 export function activate(context) {
+ const image = window.registerImageEditorProvider('test.image', {resolveImageEditor(_context, view) { view.html = '<p>HTML-only image editor</p>'; }});
+ context.subscriptions.push(image, commands.register('test.browser.disposeImage', () => image.dispose()));
  context.subscriptions.push(commands.register('test.browser.command', async () => {
   const configuration = workspace.getConfiguration('sample');
   await configuration.update('enabled', false, 'workspace');
@@ -135,11 +137,19 @@ const manifest = JSON.parse(await readFile(new URL('../package.json', pathToFile
 globalThis.__ashConfiguration = { extensionId: manifest.publisher + '.' + manifest.name, extensionPath: '/', commands: manifest.contributes.commands, manifest };
 globalThis.__ashInitialization = { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: { defaults: {contents: {}, keys: [], overrides: []}, folders: []} };
 globalThis.__ashInvocation = () => 1;
+const changes = [];
+globalThis.__ashRegistrationsChanged = snapshot => changes.push(snapshot);
 const requests = [];
 globalThis.__ashRequest = async (_id, encoded) => { requests.push(JSON.parse(encoded)); return JSON.stringify({result: 'done'}); };
 const runtime = await import(pathToFileURL(process.argv[1]).href);
 const registrations = await runtime.activate();
 assert(registrations.some(value => value.kind === 'command' && value.registrationId === 'test.browser.command'));
+assert(registrations.some(value => value.kind === 'dataChannel' && value.registrationId === 'test.image'));
+assert.deepEqual(await runtime.invoke('test.image', {data: {source: 'screen'}}, 2, 'receiveData'), {html: '<p>HTML-only image editor</p>', resources: [], state: null});
+await runtime.invoke('test.browser.disposeImage', {arguments: []}, 3, 'execute');
+assert.equal(changes.length, 1);
+assert.equal(changes[0].registrations.some(value => value.registrationId === 'test.image'), false);
+await assert.rejects(runtime.invoke('test.image', {data: {source: 'screen'}}, 4, 'receiveData'), /disposed/);
 assert.equal(await runtime.invoke('test.browser.command', {arguments: []}, 1, 'execute'), 'combined-entry-marker');
 assert.deepEqual(requests, [
  {operation: 'updateConfiguration', section: 'sample.enabled', value: false, target: 'workspace'},
@@ -172,15 +182,15 @@ await assert.rejects(runtime.invoke('test.browser.command', {arguments: []}, 1, 
 		assert.equal((await stat(catalog, { bigint: true })).mtimeNs, published, 'type-only edits do not publish a changed snapshot');
 		const edited = await snapshots();
 		assert.equal(Object.keys(edited).filter(key => edited[key] !== both[key]).length, 1, 'only the affected package is rebuilt');
-		await writeFile(join(directory, 'shared.ts'), "export const external = 'external-one';");
-		await writeFile(join(directory, 'extensions/git/browser/helper.ts'), "export { external as marker } from '../../../shared.ts';");
+		await writeFile(join(directory, 'extensions/git/browser/shared.ts'), "export const external = 'external-one';");
+		await writeFile(join(directory, 'extensions/git/browser/helper.ts'), "export { external as marker } from './shared.js';");
 		run();
 		const dependencies = await snapshots();
-		await writeFile(join(directory, 'shared.ts'), "export const external = 'external-two';");
+		await writeFile(join(directory, 'extensions/git/browser/shared.ts'), "export const external = 'external-two';");
 		run();
 		assert.equal(Object.keys(dependencies).filter(key => dependencies[key] !== (edited[key])).length, 1);
 		const dependentEdit = await snapshots();
-		assert.equal(Object.keys(dependentEdit).filter(key => dependentEdit[key] !== dependencies[key]).length, 1, 'external module edits invalidate only their consumer');
+		assert.equal(Object.keys(dependentEdit).filter(key => dependentEdit[key] !== dependencies[key]).length, 1, 'package module edits invalidate only their consumer');
 		const latest = JSON.parse(await readFile(catalog, 'utf8'));
 		assert.match(Buffer.from(latest.resources['test.git']['browser/main.ts'], 'base64').toString('utf8'), /external-two/);
 		assert.match(await readFile(preparedEntry, 'utf8'), /combined-entry-marker/, 'published old bytes remain frozen');
@@ -200,6 +210,17 @@ await assert.rejects(runtime.invoke('test.browser.command', {arguments: []}, 1, 
 		run();
 		const configured = await snapshots();
 		assert.equal(Object.keys(configured).filter(key => configured[key] !== dependentEdit[key]).length, 2, 'shared compiler settings invalidate both bundles');
+		const accepted = await publication();
+		await writeFile(join(directory, 'shared.ts'), "export const external = 'private-host-module';");
+		await symlink(join(directory, 'shared.ts'), join(directory, 'extensions/git/browser/private-link.ts'));
+		for (const source of ["export { external as marker } from '../../../shared.ts';", "export { external as marker } from 'unlisted-host-package';", "import type { external } from '../../../shared.ts'; export const marker = 'typed-import';", "export type Private = import('../../../shared.ts').external; export const marker = 'typed-query';", "export { external as marker } from './private-link.ts';", "import type { external } from './private-link.ts'; export const marker = 'typed-symlink';"]) {
+			await writeFile(join(directory, 'extensions/git/browser/helper.ts'), source);
+			const rejected = spawnSync(process.execPath, ['build/builtin/extensions.ts'], { cwd: directory, encoding: 'utf8', timeout: 30_000, env: { ...process.env, ASH_WEB_EXTENSION_PATHS: '' } });
+			assert.ifError(rejected.error);
+			assert.notEqual(rejected.status, 0, source);
+			assert.match(rejected.stderr, /escapes its package|declared dependency or @ash\/sdk/);
+			assert.deepEqual(await publication(), accepted, 'a rejected import cannot replace the admitted package snapshot');
+		}
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}

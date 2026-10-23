@@ -465,3 +465,41 @@ fn git(root: &Path, args: &[&str]) -> String {
     );
     String::from_utf8(output.stdout).unwrap().trim().to_owned()
 }
+
+#[test]
+fn warmed_history_reads_still_check_revoked_directory_authority() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().canonicalize().unwrap();
+    git(&root, &["init", "--initial-branch=main"]);
+    git(&root, &["config", "user.name", "Ash Test"]);
+    git(&root, &["config", "user.email", "ash@example.invalid"]);
+    std::fs::create_dir(root.join("scope")).unwrap();
+    std::fs::write(root.join("scope/file.txt"), "history\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-m", "History"]);
+    let head = git(&root, &["rev-parse", "HEAD"]);
+    let scope = root.join("scope");
+    let grant = Grant::for_environment(
+        Dir::open_local(&scope).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::InspectRepository]),
+    );
+    let service = GitService::new(
+        grant.authorize(Permission::InspectRepository).unwrap(),
+        scope,
+    )
+    .unwrap();
+    let repository = service
+        .repository_for_request(&ash_async_utils::CancellationSource::new().token())
+        .unwrap();
+    service.commit_changes(&repository, &head).unwrap();
+    let read = || service.commit_file(&repository, &head, Path::new("file.txt"), None);
+    assert_eq!(read().unwrap().modified(), Some(b"history\n".as_slice()));
+    grant.revoke();
+    let (result, timings) = super::with_process_timings(read);
+    assert!(matches!(result, Err(super::GitServiceError::Permission)));
+    assert!(
+        timings.records.is_empty(),
+        "Revocation must be checked before cached metadata or a retained Git child is used"
+    );
+}

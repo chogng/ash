@@ -1183,6 +1183,13 @@ fn language_diagnostics_and_capabilities_are_delivered_only_to_the_owning_connec
             signature_help_retrigger_characters: Vec::new(),
         },
     );
-    assert_eq!(first.drain().len(), 2);
+    broker.publish_language_diagnostics_refresh(
+        Some(101),
+        ash_app_server_protocol::protocol::language::LanguageDiagnosticsRefreshNotification {
+            dir_id: None,
+            server: "custom".into(),
+        },
+    );
+    assert_eq!(first.drain().len(), 3);
     assert!(second.drain().is_empty());
 }

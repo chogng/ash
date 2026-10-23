@@ -324,7 +324,7 @@ export class AppServerLanguageServerStatusService extends Disposable implements 
 
 	private description(server: Server): string {
 		const state = server.state;
-		const label = !state ? localize('languageServer.idle', 'Not started') : state.type === 'ready' ? localize('languageServer.running', 'Running') : state.type === 'stopped' ? localize('languageServer.stopped', 'Stopped') : state.type === 'starting' ? localize('languageServer.starting', 'Starting…') : state.type === 'backingOff' ? localize('languageServer.restarting', 'Restarting…') : localize('languageServer.failed', 'Failed');
+		const label = !state ? localize('languageServer.idle', 'Not started') : state.type === 'ready' ? localize('languageServer.running', 'Running') : state.type === 'idle' ? localize({ bundle: 'ash.settings', key: 'lsp.idle.state' }, 'Released while idle') : state.type === 'stopped' ? localize('languageServer.stopped', 'Stopped') : state.type === 'starting' ? localize('languageServer.starting', 'Starting…') : state.type === 'backingOff' ? localize('languageServer.restarting', 'Restarting…') : localize('languageServer.failed', 'Failed');
 		const issue = server.issue ?? (state?.type === 'failed' || state?.type === 'crashLoop' ? state.message : undefined);
 		return issue ? localize('languageServer.stateIssue', '{0}: {1}', label, summary(issue, 90)) : label;
 	}
@@ -356,6 +356,7 @@ function lifecyclePresentation(state: LanguageServerState): { readonly severity:
 	switch (state.type) {
 		case 'starting': return { severity: 'information', text: localize('languageServer.logStarting', 'Starting language server…') };
 		case 'ready': return { severity: 'information', text: localize('languageServer.logReady', 'Language server is ready.') };
+		case 'idle': return { severity: 'log', text: localize({ bundle: 'ash.settings', key: 'lsp.idle.state' }, 'Released while idle') };
 		case 'backingOff': return { severity: 'warning', text: localize('languageServer.logRetry', 'Language server stopped unexpectedly; restart attempt {0} begins in {1}ms.', state.attempt, state.retryAfterMillis) };
 		case 'crashLoop': return { severity: 'error', text: localize('languageServer.logCrashLoop', 'Language server entered a crash loop after {0} restart attempts: {1}', state.restartAttempts, state.message) };
 		case 'failed': return { severity: 'error', text: localize('languageServer.logFailed', 'Language server failed: {0}', state.message) };

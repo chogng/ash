@@ -13,6 +13,32 @@ import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { type TextMeasurer } from '../../common/viewModel.js';
 
+test('Hidden lines and single-line coordinate queries do not materialize the full unwrapped document', () => {
+	class CountingTextModel extends TextModel {
+		lineReads = 0;
+		override getLineLength(lineNumber: number): number {
+			this.lineReads++;
+			return super.getLineLength(lineNumber);
+		}
+	}
+	using model = new CountingTextModel(Array.from({ length: 10_000 }, () => 'shared line').join('\n'));
+	using lines = createViewModelLines(model);
+	const converter = lines.createCoordinatesConverter();
+	model.lineReads = 0;
+	assert.equal(converter.getModelLineViewLineCount(5000), 1);
+	assert.ok(model.lineReads < 10, 'A coordinate query must not read every source line');
+	model.lineReads = 0;
+	lines.setHiddenAreas([new Range(1, 1, 4999, 1), new Range(5001, 1, 10_000, 1)]);
+	assert.equal(lines.getViewLineCount(), 1);
+	assert.equal(lines.getViewLineContent(1), 'shared line');
+	assert.deepEqual(converter.convertViewPositionToModelPosition(new Position(1, 1)), new Position(5000, 1));
+	assert.equal(converter.getModelLineViewLineCount(1), 1);
+	assert.equal(converter.getModelLineViewLineCount(5000), 1);
+	assert.ok(model.lineReads < 20, 'Collapsing must only materialize visible rows');
+	lines.setHiddenAreas([]);
+	assert.equal(lines.getViewLineCount(), 10_000);
+});
+
 test('Leading hidden lines map to the start of the first visible line', () => {
 	using model = new TextModel('hidden\nalso hidden\nvisible\nlast');
 	using lines = createViewModelLines(model);
@@ -62,6 +88,8 @@ test("Visible visual-line projection removes hidden bodies while preserving wrap
 	assert.equal(projection.lineSource.lineCount, 5);
 	assert.equal(projection.projection.visualLineIndexAt(new Position((1) + 1, (3) + 1)), 2);
 	assert.equal(projection.projection.lineAt(2)?.logicalLineIndex, 0);
+	const converter = projection.createCoordinatesConverter();
+	assert.deepEqual([1, 2, 3, 4].map(line => converter.getModelLineViewLineCount(line)), [3, 1, 1, 2]);
 });
 
 test("Visible visual-line projection refreshes the source before collapsed ranges observe a shrinking model", () => {

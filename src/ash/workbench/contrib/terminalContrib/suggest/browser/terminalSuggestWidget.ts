@@ -1,12 +1,13 @@
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { List } from '../../../../../base/browser/ui/list/listWidget.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
-import { listRowHeight } from '../../../../../base/common/uiSizes.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
 import type { IXtermTerminal } from '../../../terminal/browser/terminal.js';
 import type { ITerminalWidget } from '../../../terminal/browser/widgets/widgets.js';
 import './media/terminalSuggestWidget.css';
+
+const SuggestionRowHeight = 22;
 
 /** A transient presentation of query results; input and history stay with the terminal. */
 export class TerminalSuggestWidget<T extends { readonly label: string; readonly description?: string; }> extends Disposable implements ITerminalWidget {
@@ -27,7 +28,7 @@ export class TerminalSuggestWidget<T extends { readonly label: string; readonly 
 		this.element.append(listHost);
 		this.list = this._register(new List<T>(listHost, {
 			ariaLabel: localize('terminal.suggest.ariaLabel', 'Terminal suggestions'), role: 'listbox', domFocusable: false,
-			keyboardNavigation: false, scrolling: 'managed', acceptOnClick: true, getHeight: () => listRowHeight,
+			keyboardNavigation: false, scrolling: 'managed', acceptOnClick: true, getHeight: () => SuggestionRowHeight,
 			accessibilityProvider: { getAriaLabel: item => item.label },
 			renderItem: item => {
 				const row = document.createElement('div'); row.className = 'ash-terminal-suggest-item';
@@ -77,8 +78,8 @@ export class TerminalSuggestWidget<T extends { readonly label: string; readonly 
 		const available = Math.min(parent.height, Math.max(belowSpace, aboveSpace));
 		// Fit complete rows and the instruction line into this split's actual viewport.
 		const overhead = this.footer.offsetHeight + 2;
-		const rows = Math.max(1, Math.min(items.length, 6, Math.floor((available - overhead) / listRowHeight)));
-		this.list.layout(rows * listRowHeight);
+		const rows = Math.max(1, Math.min(items.length, 6, Math.floor((available - overhead) / SuggestionRowHeight)));
+		this.list.layout(rows * SuggestionRowHeight);
 		const cursorLeft = bounds.left - parent.left + raw.buffer.active.cursorX * bounds.width / raw.cols;
 		this.element.style.left = `${Math.max(0, Math.min(cursorLeft, parent.width - this.element.offsetWidth))}px`;
 		const top = above ? cursorTop - this.element.offsetHeight : below;

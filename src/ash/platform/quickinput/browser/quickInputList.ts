@@ -36,6 +36,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	private readonly headings = new Map<TItem, string>();
 	public keyMods: IKeyMods = { ctrlCmd: false, alt: false, shift: false };
 	private _visibleItems: readonly TItem[] = [];
+	private singleLineRows: boolean;
 	private maxHeight = Number.POSITIVE_INFINITY;
 	private query = "";
 	private _sortByLabel = true;
@@ -72,8 +73,9 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		this._onDidChangeActive.event;
 	readonly onDidTriggerItemButton = this.buttonEmitter.event;
 
-	constructor(container: HTMLElement, presentation: 'quickPick' | 'menu' | 'compactMenu' = 'quickPick') {
+	constructor(container: HTMLElement, private readonly presentation: 'quickPick' | 'menu' | 'compactMenu' = 'quickPick') {
 		super();
+		this.singleLineRows = presentation === 'quickPick';
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = 'ash-quick-pick-list';
@@ -82,11 +84,20 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		this._register(toDisposable(() => this.element.remove()));
 		container.append(this.element);
 
+		const owner = this;
+		const singleLineHeight = () => 22;
 		this.list = this._register(new List<TItem>(this.element, {
 			styles: defaultListStyles,
 			ariaLabel: localize('quickInput.results', 'Quick Pick results'),
 			domFocusable: true,
 			scrolling: 'managed',
+			// Details and menus retain their content-sized geometry. Ordinary results
+			// share the standard row height, so only the viewport needs DOM rows.
+			get getHeight() { return owner.singleLineRows ? singleLineHeight : undefined; },
+			accessibilityProvider: {
+				getAriaSetSize: () => this._visibleItems.length,
+				getAriaPosInSet: item => this._visibleItems.indexOf(item) + 1,
+			},
 			renderItem: (item, _index, row) => this.renderItem(item, row),
 			onDidRemoveRow: row => {
 				this.keybindingLabels.deleteAndDispose(row);
@@ -124,6 +135,11 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		}));
 		this._register(this.list.onDidChangeActive(({ item, rowId }) => {
 			this._onDidChangeActive.fire({ item, rowId });
+		}));
+		// The focused option can mount after the input received logical focus,
+		// or leave the DOM during scrolling. Keep the combobox's reference live.
+		this._register(this.list.onDidRenderRows(() => {
+			this._onDidChangeActive.fire({ item: this.list.activeItem, rowId: this.list.row(this.list.activeIndex)?.id });
 		}));
 	}
 
@@ -241,6 +257,8 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			this._visibleItems = candidates.filter(item => matches.has(item));
 		}
 		const active = this.list.activeItem;
+		this.singleLineRows = this.presentation === 'quickPick' && !this._visibleItems.some(item => !!item.detail);
+		this.element.classList.toggle('ash-quick-pick-list-virtualized', this.singleLineRows);
 		this.list.items = this._visibleItems;
 		// Item actions already provide Tab targets; otherwise the list needs its own.
 		this.list.element.tabIndex = this._visibleItems.some(item => item.buttons?.length) ? -1 : 0;

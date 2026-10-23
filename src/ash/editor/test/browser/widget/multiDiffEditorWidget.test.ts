@@ -1,13 +1,16 @@
+import { computeDiffRowLayout } from '../../../browser/widget/multiDiffEditor/compressedVirtualizedScrollLayout.js';
+import { TEST_FONT_INFO } from '../config/testConfiguration.js';
 import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
 import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { test, suite, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../base/browser/dom.js';
 import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Event } from '../../../../base/common/event.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../common/diff/documentDiffProvider.js';
 import { DefaultLinesDiffComputer } from '../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
@@ -41,6 +44,58 @@ suiteTeardown(() => {
 	browserEnvironment.window.close();
 });
 const diffOptions: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
+
+suite('MultiDiff comparison retention', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('row height estimates preserve paired wraps across bounded computation batches', async () => {
+		using resources = new DisposableStore();
+		const before = Array.from({ length: 300 }, () => 'x');
+		before[254] = 'x'.repeat(25);
+		const after = [...before];
+		after[256] = 'x'.repeat(45);
+		const original = resources.add(new TextModel(before.join('\n')));
+		const modified = resources.add(new TextModel(after.join('\n')));
+		const model = resources.add(new DiffModel({ original, modified, diffProvider: new MultiDiffTestComputationService(), diffOptions }));
+		await waitForReady(model);
+		const plain = computeDiffRowLayout(model, 20);
+		assert.equal(plain.height, 6000);
+		assert.equal(plain.getOffset(257), 5140);
+		const wrapped = computeDiffRowLayout(model, 20, { fontInfo: TEST_FONT_INFO, column: 10 });
+		assert.deepEqual([254, 255, 256, 257, 300].map(index => wrapped.getOffset(index)), [5080, 5140, 5160, 5260, 6120]);
+		assert.equal(wrapped.height, 6120);
+	});
+
+	test('comparison retention pins pending navigation and permits reload after the final release', async () => {
+		using resources = new DisposableStore();
+		const original = resources.add(new TextModel('before'));
+		const modified = resources.add(new TextModel('after'));
+		const provider = new MultiDiffTestComputationService();
+		let current: InstanceType<typeof DiffModel> | undefined;
+		let loads = 0;
+		const loaded = new DeferredPromise<void>();
+		const item = resources.add(new DocumentDiffItem({ id: 'retained', label: 'retained.txt' }, async () => {
+			loads++;
+			await loaded.p;
+			return current = resources.add(new DiffModel({ original, modified, diffProvider: provider, diffOptions }));
+		}, { onDidChange: () => { }, release: () => current?.dispose() }));
+		const viewport = item.retain();
+		const navigation = item.retain();
+		const pending = item.resolve();
+		viewport.dispose();
+		assert.equal(item.release(), false);
+		await loaded.complete();
+		const first = await pending;
+		assert.equal(item.release(), false, 'Navigation still owns the ready comparison');
+		navigation.dispose();
+		assert.equal(item.release(), true);
+		assert.equal(first?.isDisposed, true);
+		assert.equal(item.model, undefined);
+		assert.equal(item.state, 'unresolved');
+		const second = await item.resolve();
+		assert.notEqual(second, first);
+		assert.equal(loads, 2, 'Eviction must drop the settled promise as well as the model');
+	});
+});
 
 test('MultiDiff collapse toggle follows individual headers, restored state and source replacement', () => {
 	using resources = new DisposableStore();
@@ -126,7 +181,7 @@ for (const restore of [false, true]) {
 			const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 			container.focus();
 			const original = Array.from({ length: 100 }, (_, index) => `shared ${index + 1}`);
-			await services.get(IConfigurationService).updateValue('diffEditor.hideUnchangedRegions.enabled', true);
+			assert.equal(services.get(IConfigurationService).getValue('diffEditor.hideUnchangedRegions.enabled'), false, 'The ordinary diff default stays independent');
 			const modified = [...original];
 			modified[59] = 'changed';
 			using before = new TextModel(original.join('\n'));
@@ -149,6 +204,16 @@ for (const restore of [false, true]) {
 				assert.ok(container.querySelectorAll('.ash-diff-hidden-region').length > 0);
 				const changeTop = editor.getActiveControl()!.modifiedEditor.getTopForLineNumber(60);
 				assert.ok(changeTop >= 0 && changeTop < 300);
+				const editorService = services.get(ICodeEditorService);
+				for (let iteration = 0; iteration < 5; iteration++) {
+					editor.collapseAll();
+					assert.equal(editorService.listDiffEditors().length, 0);
+					assert.equal(editorService.listCodeEditors().length, 0);
+					editor.expandAll();
+					assert.equal(editorService.listDiffEditors().length, 1);
+					assert.equal(editorService.listCodeEditors().length, 2);
+					assert.equal(container.querySelectorAll('.ash-diff-hidden-region').length, 4);
+				}
 				editor.collapseAll();
 				await editor.toggleCollapseUnchangedRegions();
 				editor.expandAll();

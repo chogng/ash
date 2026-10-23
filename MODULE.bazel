@@ -116,7 +116,8 @@ rules_rust.patch(
 use_repo(rules_rust, "rules_rust")
 
 toolchains = use_extension("@rules_rs//rs/toolchains:module_extension.bzl", "toolchains")
-RUST_VERSION = "1.98.0"
+RUST_VERSION = "1.99.1"
+WINDOWS_RUST_CPUS = ["x86_64", "aarch64"]
 toolchains.toolchain(
     edition = "2024",
     version = RUST_VERSION,
@@ -134,12 +135,14 @@ rust_tools = use_repo_rule("@rules_rust//rust/private:repositories.bzl", "rust_t
         target_triple = cpu + "-pc-windows-gnullvm",
         version = RUST_VERSION,
     )
-    for cpu in ["x86_64", "aarch64"]
+    for cpu in WINDOWS_RUST_CPUS
 ]
 override_repo(
     toolchains,
-    cargo_windows_x86_64_1_98_0 = "ash_gnullvm_x86_64_tools",
-    cargo_windows_aarch64_1_98_0 = "ash_gnullvm_aarch64_tools",
+    **{
+        "cargo_windows_x86_64_" + RUST_VERSION.replace(".", "_"): "ash_gnullvm_x86_64_tools",
+        "cargo_windows_aarch64_" + RUST_VERSION.replace(".", "_"): "ash_gnullvm_aarch64_tools",
+    }
 )
 
 # Reuse rules_rust's repository sets for MSVC-hosted compilers without changing
@@ -164,7 +167,7 @@ msvc_rust.toolchain(edition = "2024", versions = [RUST_VERSION])
         ],
         versions = [RUST_VERSION],
     )
-    for cpu in ["x86_64", "aarch64"]
+    for cpu in WINDOWS_RUST_CPUS
 ]
 msvc_rust.repository_set(
     name = "ash_msvc_x86_64",

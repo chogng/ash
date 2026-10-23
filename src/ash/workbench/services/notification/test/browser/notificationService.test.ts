@@ -18,11 +18,11 @@ import { darkColorTheme } from "../../../../../platform/theme/common/colorTheme.
 import { IStorageService, StorageScope, StorageTarget } from "../../../../../platform/storage/common/storage.js";
 import { BrowserStorageService } from "../../../storage/browser/storageService.js";
 import { registerTestComponentServices } from "../../../../test/common/testEditorServices.js";
-import { StatusbarPart } from "../../../../browser/parts/statusbar/statusbarPart.js";
+import { StatusbarPart, StatusbarService } from "../../../../browser/parts/statusbar/statusbarPart.js";
 import { INotificationsCenter, NotificationsCenter } from "../../../../browser/parts/notifications/notificationsCenter.js";
 import { NotificationActionRunner } from "../../../../browser/parts/notifications/notificationsCommands.js";
 import { CommandService } from "../../../commands/common/commandService.js";
-import { StatusbarAlignment, StatusbarService } from "../../../statusbar/browser/statusbar.js";
+import { IStatusbarService, StatusbarAlignment } from "../../../statusbar/browser/statusbar.js";
 import { TestNotificationService } from '../common/testNotificationService.js';
 import { NotificationService } from '../../common/notificationService.js';
 import { Event, Emitter } from '../../../../../base/common/event.js';
@@ -627,7 +627,10 @@ for (const clearAll of [false, true]) {
 		services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: document.defaultView!, workspaceId: "notifications-test", backend: document.defaultView!.localStorage, flushInterval: 0 }));
 		registerTestComponentServices(services, document);
-		using part = services.createInstance(StatusbarPart, document.body, statusbar);
+		services.registerInstance(IContextMenuService, fixture.presentation.menus);
+		services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+		services.registerInstance(IStatusbarService, statusbar);
+		using part = services.createInstance(StatusbarPart, document.body);
 		document.body.append(part.domNode);
 		const origin = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="ash.status.notifications"] .ash-statusbar-item-label')!;
 		const handle = service.notify({ severity: Severity.Info, message: "Finished" });

@@ -42,3 +42,14 @@ export function findWorkbenchSelector(contents: string): number | undefined {
 	}
 	return undefined;
 }
+
+/** CSS dependencies obey the same direction as imports: shared layers cannot name Sessions UI. */
+export function findSessionsReference(contents: string): number | undefined {
+	for (const selector of selectors(contents)) {
+		const match = /\.ash-(?:sessions-[\w-]+|code-sessions-window|workbench-sessions)(?![\w-])/.exec(selector.text);
+		if (match) { return selector.offset + match.index; }
+	}
+	const source = contents.replace(/\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|url\([^)]*\)/gi, text => ' '.repeat(text.length));
+	const variable = /--(?:ash-)?sessions-[\w-]+/.exec(source);
+	return variable?.index;
+}

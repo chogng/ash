@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../browser/parts/statusbar/statusbarPart.js';
 import { IDefaultLogLevelsService } from '../../services/log/common/defaultLogLevels.js';
 import { DEFAULT_LOG_LEVEL, ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { emptyEditorServiceState } from '../common/testEditorService.js';
@@ -33,7 +34,7 @@ import { TextModelResolverService } from '../../services/textmodelResolver/commo
 import { IFileTextModelService, ITextModelResourceService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { IOutputService } from '../../services/output/common/output.js';
 import { OutputService } from '../../contrib/output/browser/outputServices.js';
-import { IStatusbarService, StatusbarService } from '../../services/statusbar/browser/statusbar.js';
+import { IStatusbarService } from '../../services/statusbar/browser/statusbar.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
@@ -41,7 +42,8 @@ import { TestQuickInputService } from '../../../platform/quickinput/test/browser
 import { TestNotificationService } from '../../services/notification/test/common/testNotificationService.js';
 import { ViewsService } from '../../services/views/browser/viewsService.js';
 import { IViewsService } from '../../services/views/common/viewsService.js';
-import { WorkbenchViewRegistry } from '../../common/views.js';
+import { IViewDescriptorService, WorkbenchViewRegistry } from '../../common/views.js';
+import { IPaneCompositePartService } from '../../services/panecomposite/browser/panecomposite.js';
 import { ViewDescriptorService } from '../../services/views/browser/viewDescriptorService.js';
 import { IFileSearchService } from '../../../platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../../platform/search/browser/browserFileSearchService.js';
@@ -177,13 +179,17 @@ export function registerTestWorkbenchInteractionServices(owner: DisposableStore,
 	const descriptors = owner.add(new TestViewDescriptorService({ registry: owner.add(new WorkbenchViewRegistry()) }, viewContext));
 	// Service scenarios have no UI Parts. The real view owner returns null for
 	// unregistered views; Web/Electron scenarios exercise their actual containers.
-	services.registerInstance(IViewsService, owner.add(new ViewsService(descriptors, {
+	const panes: IPaneCompositePartService = {
+		getProgressIndicator: () => undefined,
 		onDidPaneCompositeOpen: Event.None, onDidPaneCompositeClose: Event.None,
 		getActivePaneComposite: () => undefined, getLastActivePaneCompositeId: () => undefined,
 		getPartId: () => { throw new Error('UI Parts are not registered in this service scenario'); },
 		openPaneComposite: async () => { throw new Error('UI Parts are not registered in this service scenario'); },
 		hideActivePaneComposite: () => { throw new Error('UI Parts are not registered in this service scenario'); },
-	}, viewContext)));
+	};
+	services.registerInstance(IViewDescriptorService, descriptors);
+	services.registerInstance(IPaneCompositePartService, panes);
+	services.registerInstance(IViewsService, owner.add(new ViewsService(descriptors, panes, viewContext)));
 
 	const window = new JSDOM('', { url: 'https://ash.test' });
 	owner.add(toDisposable(() => window.window.close()));

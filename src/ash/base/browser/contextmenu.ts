@@ -36,6 +36,7 @@ export interface IContextMenuDelegate {
 		options: MenuActionViewItemOptions,
 	): ActionViewItem | undefined;
 	getKeyBinding?(action: IAction): ResolvedKeybinding | undefined;
+	/** Applies caller-owned styling and selects browser rendering on Desktop. */
 	getMenuClassName?(): string;
 	readonly onHide?: (didCancel: boolean) => void;
 	/** Cancels only this presentation; an action that has already started still completes. */

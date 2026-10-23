@@ -1,4 +1,4 @@
-import type { ConnectorApiTokenConnectParams, ConnectorCommandResultDto, ConnectorDisconnectParams, ConnectorDisconnectResultDto, ConnectorListResult } from "../../../../../.build/protocol/typescript/index.js";
+import type { ConnectorApiTokenConnectParams, ConnectorCommandResultDto, ConnectorDisconnectParams, ConnectorDisconnectResultDto, ConnectorListResult, ConnectorSetEnabledParams } from "../../../../../.build/protocol/typescript/index.js";
 
 export interface ConnectorOAuthConnectParams {
 	readonly commandId: string;
@@ -12,7 +12,7 @@ export interface IConnectorApi {
 	list(): Promise<ConnectorListResult>;
 	connectApiToken(params: ConnectorApiTokenConnectParams): Promise<ConnectorCommandResultDto>;
 	connectOAuth(params: ConnectorOAuthConnectParams): Promise<ConnectorCommandResultDto>;
-	disconnect(params: ConnectorDisconnectParams): Promise<ConnectorDisconnectResultDto>;
+	setEnabled(params: ConnectorSetEnabledParams): Promise<ConnectorCommandResultDto>;
 	refreshOAuth(connectorId: string): Promise<void>;
 	revokeOAuth(params: ConnectorDisconnectParams): Promise<ConnectorDisconnectResultDto>;
 }

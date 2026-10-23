@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import childProcess, { ChildProcess } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { join, resolve } from 'node:path';
@@ -26,12 +27,13 @@ function mockSourceChanges(t: TestContext) {
 	t.mock.method(fs, 'statSync', () => ({ dev: 1, ino: 1, size: 1, mtimeMs: Date.now() + ++revision, ctimeMs: Date.now() + revision } as fs.Stats));
 	t.mock.method(fs, 'watch', (...args: unknown[]) => {
 		listeners.set(args[0] as string, args.at(-1) as (event: string, file: string) => void);
-		return { close() { } };
+		return Object.assign(new EventEmitter(), { close() { } });
 	});
 	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
 	return (file: string, workspaceManifest = false, sourceRoot = 'crates') => {
 		const directory = workspaceManifest ? repositoryRoot : join(repositoryRoot, sourceRoot);
-		listeners.get(directory)!('change', file);
+		const watched = workspaceManifest && process.platform === 'darwin' ? join(repositoryRoot, file) : directory;
+		listeners.get(watched)!('change', file);
 	};
 }
 
@@ -309,6 +311,36 @@ test('workspace-root watcher accepts only canonical root manifests', () => {
 	assert.equal(shouldRebuildWorkspaceManifest('crates/app-server/Cargo.toml'), false);
 });
 
+test('macOS backend watching does not subscribe to the repository or its build caches', { skip: process.platform !== 'darwin' }, async t => {
+	const paths: string[] = [];
+	let closed = 0;
+	t.mock.method(fs, 'watch', (file: string) => {
+		paths.push(file);
+		return Object.assign(new EventEmitter(), { close() { closed++; } });
+	});
+	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+	syncBuiltinESMExports();
+	const stop = await watchAppServer({ skipInitial: true });
+	t.after(stop);
+	assert.deepEqual(new Set(paths), new Set(['crates', 'sdk/rust', 'Cargo.toml', 'Cargo.lock'].map(file => join(repositoryRoot, file))));
+	stop();
+	assert.equal(closed, paths.length);
+});
+
+test('a failed subscription closes previously registered source watches', async t => {
+	const failure = Object.assign(new Error('manifest unavailable'), { code: 'EACCES' });
+	let opened = 0;
+	let closed = 0;
+	t.mock.method(fs, 'watch', () => {
+		if (++opened === 3) throw failure;
+		return Object.assign(new EventEmitter(), { close() { closed++; } });
+	});
+	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+	syncBuiltinESMExports();
+	await assert.rejects(watchAppServer({ skipInitial: true }), error => error === failure);
+	assert.equal(closed, 2);
+});
+
 test('watcher stops before the backend build when protocol generation fails', async (t) => {
 	const commands: { command: string; args: string[]; }[] = [];
 	const failure = Promise.withResolvers<string>();
@@ -317,7 +349,7 @@ test('watcher stops before the backend build when protocol generation fails', as
 		syncBuiltinESMExports();
 	});
 	mockProtocolDirectories(t);
-	t.mock.method(fs, 'watch', () => ({ close() { } }));
+	t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() { } }));
 	t.mock.method(console, 'error', (message: string) => failure.resolve(message));
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
 		commands.push({ command: _command, args: [...args] });
@@ -340,7 +372,7 @@ test('watcher invokes the Python backend builder after protocol generation', asy
 		syncBuiltinESMExports();
 	});
 	mockProtocolDirectories(t);
-	t.mock.method(fs, 'watch', () => ({ close() { } }));
+	t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() { } }));
 	t.mock.method(console, 'error', (message: string) => failure.resolve(message));
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
 		commands.push(args[1] ?? '');
@@ -362,7 +394,7 @@ for (const succeeds of [true, false]) {
 		let reloads = 0;
 		t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
 		mockProtocolDirectories(t);
-		t.mock.method(fs, 'watch', () => ({ close() { } }));
+		t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() { } }));
 		t.mock.method(console, 'error', (message: string) => {
 			assert.match(message, /backend build exited with status 1/);
 			completed.resolve();

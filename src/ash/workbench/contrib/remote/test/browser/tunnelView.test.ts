@@ -28,8 +28,8 @@ test("Remote Ports renders tunnel service state changes", async () => {
 		const refreshPortsAction = titleActions.querySelector<HTMLButtonElement>("[data-action-id='ash.ports.refresh'] button");
 		assert.ok(forwardPortAction);
 		assert.ok(refreshPortsAction);
-		assert.ok(forwardPortAction.querySelector("svg.ash-icon"));
-		assert.ok(refreshPortsAction.querySelector("svg.ash-icon"));
+		assert.ok(forwardPortAction.querySelector(".ash-icon"));
+		assert.ok(refreshPortsAction.querySelector(".ash-icon"));
 		forwardPortAction.click();
 		assert.equal(browser.window.document.activeElement, pane.element.querySelector(".ash-remote-ports-input"));
 

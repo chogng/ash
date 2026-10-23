@@ -1,6 +1,30 @@
+load("@crates//:data.bzl", "DEP_DATA")
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_library")
 load("//:defs.bzl", "ash_rust_crate")
 
 ash_rust_crate(
     name = "app-server-client",
     crate_name = "ash_app_server_client",
+)
+
+# Cargo enables this feature only for the contract-test consumer. Keep the same
+# source in a test-only Bazel variant so product clients retain their usual API.
+_CLIENT = DEP_DATA["crates/app-server-client"]
+
+rust_library(
+    name = "in-process-test-client",
+    testonly = True,
+    aliases = {
+        label: alias
+        for label, alias in _CLIENT["aliases"].items()
+        if label in _CLIENT["deps"]
+    },
+    crate_name = "ash_app_server_client",
+    crate_features = ["in-process"],
+    deps = all_crate_deps(),
+    edition = "2024",
+    rustc_env_files = ["//:workspace-version-env"],
+    srcs = glob(["src/**/*.rs"]),
+    visibility = ["//crates/app-server-client-tests:__pkg__"],
 )

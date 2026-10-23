@@ -221,7 +221,7 @@ export class IconLabel extends Disposable {
 		element.setAttribute('aria-hidden', 'true');
 		element.hidden = !icon;
 		this.element.append(element);
-		// Retain mounted SVGs so the document's icon resolver can update theme artwork in place.
+		// Retain mounted icons so theme changes can update their artwork in place.
 		if (this.suffixIconId !== icon?.id) {
 			element.replaceChildren();
 			if (icon) appendIcon(icon, element);

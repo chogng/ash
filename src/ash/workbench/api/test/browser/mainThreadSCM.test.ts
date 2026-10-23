@@ -722,3 +722,24 @@ test('Git welcome predicates distinguish scanning, failure, disconnected and con
 	folders.set(0);
 	assert.ok(!visible().some((content: string) => /noRepository|failed|initializing|unavailable/.test(content)));
 });
+
+
+test('SCM action button retains grouped commands and rejects malformed availability at the extension boundary', async () => {
+	const descriptor = {
+		command: { id: 'git.commit', title: '$(check) Commit', arguments: ['repo'] }, enabled: false,
+		secondaryCommands: [[{ id: 'git.commitAll', title: 'Commit All', arguments: ['repo'] }], [{ id: 'git.commitAmend', title: 'Commit (Amend)' }]],
+	};
+	const value = fixture(async () => null, [{ ...provider() as Record<string, JsonValue>, actionButton: descriptor }]);
+	try {
+		const button = value.scm.getRepository('repo')!.provider.actionButton!;
+		assert.equal(button.enabled, false);
+		assert.equal(button.command.title, '$(check) Commit');
+		assert.deepEqual(button.secondaryCommands?.map(group => group.map(command => [command.id, command.arguments])), [
+			[['git.commitAll', ['repo']]], [['git.commitAmend', undefined]],
+		]);
+		const malformed = { ...provider() as Record<string, JsonValue>, actionButton: { ...descriptor, enabled: 'yes' } };
+		assert.throws(() => value.bridge.set(source, 'ash.scm', 2, [malformed]), /Invalid SCM action button availability/u);
+	} finally {
+		value.lifetime.dispose();
+	}
+});

@@ -10,6 +10,16 @@ const local = [{
 	actionId: "chat.history",
 }];
 
+test('Chat discovers Extensions through the sidebar and preserves old slash bindings', () => {
+	const catalog = new SlashCommandCatalog(DesktopSlashCommands, []);
+	assert.ok(catalog.matching('').some(command => command.name === 'skills'));
+	assert.ok(catalog.matching('plugins').some(command => command.name === 'plugins'));
+	assert.ok(!catalog.commands.some(command => command.name === 'extensions'));
+	assert.ok(!catalog.matching('extensions').some(command => command.name === 'extensions'));
+	assert.equal(parseSlashCommandInput('/extensions', catalog).kind, 'command');
+	assert.equal(parseSlashCommandInput('/plugins', catalog).kind, 'command');
+});
+
 test("Product Slash Commands preserve shared definitions and local panel arguments", () => {
 	const catalog = new SlashCommandCatalog(DesktopSlashCommands, []);
 	assert.deepEqual(catalog.binding('skills'), { origin: 'local', actionId: 'workbench.action.chat.configure.skills' });

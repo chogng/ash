@@ -2,8 +2,8 @@ import './style.css';
 import './colors.js';
 import { addDisposableListener, getClientArea, getWindow, h, stopEvent } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { Event } from '../../../../base/common/event.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Emitter, type Event } from '../../../../base/common/event.js';
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/common/numbers.js';
 import { formatNlsMessage, localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -39,6 +39,7 @@ import { MultiDiffEditorLogger } from './multiDiffEditorLogging.js';
 import {
 	DEFAULT_LINE_HEIGHT,
 	DEFAULT_OVERSCAN_ROW_COUNT,
+	hideUnchangedRegions,
 	validateMultiDiffEditorOptions,
 	type IMultiDiffEditorWidgetOptions,
 } from './multiDiffEditorOptions.js';
@@ -67,6 +68,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	public readonly onDidChangeCollapseState: Event<void>;
 	private readonly layouts: MultiDiffSectionLayout[] = [];
 	private readonly measuredHeights = new Map<string, number>();
+	private hideUnchangedRegionsEnabled: boolean;
+	private readonly hideUnchangedRegionsEmitter = this._register(new Emitter<void>());
+	public readonly onDidChangeHideUnchangedRegions = this.hideUnchangedRegionsEmitter.event;
 	private editorOptions: Pick<DiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'showLineNumbers' | 'showInlineChanges' | 'loopChanges' | 'wordWrapColumn'>;
 	private rowLayouts = new WeakMap<DiffModel, DiffRowLayout>();
 	private lineHeight: number;
@@ -87,7 +91,6 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private readonly workbenchUIElementFactory: IMultiDiffEditorWidgetOptions['workbenchUIElementFactory'];
 	private readonly logger: MultiDiffEditorLogger;
 	private navigationAbortController = new AbortController();
-	private readonly observedItemIds = new Set<string>();
 
 	constructor(
 		options: IMultiDiffEditorWidgetOptions,
@@ -99,6 +102,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.logger = new MultiDiffEditorLogger(logService);
 		validateMultiDiffEditorOptions(options);
 		this.items = options.model.items;
+		this.hideUnchangedRegionsEnabled = hideUnchangedRegions(configuration);
 		this._register(toDisposable(() => this.navigationAbortController.abort()));
 		this.viewModel = this._register(new MultiDiffEditorViewModel(this.items));
 		this.onDidChangeCollapseState = this.viewModel.onDidChangeCollapseState;
@@ -167,6 +171,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this._register(addDisposableListener(this.domNode, 'keydown', event => this.handleKeydown(event), true));
 		this.bindItems();
 		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('diffEditor.hideUnchangedRegions.enabled')) {
+				this.hideUnchangedRegionsEnabled = configuration.getValue('diffEditor.hideUnchangedRegions.enabled');
+			}
 			if (['enabled', 'contextLineCount', 'minimumLineCount', 'revealLineCount'].some(name => event.affectsConfiguration(`diffEditor.hideUnchangedRegions.${name}`))) {
 				this.updateHideUnchangedRegions();
 			}
@@ -180,7 +187,6 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			this.itemListeners.clear();
 			this.items = items;
 			this.viewModel.setItems(items);
-			this.observedItemIds.clear();
 			this.measuredHeights.clear();
 			this.rowLayouts = new WeakMap();
 			this.layouts.length = 0;
@@ -222,15 +228,25 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 
 	private getHideUnchangedRegionsOptions(): HideUnchangedRegionsOptions {
 		return {
-			enabled: this.configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled'),
+			enabled: this.hideUnchangedRegionsEnabled,
 			contextLineCount: this.configuration.getValue('diffEditor.hideUnchangedRegions.contextLineCount'),
 			minimumLineCount: this.configuration.getValue('diffEditor.hideUnchangedRegions.minimumLineCount'),
 			revealLineCount: this.configuration.getValue('diffEditor.hideUnchangedRegions.revealLineCount'),
 		};
 	}
 
-	public toggleCollapseUnchangedRegions(): Promise<void> {
-		return this.configuration.updateValue('diffEditor.hideUnchangedRegions.enabled', !this.configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled'));
+	public get collapseUnchangedRegions(): boolean {
+		return this.hideUnchangedRegionsEnabled;
+	}
+
+	public async toggleCollapseUnchangedRegions(): Promise<void> {
+		const enabled = !this.hideUnchangedRegionsEnabled;
+		await this.configuration.updateValue('diffEditor.hideUnchangedRegions.enabled', enabled);
+		if (this.isDisposed || this.hideUnchangedRegionsEnabled === enabled) return;
+		// The multi-diff starts compact. Remember an explicit toggle in this view
+		// even when writing the ordinary diff default removes the setting without an event.
+		this.hideUnchangedRegionsEnabled = enabled;
+		this.updateHideUnchangedRegions();
 	}
 
 	private updateHideUnchangedRegions(): void {
@@ -240,6 +256,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		}
 		this.measuredHeights.clear();
 		this.refreshLayout();
+		this.hideUnchangedRegionsEmitter.fire();
 	}
 
 	public saveViewState(): MultiDiffEditorViewState {
@@ -337,7 +354,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		// Each item publishes its own load error in the header; one failed file must not close the whole editor.
 		await Promise.allSettled([...this.sections.entries()].flatMap(([index]) => {
 			if (this.viewModel.isCollapsed(this.items[index]!.id)) return [];
-			return [this.items[index]!.resolve().then(model => model ? this.waitForReady(model, signal) : undefined)];
+			const item = this.items[index]!;
+			const retention = item.retain?.();
+			return [item.resolve().then(model => model ? this.waitForReady(model, signal) : undefined).finally(() => retention?.dispose())];
 		}));
 		await this.initialNavigation;
 	}
@@ -419,28 +438,26 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private bindItems(): void {
 		for (let index = 0; index < this.items.length; index++) {
 			const item = this.items[index]!;
-			this.observeModel(index, item.model);
+			const listener = this.itemListeners.add(new MutableDisposable<IDisposable>());
+			const observe = (): void => {
+				const model = item.model;
+				listener.value = model?.onDidChange(() => {
+					this.logger.itemStateChanged(item.id, model.state.kind);
+					this.rowLayouts.delete(model);
+					// Pending computation must not unmount an editor receiving input.
+					if (model.state.kind === 'ready') this.measuredHeights.delete(item.id);
+					this.sections.get(index)?.updateStatus();
+					if (this.viewModel.activeChange?.itemId === item.id) this.viewModel.activeChange = undefined;
+					this.refreshLayout();
+				});
+			};
+			observe();
 			this.itemListeners.add(item.onDidChange(() => {
-				this.observeModel(index, item.model);
+				observe();
 				this.sections.get(index)?.updateStatus();
 				this.refreshLayout();
 			}));
 		}
-	}
-
-	private observeModel(index: number, model: DiffModel | undefined): void {
-		const item = this.items[index]!;
-		if (!model || this.observedItemIds.has(item.id)) return;
-		this.observedItemIds.add(item.id);
-		this.itemListeners.add(model.onDidChange(() => {
-			this.logger.itemStateChanged(item.id, model.state.kind);
-			this.rowLayouts.delete(model);
-			// A pending computation must not shrink and unmount the editor receiving text input.
-			if (model.state.kind === 'ready') this.measuredHeights.delete(item.id);
-			this.sections.get(index)?.updateStatus();
-			if (this.viewModel.activeChange?.itemId === item.id) this.viewModel.activeChange = undefined;
-			this.refreshLayout();
-		}));
 	}
 
 	private refreshLayout(): void {
@@ -468,12 +485,12 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			const collapsed = this.viewModel.isCollapsed(item.id);
 			const model = item.model;
 			let rows = model ? this.rowLayouts.get(model) : undefined;
-			if (!rows && model) {
+			if (!rows && model && !collapsed) {
 				rows = computeDiffRowLayout(model, this.lineHeight, wrapping);
 				this.rowLayouts.set(model, rows);
 			}
-			rows ??= { offsets: [0] };
-			const estimatedHeight = model ? rows.offsets.at(-1) ?? 0 : this.lineHeight * 5;
+			rows ??= { height: 0, getOffset: () => 0 };
+			const estimatedHeight = model ? rows.height : this.lineHeight * 5;
 			const bodyHeight = collapsed ? 0 : Math.max(this.lineHeight, this.measuredHeights.get(item.id) ?? estimatedHeight);
 			const height = MULTI_DIFF_HEADER_HEIGHT + bodyHeight;
 			const layout = { top, bodyHeight, height, rows };
@@ -509,6 +526,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 					section.unmount();
 					continue;
 				}
+				section.retainModel();
 				if (!item.model) {
 					if (item.state === 'unresolved') void item.resolve().catch(() => undefined);
 					continue;
@@ -521,10 +539,11 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 						modifiedAriaLabel: item.modifiedLabel,
 						readOnly: item.readOnly,
 						scrollBeyondLastLine: false,
+						scrollbar: { vertical: 'hidden' },
+						renderOverviewRuler: false,
 						wordWrap: this.temporaryWordWrap ?? this.configuredWordWrap,
 						...this.editorOptions,
 					}));
-					section.editor!.updateOptions({ scrollbar: { vertical: 'hidden' }, renderOverviewRuler: false });
 					// Restore the file cursor before hiding regions so mounting does not expand them.
 					section.editor!.setHideUnchangedRegionsOptions(this.getHideUnchangedRegionsOptions());
 					section.layoutEditor(this.viewportWidth);
@@ -578,30 +597,35 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			const index = rot(rawIndex, this.items.length);
 			const item = this.items[index]!;
 			if (item.binary) continue;
-			let model: DiffModel;
+			const retention = item.retain?.();
 			try {
-				const resolved = await item.resolve();
-				if (!resolved) continue;
-				model = resolved;
-				await this.waitForReady(model, signal);
-			} catch {
-				if (!this.isDisposed && generation === this.navigationGeneration) {
-					this.accessibilityStatusDomNode.textContent = formatNlsMessage(localize('multiDiffEditor.loadError', 'Could not load {0}'), { 0: item.label });
+				let model: DiffModel;
+				try {
+					const resolved = await item.resolve();
+					if (!resolved) continue;
+					model = resolved;
+					await this.waitForReady(model, signal);
+				} catch {
+					if (!this.isDisposed && generation === this.navigationGeneration) {
+						this.accessibilityStatusDomNode.textContent = formatNlsMessage(localize('multiDiffEditor.loadError', 'Could not load {0}'), { 0: item.label });
+					}
+					return undefined;
 				}
-				return undefined;
-			}
-			if (this.isDisposed || generation !== this.navigationGeneration) return undefined;
-			const rows = model.diff!.rows;
-			const firstRow = step === 0 && activeIndex === index
-				? active!.rowIndex + delta
-				: delta > 0 ? 0 : rows.length - 1;
-			for (let rowIndex = firstRow; rowIndex >= 0 && rowIndex < rows.length; rowIndex += delta) {
-				if (rows[rowIndex]!.kind === LineDiffKind.Unchanged) continue;
-				const location = { itemId: item.id, rowIndex };
-				this.revealChange(location, focus);
-				this.announceChange(location);
-				return location;
-			}
+				if (this.isDisposed || generation !== this.navigationGeneration) return undefined;
+				const rows = model.diff!.rows;
+				const firstRow = step === 0 && activeIndex === index
+					? active!.rowIndex + delta
+					: delta > 0 ? 0 : rows.length - 1;
+				const hunks = model.diff!.hunks;
+				const hunk = delta > 0 ? hunks.find(hunk => hunk.rowEnd > firstRow) : [...hunks].reverse().find(hunk => hunk.rowStart <= firstRow);
+				if (hunk) {
+					const rowIndex = delta > 0 ? Math.max(firstRow, hunk.rowStart) : Math.min(firstRow, hunk.rowEnd - 1);
+					const location = { itemId: item.id, rowIndex };
+					this.revealChange(location, focus);
+					this.announceChange(location);
+					return location;
+				}
+			} finally { retention?.dispose(); }
 		}
 		if (active && !this.loopChanges) return active;
 		this.accessibilityStatusDomNode.textContent = localize('diffEditor.noChanges', 'No differences');
@@ -639,8 +663,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private announceChange(location: MultiDiffEditorLocation): void {
 		const item = this.items.find(candidate => candidate.id === location.itemId)!;
 		if (this.items.every(candidate => candidate.binary || candidate.model?.state.kind === 'ready')) {
-			const changes = this.items.flatMap(candidate => candidate.binary ? [] : candidate.model!.diff!.rows.flatMap((row, rowIndex) =>
-				row.kind === LineDiffKind.Unchanged ? [] : [{ itemId: candidate.id, rowIndex }]));
+			const changes = this.items.flatMap(candidate => candidate.binary ? [] : Array.from(candidate.model!.diff!.rows.changedEntries(), ([rowIndex]) => ({ itemId: candidate.id, rowIndex })));
 			const selectedIndex = changes.findIndex(change => change.itemId === location.itemId && change.rowIndex === location.rowIndex);
 			this.accessibilityStatusDomNode.textContent = formatNlsMessage(localize('multiDiffEditor.changeLocation', 'Change {0} of {1}, {2}'), { 0: selectedIndex + 1, 1: changes.length, 2: item.label });
 			return;
@@ -653,7 +676,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		if (itemIndex < 0) throw new RangeError(`Unknown multi-diff item '${location.itemId}'`);
 		const item = this.items[itemIndex]!;
 		const model = item.model;
-		if (!isNonNegativeSafeInteger(location.rowIndex) || model?.diff?.rows[location.rowIndex]?.kind === LineDiffKind.Unchanged || !model?.diff?.rows[location.rowIndex]) {
+		if (!isNonNegativeSafeInteger(location.rowIndex) || model?.diff?.rows.get(location.rowIndex)?.kind === LineDiffKind.Unchanged || !model?.diff?.rows.get(location.rowIndex)) {
 			throw new RangeError('Multi-diff change row is outside its item');
 		}
 		const previous = this.viewModel.activeChange;
@@ -671,12 +694,12 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			layout = this.layouts[itemIndex]!;
 		}
 		const control = this.sections.get(itemIndex)?.editor;
-		const row = model.diff.rows[location.rowIndex]!;
+		const row = model.diff.rows.get(location.rowIndex)!;
 		const codeEditor = row.modifiedLineIndex === undefined ? control?.originalEditor : control?.modifiedEditor;
 		const lineNumber = (row.modifiedLineIndex ?? row.originalLineIndex ?? 0) + 1;
 		// Full-file row offsets overestimate the position after unchanged lines are hidden.
-		const rowTop = layout.top + (codeEditor?.getTopForLineNumber(lineNumber) ?? layout.rows.offsets[location.rowIndex]!);
-		const rowBottom = layout.top + (codeEditor?.getBottomForLineNumber(lineNumber) ?? layout.rows.offsets[location.rowIndex + 1]!);
+		const rowTop = layout.top + (codeEditor?.getTopForLineNumber(lineNumber) ?? layout.rows.getOffset(location.rowIndex));
+		const rowBottom = layout.top + (codeEditor?.getBottomForLineNumber(lineNumber) ?? layout.rows.getOffset(location.rowIndex + 1));
 		const editorViewportHeight = Math.max(1, this.viewportHeight - MULTI_DIFF_HEADER_HEIGHT);
 		const scrollTop = this.scrollView.getLogicalScrollTop();
 		if (rowTop < scrollTop) this.scrollView.setLogicalScrollTop(rowTop);
@@ -685,7 +708,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		const editor = this.sections.get(itemIndex)?.editor;
 		if (editor) {
 			editor.revealChangeRow(location.rowIndex, false);
-			const row = model.diff.rows[location.rowIndex]!;
+			const row = model.diff.rows.get(location.rowIndex)!;
 			if (!focus) {
 				editor.modifiedEditor.setPosition({ lineNumber: Math.min(model.modified.lineCount, lineNumber), column: 1 });
 			}

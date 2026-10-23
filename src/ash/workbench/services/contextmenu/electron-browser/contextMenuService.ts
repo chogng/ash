@@ -354,7 +354,9 @@ export class ElectronContextMenuService extends Disposable implements IContextMe
 		if (this.isDisposed || delegate.cancellationToken?.isCancellationRequested) { delegate.onHide?.(true); return; }
 		// Electron Menu.popup cannot align its right edge with an element on the right side of the window.
 		const rightHandTrigger = isNode(anchor) && delegate.anchorAxisAlignment === AnchorAxisAlignment.Horizontal && delegate.anchorAlignment === AnchorAlignment.Left;
-		const menu = this.usesSystemMenu && !rightHandTrigger ? this.systemMenu : this.browserMenu;
+		// Caller-owned styling needs the browser menu's DOM, including on macOS.
+		const styledMenu = !!delegate.getMenuClassName?.();
+		const menu = this.usesSystemMenu && !rightHandTrigger && !styledMenu ? this.systemMenu : this.browserMenu;
 		if (menu === this.browserMenu) this.systemMenu.hideContextMenu();
 		else this.browserMenu.hideContextMenu();
 		menu.showContextMenu({ ...delegate, getAnchor: () => anchor });

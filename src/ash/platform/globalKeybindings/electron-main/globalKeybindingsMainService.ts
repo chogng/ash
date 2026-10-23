@@ -1,4 +1,7 @@
-import { AbstractDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { AbstractDisposable, toDisposable, type IDisposable, type DisposableStore } from '../../../base/common/lifecycle.js';
+import type { BrowserWindow } from 'electron';
+import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
+import { GLOBAL_KEYBINDING_UPDATE_CHANNEL, GLOBAL_KEYBINDING_TRIGGER_CHANNEL, validateGlobalKeybindingRequest, type GlobalKeybindingRequest } from '../common/globalKeybindings.js';
 import type { JsonValue } from '../../../base/common/jsonValue.js';
 import type { INativeSystemWideKeybinding, INativeSystemWideKeybindingResult } from '../../native/common/nativeHost.js';
 
@@ -36,6 +39,38 @@ export class GlobalKeybindingsMainService extends AbstractDisposable {
 
 	constructor(private readonly options: GlobalKeybindingsMainServiceOptions) {
 		super();
+	}
+
+	/** Renderer leases share the existing registry and end on navigation, crash or window teardown. */
+	createWindowRoutes(window: BrowserWindow, lifetime: DisposableStore): readonly IpcRoute<unknown, unknown>[] {
+		const leases = new Map<string, IGlobalKeybindingOwner>();
+		let disposed = false;
+		const clear = () => { for (const lease of leases.values()) lease.dispose(); leases.clear(); };
+		const navigating = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean) => { if (mainFrame && !inPlace) clear(); };
+		const contents = window.webContents;
+		contents.on('render-process-gone', clear);
+		contents.on('did-start-navigation', navigating);
+		lifetime.add(toDisposable(() => { disposed = true; contents.off('render-process-gone', clear); contents.off('did-start-navigation', navigating); clear(); }));
+		return [{
+			channel: GLOBAL_KEYBINDING_UPDATE_CHANNEL,
+			validate: validateGlobalKeybindingRequest,
+			invoke: value => {
+				if (disposed || window.isDestroyed() || contents.isDestroyed()) throw new Error('Global keybinding scope has closed');
+				const request = value as GlobalKeybindingRequest;
+				let lease = leases.get(request.id);
+				if (!request.global) {
+					lease?.dispose(); leases.delete(request.id);
+					return { available: !!request.accelerator && this.check(request.accelerator, request.commandId), activeLabel: '' };
+				}
+				if (!lease) {
+					if (leases.size >= 64) throw new RangeError('Too many global keybinding leases');
+					lease = this.createOwner(window.id, () => { if (!window.isDestroyed() && !contents.isDestroyed()) contents.send(GLOBAL_KEYBINDING_TRIGGER_CHANNEL, { id: request.id }); });
+					leases.set(request.id, lease);
+				}
+				const available = !!request.accelerator && lease.update({ accelerator: request.accelerator, commandId: request.commandId, userSettingsLabel: request.label });
+				return { available, activeLabel: lease.getBinding()?.userSettingsLabel ?? '' };
+			},
+		}];
 	}
 
 	updateKeybindings(

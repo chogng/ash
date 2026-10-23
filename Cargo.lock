@@ -438,13 +438,9 @@ name = "ash-app-server-client"
 version = "0.1.0"
 dependencies = [
  "ash-app-server",
- "ash-app-server-diff",
  "ash-app-server-protocol",
  "ash-app-server-transport",
- "ash-async-utils",
  "ash-client",
- "ash-core",
- "ash-core-api",
  "ash-diagnostics",
  "ash-feedback-contract",
  "ash-memories",
@@ -458,6 +454,24 @@ dependencies = [
  "serde",
  "serde_json",
  "zeroize",
+]
+
+[[package]]
+name = "ash-app-server-client-tests"
+version = "0.1.0"
+dependencies = [
+ "ash-app-server",
+ "ash-app-server-client",
+ "ash-app-server-diff",
+ "ash-app-server-protocol",
+ "ash-async-utils",
+ "ash-client",
+ "ash-core",
+ "ash-core-api",
+ "ash-memory-diagnostics",
+ "ash-protocol",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -1915,8 +1929,8 @@ dependencies = [
 
 [[package]]
 name = "ash-grammars"
-version = "0.1.0"
-source = "git+https://github.com/chogng/ash-grammars?rev=35c271b712d1bc9633ea2f1c91f078e4c3c85a95#35c271b712d1bc9633ea2f1c91f078e4c3c85a95"
+version = "0.1.1"
+source = "git+https://github.com/chogng/ash-grammars?rev=1b0906dd92167820aad912a6c4a509e2b58bc661#1b0906dd92167820aad912a6c4a509e2b58bc661"
 dependencies = [
  "serde_json",
  "sha2 0.10.9",
@@ -2870,6 +2884,7 @@ dependencies = [
  "ash-core",
  "ash-core-api",
  "ash-protocol",
+ "ash-rollout-trace",
  "ash-state",
  "ash-thread-store",
 ]
@@ -2878,12 +2893,9 @@ dependencies = [
 name = "ash-rollout-trace"
 version = "0.1.0"
 dependencies = [
- "ash-core",
  "ash-core-api",
  "ash-history",
  "ash-protocol",
- "ash-rollout",
- "ash-state",
  "ash-thread-store",
  "ash-utils-string",
  "getrandom 0.2.17",
@@ -4648,9 +4660,9 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "clipboard-win"
-version = "5.4.1"
+version = "5.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bde03770d3df201d4fb868f2c9c59e66a3e4e2bd06692a0fe701e7103c7e84d4"
+checksum = "052af7878466feccda12ba7a6a67d019d712f296809559b47c12c8cc196d3a9a"
 dependencies = [
  "error-code",
 ]

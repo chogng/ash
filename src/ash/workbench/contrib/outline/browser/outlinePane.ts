@@ -6,7 +6,6 @@ import { CancellationTokenSource } from '../../../../base/common/cancellation.js
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
@@ -113,6 +112,8 @@ export class OutlinePane extends ViewPane {
 		const token = new CancellationTokenSource();
 		lifetime.add(toDisposable(() => token.dispose(true)));
 		this.emptyDomNode.textContent = localize('outline.loading', 'Loading document symbols…');
+		const progress = this.getProgressIndicator().show(true, 150);
+		lifetime.add(toDisposable(() => progress.done()));
 		try {
 			const outline = await this.outlines.createOutline(editor, OutlineTarget.OutlinePane, token.token);
 			if (this.isDisposed || generation !== this.generation || token.token.isCancellationRequested) { outline?.dispose(); return; }
@@ -120,7 +121,7 @@ export class OutlinePane extends ViewPane {
 			lifetime.add(outline);
 			this.outline = outline;
 			const tree = lifetime.add(new WorkbenchObjectTree<unknown>(this.contentElement, {
-				getHeight: () => listRowHeight,
+				getHeight: () => 22,
 				...outline.config.options,
 				configurationService: this.configuration,
 				openOnSingleClick: true,
@@ -150,6 +151,8 @@ export class OutlinePane extends ViewPane {
 			if (generation !== this.generation || token.token.isCancellationRequested || isCancellationError(error)) return;
 			this.emptyDomNode.textContent = localize('outline.failed', 'Could not load document symbols.');
 			this.log.error('outline', 'Could not load outline', error);
+		} finally {
+			progress.done();
 		}
 	}
 

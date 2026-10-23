@@ -1,3 +1,5 @@
+import { expect } from '@playwright/test';
+import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { registerOnboardingTryout } from '../../../onboarding/common/onboardingTryout.js';
@@ -16,5 +18,22 @@ suite('ReleaseNotesTryouts', () => {
 		assert.match(prepared, /\[Malformed\]\(ash:\/\/tryout\/test\.releaseNotes\.open\?command=other\)/);
 		assert.equal(releaseNotesTryoutId('#ash-release-tryout-test.releaseNotes.open'), 'test.releaseNotes.open');
 		assert.equal(releaseNotesTryoutId('#ash-release-tryout-test.releaseNotes.missing'), undefined);
+	});
+});
+
+suite('releaseNotes browser component', () => {
+	const browserTests = useBrowserTests();
+	test('release notes render a registered Try This link and ignore other IDs', async function () {
+		const { page } = browserTests;
+
+		await page.goto('/releaseNotes.html');
+		const notes = page.frameLocator('main iframe[title="Release Notes"]').frameLocator('iframe');
+		await expect(notes.getByRole('heading', { name: 'Ash 0.1' })).toBeVisible();
+		await notes.getByRole('link', { name: 'Try Search commands' }).click();
+		await expect.poll(() => page.evaluate(() => window.ashReleaseNotesIntegration.opened)).toEqual(['workbench.commandCenter.open']);
+		await expect(page.frameLocator('#chinese iframe').frameLocator('iframe').getByRole('heading', { name: '查找操作' })).toBeVisible();
+		const invalid = page.frameLocator('iframe[title="Invalid links"]').frameLocator('iframe');
+		await expect(invalid.getByRole('link', { name: 'Unknown' })).toHaveCount(0);
+		await expect(invalid.getByRole('link', { name: 'Malformed' })).toHaveCount(0);
 	});
 });

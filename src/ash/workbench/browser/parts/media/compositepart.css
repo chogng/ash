@@ -1,0 +1,8 @@
+.ash-composite-progress {
+	position: relative;
+	flex: 0 0 0;
+	min-height: 0;
+	height: 0;
+	z-index: 1;
+	pointer-events: none;
+}

@@ -39,6 +39,8 @@ Workbench-level global styles live in `src/ash/workbench/browser/media/`.
 
 ## 3. Standard Sizes
 
+These are IDE Workbench defaults. Agent Window role assignments and values follow [Sessions style](../../../src/ash/sessions/STYLE.md); the CSS organization, layout mechanisms and overflow guidance in this skill remain shared.
+
 Follow the [row and toolbar sizing rules](../../../.github/instructions/design-tokens.instructions.md#rows-and-toolbar-actions).
 
 | Element | Size |
@@ -253,6 +255,8 @@ For `IconLabel` and list/tree renderers, this is handled automatically. For cust
 
 ## 10. Design-System Size Tokens (spacing, radius, font, lxicon, stroke)
 
+The registration mechanism is shared; the mappings below are IDE defaults. Apply the owning window's visual rules when choosing a token, and keep product-specific overrides in its scope.
+
 Ash ships a design-system **size** ramp, registered in `src/ash/platform/theme/common/sizes/baseSizes.ts` and emitted as `--ash-*` CSS variables. When writing or editing CSS, prefer the token var over a raw px value wherever a token exists. The full tables + rationale live in the auto-injected `.github/instructions/design-tokens.instructions.md` (canonical source — keep this section in sync with it). This section captures the **decision logic** for deeper styling tasks.
 
 > Every `--ash-*` size var you reference must already exist in `build/lib/stylelint/ash-known-variables.json` (`"sizes"` array, alphabetically sorted) or stylelint/hygiene fails. Adding a *new* token means adding it both in `baseSizes.ts` and that JSON file.
@@ -272,9 +276,10 @@ Scale (px): `0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32, 36, 40` → `--ash-spaci
 | 6  | `--ash-cornerRadius-medium` | base / inner surfaces |
 | 8  | `--ash-cornerRadius-large` | prominent / outer surfaces |
 | 12 | `--ash-cornerRadius-xLarge` | very prominent surfaces |
+| 16 | `--ash-cornerRadius-xxLarge` | extra-large surfaces |
 | 9999 | `--ash-cornerRadius-circle` | fully rounded (pills, dots) |
 
-**Snap map** for off-scale literals (ties round **up**): `2→xSmall`, `3,4→small`, `5,6→medium`, `7,8→large`, `10,11,12→xLarge`, `14,16,18,20→xLarge`, `999→circle`.
+**Snap map** for off-scale literals (ties round **up**): `2→xSmall`, `3,4→small`, `5,6→medium`, `7,8→large`, `10,11,12→xLarge`, `14,16,18,20→xxLarge`, `999→circle`.
 
 - **Pills** (radius ≈ half the element height — e.g. `28h`/`14r`, `36h`/`18r`, `22×22`/`11r`) → `--ash-cornerRadius-circle`, **not** xLarge. The literal-nearest token would square them and lose the fully-rounded intent.
 - **Leave untouched:** `50%`, `0`, `0px`, `inherit`, any `calc()`/`var()`. Preserve `!important`.

@@ -1,0 +1,149 @@
+/* Agents Window visual defaults and shared-widget presentations.
+ * Layout belongs to workbench.css; page-specific appearances stay with their owners. */
+/* Font rendering is shared; visual weight is owned by the Agents Window. */
+.ash-sessions-window {
+	/* Window-owned type roles also apply to shared widgets and anchored popups. */
+	--ash-fontSize-heading1: 26px;
+	--ash-fontSize-heading2: 18px;
+	--ash-fontSize-heading3: 14px;
+	--ash-fontSize-body1: 14px;
+	--ash-fontSize-body2: 11px;
+	--ash-fontSize-label1: 14px;
+	--ash-fontSize-label2: 11px;
+	--ash-fontSize-label3: 10px;
+	--ash-icon-font-family: "Ash UI Variable";
+	--ash-icon-font-weight: 550;
+}
+
+/* Dedicated SVG artwork keeps its paints; normalize its linework in this host. */
+.ash-sessions-window
+	.ash-icon:not(.ash-icon-default-font)
+	.ash-icon-artwork
+	[stroke] {
+	stroke-width: 1.25px;
+}
+
+/* The catalog's opaque masks clip one half of these inside-aligned strokes. */
+.ash-sessions-window
+	.ash-icon:not(.ash-icon-default-font)
+	.ash-icon-artwork
+	[stroke][mask] {
+	stroke-width: 2.5px;
+}
+
+.ash-sessions-window {
+	--ash-button-border-radius: var(--ash-cornerRadius-large);
+	--ash-button-small-font-size: var(--ash-fontSize-label1);
+	--sessions-accent: var(--ash-button-primaryBackground);
+	--sessions-accent-strong: color-mix(
+		in srgb,
+		var(--ash-button-primaryBackground) 82%,
+		var(--ash-foreground)
+	);
+	--sessions-soft-surface: color-mix(
+		in srgb,
+		var(--ash-editor-background) 88%,
+		var(--ash-workbench-background)
+	);
+	--sessions-muted-surface: color-mix(
+		in srgb,
+		var(--ash-sideBar-background) 74%,
+		var(--ash-workbench-background)
+	);
+	font-family: var(--ash-font-family);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-regular);
+	line-height: 1.4;
+	color: var(--ash-foreground);
+	background: var(--ash-titleBar-background);
+}
+
+.ash-sessions-window .ash-context-view-hover {
+	/* ContextView hosts the hover under the window root, outside the triggering control. */
+	--ash-hover-background: var(--ash-sessions-tooltip-background);
+	--ash-hover-foreground: var(--ash-sessions-tooltip-foreground);
+	--ash-hover-border: var(--ash-sessions-tooltip-border);
+	border-radius: var(--ash-cornerRadius-xLarge);
+}
+
+.ash-sessions-window .ash-context-view-hover::before {
+	content: none;
+}
+
+.ash-sessions-window .ash-context-view-menu {
+	border-radius: var(--ash-cornerRadius-xLarge);
+}
+
+.ash-sessions-window .ash-menu {
+	--ash-list-rowHeight: var(--ash-spacing-size280);
+}
+
+.ash-sessions-window .ash-menu .ash-button {
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+/* Scope the palette to buttons so other uses of the accent keep their own colors.
+ * Explicit widget styles and page-owned presentations can still override it. */
+.ash-sessions-window .ash-button {
+	--ash-button-primaryForeground: var(--ash-editor-background);
+	--ash-button-primaryBackground: var(--ash-foreground);
+	--ash-button-primaryHoverBackground: color-mix(
+		in srgb,
+		var(--ash-foreground) 90%,
+		var(--ash-editor-background)
+	);
+	--ash-button-background: color-mix(
+		in srgb,
+		var(--ash-foreground) 80%,
+		var(--ash-editor-background)
+	);
+	--ash-button-secondaryBackground: transparent;
+}
+
+.ash-sessions-window
+	.ash-button-standard:where(.ash-button-primary, .ash-button-secondary) {
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+}
+
+.ash-sessions-window .ash-button-standard:where(.icon-only) {
+	min-width: var(--ash-spacing-size280);
+	padding: var(--ash-spacing-size40);
+}
+
+.ash-sessions-window .ash-button-small {
+	min-height: var(--ash-spacing-size280);
+	padding: var(--ash-spacing-size20) var(--ash-spacing-size80);
+}
+
+.ash-sessions-window .ash-button-primary {
+	border-color: var(--ash-contrastBorder, transparent);
+}
+
+.ash-sessions-window .ash-button-quiet:where(:not(:disabled):hover) {
+	background: var(--ash-button-hoverBackground);
+}
+
+.ash-sessions-window .ash-button-quiet:where(:not(:disabled):active) {
+	background: var(--ash-button-activeBackground);
+}
+
+@media (forced-colors: active) {
+	.ash-sessions-window .ash-button {
+		border-color: CanvasText;
+	}
+}
+
+.ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-sessions-window
+	.ash-button {
+	--ash-button-primaryHoverBackground: var(--ash-foreground);
+	--ash-button-background: var(--ash-foreground);
+	border-color: var(--ash-contrastBorder);
+}
+
+.ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-sessions-window
+	.ash-button-primary:focus-visible {
+	/* The HC focus color matches the fill; separate the ring from that fill. */
+	outline-offset: var(--ash-spacing-size20);
+}

@@ -1,5 +1,5 @@
 import type { DocumentNode } from './documentCodec.js';
-import type { ChannelReference } from '../../../../platform/collaboration/common/channelService.js';
+import type { ChannelReference } from '../../../../platform/collab/common/channelService.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';

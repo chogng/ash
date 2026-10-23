@@ -1588,14 +1588,11 @@ fn acl_denied_write_is_reported_as_os_permission_denied() {
     assert!(identity.status.success());
     let identity = String::from_utf8(identity.stdout).unwrap();
     let identity = identity.trim();
+    // Deny data writes explicitly on existing descendants: inherited administrator
+    // grants can otherwise leave the file writable after changing its parent ACL.
     let restricted = std::process::Command::new("icacls")
         .arg(&protected)
-        .args([
-            "/inheritance:r",
-            "/grant:r",
-            &format!("{identity}:(OI)(CI)RX"),
-            "*S-1-5-18:(OI)(CI)F",
-        ])
+        .args(["/deny", &format!("{identity}:(OI)(CI)(WD,AD)"), "/T"])
         .output()
         .unwrap();
     let denied = fs::write(&target, b"unexpected");
@@ -1607,11 +1604,7 @@ fn acl_denied_write_is_reported_as_os_permission_denied() {
     );
     let restored = std::process::Command::new("icacls")
         .arg(&protected)
-        .args([
-            "/inheritance:e",
-            "/grant:r",
-            &format!("{identity}:(OI)(CI)F"),
-        ])
+        .args(["/remove:d", identity, "/T"])
         .output()
         .unwrap();
     assert!(restricted.status.success(), "{restricted:?}");

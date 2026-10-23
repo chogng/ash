@@ -1,4 +1,4 @@
-Ash grammar resources v0.1.0
+Ash grammar resources v0.1.1
 https://github.com/chogng/ash-grammars
 
 The following notices accompany the linked grammar library and portable WASM modules.

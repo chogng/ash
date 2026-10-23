@@ -62,7 +62,7 @@ SessionsViewRegistry.registerStaticViews(CREATOR_NAVIGATION_CONTAINER_ID, [{ id:
 
 registerAction2(class OpenCreator extends Action2 {
 	constructor() {
-		super({ id: 'sessions.open.creator', title: localize2('sessions.creator.title', 'Creator'), icon: Lxicon.symbolColor, toggled: { condition: ContextKeyExpr.has('sessions.activity.creatorSelected'), icon: Lxicon.symbolColorFilled }, menu: { id: Menus.ActivityBar, group: 'navigation', order: 50 } });
+		super({ id: 'sessions.open.creator', title: localize2('sessions.creator.title', 'Creator'), icon: Lxicon.symbolColor, toggled: ContextKeyExpr.has('sessions.activity.creatorSelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 50 } });
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(ICommandService).executeCommand('sessions.show.creator'); }
 });
