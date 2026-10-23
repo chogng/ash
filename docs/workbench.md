@@ -49,4 +49,4 @@ Code Sessions 保持独立页面。Workbench 通过 Titlebar action 请求打开
 
 统一 Renderer 输出在 `.build/desktop/renderer/ash`，包含 Workbench 与 Code Sessions 入口。Academy 的客户端实现独立编译和加载，不随工作台 Renderer 打包。
 
-验证覆盖文档类型匹配、共享模型与释放、保存冲突、旧配置忽略与存储迁移、浏览器富文档输入以及 Electron 实际文件打开和保存。Academy 的 profile、视图、转换及 DOCX 测试位于 `test/extensions/academy*.test.ts`。宿主目录只保留通用工作台交互测试。分页、段落、引用等无障碍帮助由扩展提供；宿主只补充保存、转换和焦点恢复操作。用户流程使用 Playwright 的内容、焦点和持久状态断言。
+验证覆盖文档类型匹配、共享模型与释放、保存冲突、旧配置忽略与存储迁移、浏览器富文档输入以及 Electron 实际文件打开和保存。Academy 的 profile、视图、转换及 DOCX 测试位于 `extensions/academy/test/browser/`。宿主目录只保留通用工作台交互测试。分页、段落、引用等无障碍帮助由扩展提供；宿主只补充保存、转换和焦点恢复操作。用户流程使用 Playwright 的内容、焦点和持久状态断言。

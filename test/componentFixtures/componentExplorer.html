@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<title>Ash component explorer</title>
+	</head>
+	<body data-mode="explorer">
+		<main class="ash-component-explorer">
+			<aside>
+				<h1>Component fixtures</h1>
+				<label for="fixture-filter">Filter fixtures</label>
+				<input id="fixture-filter" type="search" />
+				<nav aria-label="Component fixtures">
+					<ul id="fixtures"></ul>
+				</nav>
+			</aside>
+			<section aria-label="Fixture preview">
+				<div class="ash-component-explorer-actions">
+					<button id="reverse" disabled>Reverse CSS</button>
+					<button id="reset" disabled>Reset CSS</button>
+					<span id="status" role="status"></span>
+				</div>
+				<iframe id="preview" title="Component fixture preview"></iframe>
+				<details>
+					<summary>Stylesheet source order</summary>
+					<ol id="stylesheets"></ol>
+				</details>
+			</section>
+		</main>
+		<script type="module" src="./componentExplorer.ts"></script>
+	</body>
+</html>

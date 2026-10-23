@@ -12,6 +12,8 @@
     "./**/*.ts",
     "../../componentFixtures/**/*.ts",
     "../../componentFixtures/**/*.mts",
-    "../../../src/**/*.fixture.ts"
+    "../../../src/**/*.fixture.ts",
+    "../../../src/ash/**/test/**/fixtures/*.page.ts",
+    "../../fixtures/browser/**/*.ts"
   ]
 }

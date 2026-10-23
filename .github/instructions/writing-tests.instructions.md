@@ -1,6 +1,6 @@
 ---
 description: Ash test writing guidelines — unit tests, integration tests, snapshot tests, and clean teardown patterns. Reference when writing or updating tests.
-applyTo: "src/ash/**/test/**/*.ts, src/ash/**/*.test.ts,test/**/*.ts"
+applyTo: "src/ash/**/test/**/*.ts, src/ash/**/*.test.ts,extensions/**/test/**/*.ts,test/**/*.ts"
 ---
 
 # Writing Tests
@@ -9,14 +9,17 @@ applyTo: "src/ash/**/test/**/*.ts, src/ash/**/*.test.ts,test/**/*.ts"
 
 | Type | File suffix | Location | Runs in |
 | --- | --- | --- | --- |
-| Unit tests | `.test.ts` | `src/ash/**/test/` | Mocha in Node/jsdom |
+| Unit and component tests | `.test.ts` | `src/ash/<owner>/test/<runtime>/` | Mocha; Node/jsdom or isolated Chromium pages |
+| Extension package unit tests | `.test.ts` | `extensions/<owner>/test/<runtime>/` | Mocha in Node/jsdom |
 | Browser integration tests | `.integration.spec.ts` | `test/integration/browser/` | Chromium via Playwright |
 | Stanza distribution tests | `.spec.ts` | `test/stanza/` | Chromium and Firefox against the standalone build |
 | Smoke tests | `.spec.ts` | `test/smoke/areas/` | Browser or Electron via Playwright |
 
 ## Test scope
 
-- Test sorting, serialization and other pure rules in unit tests. Test rendered layout, styles and component input in browser integration using the real production component and its required host styles and theme setup; reuse an existing fixture where possible.
+- Keep rules, rendered components and renderer service assembly in the owning source module's `.test.ts`. Reuse existing coverage before moving assertions. For real layout, styles, focus and input, use `useBrowserTests` from `test/unit/browser/context.ts` inside a Mocha `suite`; `test:unit` prepares the shared browser assets only when selected files need them. Use normal Mocha hooks and tests, with Playwright only driving and asserting against the browser.
+- Browser page fixtures live with their component under `test/<runtime>/fixtures/`; genuinely shared pages and helpers live in `test/fixtures/browser`. Name executable page harnesses `.page.ts`: `.fixture.ts` is reserved for screenshot fixture discovery. Keep spec-only helpers out of production modules.
+- Root browser integration covers real process/package loading, transport, Worker or iframe boundaries, native browser contracts and representative host lifecycles. Split mixed suites by the boundary each case observes; multiple renderer services and mocked IPC alone do not require a root integration suite.
 - Do not add a full-application smoke test solely to check icon size, color, spacing or corner radius. Keep these checks automated with computed CSS and rendered geometry assertions; a screenshot alone does not replace those assertions.
 - Use smoke tests for startup, IPC, native windows, real filesystem or process wiring, backend persistence and restart, and representative complete user flows. Keep smoke coverage for layout or interaction that depends on actual Workbench or native-window composition and cannot be exercised in an isolated component.
 - When moving coverage, map the old behavior and assertions to the destination, pass the destination tests before removing the old cases, and retain the affected real product flow. Remove an existing duplicate only after confirming equivalent coverage; merely checking that a retired button is absent does not prove a feature works.

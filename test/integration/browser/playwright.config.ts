@@ -5,12 +5,9 @@ import { defineConfig } from "@playwright/test";
 // user-supplied file filter narrows that scope instead of adding to it.
 // Package-owned clients remain in the full browser suite, independent of Stanza.
 const editorSpecs = [
-	"codeExtension.integration.spec.ts",
 	"diff.integration.spec.ts",
 	"gpuText.integration.spec.ts",
 	"iPadShowKeyboard.integration.spec.ts",
-	"language.integration.spec.ts",
-	"loading.integration.spec.ts",
 	"standalone.integration.spec.ts",
 	"textModel.integration.spec.ts",
 	"themes.integration.spec.ts",

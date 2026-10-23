@@ -5,15 +5,16 @@ description: Use when running unit tests in the Ash repo. Covers pnpm test:unit 
 
 # Running Unit Tests
 
-Unit tests run in Node/jsdom through Mocha. Use the Node version in `.nvmrc` and run these commands from the repository root.
+Source-owned unit and component tests run through Mocha. Pure and DOM contract tests use Node/jsdom; rendered component tests use isolated Chromium contexts through `test/unit/browser/context.ts`. The same file filters apply, and the runner builds and serves browser fixtures only when selected tests import that helper. Install the repository-pinned Chromium for these tests. Use the Node version in `.nvmrc` and run these commands from the repository root.
 
 ## Scripts
 
 | Scope                                 | Command                 |
 | ------------------------------------- | ----------------------- |
-| Frontend and architecture units       | `pnpm test:unit`        |
+| Desktop, extension and architecture units | `pnpm test:unit`        |
 | Editor and its Workbench integrations | `pnpm test:editor:unit` |
-| Extension units                       | `pnpm test:extensions`  |
+| Extension host contracts              | `pnpm test:extensions`  |
+| Extension package units               | `pnpm test:unit --runGlob 'extensions/*/test/**/*.test.js'` |
 | Build tools                           | `pnpm --dir build test` |
 
 The frontend, editor, and extension commands prepare resources and compile tests before running them. Build-tool tests use Node's test runner and do not accept the Mocha options below. After compiling tests, use `pnpm test:unit:runner` when changing the unit runner; `pnpm test:main` and frontend CI include this regression suite once. Selected business-unit runs do not rerun it.
@@ -24,7 +25,7 @@ For repeated runs against unchanged sources and generated inputs, use `pnpm test
 
 | Option                     | Meaning                                                                                                                         |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `--run <path>`             | A source `.ts` or emitted `.js` path relative to the repository root; starts with `src/` or `test/`. Repeat for multiple files. |
+| `--run <path>`             | A source `.ts` or emitted `.js` path relative to the repository root; starts with `src/`, `extensions/` or `test/`. Repeat for multiple files. |
 | `--runGlob <pattern>`      | Match emitted `.js` paths relative to `.build/desktop/test`. Cannot be combined with `--run`.                                   |
 | `--grep <pattern>`         | Match full Mocha test titles in the selected files.                                                                             |
 | `--timeout <milliseconds>` | Positive integer; default 60,000 per test.                                                                                      |
@@ -37,7 +38,7 @@ pnpm test:unit --runGlob '**/localizationService.test.js'
 
 A single leading package-manager `--` separator is accepted. Unknown options, misplaced separators, and empty grep patterns fail before tests start. Use `--run` for file paths; bare positional paths and `--coverage` are unsupported. The runner fails if no tests execute. Check the selected suite's final test count and exit code. Runner regression tests have a separate summary.
 
-For test design and cleanup, read [Writing Tests](../../../.github/instructions/writing-tests.instructions.md) and [TypeScript Testing](../../../.github/instructions/typescript-testing.instructions.md). Real layout and input behavior belong in the Playwright browser integration suite; complete product flows belong in [smoke-tests](../smoke-tests/SKILL.md).
+For scope, fixture ownership and cleanup, read [Writing Tests](../../../.github/instructions/writing-tests.instructions.md) and [TypeScript Testing](../../../.github/instructions/typescript-testing.instructions.md). Complete product flows belong in [smoke-tests](../smoke-tests/SKILL.md).
 
 ## Stopping and reusing validation
 

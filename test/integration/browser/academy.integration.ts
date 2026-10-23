@@ -5,7 +5,7 @@ import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/edi
 import { IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import type { TextModelWorkingCopyReference } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
-import { bindTestColorTheme } from './themeFixture.js';
+import { bindTestColorTheme } from '../../fixtures/browser/themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
@@ -52,7 +52,7 @@ import type { DocumentCollaborationRemoteEnvelope } from "../../../extensions/ac
 import type { DocumentCollaborationEnvelope } from "../../../extensions/academy/common/services/documentCollaborationService.js";
 import type { DocumentCollaborationSubmitOutcome } from "../../../extensions/academy/common/services/documentCollaborationService.js";
 import type { IDocumentCollaborationService } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
-import { MemoryTextFiles } from "./memoryTextFiles.js";
+import { MemoryTextFiles } from "../../fixtures/browser/memoryTextFiles.js";
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';

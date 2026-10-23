@@ -64,6 +64,7 @@
     "src/ash/platform/browserView/common/**/*.ts",
     "src/ash/platform/browserView/electron-main/browserViewIpc.ts",
     "test/architecture/**/*.ts",
-    "test/extensions/**/*.ts"
+    "extensions/*/test/**/*.ts",
+    "test/fixtures/browser/**/*.ts"
   ]
 }

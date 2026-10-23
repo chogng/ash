@@ -108,7 +108,7 @@ def accept(
                     ),
                     "check",
                     "-p",
-                    "test/remote/tsconfig.json",
+                    "test/sanity/tsconfig.json",
                     "--all",
                 )
                 run(
@@ -118,7 +118,7 @@ def accept(
                         / ("bun.exe" if os.name == "nt" else "bun")
                     ),
                     "build",
-                    "test/remote/remoteReleaseAcceptance.ts",
+                    "test/sanity/remoteReleaseAcceptance.ts",
                     "--target=node",
                     "--outfile",
                     str(script),

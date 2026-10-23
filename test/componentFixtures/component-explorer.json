@@ -2,7 +2,7 @@
   "screenshotDir": "../../.build/component-fixtures/screenshots",
   "server": {
     "type": "http",
-    "cmd": "node test/integration/browser/run.ts --component-fixtures --explore",
+    "cmd": "node test/componentFixtures/run.ts --explore",
     "cwd": "../../",
     "wait": {
       "stdout": "Component explorer: http://127\\.0\\.0\\.1:(?<port>\\d+)/"

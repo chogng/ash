@@ -5,7 +5,7 @@ description: Use when running browser integration tests in the Ash repo. Covers 
 
 # Running Integration Tests
 
-Browser integration tests live in `test/integration/browser/`. They test editors and components in a real browser through Playwright.
+Browser integration tests live in `test/integration/browser/`. They use Playwright to exercise real process/package, transport, Worker, iframe and host lifecycle boundaries. Source-owned component tests use Mocha `.test.ts`; scope and fixture ownership are defined in [Writing Tests](../../../.github/instructions/writing-tests.instructions.md).
 
 ## Scripts
 
@@ -24,12 +24,12 @@ The browser commands typecheck and collect the selection before building pages o
 The runner accepts one leading package-manager `--` separator, but rejects separators between Playwright arguments. Prefer passing arguments directly:
 
 ```bash
-pnpm test:browser:integration dialog.integration.spec.ts --project=chromium
+pnpm test:browser:integration webview.integration.spec.ts --project=chromium
 pnpm test:editor:browser textModel.integration.spec.ts --project=chromium --list
 pnpm test:editor:browser --project=chromium --grep 'restores'
 ```
 
-`--grep`, `--list`, `--repeat-each=N`, and `--max-failures=1` use Playwright's meanings. Check the selected tests with `--list` when a filter is ambiguous. The `chrome-gpu` project selects GPU specs and requires the corresponding Chrome installation; ordinary component specs use `chromium`.
+`--grep`, `--list`, `--repeat-each=N`, and `--max-failures=1` use Playwright's meanings. Check the selected tests with `--list` when a filter is ambiguous. The `chrome-gpu` project selects GPU specs and requires the corresponding Chrome installation; other integration specs use `chromium`.
 
 ## Distinction from other test types
 

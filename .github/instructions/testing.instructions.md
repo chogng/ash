@@ -28,7 +28,7 @@ Commands: [Rust development](../../.agents/skills/rust-development/SKILL.md#vali
 | --- | --- |
 | 文档、注释 | 按[文档规范](documentation.instructions.md)检查；可执行示例变化时验证对应示例。 |
 | 内部逻辑、行为不变的重构、后端领域契约 | 运行所属模块及受影响消费者的定向测试和必要构建检查；涉及实际进程或产品接线时再增加对应运行场景。 |
-| 布局、主题、组件交互 | 使用[浏览器集成测试](../../.agents/skills/integration-tests/SKILL.md)或已有组件 fixture；视觉变化审阅关键截图。组件隔离环境不能覆盖的产品组合行为使用下一行入口。 |
+| 布局、主题、组件交互 | 使用源码 owner 的 [Mocha 浏览器组件测试](writing-tests.instructions.md)或已有组件 fixture；视觉变化审阅关键截图。组件隔离环境不能覆盖的产品组合行为使用下一行入口。 |
 | 完整用户流程、Desktop 启动、IPC、原生窗口、前后端接线 | 选择覆盖相应宿主和连接的定向 [smoke](../../.agents/skills/smoke-tests/SKILL.md)；一次性复现、修复验收或需要录制证据时使用 [UI scenario](../../.agents/skills/validate-ui-scenario/SKILL.md)。已有场景足以验证该结论时直接复用，不额外运行同样的场景。 |
 | Agent 工具、执行、取消或恢复 | 使用受控模型响应验证受影响的生产调用链；涉及客户端接线时从相应产品入口验收。真实 Provider／模型调用用于外部服务兼容性或明确的模型任务评估，不作为每次 Agent 改动的前置条件。 |
 | TUI 状态、渲染与交互 | 使用 [App／组件测试](../../.agents/skills/test-tui/SKILL.md)；行为依赖真实 CLI 进程、PTY、信号或宿主终端时增加 [PTY 场景](../../.agents/skills/test-tui-pty/SKILL.md)。 |

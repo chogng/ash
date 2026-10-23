@@ -49,6 +49,55 @@ test('component explorer discovers themed fixtures and exposes real CSS source o
 	const screenshot = test.info().outputPath('component-explorer.png');
 	await page.screenshot({ path: screenshot });
 	await test.info().attach('component-explorer', { path: screenshot, contentType: 'image/png' });
+	// Retain the former integration regression gate using the existing source-order runtime.
+	for (const theme of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		const fixtureId = `shared/SelectAndList/${theme}`;
+		await page.getByRole('searchbox', { name: 'Filter fixtures' }).fill(fixtureId);
+		await page.getByRole('link', { name: fixtureId, exact: true }).click();
+		await expect(page.getByRole('status')).toHaveText(fixtureId);
+		await expect(frame.locator('body')).toHaveAttribute('data-ready', 'true');
+		const popup = frame.locator('.ash-select-box-list');
+		await frame.getByRole('combobox', { name: 'Fixture choice' }).click();
+		await frame.getByRole('combobox', { name: 'Fixture choice' }).press('ArrowDown');
+		const assertPresentation = async (): Promise<void> => {
+			for (const side of ['top', 'right', 'bottom', 'left']) await expect(popup).toHaveCSS(`padding-${side}`, '4px');
+			await expect(popup.getByRole('option')).toHaveCount(3);
+			for (const name of ['First choice', 'Last choice']) await expect(popup.getByRole('option', { name, exact: true })).toHaveCSS('cursor', 'pointer');
+			const disabled = popup.getByRole('option', { name: 'Unavailable choice', exact: true });
+			await expect(disabled).toHaveAttribute('aria-disabled', 'true');
+			await expect(disabled).toHaveCSS('cursor', 'default');
+			expect(await popup.evaluate(element => ({
+				height: element.getBoundingClientRect().height,
+				rows: [...element.querySelectorAll('[role="option"]')].map(row => row.getBoundingClientRect().height),
+			}))).toEqual({ height: 74, rows: [22, 22, 22] });
+			const plainList = frame.getByRole('listbox', { name: 'Fixture list', exact: true });
+			await expect(plainList).toHaveCSS('padding-top', '0px');
+			await expect(plainList.locator('.ash-list-row').first()).toHaveCSS('cursor', 'default');
+			await popup.getByRole('option', { name: 'First choice', exact: true }).focus();
+			await page.keyboard.press('Home');
+			await expect(popup.getByRole('option', { name: 'First choice', exact: true })).toBeFocused();
+			await page.keyboard.press('ArrowDown');
+			await expect(popup.getByRole('option', { name: 'Last choice', exact: true })).toBeFocused();
+			await page.keyboard.press('ArrowUp');
+			await expect(popup.getByRole('option', { name: 'First choice', exact: true })).toBeFocused();
+			await page.keyboard.press('End');
+			const focused = popup.getByRole('option', { name: 'Last choice', exact: true });
+			await expect(focused).toBeFocused();
+			await expect(focused).toHaveCSS('outline-style', 'solid');
+			await expect(focused).toHaveCSS('outline-width', '1px');
+			await expect(frame.getByRole('combobox', { name: 'Fixture choice' })).toHaveAttribute('aria-activedescendant', (await focused.getAttribute('id'))!);
+		};
+		await assertPresentation();
+		await frame.locator('body').evaluate(() => {
+			const order = window.componentFixture.order();
+			const list = window.componentFixture.documents().find(document => document.source.endsWith('/list/list.css'))!;
+			window.componentFixture.setOrder([...order.filter(index => index !== list.index), list.index]);
+		});
+		await assertPresentation();
+		await page.keyboard.press('Escape');
+		await expect(popup).toBeHidden();
+		await expect(frame.getByRole('combobox', { name: 'Fixture choice' })).toBeFocused();
+	}
 	await page.goto('/componentFixture.html?fixture=unknown');
 	await expect(page.getByRole('alert')).toContainText('Unknown component fixture');
 });
@@ -59,8 +108,8 @@ test('CSS scan localizes an injected conflict to its two actual source files', a
 	const result = await scanFixture(page, id, Date.now() + 60_000, /fixtures\/cssOrder\/(earlier|later)\.css$/, recorder.save, async page => {
 		await page.evaluate(async () => {
 			document.querySelector('.ash-component-fixture')!.classList.add('ash-fixture-order-probe');
-			await import('/fixtures/cssOrder/earlier.css');
-			await import('/fixtures/cssOrder/later.css');
+			await import('/test/componentFixtures/fixtures/cssOrder/earlier.css');
+			await import('/test/componentFixtures/fixtures/cssOrder/later.css');
 			window.componentFixture.refreshStyles();
 		});
 	});
@@ -69,8 +118,8 @@ test('CSS scan localizes an injected conflict to its two actual source files', a
 	await testInfo.attach('injected-conflict', { path: report, contentType: 'application/json' });
 	expect(result.status, JSON.stringify(result)).toBe('localized');
 	expect(result.conflict?.map(document => document.source)).toEqual([
-		'test/integration/browser/fixtures/cssOrder/earlier.css',
-		'test/integration/browser/fixtures/cssOrder/later.css',
+		'test/componentFixtures/fixtures/cssOrder/earlier.css',
+		'test/componentFixtures/fixtures/cssOrder/later.css',
 	]);
 	expect(result.probes).toBeLessThan(15);
 	expect(result.difference?.styles.some(change => change.property === '/border-top-width')).toBe(true);
@@ -81,11 +130,11 @@ test('a dynamic stylesheet between source documents prevents a false pair attrib
 	const result = await scanFixture(page, 'shared/ButtonsAndMenu/ash-dark', Date.now() + 60_000, /fixtures\/cssOrder\/(earlier|later)\.css$/, recorder.save, async page => {
 		await page.evaluate(async () => {
 			document.querySelector('.ash-component-fixture')!.classList.add('ash-fixture-order-probe');
-			await import('/fixtures/cssOrder/earlier.css');
+			await import('/test/componentFixtures/fixtures/cssOrder/earlier.css');
 			const dynamic = document.createElement('style');
 			dynamic.textContent = '.ash-fixture-order-probe .ash-button { border-width: 4px; }';
 			document.head.append(dynamic);
-			await import('/fixtures/cssOrder/later.css');
+			await import('/test/componentFixtures/fixtures/cssOrder/later.css');
 			window.componentFixture.refreshStyles();
 		});
 	});

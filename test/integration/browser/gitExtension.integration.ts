@@ -2,7 +2,7 @@ import { StatusbarService } from '../../../src/ash/workbench/browser/parts/statu
 import { TimelineService } from '../../../src/ash/workbench/contrib/timeline/common/timelineService.js';
 import { NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import type { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
-import { TestNotificationService } from './notificationFixture.js';
+import { TestNotificationService } from '../../fixtures/browser/notificationFixture.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { NotificationActionRunner } from '../../../src/ash/workbench/browser/parts/notifications/notificationsCommands.js';
 import { NotificationsToasts } from '../../../src/ash/workbench/browser/parts/notifications/notificationsToasts.js';
@@ -12,7 +12,7 @@ import { INotificationService } from '../../../src/ash/platform/notification/com
 import { ViewsRegistry } from '../../../src/ash/workbench/common/views.js';
 import { ProgressService } from '../../../src/ash/workbench/services/progress/browser/progressService.js';
 import { AppServerRemoteError } from '../../../src/ash/platform/agentHost/common/appServerError.js';
-import { RustGitHostFixture } from './rustGitHostFixture.js';
+import { RustGitHostFixture } from '../../fixtures/browser/rustGitHostFixture.js';
 import '../../../src/ash/workbench/browser/parts/editor/editor.contribution.js';
 import { MenuId, MenusRegistry } from '../../../src/ash/platform/actions/common/actions.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
@@ -37,7 +37,7 @@ import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { withEnabledBuiltInExtensions } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
-import { createBuiltinExtensionFixture } from './builtinExtensionsFixture.js';
+import { createBuiltinExtensionFixture } from '../../fixtures/browser/builtinExtensionsFixture.js';
 import { WebWorkerExtensionHost as BrowserExtensionHostApi } from '../../../src/ash/workbench/services/extensions/browser/webWorkerExtensionHost.js';
 import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
 import { createExtensionHostInitialization } from '../../../src/ash/workbench/services/extensions/common/extensionHostProtocol.js';
@@ -57,7 +57,7 @@ import { IStatusbarService, StatusbarAlignment } from '../../../src/ash/workbenc
 import { StatusbarEntryItem } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarItem.js';
 import { ScmViewPane } from '../../../src/ash/workbench/contrib/scm/browser/scmViewPane.js';
 import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
-import { bindTestColorTheme } from './themeFixture.js';
+import { bindTestColorTheme } from '../../fixtures/browser/themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';

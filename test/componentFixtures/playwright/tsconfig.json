@@ -1,3 +1,16 @@
 {
-  "extends": "../../integration/browser/tsconfig.json"
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node", "vite/client", "@webgpu/types"]
+  },
+  "include": [
+    "../../../src/typings/css.d.ts",
+    "../../../src/typings/editContext.d.ts",
+    "../**/*.ts",
+    "../**/*.mts",
+    "../../fixtures/browser/**/*.ts",
+    "../../../src/**/*.fixture.ts"
+  ]
 }

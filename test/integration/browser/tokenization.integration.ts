@@ -1,7 +1,7 @@
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
-import { rustSyntaxFixture } from './rustSyntaxHostFixture.js';
+import { rustSyntaxFixture } from '../../fixtures/browser/rustSyntaxHostFixture.js';
 import { Range } from '../../../src/ash/editor/common/core/range.js';
 import { LanguageDiagnosticSeverity } from '../../../src/ash/editor/common/languages.js';
 import { SnippetsService } from '../../../src/ash/workbench/contrib/snippets/browser/snippetsService.js';

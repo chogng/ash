@@ -1,4 +1,4 @@
-import { test } from './rustSyntaxProcessFixture.js';
+import { test } from '../../fixtures/browser/rustSyntaxProcessFixture.js';
 import { expect } from '@playwright/test';
 
 const pageErrors = new WeakMap<object, string[]>();

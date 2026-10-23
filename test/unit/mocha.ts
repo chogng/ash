@@ -2,6 +2,7 @@ import { withProcessRun } from '../../build/processes.ts';
 import { constants, copyFileSync, cpSync, existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { availableParallelism, tmpdir } from 'node:os';
 import { dirname, resolve, sep } from 'node:path';
+import { startBrowserUnitServer } from './browser/server.ts';
 
 interface Selection {
 	readonly runs: readonly string[];
@@ -62,45 +63,50 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 		const resultDirectory = mkdtempSync(resolve(tmpdir(), 'ash-unit-results-'));
 		try {
 			await withProcessRun(desktopDirectory, async (run, environment) => {
-				let nextFile = 0;
-				const worker = async (): Promise<void> => {
-					while (!run.stopped && nextFile < files.length) {
-						const index = nextFile++;
-						const file = files[index];
-						const countFile = resolve(resultDirectory, `${index}.txt`);
-						const result = await run.command(process.execPath, [
-							'--import', './test/unit/ignore-css-imports.ts',
-							'--import', './test/unit/theme-resources.ts',
-							...(editorEnvironment ? ['--import', './test/unit/editor-environment.ts'] : []),
-							'node_modules/mocha/bin/mocha.js',
-							'--ui', 'tdd',
-							'--forbid-only',
-							'--reporter', './test/unit/reporter.ts',
-							'--reporter-option', `countFile=${countFile}`,
-							'--timeout', String(selection.timeout),
-							...(selection.grep ? ['--grep', selection.grep] : []),
-							file,
-						], { ...environment, ASH_UNIT_TEST_OUTPUT_DIRECTORY: outputDirectory }, true);
-						// Print one completed file at a time so concurrent reporters stay readable.
-						process.stdout.write(result.output);
-						if (run.stopped || result.code === 130 || result.code === 143) {
-							if (!run.stopped) {
-								process.exitCode = result.code;
-								await run.stop(result.code === 130 ? 'SIGINT' : 'SIGTERM');
+				const browserServer = files.some(file => /unit\/browser\/context\.js/u.test(readFileSync(file, 'utf8')))
+					? await startBrowserUnitServer(run, environment) : undefined;
+				const testEnvironment = browserServer ? { ...environment, ASH_BROWSER_UNIT_BASE_URL: browserServer.url, ASH_BROWSER_UNIT_RESULTS: browserServer.results } : environment;
+				try {
+					let nextFile = 0;
+					const worker = async (): Promise<void> => {
+						while (!run.stopped && nextFile < files.length) {
+							const index = nextFile++;
+							const file = files[index];
+							const countFile = resolve(resultDirectory, `${index}.txt`);
+							const result = await run.command(process.execPath, [
+								'--import', './test/unit/ignore-css-imports.ts',
+								'--import', './test/unit/theme-resources.ts',
+								...(editorEnvironment ? ['--import', './test/unit/editor-environment.ts'] : []),
+								'node_modules/mocha/bin/mocha.js',
+								'--ui', 'tdd',
+								'--forbid-only',
+								'--reporter', './test/unit/reporter.ts',
+								'--reporter-option', `countFile=${countFile}`,
+								'--timeout', String(selection.timeout),
+								...(selection.grep ? ['--grep', selection.grep] : []),
+								file,
+							], { ...testEnvironment, ASH_UNIT_TEST_OUTPUT_DIRECTORY: outputDirectory }, true);
+							// Print one completed file at a time so concurrent reporters stay readable.
+							process.stdout.write(result.output);
+							if (run.stopped || result.code === 130 || result.code === 143) {
+								if (!run.stopped) {
+									process.exitCode = result.code;
+									await run.stop(result.code === 130 ? 'SIGINT' : 'SIGTERM');
+								}
+								return;
 							}
-							return;
+							if (result.code !== 0) failed.push(file);
+							if (existsSync(countFile)) executedTests += Number(readFileSync(countFile, 'utf8'));
 						}
-						if (result.code !== 0) failed.push(file);
-						if (existsSync(countFile)) executedTests += Number(readFileSync(countFile, 'utf8'));
+					};
+					const results = await Promise.allSettled(Array.from({ length: Math.min(selection.workers, files.length) }, async () => {
+						try { await worker(); }
+						catch (error) { await run.close(); throw error; }
+					}));
+					for (const result of results) {
+						if (result.status === 'rejected') throw result.reason;
 					}
-				};
-				const results = await Promise.allSettled(Array.from({ length: Math.min(selection.workers, files.length) }, async () => {
-					try { await worker(); }
-					catch (error) { await run.close(); throw error; }
-				}));
-				for (const result of results) {
-					if (result.status === 'rejected') throw result.reason;
-				}
+				} finally { await browserServer?.dispose(); }
 			});
 		} finally {
 			rmSync(resultDirectory, { recursive: true, force: true });
@@ -122,7 +128,7 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 }
 
 function sourceFile(value: string): string {
-	if (!value.startsWith('src/') && !value.startsWith('test/')) {
+	if (!value.startsWith('src/') && !value.startsWith('test/') && !value.startsWith('extensions/')) {
 		throw new Error(`--run expects a path relative to the repository root: ${value}`);
 	}
 	return value.endsWith('.ts') ? `${value.slice(0, -3)}.js` : value;

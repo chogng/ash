@@ -33,7 +33,7 @@ import editorMessages from '../../../extensions/language-pack-zh-cn/translations
 import workbenchMessages from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { AccessibleViewRegistry } from '../../../src/ash/platform/accessibility/browser/accessibleViewRegistry.js';
-import { bindTestColorTheme } from './themeFixture.js';
+import { bindTestColorTheme } from '../../fixtures/browser/themeFixture.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/toolbar/toolbar.css';
 

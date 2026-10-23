@@ -700,7 +700,7 @@ async function runScreenshots(run: ProcessRun, environment: NodeJS.ProcessEnv, r
 	}
 }
 
-/** Keeps fixture tests on the existing integration runner's selection and process lifecycle. */
+/** Runs fixture tooling with Playwright selection and the shared process lifecycle. */
 export async function runComponentFixtures(run: ProcessRun, environment: NodeJS.ProcessEnv, request: ReturnType<typeof parseFixtureArguments>): Promise<void> {
 	const root = resolve(import.meta.dirname, '../..');
 	if (request.screenshots || request.compare) {
@@ -725,8 +725,8 @@ export async function runComponentFixtures(run: ProcessRun, environment: NodeJS.
 	const port = process.env.ASH_COMPONENT_EXPLORER_PORT;
 	if (port && (!Number.isInteger(Number(port)) || Number(port) < 1 || Number(port) > 65535)) throw new Error('Invalid component explorer port');
 	const server = await createServer({
-		configFile: resolve(root, 'test/integration/browser/vite.config.ts'),
-		cacheDir: resolve(results, 'vite-cache'), optimizeDeps: { entries: ['componentExplorer.html', 'componentFixture.html'] },
+		configFile: resolve(root, 'test/fixtures/browser/vite.config.ts'),
+		cacheDir: resolve(results, 'vite-cache'), optimizeDeps: { entries: ['test/componentFixtures/componentExplorer.html', 'test/componentFixtures/componentFixture.html'] },
 		server: { host: '127.0.0.1', port: port ? Number(port) : 0, strictPort: !!port, open: false }, logLevel: 'warn',
 	});
 	try {

@@ -34,7 +34,7 @@ export async function runScreenshotCommand(testInfo: TestInfo, mode: 'capture' |
 		compare: { baseline: 'baseline', current: 'current' },
 	}));
 	const { stdout } = await promisify(execFile)(process.execPath, [
-		resolve(import.meta.dirname, '../../../integration/browser/run.ts'), '--component-fixtures',
+		resolve(import.meta.dirname, '../../run.ts'),
 		mode === 'capture' ? '--screenshots' : '--compare', '--config', config, '--out', directory,
 	], { cwd: resolve(import.meta.dirname, '../../../..'), windowsHide: true, timeout: testInfo.timeout - 10_000, maxBuffer: 2 * 1024 * 1024 });
 	console.log(stdout);

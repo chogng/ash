@@ -20,7 +20,7 @@ test("browser integration entrypoints narrow file filters within their suite", (
 	assert.match(editor.output, /textModel\.integration\.spec\.ts/u);
 	assert.match(editor.output, /Total: \d+ tests in 1 file/u);
 	assert.doesNotMatch(editor.output, /(?:academy|themes|tokenization)\.integration\.spec\.ts/u);
-	const outsideEditor = list(true, "dialog.integration.spec.ts");
+	const outsideEditor = list(true, "webview.integration.spec.ts");
 	assert.equal(outsideEditor.status, 1, outsideEditor.output);
 	assert.match(outsideEditor.output, /No tests found/u);
 	for (const file of ["academy.integration.spec.ts", "pdfExtension.integration.spec.ts", "referenceManager.integration.spec.ts"]) {
@@ -31,8 +31,8 @@ test("browser integration entrypoints narrow file filters within their suite", (
 		assert.equal(integration.status, 0, integration.output);
 		assert.match(integration.output, /Total: \d+ tests in 1 file/u);
 	}
-	const allBrowser = list(false, "dialog.integration.spec.ts");
+	const allBrowser = list(false, "webview.integration.spec.ts");
 	assert.equal(allBrowser.status, 0, allBrowser.output);
-	assert.match(allBrowser.output, /dialog\.integration\.spec\.ts/u);
+	assert.match(allBrowser.output, /webview\.integration\.spec\.ts/u);
 	assert.match(allBrowser.output, /Total: \d+ tests in 1 file/u);
 });

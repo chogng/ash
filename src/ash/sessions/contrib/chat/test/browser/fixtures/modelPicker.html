@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Sessions model picker</title>
+		<style>
+			body { margin: 0; font: 13px system-ui; }
+			#composer { position: fixed; bottom: 32px; right: 32px; display: flex; width: min(600px, calc(100vw - 64px)); justify-content: flex-end; }
+		</style>
+	</head>
+	<body>
+		<button id="outside">Outside</button>
+		<div id="composer"></div>
+		<output aria-label="Selection"></output>
+		<script type="module" src="./modelPicker.page.ts"></script>
+	</body>
+</html>

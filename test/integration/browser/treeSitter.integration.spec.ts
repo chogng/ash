@@ -1,4 +1,4 @@
-import { test } from './rustSyntaxProcessFixture.js';
+import { test } from '../../fixtures/browser/rustSyntaxProcessFixture.js';
 import structures from '../../fixtures/tree-sitter/structure.json' with { type: 'json' };
 import samples from '../../fixtures/tree-sitter/languages.json' with { type: 'json' };
 import { expect } from '@playwright/test';
