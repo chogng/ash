@@ -2,7 +2,6 @@ import { defaultButtonStyles, defaultToggleStyles } from '../../../../platform/t
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { observeElementSize } from '../../../../base/browser/observer.js';
 import { IMarkdownRendererService } from '../../../../platform/markdown/browser/markdownRenderer.js';
-import { Range } from '../../../../editor/common/core/range.js';
 import { createObjectUrl } from '../../../../base/browser/fileAccess.js';
 import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
 import { mainWindow } from '../../../../base/browser/window.js';
@@ -27,7 +26,7 @@ import { IExtensionApi, type ExtensionDescriptor } from '../../../../platform/ex
 import { toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../base/common/uri.js';
-import { changeExtensionEnablement, configureMcpServer, describeConnectorState, describeMcpServerState, describePluginPermission, promptConnectorApiToken, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
+import { changeExtensionEnablement, configureMcpServer, describeConnectorState, describeMcpServerState, describePluginPermission, getSkillSummary, promptConnectorApiToken, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
 import type { ParsedPromptFile } from '../../chat/common/promptSyntax/promptFileParser.js';
 import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
 import { ILanguageModelToolsService } from '../../chat/common/tools/languageModelToolsService.js';
@@ -367,9 +366,17 @@ export class ExtensionEditor extends EditorPane {
 				if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 				const skill = snapshot.catalog.skills.find(skill => skill.id.source === target.source && skill.id.name === target.name);
 				if (!skill) { this.header.status.textContent = localize({ bundle: 'ash.extensions', key: 'skillMissing' }, 'This skill is no longer available. Refresh Skills.'); return; }
-				this.header.metadata.textContent = localize({ bundle: 'ash.extensions', key: 'skillSource' }, 'Source: {0}', skill.id.source);
 				this.header.description.textContent = skill.description;
 				this.renderOverview();
+				this.header.description.textContent = getSkillSummary(skill);
+				const author = skill.metadata?.author;
+				const skillVersion = skill.metadata?.version;
+				const updated = skill.metadata?.['updated-at'];
+				this.header.metadata.textContent = [
+					author ? localize({ bundle: 'ash.extensions', key: 'detailDeveloper' }, 'Developer: {0}', author) : '',
+					skillVersion ? localize({ bundle: 'ash.extensions', key: 'detailVersionValue' }, 'Version: {0}', skillVersion) : '',
+					updated ? localize({ bundle: 'ash.extensions', key: 'detailUpdated' }, 'Updated: {0}', updated) : '',
+				].filter(Boolean).join(' · ');
 				this.renderInfo([{
 					label: localize({ bundle: 'ash.extensions', key: 'skillDetails' }, 'Skill details'), rows: [
 						{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: skill.id.name },
@@ -397,19 +404,6 @@ export class ExtensionEditor extends EditorPane {
 					label: localize({ bundle: 'ash.extensions', key: 'enableSkill' }, 'Enable skill'), checked: skill.enabled,
 					change: checked => this.prompts.setSkillEnablement(skill.id, checked, snapshot.revision, target.sessionId)
 				});
-				button(localize({ bundle: 'ash.extensions', key: 'openSkillInstructions' }, 'Open instructions'), async () => {
-					const cancellation = new CancellationTokenSource();
-					const cancel = (): void => cancellation.cancel();
-					signal.addEventListener('abort', cancel, { once: true });
-					this.actionResources.add(toDisposable(() => { signal.removeEventListener('abort', cancel); cancellation.dispose(true); }));
-					const parsed = await this.prompts.parseNew(skill.uri, cancellation.token);
-					if (!signal.aborted && !this.isDisposed && version === this.loadVersion) {
-						await this.editors.openEditor({ resource: skill.uri, languageId: 'markdown', label: `${skill.name}/SKILL.md`, readOnly: true, showBreadcrumbs: false }, {
-							pinned: true, selection: parsed.body ? Range.fromPositions(parsed.body.range.getStartPosition()) : undefined,
-						});
-					}
-				});
-				button(localize({ bundle: 'ash.extensions', key: 'refresh' }, 'Refresh'), async () => { await this.setInput(input, signal); });
 				return;
 			}
 			this.contentHeading.textContent = localize({ bundle: 'ash.extensions', key: 'mcpToolsHeading' }, 'Tools');

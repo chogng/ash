@@ -99,6 +99,10 @@
 	margin-top: 16px;
 }
 
+.ash-extension-editor .extension-actions:empty {
+	display: none;
+}
+
 .ash-extension-editor .extension-detail-tabs {
 	height: var(--ash-tab-height);
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);

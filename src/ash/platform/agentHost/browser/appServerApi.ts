@@ -146,13 +146,15 @@ function normalizeSkill(value: unknown): SkillDescriptor {
 	const source = boundedText(id.source, "Skill source", 256);
 	const name = boundedText(id.name, "Skill name", 64);
 	const description = boundedText(skill.description, "Skill description", 1024);
+	const metadata = Object.entries(record(skill.metadata ?? {}, "Skill metadata"));
+	if (metadata.length > 64 || metadata.some(([key, value]) => !key || [...key].length > 128 || typeof value !== 'string' || [...value].length > 1024)) throw new TypeError("Skill metadata is invalid");
 	const contentDigest = boundedText(skill.contentDigest, "Skill digest", 96);
 	const enablement = boundedText(skill.enablement, "Skill enablement", 16);
 	const compatibility = record(skill.compatibility, "Skill compatibility");
 	const compatibilityType = boundedText(compatibility.type, "Skill compatibility type", 16);
 	if (enablement !== "enabled" && enablement !== "disabled") throw new TypeError("Skill enablement is invalid");
 	if (compatibilityType !== "compatible" && compatibilityType !== "unknown") throw new TypeError("Skill compatibility is invalid");
-	return Object.freeze({ id: Object.freeze({ source, name }), description, contentDigest, enabled: enablement === "enabled", compatible: compatibilityType === "compatible" });
+	return Object.freeze({ id: Object.freeze({ source, name }), description, metadata: Object.freeze(Object.fromEntries(metadata) as Record<string, string>), contentDigest, enabled: enablement === "enabled", compatible: compatibilityType === "compatible" });
 }
 
 function record(value: unknown, owner: string): Record<string, unknown> {

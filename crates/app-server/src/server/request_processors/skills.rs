@@ -219,6 +219,7 @@ fn skill_list_result(snapshot: &SkillRuntimeSnapshot) -> SkillListResult {
                 SkillDto {
                     id: catalog.id().clone(),
                     description: catalog.metadata().description().to_owned(),
+                    metadata: catalog.metadata().extensions().clone(),
                     source_kind: match catalog.source().kind() {
                         SkillSourceKind::BuiltIn => SkillSourceKindDto::BuiltIn,
                         SkillSourceKind::User => SkillSourceKindDto::User,

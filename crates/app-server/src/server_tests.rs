@@ -4565,6 +4565,24 @@ fn create_instructions_skill_uses_normal_activation() {
             .iter()
             .any(|command| command["name"] == "create-instructions")
     );
+    let catalog = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":20,"method":"skills/list",
+            "params":{"reload":"cached"}
+        }),
+    );
+    let skill = catalog["result"]["skills"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|skill| skill["id"]["name"] == "create-instructions")
+        .unwrap();
+    assert_eq!(skill["metadata"]["author"], "Ash");
+    assert_eq!(skill["metadata"]["version"], "1.0.0");
+    assert_eq!(skill["metadata"]["updated-at"], "2026-10-22");
+
     let session = create_session(&server, &mut connection, 2, "instructions-session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let thread = create_thread(

@@ -1,6 +1,10 @@
 ---
 name: create-instructions
 description: Create or update Ash instruction files from a requested project rule, convention, or correction in the conversation. Use when the user wants a durable rule for future agent work.
+metadata:
+  author: Ash
+  version: "1.0.0"
+  updated-at: "2026-10-22"
 ---
 
 # Create instructions

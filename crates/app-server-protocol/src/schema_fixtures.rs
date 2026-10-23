@@ -97,6 +97,25 @@ fn skill_enablement_preserves_optional_session_lookup_scope() {
 }
 
 #[test]
+fn skill_catalog_preserves_author_metadata_and_defaults_missing_metadata() {
+    use crate::protocol::skills::SkillDto;
+    let mut value = serde_json::json!({
+        "id": {"source":"builtin:skill-source:ash-release","name":"create-instructions"},
+        "description":"Create project instructions.", "sourceKind":"builtIn",
+        "contentDigest":format!("sha256:{}", "a".repeat(64)),
+        "enablement":"enabled", "compatibility":{"type":"compatible"},
+        "metadata":{"author":"Ash","version":"1.0.0","updated-at":"2026-10-22"}
+    });
+    let skill: SkillDto = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(skill).unwrap(), value);
+    value.as_object_mut().unwrap().remove("metadata");
+    let skill: SkillDto = serde_json::from_value(value.clone()).unwrap();
+    assert!(skill.metadata.is_empty());
+    value["metadata"] = serde_json::json!({"author":42});
+    assert!(serde_json::from_value::<SkillDto>(value).is_err());
+}
+
+#[test]
 fn start_turn_reasoning_effort_round_trips_and_omitted_approval_inherits_profile() {
     let request = serde_json::json!({
         "type": "startTurn",

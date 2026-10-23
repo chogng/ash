@@ -287,20 +287,24 @@ for (const window of ['Code', 'Agents']) {
 }
 
 for (const window of ['Code', 'Agents']) {
-	test(`Skills command opens a readonly SKILL.md snapshot from the shared backend in ${window}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+	test(`Skills command shows metadata and readonly instructions from the shared backend in ${window}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
-		await page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').filter({ hasText: 'skill-creator' }).click();
-		await page.locator('.ash-extension-editor').getByRole('button', { name: 'Open instructions', exact: true }).click();
-		await expect(page.getByRole('tab', { name: 'skill-creator/SKILL.md', exact: true })).toBeVisible();
-		const editor = page.getByRole('region', { name: 'skill-creator/SKILL.md', exact: true });
-		const input = editor.locator('.stanza-editor-input');
-		await expect(editor.locator('.view-lines')).toContainText('name: skill-creator');
-		await expect(input).toHaveAttribute('aria-readonly', 'true');
-		await input.focus();
-		await page.keyboard.insertText('forbidden edit');
-		await expect(editor.locator('.view-lines')).toContainText('name: skill-creator');
-		await expect(editor.locator('.view-lines')).not.toContainText('forbidden edit');
+		const row = page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').filter({ hasText: 'skill-creator' });
+		await expect(row.locator('.extension-description')).toHaveText('Create and update Ash skills.');
+		await expect(row.locator('.extension-metadata')).toHaveText('Ash · Enabled');
+		await expect(row).not.toContainText('builtin:skill-source:ash-release');
+		await row.click();
+		const editor = page.locator('.ash-extension-editor');
+		await expect(editor.locator('.extension-metadata')).toHaveText('Developer: Ash · Version: 1.0.0 · Updated: 2026-10-22');
+		await expect(editor.locator('.extension-detail-description > p')).toHaveText('Create and update Ash skills.');
+		await expect(editor.locator('.extension-actions')).toBeHidden();
+		await editor.getByRole('tab', { name: 'Instructions', exact: true }).focus();
+		await editor.getByRole('tab', { name: 'Instructions', exact: true }).press('Enter');
+		const instructions = editor.getByRole('tabpanel', { name: 'Instructions', exact: true });
+		await expect(instructions.getByRole('heading', { name: 'Skill creator', exact: true })).toBeVisible();
+		await expect(instructions).toContainText('Create a Skill that adds reusable procedural knowledge');
+		await expect(instructions.locator('textarea, input, [contenteditable="true"]')).toHaveCount(0);
 	});
 }
 

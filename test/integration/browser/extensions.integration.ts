@@ -321,9 +321,9 @@ let completeSkillEnablement: (() => void) | undefined;
 const skillId = { source: 'marketplace:example/web', name: 'review' };
 services.registerInstance(IAppServerSkillApi, {
 	onDidChangeSkills: Event.None,
-	readTextResource: async (_reference, _path, signal) => { instructionSignal = signal; if (holdInstructions) { return new Promise<string>(resolve => { completeInstructions = resolve; }); } return '---\r\nname: review\r\ndescription: Review changes\r\n---\r\n# Review\r\nReview changes carefully.'; },
+	readTextResource: async (_reference, _path, signal) => { instructionSignal = signal; if (holdInstructions) { return new Promise<string>(resolve => { completeInstructions = resolve; }); } return '---\r\nname: review\r\ndescription: Review changes\r\nmetadata:\r\n  author: Acme\r\n  version: "2.1.0"\r\n  updated-at: "2026-10-20"\r\n---\r\n# Review\r\nReview changes carefully.'; },
 	list: async () => ({ generation: 1, skills: [] }),
-	read: async () => (managementReads.skills++, { revision, catalog: { generation: 1, skills: [{ id: skillId, description: 'Review changes', enabled, compatible: true, contentDigest: 'digest' }] }, diagnostics: [{ source: 'workspace', subject: 'bad-skill', message: 'Invalid metadata' }] }),
+	read: async () => (managementReads.skills++, { revision, catalog: { generation: 1, skills: [{ id: skillId, description: 'Review changes. Use when reviewing a project before release.', metadata: { author: 'Acme', version: '2.1.0', 'updated-at': '2026-10-20' }, enabled, compatible: true, contentDigest: 'digest' }] }, diagnostics: [{ source: 'workspace', subject: 'bad-skill', message: 'Invalid metadata' }] }),
 	setEnabled: async (id, value, expectedRevision, sessionId) => { if (holdSkillEnablement) { await new Promise<void>(resolve => { completeSkillEnablement = resolve; }); } requests.push(sessionId ? ['skill', id, value, expectedRevision, sessionId] : ['skill', id, value, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } enabled = value; revision++; },
 });
 const connectorChanges = disposables.add(new Emitter<number>());

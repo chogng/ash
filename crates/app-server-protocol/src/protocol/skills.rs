@@ -6,6 +6,7 @@ use ash_protocol::ContentDigest;
 use ash_protocol::SkillId;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -48,6 +49,9 @@ pub enum SkillCompatibilityDto {
 pub struct SkillDto {
     pub id: SkillId,
     pub description: String,
+    /// Author-declared display metadata from the validated Skill catalog.
+    #[serde(default)]
+    pub metadata: BTreeMap<String, String>,
     pub source_kind: SkillSourceKindDto,
     pub content_digest: ContentDigest,
     pub enablement: SkillEnablementDto,

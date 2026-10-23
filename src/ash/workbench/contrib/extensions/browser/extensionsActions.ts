@@ -1,4 +1,5 @@
 import { localize, localize2 } from '../../../../nls.js';
+import type { SkillDescriptor } from '../../../../platform/agentHost/common/appServerApi.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
@@ -17,6 +18,20 @@ import { isCancellationError } from '../../../../base/common/errors.js';
 import type { McpServerRuntimeState } from '../../../../platform/mcp/common/mcpServerStatusService.js';
 import type { ConnectorState, IConnectorService } from '../../../../platform/connectors/common/connectorService.js';
 import type { IMcpServerManagementService, McpServerConfiguration, McpServerConfigurationSnapshot } from '../../../../platform/mcp/common/mcpServerManagementService.js';
+
+/** The sidebar and detail header share the same concise, localized Skill description. */
+export function getSkillSummary(skill: SkillDescriptor): string {
+	if (skill.id.source === 'builtin:skill-source:ash-release') {
+		if (skill.id.name === 'create-instructions') {
+			return localize({ bundle: 'ash.extensions', key: 'skillCreateInstructionsSummary' }, 'Create and update Ash project instructions.');
+		}
+		if (skill.id.name === 'skill-creator') {
+			return localize({ bundle: 'ash.extensions', key: 'skillCreatorSummary' }, 'Create and update Ash skills.');
+		}
+	}
+	const description = (skill.metadata?.['short-description'] || skill.description).replace(/\s+/gu, ' ').trim();
+	return description.match(/^.*?(?:[。！？]|[.!?](?:\s|$))/u)?.[0].trim() ?? description;
+}
 
 /** Selection uses the catalog's actions; account and server mutations stay with their domain owners. */
 export async function addConnection(connectors: IConnectorService, mcp: IMcpServerManagementService, quickInput: IQuickInputService, dialogs: IDialogService, signal: AbortSignal): Promise<ExtensionsCapabilityTarget | undefined> {

@@ -440,6 +440,7 @@ fn enabled_unique_skills_become_dollar_selector_items() {
             skills: vec![SkillDto {
                 id: skill_id.clone(),
                 description: "draft a commit message".into(),
+                metadata: Default::default(),
                 source_kind: SkillSourceKindDto::User,
                 content_digest: digest.clone(),
                 enablement: SkillEnablementDto::Enabled,

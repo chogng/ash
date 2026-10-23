@@ -1120,9 +1120,9 @@ for (const [locale, disable, enable, disabled, running, onDemand] of [
 	});
 }
 
-for (const [locale, skillsTitle, enable, openInstructions] of [
-	['en', 'Skills', 'Enable skill', 'Open instructions'],
-	['zh-CN', '技能', '启用技能', '打开说明'],
+for (const [locale, skillsTitle, enable, instructions] of [
+	['en', 'Skills', 'Enable skill', 'Instructions'],
+	['zh-CN', '技能', '启用技能', '说明'],
 ]) {
 	test(`Extensions panes open scoped Skills details and readonly instructions in ${locale}`, async ({ page }) => {
 		const errors: string[] = [];
@@ -1136,10 +1136,20 @@ for (const [locale, skillsTitle, enable, openInstructions] of [
 		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('workbench.action.chat.configure.skills'));
 		await expect(header).toHaveAttribute('aria-expanded', 'true');
 		const list = skills.getByRole('listbox');
+		await expect(list.getByRole('option').locator('.extension-description')).toHaveText('Review changes.');
+		await expect(list.getByRole('option').locator('.extension-metadata')).toHaveText(locale === 'en' ? 'Acme · Enabled' : 'Acme · 已启用');
+		await expect(list.getByRole('option')).not.toContainText('marketplace:example/web');
 		await list.focus();
 		await list.press('Enter');
 		const details = page.locator('.ash-extension-editor');
 		await expect(details).toContainText('workspace / bad-skill: Invalid metadata');
+		await expect(details.locator('.extension-metadata')).toHaveText(locale === 'en'
+			? 'Developer: Acme · Version: 2.1.0 · Updated: 2026-10-20'
+			: '开发方：Acme · 版本：2.1.0 · 更新于：2026-10-20');
+		await expect(details.locator('.extension-detail-description > p')).toHaveText('Review changes.');
+		await expect(details.getByRole('tabpanel', { name: locale === 'en' ? 'Details' : '详情', exact: true })).toContainText('Use when reviewing a project before release.');
+		await expect(details.locator('.extension-actions')).toBeHidden();
+		await expect(details.locator('.extension-actions button')).toHaveCount(0);
 		const toggle = details.getByRole('switch', { name: enable, exact: true });
 		await expect(toggle).toBeChecked();
 		await toggle.focus();
@@ -1157,9 +1167,10 @@ for (const [locale, skillsTitle, enable, openInstructions] of [
 		await expect(toggle).toBeChecked();
 		await expect(toggle).toBeEnabled();
 		await expect(toggle).toBeFocused();
-		await details.getByRole('button', { name: openInstructions, exact: true }).click();
-		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'document').map((entry: any) => [entry[0], { ...entry[1], resource: { scheme: entry[1].resource.scheme, authority: entry[1].resource.authority, path: entry[1].resource.path } }])[0])).toMatchObject(['document', { resource: { scheme: 'private', authority: 'skill', path: '/review/SKILL.md' }, readOnly: true, languageId: 'markdown' }]);
-		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.find((entry: any) => entry[0] === 'documentOptions'))).toMatchObject(['documentOptions', { selection: { startLineNumber: 5, startColumn: 1, endLineNumber: 5, endColumn: 1 } }]);
+		await details.getByRole('tab', { name: instructions, exact: true }).focus();
+		await details.getByRole('tab', { name: instructions, exact: true }).press('Enter');
+		await expect(details.getByRole('tabpanel', { name: instructions, exact: true })).toContainText('Review changes carefully.');
+		await expect(details.getByRole('tabpanel', { name: instructions, exact: true })).not.toContainText('metadata:');
 		await header.focus();
 		await header.press('ArrowLeft');
 		await expect(header).toHaveAttribute('aria-expanded', 'false');
@@ -1308,9 +1319,9 @@ test('Installed Extensions includes packages with different capabilities and use
 test('Changing the selected capability aborts a pending instructions read and discards its document', async ({ page }) => {
 	await page.goto('/extensions.html');
 	await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('workbench.action.chat.configure.skills'));
-	await page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').click();
 	await page.evaluate(() => window.ashExtensionsIntegration.holdInstructions());
-	await page.locator('.ash-extension-editor').getByRole('button', { name: 'Open instructions', exact: true }).click();
+	await page.locator('[data-view-id="ash.extensions.skills"]').getByRole('option').click();
+	await page.locator('.ash-extension-editor').getByRole('tab', { name: 'Instructions', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.instructionsStarted())).toBe(true);
 	const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
 	await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
@@ -1318,6 +1329,7 @@ test('Changing the selected capability aborts a pending instructions read and di
 	await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.instructionsAborted())).toBe(true);
 	await page.evaluate(() => window.ashExtensionsIntegration.completeInstructions());
 	await expect(page.locator('.ash-extension-editor')).toContainText('fixture_search');
+	await expect(page.locator('.ash-extension-editor')).not.toContainText('Retired instructions');
 	expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'document'))).toEqual([]);
 });
 
