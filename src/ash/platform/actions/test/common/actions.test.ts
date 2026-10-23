@@ -362,6 +362,35 @@ test("menus can resolve actions against a caller-owned context scope", () => {
 	assert.equal(menu.getActions()[0]?.[1].length, 1);
 });
 
+test('history menus ignore sibling row creation and disposal while reacting to inherited context', () => {
+	using registrations = new DisposableStore();
+	const menuId = new MenuId('test.actions.history-row-isolation');
+	registrations.add(MenusRegistry.appendMenuItem(menuId, {
+		command: { id: 'test.history.row', title: 'History action', precondition: ContextKeyExpr.not('scmHistoryBusy') },
+		when: ContextKeyExpr.equals('scmHistoryProviderId', 'git'),
+	}));
+	using root = new ContextKeyService();
+	using row = root.createScoped({ getRootNode: () => ({}) } as HTMLElement);
+	row.setContext('scmHistoryProviderId', 'git');
+	using services = new InstantiationService();
+	using commands = new CommandService(services);
+	using menu = new MenuService(commands, root).createMenu(menuId, row);
+	let changes = 0;
+	using listener = menu.onDidChange(() => changes++);
+	assert.equal(menu.getActions()[0][1][0].enabled, true);
+	for (let index = 0; index < 150; index++) {
+		using sibling = root.createScoped({ getRootNode: () => ({}) } as HTMLElement);
+		sibling.setContext('scmHistoryProviderId', 'git');
+	}
+	assert.equal(changes, 0, 'Scrolling other rows must leave this menu intact.');
+	root.setContext('scmHistoryBusy', true);
+	assert.equal(changes, 1);
+	assert.equal(menu.getActions()[0][1][0].enabled, false);
+	row.setContext('scmHistoryProviderId', 'other');
+	assert.equal(changes, 2);
+	assert.deepEqual(menu.getActions(), []);
+});
+
 test("menu change events include context keys used by nested submenus", () => {
 	using registrations = new DisposableStore();
 	const rootMenu = new MenuId("test.actions.nested-root");
