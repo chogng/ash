@@ -6,6 +6,7 @@ import {
 } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
+import { createObjectUrl } from '../../../../base/browser/fileAccess.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { CountBadge } from '../../../../base/browser/ui/countBadge/countBadge.js';
 import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
@@ -49,7 +50,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { changeExtensionPackage } from './extensionEditor.js';
 import { IGlobalExtensionEnablementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
 import { IPluginManagementService } from '../../../../platform/extensionManagement/common/pluginManagementService.js';
-import { IExtensionApi, type ExtensionDescriptor } from '../../../../platform/extensions/common/extensionApi.js';
+import { IExtensionApi, type ExtensionCatalog, type ExtensionResourceRequest } from '../../../../platform/extensions/common/extensionApi.js';
 import './media/extension.css';
 
 interface ExtensionListItem {
@@ -60,6 +61,7 @@ interface ExtensionListItem {
 	readonly source?: ExtensionsInputSource;
 	readonly enabled?: boolean;
 	readonly canChangeEnablement?: boolean;
+	readonly icon?: ExtensionResourceRequest;
 }
 
 /** The Workbench and Sessions share catalog rendering; package authority stays in the backend. */
@@ -156,6 +158,18 @@ class ExtensionsContent extends Disposable {
 		if (item.installation) { row.dataset.installationId = item.installation.installationId; } else { delete row.dataset.installationId; }
 		const content = h(mainWindow.document, 'div'); content.className = 'extension-row';
 		const icon = h(mainWindow.document, 'div'); icon.className = 'extension-icon'; appendLabelIcon(icon, Lxicon.extensions); icon.setAttribute('aria-hidden', 'true');
+		if (item.icon) {
+			const path = item.icon.path.toLowerCase();
+			void this.extensionCatalog.resources.readExtensionResourceBytes(item.icon).then(bytes => {
+				if (resources.isDisposed) { return; }
+				const image = h(mainWindow.document, 'img'); image.alt = ''; image.draggable = false;
+				const mime = path.endsWith('.svg') ? 'image/svg+xml' : `image/${path.split('.').at(-1)!.replace('jpg', 'jpeg')}`;
+				const object = createObjectUrl(mainWindow, new Blob([new Uint8Array(bytes)], { type: mime }));
+				resources.add(object.registration);
+				resources.add(addDisposableListener(image, 'load', () => icon.replaceChildren(image)));
+				image.src = object.url.toString();
+			}).catch(() => { /* Keep the generic icon when a package resource is unavailable. */ });
+		}
 		const body = h(mainWindow.document, 'div'); body.className = 'extension-body';
 		const labels: readonly [string, string | undefined][] = this.isPluginsPane
 			? [['extension-name', item.summary.displayName], ['extension-metadata', item.publisher]]
@@ -230,11 +244,11 @@ class ExtensionsContent extends Disposable {
 			// plugins have their own owner and remain manageable from a Web client.
 			const policies = installed.length ? await this.extensionManagement.listEditorExtensions() : { extensions: [] };
 			let items: ExtensionListItem[];
-			let editorMetadata: readonly ExtensionDescriptor[] = [];
+			let editorCatalog: ExtensionCatalog | undefined;
 			const builtInItems: ExtensionListItem[] = [];
 			if (this.options.mode === 'builtIn' || isInstalled) {
 				const catalog = await this.extensionCatalog.list('cached', { includeDisabled: true });
-				editorMetadata = catalog.extensions;
+				editorCatalog = catalog;
 				const providers = await this.extensionManagement.listBuiltInProviders().catch(() => undefined);
 				const disabled = new Set(this.enablement.getDisabledExtensions().map(value => value.id));
 				builtInItems.push(...catalog.extensions.filter(extension => extension.sourceKind === 'builtIn' && (!this.options.capabilityKind || this.options.capabilityKind === 'editorExtension' || this.options.capabilityKind === 'localization' && JSON.parse(extension.manifestJson).contributes?.localizations?.length)).map(extension => {
@@ -254,7 +268,7 @@ class ExtensionsContent extends Disposable {
 			} else if (isInstalled) {
 				items = installed.filter(entry => (!this.options.capabilityKind || entry.capabilities.some(capability => capability.kind === this.options.capabilityKind))).map(installation => {
 					const policy = policies.extensions.find(value => value.installationId === installation.installationId);
-					const editor = editorMetadata.find(value => value.id === installation.package.id.split('@')[0] && value.version === installation.package.version);
+					const editor = editorCatalog?.extensions.find(value => value.id === installation.package.id.split('@')[0] && value.version === installation.package.version);
 					return { installation, publisher: editor?.publisher === 'ash' ? 'Ash' : editor?.publisher, enabled: policy?.enabled, canChangeEnablement: !!policy, summary: { id: installation.package.id, version: installation.package.version, displayName: editor?.displayName ?? installation.package.id.split('@')[0], packageType: 'installed', description: installation.capabilities.map(capability => capability.kind === 'editorExtension' ? localize({ bundle: 'ash.extensions', key: 'pluginEditorTag' }, 'Editor') : capability.kind).join(' · ') } };
 				});
 				items.push(...builtInItems);
@@ -272,6 +286,18 @@ class ExtensionsContent extends Disposable {
 				});
 			}
 			if (this.isDisposed || generation !== this.generation) { return; }
+			const catalog = editorCatalog;
+			if (catalog) {
+				items = items.map(item => {
+					const id = item.summary.id.replace(/@[^@]+$/u, '');
+					const extension = catalog.extensions.find(value => value.id === id && value.version === item.summary.version);
+					if (!extension) { return item; }
+					const path = JSON.parse(extension.manifestJson).icon;
+					return typeof path === 'string' && /\.(?:png|jpe?g|gif|webp|svg)$/iu.test(path)
+						? { ...item, icon: { generation: catalog.generation, extensionId: extension.id, path } }
+						: item;
+				});
+			}
 			this.installed = installed;
 			this.list.items = this.options.mode === 'browse' || this.options.mode === undefined ? items : items.filter(item =>
 				[item.summary.id, item.summary.displayName, item.summary.description, ...item.searchTerms ?? []]

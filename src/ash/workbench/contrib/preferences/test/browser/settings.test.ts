@@ -1,10 +1,9 @@
 import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../../../../platform/browserView/common/browserPasswordService.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
-import { ScreenshotGlobalShortcutSetting } from '../../../screenshot/common/screenshot.js';
+import { ScreenshotGlobalShortcutSetting } from '../../../chat/common/constants.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { resolveKeybinding } from '../../../../../base/common/keybindings.js';
 import { IHostService } from '../../../../services/host/browser/host.js';
-import '../../../screenshot/browser/screenshot.contribution.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
@@ -16,6 +15,9 @@ import { createTestLanguageModelToolsService } from '../../../chat/test/common/t
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import gitMessages from '../../../../../../../extensions/git/package.nls.json' with { type: 'json' };
+import snapshotMessages from '../../../../../../../extensions/snapshot/package.nls.json' with { type: 'json' };
+import snapshotManifest from '../../../../../../../extensions/snapshot/package.json' with { type: 'json' };
+import { localizeManifest } from '../../../../../platform/extensionManagement/common/extensionNls.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import manifest from '../../../../../../../extensions/git/package.json' with { type: 'json' };
@@ -153,6 +155,7 @@ const { IAppServerRemoteAgentService: RemoteAgentServiceId } = await import('../
 const { IWorkspaceTrustApi: WorkspaceTrustApiId } = await import('../../../../../platform/workspace/common/workspaceTrust.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 configurationRegistry.updateConfigurations({ add: [...parseExtensionManifest(JSON.stringify(manifest).replace(/%([^%]+)%/g, (match, key) => (gitMessages as Record<string, string>)[key] ?? match), { id: 'ash.git', name: 'git', publisher: 'ash', version: '0.1.0' }).contributes.configuration], remove: [] });
+configurationRegistry.updateConfigurations({ add: [...parseExtensionManifest(JSON.stringify(localizeManifest(snapshotManifest, snapshotMessages)), { id: 'ash.snapshot', name: 'snapshot', publisher: 'ash', version: '0.1.0' }).contributes.configuration], remove: [] });
 const { EditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
 const { EditorPaneRegistry, EditorPanes } = await import('../../../../browser/editor.js');
 const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
@@ -1137,7 +1140,6 @@ test('settingsLayout is the single projection from registered settings to catego
 		'general',
 		'github',
 		'network',
-		'screenshot',
 		'appearance',
 		'layout',
 		'debugging',
@@ -1967,7 +1969,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'github', 'network', 'screenshot', 'appearance', 'layout', 'debugging', 'settings-editor', 'startup', 'browser'],
+		['general', 'github', 'network', 'appearance', 'layout', 'debugging', 'settings-editor', 'startup', 'browser'],
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="general"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
@@ -1984,18 +1986,23 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
 	await nextTurn();
 	await configuration.updateValue(AccessibilityVerbositySettingId.ChatScreenshot, false);
-	await preferences.openSettings({ section: 'screenshot' });
+	await preferences.openSettings({ section: 'extension.ash.snapshot' });
 	await nextTurn();
 	assert.equal(root.querySelector('[data-settings-item-id="screenshot.section"]'), null);
-	const screenshotSettings = root.querySelector<HTMLElement>('.ash-screenshot-settings')!;
-	assert.ok(screenshotSettings);
-	assert.deepEqual([...screenshotSettings.querySelectorAll<HTMLElement>('[data-settings-item-id]')].map(row => row.dataset.settingsItemId), [ScreenshotGlobalShortcutSetting]);
-	const globalScreenshot = screenshotSettings.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+	assert.equal(root.querySelector('[data-settings-category-id="screenshot"]'), null);
+	assert.equal(root.querySelector('[data-settings-category-id="extension.ash.snapshot"]')?.textContent, 'Snapshot');
+	const globalScreenshot = root.querySelector<HTMLElement>(`[data-configuration-key="${ScreenshotGlobalShortcutSetting}"]`)!;
 	assert.ok(globalScreenshot);
-	assert.equal(globalScreenshot.checked, false);
+	assert.equal(globalScreenshot.getAttribute('aria-checked'), 'false');
 	globalScreenshot.click();
 	await nextTurn();
 	assert.equal(configuration.getValue(ScreenshotGlobalShortcutSetting), true);
+	const screenshotHints = root.querySelector<HTMLElement>(`[data-configuration-key="${AccessibilityVerbositySettingId.ChatScreenshot}"]`)!;
+	assert.ok(screenshotHints);
+	assert.equal(screenshotHints.getAttribute('aria-checked'), 'false');
+	screenshotHints.click();
+	await nextTurn();
+	assert.equal(configuration.getValue(AccessibilityVerbositySettingId.ChatScreenshot), true);
 	await preferences.openSettings({ section: 'accessibilitySignals' });
 	assert.equal(root.querySelector('[data-settings-category-id="accessibilitySignals"]')?.textContent, 'Accessibility Signals');
 	assert.ok(root.querySelector('[data-settings-item-id="accessibility.signalOptions.volume"]'));
@@ -2007,12 +2014,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(root.querySelector('[data-settings-item-id="workbench.reduceMotion"]'));
 	assert.ok(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`));
 	assert.ok(root.querySelector('[data-settings-item-id^="accessibility.verbosity."]'));
-	const screenshotHints = root.querySelector<HTMLInputElement>(`[data-settings-item-id="${AccessibilityVerbositySettingId.ChatScreenshot}"] input[type="checkbox"]`);
-	assert.ok(screenshotHints);
-	assert.equal(screenshotHints.checked, false);
-	screenshotHints.click();
-	await nextTurn();
-	assert.equal(configuration.getValue(AccessibilityVerbositySettingId.ChatScreenshot), true);
+	assert.equal(root.querySelector(`[data-settings-item-id="${AccessibilityVerbositySettingId.ChatScreenshot}"]`), null);
 	assert.equal(root.querySelector('[data-settings-item-id^="accessibility.signal"]'), null);
 	await preferences.openSettings({ section: 'terminal' });
 	assert.equal(root.querySelector('[data-settings-category-id="terminal"]')?.textContent, 'Terminal');

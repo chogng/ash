@@ -3,13 +3,17 @@ import { basename, join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { ElectronApplication, Page } from '@playwright/test';
+import type { BaseWindow, SaveDialogOptions } from 'electron';
 
 const screenshotShortcut = process.platform === 'darwin' ? 'Control+Meta+a' : 'Control+Alt+s';
 
-test('Agents screenshot shortcut survives initial navigation, reload and reopening', { tag: ['@electron-ui'] }, async ({ application, workbench, target }) => {
+// These cases exercise OS capture and focus; synthetic cover windows must actually be visible.
+test.use({ electronWindowMode: 'active' });
+
+test('Agents screenshot shortcut survives initial navigation, reload and reopening', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench, target }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	const synchronize = async (): Promise<void> => {
-		const result = await page.evaluate(() => (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:screenshot:shortcut', { accelerator: '', label: '', global: false }));
+		const result = await page.evaluate(() => (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:global-keybinding:update', { id: 'chat.screenshot', commandId: 'workbench.action.chat.attachScreenshot', accelerator: '', label: '', global: false }));
 		expect(result).toEqual({ available: false, activeLabel: '' });
 	};
 	await synchronize();
@@ -20,9 +24,9 @@ test('Agents screenshot shortcut survives initial navigation, reload and reopeni
 });
 
 async function screenOverlay(application: ElectronApplication, chinese = false): Promise<Page> {
-	await expect.poll(() => application.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBeGreaterThan(0);
-	const page = application.windows().find(page => page.url().includes('/screenshot/screenshot.html'))!;
-	await expect(page.getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true })).toBeVisible();
+	await expect.poll(() => application.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBeGreaterThan(0);
+	const page = application.windows().find(page => page.url().includes('/imageView/imageView.html'))!;
+	await expect(page.frameLocator('iframe').getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true })).toBeVisible();
 	return page;
 }
 
@@ -33,6 +37,7 @@ async function coverDisplays(application: ElectronApplication): Promise<number[]
 		await Promise.all(windows.map(async window => {
 			await window.loadURL('data:text/html,' + encodeURIComponent('<html><body style="margin:0;background:linear-gradient(90deg,rgb(37,99,235) 0 50%,rgb(34,197,94) 50% 100%);height:100vh;color:white;font:20px sans-serif"><p style="margin:20px">Ash synthetic screen capture fixture</p></body></html>'));
 			window.showInactive();
+			if (!window.isVisible()) throw new Error('Synthetic screen cover did not become visible');
 			await window.webContents.executeJavaScript('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
 		}));
 		return windows.map(window => window.id);
@@ -66,7 +71,7 @@ test('AI window capture keeps its trusted sender, CSS rectangle and no-overlay b
 });
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`manual screenshot selects another window's desktop pixels and cancels safely in ${locale}`, { tag: ['@electron-ui'] }, async ({ application, workbench, restartWorkbench }, testInfo) => {
+	test(`manual screenshot selects another window's desktop pixels and cancels safely in ${locale}`, { tag: ['@electron-app-server'] }, async ({ application, workbench, restartWorkbench }, testInfo) => {
 		if (!('browserWindow' in application)) throw new Error('Expected an Electron window');
 		const chinese = locale === 'zh-CN';
 		if (chinese) {
@@ -88,21 +93,21 @@ for (const locale of ['en', 'zh-CN']) {
 			await input.press(screenshotShortcut);
 			let overlay = await screenOverlay(desktop, chinese);
 			await overlay.keyboard.press('Escape').catch(error => { if (!overlay.isClosed()) throw error; });
-			await expect.poll(() => desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
+			await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
 			await expect(page.locator('.ash-chat-input-editor').last()).toContainText('Screenshot draft');
 			await input.press(screenshotShortcut);
 			overlay = await screenOverlay(desktop, chinese);
-			const image = (await overlay.locator('canvas').boundingBox())!;
+			const image = (await overlay.frameLocator('iframe').locator('canvas').boundingBox())!;
 			await overlay.mouse.move(image.x + 100, image.y + 150);
 			await overlay.mouse.down();
 			await overlay.mouse.move(image.x + 500, image.y + 350, { steps: 4 });
 			await overlay.mouse.up();
 			// The independent window-capture endpoint remains usable while manual selection is open.
-			const overlayCount = desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length;
+			const overlayCount = desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length;
 			const raw = await page.evaluate(async () => [...(await (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:host:screenshot', { x: 0, y: 0, width: 80, height: 60 }) as Uint8Array).slice(0, 8)]);
 			expect(raw).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
-			expect(desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html'))).toHaveLength(overlayCount);
-			const pixels = await overlay.locator('canvas').evaluate(canvas => {
+			expect(desktop.windows().filter(page => page.url().includes('/imageView/imageView.html'))).toHaveLength(overlayCount);
+			const pixels = await overlay.frameLocator('iframe').locator('canvas').evaluate(canvas => {
 				const image = canvas as HTMLCanvasElement;
 				const context = image.getContext('2d')!;
 				return [0.25, 0.75].map(x => [...context.getImageData(Math.floor(image.width * x), Math.floor(image.height / 2), 1, 1).data]);
@@ -117,60 +122,68 @@ for (const locale of ['en', 'zh-CN']) {
 			const path = testInfo.outputPath(`manual-capture-${locale}.png`);
 			await overlay.screenshot({ path });
 			await testInfo.attach('synthetic desktop selection', { path, contentType: 'image/png' });
-			await overlay.getByRole('button', { name: chinese ? '加入聊天' : 'Add to Chat', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
-			await expect.poll(() => desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
+			await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '加入聊天' : 'Add to Chat', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
+			await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
 			await expect(input).toBeFocused();
 			await expect(page.getByRole('button', { name: chinese ? '预览 截图' : 'Preview Screenshot', exact: true })).toBeVisible();
-			if (!chinese) {
-				const originals = await desktop.evaluateHandle(async ({ dialog, clipboard, ClipboardItem }) => ({
-					save: dialog.showSaveDialog,
-					clipboard: await Promise.all((await clipboard.read()).filter(item => item.types.length > 0).map(async item => new ClipboardItem(Object.fromEntries(await Promise.all(item.types.map(async type => [type, await item.getType(type)])))))),
-				}));
-				try {
-					await expect.poll(() => desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
-					await input.press(screenshotShortcut);
-					overlay = await screenOverlay(desktop);
-					await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
-					await desktop.evaluate(({ dialog }) => { dialog.showSaveDialog = async () => ({ canceled: true, filePath: '' }); });
-					await overlay.getByRole('button', { name: 'Save', exact: true }).click();
-					await expect(overlay.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
-					await expect(overlay.getByRole('dialog', { name: 'Screen Capture', exact: true })).toBeVisible();
-					const destination = testInfo.outputPath('saved-screenshot.png');
-					await desktop.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, destination);
-					await overlay.getByRole('button', { name: 'Save', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
-					await expect.poll(() => readFile(destination).then(bytes => [...bytes.subarray(0, 8)]).catch(error => { if (error.code === 'ENOENT') return []; throw error; })).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
-					await expect.poll(() => desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
-					await input.press(screenshotShortcut);
-					overlay = await screenOverlay(desktop);
-					await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
-					const previous = overlay;
-					await overlay.getByRole('button', { name: 'Retake', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
-					await expect.poll(() => previous.isClosed()).toBe(true);
-					overlay = await screenOverlay(desktop);
-					await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
-					await overlay.getByRole('button', { name: 'Copy', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
-					await expect.poll(() => desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
-					const copied = await desktop.evaluate(async ({ clipboard }) => {
-						for (const item of await clipboard.read()) {
-							if (!item.types.includes('image/png')) continue;
-							// Only the bookmark MIME type returns a ClipboardBookmark.
-							const image = await item.getType('image/png') as Blob;
-							return [...new Uint8Array(await image.arrayBuffer()).subarray(0, 8)];
-						}
-						return [];
-					});
-					expect(copied).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
-					await expect(page.getByRole('button', { name: 'Preview Screenshot', exact: true })).toHaveCount(1);
-				} finally {
-					await desktop.evaluate(async ({ dialog, clipboard }, saved) => { dialog.showSaveDialog = saved.save; if (saved.clipboard.length) await clipboard.write(saved.clipboard); else clipboard.clear(); }, originals);
-					await originals.dispose();
-				}
+			const originals = await desktop.evaluateHandle(async ({ dialog, clipboard, ClipboardItem }) => ({
+				save: dialog.showSaveDialog,
+				clipboard: await Promise.all((await clipboard.read()).filter(item => item.types.length > 0).map(async item => new ClipboardItem(Object.fromEntries(await Promise.all(item.types.map(async type => [type, await item.getType(type)])))))),
+			}));
+			try {
+				await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
+				await input.press(screenshotShortcut);
+				overlay = await screenOverlay(desktop, chinese);
+				await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '整个屏幕' : 'Entire screen', exact: true }).click();
+				await desktop.evaluate(({ dialog }) => { dialog.showSaveDialog = async () => ({ canceled: true, filePath: '' }); });
+				await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '保存' : 'Save', exact: true }).click();
+				await expect(overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '保存' : 'Save', exact: true })).toBeEnabled();
+				await expect(overlay.frameLocator('iframe').getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture', exact: true })).toBeVisible();
+				const destination = testInfo.outputPath('saved-screenshot.png');
+				const savedDialogs = await desktop.evaluateHandle(({ dialog }, path) => {
+					const calls: { title?: string; defaultPath?: string; }[] = [];
+					dialog.showSaveDialog = async (ownerOrOptions: BaseWindow | SaveDialogOptions, options?: SaveDialogOptions) => {
+						const value = options ?? ownerOrOptions as SaveDialogOptions;
+						calls.push({ title: value.title, defaultPath: value.defaultPath });
+						return { canceled: false, filePath: path };
+					};
+					return calls;
+				}, destination);
+				await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '保存' : 'Save', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
+				await expect.poll(() => readFile(destination).then(bytes => [...bytes.subarray(0, 8)]).catch(error => { if (error.code === 'ENOENT') return []; throw error; })).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+				expect(await savedDialogs.jsonValue()).toEqual([{ title: chinese ? '保存图像' : 'Save image', defaultPath: 'Image.png' }]);
+				await savedDialogs.dispose();
+				await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
+				await input.press(screenshotShortcut);
+				overlay = await screenOverlay(desktop, chinese);
+				await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '整个屏幕' : 'Entire screen', exact: true }).click();
+				const previous = overlay;
+				await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '重新截图' : 'Retake', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
+				await expect.poll(() => previous.isClosed()).toBe(true);
+				overlay = await screenOverlay(desktop, chinese);
+				await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '整个屏幕' : 'Entire screen', exact: true }).click();
+				await overlay.frameLocator('iframe').getByRole('button', { name: chinese ? '复制' : 'Copy', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
+				await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
+				const copied = await desktop.evaluate(async ({ clipboard }) => {
+					for (const item of await clipboard.read()) {
+						if (!item.types.includes('image/png')) continue;
+						// Only the bookmark MIME type returns a ClipboardBookmark.
+						const image = await item.getType('image/png') as Blob;
+						return [...new Uint8Array(await image.arrayBuffer()).subarray(0, 8)];
+					}
+					return [];
+				});
+				expect(copied).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+				await expect(page.getByRole('button', { name: chinese ? '预览 截图' : 'Preview Screenshot', exact: true })).toHaveCount(1);
+			} finally {
+				await desktop.evaluate(async ({ dialog, clipboard }, saved) => { dialog.showSaveDialog = saved.save; if (saved.clipboard.length) await clipboard.write(saved.clipboard); else clipboard.clear(); }, originals);
+				await originals.dispose();
 			}
 
 		} finally { await uncoverDisplays(desktop, covers); }
 	});
 
-	test(`screen permission guidance identifies the running app and offers recovery in ${locale}`, { tag: ['@electron-ui'] }, async ({ application, workbench, restartWorkbench }) => {
+	test(`screen permission guidance identifies the running app and offers recovery in ${locale}`, { tag: ['@electron-app-server'] }, async ({ application, workbench, restartWorkbench }) => {
 		test.skip(process.platform !== 'darwin', 'macOS screen recording permission');
 		if (!('browserWindow' in application)) throw new Error('Expected an Electron window');
 		const chinese = locale === 'zh-CN';
@@ -208,12 +221,12 @@ for (const locale of ['en', 'zh-CN']) {
 		});
 		try {
 			await workbench.settingsEditor.openUserSettingsUI();
-			await workbench.settingsEditor.selectGroup('workbench');
-			await workbench.settingsEditor.selectCategory('screenshot');
+			await workbench.settingsEditor.selectGroup('extensions');
+			await workbench.settingsEditor.selectCategory('extension.ash.snapshot');
 			const settings = page.getByRole('dialog', { name: chinese ? 'Ash 设置' : 'Ash Settings', exact: true });
-			const background = settings.getByRole('switch', { name: chinese ? '全局截图' : 'Global screenshot shortcut', exact: true });
+			const background = settings.getByRole('switch', { name: chinese ? '全局截图快捷键' : 'Global screenshot shortcut', exact: true });
 			await expect(background).not.toBeChecked();
-			await expect(settings.locator('[data-settings-item-id]')).toHaveCount(1);
+			await expect(settings.locator('[data-configuration-key="snapshot.code.padding"]')).toBeVisible();
 			await expect(settings.getByRole('button', { name: chinese ? '打开系统设置' : 'Open System Settings', exact: true })).toHaveCount(0);
 			await background.focus();
 			await background.press('Space');
@@ -239,7 +252,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(input).toBeFocused();
 			await expect(page.locator('.ash-chat-input-editor').last()).toContainText('Permission draft');
 			await expect(page.getByRole('button', { name: chinese ? '预览 截图' : 'Preview Screenshot', exact: true })).toHaveCount(0);
-			expect(desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html'))).toHaveLength(0);
+			expect(desktop.windows().filter(page => page.url().includes('/imageView/imageView.html'))).toHaveLength(0);
 			await expect(page.getByText(/Could not add context|无法添加上下文/)).toHaveCount(0);
 
 			await saved.evaluate(state => { state.response = 1; });
@@ -273,7 +286,7 @@ for (const locale of ['en', 'zh-CN']) {
 
 }
 
-test('screenshot shortcut reports occupancy, retains a working global binding and triggers from the background', { tag: ['@electron-ui'] }, async ({ application, workbench }) => {
+test('screenshot shortcut reports occupancy, retains a working global binding and triggers from the background', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
 	test.skip(process.platform !== 'darwin', 'macOS global screenshot shortcut');
 	if (!('browserWindow' in application)) throw new Error('Expected Electron');
 	const desktop = application;
@@ -299,8 +312,8 @@ test('screenshot shortcut reports occupancy, retains a working global binding an
 	let covers: number[] = [];
 	try {
 		await workbench.settingsEditor.openUserSettingsUI();
-		await workbench.settingsEditor.selectGroup('workbench');
-		await workbench.settingsEditor.selectCategory('screenshot');
+		await workbench.settingsEditor.selectGroup('extensions');
+		await workbench.settingsEditor.selectCategory('extension.ash.snapshot');
 		let settings = page.getByRole('dialog', { name: 'Ash Settings', exact: true });
 		const background = settings.getByRole('switch', { name: 'Global screenshot shortcut', exact: true });
 		await expect(background).not.toBeChecked();
@@ -319,8 +332,8 @@ test('screenshot shortcut reports occupancy, retains a working global binding an
 		await expect(shortcuts.locator('.ash-keybindings-command-id')).toHaveText('workbench.action.chat.attachScreenshot');
 
 		await workbench.settingsEditor.openUserSettingsUI();
-		await workbench.settingsEditor.selectGroup('workbench');
-		await workbench.settingsEditor.selectCategory('screenshot');
+		await workbench.settingsEditor.selectGroup('extensions');
+		await workbench.settingsEditor.selectCategory('extension.ash.snapshot');
 		await saved.evaluate(state => state.blocked.clear());
 		await background.focus(); await background.press('Space');
 		await expect(background).not.toBeChecked();
@@ -352,13 +365,13 @@ test('screenshot shortcut reports occupancy, retains a working global binding an
 		await saved.evaluate(state => state.callbacks.get('Command+Control+B')!());
 		const overlay = await screenOverlay(desktop);
 		await overlay.keyboard.press('Escape').catch(error => { if (!overlay.isClosed()) throw error; });
-		await expect.poll(() => desktop.windows().filter(page => page.url().includes('/screenshot/screenshot.html')).length).toBe(0);
+		await expect.poll(() => desktop.windows().filter(page => page.url().includes('/imageView/imageView.html')).length).toBe(0);
 		await expect(page.locator('.ash-chat-input-editor').last()).toContainText('Global capture draft');
 		await uncoverDisplays(desktop, covers); covers = [];
 
 		await workbench.settingsEditor.openUserSettingsUI();
-		await workbench.settingsEditor.selectGroup('workbench');
-		await workbench.settingsEditor.selectCategory('screenshot');
+		await workbench.settingsEditor.selectGroup('extensions');
+		await workbench.settingsEditor.selectCategory('extension.ash.snapshot');
 		settings = page.getByRole('dialog', { name: 'Ash Settings', exact: true });
 		const disableBackground = settings.getByRole('switch', { name: 'Global screenshot shortcut', exact: true });
 		await disableBackground.focus(); await disableBackground.press('Space');
@@ -366,7 +379,7 @@ test('screenshot shortcut reports occupancy, retains a working global binding an
 	} finally {
 		if (covers.length) await uncoverDisplays(desktop, covers);
 		// Release this contribution's registration before restoring the registry mock.
-		await page.evaluate(async () => { await (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:screenshot:shortcut', { accelerator: '', label: '', global: false }); });
+		await page.evaluate(async () => { await (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:global-keybinding:update', { id: 'chat.screenshot', commandId: 'workbench.action.chat.attachScreenshot', accelerator: '', label: '', global: false }); });
 		await desktop.evaluate(({ globalShortcut }, state) => {
 			globalShortcut.register = state.originals.register; globalShortcut.unregister = state.originals.unregister; globalShortcut.isRegistered = state.originals.isRegistered;
 		}, saved);

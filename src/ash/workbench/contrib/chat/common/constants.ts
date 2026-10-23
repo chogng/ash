@@ -3,6 +3,8 @@ import type { DictationBackend } from '../../../../platform/renderer/common/dict
 import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
 
 export const OPEN_AGENTS_WINDOW_COMMAND_ID = 'workbench.action.openAgentsWindow';
+export const ScreenshotCommandId = 'workbench.action.chat.attachScreenshot';
+export const ScreenshotGlobalShortcutSetting = 'screenshot.globalShortcut';
 
 /** Message input preferences are independent of the file and reply-code editors. */
 export const ChatInputConfiguration = Object.freeze({

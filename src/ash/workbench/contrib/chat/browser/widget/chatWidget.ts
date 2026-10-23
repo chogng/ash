@@ -33,7 +33,7 @@ import type { IChatSessionHistoryStatus } from '../../../../../platform/chat/com
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
-import type { ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
+import type { ChatContextAttachment, ChatImageCapture } from "../../../../services/chat/common/chatContextService.js";
 import type { IOpenerService } from "../../../../../platform/opener/common/opener.js";
 import type { IEditorService } from "../../../../services/editor/common/editorService.js";
 import { URI } from "../../../../../base/common/uri.js";
@@ -353,8 +353,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.inputPart.addContext(attachment);
 	}
 
-	captureScreenshot(): Promise<void> {
-		return this.inputPart.captureScreenshot();
+	captureScreenshot(capture?: ChatImageCapture): Promise<void> {
+		return this.inputPart.captureScreenshot(capture);
 	}
 
 	bindDraftStorage(storage: IChatDraftStorage, onWillShutdown: ILifecycleService['onWillShutdown']): void {

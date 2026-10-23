@@ -1,4 +1,4 @@
-import './contrib/screenshot/browser/screenshot.web.contribution.js';
+import './services/imageEditor/browser/browserImageEditorService.js';
 import './contrib/splash/browser/splash.contribution.js';
 import '../platform/meteredConnection/browser/meteredConnectionService.js';
 import { IRemoteTunnelService } from '../platform/remoteTunnel/common/remoteTunnel.js';

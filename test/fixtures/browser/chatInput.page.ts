@@ -1,8 +1,9 @@
+import { ChatContextKeys } from '../../../src/ash/workbench/contrib/chat/common/actions/chatContextKeys.js';
+import { startSnapshotFixture } from './snapshotFixture.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 const codeFeatures = registerTestCodeEditorFeatures();
-import '../../../src/ash/workbench/contrib/screenshot/browser/screenshot.contribution.js';
-import { BrowserScreenshotService } from '../../../src/ash/workbench/contrib/screenshot/browser/browserScreenshotService.js';
-import { IScreenshotService } from '../../../src/ash/workbench/contrib/screenshot/common/screenshot.js';
+import { BrowserImageEditorService } from '../../../src/ash/workbench/services/imageEditor/browser/browserImageEditorService.js';
+import { IImageEditorService } from '../../../src/ash/workbench/services/imageEditor/common/imageEditorService.js';
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
@@ -80,6 +81,7 @@ import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { Selection } from '../../../src/ash/editor/common/core/selection.js';
+import { Range } from '../../../src/ash/editor/common/core/range.js';
 import { registerChatContextActions } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatContextActions.js';
 import { CHAT_VIEW_ID } from '../../../src/ash/workbench/contrib/chat/common/chat.js';
 import type { ChatInputDelegate, ChatInputState } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
@@ -95,7 +97,7 @@ import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
-import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
+import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
@@ -120,7 +122,7 @@ declare global {
 const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
 	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
-	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
+	setNlsMessages(catalog.locale, catalog.bundles);
 }
 const resources = new DisposableStore();
 setARIAContainer(document.body);
@@ -180,7 +182,7 @@ document.body.append(destinations);
 const recordDestination = (value: unknown): void => { destinations.textContent = JSON.stringify([...JSON.parse(destinations.textContent!), value]); };
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IOpenerService, { open: async (resource, options) => { recordDestination({ resource: resource.toString(), options }); return true; } } as IOpenerService);
-services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === 'git.getRepositoryContexts' || id === 'workbench.action.chat.attachSelection' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
+services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === 'git.getRepositoryContexts' || id === 'workbench.action.chat.attachSelection' || id === 'workbench.action.chat.attachScreenshot' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services, resource); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
 const contextKeys = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contextKeys);
 services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
@@ -368,7 +370,7 @@ services.registerInstance(ILanguageModelsService, {
 } satisfies ILanguageModelsService);
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
-services.registerSingleton(IScreenshotService, () => services.createInstance(BrowserScreenshotService));
+services.registerSingleton(IImageEditorService, () => services.createInstance(BrowserImageEditorService));
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 const notifications = resources.add(new TestNotificationService());
@@ -551,21 +553,36 @@ const delegate: ChatInputDelegate = {
 const cowork = new URLSearchParams(location.search).get('surface') === 'cowork';
 const inlineCode = new URLSearchParams(location.search).has('inlineCode');
 registerCodeEditorServices(services);
-if (inlineCode) {
-	resources.add(registerChatContextActions());
+if (inlineCode || new URLSearchParams(location.search).has('screenshotFixture')) {
+	ChatContextKeys.enabled.bindTo(services.get(IContextKeyService)).set(true);
+	resources.add(registerChatContextActions(services.get(IImageEditorService), services.get(ICommandService)));
 }
 const editorProvider = inlineCode ? { create: (options: Parameters<typeof ChatInputEditors.create>[0]) => services.createInstance(ChatInputEditor, options) } : ChatInputEditors;
+const snapshotFixture = new URLSearchParams(location.search).has('screenshotFixture') ? await startSnapshotFixture(services, resources) : undefined;
+
 const part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { contextMenuStyle: 'custom', showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
 	modePicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
 	renderSecondaryToolbar: !cowork,
 }));
 if (inlineCode) {
+	if (snapshotFixture) resources.add(languageFeatures.syntaxProvider.register({
+		id: 'test.snapshot.syntax', languageIds: ['typescript'],
+		provideTokens: () => ({
+			tokens: [
+				{ range: new Range(3, 1, 3, 6), tokenType: 'keyword', modifiers: [], presentation: { foreground: '#00aa00', fontStyle: ['bold'] } },
+				{ range: new Range(4, 1, 4, 7), tokenType: 'keyword', modifiers: [], presentation: { foreground: '#00aa00', fontStyle: ['bold'] } },
+			]
+		}),
+	}));
 	const source = document.createElement('section');
 	source.id = 'code-selection-source';
 	source.style.cssText = 'width:600px;height:200px;margin-top:24px';
 	document.body.append(source);
-	const model = resources.add(new TextModel('first\nsecond\nconst unsaved = 42;\nreturn unsaved;\nlast', { resource: URI.file('/workspace/example.ts'), languageId: 'typescript' }));
+	const model = resources.add(new TextModel('first\nsecond\nconst unsaved = 42;\nreturn unsaved;\nlast', {
+		resource: URI.file('/workspace/example.ts'), languageId: 'typescript',
+		...(snapshotFixture ? { tokenization: { syntaxProviderRegistry: languageFeatures.syntaxProvider } } : {}),
+	}));
 	const editor = resources.add(services.createInstance(CodeEditorWidget, { container: source, model }));
 	editor.layout({ width: 600, height: 200 });
 	const add = document.createElement('button');
@@ -577,6 +594,14 @@ if (inlineCode) {
 		void services.get(ICommandService).executeCommand('workbench.action.chat.attachSelection');
 	};
 	document.body.append(add);
+	if (snapshotFixture) {
+		const capture = document.createElement('button'); capture.id = 'create-code-image'; capture.textContent = 'Create code image';
+		resources.add(addDisposableListener(capture, 'click', () => {
+			editor.setSelection(new Selection(3, 1, 5, 1)); editor.focus();
+			void snapshotFixture.runCode().catch(error => { document.querySelector<HTMLOutputElement>('[aria-label="Context error"]')!.textContent = String(error); });
+		}));
+		document.body.append(capture);
+	}
 }
 if (new URLSearchParams(location.search).has('sessionsLayout')) {
 	// Exercise the Chat host's production CSS with the real, auto-growing composer.
@@ -759,6 +784,8 @@ declare global {
 		ashScreenshotIntegration: {
 			state(): { calls: number; overlays: number[]; pending: boolean; };
 			release(): void;
+			stopExtension(): Promise<void> | undefined;
+			draft(): Promise<string | undefined>;
 			switchDraft(): void;
 		};
 	}
@@ -766,5 +793,7 @@ declare global {
 window.ashScreenshotIntegration = {
 	state: () => ({ calls: screenshotCalls, overlays: screenshotVisibleOverlays, pending: part.attachmentModel.hasPendingContext }),
 	release: () => { releaseScreenshot?.(); releaseScreenshot = undefined; },
+	stopExtension: () => snapshotFixture?.stop(),
+	draft: async () => (await part.captureDraft())?.draft.text,
 	switchDraft: () => { part.invalidatePendingInput(); part.restoreDraft({ mode: state.mode, text: 'Next conversation', contexts: [] }); },
 };

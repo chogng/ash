@@ -155,6 +155,17 @@ PDF.js 和 Worker 随扩展客户端打包，JS／CSS 摘要覆盖其字节。�
 
 ### 浏览器 Worker 与后端宿主的生命周期
 
+截图由预装的 [`ash.snapshot`](../extensions/snapshot/README.md) Browser 扩展拥有。
+普通 TS 扩展通过 `@ash/sdk` 的 `window.registerImageEditorProvider` 注册图片编辑器，
+内部沿既有 `image.editor.v1` capability 的注册、调用和撤销链接入；宿主只承载隔离视图、
+采集屏幕及执行输出。界面脚本不在 Workbench 或原生窗口的可信 realm 中执行。
+`window.showImageEditor` 可请求屏幕或代码选区输入；选区快照由客户端编辑器提供，
+扩展不能访问内部模型或复制其状态。公开接口与视图消息见 [TS SDK](../sdk/typescript/README.md)。
+`workbench/services/imageEditor` 拥有 Provider 注册与交互生命周期；
+`platform/imageView` 只负责系统取屏、隔离原生窗口和图像输出，不解释代码选区或 Chat 数据。
+Chat 通过图像服务注册附件接收逻辑，自己绑定草稿取消、截图命令和既有快捷键偏好；
+全局按键使用 `platform/globalKeybindings` 的窗口租约。SDK adapter 不导入 Chat 贡献或调用其命令。
+
 执行位置与 Provider 类型决定生命周期机制，不能因实现语言是 TS 或 Rust 就把它们合并：
 
 | 路径                                      | 启动与激活 owner                                | 当前机制                                                                                          |

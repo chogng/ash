@@ -185,6 +185,9 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		'extensions/document-client/package.json': JSON.stringify({ name: 'document-client', publisher: 'ash', version: '1.0.0' }),
 		'extensions/document-client/browser/editor.ts': 'export {};',
 		'extensions/document-client/common/paragraph.ts': `import { localize } from '../../../src/ash/nls.js'; localize('packageClient', 'Package client');`,
+		'extensions/independent/package.json': JSON.stringify({ name: 'independent', publisher: 'ash', version: '1.0.0', browser: './extension.ts', l10n: 'l10n' }),
+		'extensions/independent/browser/editor.ts': `import { localize } from '../common/nls.js'; localize('extensionOwned', 'Extension-owned view');`,
+		'extensions/independent/common/nls.ts': `export function localize(_key: string, message: string): string { return message; }`,
 	};
 	for (const [name, text] of Object.entries(files)) {
 		await mkdir(dirname(join(root, name)), { recursive: true });
@@ -220,6 +223,8 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	assert.equal(packedCatalog.locale, 'zh-CN');
 	assert.equal(packedCatalog.bundles.ash.packageClient, '包内文档');
 	assert.match(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /Package client/u);
+	assert.doesNotMatch(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /extensionOwned|Extension-owned view/u);
+	assert.equal(packedCatalog.bundles.ash.extensionOwned, undefined);
 	assert.equal(packedCatalog.bundles.ash.hello, '你好');
 	const frenchCatalog = JSON.parse(await readFile(join(generated, 'extensions/ash.language-pack-fr/localization/package.json'), 'utf8'));
 	assert.equal(frenchCatalog.bundles.ash.hello, 'Bonjour');

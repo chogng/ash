@@ -1,4 +1,4 @@
-import { IScreenshotService } from '../../../screenshot/common/screenshot.js';
+import { IImageEditorService } from '../../../../services/imageEditor/common/imageEditorService.js';
 import { captureTerminalAttachment } from '../../../terminal/browser/chatTerminalCommandMirror.js';
 import { ILanguageModelToolsService, isToolSet } from '../../common/tools/languageModelToolsService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
@@ -20,7 +20,7 @@ import { GitHubIssueState, IGitHubService, type GitHubRepository } from '../../.
 import { filterQuickPickItems } from '../../../../../platform/quickinput/browser/quickInputList.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { createToolSelectionAttachment, showToolsPicker, toolSetLabel } from './chatToolPicker.js';
-import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
+import type { ChatContextAttachment, ChatImageCapture } from '../../../../services/chat/common/chatContextService.js';
 import { IChatService } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { convertBufferToScreenshotVariable } from '../attachments/chatScreenshotContext.js';
@@ -144,9 +144,10 @@ export class ClipboardImageContextValuePick implements ChatContextSource {
 export class ScreenshotContextValuePick implements ChatContextSource {
 	public readonly icon = Lxicon.openPreview;
 	public get label(): string { return localize('chat.context.screenshotWeb', 'Screenshot…'); }
-	constructor(@IScreenshotService private readonly screenshots: IScreenshotService) { }
-	public async asAttachment(signal: AbortSignal): Promise<ChatContextSelection | undefined> {
-		const image = await this.screenshots.captureScreenshot(signal);
+	constructor(@IImageEditorService private readonly imageEditors: IImageEditorService) { }
+	get accessibilityHelp(): string { return this.imageEditors.accessibilityHelp; }
+	public async asAttachment(signal: AbortSignal, capture?: ChatImageCapture): Promise<ChatContextSelection | undefined> {
+		const image = await (capture ? capture(signal) : this.imageEditors.capture(signal));
 		if (!image || signal.aborted) return undefined;
 		const attachment = await convertBufferToScreenshotVariable(image);
 		return signal.aborted ? undefined : { attachment, acceptInBackground: false };

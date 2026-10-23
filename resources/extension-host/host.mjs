@@ -8,6 +8,7 @@ const invocations = new Map();
 let phase = 'new';
 let activation;
 let registrationListener;
+let fullRegistrationSnapshots = false;
 let registrationRevision = 0;
 let speechRegistrationGeneration = 0;
 const dynamicTerminalRegistration = kind => ['terminalProfileProvider', 'terminalPty', 'terminalLinkProvider', 'terminalCompletionProvider', 'terminalQuickFixProvider'].includes(kind);
@@ -16,6 +17,10 @@ const dynamicRegistration = kind => kind === 'speechProvider' || kind === 'treeD
 function publishDynamicRegistrations() {
 	if (phase !== 'active') return;
 	const active = [...registrations.values()];
+	if (fullRegistrationSnapshots) {
+		registrationListener?.(JSON.stringify({ revision: ++registrationRevision, registrations: registrationDescriptors() }));
+		return;
+	}
 	registrationListener?.(JSON.stringify({
 		revision: ++registrationRevision,
 		treeProviders: active.filter(value => value.kind === 'treeDataProvider')
@@ -28,6 +33,10 @@ function publishDynamicRegistrations() {
 				...(triggerCharacters ? { triggerCharacters } : {}), ...(providerId ? { providerId } : {}), ...(profileId ? { profileId, title } : {})
 			})),
 	}));
+}
+
+function registrationDescriptors() {
+	return [...registrations.values()].map(({ callback, operation, dispatch, disposeResources, invokePayload, ...descriptor }) => descriptor);
 }
 
 export class CancellationTokenSource {
@@ -73,11 +82,11 @@ function register(registration) {
 		dispose() {
 			if (registrations.get(registration.registrationId) === registration) {
 				registrations.delete(registration.registrationId);
-				if (dynamicRegistration(registration.kind)) {
+				if (dynamicRegistration(registration.kind) || fullRegistrationSnapshots) {
 					for (const source of invocations.values()) if (source.registration === registration) { try { source.cancel(); } catch { /* Revocation still retires the registration when an extension listener throws. */ } }
 				}
 				try { registration.disposeResources?.(); }
-				finally { if (dynamicRegistration(registration.kind)) publishDynamicRegistrations(); }
+				finally { if (dynamicRegistration(registration.kind) || fullRegistrationSnapshots) publishDynamicRegistrations(); }
 			}
 		}
 	});
@@ -797,9 +806,10 @@ function checkedRange(range, text) {
 // The runtime module is not resolved from extension packages; Rust owns final authority.
 export const __runtime = Object.freeze({
 	// The product transport owns this hook; authors cannot import the runtime module.
-	onRegistrationsChanged(listener) {
+	onRegistrationsChanged(listener, fullSnapshot = false) {
 		if (phase !== 'new' || registrationListener || typeof listener !== 'function') throw new Error('Invalid registration event binding');
 		registrationListener = listener;
+		fullRegistrationSnapshots = fullSnapshot;
 	},
 	get isDisposed() { return phase === 'disposed'; },
 	beginActivation(extensionId) {
@@ -811,7 +821,7 @@ export const __runtime = Object.freeze({
 	sealActivation() {
 		if (phase !== 'activating') { throw new Error('Extension is not activating'); }
 		phase = 'active';
-		return JSON.stringify([...registrations.values()].map(({ callback, operation, dispatch, disposeResources, invokePayload, ...descriptor }) => descriptor));
+		return JSON.stringify(registrationDescriptors());
 	},
 	// Browser contributions reuse the same registration and cancellation owner.
 	registerContribution(descriptor, operation, callback) {

@@ -68,6 +68,10 @@ User-installed extensions are a separate profile-level root. Extensions packages
 
 ## Bundled packages
 
+[`snapshot`](snapshot/README.md) is the default screen and code-image extension.
+It uses the public Browser SDK and an opaque view; capture permissions, native
+windows, shortcuts and output resources remain with the host.
+
 [`debug-lldb`](debug-lldb/README.md) is an optional Rust debugger provider for CodeLLDB
 (`lldb`, with a verified runtime prepared on demand) or an installed `lldb-dap`.
 It supplies configuration and adapter descriptors; Workbench Debug and the generic

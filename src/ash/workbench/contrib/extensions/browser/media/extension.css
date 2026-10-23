@@ -73,6 +73,12 @@
 	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 	border-radius: var(--ash-cornerRadius-small);
 }
+.ash-extensions .extension-icon > img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	border-radius: inherit;
+}
 .ash-extensions .extension-body {
 	display: flex;
 	flex-direction: column;

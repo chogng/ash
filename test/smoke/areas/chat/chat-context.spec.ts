@@ -205,13 +205,13 @@ test('host screenshot captures a PNG and releases the browser capture stream', a
 		await page.getByRole('dialog').getByRole('option', { name: 'Screenshot…', exact: true }).click();
 		if (target.kind === 'electron') {
 			if (!('windows' in application)) throw new Error('Expected Electron windows');
-			await expect.poll(() => application.windows().filter(window => window.url().includes('/screenshot/screenshot.html')).length).toBeGreaterThan(0);
-			const overlay = application.windows().find(window => window.url().includes('/screenshot/screenshot.html'))!;
-			await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
-			await overlay.getByRole('button', { name: 'Add to Chat', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
-			await expect.poll(() => application.windows().filter(window => window.url().includes('/screenshot/screenshot.html')).length).toBe(0);
+			await expect.poll(() => application.windows().filter(window => window.url().includes('/imageView/imageView.html')).length).toBeGreaterThan(0);
+			const overlay = application.windows().find(window => window.url().includes('/imageView/imageView.html'))!;
+			await overlay.frameLocator('iframe').getByRole('button', { name: 'Entire screen', exact: true }).click();
+			await overlay.frameLocator('iframe').getByRole('button', { name: 'Add to Chat', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
+			await expect.poll(() => application.windows().filter(window => window.url().includes('/imageView/imageView.html')).length).toBe(0);
 		} else {
-			const overlay = page.getByRole('dialog', { name: 'Screen Capture', exact: true });
+			const overlay = page.frameLocator('iframe').getByRole('dialog', { name: 'Screen Capture', exact: true });
 			await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
 			await overlay.getByRole('button', { name: 'Add to Chat', exact: true }).click();
 			await expect(overlay).toBeHidden();

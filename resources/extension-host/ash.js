@@ -36,6 +36,7 @@ export function createApi(configuration, initialization) {
 	let environmentPersistent = true;
 	let environmentAdmitted = false;
 	let speechAdmitted = false;
+	let imageEditorAdmitted = false;
 	let treeAdmitted = false;
 	let terminalLinksAdmitted = false;
 	let terminalCompletionsAdmitted = false;
@@ -743,6 +744,29 @@ export function createApi(configuration, initialization) {
 			return { html: Object.keys(resources).length ? panel.webview.html.replace(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>\s*<\/script>|<link\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi, (tag, script, style) => script === resources.script || style === resources.style ? '' : tag) : panel.webview.html, ...(Object.keys(resources).length ? { resources } : {}), ...(panel.update ? { update: panel.update } : {}) };
 		}));
 		subscriptions.push(registration, new Disposable(() => { for (const panel of customPanels.values()) panel.dispose(); customPanels.clear(); }));
+		return registration;
+	}
+
+	function registerImageEditorProvider(viewType, provider) {
+		if (!imageEditorAdmitted) throw new Error('Image editors require the admitted imageEditor capability');
+		const declaration = configuration.manifest?.contributes?.imageEditors?.find(entry => entry.id === viewType);
+		if (!declaration || typeof provider?.resolveImageEditor !== 'function') throw new TypeError('Image editor must be declared in package.json');
+		const registration = ashRuntime.registerContribution({ kind: 'dataChannel', registrationId: viewType, channelId: 'image.editor.v1' }, 'receiveData', (call, payload) => invoke(async () => {
+			const context = payload?.data;
+			if (!context || !['screen', 'selection'].includes(context.source) || Object.keys(context).join(',') !== 'source') throw new TypeError('Invalid image editor context');
+			const assets = new Set();
+			const view = {
+				html: '', asWebviewUri(uri) {
+					if (uri.scheme !== 'blob') throw new TypeError('Image view resources must belong to this browser extension');
+					const value = uri.toString(); assets.add(value);
+					if (!webviewAssets.has(value)) { webviewAssets.add(value); globalThis.__ashWebviewResource?.(value); }
+					return uri;
+				}, setState(value) { view.state = value; }
+			};
+			await provider.resolveImageEditor(Object.freeze({ source: context.source }), view, call.cancellationToken);
+			return { html: view.html, resources: [...assets], state: view.state ?? null };
+		}));
+		subscriptions.push(registration);
 		return registration;
 	}
 
@@ -1936,6 +1960,12 @@ export function createApi(configuration, initialization) {
 			createOutputChannel,
 			get activeTextEditor() { return activeEditor; },
 			registerCustomEditorProvider,
+			registerImageEditorProvider,
+			async showImageEditor(viewType, options) {
+				if (!imageEditorAdmitted) throw new Error('Image editors require the admitted imageEditor capability');
+				if (typeof viewType !== 'string' || !['screen', 'selection'].includes(options?.source)) throw new TypeError('Invalid image editor request');
+				await request({ operation: 'editorOperation', payload: { method: 'showImageEditor', viewType, source: options.source } }, 'value');
+			},
 			createStatusBarItem,
 			showInformationMessage: (text, ...items) => message('information', text, ...items),
 			showWarningMessage: (text, ...items) => message('warning', text, ...items),
@@ -2037,6 +2067,7 @@ export function createApi(configuration, initialization) {
 			terminalCompletionsAdmitted = capabilities.includes('terminalCompletionProvider');
 			terminalQuickFixesAdmitted = capabilities.includes('terminalQuickFixProvider');
 			speechAdmitted = capabilities.includes('speechProvider');
+			imageEditorAdmitted = capabilities.includes('imageEditor');
 			treeAdmitted = capabilities.includes('treeView');
 			if (environmentAdmitted) subscriptions.push(ashTerminals.registerEnvironmentVariableCollection('ash.terminalEnvironment', snapshotEnvironment));
 			if (initialization) subscriptions.push(ensureWorkspaceEvents());
@@ -2048,6 +2079,7 @@ export function createApi(configuration, initialization) {
 			subscriptions.push(new Disposable(() => {
 				environmentAdmitted = false;
 				speechAdmitted = false;
+				imageEditorAdmitted = false;
 				treeAdmitted = false;
 				environmentMutators.clear();
 				scmBridge.dispose();

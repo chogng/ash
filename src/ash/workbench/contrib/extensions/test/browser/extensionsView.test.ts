@@ -5,6 +5,34 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 
 suite('extensions browser component', () => {
 	const browserTests = useBrowserTests();
+	test('Declared package icons load in the list and details and release removed rows', async function () {
+		const { page } = browserTests;
+		await page.goto('/extensions.html?locale=zh-CN');
+		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
+		const row = page.locator('[data-view-id="ash.extensions.plugins"] [data-package-id="ash.snapshot"]');
+		await row.scrollIntoViewIfNeeded();
+		const icon = row.locator('.extension-icon img');
+		await expect(icon).toBeVisible();
+		await expect.poll(() => icon.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+		await expect(row.locator('.extension-icon')).toHaveAttribute('aria-hidden', 'true');
+		const source = (await icon.getAttribute('src'))!;
+		const size = await icon.evaluate(image => ({ width: image.clientWidth, height: image.clientHeight }));
+		expect(size.width).toBe(size.height);
+		await row.click();
+		const detail = page.locator('.ash-extension-editor .extension-detail-icon img');
+		await expect(detail).toBeVisible();
+		await expect.poll(() => detail.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+		const sameAsset = await page.evaluate(async ({ list, detail }) => {
+			const read = async (source: string) => new Uint8Array(await (await fetch(source)).arrayBuffer());
+			const [left, right] = await Promise.all([read(list), read(detail)]);
+			return left.length === right.length && left.every((value, index) => value === right[index]);
+		}, { list: source, detail: (await detail.getAttribute('src'))! });
+		expect(sameAsset).toBe(true);
+		await page.evaluate(() => window.ashExtensionsIntegration.dispose());
+		expect(await page.evaluate(async source => {
+			try { await fetch(source); return false; } catch { return true; }
+		}, source)).toBe(true);
+	});
 	function serviceAccount(id: string, displayName: string, oauth = false): ConnectorView {
 		return {
 			id, displayName, description: `Authorize ${displayName}`, mcpDeclarationId: `fixture:${id}:mcp:tools`, mcpServerId: null,

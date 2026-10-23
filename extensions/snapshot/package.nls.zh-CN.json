@@ -1,0 +1,18 @@
+{
+  "displayName": "截图",
+  "description": "捕获、标注并导出屏幕和代码图片。",
+  "code.command": "截图：生成代码图片",
+  "global.title": "全局截图快捷键",
+  "global.description": "允许在 Ash 处于后台时使用截图快捷键。",
+  "accessibility.title": "截图无障碍帮助",
+  "accessibility.description": "在截图时播报打开无障碍帮助的方法。",
+  "code.padding": "代码图片四周的留白，单位为像素。",
+  "code.scale": "代码图片的分辨率倍率。",
+  "code.background": "代码窗口周围的背景色，使用六位十六进制颜色。",
+  "code.lineNumbers": "在代码图片中显示行号。",
+  "code.realLineNumbers": "使用原文档行号。",
+  "code.windowControls": "在代码图片中显示装饰性窗口按钮。",
+  "code.windowTitle": "在代码图片中显示文件名。",
+  "code.transparent": "代码图片使用透明的外围背景。",
+  "capture.help": "屏幕截图\n拖动框选区域。在选区内拖动可移动选区，拖动八个控制点可调整大小。标注后先选择“选择”，再调整区域。方向键移动区域；Shift+方向键调整大小；按住 Ctrl 或 Command 将步长增加到 10 像素。“整个屏幕”选择完整图片。“坐标”提供以图片像素为单位的 X、Y、宽度和高度输入框。矩形、箭头、画笔、文字和马赛克可用于标注。绘制前可选择颜色和线宽。文字工具会在点击位置打开输入框，Enter 确认，Escape 放弃该文字。“撤销”移除最后一个标注。“复制”复制最终图片，“保存”让你选择文件位置，“加入聊天”将图片加入发起截图的草稿。选区获得焦点时 Enter 确认。Escape 取消截图。Tab 和 Shift+Tab 在控件之间移动。Alt+F1 打开帮助；Alt+F2 朗读选区坐标和标注数量。不描述图片内容。\n在编辑器中选择代码，运行“截图：生成代码图片”，即可将选区生成为图片，无需采集屏幕。代码图片的无障碍视图包含选中的文本。"
+}

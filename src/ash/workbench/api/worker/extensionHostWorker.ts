@@ -60,6 +60,7 @@ async function dispatch(message: Exclude<BrowserExtensionHostRequest, { type: 'c
 			return clientRequest(JSON.parse(encoded)).then(value => JSON.stringify(value));
 		};
 		globals.__ashWebviewResource = (url: string): void => scope.postMessage({ type: 'webviewResource', url });
+		globals.__ashRegistrationsChanged = (snapshot: JsonValue): void => scope.postMessage({ type: 'registrationsChanged', snapshot });
 		// Immutable bundled package code executes in a separate Worker realm.
 		runtime = await import(/* @vite-ignore */ message.entryPoint) as BrowserRuntime;
 		return runtime.activate();

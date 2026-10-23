@@ -4,7 +4,7 @@ import { parseDefaultLogLevels } from '../../workbench/services/log/common/defau
 import { LogLevelToString } from '../../platform/log/common/log.js';
 import type { AppServerConnectionTarget } from '../../platform/agentHost/common/appServerTransport.js';
 import { RemoteAgentHostConnectionPool } from '../../platform/remote/electron-main/remoteConnectionIpc.js';
-import { ScreenshotMainService } from '../../workbench/contrib/screenshot/electron-main/screenshotMainService.js';
+import { ImageViewMainService } from '../../platform/imageView/electron-main/imageViewMainService.js';
 import { AshWorkbenchName } from '../common/application.js';
 import '../../platform/update/common/update.config.contribution.js';
 import { SystemPolicyService } from '../../platform/policy/node/systemPolicyService.js';
@@ -1633,10 +1633,11 @@ export class AshApplication extends Disposable {
 			...(localSupervisor?.routes(window.webContents, () => ({ workspaceId: 'local-profile', workspaceRoot: this.profileRoot })) ?? []),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
 			...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),
-			...windowDisposables.add(new ScreenshotMainService(window, {
-				entry: this.resolveRendererEntry('screenshot'), webPreferences: this.createSandboxWebPreferences(),
+			...this.globalKeybindings.createWindowRoutes(window, windowDisposables),
+			...windowDisposables.add(new ImageViewMainService(window, {
+				entry: this.resolveRendererEntry('imageView'), webPreferences: this.createSandboxWebPreferences(),
 				router: this.trustedIpcRouter, localization: () => this.activeLanguagePack,
-			}, this.globalKeybindings)).routes(),
+			})).routes(),
 			userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 			...remoteWindowContext.ipcRoutes,
 			windowOperationIpcRoute(this.windowsMainService, window),
@@ -2019,10 +2020,11 @@ export class AshApplication extends Disposable {
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),
 						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),
-						...windowDisposables.add(new ScreenshotMainService(window, {
-							entry: this.resolveRendererEntry('screenshot'), webPreferences: this.createSandboxWebPreferences(),
+						...this.globalKeybindings.createWindowRoutes(window, windowDisposables),
+						...windowDisposables.add(new ImageViewMainService(window, {
+							entry: this.resolveRendererEntry('imageView'), webPreferences: this.createSandboxWebPreferences(),
 							router: this.trustedIpcRouter, localization: () => this.activeLanguagePack,
-						}, this.globalKeybindings)).routes(),
+						})).routes(),
 						userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 						...remoteWindowContext.ipcRoutes,
 						windowOperationIpcRoute(this.windowsMainService, window),
@@ -2108,8 +2110,8 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	private resolveRendererEntry(kind: "workbench" | "sessions" | "remoteRuntimeInstall" | "screenshot"): RendererEntry {
-		const entry = kind === "screenshot" ? "screenshot" : kind === "workbench"
+	private resolveRendererEntry(kind: "workbench" | "sessions" | "remoteRuntimeInstall" | "imageView"): RendererEntry {
+		const entry = kind === "imageView" ? "imageView" : kind === "workbench"
 			? "workbench"
 			: kind === "sessions"
 				? 'sessions'

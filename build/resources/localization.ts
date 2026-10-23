@@ -262,6 +262,13 @@ async function generate(check: boolean): Promise<boolean> {
 	for (const entry of await readdir(resolve(repository, 'extensions'), { withFileTypes: true })) {
 		if (!entry.isDirectory()) continue;
 		const packageRoot = resolve(repository, 'extensions', entry.name);
+		const manifest = await readFile(resolve(packageRoot, 'package.json'), 'utf8').catch(error => {
+			if (error.code === 'ENOENT') return undefined;
+			throw error;
+		});
+		// Independent Browser extensions own their SDK l10n bundles; only product-compiled
+		// editor clients contribute messages to the host's language catalogs.
+		if (manifest !== undefined && typeof JSON.parse(manifest).browser === 'string') continue;
 		const client = await readFile(resolve(packageRoot, 'browser/editor.ts'), 'utf8').catch(error => {
 			if (error.code === 'ENOENT') return undefined;
 			throw error;

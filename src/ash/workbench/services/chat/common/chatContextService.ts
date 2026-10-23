@@ -1,4 +1,5 @@
 import type { URI } from '../../../../base/common/uri.js';
+import type { VSBuffer } from '../../../../base/common/buffer.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -25,13 +26,16 @@ export interface ChatContextAttachment {
 	resolve(): Promise<ResolvedChatContext>;
 }
 
+/** A host-owned producer borrows the destination draft's cancellation signal. */
+export type ChatImageCapture = (signal: AbortSignal) => Promise<VSBuffer | undefined>;
+
 /** A Chat view that accepts context from another Workbench contribution. */
 export interface IChatContextTarget {
 	addContext(attachment: ChatContextAttachment): void;
 	/** Appends to the currently visible composer synchronously, preserving its draft and attachments. */
 	appendToDraft(text: string): void;
 	/** Captures and previews an image through the active composer’s attachment lifecycle. */
-	captureScreenshot(): Promise<void>;
+	captureScreenshot(capture?: ChatImageCapture): Promise<void>;
 	acceptInput(value?: string): Promise<void>;
 }
 
