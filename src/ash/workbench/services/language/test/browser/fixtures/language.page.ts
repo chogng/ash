@@ -1,3 +1,4 @@
+import { ILanguageServerLifecycleService } from '../../../common/languageServerLifecycleService.js';
 import { IPaneCompositePartService } from '../../../../panecomposite/browser/panecomposite.js';
 import { IViewDescriptorService } from '../../../../../common/views.js';
 import { IViewsService } from '../../../../views/common/viewsService.js';
@@ -133,6 +134,7 @@ providerServices.registerInstance(IWorkspaceTrustManagementService, {
 	getWorkspaceTrustInfo: async () => undefined,
 });
 providerServices.registerInstance(IServerEventApi, { subscribe: listener => changes.event(listener) });
+providerServices.registerInstance(ILanguageServerLifecycleService, { start() {}, withActivity: (_document, _signal, operation) => operation() });
 const languageProviders = store.add(providerServices.createInstance(AppServerLanguageProviders, api, { checkWorkspaceTrust: false }));
 languageProviders.start();
 for (const [id, value] of [['install', true], ['uninstall', false]] as const) {

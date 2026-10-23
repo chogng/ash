@@ -912,6 +912,51 @@ test('the packaged browser catalog activates Markdown grammar and configuration 
 	assert.equal(languageService.createByMimeType('text/markdown').languageId, 'markdown');
 });
 
+test('the Rust package defaults to on-demand analysis and preserves explicit settings in English and Chinese', async () => {
+	using localization = toDisposable(resetNlsResolver);
+	const manifestJson = await readFile('extensions/rust/package.json', 'utf8');
+	const resources = new Set(await readdir('extensions/rust'));
+	const manifest = JSON.parse(manifestJson);
+	const entry: ExtensionDescriptor = { ...descriptor, id: `${manifest.publisher}.${manifest.name}`, name: manifest.name, publisher: manifest.publisher, version: manifest.version, manifestJson, manifestSha256: digestText(manifestJson) };
+	const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+	const key = 'rust-analyzer.cachePriming.enable';
+	for (const locale of ['en', 'zh-CN']) {
+		initializeTestLocalization(locale);
+		using configuration = new WorkbenchConfigurationService();
+		using explicit = new WorkbenchConfigurationService({ source: JSON.stringify({ [key]: true }) });
+		using languageService = new LanguageService();
+		using languages = new LanguageFeaturesService();
+		using service = new AppServerExtensionService({
+			api: {
+				list: async () => ({ generation: 1, extensions: [entry], diagnostics: [] }),
+				resources: new ExtensionResourceLoaderService(request => {
+					if (!resources.has(request.path)) throw new Error(`Missing case-sensitive Rust resource: ${request.path}`);
+					return readFile(`extensions/rust/${request.path}`);
+				}),
+			}, languageService, languageConfigurationService: languages.languageConfigurationService
+		}, createEmptyTestLanguagePacks(), adapters);
+		await service.start();
+		const settings = registry.getRegisteredConfigurations().filter(setting => setting.source?.id === entry.id);
+		assert.equal(settings.length, 194, 'the pinned server configuration catalog must be complete');
+		assert.ok(settings.every(setting => setting.source?.displayName === 'Rust'), 'the Settings category is named Rust in every locale');
+		assert.ok(settings.every(setting => setting.schema?.title && !setting.schema.title.startsWith('%')));
+		assert.ok(settings.every(setting => setting.schema?.markdownDescription && !setting.schema.markdownDescription.startsWith('%')));
+		assert.equal(configuration.getValue(key), false);
+		assert.equal(explicit.getValue(key), true);
+		assert.equal(configuration.getValue('rust-analyzer.lru.capacity'), null);
+		assert.equal(configuration.getValue('rust-analyzer.check.command'), 'check');
+		assert.equal(configuration.getValue('rust-analyzer.procMacro.enable'), true);
+		assert.throws(() => registry.getConfiguration('rust-analyzer.lru.capacity')!.parse(-1), /declared schema|声明的架构/u);
+		assert.throws(() => registry.getConfiguration('rust-analyzer.cargo.features')!.parse('invalid-feature-mode'));
+		assert.equal((await configuration.read()).source.trim(), '{}', 'extension defaults must not write the profile');
+		assert.match(registry.getConfiguration(key)!.schema!.markdownDescription!, locale === 'en' ? /analysis is computed on demand/ : /改为按需分析/);
+		assert.match(registry.getConfiguration('rust-analyzer.lru.capacity')!.schema!.title!, locale === 'en' ? /Lru: Capacity/ : /语法树容量/);
+		service.dispose();
+		assert.equal(registry.getConfiguration(key), undefined, 'the setting belongs to the Rust extension');
+		assert.equal(explicit.getValue(key), true, 'withdrawing the default preserves the user setting');
+	}
+});
+
 test('extension configuration defaults refresh, reject invalid replacements and withdraw with their owner', async () => {
 	const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 	const node = { properties: { 'extensionDefault.wrap': { type: 'string' as const, enum: ['off', 'on'], default: 'off', scope: 5 } } };

@@ -361,6 +361,12 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
                 ash_lsp_manager::LanguageServerControl::Restart
             }
             LanguageServerControlActionDto::Stop => ash_lsp_manager::LanguageServerControl::Stop,
+            LanguageServerControlActionDto::Resume => {
+                ash_lsp_manager::LanguageServerControl::Resume
+            }
+            LanguageServerControlActionDto::Suspend => {
+                ash_lsp_manager::LanguageServerControl::Suspend
+            }
         };
         runtime
             .control_servers(

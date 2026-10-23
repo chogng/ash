@@ -64,6 +64,8 @@ pub enum LanguageServerState {
     /// Explicitly suspended while retaining its definition and document snapshots.
     /// Unlike retirement during replacement, language requests must not wait for a restart.
     UserStopped,
+    /// Idle process released while its definition remains available for demand activation.
+    Idle,
 }
 
 /// An explicit user action, independent of persistent enablement and crash recovery.
@@ -71,6 +73,10 @@ pub enum LanguageServerState {
 pub enum LanguageServerControl {
     Restart,
     Stop,
+    /// Activate only an automatically idle server; concurrent resumes are idempotent.
+    Resume,
+    /// Release only a ready server with no open documents or in-flight requests.
+    Suspend,
 }
 
 /// Document operation that failed after crossing the asynchronous service boundary.
@@ -1410,6 +1416,7 @@ struct DocumentState {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ManagedServerPhase {
     Stopped,
+    Idle,
     Starting,
     Ready,
     BackingOff,

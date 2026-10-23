@@ -1,3 +1,4 @@
+import '../../../services/language/common/languageServerLifecycleService.js';
 import type { ISetting, ISettingsGroup, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { localize } from '../../../../nls.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
@@ -294,7 +295,12 @@ export const SettingsNavigation = [
 				label: localize({ bundle: 'ash.settings', key: 'categories.editor-language.label' }, 'Language servers'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.editor-language.description' }, 'Configure language servers and inspect their logs.'),
 				presentation: 'editor',
-				groups: [],
+				groups: [{
+					id: 'language-server-lifecycle',
+					label: localize({ bundle: 'ash.settings', key: 'lsp.idle.groupTitle' }, 'Analysis cache and memory'),
+					description: localize({ bundle: 'ash.settings', key: 'lsp.idle.groupDescription' }, 'Started servers stay running by default to reuse their in-memory analysis. Rust computes analysis on demand by default. Its analysis cache is lost when the server stops; Cargo build artifacts on disk do not restore this cache.'),
+					settings: ['languageServers.autoSuspend', 'languageServers.idleTimeoutMinutes'],
+				}],
 			},
 			{
 				id: 'editor-search',

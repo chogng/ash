@@ -15,6 +15,7 @@ import { workspaceRelativePath, IWorkspaceContextService } from "../../../../pla
 import { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
+import { ILanguageServerLifecycleService } from '../common/languageServerLifecycleService.js';
 import { AppServerLanguageSupport } from "./appServerLanguageSupport.js";
 import { resolveAppServerLanguageDirAccess } from "./appServerLanguageWorkspace.js";
 
@@ -57,6 +58,7 @@ export class AppServerLanguageProviders extends Disposable {
 		@IWorkspaceTrustManagementService private readonly workspaceTrust: IWorkspaceTrustManagementService,
 		@IServerEventApi events: IServerEventApi,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@ILanguageServerLifecycleService private readonly lifecycle: ILanguageServerLifecycleService,
 	) {
 		super();
 		const subscription = events.subscribe(event => {
@@ -72,7 +74,7 @@ export class AppServerLanguageProviders extends Disposable {
 				}
 				this.queueRefresh();
 			}
-			if (event.method === 'language/serverState' && event.params.state.type !== 'ready') {
+			if (event.method === 'language/serverState' && event.params.state.type !== 'ready' && event.params.state.type !== 'idle') {
 				const folderId = event.params.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
 				let removed = false;
 				for (const [key, value] of this.capabilities) {
@@ -110,7 +112,7 @@ export class AppServerLanguageProviders extends Disposable {
 		const folders = this.workspace.getWorkspace().folders;
 		const languageIds = support.languageIds;
 		const completionLanguages = languageIds.filter(language => folders.some(folder => support.supports(folder.id, language) && this.capabilities.get(`${folder.id}:${language}`)?.features.has('completion')));
-		const adapter = new AppServerLanguageProvider(this.api, this.workspace, completionLanguages, this.capabilities);
+		const adapter = new AppServerLanguageProvider(this.api, this.workspace, completionLanguages, this.capabilities, this.lifecycle);
 		const registrations = new DisposableStore();
 		// Negotiated features control availability; exact resource guards also protect
 		// retained adapters and completion's language-only provider catalog.
@@ -153,7 +155,7 @@ export class AppServerLanguageProviders extends Disposable {
 		register('foldingRanges', this.languageFeatures.foldingRangeProvider, adapter);
 		if (completionLanguages.length) registrations.add(this.languageFeatures.completionProvider.register(adapter));
 		if ([...this.capabilities.values()].some(value => value.features.has('workspaceSymbols'))) {
-			registrations.add(this.languageFeatures.workspaceSymbolProvider.register('*', new AppServerWorkspaceSymbolProvider(this.api, this.workspace, support, this.capabilities)));
+			registrations.add(this.languageFeatures.workspaceSymbolProvider.register('*', new AppServerWorkspaceSymbolProvider(this.api, this.workspace, support, this.capabilities, this.lifecycle)));
 		}
 		return registrations;
 	}
@@ -198,7 +200,7 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 	readonly id = "ash.appServer.completions";
 	readonly triggerCharacters: readonly string[];
 
-	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, readonly languageIds: readonly string[], private readonly capabilities: ReadonlyMap<string, ServerCapabilities>) {
+	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, readonly languageIds: readonly string[], private readonly capabilities: ReadonlyMap<string, ServerCapabilities>, private readonly lifecycle: ILanguageServerLifecycleService) {
 		const all = [...this.capabilities.values()];
 		this.triggerCharacters = Object.freeze([...new Set(all.flatMap(value => value.completion))]);
 		this.signatureHelpTriggerCharacters = Object.freeze([...new Set(all.flatMap(value => value.signature))]);
@@ -467,7 +469,7 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 	}
 
 	private requestFeature<T>(feature: LanguageServerFeatureDto, document: { readonly dirId?: string; readonly languageId: string; }, signal: AbortSignal | undefined, invoke: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
-		return requestWithCapability(this.capabilities, this.workspace, feature, document, signal, invoke);
+		return this.lifecycle.withActivity(document, signal, () => requestWithCapability(this.capabilities, this.workspace, feature, document, signal, invoke));
 	}
 
 	private documentForRequest(request: { readonly resource?: URI; readonly languageId: string; readonly snapshot: { readonly version: number; getText(): string; }; readonly model: { readonly largeFile: { readonly tooLargeForSynchronization: boolean; }; }; }) {
@@ -541,14 +543,14 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 }
 
 class AppServerWorkspaceSymbolProvider implements languages.LanguageWorkspaceSymbolProvider {
-	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, private readonly support: AppServerLanguageSupport, private readonly capabilities: ReadonlyMap<string, ServerCapabilities>) { }
+	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, private readonly support: AppServerLanguageSupport, private readonly capabilities: ReadonlyMap<string, ServerCapabilities>, private readonly lifecycle: ILanguageServerLifecycleService) { }
 
 	async provideWorkspaceSymbols(query: string, signal: AbortSignal): Promise<readonly languages.LanguageWorkspaceSymbol[]> {
 		const folders = this.workspace.getWorkspace().folders;
 		const roots = folders.map(folder => ({ id: folder.id, uri: folder.uri, ...(folders.length > 1 ? { wireId: folder.id } : {}) }));
 		const responses = await Promise.all(roots.flatMap(root => this.support.workspaceLanguageIds(root.id).map(async languageId => {
 			const document = { ...(root.wireId ? { dirId: root.wireId } : {}), languageId };
-			const result = await requestWithCapability(this.capabilities, this.workspace, 'workspaceSymbols', document, signal, signal => this.api.directorySymbols({ ...document, query }, { signal }));
+			const result = await this.lifecycle.withActivity(document, signal, () => requestWithCapability(this.capabilities, this.workspace, 'workspaceSymbols', document, signal, signal => this.api.directorySymbols({ ...document, query }, { signal })));
 			return result?.symbols.map(symbol => ({ root, symbol })) ?? [];
 		})));
 		if (signal.aborted) return Object.freeze([]);

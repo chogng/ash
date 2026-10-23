@@ -113,6 +113,25 @@ impl Supervisor {
             else {
                 continue;
             };
+            if action == LanguageServerControl::Resume
+                && self.servers[&name].phase != ManagedServerPhase::Idle
+            {
+                continue;
+            }
+            if action == LanguageServerControl::Suspend
+                && (self.servers[&name].phase != ManagedServerPhase::Ready
+                    || self
+                        .in_flight_requests
+                        .values()
+                        .any(|request| request.server == name)
+                    || self.documents.values().any(|entry| {
+                        definition
+                            .language_ids()
+                            .any(|language| language == entry.document.language_id())
+                    }))
+            {
+                continue;
+            }
             if let Some((client, retired_definition)) = self.detach_server(&name) {
                 shutdowns.spawn(async move {
                     // Keep every source lease until its process is reaped. Batch shutdowns run
@@ -127,24 +146,35 @@ impl Supervisor {
                 ManagedServer {
                     definition,
                     epoch: 0,
-                    phase: ManagedServerPhase::Stopped,
+                    phase: if action == LanguageServerControl::Suspend {
+                        ManagedServerPhase::Idle
+                    } else {
+                        ManagedServerPhase::Stopped
+                    },
                     restart: ServerRestartTracker::default(),
                 },
             );
-            self.emit_server_state(
-                &name,
-                if action == LanguageServerControl::Stop {
-                    LanguageServerState::UserStopped
-                } else {
-                    LanguageServerState::Stopped
-                },
-            );
+            match action {
+                LanguageServerControl::Stop => {
+                    self.emit_server_state(&name, LanguageServerState::UserStopped)
+                }
+                LanguageServerControl::Restart | LanguageServerControl::Resume => {
+                    self.emit_server_state(&name, LanguageServerState::Stopped)
+                }
+                LanguageServerControl::Suspend => {}
+            }
             stopped.push(name);
         }
         while shutdowns.join_next().await.is_some() {}
-        if action == LanguageServerControl::Restart {
-            for name in stopped {
-                self.start_server(&name);
+        for name in stopped {
+            match action {
+                LanguageServerControl::Restart | LanguageServerControl::Resume => {
+                    self.start_server(&name)
+                }
+                LanguageServerControl::Suspend => {
+                    self.emit_server_state(&name, LanguageServerState::Idle)
+                }
+                LanguageServerControl::Stop => {}
             }
         }
     }

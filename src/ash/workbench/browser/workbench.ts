@@ -292,6 +292,8 @@ import { TextModelResolverService } from '../services/textmodelResolver/common/t
 import { IBulkEditService } from "../../editor/browser/services/bulkEditService.js";
 import { getBrowserTextModelService } from "../services/textmodelResolver/browser/browserTextModelService.js";
 import { getBrowserTextResourceStore } from "../contrib/codeEditor/browser/browserTextResourceStore.js";
+import { ILanguageServerLifecycleService } from '../services/language/common/languageServerLifecycleService.js';
+import { AppServerLanguageLifecycleService } from '../services/language/browser/appServerLanguageLifecycleService.js';
 import { AppServerLanguageProviders } from "../services/language/browser/appServerLanguageProviders.js";
 import { DiffService } from "../services/diff/browser/diffService.js";
 import { IDiffService } from "../services/diff/common/diffService.js";
@@ -789,6 +791,9 @@ export class Workbench extends Disposable {
 		// Only the desktop host may inspect directory grants. Web language requests
 		// are authorized by the server for the authenticated workspace.
 		const checkWorkspaceTrust = !!nativeHostApi;
+		services.registerInstance(ILanguageServerService, api.languageServers);
+		const languageLifecycle = this._register(services.createInstance(AppServerLanguageLifecycleService));
+		services.registerInstance(ILanguageServerLifecycleService, languageLifecycle);
 		const languageProviders = api.hasAppServer ? this._register(services.createInstance(AppServerLanguageProviders, api.language, { checkWorkspaceTrust })) : undefined;
 		const diffService = services.createInstance(DiffService);
 		services.registerInstance(IDiffService, diffService);
@@ -822,7 +827,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAppServerSkillApi, api.skills);
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IInstructionService, api.instructions);
-		services.registerInstance(ILanguageServerService, api.languageServers);
 		services.registerInstance(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
 		const workbenchState = workspaceContext.getWorkbenchState();
 		const workbenchWindow = this._register(new WorkbenchWindow({
@@ -999,7 +1003,10 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAccountPolicyService, accountPolicies);
 		const policies = this._register(new MultiplexPolicyService([systemPolicies, accountPolicies]));
 		services.registerInstance(IPolicyService, policies);
-		serviceContributionReady.push(configuration.initialize(fileService, policies, workingCopyService).then(() => {
+		// Language-server initialization consumes extension-contributed defaults too.
+		// Starting earlier can launch expensive server work with upstream defaults.
+		serviceContributionReady.push(Promise.all([configuration.initialize(fileService, policies, workingCopyService), extensionReady]).then(() => {
+			languageLifecycle.start();
 			languageProviders?.start();
 			languageDiagnosticsService.start();
 		}));

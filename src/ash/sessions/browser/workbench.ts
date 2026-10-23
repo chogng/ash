@@ -31,6 +31,8 @@ import { ITestExecutionService } from '../../platform/testing/common/testExecuti
 import { SystemOutputService } from '../../workbench/services/output/browser/systemOutputService.js';
 import { AppServerLanguageServerStatusService } from '../../workbench/services/language/browser/appServerLanguageServerStatusService.js';
 import { AppServerLanguageDiagnosticsService } from '../../workbench/services/language/browser/appServerLanguageDiagnosticsService.js';
+import { ILanguageServerLifecycleService } from '../../workbench/services/language/common/languageServerLifecycleService.js';
+import { AppServerLanguageLifecycleService } from '../../workbench/services/language/browser/appServerLanguageLifecycleService.js';
 import { AppServerLanguageProviders } from '../../workbench/services/language/browser/appServerLanguageProviders.js';
 import { ILanguageDiagnosticsService } from '../../workbench/services/language/common/languageDiagnosticsService.js';
 import { LanguageDiagnosticsMarkerBridge } from '../../workbench/services/language/browser/languageDiagnosticsMarkerBridge.js';
@@ -406,7 +408,6 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IProjectService, options.api.projects);
 		services.registerInstance(INetworkDiagnosticsService, options.api.networkDiagnostics);
 		services.registerInstance(IContentSearchConfigurationService, options.api.contentSearchConfiguration);
-		services.registerInstance(ILanguageServerService, options.api.languageServers);
 		services.registerInstance(IExtensionHostApi, options.extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, enabledExtensions, options.api.extensionHost)));
 		if (!serviceCollection.has(ITelemetryService)) { services.registerInstance(ITelemetryService, NullTelemetryService); }
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
@@ -565,6 +566,9 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IWorkspaceTrustManagementService, this._register(services.createInstance(WorkspaceTrustManagementService)));
 		this._register(services.createInstance(WorkbenchLanguageFeatures));
 		const checkWorkspaceTrust = !!options.nativeHostApi;
+		services.registerInstance(ILanguageServerService, options.api.languageServers);
+		const languageLifecycle = this._register(services.createInstance(AppServerLanguageLifecycleService));
+		services.registerInstance(ILanguageServerLifecycleService, languageLifecycle);
 		const languageProviders = options.api.hasAppServer ? this._register(services.createInstance(AppServerLanguageProviders, options.api.language, { checkWorkspaceTrust })) : undefined;
 		const languageDiagnosticsService = this._register(services.createInstance(AppServerLanguageDiagnosticsService, options.api.language, undefined, checkWorkspaceTrust));
 		services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
@@ -596,7 +600,10 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IAccountPolicyService, accountPolicies);
 		const policies = this._register(new MultiplexPolicyService([systemPolicies, accountPolicies]));
 		services.registerInstance(IPolicyService, policies);
-		serviceContributionReady.push(configurationService.initialize(fileService, policies, workingCopies).then(() => {
+		// Match Code startup: server initialization needs the extension defaults as
+		// well as the profile and workspace settings, before any background pull.
+		serviceContributionReady.push(Promise.all([configurationService.initialize(fileService, policies, workingCopies), extensionReady]).then(() => {
+			languageLifecycle.start();
 			languageProviders?.start();
 			languageDiagnosticsService.start();
 		}));

@@ -138,6 +138,109 @@ async fn disabling_supervisor_aborts_pending_retry_tasks() {
     ));
 }
 
+#[tokio::test]
+async fn idle_suspend_refuses_open_documents_and_requests_before_releasing_a_ready_server() {
+    let workspace = tempfile::tempdir().unwrap();
+    let definition = LanguageServerDefinition::new(
+        "rust",
+        ["rust"],
+        LanguageServerCommand::new("unused-state-machine-server"),
+    )
+    .unwrap();
+    let name = definition.name().clone();
+    let sink = Arc::new(RecordingSink::default());
+    let (commands, _receiver) = mpsc::unbounded_channel();
+    let mut supervisor = Supervisor::new(
+        LspManagerConfiguration::enabled(workspace.path(), vec![definition]),
+        sink.clone(),
+        None,
+        commands,
+    );
+    supervisor.servers.get_mut(&name).unwrap().phase = ManagedServerPhase::Ready;
+    let path = workspace.path().join("main.rs");
+    supervisor.documents.insert(
+        path.clone(),
+        DocumentState {
+            document: LspDocumentSnapshot::new(
+                &path,
+                "rust",
+                LanguageDocumentRevision::INITIAL,
+                "fn main() {}",
+            )
+            .unwrap(),
+            uri: file_uri(&path).unwrap(),
+            routed: false,
+        },
+    );
+    supervisor
+        .control_servers(LanguageServerControl::Suspend, vec![name.clone()])
+        .await;
+    assert_eq!(supervisor.servers[&name].phase, ManagedServerPhase::Ready);
+    assert!(sink.snapshot().is_empty());
+    supervisor.close(&path).await;
+    let request_id = LanguageRequestId::new(1);
+    supervisor.in_flight_requests.insert(
+        request_id,
+        InFlightLanguageRequest {
+            cancellation: CancellationSource::new(),
+            kind: LanguageRequestKind::References,
+            server: name.clone(),
+            server_epoch: 0,
+            configuration_generation: 0,
+            service_generation: 0,
+            cold_for_incarnation: false,
+            started: Instant::now(),
+            path,
+            revision: LanguageDocumentRevision::INITIAL,
+        },
+    );
+    supervisor
+        .control_servers(LanguageServerControl::Suspend, vec![name.clone()])
+        .await;
+    assert_eq!(supervisor.servers[&name].phase, ManagedServerPhase::Ready);
+    assert!(sink.snapshot().is_empty());
+    supervisor.in_flight_requests.remove(&request_id);
+    supervisor
+        .control_servers(LanguageServerControl::Suspend, vec![name.clone()])
+        .await;
+    assert_eq!(supervisor.servers[&name].phase, ManagedServerPhase::Idle);
+    assert!(sink.snapshot().iter().any(|event| matches!(
+        event,
+        LanguageServiceEvent::ServerStateChanged {
+            state: LanguageServerState::Idle,
+            ..
+        }
+    )));
+    assert_eq!(
+        supervisor.configuration.servers.len(),
+        1,
+        "demand activation retains the definition"
+    );
+    supervisor
+        .control_servers(LanguageServerControl::Resume, vec![name.clone()])
+        .await;
+    let epoch = supervisor.servers[&name].epoch;
+    supervisor
+        .control_servers(LanguageServerControl::Resume, vec![name.clone()])
+        .await;
+    assert_eq!(
+        supervisor.servers[&name].epoch, epoch,
+        "concurrent demand must not restart an active launch"
+    );
+    supervisor
+        .control_servers(LanguageServerControl::Stop, vec![name.clone()])
+        .await;
+    supervisor
+        .control_servers(LanguageServerControl::Resume, vec![name.clone()])
+        .await;
+    assert_eq!(
+        supervisor.servers[&name].phase,
+        ManagedServerPhase::Stopped,
+        "resume respects explicit user stop"
+    );
+    supervisor.disable().await;
+}
+
 #[test]
 fn request_facade_reports_missing_ready_capability_without_blocking_the_caller() {
     let workspace = tempfile::tempdir().expect("workspace");

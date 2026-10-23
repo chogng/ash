@@ -94,6 +94,10 @@ pub struct LanguageServersResult {
 pub enum LanguageServerControlActionDto {
     Restart,
     Stop,
+    /// Idempotently reactivate an automatically idle process; respect explicit user stop.
+    Resume,
+    /// Release a ready process only when it has no open documents or requests.
+    Suspend,
 }
 
 /// Controls only this connection's server in an authorized workspace directory. Omitting
@@ -983,6 +987,8 @@ pub struct LanguageServerProgressNotification {
 pub enum LanguageServerStateDto {
     Starting,
     Ready,
+    /// Automatically released; demand language work can reactivate it.
+    Idle,
     BackingOff {
         attempt: u32,
         #[serde(rename = "retryAfterMillis")]

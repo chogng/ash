@@ -13,13 +13,13 @@ export interface LanguageServerConfiguration {
 
 /** Connection-local process state; discovery alone never starts a server. */
 export type LanguageServerState =
-	| { readonly type: 'starting' | 'ready' | 'stopped'; }
+	| { readonly type: 'starting' | 'ready' | 'stopped' | 'idle'; }
 	| { readonly type: 'backingOff'; readonly attempt: number; readonly retryAfterMillis: number; }
 	| { readonly type: 'crashLoop'; readonly restartAttempts: number; readonly message: string; }
 	| { readonly type: 'failed'; readonly message: string; };
 
 export interface LanguageServerControl {
-	readonly action: 'restart' | 'stop';
+	readonly action: 'restart' | 'stop' | 'suspend' | 'resume';
 	readonly dirId?: string;
 	/** Omit to control only the servers already started in this directory. */
 	readonly serverId?: string;

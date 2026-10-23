@@ -12,6 +12,1999 @@
     "Programming Languages"
   ],
   "contributes": {
+    "configuration": {
+      "title": "Rust",
+      "properties": {
+        "rust-analyzer.assist.emitMustUse": {
+          "markdownDescription": "%assist.emitMustUse.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%assist.emitMustUse.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.assist.expressionFillDefault": {
+          "markdownDescription": "%assist.expressionFillDefault.description%",
+          "default": "todo",
+          "type": "string",
+          "enum": [
+            "todo",
+            "default"
+          ],
+          "enumDescriptions": [
+            "%assist.expressionFillDefault.enum.0%",
+            "%assist.expressionFillDefault.enum.1%"
+          ],
+          "title": "%assist.expressionFillDefault.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.assist.preferSelf": {
+          "markdownDescription": "%assist.preferSelf.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%assist.preferSelf.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.assist.termSearch.fuel": {
+          "markdownDescription": "%assist.termSearch.fuel.description%",
+          "default": 1800,
+          "type": "integer",
+          "minimum": 0,
+          "title": "%assist.termSearch.fuel.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cachePriming.enable": {
+          "markdownDescription": "%cachePriming.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%cachePriming.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cachePriming.numThreads": {
+          "markdownDescription": "%cachePriming.numThreads.description%",
+          "default": "physical",
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 255
+            },
+            {
+              "type": "string",
+              "enum": [
+                "physical",
+                "logical"
+              ],
+              "enumDescriptions": [
+                "%cachePriming.numThreads.anyOf.1.enum.0%",
+                "%cachePriming.numThreads.anyOf.1.enum.1%"
+              ]
+            }
+          ],
+          "title": "%cachePriming.numThreads.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.allTargets": {
+          "markdownDescription": "%cargo.allTargets.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%cargo.allTargets.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.autoreload": {
+          "markdownDescription": "%cargo.autoreload.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%cargo.autoreload.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.buildScripts.enable": {
+          "markdownDescription": "%cargo.buildScripts.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%cargo.buildScripts.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.buildScripts.invocationStrategy": {
+          "markdownDescription": "%cargo.buildScripts.invocationStrategy.description%",
+          "default": "per_workspace",
+          "type": "string",
+          "enum": [
+            "per_workspace",
+            "once"
+          ],
+          "enumDescriptions": [
+            "%cargo.buildScripts.invocationStrategy.enum.0%",
+            "%cargo.buildScripts.invocationStrategy.enum.1%"
+          ],
+          "title": "%cargo.buildScripts.invocationStrategy.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.buildScripts.overrideCommand": {
+          "markdownDescription": "%cargo.buildScripts.overrideCommand.description%",
+          "default": null,
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "%cargo.buildScripts.overrideCommand.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.buildScripts.rebuildOnSave": {
+          "markdownDescription": "%cargo.buildScripts.rebuildOnSave.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%cargo.buildScripts.rebuildOnSave.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.buildScripts.useRustcWrapper": {
+          "markdownDescription": "%cargo.buildScripts.useRustcWrapper.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%cargo.buildScripts.useRustcWrapper.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.cfgs": {
+          "markdownDescription": "%cargo.cfgs.description%",
+          "default": [
+            "debug_assertions",
+            "miri"
+          ],
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "%cargo.cfgs.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.configPath": {
+          "markdownDescription": "%cargo.configPath.description%",
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "%cargo.configPath.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.extraArgs": {
+          "markdownDescription": "%cargo.extraArgs.description%",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "%cargo.extraArgs.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.extraEnv": {
+          "markdownDescription": "%cargo.extraEnv.description%",
+          "default": {},
+          "type": "object",
+          "title": "%cargo.extraEnv.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.features": {
+          "markdownDescription": "%cargo.features.description%",
+          "default": [],
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "all"
+              ],
+              "enumDescriptions": [
+                "%cargo.features.anyOf.0.enum.0%"
+              ]
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ],
+          "title": "%cargo.features.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.metadataExtraArgs": {
+          "markdownDescription": "%cargo.metadataExtraArgs.description%",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "%cargo.metadataExtraArgs.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.noDefaultFeatures": {
+          "markdownDescription": "%cargo.noDefaultFeatures.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%cargo.noDefaultFeatures.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.noDeps": {
+          "markdownDescription": "%cargo.noDeps.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%cargo.noDeps.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.sysroot": {
+          "markdownDescription": "%cargo.sysroot.description%",
+          "default": "discover",
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "%cargo.sysroot.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.sysrootSrc": {
+          "markdownDescription": "%cargo.sysrootSrc.description%",
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "%cargo.sysrootSrc.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.target": {
+          "markdownDescription": "%cargo.target.description%",
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "%cargo.target.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cargo.targetDir": {
+          "markdownDescription": "%cargo.targetDir.description%",
+          "default": null,
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "%cargo.targetDir.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.cfg.setTest": {
+          "markdownDescription": "%cfg.setTest.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%cfg.setTest.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.checkOnSave": {
+          "markdownDescription": "%checkOnSave.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%checkOnSave.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.check.allTargets": {
+          "markdownDescription": "%check.allTargets.description%",
+          "default": null,
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "%check.allTargets.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.check.command": {
+          "markdownDescription": "%check.command.description%",
+          "default": "check",
+          "type": "string",
+          "title": "%check.command.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.check.extraArgs": {
+          "markdownDescription": "%check.extraArgs.description%",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "%check.extraArgs.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.check.extraEnv": {
+          "markdownDescription": "%check.extraEnv.description%",
+          "default": {},
+          "type": "object",
+          "title": "%check.extraEnv.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.check.features": {
+          "markdownDescription": "%check.features.description%",
+          "default": null,
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "all"
+              ],
+              "enumDescriptions": [
+                "%check.features.anyOf.0.enum.0%"
+              ]
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "%check.features.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.check.ignore": {
+          "markdownDescription": "%check.ignore.description%",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "title": "%check.ignore.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.check.invocationStrategy": {
+          "markdownDescription": "%check.invocationStrategy.description%",
+          "default": "per_workspace",
+          "type": "string",
+          "enum": [
+            "per_workspace",
+            "once"
+          ],
+          "enumDescriptions": [
+            "%check.invocationStrategy.enum.0%",
+            "%check.invocationStrategy.enum.1%"
+          ],
+          "title": "%check.invocationStrategy.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.check.noDefaultFeatures": {
+          "markdownDescription": "%check.noDefaultFeatures.description%",
+          "default": null,
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "%check.noDefaultFeatures.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.check.overrideCommand": {
+          "markdownDescription": "%check.overrideCommand.description%",
+          "default": null,
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "%check.overrideCommand.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.check.targets": {
+          "markdownDescription": "%check.targets.description%",
+          "default": null,
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ],
+          "title": "%check.targets.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.check.workspace": {
+          "markdownDescription": "%check.workspace.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%check.workspace.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.addColonsToModule": {
+          "markdownDescription": "%completion.addColonsToModule.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%completion.addColonsToModule.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.addSemicolonToUnit": {
+          "markdownDescription": "%completion.addSemicolonToUnit.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%completion.addSemicolonToUnit.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.autoAwait.enable": {
+          "markdownDescription": "%completion.autoAwait.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%completion.autoAwait.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.autoIter.enable": {
+          "markdownDescription": "%completion.autoIter.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%completion.autoIter.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.autoimport.enable": {
+          "markdownDescription": "%completion.autoimport.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%completion.autoimport.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.autoimport.exclude": {
+          "markdownDescription": "%completion.autoimport.exclude.description%",
+          "default": [
+            {
+              "path": "core::borrow::Borrow",
+              "type": "methods"
+            },
+            {
+              "path": "core::borrow::BorrowMut",
+              "type": "methods"
+            }
+          ],
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "always",
+                      "methods",
+                      "sub_items",
+                      "variants"
+                    ],
+                    "enumDescriptions": [
+                      "%completion.autoimport.exclude.items.anyOf.1.properties.type.enum.0%",
+                      "%completion.autoimport.exclude.items.anyOf.1.properties.type.enum.1%",
+                      "%completion.autoimport.exclude.items.anyOf.1.properties.type.enum.2%",
+                      "%completion.autoimport.exclude.items.anyOf.1.properties.type.enum.3%"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "title": "%completion.autoimport.exclude.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.autoself.enable": {
+          "markdownDescription": "%completion.autoself.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%completion.autoself.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.callable.snippets": {
+          "markdownDescription": "%completion.callable.snippets.description%",
+          "default": "fill_arguments",
+          "type": "string",
+          "enum": [
+            "fill_arguments",
+            "add_parentheses",
+            "none"
+          ],
+          "enumDescriptions": [
+            "%completion.callable.snippets.enum.0%",
+            "%completion.callable.snippets.enum.1%",
+            "%completion.callable.snippets.enum.2%"
+          ],
+          "title": "%completion.callable.snippets.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.excludeTraits": {
+          "markdownDescription": "%completion.excludeTraits.description%",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "%completion.excludeTraits.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.fullFunctionSignatures.enable": {
+          "markdownDescription": "%completion.fullFunctionSignatures.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%completion.fullFunctionSignatures.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.hideDeprecated": {
+          "markdownDescription": "%completion.hideDeprecated.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%completion.hideDeprecated.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.limit": {
+          "markdownDescription": "%completion.limit.description%",
+          "default": null,
+          "type": [
+            "null",
+            "integer"
+          ],
+          "minimum": 0,
+          "title": "%completion.limit.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.postfix.enable": {
+          "markdownDescription": "%completion.postfix.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%completion.postfix.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.privateEditable.enable": {
+          "markdownDescription": "%completion.privateEditable.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%completion.privateEditable.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.snippets.custom": {
+          "markdownDescription": "%completion.snippets.custom.description%",
+          "default": {
+            "Ok": {
+              "postfix": "ok",
+              "body": "Ok(${receiver})",
+              "description": "Wrap the expression in a `Result::Ok`",
+              "scope": "expr"
+            },
+            "Box::pin": {
+              "postfix": "pinbox",
+              "body": "Box::pin(${receiver})",
+              "requires": "std::boxed::Box",
+              "description": "Put the expression into a pinned `Box`",
+              "scope": "expr"
+            },
+            "Arc::new": {
+              "postfix": "arc",
+              "body": "Arc::new(${receiver})",
+              "requires": "std::sync::Arc",
+              "description": "Put the expression into an `Arc`",
+              "scope": "expr"
+            },
+            "Some": {
+              "postfix": "some",
+              "body": "Some(${receiver})",
+              "description": "Wrap the expression in an `Option::Some`",
+              "scope": "expr"
+            },
+            "Err": {
+              "postfix": "err",
+              "body": "Err(${receiver})",
+              "description": "Wrap the expression in a `Result::Err`",
+              "scope": "expr"
+            },
+            "Rc::new": {
+              "postfix": "rc",
+              "body": "Rc::new(${receiver})",
+              "requires": "std::rc::Rc",
+              "description": "Put the expression into an `Rc`",
+              "scope": "expr"
+            }
+          },
+          "type": "object",
+          "title": "%completion.snippets.custom.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.termSearch.enable": {
+          "markdownDescription": "%completion.termSearch.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%completion.termSearch.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.termSearch.fuel": {
+          "markdownDescription": "%completion.termSearch.fuel.description%",
+          "default": 1000,
+          "type": "integer",
+          "minimum": 0,
+          "title": "%completion.termSearch.fuel.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.completion.turbofish.enable": {
+          "markdownDescription": "%completion.turbofish.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%completion.turbofish.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.diagnostics.disabled": {
+          "markdownDescription": "%diagnostics.disabled.description%",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "title": "%diagnostics.disabled.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.diagnostics.enable": {
+          "markdownDescription": "%diagnostics.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%diagnostics.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.diagnostics.experimental.enable": {
+          "markdownDescription": "%diagnostics.experimental.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%diagnostics.experimental.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.diagnostics.remapPrefix": {
+          "markdownDescription": "%diagnostics.remapPrefix.description%",
+          "default": {},
+          "type": "object",
+          "title": "%diagnostics.remapPrefix.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.diagnostics.styleLints.enable": {
+          "markdownDescription": "%diagnostics.styleLints.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%diagnostics.styleLints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.diagnostics.warningsAsHint": {
+          "markdownDescription": "%diagnostics.warningsAsHint.description%",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "%diagnostics.warningsAsHint.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.diagnostics.warningsAsInfo": {
+          "markdownDescription": "%diagnostics.warningsAsInfo.description%",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "%diagnostics.warningsAsInfo.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.disableFixtureSupport": {
+          "markdownDescription": "%disableFixtureSupport.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%disableFixtureSupport.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.document.symbol.search.excludeLocals": {
+          "markdownDescription": "%document.symbol.search.excludeLocals.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%document.symbol.search.excludeLocals.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.files.exclude": {
+          "markdownDescription": "%files.exclude.description%",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "%files.exclude.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.files.watcher": {
+          "markdownDescription": "%files.watcher.description%",
+          "default": "client",
+          "type": "string",
+          "enum": [
+            "client",
+            "server"
+          ],
+          "enumDescriptions": [
+            "%files.watcher.enum.0%",
+            "%files.watcher.enum.1%"
+          ],
+          "title": "%files.watcher.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.gotoImplementations.filterAdjacentDerives": {
+          "markdownDescription": "%gotoImplementations.filterAdjacentDerives.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%gotoImplementations.filterAdjacentDerives.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.highlightRelated.branchExitPoints.enable": {
+          "markdownDescription": "%highlightRelated.branchExitPoints.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%highlightRelated.branchExitPoints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.highlightRelated.breakPoints.enable": {
+          "markdownDescription": "%highlightRelated.breakPoints.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%highlightRelated.breakPoints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.highlightRelated.closureCaptures.enable": {
+          "markdownDescription": "%highlightRelated.closureCaptures.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%highlightRelated.closureCaptures.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.highlightRelated.exitPoints.enable": {
+          "markdownDescription": "%highlightRelated.exitPoints.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%highlightRelated.exitPoints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.highlightRelated.references.enable": {
+          "markdownDescription": "%highlightRelated.references.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%highlightRelated.references.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.highlightRelated.yieldPoints.enable": {
+          "markdownDescription": "%highlightRelated.yieldPoints.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%highlightRelated.yieldPoints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.actions.debug.enable": {
+          "markdownDescription": "%hover.actions.debug.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%hover.actions.debug.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.actions.enable": {
+          "markdownDescription": "%hover.actions.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%hover.actions.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.actions.gotoTypeDef.enable": {
+          "markdownDescription": "%hover.actions.gotoTypeDef.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%hover.actions.gotoTypeDef.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.actions.implementations.enable": {
+          "markdownDescription": "%hover.actions.implementations.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%hover.actions.implementations.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.actions.references.enable": {
+          "markdownDescription": "%hover.actions.references.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%hover.actions.references.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.actions.run.enable": {
+          "markdownDescription": "%hover.actions.run.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%hover.actions.run.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.actions.updateTest.enable": {
+          "markdownDescription": "%hover.actions.updateTest.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%hover.actions.updateTest.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.documentation.enable": {
+          "markdownDescription": "%hover.documentation.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%hover.documentation.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.documentation.keywords.enable": {
+          "markdownDescription": "%hover.documentation.keywords.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%hover.documentation.keywords.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.dropGlue.enable": {
+          "markdownDescription": "%hover.dropGlue.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%hover.dropGlue.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.links.enable": {
+          "markdownDescription": "%hover.links.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%hover.links.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.maxSubstitutionLength": {
+          "markdownDescription": "%hover.maxSubstitutionLength.description%",
+          "default": 20,
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "hide"
+              ]
+            },
+            {
+              "type": "integer"
+            }
+          ],
+          "title": "%hover.maxSubstitutionLength.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.memoryLayout.alignment": {
+          "markdownDescription": "%hover.memoryLayout.alignment.description%",
+          "default": "hexadecimal",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "both",
+                "decimal",
+                "hexadecimal"
+              ],
+              "enumDescriptions": [
+                "%hover.memoryLayout.alignment.anyOf.1.enum.0%",
+                "%hover.memoryLayout.alignment.anyOf.1.enum.1%",
+                "%hover.memoryLayout.alignment.anyOf.1.enum.2%"
+              ]
+            }
+          ],
+          "title": "%hover.memoryLayout.alignment.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.memoryLayout.enable": {
+          "markdownDescription": "%hover.memoryLayout.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%hover.memoryLayout.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.memoryLayout.niches": {
+          "markdownDescription": "%hover.memoryLayout.niches.description%",
+          "default": false,
+          "type": [
+            "null",
+            "boolean"
+          ],
+          "title": "%hover.memoryLayout.niches.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.memoryLayout.offset": {
+          "markdownDescription": "%hover.memoryLayout.offset.description%",
+          "default": "hexadecimal",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "both",
+                "decimal",
+                "hexadecimal"
+              ],
+              "enumDescriptions": [
+                "%hover.memoryLayout.offset.anyOf.1.enum.0%",
+                "%hover.memoryLayout.offset.anyOf.1.enum.1%",
+                "%hover.memoryLayout.offset.anyOf.1.enum.2%"
+              ]
+            }
+          ],
+          "title": "%hover.memoryLayout.offset.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.memoryLayout.padding": {
+          "markdownDescription": "%hover.memoryLayout.padding.description%",
+          "default": null,
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "both",
+                "decimal",
+                "hexadecimal"
+              ],
+              "enumDescriptions": [
+                "%hover.memoryLayout.padding.anyOf.1.enum.0%",
+                "%hover.memoryLayout.padding.anyOf.1.enum.1%",
+                "%hover.memoryLayout.padding.anyOf.1.enum.2%"
+              ]
+            }
+          ],
+          "title": "%hover.memoryLayout.padding.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.memoryLayout.size": {
+          "markdownDescription": "%hover.memoryLayout.size.description%",
+          "default": "both",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "both",
+                "decimal",
+                "hexadecimal"
+              ],
+              "enumDescriptions": [
+                "%hover.memoryLayout.size.anyOf.1.enum.0%",
+                "%hover.memoryLayout.size.anyOf.1.enum.1%",
+                "%hover.memoryLayout.size.anyOf.1.enum.2%"
+              ]
+            }
+          ],
+          "title": "%hover.memoryLayout.size.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.show.enumVariants": {
+          "markdownDescription": "%hover.show.enumVariants.description%",
+          "default": 5,
+          "type": [
+            "null",
+            "integer"
+          ],
+          "minimum": 0,
+          "title": "%hover.show.enumVariants.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.show.fields": {
+          "markdownDescription": "%hover.show.fields.description%",
+          "default": 5,
+          "type": [
+            "null",
+            "integer"
+          ],
+          "minimum": 0,
+          "title": "%hover.show.fields.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.hover.show.traitAssocItems": {
+          "markdownDescription": "%hover.show.traitAssocItems.description%",
+          "default": null,
+          "type": [
+            "null",
+            "integer"
+          ],
+          "minimum": 0,
+          "title": "%hover.show.traitAssocItems.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.imports.granularity.enforce": {
+          "markdownDescription": "%imports.granularity.enforce.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%imports.granularity.enforce.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.imports.granularity.group": {
+          "markdownDescription": "%imports.granularity.group.description%",
+          "default": "crate",
+          "type": "string",
+          "enum": [
+            "crate",
+            "module",
+            "item",
+            "one",
+            "preserve"
+          ],
+          "enumDescriptions": [
+            "%imports.granularity.group.enum.0%",
+            "%imports.granularity.group.enum.1%",
+            "%imports.granularity.group.enum.2%",
+            "%imports.granularity.group.enum.3%",
+            "%imports.granularity.group.enum.4%"
+          ],
+          "title": "%imports.granularity.group.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.imports.group.enable": {
+          "markdownDescription": "%imports.group.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%imports.group.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.imports.merge.glob": {
+          "markdownDescription": "%imports.merge.glob.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%imports.merge.glob.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.imports.preferNoStd": {
+          "markdownDescription": "%imports.preferNoStd.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%imports.preferNoStd.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.imports.preferPrelude": {
+          "markdownDescription": "%imports.preferPrelude.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%imports.preferPrelude.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.imports.prefix": {
+          "markdownDescription": "%imports.prefix.description%",
+          "default": "crate",
+          "type": "string",
+          "enum": [
+            "plain",
+            "self",
+            "crate"
+          ],
+          "enumDescriptions": [
+            "%imports.prefix.enum.0%",
+            "%imports.prefix.enum.1%",
+            "%imports.prefix.enum.2%"
+          ],
+          "title": "%imports.prefix.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.imports.prefixExternPrelude": {
+          "markdownDescription": "%imports.prefixExternPrelude.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%imports.prefixExternPrelude.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.bindingModeHints.enable": {
+          "markdownDescription": "%inlayHints.bindingModeHints.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%inlayHints.bindingModeHints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.chainingHints.enable": {
+          "markdownDescription": "%inlayHints.chainingHints.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%inlayHints.chainingHints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.closingBraceHints.enable": {
+          "markdownDescription": "%inlayHints.closingBraceHints.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%inlayHints.closingBraceHints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.closingBraceHints.minLines": {
+          "markdownDescription": "%inlayHints.closingBraceHints.minLines.description%",
+          "default": 25,
+          "type": "integer",
+          "minimum": 0,
+          "title": "%inlayHints.closingBraceHints.minLines.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.closureCaptureHints.enable": {
+          "markdownDescription": "%inlayHints.closureCaptureHints.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%inlayHints.closureCaptureHints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.closureReturnTypeHints.enable": {
+          "markdownDescription": "%inlayHints.closureReturnTypeHints.enable.description%",
+          "default": "never",
+          "type": "string",
+          "enum": [
+            "always",
+            "never",
+            "with_block"
+          ],
+          "enumDescriptions": [
+            "%inlayHints.closureReturnTypeHints.enable.enum.0%",
+            "%inlayHints.closureReturnTypeHints.enable.enum.1%",
+            "%inlayHints.closureReturnTypeHints.enable.enum.2%"
+          ],
+          "title": "%inlayHints.closureReturnTypeHints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.closureStyle": {
+          "markdownDescription": "%inlayHints.closureStyle.description%",
+          "default": "impl_fn",
+          "type": "string",
+          "enum": [
+            "impl_fn",
+            "rust_analyzer",
+            "with_id",
+            "hide"
+          ],
+          "enumDescriptions": [
+            "%inlayHints.closureStyle.enum.0%",
+            "%inlayHints.closureStyle.enum.1%",
+            "%inlayHints.closureStyle.enum.2%",
+            "%inlayHints.closureStyle.enum.3%"
+          ],
+          "title": "%inlayHints.closureStyle.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.discriminantHints.enable": {
+          "markdownDescription": "%inlayHints.discriminantHints.enable.description%",
+          "default": "never",
+          "type": "string",
+          "enum": [
+            "always",
+            "never",
+            "fieldless"
+          ],
+          "enumDescriptions": [
+            "%inlayHints.discriminantHints.enable.enum.0%",
+            "%inlayHints.discriminantHints.enable.enum.1%",
+            "%inlayHints.discriminantHints.enable.enum.2%"
+          ],
+          "title": "%inlayHints.discriminantHints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.expressionAdjustmentHints.disableReborrows": {
+          "markdownDescription": "%inlayHints.expressionAdjustmentHints.disableReborrows.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%inlayHints.expressionAdjustmentHints.disableReborrows.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.expressionAdjustmentHints.enable": {
+          "markdownDescription": "%inlayHints.expressionAdjustmentHints.enable.description%",
+          "default": "never",
+          "type": "string",
+          "enum": [
+            "always",
+            "never",
+            "reborrow"
+          ],
+          "enumDescriptions": [
+            "%inlayHints.expressionAdjustmentHints.enable.enum.0%",
+            "%inlayHints.expressionAdjustmentHints.enable.enum.1%",
+            "%inlayHints.expressionAdjustmentHints.enable.enum.2%"
+          ],
+          "title": "%inlayHints.expressionAdjustmentHints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.expressionAdjustmentHints.hideOutsideUnsafe": {
+          "markdownDescription": "%inlayHints.expressionAdjustmentHints.hideOutsideUnsafe.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%inlayHints.expressionAdjustmentHints.hideOutsideUnsafe.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.expressionAdjustmentHints.mode": {
+          "markdownDescription": "%inlayHints.expressionAdjustmentHints.mode.description%",
+          "default": "prefix",
+          "type": "string",
+          "enum": [
+            "prefix",
+            "postfix",
+            "prefer_prefix",
+            "prefer_postfix"
+          ],
+          "enumDescriptions": [
+            "%inlayHints.expressionAdjustmentHints.mode.enum.0%",
+            "%inlayHints.expressionAdjustmentHints.mode.enum.1%",
+            "%inlayHints.expressionAdjustmentHints.mode.enum.2%",
+            "%inlayHints.expressionAdjustmentHints.mode.enum.3%"
+          ],
+          "title": "%inlayHints.expressionAdjustmentHints.mode.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.genericParameterHints.const.enable": {
+          "markdownDescription": "%inlayHints.genericParameterHints.const.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%inlayHints.genericParameterHints.const.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.genericParameterHints.lifetime.enable": {
+          "markdownDescription": "%inlayHints.genericParameterHints.lifetime.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%inlayHints.genericParameterHints.lifetime.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.genericParameterHints.type.enable": {
+          "markdownDescription": "%inlayHints.genericParameterHints.type.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%inlayHints.genericParameterHints.type.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.implicitDrops.enable": {
+          "markdownDescription": "%inlayHints.implicitDrops.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%inlayHints.implicitDrops.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.implicitSizedBoundHints.enable": {
+          "markdownDescription": "%inlayHints.implicitSizedBoundHints.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%inlayHints.implicitSizedBoundHints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.impliedDynTraitHints.enable": {
+          "markdownDescription": "%inlayHints.impliedDynTraitHints.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%inlayHints.impliedDynTraitHints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.lifetimeElisionHints.enable": {
+          "markdownDescription": "%inlayHints.lifetimeElisionHints.enable.description%",
+          "default": "never",
+          "type": "string",
+          "enum": [
+            "always",
+            "never",
+            "skip_trivial"
+          ],
+          "enumDescriptions": [
+            "%inlayHints.lifetimeElisionHints.enable.enum.0%",
+            "%inlayHints.lifetimeElisionHints.enable.enum.1%",
+            "%inlayHints.lifetimeElisionHints.enable.enum.2%"
+          ],
+          "title": "%inlayHints.lifetimeElisionHints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.lifetimeElisionHints.useParameterNames": {
+          "markdownDescription": "%inlayHints.lifetimeElisionHints.useParameterNames.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%inlayHints.lifetimeElisionHints.useParameterNames.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.maxLength": {
+          "markdownDescription": "%inlayHints.maxLength.description%",
+          "default": 25,
+          "type": [
+            "null",
+            "integer"
+          ],
+          "minimum": 0,
+          "title": "%inlayHints.maxLength.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.parameterHints.enable": {
+          "markdownDescription": "%inlayHints.parameterHints.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%inlayHints.parameterHints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.parameterHints.missingArguments.enable": {
+          "markdownDescription": "%inlayHints.parameterHints.missingArguments.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%inlayHints.parameterHints.missingArguments.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.rangeExclusiveHints.enable": {
+          "markdownDescription": "%inlayHints.rangeExclusiveHints.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%inlayHints.rangeExclusiveHints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.reborrowHints.enable": {
+          "markdownDescription": "%inlayHints.reborrowHints.enable.description%",
+          "default": "never",
+          "type": "string",
+          "enum": [
+            "always",
+            "never",
+            "mutable"
+          ],
+          "enumDescriptions": [
+            "%inlayHints.reborrowHints.enable.enum.0%",
+            "%inlayHints.reborrowHints.enable.enum.1%",
+            "%inlayHints.reborrowHints.enable.enum.2%"
+          ],
+          "title": "%inlayHints.reborrowHints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.renderColons": {
+          "markdownDescription": "%inlayHints.renderColons.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%inlayHints.renderColons.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.typeHints.enable": {
+          "markdownDescription": "%inlayHints.typeHints.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%inlayHints.typeHints.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.typeHints.hideClosureInitialization": {
+          "markdownDescription": "%inlayHints.typeHints.hideClosureInitialization.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%inlayHints.typeHints.hideClosureInitialization.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.typeHints.hideClosureParameter": {
+          "markdownDescription": "%inlayHints.typeHints.hideClosureParameter.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%inlayHints.typeHints.hideClosureParameter.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.typeHints.hideInferredTypes": {
+          "markdownDescription": "%inlayHints.typeHints.hideInferredTypes.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%inlayHints.typeHints.hideInferredTypes.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.typeHints.hideNamedConstructor": {
+          "markdownDescription": "%inlayHints.typeHints.hideNamedConstructor.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%inlayHints.typeHints.hideNamedConstructor.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.inlayHints.typeHints.location": {
+          "markdownDescription": "%inlayHints.typeHints.location.description%",
+          "default": "inline",
+          "type": "string",
+          "enum": [
+            "inline",
+            "end_of_line"
+          ],
+          "enumDescriptions": [
+            "%inlayHints.typeHints.location.enum.0%",
+            "%inlayHints.typeHints.location.enum.1%"
+          ],
+          "title": "%inlayHints.typeHints.location.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.interpret.tests": {
+          "markdownDescription": "%interpret.tests.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%interpret.tests.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.joinLines.joinAssignments": {
+          "markdownDescription": "%joinLines.joinAssignments.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%joinLines.joinAssignments.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.joinLines.joinElseIf": {
+          "markdownDescription": "%joinLines.joinElseIf.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%joinLines.joinElseIf.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.joinLines.removeTrailingComma": {
+          "markdownDescription": "%joinLines.removeTrailingComma.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%joinLines.removeTrailingComma.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.joinLines.unwrapTrivialBlock": {
+          "markdownDescription": "%joinLines.unwrapTrivialBlock.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%joinLines.unwrapTrivialBlock.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.lens.debug.enable": {
+          "markdownDescription": "%lens.debug.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%lens.debug.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.lens.enable": {
+          "markdownDescription": "%lens.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%lens.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.lens.implementations.enable": {
+          "markdownDescription": "%lens.implementations.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%lens.implementations.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.lens.location": {
+          "markdownDescription": "%lens.location.description%",
+          "default": "above_name",
+          "type": "string",
+          "enum": [
+            "above_name",
+            "above_whole_item"
+          ],
+          "enumDescriptions": [
+            "%lens.location.enum.0%",
+            "%lens.location.enum.1%"
+          ],
+          "title": "%lens.location.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.lens.references.adt.enable": {
+          "markdownDescription": "%lens.references.adt.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%lens.references.adt.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.lens.references.enumVariant.enable": {
+          "markdownDescription": "%lens.references.enumVariant.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%lens.references.enumVariant.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.lens.references.method.enable": {
+          "markdownDescription": "%lens.references.method.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%lens.references.method.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.lens.references.trait.enable": {
+          "markdownDescription": "%lens.references.trait.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%lens.references.trait.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.lens.run.enable": {
+          "markdownDescription": "%lens.run.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%lens.run.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.lens.updateTest.enable": {
+          "markdownDescription": "%lens.updateTest.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%lens.updateTest.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.linkedProjects": {
+          "markdownDescription": "%linkedProjects.description%",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "object"
+            ]
+          },
+          "title": "%linkedProjects.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.lru.capacity": {
+          "markdownDescription": "%lru.capacity.description%",
+          "default": null,
+          "type": [
+            "null",
+            "integer"
+          ],
+          "minimum": 0,
+          "maximum": 65535,
+          "title": "%lru.capacity.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.lru.query.capacities": {
+          "markdownDescription": "%lru.query.capacities.description%",
+          "default": {},
+          "type": "object",
+          "title": "%lru.query.capacities.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.notifications.cargoTomlNotFound": {
+          "markdownDescription": "%notifications.cargoTomlNotFound.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%notifications.cargoTomlNotFound.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.numThreads": {
+          "markdownDescription": "%numThreads.description%",
+          "default": null,
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 255
+            },
+            {
+              "type": "string",
+              "enum": [
+                "physical",
+                "logical"
+              ],
+              "enumDescriptions": [
+                "%numThreads.anyOf.2.enum.0%",
+                "%numThreads.anyOf.2.enum.1%"
+              ]
+            }
+          ],
+          "title": "%numThreads.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.procMacro.attributes.enable": {
+          "markdownDescription": "%procMacro.attributes.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%procMacro.attributes.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.procMacro.enable": {
+          "markdownDescription": "%procMacro.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%procMacro.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.procMacro.ignored": {
+          "markdownDescription": "%procMacro.ignored.description%",
+          "default": {},
+          "type": "object",
+          "title": "%procMacro.ignored.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.procMacro.processes": {
+          "markdownDescription": "%procMacro.processes.description%",
+          "default": 2,
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 255
+            },
+            {
+              "type": "string",
+              "enum": [
+                "physical"
+              ],
+              "enumDescriptions": [
+                "%procMacro.processes.anyOf.1.enum.0%"
+              ]
+            }
+          ],
+          "title": "%procMacro.processes.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.procMacro.server": {
+          "markdownDescription": "%procMacro.server.description%",
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "%procMacro.server.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.profiling.memoryProfile": {
+          "markdownDescription": "%profiling.memoryProfile.description%",
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "%profiling.memoryProfile.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.references.excludeImports": {
+          "markdownDescription": "%references.excludeImports.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%references.excludeImports.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.references.excludeTests": {
+          "markdownDescription": "%references.excludeTests.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%references.excludeTests.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.rename.showConflicts": {
+          "markdownDescription": "%rename.showConflicts.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%rename.showConflicts.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.runnables.bench.command": {
+          "markdownDescription": "%runnables.bench.command.description%",
+          "default": "bench",
+          "type": "string",
+          "title": "%runnables.bench.command.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.runnables.bench.overrideCommand": {
+          "markdownDescription": "%runnables.bench.overrideCommand.description%",
+          "default": null,
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "%runnables.bench.overrideCommand.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.runnables.command": {
+          "markdownDescription": "%runnables.command.description%",
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "%runnables.command.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.runnables.doctest.overrideCommand": {
+          "markdownDescription": "%runnables.doctest.overrideCommand.description%",
+          "default": null,
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "%runnables.doctest.overrideCommand.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.runnables.extraArgs": {
+          "markdownDescription": "%runnables.extraArgs.description%",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "%runnables.extraArgs.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.runnables.extraTestBinaryArgs": {
+          "markdownDescription": "%runnables.extraTestBinaryArgs.description%",
+          "default": [
+            "--nocapture"
+          ],
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "%runnables.extraTestBinaryArgs.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.runnables.test.command": {
+          "markdownDescription": "%runnables.test.command.description%",
+          "default": "test",
+          "type": "string",
+          "title": "%runnables.test.command.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.runnables.test.overrideCommand": {
+          "markdownDescription": "%runnables.test.overrideCommand.description%",
+          "default": null,
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "%runnables.test.overrideCommand.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.rustc.source": {
+          "markdownDescription": "%rustc.source.description%",
+          "default": null,
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "%rustc.source.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.rustfmt.extraArgs": {
+          "markdownDescription": "%rustfmt.extraArgs.description%",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "%rustfmt.extraArgs.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.rustfmt.overrideCommand": {
+          "markdownDescription": "%rustfmt.overrideCommand.description%",
+          "default": null,
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "%rustfmt.overrideCommand.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.rustfmt.rangeFormatting.enable": {
+          "markdownDescription": "%rustfmt.rangeFormatting.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%rustfmt.rangeFormatting.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.semanticHighlighting.comments.enable": {
+          "markdownDescription": "%semanticHighlighting.comments.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%semanticHighlighting.comments.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.semanticHighlighting.doc.comment.inject.enable": {
+          "markdownDescription": "%semanticHighlighting.doc.comment.inject.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%semanticHighlighting.doc.comment.inject.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.semanticHighlighting.nonStandardTokens": {
+          "markdownDescription": "%semanticHighlighting.nonStandardTokens.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%semanticHighlighting.nonStandardTokens.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.semanticHighlighting.operator.enable": {
+          "markdownDescription": "%semanticHighlighting.operator.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%semanticHighlighting.operator.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.semanticHighlighting.operator.specialization.enable": {
+          "markdownDescription": "%semanticHighlighting.operator.specialization.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%semanticHighlighting.operator.specialization.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.semanticHighlighting.punctuation.enable": {
+          "markdownDescription": "%semanticHighlighting.punctuation.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%semanticHighlighting.punctuation.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.semanticHighlighting.punctuation.separate.macro.bang": {
+          "markdownDescription": "%semanticHighlighting.punctuation.separate.macro.bang.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%semanticHighlighting.punctuation.separate.macro.bang.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.semanticHighlighting.punctuation.specialization.enable": {
+          "markdownDescription": "%semanticHighlighting.punctuation.specialization.enable.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%semanticHighlighting.punctuation.specialization.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.semanticHighlighting.strings.enable": {
+          "markdownDescription": "%semanticHighlighting.strings.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%semanticHighlighting.strings.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.signatureInfo.detail": {
+          "markdownDescription": "%signatureInfo.detail.description%",
+          "default": "full",
+          "type": "string",
+          "enum": [
+            "full",
+            "parameters"
+          ],
+          "enumDescriptions": [
+            "%signatureInfo.detail.enum.0%",
+            "%signatureInfo.detail.enum.1%"
+          ],
+          "title": "%signatureInfo.detail.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.signatureInfo.documentation.enable": {
+          "markdownDescription": "%signatureInfo.documentation.enable.description%",
+          "default": true,
+          "type": "boolean",
+          "title": "%signatureInfo.documentation.enable.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.typing.triggerChars": {
+          "markdownDescription": "%typing.triggerChars.description%",
+          "default": "=.",
+          "type": [
+            "null",
+            "string"
+          ],
+          "title": "%typing.triggerChars.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.vfs.extraIncludes": {
+          "markdownDescription": "%vfs.extraIncludes.description%",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "%vfs.extraIncludes.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.workspace.discoverConfig": {
+          "markdownDescription": "%workspace.discoverConfig.description%",
+          "default": null,
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "progressLabel": {
+                  "type": "string"
+                },
+                "filesToWatch": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "title": "%workspace.discoverConfig.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.workspace.symbol.search.excludeImports": {
+          "markdownDescription": "%workspace.symbol.search.excludeImports.description%",
+          "default": false,
+          "type": "boolean",
+          "title": "%workspace.symbol.search.excludeImports.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.workspace.symbol.search.kind": {
+          "markdownDescription": "%workspace.symbol.search.kind.description%",
+          "default": "only_types",
+          "type": "string",
+          "enum": [
+            "only_types",
+            "all_symbols"
+          ],
+          "enumDescriptions": [
+            "%workspace.symbol.search.kind.enum.0%",
+            "%workspace.symbol.search.kind.enum.1%"
+          ],
+          "title": "%workspace.symbol.search.kind.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.workspace.symbol.search.limit": {
+          "markdownDescription": "%workspace.symbol.search.limit.description%",
+          "default": 128,
+          "type": "integer",
+          "minimum": 0,
+          "title": "%workspace.symbol.search.limit.title%",
+          "scope": "resource"
+        },
+        "rust-analyzer.workspace.symbol.search.scope": {
+          "markdownDescription": "%workspace.symbol.search.scope.description%",
+          "default": "workspace",
+          "type": "string",
+          "enum": [
+            "workspace",
+            "workspace_and_dependencies"
+          ],
+          "enumDescriptions": [
+            "%workspace.symbol.search.scope.enum.0%",
+            "%workspace.symbol.search.scope.enum.1%"
+          ],
+          "title": "%workspace.symbol.search.scope.title%",
+          "scope": "resource"
+        }
+      }
+    },
     "languages": [
       {
         "id": "rust",

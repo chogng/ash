@@ -1,6 +1,13 @@
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { suite, test } from "mocha";
+import { readFile } from 'node:fs/promises';
+import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { Registry } from '../../../../../platform/registry/common/platform.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { parseExtensionManifest } from '../../../extensions/common/extensionManifest.js';
+import { AppServerLanguageSupport } from '../../browser/appServerLanguageSupport.js';
 import { Emitter, Event } from "../../../../../base/common/event.js";
 import { CancellationToken, CancellationTokenSource } from "../../../../../base/common/cancellation.js";
 import { URI } from "../../../../../base/common/uri.js";
@@ -17,10 +24,52 @@ import { IWorkspaceTrustManagementService, type WorkspaceTrustPermission } from 
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { type LanguageServerFeatureDto, type ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { TestWorkspaceService } from "../../../configuration/test/common/testServices.js";
 import { AppServerLanguageProviders } from "../../browser/appServerLanguageProviders.js";
+import { ILanguageServerLifecycleService } from '../../common/languageServerLifecycleService.js';
+
+suite('Rust configuration catalog forwarding', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('catalog defaults stay with the server while explicit settings and the memory default reach each directory', async () => {
+		const source = await readFile('extensions/rust/package.json', 'utf8');
+		const manifest = JSON.parse(source);
+		const nodes = [...parseExtensionManifest(source, { id: 'vscode.rust', name: 'rust', publisher: 'vscode', version: manifest.version }).contributes.configuration];
+		const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+		registry.updateConfigurations({ add: nodes, remove: [] });
+		using registration = toDisposable(() => registry.updateConfigurations({ add: [], remove: nodes }));
+		using workspace = new TestWorkspaceService({ id: 'rust', uri: URI.file('/project') });
+		const api = new FakeLanguageApi();
+		const requests: Parameters<ILanguageApi['servers']>[0][] = [];
+		api.onServers = request => requests.push(request);
+		await AppServerLanguageSupport.read(api, workspace, workspace);
+		assert.deepEqual(requests.at(-1)?.settings, { 'rust-analyzer': { cachePriming: { enable: false } } });
+		await workspace.write(JSON.stringify({ 'rust-analyzer.lru.capacity': 32, 'rust-analyzer.numThreads': 4, 'rust-analyzer.cargo.features': ['fast'], 'rust-analyzer.check.command': 'clippy' }));
+		await AppServerLanguageSupport.read(api, workspace, workspace);
+		assert.deepEqual(requests.at(-1)?.settings, { 'rust-analyzer': { cachePriming: { enable: false }, lru: { capacity: 32 }, numThreads: 4, cargo: { features: ['fast'] }, check: { command: 'clippy' } } });
+		await workspace.write('{}');
+		await AppServerLanguageSupport.read(api, workspace, workspace);
+		assert.deepEqual(requests.at(-1)?.settings, { 'rust-analyzer': { cachePriming: { enable: false } } }, 'removal retires explicit overrides without forwarding 193 upstream defaults');
+		const first = URI.file('/first');
+		const second = URI.file('/second');
+		const workspaceFile = URI.file('/folders.code-workspace');
+		using folders = new TestWorkspaceService({ id: 'folders', configuration: workspaceFile, folders: [first, second].map((uri, index) => ({ uri, id: String(index), name: String(index), index })) });
+		using fileProvider = new InMemoryFileSystemProvider();
+		using fileRegistration = folders.fileService.registerProvider('file', fileProvider);
+		await folders.fileService.createDirectory(URI.joinPath(first, '.vscode'));
+		await folders.fileService.createDirectory(URI.joinPath(second, '.vscode'));
+		await folders.fileService.writeFile({ resource: workspaceFile, content: '{ "settings": {} }' }, { create: true, overwrite: false });
+		await folders.fileService.writeFile({ resource: URI.joinPath(first, '.vscode', 'settings.json'), content: '{ "rust-analyzer.lru.capacity": 16 }' }, { create: true, overwrite: false });
+		await folders.initialize(folders.fileService);
+		requests.length = 0;
+		await AppServerLanguageSupport.read(api, folders, folders);
+		assert.deepEqual(requests.map(request => ({ dirId: request.dirId, settings: request.settings })), [
+			{ dirId: '0', settings: { 'rust-analyzer': { cachePriming: { enable: false }, lru: { capacity: 16 } } } },
+			{ dirId: '1', settings: { 'rust-analyzer': { cachePriming: { enable: false } } } },
+		], 'one folder override must not send another folder the registered null default');
+	});
+});
 
 function notifyFeatures(events: FakeServerEvents, features: readonly LanguageServerFeatureDto[], dirId?: string): void {
 	events.fire({
@@ -161,6 +210,7 @@ function createProviders(languages: LanguageFeaturesService, api: FakeLanguageAp
 	services.registerInstance(ILanguageFeaturesService, languages);
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IConfigurationService, workspace);
+	services.registerInstance(ILanguageServerLifecycleService, { start() { }, withActivity: (_document, _signal, operation) => operation() });
 	const events = options.events ?? new FakeServerEvents();
 	services.registerInstance(IServerEventApi, events);
 	services.registerInstance(IWorkspaceTrustManagementService, options.workspaceTrust ?? {
@@ -691,6 +741,24 @@ class FakeServerEvents implements IServerEventApi {
 	subscribe(listener: (event: ServerNotification) => void) { this.listener = listener; return { dispose: () => { this.listener = undefined; } }; }
 	fire(event: ServerNotification): void { if (event.method === 'language/serverCapabilities') this.capabilityNotifications.push(event.params); this.listener?.(event); }
 }
+
+test('idle release keeps demand providers available while explicit stop withdraws them', async () => {
+	using languages = new LanguageFeaturesService();
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	const api = new FakeLanguageApi();
+	const events = new FakeServerEvents();
+	using providers = createProviders(languages, api, workspace, { events });
+	using model = new TextModel('fn main() {}', { languageId: 'rust', resource: URI.file('/project/main.rs') });
+	await tick();
+	assert.equal(languages.hoverProvider.has(model), true);
+	api.negotiateCapabilities = false;
+	events.fire({ method: 'language/serverState', params: { server: 'rust', state: { type: 'idle' } } });
+	await tick();
+	assert.equal(languages.hoverProvider.has(model), true);
+	events.fire({ method: 'language/serverState', params: { server: 'rust', state: { type: 'stopped' } } });
+	await tick();
+	assert.equal(languages.hoverProvider.has(model), false);
+});
 
 test('Desktop providers discover custom routes and retire disabled routes after a profile change', async () => {
 	using languages = new LanguageFeaturesService();

@@ -531,6 +531,92 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	assert.equal(reopened.getValue('git.untrackedChanges'), 'separate');
 });
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`Rust numeric settings save numbers, automatic values and named modes directly (${locale})`, async () => {
+		using resources = new DisposableStore();
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		if (locale === 'zh-CN') setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		resources.add(toDisposable(resetNlsResolver));
+		const manifest = JSON.parse(await readFile('extensions/rust/package.json', 'utf8'));
+		const messages = JSON.parse(await readFile(`extensions/rust/package.nls${locale === 'en' ? '' : '.zh-CN'}.json`, 'utf8'));
+		const localized = JSON.stringify(manifest, (_key, value) => typeof value === 'string' ? value.replace(/%([^%]+)%/g, (match, key) => messages[key] ?? match) : value);
+		const registry = new ConfigurationRegistry();
+		registry.updateConfigurations({ add: [...parseExtensionManifest(localized, { id: 'vscode.rust', name: 'rust', publisher: 'vscode', version: manifest.version }).contributes.configuration], remove: [] });
+		const defaults = new DefaultSettings(registry);
+		for (const key of ['lru.capacity', 'numThreads', 'cachePriming.numThreads', 'procMacro.processes', 'completion.limit']) {
+			assert.equal(defaults.get(`rust-analyzer.${key}`).valueType, 'numberWithOptions', key);
+		}
+		const configuration = resources.add(new WorkspaceService({ registry }));
+		const root = h(browserEnvironment.window.document, 'div');
+		browserEnvironment.window.document.body.replaceChildren(root);
+		resources.add(toDisposable(() => root.remove()));
+		const contextView = resources.add(new BrowserContextViewService(root));
+		let actions: readonly IAction[] = [];
+		const errors: string[] = [];
+		const widgets = ['lru.capacity', 'numThreads'].map(key => {
+			const widget = resources.add(createSettingWidget(resources, root, defaults.get(`rust-analyzer.${key}`), {
+				configurationService: configuration, contextViewProvider: contextView,
+				contextMenuProvider: { showContextMenu: delegate => { actions = delegate.getActions(); } },
+				clipboardService: {
+					triggerPaste: () => undefined, read: async () => [], readText: async () => '', writeText: async () => { },
+					readFindText: async () => '', writeFindText: async () => { }, readImage: async () => new Uint8Array(),
+					readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
+				},
+				onOpenSettings: async () => { assert.fail('Numeric settings must not require JSON editing'); },
+				onStatus: (message, error) => { if (error) errors.push(message); },
+			}));
+			root.append(widget.domNode);
+			return widget;
+		});
+		const cache = widgets[0].domNode.querySelector<HTMLInputElement>('input')!;
+		const change = async (input: HTMLInputElement, value: string) => {
+			input.value = value;
+			input.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+			await nextTurn();
+		};
+		assert.equal(cache.type, 'number');
+		assert.equal(cache.placeholder, locale === 'zh-CN' ? '自动' : 'Automatic');
+		for (const value of [32, 0]) {
+			await change(cache, String(value));
+			assert.equal(JSON.parse((await configuration.read()).source)['rust-analyzer.lru.capacity'], value);
+		}
+		for (const value of ['-1', '65536', '1.5']) {
+			await change(cache, value);
+			assert.equal(cache.value, '0');
+			assert.equal(configuration.getValue('rust-analyzer.lru.capacity'), 0);
+		}
+		assert.equal(errors.length, 3);
+		assert.ok(errors[0].includes(locale === 'zh-CN' ? '整数' : 'whole number'));
+		await change(cache, '');
+		assert.equal(configuration.getValue('rust-analyzer.lru.capacity'), null);
+		assert.equal(JSON.parse((await configuration.read()).source)['rust-analyzer.lru.capacity'], undefined, 'automatic removes a redundant user override');
+		await change(cache, '32');
+		widgets[0].domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!.click();
+		await actions.find(action => action.id === 'settings.resetSetting')!.run();
+		await nextTurn();
+		assert.deepEqual(errors.slice(3), []);
+		assert.equal(JSON.parse((await configuration.read()).source)['rust-analyzer.lru.capacity'], undefined);
+		assert.equal(cache.value, '');
+		const threads = widgets[1].domNode.querySelector<HTMLInputElement>('input')!;
+		await change(threads, '4');
+		assert.equal(configuration.getValue('rust-analyzer.numThreads'), 4);
+		const mode = widgets[1].domNode.querySelector<HTMLButtonElement>('[role="combobox"]')!;
+		mode.click();
+		const choices = root.ownerDocument.getElementById(mode.getAttribute('aria-controls')!)!;
+		choices.querySelectorAll<HTMLElement>('[role="option"]')[3].click();
+		await nextTurn();
+		assert.equal(configuration.getValue('rust-analyzer.numThreads'), 'logical');
+		assert.equal(threads.value, '');
+		await change(threads, '2');
+		assert.equal(configuration.getValue('rust-analyzer.numThreads'), 2);
+		using reopened = new WorkspaceService({ registry, source: (await configuration.read()).source });
+		assert.equal(reopened.getValue('rust-analyzer.numThreads'), 2);
+		await configuration.write('{ "rust-analyzer.lru.capacity": 16, "rust-analyzer.numThreads": "physical" }');
+		assert.equal(cache.value, '16');
+		assert.equal(threads.placeholder, messages['numThreads.anyOf.2.enum.0']);
+	});
+}
+
 test('File exclusion Settings show defaults, persist disabled rules and reset through the widget', async () => {
 	using resources = new DisposableStore();
 	const configuration = resources.add(new WorkspaceService());
@@ -1270,7 +1356,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, GitConfiguration.rebaseWhenSync), 'extension.ash.git');
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.rebaseWhenSync)?.defaultValue, false);
 	assert.equal(defaults.get(GitConfiguration.rebaseWhenSync).valueType, 'boolean');
-	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'select', 'text', 'stringMap', 'complex'].includes(setting.valueType)), true);
+	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'numberWithOptions', 'select', 'text', 'stringMap', 'complex'].includes(setting.valueType)), true);
 	assert.equal(defaults.get('git.ignoredRepositories').valueType, 'complex');
 	const themeSetting = defaults.get(WorkbenchConfiguration.colorTheme);
 	assert.equal(themeSetting.valueType, 'select');
