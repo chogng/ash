@@ -45,7 +45,7 @@ def output_files(args):
 
 def tool_files():
     return sorted(path for path in SCRIPTS.glob("*.py") if not path.name.startswith("test_")) + [REQUIREMENTS, ROOT / ".agents/skills/variable-iconfont/scripts/vifont.py",
-        ROOT / "build/resources/icons/generate.ts", ROOT / "build/resources/icons/generate-to-ts.ts", ROOT / "pnpm-lock.yaml"]
+        ROOT / "build/resources/icons/generate.ts", ROOT / "build/resources/icons/generate-to-ts.ts", ROOT / "pnpm-lock.yaml", ROOT / ".prettierrc.toml"]
 
 
 def fingerprint(args):
@@ -75,6 +75,16 @@ def generate(source, typescript=None):
     arguments = [str(BUN), str(ROOT / "build/resources/icons/generate.ts"), "--source-directory", str(source)]
     arguments += ["--typescript-file", str(typescript)] if typescript else ["--catalog-only"]
     subprocess.run(arguments, cwd=ROOT, check=True)
+
+
+def write_manifest(path, table):
+    # Match the repository formatter before publication so font rebuilds do not
+    # alternate between expanded Python arrays and compact JSON coordinates.
+    # Staged paths under .build are ignored by the formatter. Use the shipped
+    # manifest's context while formatting stdin, without touching that live file.
+    formatted = subprocess.run([str(BUN), "fmt", "--config", str(ROOT / ".prettierrc.toml"), "--stdin-filepath", str(SOURCE / "font/manifest.json")],
+        input=(json.dumps(table, indent=2) + "\n").encode("utf-8"), stdout=subprocess.PIPE, cwd=ROOT, check=True)
+    path.write_bytes(formatted.stdout)
 
 
 def validate_layers(path, layers):
@@ -174,7 +184,7 @@ def compile_fonts(source, media, typescript, out):
     validate_layers(out / "variable/subset.woff2", layers)
     table.pop("svg", None)
     table.update({"codepoints": codepoints, "color": colors, "layers": layers, "sources": {source.stem: hashlib.sha256(source.read_text().strip().encode()).hexdigest() for source in sources}})
-    manifest.write_text(json.dumps(table, indent=2) + "\n")
+    write_manifest(manifest, table)
     media.mkdir(parents=True, exist_ok=True)
     shutil.copy2(report["woff2"], media / "lxicon.woff2")
     shutil.copy2(out / "variable/subset.woff2", media / "lxicon-variable.woff2")

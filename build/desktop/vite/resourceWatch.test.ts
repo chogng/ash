@@ -23,6 +23,22 @@ async function iconFixture(t: TestContext) {
 	return { root, sourceDirectory, outputFile: join(root, 'icons.ts'), fontDirectory: join(root, 'fonts') };
 }
 
+test('icon generation watches the manifest formatter configuration', async () => {
+	const config = join(repository, '.prettierrc.toml');
+	const watched: string[] = [];
+	const watcher = Object.assign(new EventEmitter(), { add(path: string) { watched.push(path); } });
+	const httpServer = new EventEmitter();
+	const plugin = productIconsPlugin();
+	const close = plugin.closeBundle;
+	if (typeof close !== 'function') throw new Error('Missing plugin cleanup');
+	try {
+		plugin.configureServer({ watcher, httpServer, ws: { send() { } }, config: { logger: { error() { } } } });
+		assert.ok(watched.includes(config));
+		assert.deepEqual(plugin.handleHotUpdate({ file: config }), []);
+	} finally { await Reflect.apply(close, {}, []); }
+	assert.equal(watcher.listenerCount('all'), 0);
+});
+
 test('all resource plugins remove subscriptions and cancel pending generation on shutdown', t => {
 	t.mock.timers.enable({ apis: ['setTimeout'] });
 	const repository = resolve(import.meta.dirname, '../../..');

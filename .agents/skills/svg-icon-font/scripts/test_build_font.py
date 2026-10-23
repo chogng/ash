@@ -2,6 +2,7 @@
 
 import json
 import math
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,7 +15,7 @@ from fontTools.ttLib.tables import otTables
 
 from build_font import UPM, build, normalize_svg
 from build_sessions_font import build_sessions
-from build_product_font import rebuild
+from build_product_font import ROOT, publish, rebuild, write_manifest
 
 
 class SvgFontTests(unittest.TestCase):
@@ -32,6 +33,39 @@ class SvgFontTests(unittest.TestCase):
         path = self.root / "manifest.json"
         path.write_text(json.dumps({"family": "Ash Test Icons", "glyphs": sources}))
         return path
+
+    def test_product_manifest_formatting_preserves_data_and_avoids_republication(self):
+        path = self.root / "manifest.json"
+        table = {"family": "Ash Test Icons", "layers": {"ash-mark": [
+            {"id": "petal-north", "origin": [0.5, 0.2333984375]},
+        ]}}
+        write_manifest(path, table)
+        content = path.read_bytes()
+        self.assertEqual(json.loads(content), table)
+        self.assertIn(b'"origin": [0.5, 0.2333984375]', content)
+        self.assertNotIn(b"\r", content)
+        destination = self.root / "published.json"
+        self.assertTrue(publish(destination, content))
+        modified = destination.stat().st_mtime_ns
+        write_manifest(path, table)
+        self.assertFalse(publish(destination, path.read_bytes()))
+        self.assertEqual(destination.stat().st_mtime_ns, modified)
+
+    def test_product_manifest_formatter_failure_keeps_previous_contents(self):
+        path = self.root / "manifest.json"
+        path.write_bytes(b"previous generation")
+        with patch("build_product_font.subprocess.run", side_effect=subprocess.CalledProcessError(1, "formatter")):
+            with self.assertRaises(subprocess.CalledProcessError):
+                write_manifest(path, {"layers": {}})
+        self.assertEqual(path.read_bytes(), b"previous generation")
+
+    def test_product_manifest_formats_ignored_build_staging_paths(self):
+        with tempfile.TemporaryDirectory(prefix="manifest-format-", dir=ROOT / ".build") as temporary:
+            path = Path(temporary) / "manifest.json"
+            table = {"layers": {"ash-mark": [{"origin": [0.5, 0.2333984375]}]}}
+            write_manifest(path, table)
+            self.assertEqual(json.loads(path.read_bytes()), table)
+            self.assertIn(b'"origin": [0.5, 0.2333984375]', path.read_bytes())
 
     def test_stroked_circle_keeps_its_hole_and_metrics(self):
         source = self.svg('<circle cx="8" cy="8" r="5" fill="none" stroke="currentColor"/>')

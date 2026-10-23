@@ -45,6 +45,7 @@ export function productIconsPlugin(options: ProductIconsPluginOptions = {}): Ash
 		resolve(repository, 'build/resources/icons/generate.ts'),
 		resolve(repository, 'build/resources/icons/generate-to-ts.ts'),
 		resolve(repository, 'pnpm-lock.yaml'),
+		resolve(repository, '.prettierrc.toml'),
 	];
 	const accepts = (path: string): boolean => isDirectSvgChild(path, sourceDirectory)
 		|| samePath(dirname(resolve(path)), scripts) && extname(path) === '.py' && !basename(path).startsWith('test_')
