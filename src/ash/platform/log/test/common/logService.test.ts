@@ -26,6 +26,19 @@ test("LogService isolates a failing sink", () => {
 	assert.equal(sinkErrors.length, 1);
 });
 
+test('LogService preserves diagnostics when both a sink and its failure reporter throw', () => {
+	const entries: LogEntry[] = [];
+	let reports = 0;
+	using service = new LogService({
+		sinks: [{ log: () => { throw new Error('console transport disconnected'); } }, { log: entry => entries.push(entry) }],
+		onSinkError: () => { reports++; throw new Error('failure reporter disconnected'); },
+	});
+	assert.doesNotThrow(() => service.error('runtime', 'original failure'));
+	service.info('runtime', 'still usable');
+	assert.deepEqual(entries.map(entry => entry.message), ['original failure', 'still usable']);
+	assert.equal(reports, 2);
+});
+
 test('LogService defaults to Info and changes production verbosity independently of consumers', () => {
 	const entries: LogEntry[] = [];
 	using service = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });

@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { suite, test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
+import { Event } from '../../../../base/common/event.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { IMainProcessService } from '../../../ipc/common/mainProcessService.js';
 import { LogLevel, type LogEntry } from '../../common/log.js';
@@ -14,6 +16,83 @@ import { LoggerService } from '../../node/loggerService.js';
 suite('Desktop log files', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	const entry = (message: string): LogEntry => ({ timestampMillis: 123, category: 'test', level: LogLevel.Info, message, error: undefined });
+
+	test('a stalled Main write bounds the renderer backlog and reports omitted diagnostics before flush', async () => {
+		const firstWrite = new DeferredPromise<void>();
+		const started = new DeferredPromise<void>();
+		const entries: LogEntry[] = [];
+		let flushes = 0;
+		using services = new InstantiationService();
+		services.registerInstance(IMainProcessService, {
+			_serviceBrand: undefined,
+			getChannel: () => ({
+				call: async <T>(command: string, arg?: unknown): Promise<T> => {
+					if (command === 'log') {
+						entries.push(arg as LogEntry);
+						if (entries.length === 1) { void started.complete(); await firstWrite.p; }
+					} else if (command === 'flush') { flushes++; }
+					return undefined as T;
+				},
+				listen: () => Event.None,
+			}),
+			registerChannel: () => { throw new Error('Unexpected channel registration'); },
+		});
+		using client = services.createInstance(LoggerChannelClient);
+		try {
+			for (let index = 0; index < 10000; index++) { client.log(entry(`diagnostic ${index}`)); }
+			await started.p;
+			assert.equal(entries.length, 1, 'Only one IPC write may remain in flight while Main is stalled');
+		} finally { await firstWrite.complete(); }
+		await client.flush();
+		assert.deepEqual(entries.slice(0, 128).map(value => value.message), Array.from({ length: 128 }, (_, index) => `diagnostic ${index}`));
+		assert.equal(entries.length, 129);
+		assert.equal(entries[128]!.level, LogLevel.Warning);
+		assert.match(entries[128]!.message, /9872/);
+		assert.equal(flushes, 1);
+		client.log(entry('recovered'));
+		await client.flush();
+		assert.equal(entries.at(-1)!.message, 'recovered');
+	});
+
+	test('an oversized diagnostic cannot bypass the pending text budget or block later writes', async () => {
+		const entries: LogEntry[] = [];
+		using services = new InstantiationService();
+		services.registerInstance(IMainProcessService, {
+			_serviceBrand: undefined,
+			getChannel: () => ({
+				call: async <T>(command: string, arg?: unknown): Promise<T> => { if (command === 'log') { entries.push(arg as LogEntry); } return undefined as T; },
+				listen: () => Event.None,
+			}),
+			registerChannel: () => { throw new Error('Unexpected channel registration'); },
+		});
+		using client = services.createInstance(LoggerChannelClient);
+		client.log(entry('x'.repeat(1024 * 1024)));
+		client.log(entry('still writable'));
+		await client.flush();
+		assert.equal(entries.length, 2);
+		assert.equal(entries[0]!.level, LogLevel.Warning);
+		assert.match(entries[0]!.message, /1/);
+		assert.equal(entries[1]!.message, 'still writable');
+	});
+
+	test('a broken transport and console cannot recursively report every queued failure', async () => {
+		const failure = new Error('Disconnected log transport');
+		using services = new InstantiationService();
+		services.registerInstance(IMainProcessService, {
+			_serviceBrand: undefined,
+			getChannel: () => ({ call: async () => { throw failure; }, listen: () => Event.None }),
+			registerChannel: () => { throw new Error('Unexpected channel registration'); },
+		});
+		using client = services.createInstance(LoggerChannelClient);
+		const original = console.error;
+		let reports = 0;
+		console.error = () => { reports++; throw new Error('Disconnected console'); };
+		try {
+			for (let index = 0; index < 1000; index++) { client.log(entry(`diagnostic ${index}`)); }
+			await assert.rejects(client.flush(), error => error === failure);
+			assert.equal(reports, 1);
+		} finally { console.error = original; }
+	});
 
 	test('window channel persists ordered structured logs and error stacks before flush', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-logs-'));

@@ -157,6 +157,12 @@
 	border-radius: var(--ash-cornerRadius-small);
 }
 
+/* Absolute rows need the same inset as content-sized rows inside the padded list. */
+.ash-quick-pick-list-virtualized .ash-list-row {
+	margin-left: var(--ash-spacing-size60);
+	margin-right: calc(var(--ash-scrollbar-size) + var(--ash-spacing-size60));
+}
+
 .ash-quick-pick-row-content {
 	display: flex;
 	min-height: 34px;

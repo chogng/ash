@@ -241,6 +241,7 @@ export class ListView<T> extends Disposable {
 	}
 
 	private renderRows(reason: "content" | "viewport" = "content"): void {
+		if (this.isVirtualized && this.element.style.position !== 'relative') this.element.style.position = 'relative';
 		const range = this.renderRange();
 		const rows: HTMLDivElement[] = [];
 		const visibleIds = new Set<string>();
@@ -341,6 +342,10 @@ export class ListView<T> extends Disposable {
 
 	private positionRow(row: HTMLDivElement, index: number): void {
 		if (!this.isVirtualized) {
+			row.style.removeProperty('position');
+			row.style.removeProperty('top');
+			row.style.removeProperty('right');
+			row.style.removeProperty('left');
 			return;
 		}
 		row.style.position = "absolute";

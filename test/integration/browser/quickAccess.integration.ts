@@ -359,7 +359,7 @@ resources.add(addDisposableListener(document.querySelector('#files')!, 'click', 
 		...Array.from({ length: 60 }, (_, index) => ({
 			label: `file-${index}.ts`,
 			description: '/workspace/src/a-long-directory-name/another-long-directory-name/browser',
-			detail: index === 0 ? 'Additional information about this file' : undefined,
+			detail: index === 0 && !parameters.has('singleLineRows') ? 'Additional information about this file' : undefined,
 		})),
 	];
 	picker.onDidAccept(() => {

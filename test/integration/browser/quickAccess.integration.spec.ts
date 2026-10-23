@@ -1,5 +1,26 @@
 import { expect, test } from '@playwright/test';
 
+test('Quick Access virtualizes single-line results while retaining keyboard and ARIA positions', async ({ page }) => {
+	await page.goto('/quickAccess.html?singleLineRows');
+	await page.getByRole('button', { name: 'Open files', exact: true }).click();
+	const picker = page.getByRole('dialog');
+	const input = picker.getByRole('combobox');
+	await input.fill('file-');
+	const active = picker.locator('.ash-list-row.is-active');
+	await expect(active).toHaveAttribute('aria-setsize', '60');
+	await expect(active).toHaveAttribute('aria-posinset', '1');
+	await expect(input).toHaveAttribute('aria-activedescendant', await active.getAttribute('id') ?? '');
+	expect(await picker.getByRole('option').count()).toBeLessThan(40);
+	await input.press('ArrowUp');
+	await expect(active.locator('.ash-quick-pick-row-label')).toHaveText('file-59.ts');
+	await expect(active).toHaveAttribute('aria-posinset', '60');
+	await expect(input).toHaveAttribute('aria-activedescendant', await active.getAttribute('id') ?? '');
+	expect(await picker.getByRole('option').count()).toBeLessThan(40);
+	await input.press('Enter');
+	await expect(picker).toHaveCount(0);
+	await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText('file-59.ts');
+});
+
 for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', theme: 'dark' }, { locale: 'en', theme: 'hc' }]) {
 	test(`Quick Pick clears input through its toolbar and retains focus (${variant.locale}, ${variant.theme})`, async ({ page }, testInfo) => {
 		await page.goto(`/quickAccess.html?${new URLSearchParams(variant)}`);

@@ -107,7 +107,7 @@ export class List<T> extends Disposable {
 			smoothScrolling: options.smoothScrolling,
 			domFocusable: options.domFocusable,
 			getId: options.getId,
-			getHeight: options.getHeight,
+			get getHeight() { return options.getHeight; },
 			dnd: options.dnd,
 			getDragElements: (item, index) => this._selectionIndexes.includes(index) ? this.selection : [item],
 			accessibilityProvider: options.accessibilityProvider,

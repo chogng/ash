@@ -1584,6 +1584,7 @@
     "output.defaultLevelTooltip": "为后续窗口和日志记录器保存此记录级别",
     "output.help.defaultLevel": "在“设置记录级别”中，“设为默认”会为后续窗口保存当前级别。对于扩展日志，此操作仅应用于该扩展。手动选择过级别的日志记录器会保留其选择。",
     "logs.parseFailed": "无法解析启动日志级别。",
+    "logs.pendingLimit": "待写入日志超出上限，已省略 {0} 条日志。",
     "logs.readFailed": "无法读取启动日志级别。",
     "logs.reloadFailed": "无法重新加载默认日志级别。",
     "logs.invalidLevels": "log-level 必须是字符串或日志级别字符串数组。",

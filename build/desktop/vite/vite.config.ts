@@ -166,6 +166,9 @@ export default defineConfig(({ mode, command }) => {
 			host: "127.0.0.1",
 			port: developmentPort,
 			strictPort: true,
+			// Ash owns runtime diagnostics. Vite's console forwarding can throw on HMR
+			// disconnect and feed those failures back through the window error handler.
+			forwardConsole: false,
 			// Transform the product entry graphs while the host starts, before its first navigation.
 			warmup: {
 				clientFiles: Object.entries(inputs)

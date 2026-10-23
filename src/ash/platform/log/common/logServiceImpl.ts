@@ -104,7 +104,13 @@ export class LogService extends AbstractLoggerService<LogService> implements ILo
 		}
 		for (const sink of this.sinks) {
 			try { sink.log(entry); }
-			catch (sinkError) { this.onSinkError(entry, sinkError); }
+			catch (sinkError) {
+				try { this.onSinkError(entry, sinkError); }
+				catch {
+					// A disconnected console can also break the failure reporter. Keep the
+					// original entry flowing to other sinks without feeding the global error handler.
+				}
+			}
 		}
 	}
 }
