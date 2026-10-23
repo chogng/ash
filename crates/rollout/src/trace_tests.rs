@@ -1,8 +1,10 @@
-use super::*;
+use crate::LocalStateRepository;
 use ash_core::CreateThreadRequest;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
-use ash_rollout::LocalStateRepository;
+use ash_rollout_trace::ROLLOUT_TRACE_FORMAT_VERSION;
+use ash_rollout_trace::capture_session_trace;
+use ash_rollout_trace::read_session_trace_page;
 use ash_state::StateRuntime;
 use std::fs;
 use std::sync::atomic::AtomicU64;
@@ -10,7 +12,7 @@ use std::sync::atomic::Ordering;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-pub(super) fn temporary_root() -> std::path::PathBuf {
+fn temporary_root() -> std::path::PathBuf {
     // Parallel tests can observe the same clock tick; the ordinal gives each capture its own root.
     static NEXT_ROOT: AtomicU64 = AtomicU64::new(0);
     std::env::temp_dir().join(format!(
@@ -51,6 +53,9 @@ fn trace_groups_thread_streams_by_session_id() {
     assert_eq!(trace.format_version, ROLLOUT_TRACE_FORMAT_VERSION);
     assert_eq!(trace.threads[0].events[0].sequence, 1);
     assert_eq!(trace.threads[0].thread_id, thread_id);
+    // Windows cannot delete the SQLite files while any repository owner holds a connection.
+    drop(thread_store);
+    drop(repository);
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -157,5 +162,7 @@ fn trace_contains_the_complete_nested_history_prefix_closure() {
             .map(|thread| thread.events.len())
             .sum::<usize>()
     );
+    drop(threads);
+    drop(repository);
     fs::remove_dir_all(root).unwrap();
 }

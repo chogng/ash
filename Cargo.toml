@@ -78,6 +78,7 @@ members = [
     "crates/app-server-diff-live",
     "crates/app-server-daemon",
     "crates/app-server-client",
+    "crates/app-server-client-tests",
     "crates/app-server-test-client",
     "crates/app-server-protocol",
     "crates/app-server-protocol-noop-macros",

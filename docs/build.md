@@ -568,6 +568,28 @@ python -B scripts/check_blob_size.py --head HEAD
 
 ### 历史测量与适用范围
 
+#### 2026-10-22：客户端测试依赖成本
+
+在 macOS arm64、24 GiB 内存、Rust 1.99.1、`ci-test`、4 个 Cargo jobs 下，在实施拆分前，比较 `ash-app-server-client` 的 47 项测试与忽略目录中的轻量原型。原型保留协议、通知、trace、stdio 和事件通道的 32 项原有测试，隔离另 15 项内嵌 App Server 契约测试及其依赖；测量阶段未修改正式客户端源码或 manifest。第三方依赖沿用同一份锁定版本。两组交替测量各三轮，以下为中位数。
+
+| 场景                                      |       拆分前测试 |         轻量原型 |
+| ----------------------------------------- | ---------------: | ---------------: |
+| 独立空输出目录编译测试程序，`--no-run`    |        328.48 秒 |         85.35 秒 |
+| 修改同一个 MockTransport 单测后编译       |          2.73 秒 |          1.41 秒 |
+| 触碰服务端源码时间戳后编译                |          4.62 秒 |          0.59 秒 |
+| 已缓存、无源码改动的编译，`--no-run`      |          0.88 秒 |          0.54 秒 |
+| 已缓存，通过 `just test` 运行同一个单测   |          2.06 秒 |          0.56 秒 |
+| 已缓存，通过 `just test` 运行各自全部测试 | 7.19 秒（47 项） | 0.77 秒（32 项） |
+| 测试可执行程序体积                        |       211.12 MiB |        11.32 MiB |
+
+冷编译范围分别为 323.73–364.53 秒与 84.06–86.44 秒，使用新建的独立 Cargo 输出目录，保留系统和依赖源码缓存，不清空共享 `ci-test` 产物。`time` 报告的最大 RSS 中位数为 3170 与 2022 MiB，不是所有并发编译进程的内存总和。单测编辑将返回错误请求 ID 从 2 改为 3，编译日志确认两组都只重编客户端，并运行同一断言；每轮随后恢复原内容。服务端样本只改变时间戳，现有测试重编 runtime、host 和 client，原型没有编译单元失效；这不代表真实服务端功能编辑的重编译耗时。
+
+一次原始无改动样本被同期 UI 提交触发的 Git 构建标识更新干扰，未用于上述缓存比较。缓存命令复测固定 `ASH_BUILD_COMMIT`，三轮均确认没有发生编译；同期提交未改变 Rust 或 Cargo 输入。`just test` 的现有依赖图还会准备文件监听、Markdown Math、LLDB、Code Mode 和 managed lifecycle 辅助程序，其准备成本计入实际命令行，未计入 `--no-run` 编译行。
+
+结果支持为客户端提供独立的轻量测试入口，收益主要是减少冷编译依赖和避开服务端测试的运行成本；缓存充分时的纯编译差距较小。15 项服务端契约测试仍须保留，不能将原型数据解释为完整回归、产品构建或其他平台提速。拆分前 47 项和原型 32 项测试均实际通过。原始日志、Cargo timings、逐轮数据、原型与脚本位于 `.build/client-test-cost/`，汇总为 `summary.json`、`report.json` 和 `warm-commands.json`；普通客户端构建的三轮背景测量另见 `.build/build-health/ash-app-server-client-ci-test-gt2380ts/report.json`。
+
+随后将 32 项轻量测试保留在 `ash-app-server-client`，15 项内嵌服务端契约测试迁入仅含测试的 `ash-app-server-client-tests`。客户端不再通过无条件 `dev-dependencies` 或 `cfg(test)` 启用服务端实现；契约测试显式启用既有 `in-process` feature。`just test ash-app-server-client --lib` 使用 217 个本机依赖包，`just verify ash-app-server-client --lib` 通过既有 `test-packages` 配置执行两组测试，CI 的 `stdio-lifecycle` 作业显式运行契约测试包。Bazel 为该测试包提供单独的 feature 客户端目标。macOS arm64 上完整验证的 32 + 15 项测试、两个包的全目标 warning 检查、`just dependencies`（234 成员、89 项已审核多版本）和脚本测试（217 项，1 项按平台跳过）通过；Bazel 仅验证目标加载和直接依赖查询，未运行其编译或其他操作系统。上述计时仍是拆分前与原型的对照，未重新测量最终拆分后的完整冷编译成本。
+
 #### macOS arm64 开发构建（2026-10-01～16）
 
 以下仅保留能说明当前构建选择的测量。条件均为 macOS arm64、Rust 1.98.0、`dev-small`、12 个任务、三轮中位数；不能作为其他机器或当前版本的耗时预算。

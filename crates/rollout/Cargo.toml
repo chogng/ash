@@ -19,5 +19,8 @@ ash-protocol = { workspace = true }
 ash-state = { workspace = true }
 ash-thread-store = { workspace = true }
 
+[dev-dependencies]
+ash-rollout-trace = { workspace = true }
+
 [lints]
 workspace = true

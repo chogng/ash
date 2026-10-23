@@ -438,13 +438,9 @@ name = "ash-app-server-client"
 version = "0.1.0"
 dependencies = [
  "ash-app-server",
- "ash-app-server-diff",
  "ash-app-server-protocol",
  "ash-app-server-transport",
- "ash-async-utils",
  "ash-client",
- "ash-core",
- "ash-core-api",
  "ash-diagnostics",
  "ash-feedback-contract",
  "ash-memories",
@@ -458,6 +454,24 @@ dependencies = [
  "serde",
  "serde_json",
  "zeroize",
+]
+
+[[package]]
+name = "ash-app-server-client-tests"
+version = "0.1.0"
+dependencies = [
+ "ash-app-server",
+ "ash-app-server-client",
+ "ash-app-server-diff",
+ "ash-app-server-protocol",
+ "ash-async-utils",
+ "ash-client",
+ "ash-core",
+ "ash-core-api",
+ "ash-memory-diagnostics",
+ "ash-protocol",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -2870,6 +2884,7 @@ dependencies = [
  "ash-core",
  "ash-core-api",
  "ash-protocol",
+ "ash-rollout-trace",
  "ash-state",
  "ash-thread-store",
 ]
@@ -2878,12 +2893,9 @@ dependencies = [
 name = "ash-rollout-trace"
 version = "0.1.0"
 dependencies = [
- "ash-core",
  "ash-core-api",
  "ash-history",
  "ash-protocol",
- "ash-rollout",
- "ash-state",
  "ash-thread-store",
  "ash-utils-string",
  "getrandom 0.2.17",

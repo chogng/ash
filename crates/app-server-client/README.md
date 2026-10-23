@@ -2,7 +2,7 @@
 
 `ash-app-server-client` 隔离 App Server 连接和 typed protocol 调用，具体职责只有三项：
 
-1. `AppServerSession` 管理 stdio 连接、initialize/schema 校验、事件流和显式 shutdown；通过 `process_id()` 暴露所拥有的子进程身份。进程内连接只在本 crate 测试或显式启用 `in-process` 特性的契约测试中编译。
+1. `AppServerSession` 管理 stdio 连接、initialize/schema 校验、事件流和显式 shutdown；通过 `process_id()` 暴露所拥有的子进程身份。进程内连接只在显式启用 `in-process` 特性时编译；服务端契约测试由 `ash-app-server-client-tests` 承载。
 2. `AppServerClient<T>` 提供由 protocol crate 定义的 typed request/response 接口，不复制路径解析、目录授权或运行时策略。
 3. `StdioAppServerCommand` 只携带产品选择的进程参数和环境；目录、cwd 与 capability 通过正式协议传递。
 
@@ -16,6 +16,10 @@ EOF 清理回归同时覆盖 Windows 与 Unix 的 shutdown、Drop、协议不兼
 
 初始化遇到 `-32600` 与 `data.kind = ServerShuttingDown` 时保留为 `ClientError::ServerShuttingDown`，不从消息文字猜测停止状态。连接重试期限与用户提示由 CLI 或其他产品客户端拥有。
 
+客户端自身的协议、通知、trace 和 stdio 测试使用轻量依赖；内嵌服务端契约测试拥有独立的测试依赖范围。完整验证同时执行两组测试：
+
 ```text
-just test ash-app-server-client
+just test ash-app-server-client --lib
+just test ash-app-server-client-tests --lib
+just verify ash-app-server-client --lib
 ```

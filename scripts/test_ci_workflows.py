@@ -487,6 +487,7 @@ class CiWorkflowTests(unittest.TestCase):
             "cli/tests/stdio.rs",
             "cli/tests/support/ssh.rs",
             "crates/app-server-client/src/session_stdio.rs",
+            "crates/app-server-client-tests/src/session_tests.rs",
             "crates/remote-connections/src/ssh.rs",
             ".github/workflows/rust-warnings.yml",
         ):
@@ -507,6 +508,9 @@ class CiWorkflowTests(unittest.TestCase):
         self.assertIn("ASH_RG_PATH={ripgrep}", lifecycle)
         self.assertIn("-p ash-cli --test stdio --profile ci-test --locked", lifecycle)
         self.assertIn("-p ash-app-server-client -p ash-remote-connections", lifecycle)
+        self.assertIn(
+            "-p ash-app-server-client-tests --lib --profile ci-test --locked", lifecycle
+        )
         self.assertIn("--lib --profile ci-test --locked", lifecycle)
         stdio_run = lifecycle.split(
             "- name: Test real stdio, reconnect and OpenSSH process cleanup", 1

@@ -13,3 +13,6 @@ pub use repository::LocalStateRepository;
 #[cfg(test)]
 #[path = "repository_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod trace_tests;

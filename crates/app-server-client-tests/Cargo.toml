@@ -1,0 +1,26 @@
+[package]
+name = "ash-app-server-client-tests"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[dev-dependencies]
+ash-app-server-client = { workspace = true, features = ["in-process"] }
+ash-app-server = { workspace = true }
+ash-app-server-diff = { workspace = true }
+ash-app-server-protocol = { workspace = true }
+ash-async-utils = { workspace = true }
+ash-client = { workspace = true }
+ash-core = { workspace = true }
+ash-memory-diagnostics = { workspace = true }
+ash-protocol = { workspace = true }
+core-api = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

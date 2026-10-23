@@ -6,6 +6,24 @@ use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
 use std::fs;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+
+fn temporary_root() -> std::path::PathBuf {
+    // Parallel tests can observe the same clock tick; the ordinal gives each capture its own root.
+    static NEXT_ROOT: AtomicU64 = AtomicU64::new(0);
+    std::env::temp_dir().join(format!(
+        "ash-rollout-trace-{}-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+        NEXT_ROOT.fetch_add(1, Ordering::Relaxed)
+    ))
+}
 
 fn context() -> InferenceContext {
     InferenceContext {
@@ -23,7 +41,7 @@ fn request() -> ModelRequest {
 
 #[test]
 fn diagnostic_cancellation_preserves_ordered_messages_and_late_phase() {
-    let root = crate::tests::temporary_root();
+    let root = temporary_root();
     let recorder = TraceRecorder::new(Some(root.clone()));
     let mut attempt = recorder.start_attempt(context(), &request());
     attempt.output(&ModelStreamEvent::MessageStarted {
@@ -78,7 +96,7 @@ fn diagnostic_cancellation_preserves_ordered_messages_and_late_phase() {
 
 #[test]
 fn diagnostic_cancellation_retains_partial_output_and_survives_reopen() {
-    let root = crate::tests::temporary_root();
+    let root = temporary_root();
     let recorder = TraceRecorder::new(Some(root.clone()));
     let mut attempt = recorder.start_attempt(context(), &request());
     attempt.prepared_request(&request());
@@ -143,7 +161,7 @@ fn diagnostic_cancellation_retains_partial_output_and_survives_reopen() {
 
 #[test]
 fn diagnostic_omission_and_unavailable_storage_do_not_fail_attempts() {
-    let root = crate::tests::temporary_root();
+    let root = temporary_root();
     fs::create_dir_all(&root).unwrap();
     let blocked = root.join("file");
     fs::write(&blocked, "not a directory").unwrap();
@@ -185,7 +203,7 @@ fn diagnostic_omission_and_unavailable_storage_do_not_fail_attempts() {
 
 #[test]
 fn diagnostic_recovery_does_not_overwrite_orphaned_payloads() {
-    let root = crate::tests::temporary_root();
+    let root = temporary_root();
     let recorder = TraceRecorder::new(Some(root.clone()));
     recorder.start_attempt(context(), &request()).fail("first");
     assert_eq!(
@@ -220,7 +238,7 @@ fn diagnostic_recovery_does_not_overwrite_orphaned_payloads() {
 #[cfg(unix)]
 #[test]
 fn diagnostic_payload_reads_reject_replaced_directories() {
-    let root = crate::tests::temporary_root();
+    let root = temporary_root();
     let recorder = TraceRecorder::new(Some(root.clone()));
     recorder.start_attempt(context(), &request()).fail("first");
     let page = recorder.read(&context().session_id, 0, 10).unwrap();
@@ -241,7 +259,7 @@ fn diagnostic_payload_reads_reject_replaced_directories() {
 
 #[test]
 fn trace_recorder_reports_actual_directory_state_without_creating_capture_data() {
-    let root = crate::tests::temporary_root();
+    let root = temporary_root();
     assert_eq!(TraceRecorder::default().state(), RecorderState::Disabled);
     let recorder = TraceRecorder::new(Some(root.clone()));
     assert_eq!(
@@ -272,7 +290,7 @@ fn hook_evidence_is_opt_in_and_reopens_with_session_identity() {
             .events
             .is_empty()
     );
-    let root = crate::tests::temporary_root();
+    let root = temporary_root();
     let recorder = TraceRecorder::new(Some(root.clone()));
     recorder.record_hook(&scope.session_id, &scope.thread_id, None, "run", &evidence);
     drop(recorder);
@@ -345,7 +363,7 @@ fn disabled_observations_never_initialize_a_worker_or_copy_body_evidence() {
 
 #[test]
 fn reading_an_enabled_session_before_its_first_observation_is_not_a_storage_failure() {
-    let root = crate::tests::temporary_root();
+    let root = temporary_root();
     let recorder = TraceRecorder::new(Some(root.clone()));
     recorder
         .start_attempt(context(), &request())
@@ -369,7 +387,7 @@ fn reading_an_enabled_session_before_its_first_observation_is_not_a_storage_fail
 
 #[test]
 fn exhausted_event_budget_cannot_accumulate_unreferenced_body_files() {
-    let root = crate::tests::temporary_root();
+    let root = temporary_root();
     let recorder = TraceRecorder::new(Some(root.clone()));
     let mut attempt = recorder.start_attempt(context(), &request());
     assert_eq!(
@@ -413,7 +431,7 @@ fn exhausted_event_budget_cannot_accumulate_unreferenced_body_files() {
 
 #[test]
 fn shutting_down_cannot_accept_unpersisted_late_observations() {
-    let root = crate::tests::temporary_root();
+    let root = temporary_root();
     let recorder = Arc::new(TraceRecorder::new(Some(root.clone())));
     let attempts = (0..4)
         .map(|_| recorder.start_attempt(context(), &request()))
@@ -457,7 +475,7 @@ fn shutting_down_cannot_accept_unpersisted_late_observations() {
 
 #[test]
 fn blocked_storage_cannot_block_observers_and_queue_losses_remain_visible() {
-    let root = crate::tests::temporary_root();
+    let root = temporary_root();
     let recorder = TraceRecorder::new(Some(root.clone()));
     let mut attempt = recorder.start_attempt(context(), &request());
     assert_eq!(
@@ -523,7 +541,7 @@ fn blocked_storage_cannot_block_observers_and_queue_losses_remain_visible() {
 
 #[test]
 fn active_attempts_and_partial_buffers_share_the_profile_memory_budget() {
-    let root = crate::tests::temporary_root();
+    let root = temporary_root();
     let recorder = TraceRecorder::new(Some(root.clone()));
     let attempts = (0..crate::worker::MAX_ACTIVE_ATTEMPTS + 1)
         .map(|_| recorder.start_attempt(context(), &request()))
@@ -555,7 +573,7 @@ fn active_attempts_and_partial_buffers_share_the_profile_memory_budget() {
 
 #[test]
 fn retired_sessions_reject_late_callbacks_and_cleanup_their_owned_capture() {
-    let root = crate::tests::temporary_root();
+    let root = temporary_root();
     let recorder = TraceRecorder::new(Some(root.clone()));
     let mut attempt = recorder.start_attempt(context(), &request());
     assert_eq!(

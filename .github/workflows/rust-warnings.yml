@@ -226,6 +226,12 @@ jobs:
           -p ash-app-server-client -p ash-remote-connections
           --lib --profile ci-test --locked
 
+      - name: Test embedded App Server client contracts
+        timeout-minutes: 15
+        run: >-
+          python3 -B scripts/cargo.py --deny-warnings test
+          -p ash-app-server-client-tests --lib --profile ci-test --locked
+
   tui:
     name: TUI tests
     needs: changes
