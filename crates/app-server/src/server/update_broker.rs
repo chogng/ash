@@ -1164,7 +1164,7 @@ impl UpdateBroker {
     fn publish_next_extension_packages_generation(&self) -> u64 {
         let previous = self
             .extension_packages_generation
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |generation| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |generation| {
                 Some(generation.saturating_add(1))
             })
             .unwrap_or_else(|generation| generation);

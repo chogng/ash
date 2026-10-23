@@ -1585,7 +1585,11 @@ fn windows_powershell_without_a_profile_reports_trusted_commands() {
         }
         assert!(
             Instant::now() < deadline,
-            "PowerShell prompt did not report its input boundary and shell capabilities"
+            "PowerShell prompt did not report its input boundary and shell capabilities: \
+             input_boundary={saw_input_boundary}, exited={}, exit_code={:?}, integration={:?}",
+            status.exited,
+            status.exit_code,
+            status.shell_integration,
         );
         std::thread::sleep(Duration::from_millis(10));
     }

@@ -199,7 +199,7 @@ impl ExecClient {
 
     pub fn request(&self, request: Request) -> Result<Response, Error> {
         self.active
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |count| {
                 (count < MAX_ACTIVE_CONNECTIONS).then_some(count + 1)
             })
             .map_err(|_| Error::Remote(ExecError::Busy))?;

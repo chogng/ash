@@ -681,7 +681,7 @@ impl ExtensionHostSupervisor {
         let request_id = self
             .inner
             .next_request_id
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
                 (current != 0).then(|| current.checked_add(1)).flatten()
             })
             .map_err(|_| ExtensionHostError::RequestIdentityExhausted)?;

@@ -180,7 +180,7 @@ struct Waiter {
 
 fn next_id() -> CancellationId {
     let id = NEXT_CANCELLATION_ID
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
         .expect("cancellation identity space exhausted");
     CancellationId(id)
 }

@@ -218,7 +218,7 @@ impl WorkerHandle {
         }
         self.shared
             .retained_bytes
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
                 current
                     .checked_add(bytes)
                     .filter(|total| *total <= MAX_RETAINED_BYTES)
@@ -235,7 +235,7 @@ impl WorkerHandle {
         }
         self.shared
             .active_attempts
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |active| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |active| {
                 (active < MAX_ACTIVE_ATTEMPTS).then_some(active + 1)
             })
             .ok()?;

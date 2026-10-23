@@ -1388,7 +1388,7 @@ impl RuntimeInner {
 
     fn allocate_invocation_id(&self, owner: u64) -> Result<String, ExtensionHostRuntimeError> {
         self.next_invocation_id
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |value| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |value| {
                 value.checked_add(1)
             })
             .map(|value| format!("eh-{owner}-{value}"))

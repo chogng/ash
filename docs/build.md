@@ -124,6 +124,8 @@ Electron Rust watcher 仅把 `crates/app-server-diff/src/` 内的 `.rs` 修改�
 
 VS Code 配置与文档的保存格式化使用工作区推荐的 [Custom Local Formatters](https://marketplace.visualstudio.com/items?itemName=jkillian.custom-local-formatters) 扩展，通过 stdin 调用 `node_modules/bun/` 中的原生 Bun（Unix 为 `bun`，Windows 为 `bun.exe`）。安装推荐扩展并完成 `pnpm install` 后，编辑器、增量脚本和 CI 使用同一 Bun 版本与规则；Markdown 内嵌代码保持原样，TS/JS 继续使用 TypeScript formatter。`pnpm test:format` 验证编辑器命令与 CI 的 JSON、JSONC、YAML、Markdown、CSS、HTML 输出一致。
 
+真实保存接线由 [`build/formatEditor.test.ts`](../build/formatEditor.test.ts) 验证：使用独立 VS Code profile 打开合成工作区，修改未保存内容后执行保存，并比较编辑器、磁盘与 Bun 的输出，同时验证忽略文件保持原样。先用 VS Code CLI 的 `--extensions-dir <隔离目录> --install-extension jkillian.custom-local-formatters@0.2.0` 安装扩展，再设置 `ASH_VSCODE_EXECUTABLE` 为桌面可执行文件、`ASH_FORMATTER_EXTENSIONS` 为该扩展目录，运行 `node --test build/formatEditor.test.ts`。未指定 VS Code 时该测试显式跳过；报告、截图与 trace 写入 `.build/formatter-editor-validation/`。
+
 根 `package.json` 通过 `bun: "runtime:1.4.4"` 固定 Bun，由 pnpm 直接安装官方发布的原生 runtime；各平台归档与 SHA-256 校验值记录在 `pnpm-lock.yaml`。此路径不执行 npm `bun` 包的 postinstall，也不需要 Bun 补丁或 `pnpm rebuild bun`；`--ignore-scripts` 安装后即可使用。
 
 增量入口复用上述格式化器和排除规则；Rust 按文件读取，不递归格式化其他模块。提交前显式运行检查并修复所需文件，CI 保留全仓格式检查。Just 版本不符时检查会明确失败，本地和 CI 都读取 `.just-version`。修改格式规则后执行全仓检查。

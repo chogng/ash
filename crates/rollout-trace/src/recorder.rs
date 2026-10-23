@@ -798,13 +798,13 @@ impl RecorderStorage {
                 if directory.exists() {
                     fs::remove_dir_all(directory).map_err(|error| error.to_string())?;
                     self.stored_captures
-                        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |captures| {
+                        .try_update(Ordering::Relaxed, Ordering::Relaxed, |captures| {
                             Some(captures.saturating_sub(1))
                         })
                         .ok();
                 }
                 self.stored_bytes
-                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |stored| {
+                    .try_update(Ordering::Relaxed, Ordering::Relaxed, |stored| {
                         Some(stored.saturating_sub(bytes))
                     })
                     .ok();
