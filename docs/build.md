@@ -122,9 +122,9 @@ Electron Rust watcher 仅把 `crates/app-server-diff/src/` 内的 `.rs` 修改�
 
 格式化工具按语言选择：TS/JS 使用 [`tsfmt.json`](../tsfmt.json)，Rust 使用 [`rustfmt.toml`](../rustfmt.toml)，Python 使用固定版本 Ruff，配置与文档使用仓库锁定的 `bun fmt`，继续读取 [格式规则](../.prettierrc.toml)；全量、增量与编辑器入口均显式读取 [Git 排除规则](../.gitignore)和[格式化排除规则](../.prettierignore)。前端与 Rust 格式化入口只处理第一方源码；检查命令不修改文件。修改后优先检查受影响的文件，完整格式检查见 [Formatting CI](../.github/workflows/format.yml)。
 
-VS Code 配置与文档的保存格式化使用工作区推荐的 [Custom Local Formatters](https://marketplace.visualstudio.com/items?itemName=jkillian.custom-local-formatters) 扩展，通过 stdin 调用 `node_modules/bun/` 中的原生 Bun（Unix 为 `bun`，Windows 为 `bun.exe`）。安装推荐扩展并完成 `pnpm install` 后，编辑器、增量脚本和 CI 使用同一 Bun 版本与规则；Markdown 内嵌代码保持原样，TS/JS 继续使用 TypeScript formatter。`pnpm test:format` 验证编辑器命令与 CI 的 JSON、JSONC、YAML、Markdown、CSS、HTML 输出一致。
+VS Code 配置与文档的保存格式化使用工作区推荐的 [Simple LSP Client](https://marketplace.visualstudio.com/items?itemName=wdomitrz.simple-lsp-client) 扩展的外部 formatter，以独立参数和 stdin 调用 `node_modules/bun/` 中的原生 Bun，文件名不经过 shell 解释。安装推荐扩展并完成 `pnpm install` 后，编辑器、增量脚本和 CI 使用同一 Bun 版本与规则；Markdown 内嵌代码保持原样，TS/JS 继续使用 TypeScript formatter。`pnpm test:format` 验证编辑器命令与 CI 的 JSON、JSONC、YAML、Markdown、CSS、HTML 输出一致。
 
-真实保存接线由 [`build/formatEditor.test.ts`](../build/formatEditor.test.ts) 验证：使用独立 VS Code profile 打开合成工作区，修改未保存内容后执行保存，并比较编辑器、磁盘与 Bun 的输出，同时验证忽略文件保持原样。先用 VS Code CLI 的 `--extensions-dir <隔离目录> --install-extension jkillian.custom-local-formatters@0.2.0` 安装扩展，再设置 `ASH_VSCODE_EXECUTABLE` 为桌面可执行文件、`ASH_FORMATTER_EXTENSIONS` 为该扩展目录，运行 `node --test build/formatEditor.test.ts`。未指定 VS Code 时该测试显式跳过；报告、截图与 trace 写入 `.build/formatter-editor-validation/`。
+真实保存接线由 [`build/formatEditor.test.ts`](../build/formatEditor.test.ts) 验证：使用独立 VS Code profile 打开合成工作区，修改未保存内容后执行保存，并比较编辑器、磁盘与 Bun 的输出，同时验证忽略文件保持原样、空结果和大段中文正确保存，以及带 shell 语法的文件名不会执行命令。先用 VS Code CLI 的 `--extensions-dir <隔离目录> --install-extension wdomitrz.simple-lsp-client@0.1.22` 安装扩展，再设置 `ASH_VSCODE_EXECUTABLE` 为桌面可执行文件、`ASH_FORMATTER_EXTENSIONS` 为该扩展目录，运行 `node --test build/formatEditor.test.ts`。未指定 VS Code 时该测试显式跳过；报告、截图与 trace 写入 `.build/formatter-editor-validation/`。
 
 根 `package.json` 通过 `bun: "runtime:1.4.4"` 固定 Bun，由 pnpm 直接安装官方发布的原生 runtime；各平台归档与 SHA-256 校验值记录在 `pnpm-lock.yaml`。此路径不执行 npm `bun` 包的 postinstall，也不需要 Bun 补丁或 `pnpm rebuild bun`；`--ignore-scripts` 安装后即可使用。
 

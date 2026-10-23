@@ -44,6 +44,23 @@ jobs:
         if: always() && !cancelled()
         run: pnpm format:config
 
+  editor-windows:
+    name: Windows editor formatter command
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024
+        with:
+          install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+      - name: Install the locked native Bun and formatter dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Match editor arguments with CI formatting
+        run: node --test --test-name-pattern "configured editor command" build/format.test.ts
+
   rust:
     runs-on: ubuntu-24.04
     timeout-minutes: 10

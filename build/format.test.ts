@@ -131,7 +131,7 @@ test('Bun leaves generated JSON to its owning serializers and checks neighboring
 
 test('the configured editor command and CI formatter produce identical bytes for every configuration language', t => {
 	const settings = JSON.parse(readFileSync(join(repositoryRoot, '.vscode/settings.json'), 'utf8'));
-	const editor = settings['customLocalFormatters.formatters'][0];
+	const editor = settings['simpleLspClient.formatters'].bun;
 	const directory = mkdtempSync(join(repositoryRoot, 'test/.formatter-test-'));
 	t.after(() => rmSync(directory, { recursive: true, force: true }));
 	const cases = [
@@ -141,17 +141,21 @@ test('the configured editor command and CI formatter produce identical bytes for
 		['markdown', join(directory, 'notes.md'), '#   Heading\n\n```ts\nconst value=1\n```\n'],
 		['css', join(directory, 'style.css'), '.example{color:red;padding:0  1px}\n'],
 		['html', join(directory, 'index.html'), '<main><p>example</p><p>text</p></main>\n'],
+		['json', join(directory, 'literal $(printf path) & %NAME%.json'), '{"value":1,"nested":{"enabled":true}}\n'],
 	];
 	t.after(() => rmSync(cases[1][1], { force: true }));
 	for (const [language, file, input] of cases) {
-		assert.ok(editor.languages.includes(language), language);
+		assert.ok(editor.filetypes.includes(language), language);
 		// Resolve the same language override the editor uses, including single-language settings.
 		const group = settings['[json][jsonc][yaml][markdown][css][html]'];
-		assert.equal(settings[`[${language}]`]?.['editor.defaultFormatter'] ?? group['editor.defaultFormatter'], 'jkillian.custom-local-formatters');
+		assert.equal(settings[`[${language}]`]?.['editor.defaultFormatter'] ?? group['editor.defaultFormatter'], 'wdomitrz.simple-lsp-client');
 		writeFileSync(file, input);
-		const template = editor.command[process.platform] ?? editor.command['*'];
-		const command = template.replaceAll('${file}', file);
-		const formatted = spawnSync(command, { cwd: repositoryRoot, shell: true, input, encoding: 'utf8' });
+		const template = editor.cmd;
+		assert.ok(Array.isArray(template), 'The editor must pass arguments without a shell.');
+		assert.equal(template[0], '${workspaceFolder}/node_modules/bun/bun');
+		const command = template.map((argument: string) => argument.replaceAll('${workspaceFolder}', repositoryRoot).replaceAll('${file}', file));
+		assert.equal(command.at(-1), file, 'The file name must remain one literal argument.');
+		const formatted = spawnSync(command[0], command.slice(1), { cwd: repositoryRoot, input, encoding: 'utf8' });
 		assert.equal(formatted.status, 0, formatted.stdout + formatted.stderr);
 		assert.notEqual(formatted.stdout, input, language);
 		assert.equal(readFileSync(file, 'utf8'), input, 'Editor formatting must use the unsaved buffer without writing files.');
