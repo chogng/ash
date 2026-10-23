@@ -144,6 +144,84 @@ fn executable_zip_accepts_only_the_expected_regular_entry() {
     }
     assert!(!home.path().join("escape").exists());
 }
+
+#[test]
+fn executable_zip_installs_the_binary_without_companion_debug_symbols() {
+    use std::io::Write;
+    let home = tempfile::tempdir().unwrap();
+    let name = format!("rust-analyzer{}", std::env::consts::EXE_SUFFIX);
+    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    // The official Windows release includes a PDB. Only the named executable is installed,
+    // regardless of archive order; companion entries never become filesystem paths.
+    for (entry, contents) in [
+        ("rust_analyzer.pdb", b"debug symbols".as_slice()),
+        (name.as_str(), b"verified executable".as_slice()),
+        ("../escape", b"ignored companion".as_slice()),
+    ] {
+        zip.start_file(entry, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(contents).unwrap();
+    }
+    let bytes = zip.finish().unwrap().into_inner();
+    let release = executable_release(&bytes, ExecutableArchive::Zip);
+    let http = Download {
+        bytes,
+        calls: AtomicUsize::new(0),
+    };
+    let installed = install_executable(
+        home.path(),
+        "rust-analyzer",
+        "rust-analyzer",
+        &release,
+        &http,
+        || {},
+    )
+    .unwrap();
+    assert_eq!(
+        std::fs::read(&installed.path).unwrap(),
+        b"verified executable"
+    );
+    assert_eq!(
+        std::fs::read_dir(installed.path.parent().unwrap())
+            .unwrap()
+            .count(),
+        1
+    );
+    assert!(!home.path().join("escape").exists());
+}
+
+#[test]
+fn executable_zip_rejects_a_symlink_in_place_of_the_binary() {
+    let home = tempfile::tempdir().unwrap();
+    let name = format!("rust-analyzer{}", std::env::consts::EXE_SUFFIX);
+    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    zip.add_symlink(&name, "other", zip::write::SimpleFileOptions::default())
+        .unwrap();
+    let bytes = zip.finish().unwrap().into_inner();
+    let release = executable_release(&bytes, ExecutableArchive::Zip);
+    let http = Download {
+        bytes,
+        calls: AtomicUsize::new(0),
+    };
+    assert!(matches!(
+        install_executable(
+            home.path(),
+            "rust-analyzer",
+            "rust-analyzer",
+            &release,
+            &http,
+            || {},
+        ),
+        Err(CapabilityInstallError::Invalid)
+    ));
+    assert!(
+        PackageStore::open(home.path().join("capabilities/rust-analyzer"))
+            .unwrap()
+            .current()
+            .unwrap()
+            .is_none()
+    );
+}
 impl HttpClient for Download {
     fn execute(&self, request: &HttpRequest) -> Result<HttpResponse, HttpClientError> {
         assert_eq!(request.url(), "https://example.test/livekit.tar.gz");
