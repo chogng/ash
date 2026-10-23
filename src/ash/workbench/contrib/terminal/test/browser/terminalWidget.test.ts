@@ -713,6 +713,46 @@ suite('terminal browser component', () => {
 		expect(errors).toEqual([]);
 	});
 
+	test('terminal panel reserves a single command gutter across split panes and themes', async function () {
+		const { page } = browserTests;
+
+		await page.goto('/terminal.html?pane&browser&locale=zh-CN');
+		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+		const screens = page.locator('.ash-terminal-group-pane:visible .xterm-screen');
+		await expect(screens).toHaveCount(1);
+		const assertGutters = async (): Promise<void> => {
+			const container = (await page.locator('.ash-terminal-widgets').boundingBox())!;
+			const panes = page.locator('.ash-terminal-group-pane:visible');
+			const count = await screens.count();
+			for (let index = 0; index < count; index++) {
+				const screen = (await screens.nth(index).boundingBox())!;
+				const pane = (await panes.nth(index).boundingBox())!;
+				expect(screen.x - pane.x).toBeCloseTo(20, 1);
+				if (index === 0) {
+					expect(pane.x).toBeCloseTo(container.x, 1);
+				}
+				if (index === count - 1) {
+					expect(pane.x + pane.width).toBeCloseTo(container.x + container.width, 1);
+				}
+			}
+		};
+		await assertGutters();
+		await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.split'));
+		await expect(screens).toHaveCount(2);
+		for (const mode of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+			await page.evaluate(mode => window.ashTerminalPaneIntegration.theme(mode), mode);
+			await assertGutters();
+		}
+		await page.locator('#terminal').evaluate(element => element.style.width = '480px');
+		await expect.poll(async () => (await page.locator('.ash-terminal-widgets').boundingBox())!.width).toBeLessThan(480);
+		await assertGutters();
+		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(false));
+		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+		await assertGutters();
+		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+	});
+
 	test('terminal panel uses themed surfaces and regular UI type for the instance list', async function () {
 		const { page } = browserTests;
 
