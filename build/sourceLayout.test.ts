@@ -87,8 +87,11 @@ test("frontend Node tools and backend package builders have separate language ow
 			join(import.meta.dirname, 'lib/stylelint/validateHasSelectors.ts'),
 			join(import.meta.dirname, 'lib/stylelint/validateDesignTokens.ts'),
 			join(import.meta.dirname, 'lib/test/stylelint.test.ts'),
-			...['watchRebuild', 'preparedInputs', 'incrementalOutput'].flatMap(name => [
+			...['watchRebuild', 'preparedInputs', 'incrementalOutput', 'watchNativeFile'].flatMap(name => [
 				join(import.meta.dirname, `lib/${name}.ts`), join(import.meta.dirname, `lib/${name}.test.ts`),
+			]),
+			...['screenshotBlocksCi', 'screenshotDiffReport'].flatMap(name => [
+				join(import.meta.dirname, `lib/${name}.ts`), join(import.meta.dirname, `lib/test/${name}.test.ts`),
 			]),
 		]);
 		assert.deepEqual(files.filter(path => !sharedTooling.has(path)), [], directory);
