@@ -8,12 +8,12 @@ Stanza 是 Ash 的编辑器内核。每个打开文档在一个 Renderer realm �
 
 Code 使用行式文本能力。Academy 的 `DocumentTextModel` 扩展同一个核心模型，通过通用 snapshot/version 边界提交结构事务；mark、atom、facet、region 与 relation 承载富文档语义。资源服务、后台语法树和视图都不能成为第二个可写正文或编辑历史。
 
-| 场景                                             | 装配入口                                              | 所有权                                                                                       |
-| ------------------------------------------------ | ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| 基础文本宿主                                     | `editor.all.ts`                                       | 仅装配基础文本命令                                                                           |
-| 客户端 Code                                      | `editor.code.all.ts` + `workbench/contrib/codeEditor` | 客户端装配模型分析、通用编辑功能和 Widget；Workbench 注册 text/diff Pane，另行装配 MultiDiff |
-| Standalone                                       | `editor.main.ts` / `editor.api.ts`                    | 独立宿主服务、公开 `editor` 与 `languages` API；文件持久化由调用方提供                       |
-| Agent Window 的普通文档、Academic 论文与频道笔记 | 独立 `ash.academy` 扩展 + 共享客户端编辑器桥          | Academy 提供 Schema、结构事务、视图、分页和 codec；Workbench 提供资源与工作副本生命周期      |
+| 场景                                            | 装配入口                                              | 所有权                                                                                       |
+| ----------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 基础文本宿主                                    | `editor.all.ts`                                       | 仅装配基础文本命令                                                                           |
+| 客户端 Code                                     | `editor.code.all.ts` + `workbench/contrib/codeEditor` | 客户端装配模型分析、通用编辑功能和 Widget；Workbench 注册 text/diff Pane，另行装配 MultiDiff |
+| Standalone                                      | `editor.main.ts` / `editor.api.ts`                    | 独立宿主服务、公开 `editor` 与 `languages` API；文件持久化由调用方提供                       |
+| Agent Window 的普通文档、Academy 论文与频道笔记 | 独立 `ash.academy` 扩展 + 共享客户端编辑器桥          | Academy 提供 Schema、结构事务、视图、分页和 codec；Workbench 提供资源与工作副本生命周期      |
 
 `editor.api.ts` 包含浏览器宿主 API，不能作为 DOM-free 入口使用。无 DOM 的调用方应直接消费 `editor/common` 中所需的领域契约。
 

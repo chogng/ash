@@ -31,7 +31,7 @@ import type { CallDocument } from '../../../../platform/call/common/callService.
 import { localize } from '../../../../nls.js';
 
 /** Workbench-only services that complement one document editor. */
-export interface EditorPaneOptions extends Pick<DocumentEditorConfiguration, 'codec' | 'widget' | 'exportText' | 'createEmptyDocument' | 'importBinary' | 'artifactFormats'> {
+export interface EditorPaneOptions extends Pick<DocumentEditorConfiguration, 'codec' | 'widget' | 'exportText' | 'createEmptyDocument' | 'importBinary' | 'artifactFormats' | 'accessibilityHelp'> {
 	readonly codec: DocumentCodec;
 	readonly modelCompatibility?: string;
 	readonly editorId?: string;
@@ -105,6 +105,10 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 
 	public getAccessibleContent(): string {
 		return this.editor?.getAccessibleContent?.() ?? this.options.codec.toPlainText(this.getDocument());
+	}
+
+	public getAccessibilityHelp(): readonly string[] {
+		return this.options.accessibilityHelp?.() ?? [];
 	}
 
 	/** A conversion populates the already-open untitled working copy without acquiring a second model. */

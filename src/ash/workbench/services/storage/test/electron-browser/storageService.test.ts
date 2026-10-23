@@ -126,7 +126,7 @@ suite('Desktop window storage', () => {
 			});
 			const key = 'ash.code.storage.application';
 			browser.window.localStorage.setItem(key, JSON.stringify({ version: 1, entries: { saved: { value: 'yes', target: StorageTarget.USER } } }));
-			browser.window.localStorage.setItem('ash.academic.storage.workspace.sessions', JSON.stringify({ version: 1, entries: { draft: { value: 'retained', target: StorageTarget.MACHINE } } }));
+			browser.window.localStorage.setItem('ash.code.storage.workspace.sessions', JSON.stringify({ version: 1, entries: { draft: { value: 'retained', target: StorageTarget.MACHINE } } }));
 			browser.window.localStorage.setItem('ash.code.storage.profile.code-sessions', JSON.stringify({ version: 1, entries: { sidebar: { value: 'hidden', target: StorageTarget.MACHINE } } }));
 			using storage = services.createInstance(NativeWorkbenchStorageService, { ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', profileId: 'code-sessions' });
 			await storage.initialize();

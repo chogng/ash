@@ -51,9 +51,9 @@ void app.whenReady().then(async () => {
 
 for (const scenario of [
 	{ name: 'missing settings', settings: undefined },
-	{ name: 'retired Academic JSONC setting', settings: '{\n// startup mode\n"workbench.mode":"academic",\n}' },
+	{ name: 'retired Academy JSONC setting', settings: '{\n// startup mode\n"workbench.mode":"academy",\n}' },
 	{ name: 'unregistered mode', settings: '{"workbench.mode":"unknown"}' },
-	{ name: 'obsolete settings wrapper', settings: '{"version":1,"values":{"workbench.mode":"academic"}}' },
+	{ name: 'obsolete settings wrapper', settings: '{"version":1,"values":{"workbench.mode":"academy"}}' },
 ]) {
 	test(`Desktop startup opens the fixed Workbench with ${scenario.name}`, { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 		const userDataDirectory = testInfo.outputPath('user-data');
@@ -62,13 +62,13 @@ for (const scenario of [
 		if (scenario.settings !== undefined) await writeFile(join(profile, 'settings.json'), scenario.settings);
 		const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
 		const environment = { ...configuration.env };
-		environment.ASH_WORKBENCH_MODE = 'academic'; // Retired launch input must not select a product.
+		environment.ASH_WORKBENCH_MODE = 'academy'; // Retired launch input must not select a product.
 		const application = await _electron.launch({ executablePath: configuration.executablePath, args: [...configuration.args], cwd: configuration.cwd, env: environment });
 		try {
 			const page = await application.firstWindow();
 			await expect(page.locator('.ash-workbench')).toBeVisible();
 			expect(new URL(page.url()).searchParams.get('ash-workbench-mode')).toBeNull();
-			if (scenario.name === 'retired Academic JSONC setting') {
+			if (scenario.name === 'retired Academy JSONC setting') {
 				const source = await readFile(join(profile, 'settings.json'), 'utf8');
 				expect(source).toContain('// startup mode');
 				expect(source).toBe(scenario.settings);

@@ -48,7 +48,6 @@
     "src/ash/workbench/services/views/**/*.ts",
     "src/ash/workbench/services/workspaces/**/*.ts",
     "src/ash/workbench/common/**/*.ts",
-    "src/ash/workbench/contrib/academic/**/*.ts",
     "src/ash/workbench/contrib/codeEditor/**/*.ts",
     "src/ash/workbench/contrib/browserView/common/**/*.ts",
     "src/ash/workbench/contrib/browserView/test/common/**/*.ts",

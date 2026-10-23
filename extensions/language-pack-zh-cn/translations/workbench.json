@@ -2694,7 +2694,10 @@
     "languageServer.logFailed": "语言服务器失败：{0}",
     "languageServer.logStopped": "语言服务器已停止。",
     "languageServer.help": "语言服务按工作区文件夹列出服务器。使用上下方向键选择服务器，向右键打开操作，向左键返回，Escape 关闭并恢复焦点。“查看日志”打开完整输出。“重启服务器”和“停止服务器”仅作用于当前窗口，不修改已保存的配置。工作区和“所有服务器”操作仅控制已经启动过的服务器；重启也包含已停止的服务器。进度显示在状态栏，警告和完整错误保留在 Output，需要处理的失败会在通知中提供操作。",
-    "languageServer.retry": "重试"
+    "languageServer.retry": "重试",
+    "editor.selection.invalid": "新建文档的默认编辑器必须为 buildMode、code 或 academy；收到 {0}。",
+    "editor.selection.title": "新建文档的默认编辑器",
+    "editor.selection.description": "使用默认编辑器，或优先使用 Code 或 Academy 打开新的未命名文档。"
   },
   "ash.menu": {
     "file": "文件",

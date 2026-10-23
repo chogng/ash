@@ -5,8 +5,6 @@ import type { DocumentTextFormat } from '../../../services/documentEditor/common
 import { URI } from '../../../../base/common/uri.js';
 import { basename } from '../../../../base/common/resources.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
-import { VSBuffer, encodeBase64 } from '../../../../base/common/buffer.js';
-import { getMediaMime } from '../../../../base/common/mime.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IFileTextModelService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
@@ -35,24 +33,10 @@ export async function convertActiveTextToDocument(accessor: ServicesAccessor, fo
 	const sourceText = model.getValue();
 	const ownerDocument = editors.domNode.ownerDocument;
 	const profile = (await resolveGeneralProfile()).create();
-	const document = profile.importText(sourceText, format, ownerDocument, input.resource);
-	const images = new Map<string, Promise<string>>();
-	const materialize = async (node: DocumentNode): Promise<DocumentNode> => {
-		if (node.type === 'image' && typeof node.attrs.src === 'string' && !/^(?:https?:|data:)/i.test(node.attrs.src)) {
-			let image = images.get(node.attrs.src);
-			if (!image) {
-				const resource = URI.parse(node.attrs.src);
-				const mime = getMediaMime(resource.path);
-				if (!mime || !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(mime)) throw new Error(localize('document.conversion.unsupported', 'Cannot preserve {0} at {1}.', localize('document.conversion.imageResource', 'image resource'), node.id));
-				image = files.readFileBytes(resource).then(value => `data:${mime};base64,${encodeBase64(VSBuffer.wrap(new Uint8Array(value.bytes)))}`);
-				images.set(node.attrs.src, image);
-			}
-			return { ...node, attrs: { ...node.attrs, src: await image } };
-		}
-		return { ...node, content: await Promise.all(node.content.map(materialize)) };
-	};
-	const imported = { ...document, content: await Promise.all(document.content.map(materialize)) };
-	profile.codec.validate(imported);
+	const imported = await profile.importText(sourceText, format, ownerDocument, input.resource, async resource => {
+		const value = await files.readFileBytes(resource);
+		return new Uint8Array(value.bytes);
+	});
 	await openDraft(editors, imported, basename(input.resource).replace(/\.[^.]+$/, ''));
 }
 

@@ -83,7 +83,7 @@ import type { IEditorPane, IResourceEditorInput } from '../../../src/ash/workben
 import { emptyEditorServiceState } from '../../../src/ash/workbench/test/common/testEditorService.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
-import { GENERAL_DOCUMENT_EDITOR_ID } from '../../../src/ash/workbench/contrib/documentEditor/browser/documentEditorInput.js';
+import { DOCUMENT_EDITOR_ID } from '../../../src/ash/workbench/contrib/documentEditor/browser/documentEditorInput.js';
 
 interface AcademyIntegrationHarness {
 	getCallDocumentState(): { documents: readonly CallDocument[]; originalDirty: boolean; joinedResource: string | undefined; joinedTexts: readonly string[]; };
@@ -99,7 +99,7 @@ interface AcademyIntegrationHarness {
 	saveCodeBlock(): Promise<void>;
 	getSavedCodeBlock(): string;
 	setAcademyEnabled(enabled: boolean): Promise<void>;
-	replaceAcademicPackage(): Promise<void>;
+	replaceAcademyPackage(): Promise<void>;
 	getAcademyRegistration(): { name: string | undefined; routed: boolean; };
 	saveStructured(): Promise<void>;
 	getSavedStructured(): string;
@@ -108,6 +108,7 @@ interface AcademyIntegrationHarness {
 	reopenStructured(): Promise<void>;
 	getStructuredDirty(): boolean;
 	getStructuredBackup(): string;
+	getStructuredAccessibilityHelp(): readonly string[];
 	exportArtifact(format: string, imported?: boolean): Promise<number[]>;
 	importArtifact(bytes: number[]): Promise<{ backup: string; scheme: string; dirty: boolean; source: string; }>;
 	getStructuredCollaborationSubmissions(): readonly string[];
@@ -201,8 +202,8 @@ const generalDocument = new URLSearchParams(location.search).has('generalDocumen
 if (generalDocument) await import('../../../src/ash/workbench/contrib/documentEditor/browser/documentEditor.contribution.js');
 const apiDocument = schema.createDocument([schema.createNode("paragraph", { content: [schema.createText("editor-api")] })]);
 const apiModel = DocumentTextModel.create(schema, apiDocument);
-const codeBlockResource = URI.parse("inmemory://editor/code-block.ash-academic");
-const structuredResource = URI.parse(generalDocument ? 'inmemory://editor/document.ash-doc' : 'inmemory://editor/document.ash-academic');
+const codeBlockResource = URI.parse("inmemory://editor/code-block.ash-academy");
+const structuredResource = URI.parse(generalDocument ? 'inmemory://editor/document.ash-doc' : 'inmemory://editor/document.ash-academy');
 const codeBlockDocument = schema.createDocument([schema.createNode("codeBlock", {
 	attrs: { language: "typescript" },
 	content: [createTextNode("editor-text", "const editor = 1;")],
@@ -256,7 +257,7 @@ const structuredDocument = pageRule ? pageRuleDocument : new URLSearchParams(loc
 		: new URLSearchParams(location.search).has('richParagraphs')
 			? schema.createDocument(['Title', 'Body'].map(text => schema.createNode('paragraph', { content: [schema.createText(text, { marks: [{ type: 'strong', attrs: {} }] })] })))
 			: documentFromPlainText(schema, "Title\nBody");
-// Extension scenarios open a legacy Academic file and must save it as typed v2.
+// Extension scenarios open a legacy Academy file and must save it as typed v2.
 const structuredText = new URLSearchParams(location.search).has('academyExtension')
 	? JSON.stringify({ format: 'ash.document', version: 1, document: structuredDocument })
 	: serializeDocument(structuredDocument, schema);
@@ -341,7 +342,7 @@ if (new URLSearchParams(location.search).has('academyExtension') || generalDocum
 let structuredPane = disposables.add(academyExtensionService
 	? await EditorPanes.getEditorPane({ resource: structuredResource })!.create({ input: { resource: structuredResource }, instantiationService: services, documentCollaborationApi, serverEvents }) as DocumentEditorPane
 	: generalDocument
-		? EditorPanes.getEditorPane({ resource: structuredResource }, { preferredEditorId: GENERAL_DOCUMENT_EDITOR_ID })!.create({ input: { resource: structuredResource }, instantiationService: services, documentCollaborationApi, serverEvents }) as DocumentEditorPane
+		? EditorPanes.getEditorPane({ resource: structuredResource }, { preferredEditorId: DOCUMENT_EDITOR_ID })!.create({ input: { resource: structuredResource }, instantiationService: services, documentCollaborationApi, serverEvents }) as DocumentEditorPane
 		: services.createInstance(DocumentEditorPane, { ...createEditorProfileConfiguration(schema, { outlineNavigator: false, contributions: documentContributions }), contentType: 'application/vnd.ash.document+json', createDocumentCollaborationService: () => new BrowserDocumentCollaborationService() }));
 
 codeBlockPane.create(requiredElement("#code-block"));
@@ -442,7 +443,7 @@ window.ashAcademyIntegration = {
 		academySnapshot = await response.json();
 		await academyExtensionService.update(academySnapshot!);
 	},
-	replaceAcademicPackage: async () => {
+	replaceAcademyPackage: async () => {
 		if (!academyExtensionService) throw new Error('Academy extension fixture is not enabled');
 		const locale = new URLSearchParams(location.search).get('locale') ?? 'en';
 		const response = await fetch(`/__academy_extension?locale=${locale}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: true, replace: true }) });
@@ -451,7 +452,7 @@ window.ashAcademyIntegration = {
 		await academyExtensionService.update(academySnapshot!);
 	},
 	getAcademyRegistration: () => ({
-		name: EditorPanes.getEditorPanes().find(pane => pane.id === (generalDocument ? GENERAL_DOCUMENT_EDITOR_ID : 'stanza.editor.document'))?.name,
+		name: EditorPanes.getEditorPanes().find(pane => pane.id === (generalDocument ? DOCUMENT_EDITOR_ID : 'stanza.editor.document'))?.name,
 		routed: DocumentTypes.find({ resource: structuredResource }) !== undefined,
 	}),
 	saveStructured: () => structuredPane.save(),
@@ -476,6 +477,7 @@ window.ashAcademyIntegration = {
 	},
 	getStructuredDirty: () => structuredPane.isDirty,
 	getStructuredBackup: () => structuredPane.workingCopy!.backup(),
+	getStructuredAccessibilityHelp: () => structuredPane.getAccessibilityHelp(),
 	exportArtifact: async (format, imported = false) => {
 		artifactActivePane = imported ? importedPane : structuredPane;
 		artifactTarget = URI.parse('artifact:/export.' + format);

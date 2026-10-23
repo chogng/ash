@@ -55,9 +55,9 @@ impl Extension for AcademyExtension {
                         DocumentClientEditor {
                             editor_id: "stanza.editor.document".into(),
                             display_name: label("academy.editor")?,
-                            selectors: vec!["*.ash-academic".into(), "*.ash-paper".into()],
-                            document_type: "academic".into(),
-                            content_type: "application/vnd.ash.academic-document+json".into(),
+                            selectors: vec!["*.ash-academy".into(), "*.ash-paper".into()],
+                            document_type: "academy".into(),
+                            content_type: "application/vnd.ash.academy-document+json".into(),
                         },
                         DocumentClientEditor {
                             editor_id: "ash.editor.document".into(),

@@ -9,7 +9,7 @@ import { join } from "node:path";
  * path against publisher PDFs of materially different sizes. The digest makes a publisher-side
  * replacement explicit instead of accidentally accepting a challenge or error document.
  */
-export interface AcademicPdfCorpusDocument {
+export interface AcademyPdfCorpusDocument {
 	readonly fileName: string;
 	readonly pageCount: number;
 	readonly sha256: string;
@@ -17,7 +17,7 @@ export interface AcademicPdfCorpusDocument {
 	readonly title: string;
 }
 
-export const academicPdfCorpus: readonly AcademicPdfCorpusDocument[] = Object.freeze([
+export const academyPdfCorpus: readonly AcademyPdfCorpusDocument[] = Object.freeze([
 	{
 		fileName: "open-science-5-pages.pdf",
 		pageCount: 5,
@@ -55,9 +55,9 @@ export const academicPdfCorpus: readonly AcademicPdfCorpusDocument[] = Object.fr
 	},
 ]);
 
-/** Downloads and validates the opt-in academic PDF corpus into one isolated test workspace. */
-export async function downloadAcademicPdfCorpus(directory: string): Promise<void> {
-	for (const document of academicPdfCorpus) {
+/** Downloads and validates the opt-in Academy PDF corpus into one isolated test workspace. */
+export async function downloadAcademyPdfCorpus(directory: string): Promise<void> {
+	for (const document of academyPdfCorpus) {
 		const response = await fetch(document.sourceUrl, { signal: AbortSignal.timeout(120_000) });
 		if (!response.ok) throw new Error(`Could not download '${document.title}': HTTP ${response.status}`);
 		const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";

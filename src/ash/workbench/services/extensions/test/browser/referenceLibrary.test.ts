@@ -5,7 +5,7 @@ import { test } from 'mocha';
 import { parseRis, RisParseError } from '../../../../../../../extensions/reference-manager/common/ris.js';
 import { createLibraryEntry, emptyLibrary, importRecords, parseLibrary, replaceEntry, serializeLibrary } from '../../../../../../../extensions/reference-manager/common/library.js';
 import { runLibraryCitationOperation } from '../../../../../../../extensions/academy/browser/contrib/citation/common/libraryCitationApi.js';
-import { createAcademicDocumentSchema, createEmptyAcademicDocument } from '../../../../../../../extensions/academy/browser/contrib/academic/common/schema.js';
+import { createAcademyDocumentSchema, createEmptyAcademyDocument } from '../../../../../../../extensions/academy/browser/contrib/academy/common/schema.js';
 import { DocumentTextModel } from '../../../../../../../extensions/academy/common/model/documentTextModel.js';
 import { textSelection } from '../../../../../../../extensions/academy/common/core/documentSelection.js';
 import { buildReferenceIndex } from '../../../../../../../extensions/academy/browser/contrib/citation/common/references.js';
@@ -41,7 +41,7 @@ test('RIS import deduplicates DOI and metadata, preserves IDs and rejects malfor
 	assert.throws(() => parseLibrary('{"version":2}')); assert.throws(() => parseLibrary(JSON.stringify({ ...loaded, entries: [...loaded.entries, loaded.entries[0]] })));
 });
 test('Academy insertion, identity-based metadata/key update and missing records use one undo each', () => {
-	const schema = createAcademicDocumentSchema(); using model = DocumentTextModel.create(schema, createEmptyAcademicDocument(schema));
+	const schema = createAcademyDocumentSchema(); using model = DocumentTextModel.create(schema, createEmptyAcademyDocument(schema));
 	const paragraph = model.document.content.find(node => node.type === 'abstract')!.content[0];
 	const selection = textSelection({ nodeId: paragraph.id, offset: 0 });
 	const context = () => ({ model, blockId: paragraph.id, selection });
@@ -77,7 +77,7 @@ test('RIS conversion saves a separate library, reindexes working copies and neve
 });
 
 test('Academy batch key swaps remain atomic and preserve custom citation labels', () => {
-	const schema = createAcademicDocumentSchema();
+	const schema = createAcademyDocumentSchema();
 	const paragraph = schema.createNode('paragraph', { content: [schema.createText('Body'), schema.createNode('citation', { attrs: { key: 'A', label: 'Custom label' } }), schema.createNode('citation', { attrs: { key: 'B' } })] });
 	const bibliography = schema.createNode('bibliography', { content: ['A', 'B'].map((key, index) => schema.createNode('reference', { attrs: { key, libraryId: 'library', libraryEntryId: String(index) }, content: [schema.createNode('paragraph', { content: [schema.createText(key)] })] })) });
 	using model = DocumentTextModel.create(schema, schema.createDocument([bibliography, paragraph]));

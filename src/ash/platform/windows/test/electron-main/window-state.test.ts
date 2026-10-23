@@ -101,7 +101,7 @@ test('window session state reads retired mode fields and saves only window kind 
 	const state = new TestStateService();
 	state.setItem('windowSession', {
 		version: 1, active: 0,
-		windows: [{ kind: 'sessions', workspace: serializeWorkspaceIdentifier(multiRootWorkspace), modeId: 'academic' }],
+		windows: [{ kind: 'sessions', workspace: serializeWorkspaceIdentifier(multiRootWorkspace), modeId: 'retired-mode' }],
 	});
 	const handler = new WindowSessionStateHandler(state, () => [], (entry): entry is IWindowSessionEntry => entry.kind === 'sessions');
 	const restored = handler.readSession();

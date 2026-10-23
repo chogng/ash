@@ -2,37 +2,38 @@
 
 > 本文描述当前实现。Agent Window 的文档工作区与 Code IDE 边界见 [目标设计](design/work-code-workbench.md)，公开产品线见 [产品线说明](product-lines.md)。
 
-Ash Desktop 当前只有 Code 工作台。Academic 是可在同一窗口打开的论文文档类型；用户不需要切换工作台或重载窗口。代码、差异、论文、Tasks、Testing、Debug、Chat 和 Agents 窗口使用同一安装包与后端。
+Ash Desktop 当前只有 Code 工作台。Academy 是独立安装的文档编辑扩展，可在同一窗口打开文档与论文；用户不需要切换工作台或重载窗口。工作台拥有编辑器宿主和后端连接；Academy 的实现由扩展包独立提供。
 
 ## 装配与所有权
 
-| 入口或服务                                  | 负责什么                                                          |
-| ------------------------------------------- | ----------------------------------------------------------------- |
-| `code/common/application.ts` 与两端产品入口 | 固定产品标题与 Sessions 页面；入口向 Workbench 传入标题           |
-| `workbench/workbench.common.main.ts`        | 装配代码、通用文档、Academic 配置及工作台工具                     |
-| `editor.all.ts`                             | 装配行式与富文档编辑贡献；不注册 Workbench pane                   |
-| `workbench/contrib/documentEditor`          | 唯一文档 pane 注册、按文档配置匹配输入、视图与保存交互            |
-| `workbench/contrib/academic`                | Academic 文档内容类型、扩展名、schema、引用、节点视图及工具栏配置 |
-| `editor/contrib/academic`                   | 论文结构和编辑能力；不决定工作台模式                              |
-| `DocumentEditorTextModelService`            | 按规范化资源地址共享一个模型及工作副本，最后一个视图关闭时释放    |
+| 入口或服务                                  | 负责什么                                                         |
+| ------------------------------------------- | ---------------------------------------------------------------- |
+| `code/common/application.ts` 与两端产品入口 | 固定产品标题与 Sessions 页面；入口向 Workbench 传入标题          |
+| `workbench/workbench.common.main.ts`        | 装配代码、文档宿主及工作台工具；Academy 由扩展注册接入           |
+| `editor.all.ts`                             | 装配客户端内置 Code 编辑贡献；不装配 Academy 实现                |
+| `workbench/contrib/documentEditor`          | 承载扩展提供的文档视图，接入工作副本、保存、协作与视图生命周期   |
+| `extensions/academy`                        | Academy 文档内容类型、扩展名、schema、引用、节点视图及工具栏配置 |
+| `DocumentEditorTextModelService`            | 按规范化资源地址共享一个模型及工作副本，最后一个视图关闭时释放   |
 
-Browser 与 Electron 各保留一个 Workbench 启动入口，只加载 Code。标题由产品入口提供，构建与启动没有模式注册表。两端产品入口在本地化完成后加载各自 Workbench 入口并直接调用启动函数；共同贡献由 `workbench.common.main.ts` 装配，不再经单项模式 loader。工作台不提供运行时模式切换服务、宿主切换回调或切换 IPC。通用代码编辑器排除已注册的结构化文档，文档编辑器按相同配置完成匹配与实例化。Academic 匹配 `.ash-academic`、`.ash-paper` 或其内容类型。
+`DocumentEditorPane` 是 Workbench 的通用承载适配器，负责资源引用、保存、备份、取消和扩展停用；实际富文档编辑表面是 `extensions/academy/browser/widget/richTextEditor/richTextEditorWidget.ts`。宿主不解释段落、引用、分页或图片节点，也不直接导入 Academy 的实现。
 
-`TextModel` 是内容、版本与撤销的唯一来源。多个论文视图共享编辑内容、脏状态、保存修订和备份身份；关闭一个视图不销毁其他视图。结构化文件只接受版本化文档格式，损坏 JSON 或纯文本不会被隐式当成论文正文。普通文档类型、转换命令和 Work 模式仍属于后续设计。
+Browser 与 Electron 各保留一个 Workbench 启动入口，只加载 Code。标题由产品入口提供，构建与启动没有模式注册表。两端产品入口在本地化完成后加载各自 Workbench 入口并直接调用启动函数；共同贡献由 `workbench.common.main.ts` 装配，不再经单项模式 loader。工作台不提供运行时模式切换服务、宿主切换回调或切换 IPC。通用代码编辑器排除已注册的结构化文档，文档编辑器按相同配置完成匹配与实例化。Academy 匹配 `.ash-academy`、`.ash-paper` 或其内容类型。
 
-## 旧 Academic 模式迁移
+`TextModel` 是内容、版本与撤销的唯一来源。多个论文视图共享编辑内容、脏状态、保存修订和备份身份；关闭一个视图不销毁其他视图。结构化文件只接受版本化文档格式，损坏 JSON 或纯文本不会被隐式当成论文正文。普通文档、论文和频道笔记由 Academy 注册，宿主通过已注册契约完成转换。
+
+## 旧窗口与存储迁移
 
 | 旧数据                                                           | 当前处理                                                                            |
 | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | profile 的 `settings.json` 中旧 `workbench.mode`                 | 不再注册或读取该配置，不改写用户 JSONC；其他配置继续生效                            |
 | 旧 `ash-workbench-mode` URL 参数或 `ASH_WORKBENCH_MODE` 环境变量 | 不参与构建或启动；新生成的页面链接不携带模式参数                                    |
 | `windowSession` 的旧 `modeId`                                    | 窗口状态 owner 读取原工作区，之后只保存窗口种类与工作区                             |
-| Main v1 存储与浏览器的 `code` / `academic` 命名空间              | 存储服务按 scope 与 id 合并；冲突沿用当前值，再优先旧 Code 值；原始数据留在迁移备份 |
-| working-copy 备份                                                | 继续使用原工作区身份与 Academic 内容类型，不复制备份数据库                          |
+| Main v1 存储与浏览器的 `code` 命名空间                           | 存储服务按 scope 与 id 合并；冲突沿用当前值，旧值只补齐缺失键；原始数据留在迁移备份 |
+| working-copy 备份                                                | 继续使用原工作区身份与 Academy 内容类型，不复制备份数据库                           |
 
 存储身份只有 application、profile、workspace 作用域及各自 id，不再传递 `applicationId`。Main 写入 v2 格式前保存 `workbench-state.json.v1`；浏览器将原始文档存为 `ash.storage.v1.<旧身份>.<作用域及 id>`，写入 `ash.storage.<作用域及 id>` 后清除旧键。备份只供检查，不参与后续恢复；中断的迁移可以重试。已有偏好与状态不被覆盖。旧 `configuration.json` 到 `settings.json` 的 profile 迁移仍由现有配置迁移负责，不再执行模式值转换。
 
-开发与测试不再使用 `ASH_WORKBENCH_MODE=academic`；直接打开论文文件即可。`code` / `academic` 仅出现在旧存储的迁移读取和归档中。
+开发与测试直接打开已安装扩展支持的文档文件，不存在独立文档工作台模式。旧 Code 存储只在迁移时读取并归档。
 
 ## 窗口与状态
 
@@ -46,6 +47,6 @@ Code Sessions 保持独立页面。Workbench 通过 Titlebar action 请求打开
 
 ## 构建与验证
 
-统一 Renderer 输出在 `.build/desktop/renderer/ash`，包含 Workbench 与 Code Sessions 入口。Academic 不再拥有独立模式入口或 `editor.academic.all.ts`。
+统一 Renderer 输出在 `.build/desktop/renderer/ash`，包含 Workbench 与 Code Sessions 入口。Academy 的客户端实现独立编译和加载，不随工作台 Renderer 打包。
 
-验证覆盖文档类型匹配、共享模型与释放、保存冲突、旧配置忽略与存储迁移、浏览器富文档输入以及 Electron 实际文件打开和保存。用户流程使用 Playwright 的内容、焦点和持久状态断言。
+验证覆盖文档类型匹配、共享模型与释放、保存冲突、旧配置忽略与存储迁移、浏览器富文档输入以及 Electron 实际文件打开和保存。Academy 的 profile、视图、转换及 DOCX 测试位于 `test/extensions/academy*.test.ts`。宿主目录只保留通用工作台交互测试。分页、段落、引用等无障碍帮助由扩展提供；宿主只补充保存、转换和焦点恢复操作。用户流程使用 Playwright 的内容、焦点和持久状态断言。

@@ -193,12 +193,15 @@ for (const locale of ['en', 'zh-CN'] as const) test(`Academy references edit, re
 	for (const id of ['citation', 'reference', 'editReference', 'deleteReference']) await expect(action(id)).toBeDisabled();
 });
 
-for (const kind of ['academic', 'general'] as const) for (const locale of ['en', 'zh-CN'] as const) {
-	const name = kind === 'academic' ? locale === 'en' ? 'Academic Document' : '学术论文文档' : locale === 'en' ? 'Document' : '文档';
+for (const kind of ['academy', 'general'] as const) for (const locale of ['en', 'zh-CN'] as const) {
+	const name = kind === 'academy' ? locale === 'en' ? 'Academy Document' : 'Academy 文档' : locale === 'en' ? 'Document' : '文档';
 	test(`Rust Academy ${kind} disablement freezes the view and preserves dirty recovery in ${locale}`, async ({ page }) => {
 		await page.goto(`/academy.html?${kind === 'general' ? 'generalDocument' : 'academyExtension'}&locale=${locale}`);
 		await page.waitForFunction(() => !!window.ashAcademyIntegration);
 		await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.getAcademyRegistration())).toEqual({ name, routed: true });
+		const help = await page.evaluate(() => window.ashAcademyIntegration.getStructuredAccessibilityHelp());
+		expect(help.join('\n')).toContain(locale === 'zh-CN' ? '段落' : 'Paragraph');
+		expect(help.some(line => line.includes(locale === 'zh-CN' ? 'Academy 文档提供' : 'Academy documents provide'))).toBe(kind === 'academy');
 		const original = await page.evaluate(() => window.ashAcademyIntegration.getStructuredBlockTexts());
 		const input = page.locator('#document-editor textarea.stanza-document-text-input').first();
 		await input.fill('Draft paper');
@@ -241,7 +244,7 @@ test('installed Academy package replacement retires its old view and releases it
 	const original = page.locator('#document-editor textarea.stanza-document-text-input').first();
 	await original.fill('Draft survives an installed package replacement');
 	await expect(page.locator('style[data-ash-editor-client-style]')).toHaveCount(1);
-	await page.evaluate(() => window.ashAcademyIntegration.replaceAcademicPackage());
+	await page.evaluate(() => window.ashAcademyIntegration.replaceAcademyPackage());
 	await expect(original).toHaveAttribute('readonly', '');
 	expect(await page.evaluate(() => window.ashAcademyIntegration.getStructuredDirty())).toBe(true);
 	await expect(page.locator('style[data-ash-editor-client-style]')).toHaveCount(1);
@@ -331,7 +334,7 @@ for (const [locale, name] of [['en', 'Document'], ['zh-CN', '文档']] as const)
 		await page.evaluate(() => window.ashAcademyIntegration.revertStructured());
 		await expect(input).toHaveValue('General draft');
 		await page.evaluate(content => window.ashAcademyIntegration.restoreStructuredBackup(content), backup);
-		const conflicting = { ...JSON.parse(backup), documentType: 'academic' };
+		const conflicting = { ...JSON.parse(backup), documentType: 'academy' };
 		await page.evaluate(content => window.ashAcademyIntegration.setExternalStructured(content), JSON.stringify(conflicting));
 		const failure = await page.evaluate(async () => {
 			try { await window.ashAcademyIntegration.revertStructured(); return ''; }
@@ -364,12 +367,12 @@ for (const paper of ['A4', 'Letter']) {
 	});
 }
 
-test("TextModel API and Academic code-block editing run in real browsers", async ({ page }) => {
+test("TextModel API and Academy code-block editing run in real browsers", async ({ page }) => {
 	await page.goto("/academy.html");
 	await expect(page.locator("#code-block textarea.stanza-document-text-input")).toBeVisible();
 	await expect(page.locator("#code-block .stanza-editor")).toHaveCount(0);
 	await expect(page.locator("#code-block .stanza-structured-format-toolbar")).toHaveAttribute("data-context", "code");
-	await expect(page.locator("#code-block .stanza-structured-format-code-context")).toHaveText("Code block · Academic");
+	await expect(page.locator("#code-block .stanza-structured-format-code-context")).toHaveText("Code block · Academy");
 	await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.apiDocumentType)).toBe("doc");
 
 	const codeBlockInput = page.locator("#code-block textarea.stanza-document-text-input");
@@ -552,7 +555,7 @@ test('Academy paragraph controls support keyboard style selection without steali
 	await expect(page.locator('#document-editor .stanza-document-heading')).toHaveCount(0);
 });
 
-test("Academic TextModel editor persists selected font, size, and emphasis formatting", async ({ page }) => {
+test("Academy TextModel editor persists selected font, size, and emphasis formatting", async ({ page }) => {
 	await page.goto("/academy.html");
 	const input = page.locator("#document-editor textarea.stanza-document-text-input").first();
 	const fontFamily = page.locator("#document-editor select[aria-label='Font family']");
@@ -584,7 +587,7 @@ test("Academic TextModel editor persists selected font, size, and emphasis forma
 	await expect(bold).toHaveAttribute("aria-pressed", "true");
 });
 
-test("Academic TextModel editor exposes collaboration as a separate contribution", async ({ page }) => {
+test("Academy TextModel editor exposes collaboration as a separate contribution", async ({ page }) => {
 	await page.goto("/academy.html");
 	const toolbar = page.locator("#document-editor .stanza-document-collaboration-toolbar");
 	const start = toolbar.locator("[data-action-id='startCollaboration'] button");
@@ -597,7 +600,7 @@ test("Academic TextModel editor exposes collaboration as a separate contribution
 	await expect(toolbar.locator(".stanza-document-collaboration-status")).toHaveText("Room: editor-browser-room");
 });
 
-test("Academic TextModel editor exposes room-owner invitations", async ({ page }) => {
+test("Academy TextModel editor exposes room-owner invitations", async ({ page }) => {
 	await page.goto("/academy.html");
 	const toolbar = page.locator("#document-editor .stanza-document-collaboration-toolbar");
 	await toolbar.locator("[data-action-id='startCollaboration'] button").click();
@@ -618,7 +621,7 @@ test("Academic TextModel editor exposes room-owner invitations", async ({ page }
 	await expect(toolbar.locator(".stanza-document-collaboration-invitation-token")).toHaveText("Room ID: editor-browser-room\nAccess token: editor-browser-rotated-token");
 });
 
-test("Academic TextModel editor has the accessibility contract", async ({ page }) => {
+test("Academy TextModel editor has the accessibility contract", async ({ page }) => {
 	await page.goto("/academy.html");
 	const toolbar = page.locator("#document-editor .stanza-structured-format-toolbar");
 	const structuredInput = page.locator("#document-editor textarea.stanza-document-text-input").first();
@@ -1287,7 +1290,9 @@ for (const rule of ['orphan', 'short', 'widow', 'together', 'next', 'chain'] as 
 	});
 }
 
-for (const kind of ['general', 'academic']) for (const locale of ['en', 'zh-CN']) test(`M6 sections, review and binary document output use the installed ${kind} provider in ${locale}`, async ({ page }, testInfo) => {
+for (const kind of ['general', 'academy']) for (const locale of ['en', 'zh-CN']) test(`M6 sections, review and binary document output use the installed ${kind} provider in ${locale}`, async ({ page }, testInfo) => {
+	// Two page-image PDF renders and a DOCX round trip exceed the default budget on Windows.
+	test.setTimeout(120_000);
 	await page.goto(`/academy.html?${kind === 'general' ? 'generalDocument' : 'academyExtension'}&m6Pages&locale=${locale}`);
 	await page.waitForFunction(() => !!window.ashAcademyIntegration);
 	await page.evaluate(() => window.ashAcademyIntegration.layoutStructured(1000, 700));

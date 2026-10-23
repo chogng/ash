@@ -1,4 +1,5 @@
 import { defaultButtonStyles } from 'ash:editor/platform/theme/browser/defaultStyles.js';
+import { localize } from 'ash:editor/nls.js';
 import type { IContextMenuProvider } from "ash:editor/base/browser/contextmenu.js";
 import { ToolBar } from "ash:editor/base/browser/ui/toolbar/toolbar.js";
 import type { IAction } from "ash:editor/base/common/actions.js";
@@ -91,7 +92,7 @@ export class FormattingContribution extends Disposable implements DocumentFormat
 
 		const codeContext = h(ownerDocument, "div");
 		codeContext.className = "stanza-structured-format-code-context";
-		codeContext.textContent = "Code block · Academic";
+		codeContext.textContent = localize('academy.formatting.codeContext', 'Code block · Academy');
 		codeContext.setAttribute("role", "status");
 		this.codeContext = codeContext;
 

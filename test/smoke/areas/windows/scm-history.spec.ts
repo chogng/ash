@@ -417,7 +417,7 @@ test('SCM history shows Git commits and opens file and multi-file comparisons', 
 	await expect(toolbar).toHaveCount(0);
 	await expect(comparisons.getByRole('button', { name: 'Stage All', exact: true })).toHaveCount(0);
 	await expect(comparisons.getByRole('button', { name: 'Discard All', exact: true })).toHaveCount(0);
-	await expect(comparisons.locator('.stanza-multi-diff-editor-title')).toHaveText(['Cargo.toml', 'main.rs', 'main.ts', 'paper.ash-academic', 'paper.pdf']);
+	await expect(comparisons.locator('.stanza-multi-diff-editor-title')).toHaveText(['Cargo.toml', 'main.rs', 'main.ts', 'paper.ash-academy', 'paper.pdf']);
 	await expect(comparisons.locator('.stanza-multi-diff-editor-section')).toHaveCount(5);
 
 	await writeFile(join(cwd, 'main.ts'), 'const value = 2;\n');

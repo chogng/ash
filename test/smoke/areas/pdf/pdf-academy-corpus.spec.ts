@@ -2,7 +2,7 @@ import { SignedExtensionRegistry } from '../../../automation/extensionRegistry.j
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test as base } from "../../../automation/test.js";
-import { academicPdfCorpus, downloadAcademicPdfCorpus } from "../../../automation/academicPdfCorpus.js";
+import { academyPdfCorpus, downloadAcademyPdfCorpus } from "../../../automation/academyPdfCorpus.js";
 import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from "../../../automation/testWorkspace.js";
 
 const test = base.extend({
@@ -21,7 +21,7 @@ const corpusTest = test.extend<{ readonly testWorkspace: TestWorkspace; }>({
 		const workspace = await createTestWorkspace();
 		try {
 			if (target.kind === "electron" && target.appServerMode === "required") {
-				await downloadAcademicPdfCorpus(workspace.directory);
+				await downloadAcademyPdfCorpus(workspace.directory);
 			}
 			await use(workspace);
 		} finally {
@@ -32,11 +32,11 @@ const corpusTest = test.extend<{ readonly testWorkspace: TestWorkspace; }>({
 
 test.setTimeout(420_000);
 
-corpusTest("Installed optional PDF Viewer renders and annotates the open-access academic PDF corpus", { tag: ['@electron-app-server'] }, async ({ application, backendFixture, testWorkspace, workbench }) => {
+corpusTest("Installed optional PDF Viewer renders and annotates the open-access academy PDF corpus", { tag: ['@electron-app-server'] }, async ({ application, backendFixture, testWorkspace, workbench }) => {
 	await installViewer(application, backendFixture, workbench);
 	const explorer = workbench.page.locator(".ash-explorer");
 	const group = workbench.editors.groupAt(0);
-	for (const document of academicPdfCorpus) {
+	for (const document of academyPdfCorpus) {
 		const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: document.fileName });
 		await expect.poll(() => fileRow.count(), { timeout: 15_000, message: `${document.fileName} appears in Explorer` }).toBe(1);
 		await fileRow.click();

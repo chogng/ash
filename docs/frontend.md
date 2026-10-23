@@ -48,7 +48,7 @@ Sessions Web 使用 `pnpm dev:web:agents`，直接打开终端输出的 Sessions
 
 F5 配置见 [launch.json](../.vscode/launch.json)。完成 [环境初始化](build.md#初始化) 后，F5 和手动启动共用仓库的 Python 环境，macOS 无需额外的 `uv run` 包装。
 
-当前使用 Code 工作台，共同装配代码与 Academic 文档编辑器；打开论文不需要切换模式，旧 Academic 模式数据在启动时迁移，见 [工作台与文档贡献](workbench.md)。停止开发启动器使用 `Ctrl+C`；退出 Web 启动器会撤销该入口的浏览器授权，不终止其他客户端正在使用的后端。
+当前使用 Code 工作台，共同装配代码与 Academy 文档编辑器；打开论文不需要切换模式，旧 Academy 模式数据在启动时迁移，见 [工作台与文档贡献](workbench.md)。停止开发启动器使用 `Ctrl+C`；退出 Web 启动器会撤销该入口的浏览器授权，不终止其他客户端正在使用的后端。
 
 ### 开发态热更新
 
@@ -203,7 +203,7 @@ iframe 通过 `acquireAshWebviewApi().postMessage()` 通信，宿主校验来源
 
 测试入口会准备对应输入；完整 Web 测试不构建 Electron Main/Preload。Electron UI、Browser UI 和真实后端测试使用各自的 Playwright 项目，失败时查看报告和 trace。
 
-Academic 文件打开与保存已纳入 `pnpm test:desktop:app`，直接在 Code 工作台验证。旧模式迁移见 [工作台与文档贡献](workbench.md)。
+Academy 文件打开与保存已纳入 `pnpm test:desktop:app`，直接在 Code 工作台验证。旧模式迁移见 [工作台与文档贡献](workbench.md)。
 
 Agent Task 闭环回归位于 [task-agent.spec.ts](../test/smoke/areas/tasks/task-agent.spec.ts)，分别覆盖 process 与 shell Task。仅模型 Responses 使用回环 HTTP mock；聊天输入、Agent Core、一次性审批、TaskService、exec-server、PTY 和 Tasks/Terminal 均为真实产品路径。测试读取 Core 工具记录，确认发现、单次启动、Run ID 状态与输出查询、取消、进程退出及保留输出，并覆盖审批拒绝、启动失败、审批期间与运行中的命令权限撤销、窗口关闭后的进程清理、依赖完成前主 Task 不启动、后台 ready 状态、UTF-16 输出分页、终端复用后的 Run 输出隔离、依赖失败阻止主 Task 启动、取消多层并行依赖链、后台始终未 ready 和输出截断后的游标恢复；模型不生成 Task 或直接执行命令，不需要模型账户或密钥。
 

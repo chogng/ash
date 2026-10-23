@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { createDefaultDocumentSchema } from '../../../../../../../extensions/academy/common/model/documentSchema.js';
-import { exportDocx, importDocx } from '../../../../../../../extensions/academy/browser/contrib/documentOutput/docx.js';
-import { zipFiles, unzipFiles } from '../../../../../../../extensions/academy/browser/contrib/documentOutput/zip.js';
-import { documentToPlainText } from '../../../../../../../extensions/academy/common/model/documentSerialization.js';
-import { createResolveRevisionCommand } from '../../../../../../../extensions/academy/common/model/documentReview.js';
-import { DocumentTextModel } from '../../../../../../../extensions/academy/common/model/documentTextModel.js';
+import { createDefaultDocumentSchema } from '../../extensions/academy/common/model/documentSchema.js';
+import { exportDocx, importDocx } from '../../extensions/academy/browser/contrib/documentOutput/docx.js';
+import { zipFiles, unzipFiles } from '../../extensions/academy/browser/contrib/documentOutput/zip.js';
+import { documentToPlainText } from '../../extensions/academy/common/model/documentSerialization.js';
+import { createResolveRevisionCommand } from '../../extensions/academy/common/model/documentReview.js';
+import { DocumentTextModel } from '../../extensions/academy/common/model/documentTextModel.js';
 
 const environment = new JSDOM('<!doctype html>');
 suiteTeardown(() => environment.window.close());
@@ -70,38 +70,38 @@ test('DOCX rejects unsupported features, invalid archives, expansion and cancell
 	await assert.rejects(importDocx(foreign('<w:p/>'), schema, owner, aborted.signal), /abort/i);
 });
 
-test('DOCX native Academic imports preserve their profile, paper structure and citation identities', async () => {
-	const { createAcademicDocumentSchema, createEmptyAcademicDocument } = await import('../../../../../../../extensions/academy/browser/contrib/academic/common/schema.js');
-	const { importDocxDocument } = await import('../../../../../../../extensions/academy/browser/contrib/documentOutput/docx.js');
-	const academic = createAcademicDocumentSchema();
-	const empty = createEmptyAcademicDocument(academic);
-	const document = academic.createDocument([...empty.content,
-	academic.createNode('section', { content: [academic.createNode('heading', { content: [academic.createText('Research')] }), academic.createNode('paragraph', { content: [academic.createText('Evidence '), academic.createNode('citation', { id: 'citation-one', attrs: { key: 'one', label: '[1]' } })] })] }),
-	academic.createNode('bibliography', { content: [academic.createNode('reference', { attrs: { key: 'one' }, content: [academic.createNode('paragraph', { content: [academic.createText('Source one')] })] })] }),
+test('DOCX native Academy imports preserve their profile, paper structure and citation identities', async () => {
+	const { createAcademyDocumentSchema, createEmptyAcademyDocument } = await import('../../extensions/academy/browser/contrib/academy/common/schema.js');
+	const { importDocxDocument } = await import('../../extensions/academy/browser/contrib/documentOutput/docx.js');
+	const academy = createAcademyDocumentSchema();
+	const empty = createEmptyAcademyDocument(academy);
+	const document = academy.createDocument([...empty.content,
+	academy.createNode('section', { content: [academy.createNode('heading', { content: [academy.createText('Research')] }), academy.createNode('paragraph', { content: [academy.createText('Evidence '), academy.createNode('citation', { id: 'citation-one', attrs: { key: 'one', label: '[1]' } })] })] }),
+	academy.createNode('bibliography', { content: [academy.createNode('reference', { attrs: { key: 'one' }, content: [academy.createNode('paragraph', { content: [academy.createText('Source one')] })] })] }),
 	]);
-	const bytes = await exportDocx(document, academic, signal());
+	const bytes = await exportDocx(document, academy, signal());
 	const result = await importDocxDocument(bytes, owner, signal());
-	assert.equal(result.documentType, 'academic'); assert.deepEqual(result.document, document);
+	assert.equal(result.documentType, 'academy'); assert.deepEqual(result.document, document);
 });
 
 test('DOCX citation output uses current bibliography ordinals and retains explicit and unresolved labels', async () => {
-	const { createAcademicDocumentSchema } = await import('../../../../../../../extensions/academy/browser/contrib/academic/common/schema.js');
-	const academic = createAcademicDocumentSchema();
-	const document = academic.createDocument([
-		academic.createNode('bibliography', { content: ['first', 'second'].map(key => academic.createNode('reference', { attrs: { key }, content: [academic.createNode('paragraph', { content: [academic.createText(key)] })] })) }),
-		academic.createNode('paragraph', {
+	const { createAcademyDocumentSchema } = await import('../../extensions/academy/browser/contrib/academy/common/schema.js');
+	const academy = createAcademyDocumentSchema();
+	const document = academy.createDocument([
+		academy.createNode('bibliography', { content: ['first', 'second'].map(key => academy.createNode('reference', { attrs: { key }, content: [academy.createNode('paragraph', { content: [academy.createText(key)] })] })) }),
+		academy.createNode('paragraph', {
 			content: [
-				academic.createNode('citation', { attrs: { key: 'second' } }),
-				academic.createNode('citation', { attrs: { key: 'first', label: '[Custom]' } }),
-				academic.createNode('citation', { attrs: { key: 'missing', label: '' } }),
+				academy.createNode('citation', { attrs: { key: 'second' } }),
+				academy.createNode('citation', { attrs: { key: 'first', label: '[Custom]' } }),
+				academy.createNode('citation', { attrs: { key: 'missing', label: '' } }),
 			]
 		}),
 	]);
-	const files = await unzipFiles(await exportDocx(document, academic, signal()), signal());
+	const files = await unzipFiles(await exportDocx(document, academy, signal()), signal());
 	const xml = decode(files.get('word/document.xml')!);
 	for (const label of ['[2]', '[Custom]', '[missing]']) assert.ok(xml.includes(label));
 	assert.ok(!xml.includes('[second]'));
-	assert.deepEqual(await importDocx(zipFiles(files), academic, owner, signal()), document);
+	assert.deepEqual(await importDocx(zipFiles(files), academy, owner, signal()), document);
 });
 
 test('DOCX resolves used style inheritance, materializes character marks and ignores unused unsupported styles', async () => {

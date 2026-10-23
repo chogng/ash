@@ -228,7 +228,7 @@ export class ReferenceLibraryEditor extends EditorPane {
 	}
 	private async openDocument(): Promise<void> {
 		if (!EditorPanes.getEditorPanes().some(pane => pane.id === 'stanza.editor.document')) throw new Error(localize('references.academyUnavailable', 'Install, enable and authorize Academy first.'));
-		const resource = await this.fileDialogs.showOpenDialog({ canSelectFiles: true, filters: [{ name: 'Academy', extensions: ['ash-academic', 'ash-paper'] }] });
+		const resource = await this.fileDialogs.showOpenDialog({ canSelectFiles: true, filters: [{ name: 'Academy', extensions: ['ash-academy', 'ash-paper'] }] });
 		if (!resource?.[0]) return; this.signal().throwIfAborted(); await this.editors.openEditor({ resource: resource[0] }, { preferredEditorId: 'stanza.editor.document' }, 'sideGroup'); this.refreshTargets();
 	}
 	private async citations(operation: 'insert' | 'update'): Promise<void> {

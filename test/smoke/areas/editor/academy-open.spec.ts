@@ -38,18 +38,18 @@ test('Code opens and saves a general document and exposes document creation and 
 	expect(JSON.parse(await readFile(resource, 'utf8')).document.content[0].content[0].text).toBe('Saved general notes');
 });
 
-test("Code opens Academic through the document contribution and saves its structured document through the Workbench", { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test("Code opens Academy through the document contribution and saves its structured document through the Workbench", { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 
 	const page = workbench.page;
 	const explorer = page.locator(".ash-explorer");
 	await expect(explorer).toBeVisible();
 
-	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "paper.ash-academic" });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "academic workspace file appears in Explorer" }).toBe(1);
+	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "paper.ash-academy" });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "academy workspace file appears in Explorer" }).toBe(1);
 	await fileRow.click();
 
 	const group = workbench.editors.groupAt(0);
-	const paperTab = group.element.getByRole('tab', { name: 'paper.ash-academic', exact: true });
+	const paperTab = group.element.getByRole('tab', { name: 'paper.ash-academy', exact: true });
 	await expect(paperTab).toHaveCount(1);
 	await expect(paperTab).toHaveAttribute('aria-selected', 'true');
 	await expect(group.content.locator(".stanza-structured-editor-pane")).toBeVisible();
@@ -76,11 +76,11 @@ test("Code opens Academic through the document contribution and saves its struct
 	await input.press(process.platform === "darwin" ? "Meta+S" : "Control+S");
 
 	await expect.poll(
-		() => readFile(testWorkspace.academicFile, "utf8"),
+		() => readFile(testWorkspace.academyFile, "utf8"),
 		{ timeout: 15_000, message: "Document engine save reaches the App Server workspace" },
 	).toContain("\"fontSize\":18");
 	await expect.poll(
-		() => readFile(testWorkspace.academicFile, "utf8"),
+		() => readFile(testWorkspace.academyFile, "utf8"),
 		{ timeout: 15_000, message: "Document engine code block save reaches the App Server workspace" },
 	).toContain("const paper = 2;");
 	await explorer.getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();

@@ -27,15 +27,15 @@ test('user keyboard layout parser accepts VS Code debug JSON and canonical Ash J
 
 	const canonical = parseUserKeyboardLayoutResource({
 		layout: {
-			id: 'custom.academic',
-			label: 'Custom Academic',
+			id: 'custom.academy',
+			label: 'Custom Academy',
 			source: 'native',
 			operatingSystem: OperatingSystem.Linux,
 		},
 		rawMapping: { KeyQ: mappingEntry('x', 'X') },
 	});
 	assert.equal(canonical?.layout.source, 'user');
-	assert.equal(canonical?.layout.id, 'custom.academic');
+	assert.equal(canonical?.layout.id, 'custom.academy');
 	assert.throws(() => parseUserKeyboardLayoutResource({
 		layout: { id: 'bad', label: 'Bad', operatingSystem: OperatingSystem.Linux },
 		rawMapping: { KeyA: { ...mappingEntry('a', 'A'), unexpected: true } },

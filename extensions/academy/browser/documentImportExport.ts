@@ -7,6 +7,32 @@ import { localize } from 'ash:editor/nls.js';
 
 import type { DocumentTextFormat } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
 
+/** Academy owns image embedding; resource reads retain the initiating host's access checks. */
+export async function materializeDocumentImages(document: DocumentNode, readResource: (resource: URI) => Promise<Uint8Array>): Promise<DocumentNode> {
+	const images = new Map<string, Promise<string>>();
+	const materialize = async (node: DocumentNode): Promise<DocumentNode> => {
+		if (node.type === 'image' && typeof node.attrs.src === 'string' && !/^(?:https?:|data:)/i.test(node.attrs.src)) {
+			let image = images.get(node.attrs.src);
+			if (!image) {
+				const resource = URI.parse(node.attrs.src);
+				const extension = resource.path.match(/\.([^.\/]+)$/)?.[1]?.toLowerCase();
+				const mime = extension === 'png' || extension === 'gif' || extension === 'webp' ? `image/${extension}`
+					: extension === 'jpg' || extension === 'jpeg' || extension === 'jpe' ? 'image/jpeg' : undefined;
+				if (!mime) throw new DocumentConversionError('image resource', node.id);
+				image = readResource(resource).then(bytes => {
+					let binary = '';
+					for (const byte of bytes) binary += String.fromCharCode(byte);
+					return `data:${mime};base64,${btoa(binary)}`;
+				});
+				images.set(node.attrs.src, image);
+			}
+			return { ...node, attrs: { ...node.attrs, src: await image } };
+		}
+		return { ...node, content: await Promise.all(node.content.map(materialize)) };
+	};
+	return materialize(document);
+}
+
 /** Conversion errors identify the original source or node; they never flatten unsupported structure. */
 export class DocumentConversionError extends Error {
 	constructor(readonly feature: string, readonly location: string) {

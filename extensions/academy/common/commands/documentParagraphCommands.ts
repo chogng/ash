@@ -83,7 +83,7 @@ export function createApplyParagraphStyleCommand(schema: DocumentSchema, documen
 	const structural = createSetParagraphStyleCommand(schema, document, blockId, selection, style.level);
 	const paragraphs = getSelectedDocumentParagraphs(document, blockId, selection);
 	if (!paragraphs.length) return undefined;
-	// Reuse the built-in structural check, including Academic title/abstract constraints.
+	// Reuse the built-in structural check, including Academy title/abstract constraints.
 	if (!structural && paragraphs.some(node => node.type !== (style.level ? 'heading' : 'paragraph') || (style.level && node.attrs.level !== style.level))) return undefined;
 	let transaction = structural?.transaction ?? new DocumentTransaction();
 	for (const node of paragraphs) {

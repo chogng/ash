@@ -7,7 +7,7 @@ import { validateDocumentParagraphAttributes, validateDocumentParagraphStyles } 
 export type DocumentNodeKind = "root" | "group" | "block" | "line" | "inline" | "text";
 
 /** Persistent document kind; schemas own the interpretation of their document trees. */
-type DocumentType = "general" | "academic";
+type DocumentType = "general" | "academy";
 
 export interface DocumentMarkSpec {
 	readonly validateAttributes?: (attrs: DocumentAttributes) => void;

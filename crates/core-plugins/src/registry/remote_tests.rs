@@ -78,14 +78,10 @@ fn product_runtime_trust_requires_explicit_publisher_and_pinned_root() {
         .with_product_runtime_publishers(["ash".into()])
         .unwrap();
     assert!(trusted.product_runtime_authority("ash.academy").is_some());
+    assert!(trusted.product_runtime_authority("other.academy").is_none());
     assert!(
         trusted
-            .product_runtime_authority("other.academic")
-            .is_none()
-    );
-    assert!(
-        trusted
-            .product_runtime_authority("ash-impostor.academic")
+            .product_runtime_authority("ash-impostor.academy")
             .is_none()
     );
     assert!(

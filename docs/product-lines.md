@@ -25,6 +25,6 @@ Session、Thread、Turn 和 ThreadItem 能力经过 App Server。各客户端持
 
 `crates/utils/pty` 拥有进程与字节传输；Electron Renderer 的 xterm 拥有界面端的终端模型。`crates/terminal` 保留 ANSI/VT 解析、网格与输入编码，供 CLI 的真实终端测试使用，不拥有窗口、PTY 或 Agent runtime。
 
-在仓库根目录运行 `just ash` 启动 Ash Electron 桌面端，`just ash-code` 启动 Ash Code CLI/TUI，`pnpm dev:web` 或 `pnpm dev:web:full` 启动 Web。Desktop 的 Code Workbench 与 Academic 文档贡献是同一产品内的功能，详见 [Workbench 装配](workbench.md)。
+在仓库根目录运行 `just ash` 启动 Ash Electron 桌面端，`just ash-code` 启动 Ash Code CLI/TUI，`pnpm dev:web` 或 `pnpm dev:web:full` 启动 Web。Desktop 的 Code Workbench 与 Academy 文档贡献是同一产品内的功能，详见 [Workbench 装配](workbench.md)。
 
 实现入口见 [CLI](../cli/README.md)、[TUI](../crates/tui/README.md)、[前端开发](frontend.md)、[Desktop 架构](desktop-architecture.md)和 [运行包构建](../build/README.md)。

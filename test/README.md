@@ -45,7 +45,7 @@ pnpm test:desktop:smoke:ui
 
 `referenceManager.integration.spec.ts` 使用真实 Rust 文献管理、Academy 与 PDF Viewer 进程及独立客户端，覆盖 RIS／库持久化、引用插入与更新／撤销、中英文、冲突、停用恢复及可选 PDF 阅读。签名安装路径由 `signed_installed_reference_manager_uses_product_launcher_and_exact_revocable_consent` 使用测试分发验收；构建和环境变量见 [Reference Manager](../extensions/reference-manager/README.md)。
 
-Frontend CI 运行全部单元测试、Chromium 浏览器集成测试，以及 Browser、Electron UI 和连接真实 App Server 的完整 smoke suite；连接测试不再通过文件白名单或 grep 缩小范围。Academic Workbench 使用独立项目。需要联网下载出版社 PDF 的语料测试使用 `electron-pdf-corpus-app-server` 独立项目，不进入普通 smoke suite。PDF 查看器是可选扩展；该项目通过测试签名源安装并显式授权，必须提供 `ASH_PDF_VIEWER_DISTRIBUTION` 与 `ASH_PDF_VIEWER_TRUSTED_ROOT`，不复用用户 profile；前置与构建见 [PDF Viewer](../extensions/pdf-viewer/README.md)。
+Frontend CI 运行全部单元测试、Chromium 浏览器集成测试，以及 Browser、Electron UI 和连接真实 App Server 的完整 smoke suite；连接测试不再通过文件白名单或 grep 缩小范围。Academy Workbench 使用独立项目。需要联网下载出版社 PDF 的语料测试使用 `electron-pdf-corpus-app-server` 独立项目，不进入普通 smoke suite。PDF 查看器是可选扩展；该项目通过测试签名源安装并显式授权，必须提供 `ASH_PDF_VIEWER_DISTRIBUTION` 与 `ASH_PDF_VIEWER_TRUSTED_ROOT`，不复用用户 profile；前置与构建见 [PDF Viewer](../extensions/pdf-viewer/README.md)。
 
 真实 App Server 场景运行文件保存、BOM/CRLF、外部修改后的撤销，以及手动保存、未保存、延迟自动保存、切换编辑器自动保存后的重启恢复；Browser 还验证未保存内容在页面重载后的恢复。终端覆盖输入、工作区目录、面板关闭再打开、多实例输出隔离和 shell 退出后的重新启动。Search 验证大小写、正则、包含与排除条件及清除结果；Tasks 验证发现、执行、重跑、取消和实际输出；Settings 验证即时生效、重启保存和恢复默认。CI 配置覆盖 Linux Browser、macOS Electron 和 Windows Electron；终端进程在窗口重启后的恢复尚未实现，不属于当前覆盖。
 
@@ -53,7 +53,7 @@ Electron 自动化普通测试在本地和 CI 都隐藏窗口，`--debug` 显示
 
 测试声明通过 Playwright `tag` 指定适用目标：`@browser-ui`、`@browser-app-server`、`@electron-ui`、`@electron-app-server`，同一维度的标签表示可选目标；没有目标标签时覆盖所有目标。`@darwin`、`@linux`、`@win32` 限定操作系统，与目标标签同时生效。项目在采集阶段过滤不适用用例，自动 fixture 在工作区和应用启动前检查自定义配置。仅可从实际运行获知的条件继续使用正文 `test.skip`。
 
-组件布局和输入在 `test/integration/browser` 验证；Sessions Activity Bar、设置、画布、标题栏与 SCM history hover 使用隔离的浏览器页面，保留主题、辅助功能和非默认语言覆盖。Smoke 保留真实启动、跨窗口 IPC、宿主剪贴板、编辑器内容、配置持久化和重启链路。Academic workbench 与 document editing 已包含在常规 Electron 项目，CI 不额外重复运行。
+组件布局和输入在 `test/integration/browser` 验证；Sessions Activity Bar、设置、画布、标题栏与 SCM history hover 使用隔离的浏览器页面，保留主题、辅助功能和非默认语言覆盖。Smoke 保留真实启动、跨窗口 IPC、宿主剪贴板、编辑器内容、配置持久化和重启链路。Academy workbench 与 document editing 已包含在常规 Electron 项目，CI 不额外重复运行。
 
 ## 发布成品检查
 
@@ -69,9 +69,9 @@ Electron 自动化普通测试在本地和 CI 都隐藏窗口，`--debug` 显示
 
 Editor tests follow VS Code's two-layer layout with one shared editor browser suite:
 
-| Layer                                                                                           | Location                                                     | Purpose                                                                                                                                  |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Editor unit                                                                                     | `src/ash/editor/test` and editor contribution `test` folders | Code/Academic TextModel, command, controller, persistence, and projection contracts in Node/jsdom                                        |
-| Editor browser                                                                                  | `test/integration/browser`                                   | Code/Academic TextModel mount points, mode bundles, pane, input, save, worker, code-block range, and accessibility contracts in Chromium |
-| Editor architecture                                                                             | `test/architecture/editor-architecture.test.ts`              | Flat `common/browser/contrib/test` ownership, mode bundles, and synchronous-layer dependency rules                                       |
+| Layer                                                                                           | Location                                                     | Purpose                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Editor unit                                                                                     | `src/ash/editor/test` and editor contribution `test` folders | Code/Academy TextModel, command, controller, persistence, and projection contracts in Node/jsdom                                        |
+| Editor browser                                                                                  | `test/integration/browser`                                   | Code/Academy TextModel mount points, mode bundles, pane, input, save, worker, code-block range, and accessibility contracts in Chromium |
+| Editor architecture                                                                             | `test/architecture/editor-architecture.test.ts`              | Flat `common/browser/contrib/test` ownership, mode bundles, and synchronous-layer dependency rules                                      |
 | Run `pnpm test:editor`; it runs the editor unit tests and the single browser integration suite. |

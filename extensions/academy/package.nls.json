@@ -1,7 +1,7 @@
 {
   "academy.displayName": "Academy (Experimental)",
-  "academy.description": "Experimental document and academic paper editing with titles, abstracts, sections, citations and bibliographies. Existing Academic files remain supported.",
-  "academy.editor": "Academic Document",
+  "academy.description": "Experimental document and research paper editing with titles, abstracts, sections, citations and bibliographies.",
+  "academy.editor": "Academy Document",
   "academy.generalEditor": "Document",
   "academy.channelNotes": "Channel notes"
 }

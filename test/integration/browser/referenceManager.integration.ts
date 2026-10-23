@@ -52,7 +52,7 @@ const textFiles = createTestTextFileService(files);
 const models = new DocumentEditorTextModelService(textFiles, services.get(IWorkingCopyService)); services.registerInstance(IDocumentEditorTextModelService, models);
 const theme = bindTestColorTheme(services.get(IThemeService), document.body);
 const changed = new Emitter<void>(); const panes = new Map<string, EditorPane>();
-async function open(input: IResourceEditorInput, preferredEditorId?: string, slot = /\.pdf$/i.test(input.resource.path) ? 'pdf' : /\.(?:ash-academic|ash-paper)$/i.test(input.resource.path) ? 'document' : 'library') {
+async function open(input: IResourceEditorInput, preferredEditorId?: string, slot = /\.pdf$/i.test(input.resource.path) ? 'pdf' : /\.(?:ash-academy|ash-paper)$/i.test(input.resource.path) ? 'document' : 'library') {
 	const descriptor = EditorPanes.getEditorPane(input, { preferredEditorId }); if (!descriptor) throw new Error('No admitted editor');
 	const pane = await descriptor.create({ input, instantiationService: services });
 	const container = document.getElementById(slot)!; const next = document.createElement('div'); next.style.height = '100%'; container.append(next);
@@ -69,7 +69,7 @@ services.registerInstance(IExtensionHostApi, { invoke: async (request, signal) =
 const bridge = services.createInstance(MainThreadClientEditors, 30000, loadExtensionEditorModule);
 await memory.createDirectory(URI.file('/fixture'));
 await files.writeFile({ resource: URI.file('/fixture/source.ris'), content: 'TY  - JOUR\nTI  - A paper\nAU  - Smith, Jane\nPY  - 2024\nDO  - 10.1234/abc\nER  -\nTY  - BOOK\nTI  - A second book\nAU  - Wang, Ming\nPY  - 2023\nER  -\n' });
-await files.writeFile({ resource: URI.file('/fixture/paper.ash-academic'), content: '' });
+await files.writeFile({ resource: URI.file('/fixture/paper.ash-academy'), content: '' });
 await memory.writeFile(URI.file('/fixture/paper.pdf'), new Uint8Array(await (await fetch('/__references_pdf')).arrayBuffer()), { create: true, overwrite: false });
 const library = () => panes.get('library') as ReferenceLibraryEditor;
 const model = () => (panes.get('document')!.workingCopy as TextModelWorkingCopyReference).model as AcademyTextModel;

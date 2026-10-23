@@ -19,8 +19,8 @@ import { MainThreadClientEditors } from '../../browser/mainThreadClientEditors.j
 const owner = { id: 'ash.academy', name: 'academy', publisher: 'ash', version: '1.0.0', sourceKind: 'builtIn', packageSha256: 'a'.repeat(64) } as ExtensionDescriptor;
 const declaration: { readonly [key: string]: JsonValue; } = {
 	version: 1, clientModule: 'dist/editor.js', clientDigest: `sha256:${'a'.repeat(64)}`, editors: [{
-		editorId: 'stanza.editor.document', displayName: 'Academic Document', selectors: ['*.ash-academic', '*.ash-paper'],
-		documentType: 'academic', contentType: 'application/vnd.ash.academic-document+json',
+		editorId: 'stanza.editor.document', displayName: 'Academy Document', selectors: ['*.ash-academy', '*.ash-paper'],
+		documentType: 'academy', contentType: 'application/vnd.ash.academy-document+json',
 	}],
 };
 const runtime: ExtensionHostRuntime = {
@@ -29,7 +29,7 @@ const runtime: ExtensionHostRuntime = {
 	registrations: [{ kind: 'dataChannel', channelId: 'editor.client.v1', registrationId: 'editor.client.v1' }],
 };
 
-for (const [language, title] of [['en', 'Academic Document'], ['zh-CN', '学术论文文档']]) {
+for (const [language, title] of [['en', 'Academy Document'], ['zh-CN', 'Academy 文档']]) {
 	test(`real Rust Academy registers its editor through the shared bridge (${language})`, async function () {
 		this.timeout(60_000);
 		using localization = toDisposable(resetNlsResolver);
@@ -48,7 +48,7 @@ for (const [language, title] of [['en', 'Academic Document'], ['zh-CN', '学术�
 					packageId: owner.id, packageVersion: owner.version,
 					getEditorProfile: id => {
 						assert.equal(id, 'stanza.editor.document');
-						return { ...generalProfile, id: 'academic', contentType: 'application/vnd.ash.academic-document+json' };
+						return { ...generalProfile, id: 'academy', contentType: 'application/vnd.ash.academy-document+json' };
 					},
 				};
 			};
@@ -65,7 +65,7 @@ for (const [language, title] of [['en', 'Academic Document'], ['zh-CN', '学术�
 			await bridge.update(snapshot);
 			const pane = EditorPanes.getEditorPane(input)!;
 			assert.equal(pane.name, title);
-			assert.equal(DocumentTypes.find(input)?.id, 'academic');
+			assert.equal(DocumentTypes.find(input)?.id, 'academy');
 			assert.equal(loads, 0, 'component is loaded only when its editor opens');
 			await pane.create({ input, instantiationService });
 			assert.equal(loads, 1);
@@ -129,7 +129,7 @@ test('invalid or unadmitted client declarations fail without partial registratio
 	await assert.rejects(bridge.update({ generation, extensions: [runtime] }), /unavailable/);
 	entries = [owner];
 	await bridge.update({ generation: generation + 1, extensions: [runtime] });
-	assert.equal(DocumentTypes.find({ resource: URI.file('/retry.ash-paper') })?.id, 'academic');
+	assert.equal(DocumentTypes.find({ resource: URI.file('/retry.ash-paper') })?.id, 'academy');
 
 });
 
@@ -156,7 +156,7 @@ test('verified installed packages bind editor scopes to exact admitted runtime a
 		manifestSha256: `sha256:${'b'.repeat(64)}`,
 		packageSha256: runtime.packageDigest,
 		rendererClient: {
-			runtimeId: 'marketplace:verified-academic:editor-extension:editor', apiVersion: 1,
+			runtimeId: 'marketplace:verified-academy:editor-extension:editor', apiVersion: 1,
 			entry: 'dist/editor.js', digest: `sha256:${'c'.repeat(64)}`,
 			style: 'dist/editor.css', styleDigest: `sha256:${'d'.repeat(64)}`,
 			sourceDigest: declaration.clientDigest as string,
@@ -174,7 +174,7 @@ test('verified installed packages bind editor scopes to exact admitted runtime a
 		providerSignal = request.signal;
 		return {
 			packageId: owner.id, packageVersion: owner.version,
-			getEditorProfile: () => ({ ...generalProfile, id: 'academic', contentType: 'application/vnd.ash.academic-document+json' }),
+			getEditorProfile: () => ({ ...generalProfile, id: 'academy', contentType: 'application/vnd.ash.academy-document+json' }),
 		};
 	}, { invoke: async () => declaration } as unknown as IExtensionHostApi, packages, emptyEditorDeclarations);
 	await bridge.update({ generation: 1, extensions: [admittedRuntime] });
@@ -206,14 +206,14 @@ test('temporary client resource failures can retry within the same live capabili
 	let attempts = 0;
 	using bridge = new MainThreadClientEditors(30_000, async () => {
 		if (++attempts === 1) throw new Error('Temporary resource read failure');
-		return { packageId: owner.id, packageVersion: owner.version, getEditorProfile: () => ({ ...generalProfile, id: 'academic', contentType: 'application/vnd.ash.academic-document+json' }) };
+		return { packageId: owner.id, packageVersion: owner.version, getEditorProfile: () => ({ ...generalProfile, id: 'academy', contentType: 'application/vnd.ash.academy-document+json' }) };
 	}, { invoke: async () => declaration } as unknown as IExtensionHostApi, {
 		list: async () => ({ generation: 1, extensions: [owner], diagnostics: [] }),
 	} as unknown as IExtensionApi, emptyEditorDeclarations);
 	await bridge.update({ generation: 1, extensions: [runtime] });
 	const descriptor = EditorPanes.getEditorPane({ resource: URI.file('/retry-resources.ash-paper') })!;
 	await assert.rejects(descriptor.resolveDocumentProfile!(), /Temporary resource read failure/);
-	assert.equal((await descriptor.resolveDocumentProfile!()).id, 'academic');
+	assert.equal((await descriptor.resolveDocumentProfile!()).id, 'academy');
 	await descriptor.resolveDocumentProfile!();
 	assert.equal(attempts, 2);
 });
@@ -221,7 +221,7 @@ test('temporary client resource failures can retry within the same live capabili
 test('disabled installed declarations protect document routing and uninstall removes their reservation', async () => {
 	const manifestJson = JSON.stringify({
 		name: 'academy', publisher: 'ash', version: '1.0.0', ashRuntime: { kind: 'rust' },
-		contributes: { customEditors: [{ viewType: 'stanza.editor.document', displayName: 'Academic', priority: 'default', selector: [{ filenamePattern: '*.ash-protected', mimeType: 'application/vnd.ash.academic-document+json' }] }] },
+		contributes: { customEditors: [{ viewType: 'stanza.editor.document', displayName: 'Academy', priority: 'default', selector: [{ filenamePattern: '*.ash-protected', mimeType: 'application/vnd.ash.academy-document+json' }] }] },
 	});
 	let entries = [{ ...owner, sourceKind: 'registry', manifestJson, manifestSha256: `sha256:${'a'.repeat(64)}` }];
 	using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('must not load'); }, {} as IExtensionHostApi, {
@@ -243,7 +243,7 @@ test('package artifact capabilities validate targets and cancel conversion when 
 	const entered = new Promise<void>(resolve => { started = resolve; });
 	const load: ExtensionEditorModuleLoader = async () => ({
 		packageId: owner.id, packageVersion: owner.version, getEditorProfile: () => ({
-			...generalProfile, id: 'academic', contentType: 'application/vnd.ash.academic-document+json',
+			...generalProfile, id: 'academy', contentType: 'application/vnd.ash.academy-document+json',
 			create: () => ({
 				...generalProfile.create(), artifactFormats: [{ id: 'test', label: 'Test', extension: invalid ? '../escape' : 'test', mimeType: 'application/test', canImport: true }], importBinary: async (_bytes, _format, _owner, signal) => {
 					started(); await new Promise<void>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
@@ -299,8 +299,8 @@ const emptyEditorDeclarations = { getExtensionPointContributions: () => [] } as 
 test('an installed document editor declares restore and creation routes before starting its runtime', async () => {
 	const installed = {
 		...owner, sourceKind: 'registry' as const, packageSha256: runtime.packageDigest, manifestSha256: `sha256:${'b'.repeat(64)}`,
-		rendererClient: { runtimeId: 'marketplace:lazy-academic:editor', apiVersion: 1 as const, entry: 'dist/editor.js', digest: `sha256:${'c'.repeat(64)}`, style: 'dist/editor.css', styleDigest: `sha256:${'d'.repeat(64)}`, sourceDigest: declaration.clientDigest as string },
-		manifestJson: JSON.stringify({ name: 'academy', publisher: 'ash', version: '1.0.0', engines: { ash: '*' }, ashRuntime: { kind: 'rust' }, contributes: { customEditors: [{ viewType: 'stanza.editor.document', displayName: 'Academic Document', priority: 'default', documentType: 'academic', selector: [{ filenamePattern: '*.ash-paper', mimeType: 'application/vnd.ash.academic-document+json' }] }] } }),
+		rendererClient: { runtimeId: 'marketplace:lazy-academy:editor', apiVersion: 1 as const, entry: 'dist/editor.js', digest: `sha256:${'c'.repeat(64)}`, style: 'dist/editor.css', styleDigest: `sha256:${'d'.repeat(64)}`, sourceDigest: declaration.clientDigest as string },
+		manifestJson: JSON.stringify({ name: 'academy', publisher: 'ash', version: '1.0.0', engines: { ash: '*' }, ashRuntime: { kind: 'rust' }, contributes: { customEditors: [{ viewType: 'stanza.editor.document', displayName: 'Academy Document', priority: 'default', documentType: 'academy', selector: [{ filenamePattern: '*.ash-paper', mimeType: 'application/vnd.ash.academy-document+json' }] }] } }),
 	};
 	const ready = { ...runtime, id: installed.rendererClient.runtimeId };
 	const dormant = { ...ready, lifecycle: 'dormant' as const, incarnation: undefined, registrations: [], activation: { events: ['onDemand:dataChannel'], commands: [] } };
@@ -316,19 +316,19 @@ test('an installed document editor declares restore and creation routes before s
 		},
 		invoke: async () => { reads++; return declaration; },
 	} as unknown as IExtensionHostApi;
-	const extensions = { getExtensionPointContributions: () => [{ description: { id: installed.id }, value: [{ viewType: 'stanza.editor.document', displayName: 'Academic Document', priority: 'default', documentType: 'academic', selector: [{ filenamePattern: '*.ash-paper', mimeType: 'application/vnd.ash.academic-document+json' }] }] }] } as unknown as IExtensionService;
+	const extensions = { getExtensionPointContributions: () => [{ description: { id: installed.id }, value: [{ viewType: 'stanza.editor.document', displayName: 'Academy Document', priority: 'default', documentType: 'academy', selector: [{ filenamePattern: '*.ash-paper', mimeType: 'application/vnd.ash.academy-document+json' }] }] }] } as unknown as IExtensionService;
 	using bridge = new MainThreadClientEditors(30_000, async () => {
 		loads++;
-		return { packageId: owner.id, packageVersion: owner.version, getEditorProfile: () => ({ ...generalProfile, id: 'academic', contentType: 'application/vnd.ash.academic-document+json' }) };
+		return { packageId: owner.id, packageVersion: owner.version, getEditorProfile: () => ({ ...generalProfile, id: 'academy', contentType: 'application/vnd.ash.academy-document+json' }) };
 	}, api, packages, extensions);
 	await bridge.update({ generation: 1, extensions: [dormant] });
 	const input = { resource: URI.file('/restored.ash-paper') };
 	const pending = EditorPanes.getEditorPane(input)!;
 	assert.equal(pending.id, 'stanza.editor.document');
-	assert.equal(DocumentTypes.find(input)?.id, 'academic');
+	assert.equal(DocumentTypes.find(input)?.id, 'academy');
 	assert.deepEqual([starts, reads, loads], [0, 0, 0]);
 	const profile = await pending.resolveDocumentProfile!();
-	assert.equal(profile.id, 'academic');
+	assert.equal(profile.id, 'academy');
 	assert.deepEqual([starts, reads, loads], [1, 1, 1]);
 	assert.notStrictEqual(EditorPanes.getEditorPane(input), pending);
 	await EditorPanes.getEditorPane(input)!.resolveDocumentProfile!();

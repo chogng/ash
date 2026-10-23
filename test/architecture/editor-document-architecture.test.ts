@@ -5,7 +5,7 @@ import { test } from "mocha";
 import * as ts from "typescript";
 import { findDesktopRoot } from "./testPaths.js";
 
-test("Academic collaboration contracts erase all host dependencies at runtime", () => {
+test("Academy collaboration contracts erase all host dependencies at runtime", () => {
 	const file = resolve(findDesktopRoot(import.meta.dirname), "extensions/academy/common/services/documentCollaborationService.ts");
 	const emitted = ts.transpileModule(readFileSync(file, "utf8"), {
 		compilerOptions: { module: ts.ModuleKind.ESNext, verbatimModuleSyntax: true },

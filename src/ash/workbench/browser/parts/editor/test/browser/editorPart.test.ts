@@ -14,7 +14,7 @@ import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/
 import { createTestComponentServices, registerTestComponentServices, createTestEditorServices, createTestTextFileService, createTestFileService } from '../../../../../test/common/testEditorServices.js';
 import { MemoryFileService } from '../../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { createDocumentEditorPane } from '../../../../../contrib/documentEditor/browser/editorProfile.js';
-import { academicProfile } from '../../../../../../../../extensions/academy/browser/editorProfile.js';
+import { academyProfile } from '../../../../../../../../extensions/academy/browser/editorProfile.js';
 import { DocumentEditorTextModelService } from '../../../../../services/documentEditor/browser/documentEditorTextModelService.js';
 import { IDocumentEditorTextModelService } from '../../../../../services/documentEditor/common/documentTypes.js';
 import { IWorkingCopyService } from '../../../../../services/workingCopy/common/workingCopyService.js';
@@ -4057,7 +4057,7 @@ test('saveAll returns the saved untitled replacement and reports a cancelled Sav
 	} finally { dom.window.close(); }
 });
 
-test('Academic Save As transfers every view to one typed v2 resource and working copy', async () => {
+test('Academy Save As transfers every view to one typed v2 resource and working copy', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
 	try {
 		using services = createTestEditorServices(undefined, undefined, dom.window.document);
@@ -4072,11 +4072,11 @@ test('Academic Save As transfers every view to one typed v2 resource and working
 		services.registerInstance(IDocumentEditorTextModelService, models);
 		using registry = new EditorPaneRegistry();
 		registry.registerEditorPane({
-			id: 'stanza.editor.document', name: 'Academic Document', canOpen: () => EditorPaneMatch.Default,
-			create: options => createDocumentEditorPane(academicProfile, options),
+			id: 'stanza.editor.document', name: 'Academy Document', canOpen: () => EditorPaneMatch.Default,
+			create: options => createDocumentEditorPane(academyProfile, options),
 		});
-		const untitled = { resource: URI.parse('untitled:/Paper.ash-academic') };
-		const destination = URI.file('/project/paper.ash-academic');
+		const untitled = { resource: URI.parse('untitled:/Paper.ash-academy') };
+		const destination = URI.file('/project/paper.ash-academy');
 		let parts: InstanceType<typeof EditorParts>;
 		using main = createEditorPart(dom.window.document.body, {
 			registry, saveAsResource: async () => destination,
@@ -4101,7 +4101,7 @@ test('Academic Save As transfers every view to one typed v2 resource and working
 		assert.equal(copies.get(destination)[0]!.isDirty, false);
 		const saved = JSON.parse((await files.resolve({ resource: destination }, new AbortController().signal)).text);
 		assert.equal(saved.version, 2);
-		assert.equal(saved.documentType, 'academic');
+		assert.equal(saved.documentType, 'academy');
 		assert.equal(saved.document.content[0].content[0].content[0].text, 'Shared paper');
 	} finally { dom.window.close(); }
 });

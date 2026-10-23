@@ -59,7 +59,7 @@ fn installed_product_client_requires_exact_grant_and_preserves_routes_after_revo
     let declaration: serde_json::Value = serde_json::from_str(&extension.manifest_json).unwrap();
     assert_eq!(
         declaration["contributes"]["customEditors"][0]["viewType"],
-        "academic.test"
+        "academy.test"
     );
     assert_eq!(
         declaration["ashRuntime"]["client"]["entry"],
@@ -84,7 +84,7 @@ fn installed_product_client_requires_exact_grant_and_preserves_routes_after_revo
     assert_eq!(client.runtime_id, "ash.academy");
     assert_eq!(client.api_version, 1);
     assert_eq!(client.digest, sha256(b"export {};"));
-    assert_eq!(client.style_digest, sha256(b".academic {}"));
+    assert_eq!(client.style_digest, sha256(b".academy {}"));
     assert_eq!(
         catalog
             .open_resource(granted.generation, "ash.academy", &client.entry)
@@ -248,7 +248,7 @@ fn corrupt_unrelated_executable_does_not_remove_a_healthy_product_editor_or_its_
         serde_json::from_str(&snapshot.extensions[0].manifest_json).unwrap();
     assert_eq!(
         manifest["contributes"]["customEditors"][0]["viewType"],
-        "academic.test"
+        "academy.test"
     );
     assert!(
         snapshot
@@ -320,7 +320,7 @@ fn product_editor_without_a_native_for_this_platform_retains_routes_without_exec
         serde_json::from_str(&snapshot.extensions[0].manifest_json).unwrap();
     assert_eq!(
         declaration["contributes"]["customEditors"][0]["viewType"],
-        "academic.test"
+        "academy.test"
     );
     assert_eq!(declaration["ashRuntime"]["kind"], "rust");
     let admission: Arc<dyn crate::ExtensionsEditorExtensionAdmission> = Arc::new(
@@ -409,10 +409,10 @@ fn installed_manager_with_files(
 fn manifest() -> serde_json::Value {
     serde_json::json!({
         "publisher": "ash", "name": "academy", "version": "1.0.0",
-        "contributes": { "customEditors": [{ "viewType": "academic.test", "selector": [{ "filenamePattern": "*.ash-doc" }] }] },
+        "contributes": { "customEditors": [{ "viewType": "academy.test", "selector": [{ "filenamePattern": "*.ash-doc" }] }] },
         "ashRuntime": { "kind": "rust", "entrypoint": "academy-runtime", "client": {
             "apiVersion": 1, "entry": "dist/editor.js", "digest": sha256(b"export {};"),
-            "style": "dist/editor.css", "styleDigest": sha256(b".academic {}"), "sourceDigest": sha256(b"sources")
+            "style": "dist/editor.css", "styleDigest": sha256(b".academy {}"), "sourceDigest": sha256(b"sources")
         } }
     })
 }
@@ -421,12 +421,12 @@ fn files(manifest: serde_json::Value) -> BTreeMap<String, Vec<u8>> {
     BTreeMap::from([
         ("editor/package.json".into(), serde_json::to_vec(&manifest).unwrap()),
         ("editor/ash/editor-extensions.json".into(), serde_json::to_vec(&serde_json::json!({
-            "schemaVersion": 1, "editorExtensions": [{ "id": "academic", "executable": "academy-runtime", "runtimeApiVersion": 1,
-                "activationEvents": [{ "type": "onCommand", "id": "academic.run" }], "capabilities": ["command"] }]
+            "schemaVersion": 1, "editorExtensions": [{ "id": "academy", "executable": "academy-runtime", "runtimeApiVersion": 1,
+                "activationEvents": [{ "type": "onCommand", "id": "academy.run" }], "capabilities": ["command"] }]
         })).unwrap()),
         ("bin/academy".into(), b"#!/bin/sh\nexit 0\n".to_vec()),
         ("editor/dist/editor.js".into(), b"export {};".to_vec()),
-        ("editor/dist/editor.css".into(), b".academic {}".to_vec()),
+        ("editor/dist/editor.css".into(), b".academy {}".to_vec()),
     ])
 }
 

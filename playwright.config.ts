@@ -22,9 +22,9 @@ export default defineConfig({
 			{ name: "electron-app-server" },
 			{
 				name: "electron-editor-app-server",
-				testMatch: ["**/areas/editor/academic-open.spec.ts", "**/areas/editor/editor-open.spec.ts", "**/areas/chat/chat-editing.spec.ts"],
+				testMatch: ["**/areas/editor/academy-open.spec.ts", "**/areas/editor/editor-open.spec.ts", "**/areas/chat/chat-editing.spec.ts"],
 			},
-			{ name: "electron-pdf-corpus-app-server", testMatch: "**/areas/pdf/pdf-academic-corpus.spec.ts" },
+			{ name: "electron-pdf-corpus-app-server", testMatch: "**/areas/pdf/pdf-academy-corpus.spec.ts" },
 		].map(project => ({
 			...project,
 			grepInvert: testTargetExclusions(project.name, process.platform),
@@ -32,7 +32,7 @@ export default defineConfig({
 			// belong to the opt-in project. Ordinary profiles exercise the fallback.
 			testIgnore: project.name === 'electron-pdf-corpus-app-server'
 				? '**/release-package.spec.ts'
-				: ['**/release-package.spec.ts', '**/pdf-academic-corpus.spec.ts'],
+				: ['**/release-package.spec.ts', '**/pdf-academy-corpus.spec.ts'],
 		})),
 		{ name: 'electron-release', testMatch: '**/release-package.spec.ts', testIgnore: '', timeout: 600_000 },
 	],

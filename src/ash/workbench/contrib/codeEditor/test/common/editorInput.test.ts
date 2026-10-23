@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../../../base/common/uri.js";
 import { DocumentTypes } from '../../../../services/documentEditor/common/documentTypes.js';
-import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from '../../../../../../../extensions/academy/browser/documentTypes.js';
+import { ACADEMY_DOCUMENT_CONTENT_TYPE } from '../../../../../../../extensions/academy/browser/documentTypes.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { EditorResourceAccessor, SideBySideEditor } from '../../../../common/editor.js';
 
@@ -55,11 +55,11 @@ test('resource detection follows registrations instead of a hardcoded MIME or su
 
 test("Stanza excludes registered structured documents by MIME and suffix", async () => {
 	using types = DocumentTypes.registerTypes();
-	types.replace([{ id: 'academic', contentType: ACADEMIC_DOCUMENT_CONTENT_TYPE, extensions: ['.ash-paper'] }]);
+	types.replace([{ id: 'academy', contentType: ACADEMY_DOCUMENT_CONTENT_TYPE, extensions: ['.ash-paper'] }]);
 	assert.equal(matchCodeEditor({ resource: URI.file('C:/papers/research.ash-paper') }), EditorPaneMatch.None);
 	assert.equal(matchCodeEditor({
 		resource: URI.file("C:\\papers\\research.ash-paper"),
-		contentType: ACADEMIC_DOCUMENT_CONTENT_TYPE,
+		contentType: ACADEMY_DOCUMENT_CONTENT_TYPE,
 	}), EditorPaneMatch.None);
 });
 

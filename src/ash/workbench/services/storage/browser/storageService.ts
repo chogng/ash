@@ -17,8 +17,8 @@ interface StoredDocument {
 
 /** Retires old namespaces before either browser or Desktop storage reads its scopes. */
 export function migrateBrowserStorage(backend: Storage): void {
-	// Current storage wins, then Code, then Academic. Archives are never read by the adapter.
-	for (const applicationId of ['code', 'academic']) {
+	// Current storage wins over the retired Code namespace. Archives are never read by the adapter.
+	for (const applicationId of ['code']) {
 		const prefix = `ash.${applicationId}.storage.`;
 		const keys = Array.from({ length: backend.length }, (_, index) => backend.key(index)!).filter(key => key.startsWith(prefix));
 		for (const sourceKey of keys) {

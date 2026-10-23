@@ -87,7 +87,7 @@ start without a workspace. Installed packages use the same SDK and host with the
 workspace authorization; they cannot request the product authority. Browser Workers cannot
 register `ssh`, and there is no core resolver fallback.
 
-`academy` provides the optional document editor for general documents, Academic
+`academy` provides the optional document editor for general documents, Academy
 papers and channel notes. It reuses the shared text model and host services while
 owning its schemas, views, pagination and codecs. File associations and editor
 registration follow extension enablement; supported behavior and limits are in

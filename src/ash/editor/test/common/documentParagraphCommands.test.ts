@@ -9,7 +9,7 @@ import { createSplitBlockCommand, createInsertFragmentCommand, createSetBlockTyp
 import { createDefaultDocumentSchema } from '../../../../../extensions/academy/common/model/documentSchema.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { deserializeDocument, serializeDocument, extractDocumentFragment, serializeDocumentFragment, deserializeDocumentFragment } from '../../../../../extensions/academy/common/model/documentSerialization.js';
-import { createAcademicDocumentSchema, createEmptyAcademicDocument } from '../../../../../extensions/academy/browser/contrib/academic/common/schema.js';
+import { createAcademyDocumentSchema, createEmptyAcademyDocument } from '../../../../../extensions/academy/browser/contrib/academy/common/schema.js';
 
 test('Paragraph formatting is one reversible transaction with shared line semantics and durable measurements', () => {
 	const schema = createDefaultDocumentSchema();
@@ -73,9 +73,9 @@ test('Built-in paragraph styles preserve identities, inline marks, direct format
 	assert.deepEqual(model.document.content[0]!.attrs, paragraph.attrs);
 });
 
-test('Academic mandatory headings reject structural conversion without modifying other selected paragraphs', () => {
-	const schema = createAcademicDocumentSchema();
-	const document = createEmptyAcademicDocument(schema);
+test('Academy mandatory headings reject structural conversion without modifying other selected paragraphs', () => {
+	const schema = createAcademyDocumentSchema();
+	const document = createEmptyAcademyDocument(schema);
 	using model = DocumentTextModel.create(schema, document);
 	const heading = document.content[0]!.content[0]!;
 	assert.equal(createSetParagraphStyleCommand(schema, document, heading.id, allSelection(), 0), undefined);

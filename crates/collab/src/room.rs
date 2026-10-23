@@ -65,10 +65,10 @@ pub(crate) fn validate_document(value: &str) -> Result<(), String> {
         Some(2)
             if !matches!(
                 document.get("documentType").and_then(Value::as_str),
-                Some("general" | "academic")
+                Some("general" | "academy")
             ) =>
         {
-            return Err("documentType must be general or academic".into());
+            return Err("documentType must be general or academy".into());
         }
         _ => {}
     }

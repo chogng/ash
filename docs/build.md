@@ -484,7 +484,7 @@ just dependency-security
 
 BM25 的同分候选由上游 HashSet 顺序决定。Ash 在自己的搜索入口按原始分数和工具名称排序，再截断候选并转换 reciprocal rank，保证重建索引、单条结果和排除项不会受到哈希遍历顺序影响；无需修改或复制 BM25 源码。
 
-2026-10-14 移除内置 Typst 编译器及其协议、字体、许可证和 citationberg patch。Academic 改为可停用的声明式扩展，继续复用 Stanza 编辑模型；PDF 阅读器保留。下述 2026-10-11 验证记录描述当时的依赖图，不表示现版本仍提供 Typst。
+2026-10-14 移除内置 Typst 编译器及其协议、字体、许可证和 citationberg patch。Academy 改为可停用的声明式扩展，继续复用 Stanza 编辑模型；PDF 阅读器保留。下述 2026-10-11 验证记录描述当时的依赖图，不表示现版本仍提供 Typst。
 
 2026-10-11 在 Windows 恢复发布版后，CLI 的 40 项、Code Mode runtime 的 19 项及 tokenizer 的 12 项库测试首轮通过；搜索同分排序修复后，`just test ash-tools -p ash-typst -p ash-v8-poc --features ash-v8-poc/sandbox --profile ci-test --lib` 通过 tools 的 39 项、Typst 的 11 项和 V8 sandbox 的 7 项测试。`just test-tui-unit render::highlight::tests` 的 4 项与 `just test-tui-unit app::extensions_tests` 的 24 项通过，合计 156 项消费者测试。已移除随序列化补丁及字体回补一起撤掉的专用测试和资源，保留真实高亮、排版、搜索及 XML 边界覆盖。
 
@@ -1003,7 +1003,7 @@ Rust `just verify ash-dev-build --features compiler` 为 22 项并通过 check�
 
 2026-10-20 在当前 macOS 检出复核上述失败所属的四个文件：`node --test build/builtin/editorClients.test.ts build/desktop/host.test.ts build/desktop/launch/electron.test.ts build/testRunners.test.ts`，22 项全部通过，无失败或跳过，用时 15.94 秒。包括仓库外 Academy SDK 类型检查、Host watch、两种 profile 的 Electron 启停和符号链接 fixture；Electron 使用受控 Node 进程替身，没有启动真实 Electron 窗口。该次未修改实现，也未重跑全量或 Windows；不能单独据此关闭验证缺口。日志为 `/tmp/ash-rust-todo-review-20261020.log`。
 
-2026-10-21，在当前 macOS arm64 检出 `a66ebb32a` 加本轮修改上完成本机整套补验。`pnpm --dir build run test:prepared` 首跑为 236 项、214 通过、6 失败、16 跳过；最终为 220 通过、0 失败、16 跳过，用时 16.04 秒。修复包括：独立 TS 作者测试从 PATH 定位 npm，兼容 pnpm 自带的无 npm Node；恢复测试夹具补齐当前 view catalog；Academic 场景收集遵守 disconnected browser 与 connected editor 的实际目标；CSS 竞态 fixture 用轮询消除原生事件合并对断言的影响。
+2026-10-21，在当前 macOS arm64 检出 `a66ebb32a` 加本轮修改上完成本机整套补验。`pnpm --dir build run test:prepared` 首跑为 236 项、214 通过、6 失败、16 跳过；最终为 220 通过、0 失败、16 跳过，用时 16.04 秒。修复包括：独立 TS 作者测试从 PATH 定位 npm，兼容 pnpm 自带的无 npm Node；恢复测试夹具补齐当前 view catalog；Academy 场景收集遵守 disconnected browser 与 connected editor 的实际目标；CSS 竞态 fixture 用轮询消除原生事件合并对断言的影响。
 
 Host 的真实监听缺口也在本机复现：递归目录事件漏收文件内容写入，延迟到达的初始条目又可能造成空编译。现按原有源码／协议／本地化根预先注册文件监听，以自适应目录时间戳轮询发现增删；同一待编译批次只发布一次未就绪。现有 Host／Electron 回归覆盖生成输入、正常与失败保存、编译中排队、配置修改、缓存排除与进程回收，并补新增文件、修改、删除和失败编译实际读取无效源码的断言。`pnpm build` 正常 Desktop 构建通过；build 146 文件、Renderer 4446 文件、automation 2994 文件类型检查通过。这里只确认行为，不宣称监听性能收益。
 
@@ -1013,7 +1013,7 @@ Host 的真实监听缺口也在本机复现：递归目录事件漏收文件内
 
 ### 2026-10-21：Windows 构建工具全量复核
 
-在当前 Windows 11 x64、build 22631 的普通权限进程中，以 `b2cbfdac794596616d6ed024085978b442dd5539` 加本轮修改验收，Node 为仓库固定的 `v24.21.0`。首先对原待办的四个文件复跑，22 项中 15 通过、5 失败、2 跳过，确认 SDK 导出、Host watcher、两种 Electron profile 和文件符号链接 fixture 均仍有失败。全量检查又暴露了 npm 定位、启动恢复 fixture 和 Academic 场景收集的旧接线问题。
+在当前 Windows 11 x64、build 22631 的普通权限进程中，以 `b2cbfdac794596616d6ed024085978b442dd5539` 加本轮修改验收，Node 为仓库固定的 `v24.21.0`。首先对原待办的四个文件复跑，22 项中 15 通过、5 失败、2 跳过，确认 SDK 导出、Host watcher、两种 Electron profile 和文件符号链接 fixture 均仍有失败。全量检查又暴露了 npm 定位、启动恢复 fixture 和 Academy 场景收集的旧接线问题。
 
 SDK 导出现在按相对路径识别并复制声明文件，避免 Windows 路径分隔符造成 `marked.d.ts` 等依赖遗漏；仓库外 Academy 类型检查验证了完整导出链。独立 TS 作者安装测试从 pnpm 提供的原 Node 路径定位 npm，避免把 `node_modules/.bin` 中的 Node 硬链接当作完整安装目录。所有安装仍只使用离线本地归档。
 

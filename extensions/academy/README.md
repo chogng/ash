@@ -6,7 +6,7 @@ through the public Rust SDK and existing Host RPC. Shared Workbench integration
 projects the admitted package's live registration into the editor registry before
 tab restoration; Sessions consumes it.
 
-The extension owns general documents (`.ash-doc`), Academic papers and channel
+The extension owns general documents (`.ash-doc`), research papers and channel
 notes. Its `common/` owns schemas, structural transactions, commands, history,
 line projections, collaboration algorithms and codecs. `browser/` owns the rich
 text view, paragraph/formatting contributions, node views, conversions and profiles.
@@ -34,20 +34,18 @@ copies. Package declarations reserve structured routing while disabled, so a mis
 provider cannot silently expose these resources to the default text editor. Re-enabling does not resume an old view; explicit reopening can acquire
 the same working copy and history through the replacement capability.
 
-`ash.academy` is the extension identity; package/source naming uses Academy.
-Academic names the paper profile, whose `stanza.editor.document` view type, MIME
-type, `.ash-academic` / `.ash-paper` files and `stanza-academic-v1` format remain
-compatible. The former `ash.academic` package identity is not an alias: installing
-the renamed package requires its own verified source and exact-package execution
-consent. Existing consent is not transferred by renaming.
-`ash.editor.document`, the general document MIME type, `ash.collaboration.notes`
-and the channel-note MIME type also remain compatible. Paragraph contributions
-are installed per profile/view, never through the global Code contribution registry.
+`ash.academy` is the extension identity and `academy` is the paper profile.
+Its content type is `application/vnd.ash.academy-document+json`, its file selectors
+are `.ash-academy` / `.ash-paper`, and its collaboration schema is
+`stanza-academy-v1`. Source paths, symbols, persisted document types and user-visible
+labels use Academy consistently, without retired-name aliases or format readers.
+The general and channel-note profiles keep their own document types. Paragraph
+contributions are installed per profile/view, never through the global Code registry.
 Complete product/platform acceptance and advanced Word layout remain separate roadmap
 work. The supported DOCX and page-image PDF formats are described below and in the
 [roadmap](./design.md).
 
-Validate with `just verify ash-academy`, the MainThreadClientEditors / Academic
+Validate with `just verify ash-academy`, the MainThreadClientEditors / Academy
 profile / DocumentEditorPane unit suites, and
 `pnpm test:browser:integration academy.integration.spec.ts --project=chromium`.
 Ash product packages omit Academy's executable, manifest and client implementation.
@@ -101,7 +99,7 @@ Collaboration replays fully validated atomic transactions and merges independent
 paragraph attributes and style definitions by stable identity. No style state or
 replacement history is copied into the Rust process or the shared host.
 
-Academic citations resolve against bibliography keys. An empty citation label uses
+Academy citations resolve against bibliography keys. An empty citation label uses
 the current reference ordinal; explicit labels remain unchanged. Reference insertion
 rejects duplicate keys. Edit reference changes its key, text and every matching
 citation in one undo step, while preserving reference and citation identities.
@@ -142,7 +140,7 @@ include supported text, styles, lists, tables, embedded images, sections, runnin
 comments and paragraph insert/delete revisions. Native roundtrips also preserve a
 v2 snapshot only while every standard-part digest matches. Modified Word content
 uses the OOXML parser instead. Unsupported features fail before creating a draft;
-imports preserve the source and resolve the admitted general or Academic profile.
+imports preserve the source and resolve the admitted general or Academy profile.
 
 PDF output is a frozen 192 dpi page-image document, with mixed page dimensions and
 running text. Text is not searchable. It shares the page view, waits for resources,

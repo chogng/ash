@@ -272,7 +272,7 @@ joins pending attachment resolution before flushing storage.
    and broadcasts revisions; the browser page uses its scoped `localStorage`
    adapter. Storage identity contains only scope and profile/workspace id;
    the product entry supplies no storage namespace. Main archives the original
-   v1 document before writing v2; both adapters retire the old Code/Academic
+   v1 document before writing v2; both adapters retire the old Code/Academy
    browser namespaces before opening scopes. Migration archives never participate
    in runtime reads. The old Desktop document is removed only after a validated,
    non-conflicting import has reached disk. Sessions retains its own profile
@@ -381,7 +381,7 @@ displays the stored root and does not grant access.
 - Returning to Workbench closes the Electron Sessions window and focuses or
   reopens the same workspace, or navigates the browser page to its sibling
   Workbench entry.
-- Academic currently has no dedicated Sessions renderer or profile.
+- Academy currently has no dedicated Sessions renderer or profile.
 
 ## Tests and modification impact
 

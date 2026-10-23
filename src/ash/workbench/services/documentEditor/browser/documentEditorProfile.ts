@@ -31,12 +31,15 @@ export interface DocumentEditorWidget extends IDisposable {
 
 /** Package-private schema, plugins and UI options are already captured by these closures. */
 export interface DocumentEditorConfiguration {
+	/** The package describes its own controls; the host adds only Workbench actions. */
+	readonly accessibilityHelp?: () => readonly string[];
 	readonly artifactFormats?: readonly { readonly id: string; readonly label: string; readonly extension: string; readonly mimeType: string; readonly canImport: boolean; }[];
 	importBinary?(bytes: Uint8Array, format: string, ownerDocument: Document, signal: AbortSignal): Promise<{ readonly document: DocumentNode; readonly documentType: string; }>;
 	readonly codec: DocumentCodec;
 	readonly widget: Constructor<DocumentEditorWidget>;
 	readonly createEmptyDocument?: () => DocumentNode;
-	importText(text: string, format: DocumentTextFormat, ownerDocument: Document, source: URI): DocumentNode;
+	/** The host supplies resource IO without interpreting the package's document structure. */
+	importText(text: string, format: DocumentTextFormat, ownerDocument: Document, source: URI, readResource: (resource: URI) => Promise<Uint8Array>): DocumentNode | Promise<DocumentNode>;
 	exportText(document: DocumentNode, format: DocumentTextFormat): string;
 }
 

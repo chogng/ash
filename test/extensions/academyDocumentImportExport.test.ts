@@ -1,17 +1,34 @@
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { URI } from '../../../../../base/common/uri.js';
-import { createDefaultDocumentSchema } from '../../../../../../../extensions/academy/common/model/documentSchema.js';
-import type { DocumentNode } from '../../../../../../../extensions/academy/common/model/document.js';
-import { documentToPlainText } from '../../../../../../../extensions/academy/common/model/documentSerialization.js';
-import { DocumentConversionError, exportDocumentText, importDocumentText } from '../../../../../../../extensions/academy/browser/documentImportExport.js';
-import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
-import messages from '../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
+import { URI } from '../../src/ash/base/common/uri.js';
+import { createDefaultDocumentSchema } from '../../extensions/academy/common/model/documentSchema.js';
+import type { DocumentNode } from '../../extensions/academy/common/model/document.js';
+import { documentToPlainText } from '../../extensions/academy/common/model/documentSerialization.js';
+import { DocumentConversionError, exportDocumentText, importDocumentText } from '../../extensions/academy/browser/documentImportExport.js';
+import { resetNlsResolver, setNlsMessages } from '../../src/ash/nls.js';
+import messages from '../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
+import { generalProfile } from '../../extensions/academy/browser/generalProfile.js';
 
 const environment = new JSDOM('<!doctype html>');
 suiteTeardown(() => environment.window.close());
 const source = URI.file('/notes/source.md');
+
+test('Academy imports local image assets through host IO once and retains remote images', async () => {
+	const reads: string[] = [];
+	const profile = generalProfile.create();
+	const document = await profile.importText('![A](figure.png) ![B](figure.png) ![Remote](https://example.com/figure.png)', 'markdown', environment.window.document, source, async resource => {
+		reads.push(resource.toString());
+		return new Uint8Array([0, 127, 255]);
+	});
+	const images = document.content[0]!.content.filter(node => node.type === 'image');
+	assert.deepEqual(reads, ['file:///notes/figure.png']);
+	assert.deepEqual(images.map(node => node.attrs.src), ['data:image/png;base64,AH//', 'data:image/png;base64,AH//', 'https://example.com/figure.png']);
+	profile.codec.validate(document);
+	await assert.rejects(async () => profile.importText('![Unsupported](figure.svg)', 'markdown', environment.window.document, source, async () => {
+		throw new Error('Unsupported images must be rejected before IO');
+	}), error => error instanceof DocumentConversionError && error.feature === 'image resource');
+});
 
 function semantics(node: DocumentNode): unknown {
 	return { type: node.type, attrs: node.attrs, marks: node.marks, ...(node.text === undefined ? {} : { text: node.text }), content: node.content.map(semantics) };

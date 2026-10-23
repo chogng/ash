@@ -6,24 +6,24 @@ import { StorageScope, StorageTarget, WillSaveStateReason } from "../../../../..
 import { Memento } from "../../../../../workbench/common/memento.js";
 import { BrowserStorageService, migrateBrowserStorage } from "../../../../../workbench/services/storage/browser/storageService.js";
 
-test('storage startup retires both namespaces, restores all scopes and archives conflicting values', () => {
+test('storage startup retires the Code namespace, restores all scopes and archives conflicting values', () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	try {
 		const backend = dom.window.localStorage;
 		const entry = (value: string) => ({ value, target: StorageTarget.MACHINE });
-		const academic = JSON.stringify({ version: 1, entries: { editors: entry('paper'), layout: entry('academic') } });
-		backend.setItem('ash.academic.storage.workspace.research', academic);
-		backend.setItem('ash.code.storage.workspace.research', JSON.stringify({ version: 1, entries: { layout: entry('code') } }));
+		const legacy = JSON.stringify({ version: 1, entries: { editors: entry('paper'), layout: entry('code') } });
+		backend.setItem('ash.code.storage.workspace.research', legacy);
+		backend.setItem('ash.storage.workspace.research', JSON.stringify({ version: 1, entries: { layout: entry('current') } }));
 		backend.setItem('ash.code.storage.application', JSON.stringify({ version: 1, entries: { fonts: entry('font-cache') } }));
-		backend.setItem('ash.academic.storage.profile.sessions', JSON.stringify({ version: 1, entries: { sidebar: entry('360') } }));
+		backend.setItem('ash.code.storage.profile.sessions', JSON.stringify({ version: 1, entries: { sidebar: entry('360') } }));
 		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'research', profileId: 'sessions', flushInterval: 0 });
 		assert.deepEqual([
 			storage.get('editors', StorageScope.WORKSPACE), storage.get('layout', StorageScope.WORKSPACE),
 			storage.get('fonts', StorageScope.APPLICATION), storage.get('sidebar', StorageScope.PROFILE),
-		], ['paper', 'code', 'font-cache', '360']);
-		assert.equal(backend.getItem('ash.storage.v1.academic.workspace.research'), academic);
+		], ['paper', 'current', 'font-cache', '360']);
+		assert.equal(backend.getItem('ash.storage.v1.code.workspace.research'), legacy);
 		assert.deepEqual(['application', 'workspace.research'].map(scope => backend.getItem(`ash.code.storage.${scope}`)), [null, null]);
-		assert.equal(backend.getItem('ash.academic.storage.workspace.research'), null);
+		assert.equal(backend.getItem('ash.code.storage.workspace.research'), null);
 		storage.remove('editors', StorageScope.WORKSPACE);
 		using restored = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'research', profileId: 'sessions', flushInterval: 0 });
 		assert.equal(restored.get('editors', StorageScope.WORKSPACE), undefined, 'Archived data must never be replayed');

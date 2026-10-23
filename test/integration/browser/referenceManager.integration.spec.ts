@@ -63,7 +63,7 @@ for (const locale of ['en', 'zh-CN']) test(`Reference Manager imports, manages, 
 	await library.getByRole('searchbox').fill('second'); await expect(library.getByRole('listbox').getByRole('option')).toHaveCount(1); await expect(library.locator('article h2')).toHaveText('A second book');
 	await library.getByRole('searchbox').fill('no matching record'); await expect(library.getByRole('listbox').getByRole('option')).toHaveCount(0); await expect(library.locator('[data-action="edit"]')).toBeDisabled(); await library.getByRole('searchbox').fill('');
 	await library.getByRole('listbox').getByRole('option').first().focus(); await library.getByRole('listbox').getByRole('option').first().press('End'); await expect(library.getByRole('listbox').getByRole('option').last()).toBeFocused(); await library.getByRole('listbox').getByRole('option').last().press('Home');
-	await page.evaluate(async () => { await window.referenceManagerTest.enable('academy', true); await window.referenceManagerTest.open('/fixture/paper.ash-academic'); });
+	await page.evaluate(async () => { await window.referenceManagerTest.enable('academy', true); await window.referenceManagerTest.open('/fixture/paper.ash-academy'); });
 	await page.locator('#document textarea.stanza-document-text-input').last().click();
 	await expect(library.locator('[data-action="insert"]')).toBeEnabled(); await library.locator('[data-action="insert"]').click();
 	await expect(page.locator('.ash-citation')).toHaveCount(1);
@@ -78,7 +78,7 @@ for (const locale of ['en', 'zh-CN']) test(`Reference Manager imports, manages, 
 	expect(JSON.stringify(await page.evaluate(() => window.referenceManagerTest.document()))).toContain('Renamed2025');
 	expect(await page.evaluate(() => window.referenceManagerTest.invokeSaved({ version: 1, operation: 'update', libraryId: 'x', references: [] }))).toMatch(locale === 'zh-CN' ? /已更改|更改|变化/ : /changed/);
 	expect(await page.evaluate(() => window.referenceManagerTest.undo())).toBe(true); expect(await page.evaluate(() => window.referenceManagerTest.document())).toEqual(inserted); await page.evaluate(() => window.referenceManagerTest.redo());
-	await page.evaluate(() => window.referenceManagerTest.saveDocument()); expect(await page.evaluate(() => window.referenceManagerTest.persisted('/fixture/paper.ash-academic'))).toContain('Renamed2025');
+	await page.evaluate(() => window.referenceManagerTest.saveDocument()); expect(await page.evaluate(() => window.referenceManagerTest.persisted('/fixture/paper.ash-academy'))).toContain('Renamed2025');
 	await page.evaluate(() => window.referenceManagerTest.dialogs(['/fixture/paper.pdf'])); await library.locator('[data-action="attach"]').click(); await expect(library.locator('[data-action="pdf"]')).toBeEnabled(); await library.locator('[data-action="pdf"]').click();
 	await expect(library.getByRole('status')).toContainText('PDF'); await expect(page.locator('canvas')).toHaveCount(0);
 	await page.evaluate(() => window.referenceManagerTest.enable('pdf-viewer', true)); await library.locator('[data-action="pdf"]').click(); await expect(page.locator('.ash-pdf-editor canvas')).toHaveCount(1);

@@ -1035,7 +1035,7 @@
     "document.reference.accessible": "参考文献 {0}",
     "document.citation.unresolved": "未解析的引用 {0}",
     "document.citation.accessible": "引用 {0}：{1}",
-    "document.accessibility.references": "学术文档提供“引用”和“参考文献”操作。将引用标签留空可按参考文献顺序自动编号。“编辑参考文献”可在一个撤销步骤中修改文献键及其所有引用。“删除参考文献”会保留引用并标记为未解析。重复键会被拒绝。按 Tab 可聚焦引用，按 Enter 或空格可选中。只读文档中无法执行编辑操作。",
+    "document.accessibility.references": "Academy 文档提供“引用”和“参考文献”操作。将引用标签留空可按参考文献顺序自动编号。“编辑参考文献”可在一个撤销步骤中修改文献键及其所有引用。“删除参考文献”会保留引用并标记为未解析。重复键会被拒绝。按 Tab 可聚焦引用，按 Enter 或空格可选中。只读文档中无法执行编辑操作。",
     "pdf.viewer.newNote": "新批注",
     "pdf.viewer.reader": "PDF 阅读器",
     "pdf.viewer.actions": "PDF 批注操作",
@@ -1154,7 +1154,8 @@
     "format.numbered": "格式化程序 {0}",
     "format.configure": "配置默认格式化程序...",
     "format.default.select": "选择 {0} 的默认格式化程序",
-    "accessibility.editorFormatting": "格式化文档时，可选择格式化程序或为当前语言配置默认值。Escape 取消选择并返回编辑器。启用输入时格式化后，仅在提供程序声明的触发字符输入后进行格式化。"
+    "accessibility.editorFormatting": "格式化文档时，可选择格式化程序或为当前语言配置默认值。Escape 取消选择并返回编辑器。启用输入时格式化后，仅在提供程序声明的触发字符输入后进行格式化。",
+    "academy.formatting.codeContext": "代码块 · Academy"
   },
   "ash.editor.clipboard": {
     "selection.title": "选区剪贴板",
