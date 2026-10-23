@@ -9,6 +9,9 @@
     "../../../src/typings/css.d.ts",
     "../../../src/typings/editContext.d.ts",
     "../../../src/ash/sessions/contrib/themeEditor/browser/themePreviewPage.ts",
-    "./**/*.ts"
+    "./**/*.ts",
+    "../../componentFixtures/**/*.ts",
+    "../../componentFixtures/**/*.mts",
+    "../../../src/**/*.fixture.ts"
   ]
 }

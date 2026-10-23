@@ -164,5 +164,24 @@
     "justfile",
     ".github/workflows/tooling.yml",
     ".github/workflows/rusty-v8-release.yml"
+  ],
+  "component-fixtures": [
+    "src/**",
+    "test/componentFixtures/**",
+    "test/integration/browser/**",
+    "build/lib/screenshot*.ts",
+    "build/lib/test/screenshot*.test.ts",
+    "build/processes.ts",
+    "build/playwright.ts",
+    "build/desktop/vite/**",
+    "resources/**",
+    "localization/**",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "tsconfig*.json",
+    ".nvmrc",
+    ".github/workflows/component-fixtures.yml",
+    "build/**"
   ]
 }

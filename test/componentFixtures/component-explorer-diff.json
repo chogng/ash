@@ -1,0 +1,8 @@
+{
+  "screenshotDir": "../../.build/component-fixtures/screenshots",
+  "sessions": [
+    { "name": "current" },
+    { "name": "baseline", "source": { "worktree": { "ref": "HEAD" } } }
+  ],
+  "compare": { "baseline": "baseline", "current": "current" }
+}

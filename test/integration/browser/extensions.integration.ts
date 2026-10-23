@@ -74,7 +74,7 @@ import { CLOSE_EDITOR_COMMAND_ID } from '../../../src/ash/workbench/browser/part
 import { AppServerExtensionManagementService } from '../../../src/ash/workbench/services/extensionManagement/browser/appServerExtensionManagementService.js';
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import { WorkbenchToolBar } from '../../../src/ash/platform/actions/browser/toolbar.js';
-import '../../../src/ash/workbench/browser/parts/paneCompositePart.css';
+import '../../../src/ash/workbench/browser/parts/media/paneCompositePart.css';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { type IViewContainerModel, ViewsRegistry } from '../../../src/ash/workbench/common/views.js';
 import { ExtensionsViewPaneContainer } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsViewlet.js';

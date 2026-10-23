@@ -13,7 +13,8 @@
 	height: var(--ash-lxiconFontSize);
 }
 
-.ash-select-box-list {
+/* Popup geometry must win over List's shared reset regardless of import order. */
+.ash-select-box-list.ash-list {
 	--ash-list-style-list-hover-background: var(--ash-list-hoverBackground);
 	--ash-list-style-list-inactive-selection-background: transparent;
 	width: max-content;
@@ -40,6 +41,10 @@
 	padding: 0 6px;
 	border-radius: var(--ash-cornerRadius-small);
 	outline: none;
+}
+
+/* Only enabled options override List's default row cursor. */
+.ash-select-box-option:not(.ash-select-box-option-disabled) {
 	cursor: pointer;
 }
 

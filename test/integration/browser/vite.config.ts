@@ -1,15 +1,33 @@
 import { resolve } from "node:path";
-import { defineConfig } from "vite";
+import { defineConfig, normalizePath, type Plugin } from "vite";
 import { rendererOutput } from '../../../build/desktop/vite/rendererOutput.js';
 import { rendererDependencyAliases } from '../../../build/desktop/vite/rendererDependencies.js';
 import { workbenchEntryPlugin } from '../../../build/desktop/vite/workbenchEntryPlugin.js';
 import { webUpdatePlugin } from '../../../build/desktop/vite/webUpdatePlugin.js';
 
+// The comparison harness stays current; product modules resolve into the Git
+// baseline without copying fixtures or mutating either checkout's sources.
+function fixtureBaselineSources(): Plugin {
+	const sourceRoot = normalizePath(resolve(import.meta.dirname, '../../../src/ash'));
+	const baseline = process.env.ASH_COMPONENT_FIXTURE_SOURCE_ROOT;
+	return {
+		name: 'fixture-baseline-sources', enforce: 'pre',
+		async resolveId(source, importer) {
+			if (!baseline) return;
+			const resolved = await this.resolve(source, importer, { skipSelf: true });
+			if (!resolved || !resolved.id.startsWith(`${sourceRoot}/`)) return;
+			const path = resolved.id.slice(sourceRoot.length + 1);
+			if (path.startsWith('workbench/test/browser/componentFixtures/')) return;
+			return { ...resolved, id: `${normalizePath(baseline)}/${path}` };
+		},
+	};
+}
+
 export default defineConfig({
 	define: { __ASH_WEB_APP_SERVER__: 'false' },
 	resolve: { alias: [{ find: /^ash:editor\//u, replacement: resolve(import.meta.dirname, '../../../src/ash') + '/' }, ...rendererDependencyAliases] },
 	root: resolve(import.meta.dirname),
-	plugins: [webUpdatePlugin(), workbenchEntryPlugin('/themeEditor.html', [{
+	plugins: [fixtureBaselineSources(), webUpdatePlugin(), workbenchEntryPlugin('/themeEditor.html', [{
 		url: '/browser/theme-preview/themePreview.html',
 		inputFile: resolve(import.meta.dirname, 'browser/theme-preview/themePreview.html'),
 		sourceFile: resolve(import.meta.dirname, '../../../src/ash/workbench/contrib/themeEditor/browser/themePreview.html'),

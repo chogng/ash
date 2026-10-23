@@ -36,6 +36,7 @@ import productIconUrl from './fixtures/product-icons/add.svg?url';
 import '../../../src/ash/workbench/browser/media/style.css';
 import '../../../src/ash/base/browser/ui/contextview/contextview.css';
 import '../../../src/ash/base/browser/ui/button/button.css';
+import '../../../src/ash/base/browser/ui/dropdown/dropdown.css';
 import '../../../src/ash/base/browser/ui/menu/menu.css';
 import '../../../src/ash/base/browser/ui/selectbox/selectbox.css';
 import '../../../src/ash/base/browser/ui/scrollbar/scrollbar.css';
@@ -81,7 +82,7 @@ import { defaultButtonStyles, getButtonStyles, defaultCheckboxStyles, defaultCou
 
 declare global {
 	interface Window {
-		mountDefaultStyleProbes(): void;
+		mountDefaultStyleProbes(withDisabledSelectOption?: boolean): void;
 		openStyledTreeFind(): void;
 		openStyledDialog(): void;
 		changeIconModelLanguage(id: string): void;
@@ -156,7 +157,7 @@ services.registerInstance(ILanguageService, languages);
 services.registerInstance(IHostColorSchemeService, resources.add(new BrowserHostColorSchemeService(window)));
 const themes = resources.add(services.createInstance(WorkbenchThemeService, document.querySelector<HTMLElement>('#root')!));
 themes.initialize();
-window.mountDefaultStyleProbes = () => {
+window.mountDefaultStyleProbes = (withDisabledSelectOption = false) => {
 	const host = document.createElement('section');
 	host.id = 'default-style-probes';
 	host.style.width = '360px';
@@ -172,7 +173,11 @@ window.mountDefaultStyleProbes = () => {
 	resources.add(new Checkbox(host, { label: 'Styled checkbox', checked: true, ...defaultCheckboxStyles }));
 	resources.add(new SelectBox(host, {
 		presentation: 'field', ariaLabel: 'Styled select',
-		options: [{ label: 'One', value: 'one' }, { label: 'Two', value: 'two' }],
+		options: [
+			{ label: 'One', value: 'one' },
+			...(withDisabledSelectOption ? [{ label: 'Disabled option', value: 'disabled', disabled: true }] : []),
+			{ label: 'Two', value: 'two' },
+		],
 	}, { ...defaultSelectBoxStyles, selectBackground: 'var(--ash-selection-background)', selectListBackground: 'var(--ash-error-foreground)' }));
 	resources.add(new CountBadge(host, { count: 7 }, defaultCountBadgeStyles));
 	resources.add(new ProgressBar(host, defaultProgressBarStyles)).value = 0.5;

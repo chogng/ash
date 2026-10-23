@@ -5,10 +5,12 @@ import { constants, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 
 import { basename, resolve } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import sirv from 'sirv';
+import { parseFixtureArguments, runComponentFixtures } from '../../componentFixtures/cssOrderShared.mts';
 
 const desktopDirectory = resolve(import.meta.dirname, '../../..');
+const componentFixtures = process.argv[2] === '--component-fixtures' ? parseFixtureArguments(process.argv.slice(3)) : undefined;
 const editorOnly = process.argv[2] === '--editor';
-const playwrightArgs = playwrightArguments(process.argv.slice(editorOnly ? 3 : 2));
+const playwrightArgs = playwrightArguments(componentFixtures?.playwrightArgs ?? process.argv.slice(editorOnly ? 3 : 2));
 const testArgs = [
 	'node_modules/@playwright/test/cli.js',
 	'test',
@@ -17,6 +19,10 @@ const testArgs = [
 	...playwrightArgs,
 ];
 await withProcessRun(desktopDirectory, async (run, environment) => {
+	if (componentFixtures) {
+		await runComponentFixtures(run, environment, componentFixtures);
+		return;
+	}
 	const testEnv = {
 		...environment,
 		ASH_EDITOR_BROWSER_ONLY: editorOnly ? '1' : '0',
