@@ -609,7 +609,10 @@ export class SCMHistoryViewPane extends ViewPane {
 				const refs = await provider.provideHistoryItemRefs();
 				if (this.isDisposed || generation !== this.generation) { return; }
 				this.head = provider.historyItemRef.get();
-				const remote = provider.historyItemRemoteRef?.get();
+				const remoteRef = provider.historyItemRemoteRef?.get();
+				// Provider snapshots may identify the upstream without its commit revision.
+				// Use the freshly queried ref to capture immutable comparison endpoints.
+				const remote = refs.find(ref => ref.id === remoteRef?.id && ref.revision !== undefined) ?? remoteRef;
 				let filter = this.filters.get(this.filterKey) ?? 'auto';
 				let selected = Array.isArray(filter) ? refs.filter(ref => filter.includes(ref.id)) : [];
 				if (Array.isArray(filter) && selected.length === 0) {
@@ -617,8 +620,12 @@ export class SCMHistoryViewPane extends ViewPane {
 					this.filters.delete(this.filterKey);
 					this.storageService.store('scm.graphView.referencesFilter', JSON.stringify([...this.filters]), StorageScope.WORKSPACE, StorageTarget.USER);
 				}
-				if (filter === 'auto') { selected = [this.head, remote, provider.historyItemBaseRef?.get()].filter((ref): ref is ISCMHistoryItemRef => !!ref); }
-				this.historyItemRefs = filter === 'all' ? undefined : selected.flatMap(ref => ref.revision ? [ref.revision] : []);
+				if (filter === 'auto') {
+					selected = [this.head, remote, provider.historyItemBaseRef?.get()]
+						.filter((ref): ref is ISCMHistoryItemRef => !!ref)
+						.map(ref => ref.revision ? ref : refs.find(candidate => candidate.id === ref.id) ?? ref);
+				}
+				this.historyItemRefs = filter === 'all' ? undefined : selected.map(ref => ref.revision ?? ref.id);
 				this.comparison = undefined;
 				if (this.head?.revision && remote?.revision && remote.revision !== this.head.revision && provider.resolveHistoryItemRefsCommonAncestor) {
 					// A missing merge base must not hide otherwise readable commit history.
@@ -703,8 +710,8 @@ export class SCMHistoryViewPane extends ViewPane {
 		}
 		this.rows = toISCMHistoryItemViewModelArray(page.items, new Map(), this.head, this.comparison);
 		this.currentItemContext.set(this.head?.revision !== undefined);
-		this.upstreamContext.set(this.provider?.historyItemRemoteRef?.get()?.revision !== undefined);
-		this.baseContext.set(this.provider?.historyItemBaseRef?.get()?.revision !== undefined);
+		this.upstreamContext.set(this.provider?.historyItemRemoteRef?.get() !== undefined);
+		this.baseContext.set(this.provider?.historyItemBaseRef?.get() !== undefined);
 		this.branchContext.set(this.head?.category === 'localBranch' && this.head.revision !== undefined);
 		this.statusElement.hidden = page.items.length > 0;
 		this.statusElement.textContent = localize('scm.history.empty', 'No commits yet.');
