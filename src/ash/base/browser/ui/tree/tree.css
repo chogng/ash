@@ -128,6 +128,9 @@
 		--ash-list-style-list-inactive-selection-background,
 		var(--ash-list-inactiveSelectionBackground)
 	);
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	outline-offset: -1px;
 }
 
 .ash-tree-selection-active:focus .ash-tree-row.selected {
@@ -151,6 +154,7 @@
 	outline-offset: -1px;
 }
 
+.ash-tree-selection-active .ash-tree-row.selected::after,
 .ash-tree:focus-visible .ash-tree-row.focused::after,
 .ash-tree-row.drag-over::after {
 	/* Paint above row contents, including floating toolbars, without blocking input. */

@@ -1,13 +1,34 @@
-import { expect } from '@playwright/test';
+import { expect, type Locator } from '@playwright/test';
 import { expectVisibleFocusOutline } from '../../../../../../../test/fixtures/browser/focusOutline.js';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { suite, test, setup } from 'mocha';
-import { renderSCMHistoryItemGraph, toISCMHistoryItemViewModelArray } from '../../browser/scmHistory.js';
+import { renderSCMHistoryGraphPlaceholder, renderSCMHistoryItemGraph, toISCMHistoryItemViewModelArray } from '../../browser/scmHistory.js';
 import type { ISCMHistoryItem } from '../../common/history.js';
 
+
+async function expectSelectionColor(row: Locator, token: string): Promise<void> {
+	await expect.poll(() => row.evaluate((element, token) => {
+		const probe = element.ownerDocument.createElement('span');
+		probe.style.backgroundColor = `var(${token})`;
+		element.append(probe);
+		const matches = getComputedStyle(element).backgroundColor === getComputedStyle(probe).backgroundColor;
+		probe.remove();
+		return matches;
+	}, token)).toBe(true);
+}
+
 suite('SCM history graph', () => {
+	test('child rows continue both outgoing merge lanes without drawing another commit', () => {
+		const environment = new JSDOM();
+		try {
+			const graph = renderSCMHistoryGraphPlaceholder([{ id: 'main', color: 2 }, { id: 'branch', color: 5 }], environment.window.document);
+			assert.deepEqual([...graph.querySelectorAll('path')].map(path => [path.dataset.laneColor, path.getAttribute('d')]), [['2', 'M 11 0 V 22'], ['5', 'M 22 0 V 22']]);
+			assert.equal(graph.querySelectorAll('circle').length, 0);
+		} finally { environment.window.close(); }
+	});
+
 	test('connects a merge to its additional parent when that parent already has a lane', () => {
 		const history: ISCMHistoryItem[] = [
 			{ id: 'tip', parentIds: ['merge', 'base'], subject: 'tip', message: 'tip' },
@@ -104,7 +125,149 @@ suite('scmHistory browser component', () => {
 		await expect(pane.getByRole('button', { name: 'Retry loading commit graph', exact: true })).toBeVisible();
 	});
 
+	test('the shared tree navigates, previews and pins files and returns to their parent', async function () {
+		const { page } = browserTests;
+		await page.goto('/scmHistory.html?changes');
+		const tree = page.locator('.ash-scm-graph-tree');
+		const commit = tree.getByRole('treeitem', { name: /History metadata:/u });
+		const fileRows = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-graph-change') });
+		await expect(commit).toBeVisible();
+		expect(await page.evaluate(() => window.ashSCMHistoryIntegration.changeReads)).toBe(0);
+		await tree.focus();
+		await tree.press('Home');
+		await tree.press('ArrowRight');
+		await expect(fileRows).toHaveCount(3);
+		await tree.press('ArrowRight');
+		await expect(fileRows.first()).toHaveAttribute('aria-selected', 'true');
+		await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.opened.at(-1)?.options)).toEqual({ pinned: false, preserveFocus: true });
+		await expect(tree).toBeFocused();
+		await tree.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.opened.at(-1)?.options)).toEqual({ pinned: true, preserveFocus: false });
+		await tree.press('Space');
+		await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.opened.at(-1)?.options)).toEqual({ pinned: false, preserveFocus: true });
+		await fileRows.first().click({ modifiers: ['Alt'], position: { x: 100, y: 10 } });
+		await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.opened.at(-1)?.group)).toBe('sideGroup');
+		await fileRows.first().dblclick({ position: { x: 100, y: 10 } });
+		await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.opened.at(-1)?.options)).toEqual({ pinned: true, preserveFocus: false });
+		await tree.press('Shift+F10');
+		await expect(page.getByRole('menuitem', { name: 'Open File', exact: true })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(tree).toBeFocused();
+		await tree.press('ArrowLeft');
+		await expect(commit).toHaveAttribute('aria-selected', 'true');
+		await expect(commit).toHaveAttribute('aria-expanded', 'true');
+		await tree.press('ArrowLeft');
+		await expect(commit).toHaveAttribute('aria-expanded', 'false');
+		await tree.press('ArrowRight');
+		await expect(fileRows).toHaveCount(3);
+		expect(await page.evaluate(() => window.ashSCMHistoryIntegration.changeReads)).toBe(1);
+		await page.evaluate(() => window.ashSCMHistoryIntegration.setViewMode('tree'));
+		const folder = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-graph-folder') });
+		await tree.press('Home');
+		await tree.press('ArrowRight');
+		await expect(folder).toHaveAttribute('aria-selected', 'true');
+		await tree.press('ArrowLeft');
+		await expect(folder).toHaveAttribute('aria-expanded', 'false');
+		await expect(fileRows).toHaveCount(1);
+		await tree.press('ArrowRight');
+		await expect(folder).toHaveAttribute('aria-expanded', 'true');
+		await expect(fileRows).toHaveCount(3);
+	});
+
+	test('rapid file navigation keeps the latest preview when earlier content resolves last', async function () {
+		const { page } = browserTests;
+		await page.goto('/scmHistory.html?changes');
+		const tree = page.locator('.ash-scm-graph-tree');
+		await tree.focus();
+		await tree.press('Home');
+		await tree.press('ArrowRight');
+		await expect(tree.locator('.ash-scm-graph-change')).toHaveCount(3);
+		await page.evaluate(() => window.ashSCMHistoryIntegration.holdContents(['src/first.ts', 'src/second.ts']));
+		await tree.press('ArrowRight');
+		await tree.press('ArrowDown');
+		await page.evaluate(() => window.ashSCMHistoryIntegration.finishContents('src/second.ts'));
+		await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.opened.at(-1)?.resource)).toContain('second.ts');
+		await page.evaluate(() => window.ashSCMHistoryIntegration.finishContents('src/first.ts'));
+		await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.completedContents.length)).toBe(2);
+		expect(await page.evaluate(() => window.ashSCMHistoryIntegration.opened.length)).toBe(1);
+		await expect(tree.getByRole('treeitem').filter({ has: page.locator('[data-history-path="src/second.ts"]') })).toHaveAttribute('aria-selected', 'true');
+	});
+
+	test('expanded file rows stay virtualized and retain selection through refresh', async function () {
+		const { page } = browserTests;
+		await page.goto('/scmHistory.html?manyChanges');
+		const tree = page.locator('.ash-scm-graph-tree');
+		await tree.focus();
+		await tree.press('Home');
+		await tree.press('ArrowRight');
+		await expect(tree.getByRole('treeitem', { name: /file-000.ts/u })).toBeVisible();
+		await tree.press('End');
+		const last = tree.getByRole('treeitem', { name: /file-199.ts/u });
+		await expect(last).toHaveAttribute('aria-selected', 'true');
+		await expect(last).toHaveAttribute('aria-posinset', '200');
+		await expect(last).toHaveAttribute('aria-setsize', '200');
+		expect(await tree.getByRole('treeitem').count()).toBeLessThan(100);
+		await page.evaluate(() => window.ashSCMHistoryIntegration.refresh());
+		await expect(last).toHaveAttribute('aria-selected', 'true');
+		await expect(last).toBeVisible();
+		expect(await page.evaluate(() => window.ashSCMHistoryIntegration.changeReads)).toBe(1);
+		await tree.press('Home');
+		await expect(tree.getByRole('treeitem', { name: /History metadata:/u })).toBeVisible();
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
+		test(`expanded files use one tree selection and full-width rows (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/scmHistory.html?changes&locale=${locale}`);
+			const tree = page.locator('.ash-scm-graph-tree');
+			const commit = tree.getByRole('treeitem', { name: /History metadata:/u });
+			const fileRows = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-graph-change') });
+			const outside = page.locator('#outside');
+			await commit.locator('.ash-scm-graph-row').click({ position: { x: 50, y: 10 } });
+			await expect(commit).toHaveAttribute('aria-expanded', 'true');
+			await expect(fileRows).toHaveCount(3);
+			for (const mode of ['list', 'tree'] as const) {
+				await page.evaluate(mode => window.ashSCMHistoryIntegration.setViewMode(mode), mode);
+				await expect(fileRows).toHaveCount(3);
+				for (const width of [280, 560]) {
+					await page.evaluate(width => window.ashSCMHistoryIntegration.resize(width), width);
+					for (let theme = 0; theme < 4; theme++) {
+						await page.evaluate(index => window.ashSCMHistoryIntegration.setTheme(index), theme);
+						await fileRows.first().click({ position: { x: 100, y: 10 } });
+						await expect(fileRows.first()).toHaveAttribute('aria-selected', 'true');
+						await expect(commit).toHaveAttribute('aria-selected', 'false');
+						await expect(tree.locator('.ash-tree-row.selected')).toHaveCount(1);
+						const bounds = await tree.boundingBox();
+						for (const row of [commit, fileRows.first(), fileRows.last()]) {
+							const rowBounds = (await row.boundingBox())!;
+							expect(rowBounds.x).toBeCloseTo(bounds!.x, 1);
+							expect(rowBounds.width).toBeCloseTo(bounds!.width, 1);
+							expect(rowBounds.height).toBe(22);
+						}
+						await outside.hover();
+						await outside.focus();
+						await expect(commit).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+						await expectSelectionColor(fileRows.first(), '--ash-list-inactiveSelectionBackground');
+						if (theme >= 2) await expectVisibleFocusOutline(fileRows.first());
+						await page.keyboard.press('Tab');
+						await tree.focus();
+						await expectSelectionColor(fileRows.first(), '--ash-list-activeSelectionBackground');
+						await expectVisibleFocusOutline(fileRows.first());
+						await fileRows.last().hover();
+						await expect(fileRows.nth(1)).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+						if (width === 280 && theme === 1) await browserTests.info.attach(`history-file-${locale}-${mode}`, { body: await tree.screenshot(), contentType: 'image/png' });
+					}
+				}
+			}
+			const selectedId = await fileRows.first().getAttribute('data-tree-id');
+			await page.evaluate(() => window.ashSCMHistoryIntegration.refresh());
+			await expect(commit).toHaveAttribute('aria-expanded', 'true');
+			await expect(tree.locator('.ash-tree-row.selected')).toHaveAttribute('data-tree-id', selectedId!);
+			await tree.press('Escape');
+			await expect(tree.locator('.ash-tree-row.selected')).toHaveCount(0);
+			await expect(fileRows).toHaveCount(3);
+		});
+
 		test(`global header action visibility updates existing views and preserves explicit policies (${locale})`, async function () {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
@@ -251,20 +414,22 @@ suite('scmHistory browser component', () => {
 		for (let theme = 0; theme < 4; theme++) {
 			await page.evaluate(index => window.ashSCMHistoryIntegration.setTheme(index), theme);
 			await page.keyboard.press('Tab');
-			await commit.focus();
+			await page.locator('.ash-scm-graph-tree').focus();
+			await page.locator('.ash-scm-graph-tree').press('Home');
 			const row = commit.locator('.ash-scm-graph-row');
 			await row.hover({ position: { x: 80, y: 10 } });
 			await expect(commit.locator('.ash-scm-graph-actions')).toBeVisible();
-			await expectVisibleFocusOutline(row);
+			await expectVisibleFocusOutline(commit);
 			await commit.locator('.ash-scm-graph-actions button').first().click({ trial: true });
 			if (theme === 0) {
-				await commit.press('Tab');
+				await page.locator('.ash-scm-graph-tree').press('Tab');
 				await expect(commit.getByRole('button', { name: 'metadata-topic', exact: true })).toBeFocused();
 				await page.keyboard.press('Tab');
 				await expect(commit.getByRole('button', { name: 'metadata-v1', exact: true })).toBeFocused();
 				await page.keyboard.press('Tab');
 				await expect(commit.locator('.ash-scm-graph-actions button').first()).toBeFocused();
-				await commit.focus();
+				await page.locator('.ash-scm-graph-tree').focus();
+				await page.locator('.ash-scm-graph-tree').press('Home');
 			}
 			await browserTests.info.attach(`history-focus-${theme}`, { body: await row.screenshot(), contentType: 'image/png' });
 		}
@@ -345,7 +510,9 @@ suite('scmHistory browser component', () => {
 		await expect(hover).toHaveAttribute('id', hoverId!);
 		await page.locator('#outside').click();
 		await expect(hover).toHaveCount(0);
-		await commit.focus();
+		await page.locator('.ash-scm-graph-tree').focus();
+		await page.locator('.ash-scm-graph-tree').press('Home');
+		await page.locator('.ash-scm-graph-tree').press('Alt+ArrowDown');
 		await expect(hover).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(hover).toHaveCount(0);
@@ -356,13 +523,15 @@ suite('scmHistory browser component', () => {
 
 		const commit = page.getByRole('treeitem', { name: /History metadata:/u });
 		const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
-		await commit.focus();
-		await commit.press('Alt+ArrowDown');
+		await page.locator('.ash-scm-graph-tree').focus();
+		await page.locator('.ash-scm-graph-tree').press('Home');
+		await page.locator('.ash-scm-graph-tree').press('Alt+ArrowDown');
 		const messageScroll = hover.getByRole('region', { name: 'Commit message', exact: true });
 		for (let theme = 0; theme < 4; theme++) {
 			await page.evaluate(index => window.ashSCMHistoryIntegration.setTheme(index), theme);
-			await commit.focus();
-			await commit.press('Alt+ArrowDown');
+			await page.locator('.ash-scm-graph-tree').focus();
+			await page.locator('.ash-scm-graph-tree').press('Home');
+			await page.locator('.ash-scm-graph-tree').press('Alt+ArrowDown');
 			await messageScroll.focus();
 			await messageScroll.press('Home');
 			await expect(messageScroll).toHaveCSS('outline-style', 'solid');
@@ -379,7 +548,7 @@ suite('scmHistory browser component', () => {
 			})).toBe(true);
 			await browserTests.info.attach(`scm-history-${theme}`, { body: await hover.screenshot(), contentType: 'image/png' });
 			await page.keyboard.press('Escape');
-			await expect(commit).toBeFocused();
+			await expect(page.locator('.ash-scm-graph-tree')).toBeFocused();
 		}
 	});
 
@@ -390,8 +559,9 @@ suite('scmHistory browser component', () => {
 		await page.goto('/scmHistory.html?locale=zh-CN');
 		const localizedHistory = page.locator('[data-view-id="fixture.history"]');
 		const localizedCommit = page.getByRole('treeitem', { name: /History metadata:/u });
-		await localizedCommit.focus();
-		await localizedCommit.press('Alt+ArrowDown');
+		await page.locator('.ash-scm-graph-tree').focus();
+		await page.locator('.ash-scm-graph-tree').press('Home');
+		await page.locator('.ash-scm-graph-tree').press('Alt+ArrowDown');
 		const localizedHover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
 		await expect(localizedHover.getByRole('button', { name: '复制提交哈希', exact: true })).toHaveText('');
 		await expect(localizedHover.getByRole('button', { name: `打开提交 ${hash.slice(0, 7)}`, exact: true })).toBeVisible();
@@ -403,8 +573,9 @@ suite('scmHistory browser component', () => {
 		for (const width of [1100, 640, 360]) {
 			await page.setViewportSize({ width, height: 820 });
 			await page.evaluate(width => window.ashSCMHistoryIntegration.resize(Math.min(width, 560)), width);
-			await localizedCommit.focus();
-			await localizedCommit.press('Alt+ArrowDown');
+			await page.locator('.ash-scm-graph-tree').focus();
+			await page.locator('.ash-scm-graph-tree').press('Home');
+			await page.locator('.ash-scm-graph-tree').press('Alt+ArrowDown');
 			await expect(localizedHover).toBeVisible();
 			await expect.poll(() => localizedHover.evaluate(element => {
 				const tooltip = element.closest<HTMLElement>('.ash-hover')!;

@@ -28,6 +28,8 @@ import { TestThemeService } from '../../../src/ash/platform/theme/test/common/te
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
+import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
+import type { IEditorOptions } from '../../../src/ash/platform/editor/common/editor.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { SCMHistoryViewPane } from '../../../src/ash/workbench/contrib/scm/browser/scmHistoryViewPane.js';
 import { ViewPane, ViewPaneShowActions, type IViewPaneOptions } from '../../../src/ash/workbench/browser/parts/views/viewPane.js';
@@ -56,7 +58,8 @@ services.registerInstance(IHoverService, resources.add(new HoverService(configur
 services.registerInstance(IAccessibleViewService, resources.add(services.createInstance(AccessibleViewService)));
 services.registerInstance(IClipboardService, new BrowserClipboardService(navigator.clipboard));
 // Editor transport is covered by smoke; this fixture owns only row and hover rendering.
-services.registerInstance(IEditorService, { openEditor: async () => undefined } as unknown as IEditorService);
+const opened: { resource: string; options: IEditorOptions | undefined; group: unknown; }[] = [];
+services.registerInstance(IEditorService, { openEditor: async (input: IResourceEditorInput, options?: IEditorOptions, group?: unknown) => { opened.push({ resource: input.resource.toString(), options, group }); } } as unknown as IEditorService);
 const scm = resources.add(new SCMService());
 const view = resources.add(new SCMViewService(scm));
 services.registerInstance(ISCMViewService, view);
@@ -66,6 +69,9 @@ const subject = `History metadata: a long title that uses the space previously o
 const message = Array.from({ length: 24 }, (_, index) => `    Detail ${index + 1}: the complete explanation remains available without taking space from the history title.`).join('\n');
 const historyChanged = resources.add(new Emitter<void>());
 let heldHistory: DeferredPromise<void> | undefined;
+let changeReads = 0;
+const heldContents = new Map<string, DeferredPromise<void>>();
+const completedContents: string[] = [];
 const provider: ISCMHistoryProvider = {
 	onDidChange: historyChanged.event,
 	historyItemRef: observableValue('fixture.history.head', undefined),
@@ -74,8 +80,17 @@ const provider: ISCMHistoryProvider = {
 		await heldHistory?.p;
 		return [{ id: hash, displayId: hash.slice(0, 7), parentIds: [], subject, message, tooltip: { authorName: 'History Author', authorEmail: 'history@example.invalid', timestamp: timestamp * 1000, message, statistics: { files: 2, additions: 2, deletions: 0 } }, remoteLinks: [{ name: 'origin', uri: URI.parse(`https://github.com/ash-test/history/commit/${hash}`) }], references: [{ id: 'localBranch:metadata-topic', name: 'metadata-topic', category: 'localBranch' }, { id: 'tag:metadata-v1', name: 'metadata-v1', category: 'tag' }] }];
 	},
-	provideHistoryItemChanges: async () => [],
-	resolveHistoryItemChangeContents: async () => { throw new Error('Editor contents must be tested through the product host'); },
+	provideHistoryItemChanges: async () => {
+		changeReads++;
+		const query = new URLSearchParams(location.search);
+		const paths = query.has('manyChanges') ? Array.from({ length: 200 }, (_, index) => `src/file-${String(index).padStart(3, '0')}.ts`) : query.has('changes') ? ['src/first.ts', 'src/second.ts', 'README.md'] : [];
+		return paths.map(path => ({ path, uri: URI.file(`/workspace/${path}`), status: 'modified' }));
+	},
+	resolveHistoryItemChangeContents: async (_id, change) => {
+		await heldContents.get(change.path)?.p;
+		completedContents.push(change.path);
+		return { parentId: 'fixture-base', original: { kind: 'text', text: 'Before' }, modified: { kind: 'text', text: 'After' } };
+	},
 	resolveHistoryItemChatContext: async () => undefined,
 	resolveHistoryItemChangeRangeChatContext: async () => undefined,
 };
@@ -105,7 +120,13 @@ const panes = resources.add(services.createInstance(ViewPaneContainer, root, {
 panes.layout({ height: 600, width: 560 });
 panes.setVisible(true);
 const fixture = {
-	hash, timestamp, subject, message,
+	hash, timestamp, subject, message, opened,
+	get changeReads(): number { return changeReads; },
+	completedContents,
+	holdContents(paths: string[]): void { for (const path of paths) heldContents.set(path, new DeferredPromise<void>()); },
+	finishContents(path: string): void { void heldContents.get(path)?.complete(); heldContents.delete(path); },
+	setViewMode(mode: 'list' | 'tree'): void { (panes.getView('fixture.history') as SCMHistoryViewPane).setViewMode(mode); },
+	refresh(): void { historyChanged.fire(); },
 	beginHistoryRead(): void { heldHistory = new DeferredPromise<void>(); historyChanged.fire(); },
 	finishHistoryRead(fail = false): void {
 		const pending = heldHistory;

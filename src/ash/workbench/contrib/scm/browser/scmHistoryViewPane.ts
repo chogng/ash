@@ -1,14 +1,16 @@
-import { defaultButtonStyles, defaultListStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultListStyles, defaultFindWidgetStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { localize2, localize } from '../../../../nls.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
-import { List } from '../../../../base/browser/ui/list/listWidget.js';
+import { ObjectTree } from '../../../../base/browser/ui/tree/objectTree.js';
+import type { ObjectTreeElement, ObjectTreeNode } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Lxicon } from "../../../../base/common/lxicons.js";
 
 import { equals } from '../../../../base/common/arrays.js';
 import { URI } from '../../../../base/common/uri.js';
+import { ResourceTree, type IResourceNode } from '../../../../base/common/resourceTree.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -17,14 +19,14 @@ import { IClipboardService } from '../../../../platform/clipboard/common/clipboa
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
+import { FileKind } from '../../../../platform/files/common/files.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Action2, IMenuService, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { ContextKeyExpr, RawContextKey, type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { IContextKeyService, type IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IContextMenuService, IContextViewService } from "../../../../platform/contextview/browser/contextView.js";
-import { registerOpenEditorListeners, toOpenEditorOptions, type IOpenEditorOptions } from "../../../../platform/editor/browser/editor.js";
+import { toOpenEditorOptions, type IOpenEditorOptions } from "../../../../platform/editor/browser/editor.js";
 import { IHoverService, type IManagedHover } from "../../../../platform/hover/browser/hoverService.js";
 import { IResourceLabelService, type ResourceLabels } from "../../../browser/labels.js";
 import { IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -35,7 +37,7 @@ import { IEditorService } from "../../../services/editor/common/editorService.js
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane, ViewPaneShowActions } from "../../../browser/parts/views/viewPane.js";
 import { createBinaryDiffEditorInput, createDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
-import { setupHistoryItemHover, toHistoryItemHoverContent, SWIMLANE_HEIGHT, renderSCMHistoryItemGraph, toISCMHistoryItemViewModelArray } from './scmHistory.js';
+import { setupHistoryItemHover, toHistoryItemHoverContent, SWIMLANE_HEIGHT, renderSCMHistoryItemGraph, renderSCMHistoryGraphPlaceholder, toISCMHistoryItemViewModelArray } from './scmHistory.js';
 import { SCMHistoryBusyContext, SCMHistoryProviderIdContext } from '../common/scm.js';
 import { createMultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../multiDiffEditor/browser/multiDiffEditorInput.js';
 
@@ -192,7 +194,7 @@ registerAction2(class extends Action2 {
 	}
 });
 
-type ExpandedCommit =
+type HistoryItemChanges =
 	| { readonly state: "loading"; }
 	| { readonly state: "ready"; readonly result: readonly ISCMHistoryItemChange[]; }
 	| { readonly state: "error"; readonly message: string; };
@@ -202,26 +204,30 @@ interface HistoryPage {
 	readonly hasMore: boolean;
 }
 
-interface HistoryListItem {
+interface HistoryCommitElement {
 	readonly id: string;
-	model: ISCMHistoryItemViewModel | undefined;
+	readonly kind: 'commit';
+	model: ISCMHistoryItemViewModel;
 }
+
+type HistoryTreeElement = HistoryCommitElement
+	| { readonly id: string; readonly kind: 'file'; readonly model: ISCMHistoryItemViewModel; readonly change: ISCMHistoryItemChange; }
+	| { readonly id: string; readonly kind: 'folder'; readonly model: ISCMHistoryItemViewModel; readonly folder: IResourceNode<ISCMHistoryItemChange, ISCMHistoryItemViewModel>; }
+	| { readonly id: string; readonly kind: 'state'; readonly model: ISCMHistoryItemViewModel; readonly message: string; }
+	| { readonly id: string; readonly kind: 'more'; };
 
 // Each rendered commit owns its actions and hover independently of viewport updates.
 class HistoryItemRow extends Disposable {
 	public readonly element: HTMLDivElement;
 	public readonly resources = this._register(new DisposableStore());
-	public readonly changes = this._register(new DisposableStore());
 	public readonly references = this._register(new DisposableStore());
 	public referenceLabels: HTMLSpanElement | undefined;
 	public visibleReferences: readonly ISCMHistoryItemRef[] = [];
 	public headReferenceId: string | undefined;
 	public scope: IScopedContextKeyService | undefined;
 	public target: SCMHistoryItemViewModelTreeElement | undefined;
-	public expanded: ExpandedCommit | undefined;
-	public changesDirty = false;
-	public changesElement: HTMLUListElement | undefined;
 	public hover: IManagedHover | undefined;
+	public focusDetails: (() => void) | undefined;
 
 	constructor(public historyItemViewModel: ISCMHistoryItemViewModel, public graph: SVGSVGElement, document: Document) {
 		super();
@@ -256,21 +262,23 @@ export class SCMHistoryViewPane extends ViewPane {
 	private historyItemRefs: readonly string[] | undefined;
 	private comparison: { readonly remote: ISCMHistoryItemRef; readonly base: string; readonly incoming: boolean; readonly outgoing: boolean; } | undefined;
 	private readonly filterPicker = this._register(new MutableDisposable<DisposableStore>());
-	private readonly collapsedFolders = new Map<string, Set<string>>();
 	private page: HistoryPage | undefined;
 	private head: ISCMHistoryItemRef | undefined;
 	private generation = 0;
+	private openGeneration = 0;
 	private loading = false;
 	private refreshing = false;
 	private refreshFailed = false;
 	private titleOperation: object | undefined;
 	private moreError: string | undefined;
 	private rows: readonly ISCMHistoryItemViewModel[] = [];
-	private list: List<HistoryListItem> | undefined;
-	private readonly moreItem: HistoryListItem = { id: 'more', model: undefined };
-	private readonly listResources = this._register(new MutableDisposable<DisposableStore>());
+	private tree: ObjectTree<HistoryTreeElement> | undefined;
+	private readonly moreItem: HistoryTreeElement = { id: 'more', kind: 'more' };
+	private readonly treeResources = this._register(new MutableDisposable<DisposableStore>());
+	private readonly changeRows = this._register(new DisposableMap<HTMLElement, DisposableStore>());
 
-	private readonly expanded = new Map<string, ExpandedCommit>();
+	// Cached provider reads; expansion, focus and selection belong exclusively to ObjectTree.
+	private readonly commitChanges = new Map<string, HistoryItemChanges>();
 	private graphRepositoryId: string | undefined;
 	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
 
@@ -335,7 +343,6 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.viewMode = mode;
 		this.viewModeContext.set(mode);
 		this.storageService.store('scm.graphView.viewMode', mode, StorageScope.WORKSPACE, StorageTarget.USER);
-		for (const [, row] of this.rowResources) { row.changesDirty = true; }
 		if (this.page) { this.renderGraph(this.page); }
 	}
 
@@ -432,7 +439,7 @@ export class SCMHistoryViewPane extends ViewPane {
 					this.filters.set(key, typeof first === 'string' ? first : selection.map(item => (item.reference as ISCMHistoryItemRef).id));
 					this.storageService.store('scm.graphView.referencesFilter', JSON.stringify([...this.filters]), StorageScope.WORKSPACE, StorageTarget.USER);
 					this.page = undefined;
-					this.expanded.clear();
+					this.commitChanges.clear();
 					picker.hide();
 					void this.refresh();
 				}));
@@ -486,11 +493,9 @@ export class SCMHistoryViewPane extends ViewPane {
 			if (this.isDisposed || generation !== this.generation || this.head?.revision !== revision || this.page === previousPage) { return; }
 			index = this.rows.findIndex(row => row.historyItem.id === revision);
 		}
-		if (index >= 0 && this.list) {
-			this.list.reveal(index, 0.5);
-			this.list.setActiveIndex(index, undefined, { reveal: false });
-			this.list.setSelection([index]);
-			this.list.row(index)?.querySelector<HTMLElement>('.ash-scm-graph-commit')?.focus({ preventScroll: true });
+		if (index >= 0 && this.tree) {
+			this.tree.reveal(`commit:${revision}`, 0.5);
+			this.selectCommit(revision);
 		}
 	}
 
@@ -499,7 +504,6 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.head = undefined;
 		this.comparison = undefined;
 		this.historyItemRefs = undefined;
-		this.collapsedFolders.clear();
 		this.currentItemContext.set(false);
 		this.upstreamContext.set(false);
 		this.baseContext.set(false);
@@ -507,9 +511,10 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.loading = false;
 		this.moreError = undefined;
 		this.rows = [];
-		this.listResources.clear();
-		this.list = undefined;
-		this.expanded.clear();
+		this.treeResources.clear();
+		this.tree = undefined;
+		this.changeRows.clearAndDisposeAll();
+		this.commitChanges.clear();
 		this.rowResources.clearAndDisposeAll();
 		this.more.clear();
 		this.statusResources.clear();
@@ -606,8 +611,8 @@ export class SCMHistoryViewPane extends ViewPane {
 				}
 			}
 			if (previousHead !== this.head?.revision || previousComparison?.remote.revision !== this.comparison?.remote.revision || previousComparison?.base !== this.comparison?.base) {
-				this.expanded.delete(SCMIncomingHistoryItemId);
-				this.expanded.delete(SCMOutgoingHistoryItemId);
+				this.commitChanges.delete(SCMIncomingHistoryItemId);
+				this.commitChanges.delete(SCMOutgoingHistoryItemId);
 			}
 			// One bounded look-ahead page retains the loaded tail when new commits arrive.
 			const pageSize = this.configurationService.getValue<number>('scm.graph.pageSize');
@@ -661,30 +666,18 @@ export class SCMHistoryViewPane extends ViewPane {
 	}
 
 	private renderGraph(page: HistoryPage): void {
-		const previousRows = this.rows;
-		const scrollTop = this.list?.scrollTop ?? 0;
-		let anchor: { id: string; offset: number; } | undefined;
-		let position = 0;
-		if (scrollTop > 0) {
-			for (const [index, model] of previousRows.entries()) {
-				const height = this.list?.getElementHeight(index) ?? this.rowHeight(model.historyItem);
-				if (position + height > scrollTop) { anchor = { id: model.historyItem.id, offset: scrollTop - position }; break; }
-				position += height;
-			}
-		}
-		const focused = this.graphElement.ownerDocument.activeElement as HTMLElement | null;
+		const tree = this.tree;
+		const scrollTop = tree?.scrollTop ?? 0;
+		const anchor = tree?.model.visibleNodes.find(node => (tree.getElementTop(node.id) ?? 0) + SWIMLANE_HEIGHT > scrollTop);
+		const anchorOffset = anchor ? scrollTop - (tree!.getElementTop(anchor.id) ?? 0) : 0;
+		const document = this.graphElement.ownerDocument;
+		const focused = document.activeElement as HTMLElement | null;
 		const restoreFocus = focused && this.graphElement.contains(focused) ? focused : undefined;
-		const focusedCommitId = restoreFocus?.closest<HTMLElement>('.ash-scm-graph-commit')?.dataset.historyItemId;
-		const focusedFilePath = restoreFocus?.closest<HTMLElement>('.ash-scm-graph-change-row')?.querySelector<HTMLElement>('.ash-scm-graph-change')?.dataset.historyPath;
-		const focusedFolder = restoreFocus?.dataset.historyFolder;
-		const focusedAction = restoreFocus?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
-		const focusedReference = restoreFocus?.classList.contains('ash-scm-graph-label') ? restoreFocus.getAttribute('aria-label') : undefined;
-		const previousFocusIndex = this.list?.activeIndex ?? 0;
+		const focusedId = tree?.focus?.id;
 		const retained = new Set([...page.items.map(item => item.id), SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId]);
-		for (const id of this.expanded.keys()) {
-			if (!retained.has(id)) this.expanded.delete(id);
+		for (const id of this.commitChanges.keys()) {
+			if (!retained.has(id)) this.commitChanges.delete(id);
 		}
-		for (const id of this.collapsedFolders.keys()) { if (!retained.has(id)) this.collapsedFolders.delete(id); }
 		this.rows = toISCMHistoryItemViewModelArray(page.items, new Map(), this.head, this.comparison);
 		this.currentItemContext.set(this.head?.revision !== undefined);
 		this.upstreamContext.set(this.provider?.historyItemRemoteRef?.get()?.revision !== undefined);
@@ -692,92 +685,130 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.branchContext.set(this.head?.category === 'localBranch' && this.head.revision !== undefined);
 		this.statusElement.hidden = page.items.length > 0;
 		this.statusElement.textContent = localize('scm.history.empty', 'No commits yet.');
-		if (!this.list && page.items.length > 0) {
-			const resources = new DisposableStore();
-			this.listResources.value = resources;
-			const list = resources.add(new List<HistoryListItem>(this.graphElement, {
-				styles: defaultListStyles,
-				role: 'tree',
-				ariaLabel: this.graphLabel,
-				scrolling: 'managed',
-				mouseSupport: false,
-				keyboardNavigation: false,
-				multipleSelectionSupport: false,
-				loopNavigation: false,
-				getId: item => item.id,
-				getHeight: item => item.model ? this.rowHeight(item.model.historyItem) : SWIMLANE_HEIGHT * 2,
-				reuseRows: true,
-				accessibilityProvider: { getRole: () => 'presentation' },
-				renderItem: (item, index) => {
-					if (!item.model) { this.more.clear(); return this.renderMore(); }
-					const row = this.renderCommit(item.model, renderSCMHistoryItemGraph(item.model, this.rowHeight(item.model.historyItem), this.graphElement.ownerDocument));
-					this.updateCommitAccessibility(row, index);
-					return row.element;
-				},
-				updateItem: (item, index) => {
-					if (!item.model) return;
-					const row = this.rowResources.get(item.model.historyItem.id)!;
-					this.updateCommitRow(row, item.model);
-					this.updateCommitAccessibility(row, index);
-				},
-				onDidRemoveRow: row => {
-					const id = row.dataset.listId;
-					if (id?.startsWith('commit:')) this.rowResources.deleteAndDispose(id.slice(7));
-					else this.more.clear();
-				},
-			}));
-			this.list = list;
-			list.element.setAttribute('aria-multiselectable', 'false');
-			resources.add(list.onDidChangeSelection(() => this.updateSelection()));
-			resources.add(this.onDidChangeBodyVisibility(visible => { if (visible) this.loadMoreIfVisible(); }));
-			list.domNode.classList.add('ash-scm-graph-viewport');
-			list.element.setAttribute('aria-description', localize('scm.history.help', 'Use Up and Down Arrow to move between commits, Home and End to move to the first and last loaded commits, and Page Up and Page Down to move by a page. Use Right Arrow to expand files and Left Arrow to collapse them. Press Enter or Space on a history item to toggle its files; on macOS, Command+Down Arrow also toggles them. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges and Open Changes. Press Enter on Open Changes to compare all text files in that item. Press Enter on a reference badge for provider actions. Press Alt+Down Arrow to focus history details and use its actions; Escape returns to the history item. Use Filter History References to select branches and tags; Ctrl+Space toggles a reference and Enter applies the selection. Use View as List or View as Tree to change file layout. In tree mode, use Enter or the Left and Right Arrow keys on a folder to collapse or expand it. Incoming and Outgoing Changes compare the corresponding branch with its merge base. Binary changes open a read-only hexadecimal comparison. Use Up and Down Arrow to navigate expanded folders and files. Use Left Arrow to return to their parent, and Right Arrow on an expanded commit or folder to enter it. Page Up and Page Down also work from files and folders. Use Tab to reach Open File on a changed file and open its read-only historical contents. The graph selects one commit at a time. Click or press Enter or Space to select it. Escape clears the selection without collapsing files. Loading more or refreshing retains available selections and expanded files.'));
-			resources.add(list.onDidRenderRows(() => {
-				for (const [, row] of this.rowResources) {
-					if (!row.hover?.visible) continue;
-					if (!row.element.isConnected) row.hover.hide();
-					else this.contextViewService.layout();
-				}
-				this.loadMoreIfVisible();
-			}));
-		}
-		if (this.list) {
-			// Stable wrappers let List retain a commit's DOM while its graph and refs change.
-			const previous = new Map(this.list.items.map(item => [item.id, item]));
-			const items = this.rows.map(model => {
+		if (!this.tree && page.items.length > 0) this.createHistoryTree();
+		if (this.tree) {
+			const children: ObjectTreeElement<HistoryTreeElement>[] = this.rows.map(model => {
 				const id = `commit:${model.historyItem.id}`;
-				const item = previous.get(id) ?? { id, model };
-				item.model = model;
-				return item;
+				const previous = this.tree!.model.getElement(id);
+				const element: HistoryCommitElement = previous?.kind === 'commit' ? previous : { id, kind: 'commit', model };
+				element.model = model;
+				const row = this.rowResources.get(model.historyItem.id);
+				if (row) this.updateCommitRow(row, model);
+				return { element, collapsible: true, collapsed: this.tree!.isCollapsed(id) ?? true, children: this.getCommitChildren(model) };
 			});
-			if (page.hasMore) items.push(this.moreItem);
-			this.list.items = items;
-			if (anchor) {
-				let top = 0;
-				for (const model of this.rows) {
-					if (model.historyItem.id === anchor.id) { this.list.scrollTop = top + anchor.offset; break; }
-					top += this.rowHeight(model.historyItem);
-				}
-			} else if (scrollTop === 0) { this.list.scrollTop = 0; }
+			if (page.hasMore) children.push({ element: this.moreItem });
+			this.tree.setChildren(children);
+			if (anchor && this.tree.model.has(anchor.id)) this.tree.scrollTop = (this.tree.getElementTop(anchor.id) ?? 0) + anchorOffset;
+			else if (scrollTop === 0) this.tree.scrollTop = 0;
 			this.updateSelection();
-			const active = this.graphElement.ownerDocument.activeElement;
-			if (restoreFocus && (active === this.graphElement.ownerDocument.body || active === restoreFocus || active && this.graphElement.contains(active))) {
-				let target: HTMLElement | undefined = restoreFocus.isConnected ? restoreFocus : undefined;
-				if (!target && focusedCommitId) {
-					const index = this.rows.findIndex(row => row.historyItem.id === focusedCommitId);
-					const fallbackIndex = Math.min(Math.max(0, previousFocusIndex), this.rows.length - 1);
-					const row = this.list.row(index >= 0 ? index : fallbackIndex)?.querySelector<HTMLElement>('.ash-scm-graph-commit') ?? undefined;
-					const fileRow = [...row?.querySelectorAll<HTMLElement>('.ash-scm-graph-change') ?? []].find(file => file.dataset.historyPath === focusedFilePath)?.closest<HTMLElement>('.ash-scm-graph-change-row');
-					target = row;
-					if (focusedFilePath) { target = fileRow?.querySelector<HTMLElement>('.ash-scm-graph-change') ?? row; }
-					if (focusedFolder) { target = [...row?.querySelectorAll<HTMLElement>('.ash-scm-graph-folder') ?? []].find(folder => folder.dataset.historyFolder === focusedFolder) ?? row; }
-					if (focusedReference) { target = [...row?.querySelectorAll<HTMLElement>('.ash-scm-graph-label') ?? []].find(reference => reference.getAttribute('aria-label') === focusedReference) ?? row; }
-					if (focusedAction) { target = [...(fileRow ?? row)?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].find(action => action.dataset.actionId === focusedAction)?.querySelector<HTMLElement>('button') ?? target; }
+			for (const node of this.tree.model.rootNodes) {
+				if (node.element.kind === 'commit' && !node.collapsed && !this.commitChanges.has(node.element.model.historyItem.id)) {
+					const currentTree = this.tree;
+					const item = node.element.model.historyItem;
+					queueMicrotask(() => { if (!this.isDisposed && currentTree === this.tree && currentTree.isCollapsed(node.id) === false) void this.loadCommitChanges(item); });
 				}
-				target?.focus({ preventScroll: true });
+			}
+			if (restoreFocus && !restoreFocus.isConnected && document.activeElement === document.body) {
+				if (focusedId && this.tree.model.has(focusedId)) this.tree.setFocus(focusedId);
+				this.tree.domFocus();
 			}
 		}
 		this.graphElement.setAttribute('aria-busy', this.loading || this.refreshing ? 'true' : 'false');
+		this.loadMoreIfVisible();
+	}
+
+	private createHistoryTree(): void {
+		const resources = new DisposableStore();
+		this.treeResources.value = resources;
+		// Graph columns are SCM content. The shared tree owns full-width rows, hierarchy and interaction.
+		const tree = resources.add(new ObjectTree<HistoryTreeElement>(this.graphElement, {
+			styles: defaultListStyles,
+			findWidgetStyles: defaultFindWidgetStyles,
+			ariaLabel: this.graphLabel,
+			scrolling: 'managed',
+			indent: 0,
+			indentGuides: 'none',
+			multipleSelectionSupport: false,
+			expandOnlyOnTwistieClick: false,
+			expandOnDoubleClick: false,
+			twistieAdditionalCssClass: () => 'ash-tree-twistie-hidden',
+			modelOptions: { identityProvider: { getId: element => element.id } },
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: element => element.kind === 'commit' ? element.model.historyItem.subject : element.kind === 'file' ? element.change.path : element.kind === 'folder' ? element.folder.name : undefined },
+			getHeight: element => element.kind === 'more' ? SWIMLANE_HEIGHT * 2 : SWIMLANE_HEIGHT,
+			reuseRows: true,
+			renderElement: (element, node) => {
+				if (element.kind === 'more') { this.more.clear(); return this.renderMore(); }
+				if (element.kind === 'commit') return this.renderCommit(element.model, renderSCMHistoryItemGraph(element.model, SWIMLANE_HEIGHT, this.graphElement.ownerDocument)).element;
+				return this.renderHistoryChange(element, node);
+			},
+			onDidRemoveRow: row => {
+				const commit = row.querySelector<HTMLElement>('.ash-scm-graph-commit');
+				if (commit?.dataset.historyItemId) this.rowResources.deleteAndDispose(commit.dataset.historyItemId);
+				const change = row.querySelector<HTMLElement>('.ash-scm-graph-change-row, .ash-scm-graph-folder, .ash-scm-graph-change-state');
+				if (change) this.changeRows.deleteAndDispose(change);
+				if (row.querySelector('.ash-scm-graph-load-more')) this.more.clear();
+			},
+		}));
+		this.tree = tree;
+		tree.domNode.classList.add('ash-scm-graph-viewport');
+		tree.element.classList.add('ash-scm-graph-tree');
+		tree.element.setAttribute('aria-multiselectable', 'false');
+		tree.element.setAttribute('aria-description', localize('scm.history.help', 'Use Up and Down Arrow to navigate and select commits, folders and changed files. Navigating to a file previews it while keeping focus here. Home and End move to the first and last loaded rows; Page Up and Page Down move by a page. Right Arrow expands a commit or folder and enters its children; Left Arrow collapses it or returns to its parent. Enter or Space toggles commits and folders. Enter opens and pins a changed file; Space previews it while keeping focus in history. Click a file to preview it and double-click to pin it. Hold Ctrl, Command or Alt when clicking to open it beside the current editor. On macOS, Command+Down Arrow also opens the selected item. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges, Open Changes and Open File. Press Alt+Down Arrow on a commit to focus its details; Escape returns to history. Use Filter History References to select branches and tags; Ctrl+Space toggles a reference and Enter applies the selection. Use View as List or View as Tree to change file layout. Incoming and Outgoing Changes compare the branch with its merge base. Binary changes open a read-only hexadecimal comparison. The graph selects one row at a time. Escape clears the selection without collapsing files. Loading more or refreshing retains available selections and expanded rows.'));
+		resources.add(tree.onDidChangeSelection(event => {
+			this.updateSelection();
+			const element = event.elements[0];
+			if (element?.kind === 'file' && event.browserEvent instanceof KeyboardEvent && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.browserEvent.key)) {
+				void this.openCommitChange(element.model.historyItem, element.change, { editorOptions: { pinned: false, preserveFocus: true }, openToSide: false });
+			}
+		}));
+		resources.add(tree.onDidChangeFocus(() => this.updateSelection()));
+		resources.add(tree.onDidChangeCollapseState(event => {
+			if (event.element.kind === 'commit' && !event.collapsed) {
+				const item = event.element.model.historyItem;
+				queueMicrotask(() => { if (!this.isDisposed && tree === this.tree && tree.isCollapsed(event.element.id) === false) void this.loadCommitChanges(item); });
+			}
+			if (event.element.kind === 'folder') this.updateFolderTwistie(event.element.id, event.collapsed);
+		}));
+		resources.add(tree.onPointer(({ element, browserEvent }) => {
+			if (element.kind === 'file' && browserEvent.detail !== 2) void this.openCommitChange(element.model.historyItem, element.change, toOpenEditorOptions(browserEvent));
+		}));
+		resources.add(tree.onDidDoubleClick(({ element, browserEvent }) => {
+			if (element.kind === 'file') void this.openCommitChange(element.model.historyItem, element.change, toOpenEditorOptions(browserEvent, true));
+		}));
+		resources.add(tree.onDidAccept(({ element, browserEvent }) => {
+			if (element.kind === 'commit' || element.kind === 'folder') tree.toggleCollapsed(element.id);
+			else if (element.kind === 'file') {
+				const options = toOpenEditorOptions(new StandardKeyboardEvent(browserEvent));
+				if (options) void this.openCommitChange(element.model.historyItem, element.change, options);
+			} else if (element.kind === 'more') void this.loadMore();
+		}));
+		resources.add(addDisposableListener(tree.element, 'keydown', event => this.onHistoryKeyDown(event), true));
+		resources.add(this.onDidChangeBodyVisibility(visible => { if (visible) this.loadMoreIfVisible(); }));
+		resources.add(tree.onDidScroll(() => {
+			this.updateSelection();
+			for (const [, row] of this.rowResources) {
+				if (row.hover?.visible) this.contextViewService.layout();
+			}
+			this.loadMoreIfVisible();
+		}));
+		this.loadMoreIfVisible();
+	}
+
+	private getCommitChildren(model: ISCMHistoryItemViewModel): ObjectTreeElement<HistoryTreeElement>[] {
+		const changes = this.commitChanges.get(model.historyItem.id);
+		if (!changes) return [];
+		if (changes.state !== 'ready' || changes.result.length === 0) {
+			const message = changes.state === 'loading' ? localize('scm.history.loadingFiles', 'Loading changed files…') : changes.state === 'error' ? changes.message : localize('scm.history.noFiles', 'No changed files.');
+			return [{ element: { id: `state:${model.historyItem.id}`, kind: 'state', model, message } }];
+		}
+		const file = (change: ISCMHistoryItemChange): ObjectTreeElement<HistoryTreeElement> => ({ element: { id: `file:${model.historyItem.id}:${change.path}`, kind: 'file', model, change } });
+		if (this.viewMode === 'list') return changes.result.map(file);
+		const paths = new ResourceTree<ISCMHistoryItemChange, ISCMHistoryItemViewModel>(model, URI.file('/'));
+		for (const change of changes.result) paths.add(URI.file(`/${change.path}`), change);
+		const folder = (node: IResourceNode<ISCMHistoryItemChange, ISCMHistoryItemViewModel>): ObjectTreeElement<HistoryTreeElement> => node.element
+			? file(node.element)
+			: { element: { id: `folder:${model.historyItem.id}:${node.relativePath}`, kind: 'folder', model, folder: node }, collapsed: false, children: [...node.children].map(folder) };
+		return [...paths.root.children].map(folder);
 	}
 
 	private loadMoreIfVisible(): void {
@@ -785,59 +816,58 @@ export class SCMHistoryViewPane extends ViewPane {
 	}
 
 	private selectCommit(id: string, event?: UIEvent): void {
-		const index = this.rows.findIndex(row => row.historyItem.id === id);
-		if (index < 0 || !this.list) return;
-		this.list.setActiveIndex(index, event, { reveal: false });
-		this.list.setSelection([index], event);
+		this.focusHistoryElement(`commit:${id}`, event);
+		this.tree?.setSelection([`commit:${id}`], event);
+	}
+
+	private focusHistoryElement(id: string, event?: UIEvent): void {
+		if (!this.tree?.model.has(id)) return;
+		this.tree.setFocus(id, event);
+		this.tree.domFocus();
 	}
 
 	private updateSelection(): void {
-		const id = this.list?.selection[0]?.model?.historyItem.id;
-		for (const [key, row] of this.rowResources) {
-			row.element.classList.toggle('selected', key === id);
-			row.element.setAttribute('aria-selected', String(key === id));
+		const selected = new Set(this.tree?.selection.map(element => element.id));
+		for (const [id, row] of this.rowResources) {
+			row.element.classList.toggle('selected', selected.has(`commit:${id}`));
+			row.element.classList.toggle('focused', this.tree?.focus?.id === `commit:${id}`);
+		}
+		for (const domNode of this.changeRows.keys()) {
+			domNode.classList.toggle('selected', selected.has(domNode.dataset.historyTreeId ?? ''));
+			domNode.classList.toggle('focused', this.tree?.focus?.id === domNode.dataset.historyTreeId);
 		}
 	}
 
-	private updateCommitAccessibility(row: HistoryItemRow, index: number): void {
-		row.element.setAttribute('aria-posinset', String(index + 1));
-		row.element.setAttribute('aria-setsize', String(this.rows.length));
-		const selected = this.list?.selection.some(item => item.model?.historyItem.id === row.historyItemViewModel.historyItem.id) ?? false;
-		row.element.classList.toggle('selected', selected);
-		row.element.setAttribute('aria-selected', String(selected));
-	}
-
-
-	private updateCommitHeight(historyItem: ISCMHistoryItem): void {
-		const row = this.rowResources.get(historyItem.id);
-		if (row) { row.changesDirty = true; }
-		const index = this.rows.findIndex(model => model.historyItem.id === historyItem.id);
-		// Recompute from the owning expansion state instead of retaining an override across filters.
-		this.list?.updateElementHeight(index, undefined);
-		this.list?.rerender(index);
-	}
-
-	private rowHeight(historyItem: ISCMHistoryItem): number {
-		const expanded = this.expanded.get(historyItem.id);
-		if (!expanded) return SWIMLANE_HEIGHT;
-		let childRows = expanded.state === 'ready' ? Math.max(1, expanded.result.length) : 1;
-		if (this.viewMode === 'tree' && expanded.state === 'ready' && expanded.result.length > 0) {
-			const folders = this.collapsedFolders.get(historyItem.id);
-			const directories = new Set<string>();
-			let visibleFiles = 0;
-			for (const change of expanded.result) {
-				const parts = change.path.split('/');
-				let visible = true;
-				for (let depth = 1; depth < parts.length; depth++) {
-					const path = parts.slice(0, depth).join('/');
-					if (visible) { directories.add(path); }
-					if (folders?.has(path)) { visible = false; }
-				}
-				if (visible) { visibleFiles++; }
-			}
-			childRows = directories.size + visibleFiles;
+	private onHistoryKeyDown(event: KeyboardEvent): void {
+		const tree = this.tree;
+		if (!tree || event.target !== tree.element) return;
+		const element = tree.focus;
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			event.stopPropagation();
+			tree.setSelection([]);
+			return;
 		}
-		return SWIMLANE_HEIGHT * (childRows + 1);
+		if (!element) return;
+		if (element.kind === 'commit' && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key === 'ArrowDown') {
+			event.preventDefault();
+			event.stopPropagation();
+			const row = this.rowResources.get(element.model.historyItem.id);
+			row?.hover?.show();
+			row?.focusDetails?.();
+		} else if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') {
+			event.preventDefault();
+			event.stopPropagation();
+			const domNode = element.kind === 'commit' ? this.rowResources.get(element.model.historyItem.id)?.element : [...this.changeRows.keys()].find(node => node.dataset.historyTreeId === element.id);
+			domNode?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+		} else if (event.metaKey && event.key === 'ArrowDown') {
+			const options = toOpenEditorOptions(new StandardKeyboardEvent(event));
+			if (!options) return;
+			event.preventDefault();
+			event.stopPropagation();
+			if (element.kind === 'commit' || element.kind === 'folder') tree.toggleCollapsed(element.id);
+			else if (element.kind === 'file') void this.openCommitChange(element.model.historyItem, element.change, options);
+		}
 	}
 
 	private renderMore(): HTMLDivElement {
@@ -886,7 +916,8 @@ export class SCMHistoryViewPane extends ViewPane {
 		using progressLifetime = toDisposable(() => { this.loadingProgress.delete(handle); handle.dispose(); });
 
 		const generation = this.generation;
-		const hadLoaderFocus = this.graphElement.querySelector('.ash-scm-graph-load-more')?.contains(this.graphElement.ownerDocument.activeElement) === true;
+		const hadLoaderFocus = this.graphElement.querySelector('.ash-scm-graph-load-more')?.contains(this.graphElement.ownerDocument.activeElement) === true
+			|| this.tree?.focus?.kind === 'more' && this.graphElement.ownerDocument.activeElement === this.tree.element;
 		this.loading = true;
 		this.moreError = undefined;
 		this.updateMore();
@@ -901,8 +932,8 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.renderGraph(this.page);
 			this.updateMore();
 			const active = this.graphElement.ownerDocument.activeElement;
-			if (hadLoaderFocus && (active === this.graphElement.ownerDocument.body || active && this.graphElement.querySelector('.ash-scm-graph-load-more')?.contains(active))) {
-				this.list?.row(page.items.length)?.querySelector<HTMLElement>('.ash-scm-graph-commit')?.focus({ preventScroll: true });
+			if (hadLoaderFocus && (active === this.graphElement.ownerDocument.body || active === this.tree?.element || active && this.graphElement.querySelector('.ash-scm-graph-load-more')?.contains(active))) {
+				this.focusHistoryElement(`commit:${this.rows[page.items.length]?.historyItem.id}`);
 			}
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) return;
@@ -920,6 +951,8 @@ export class SCMHistoryViewPane extends ViewPane {
 		const resources = rendered.resources;
 		item.className = "ash-scm-graph-commit";
 		item.dataset.historyItemId = historyItem.id;
+		item.classList.toggle('selected', this.tree?.selection.some(element => element.id === `commit:${historyItem.id}`) ?? false);
+		item.classList.toggle('focused', this.tree?.focus?.id === `commit:${historyItem.id}`);
 		const current = this.head?.revision === historyItem.id;
 		const merge = historyItem.parentIds.length > 1;
 		item.classList.toggle("current", current);
@@ -928,9 +961,6 @@ export class SCMHistoryViewPane extends ViewPane {
 		item.classList.toggle("commit", !current && !merge);
 		item.style.setProperty("--scm-graph-node-x", `${graph.dataset.nodeX ?? 11}px`);
 		item.style.setProperty("--scm-graph-content-x", graph.style.width || "22px");
-		item.tabIndex = 0;
-		item.setAttribute("role", "treeitem");
-		item.setAttribute("aria-expanded", String(this.expanded.has(historyItem.id)));
 		if (current) item.setAttribute("aria-current", "true");
 		const details = h(document, "span");
 		details.className = "ash-scm-graph-details";
@@ -975,49 +1005,14 @@ export class SCMHistoryViewPane extends ViewPane {
 				menuOptions: { arg: menuTarget },
 				toolbarOptions: { primaryGroup: 'inline' },
 			}));
+			resources.add(addDisposableListener(actions, 'click', event => event.stopPropagation()));
+			resources.add(addDisposableListener(actions, 'dblclick', event => event.stopPropagation()));
 			overlay.append(actions);
 		}
 		row.append(overlay);
 		item.append(row);
 		rendered.hover = commitHover;
-		rendered.expanded = this.expanded.get(historyItem.id);
-		if (rendered.expanded) {
-			rendered.changesElement = this.renderCommitChanges(historyItemViewModel, rendered.expanded, rendered.changes);
-			item.append(rendered.changesElement);
-		}
-		resources.add(addDisposableListener(item, "click", (event) => {
-			if ((event.target as Element).closest(".ash-scm-graph-change, .ash-scm-graph-folder, .ash-scm-graph-actions, .ash-scm-graph-label")) return;
-			this.selectCommit(historyItem.id, event);
-			void this.toggleCommit(historyItem);
-		}));
-		resources.add(addDisposableListener(item, 'focus', () => {
-			const index = this.list?.items.findIndex(entry => entry.model?.historyItem.id === historyItem.id) ?? -1;
-			this.list?.setActiveIndex(index, undefined, { reveal: false });
-		}));
-		resources.add(addDisposableListener(item, "keydown", event => {
-			if (event.target !== item || event.defaultPrevented) { return; }
-			if (this.navigateHistoryChildren(event, historyItem.id)) { return; }
-			if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key === 'ArrowDown') {
-				event.preventDefault();
-				commitHover?.show();
-				commitDetails?.focus();
-			} else if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
-				event.preventDefault();
-				if (menuTarget) { this.showHistoryMenu(menuTarget, scope, item); }
-			} else if (toOpenEditorOptions(new StandardKeyboardEvent(event))) {
-				event.preventDefault();
-				this.selectCommit(historyItem.id, event);
-				void this.toggleCommit(historyItem);
-			} else if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
-				if (event.key === 'Escape') { event.preventDefault(); this.list?.setSelection([]); return; }
-				if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
-					event.preventDefault();
-					if (this.expanded.has(historyItem.id) === (event.key === 'ArrowLeft')) { void this.toggleCommit(rendered.historyItemViewModel.historyItem); }
-				} else {
-					void this.navigateCommits(event);
-				}
-			}
-		}));
+		rendered.focusDetails = commitDetails?.focus;
 		resources.add(addDisposableListener(item, "contextmenu", event => {
 			event.preventDefault();
 			event.stopPropagation();
@@ -1026,81 +1021,11 @@ export class SCMHistoryViewPane extends ViewPane {
 		return rendered;
 	}
 
-	private navigateHistoryChildren(event: KeyboardEvent, historyItemId: string): boolean {
-		if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.defaultPrevented) { return false; }
-		const row = this.rowResources.get(historyItemId)?.element;
-		const target = event.target as HTMLElement;
-		if (!row || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) { return false; }
-		const children = [...row.querySelectorAll<HTMLElement>('.ash-scm-graph-folder, .ash-scm-graph-change')]
-			.filter(element => !element.closest('[hidden]'));
-		const childIndex = children.indexOf(target);
-		if (target !== row && childIndex < 0) { return false; }
-		const parent = (): HTMLElement => target.closest('.ash-scm-graph-folder-children')?.parentElement?.querySelector<HTMLElement>('.ash-scm-graph-folder') ?? row;
-		let next: HTMLElement | undefined;
-		if (event.key === 'ArrowLeft' && target !== row) {
-			if (target.classList.contains('ash-scm-graph-folder') && target.getAttribute('aria-expanded') === 'true') { target.click(); }
-			else { next = parent(); }
-		} else if (event.key === 'ArrowRight' && target === row && children.length > 0) {
-			next = children[0];
-		} else if (event.key === 'ArrowRight' && target.classList.contains('ash-scm-graph-folder')) {
-			if (target.getAttribute('aria-expanded') === 'false') { target.click(); }
-			else { next = children[childIndex + 1]; }
-		} else if (event.key === 'ArrowDown' && children[childIndex + 1]) {
-			next = children[childIndex + 1];
-		} else if (event.key === 'ArrowUp' && target !== row) {
-			next = childIndex === 0 ? row : children[childIndex - 1];
-		} else if (target !== row && ['ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
-			const index = this.rows.findIndex(model => model.historyItem.id === historyItemId);
-			this.list?.setActiveIndex(index, undefined, { reveal: false });
-			void this.navigateCommits(event);
-		} else { return false; }
-		event.preventDefault();
-		event.stopPropagation();
-		next?.focus();
-		return true;
-	}
-
-	private async navigateCommits(event: KeyboardEvent): Promise<void> {
-		const list = this.list;
-		if (!list || this.rows.length === 0) { return; }
-		let index = list.activeIndex;
-		switch (event.key) {
-			case 'ArrowDown': index++; break;
-			case 'ArrowUp': index--; break;
-			case 'Home': index = 0; break;
-			case 'End': index = this.rows.length - 1; break;
-			case 'PageDown':
-				event.preventDefault();
-				await list.focusNextPage(event);
-				index = list.activeIndex;
-				break;
-			case 'PageUp':
-				event.preventDefault();
-				await list.focusPreviousPage(event);
-				index = list.activeIndex;
-				break;
-			default: return;
-		}
-		event.preventDefault();
-		if (this.list !== list || this.isDisposed) { return; }
-		index = Math.max(0, Math.min(index, this.rows.length - 1));
-		list.reveal(index);
-		list.setActiveIndex(index, event, { reveal: false });
-		const row = list.row(index)?.querySelector<HTMLElement>('.ash-scm-graph-commit');
-		row?.focus({ preventScroll: true });
-		if (event.key === 'ArrowUp' || event.key === 'End') {
-			const children = [...row?.querySelectorAll<HTMLElement>('.ash-scm-graph-folder, .ash-scm-graph-change') ?? []].filter(element => !element.closest('[hidden]'));
-			children.at(-1)?.focus({ preventScroll: true });
-		}
-	}
-
 	private updateCommitRow(row: HistoryItemRow, model: ISCMHistoryItemViewModel): void {
 		const previous = row.historyItemViewModel;
-		const expanded = this.expanded.get(model.historyItem.id);
-		const expansionChanged = row.changesDirty || row.expanded !== expanded;
 		const sameLane = (left: ISCMHistoryItemViewModel['inputSwimlanes'][number], right: ISCMHistoryItemViewModel['inputSwimlanes'][number]): boolean => left.id === right.id && left.color === right.color;
-		if (expansionChanged || previous.kind !== model.kind || !equals(previous.inputSwimlanes, model.inputSwimlanes, sameLane) || !equals(previous.outputSwimlanes, model.outputSwimlanes, sameLane)) {
-			const graph = renderSCMHistoryItemGraph(model, this.rowHeight(model.historyItem), this.graphElement.ownerDocument);
+		if (previous.kind !== model.kind || !equals(previous.inputSwimlanes, model.inputSwimlanes, sameLane) || !equals(previous.outputSwimlanes, model.outputSwimlanes, sameLane)) {
+			const graph = renderSCMHistoryItemGraph(model, SWIMLANE_HEIGHT, this.graphElement.ownerDocument);
 			row.graph.replaceWith(graph);
 			row.graph = graph;
 			row.element.style.setProperty('--scm-graph-node-x', `${graph.dataset.nodeX}px`);
@@ -1123,7 +1048,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		const references = this.getHistoryItemReferences(historyItem);
 		const headReferenceId = references.find(reference => reference.id === this.head?.id)?.id;
 		if (row.headReferenceId !== headReferenceId || !equals(row.visibleReferences, references, (left, right) => left.id === right.id && left.name === right.name && left.revision === right.revision && left.category === right.category && left.description === right.description && left.color === right.color && left.upstream === right.upstream && left.canDelete === right.canDelete)) {
-			if (row.referenceLabels?.contains(row.element.ownerDocument.activeElement)) row.element.focus({ preventScroll: true });
+			if (row.referenceLabels?.contains(row.element.ownerDocument.activeElement)) this.focusHistoryElement(`commit:${model.historyItem.id}`);
 			row.references.clear();
 			row.referenceLabels?.remove();
 			row.referenceLabels = undefined;
@@ -1134,23 +1059,12 @@ export class SCMHistoryViewPane extends ViewPane {
 				row.element.querySelector('.ash-scm-graph-overlay')!.prepend(row.referenceLabels);
 			}
 		}
-		if (!expansionChanged) return;
-		if (row.changesElement?.contains(row.element.ownerDocument.activeElement)) row.element.focus();
-		row.changes.clear();
-		row.changesElement?.remove();
-		row.changesElement = undefined;
-		row.expanded = expanded;
-		row.changesDirty = false;
-		row.element.setAttribute('aria-expanded', String(expanded !== undefined));
-		if (expanded) {
-			row.changesElement = this.renderCommitChanges(model, expanded, row.changes);
-			row.element.append(row.changesElement);
-		}
 	}
 
 	private showHistoryMenu(target: SCMHistoryItemViewModelTreeElement, scope: IScopedContextKeyService, focus: HTMLElement, event?: MouseEvent): void {
 		this.selectCommit(target.historyItemViewModel.historyItem.id);
-		focus.focus();
+		if (focus.classList.contains('ash-scm-graph-commit')) this.tree?.domFocus();
+		else focus.focus();
 		this.contextMenuService.showContextMenu({
 			getAnchor: () => event ? { x: event.clientX, y: event.clientY, targetWindow: event.view ?? undefined } : focus,
 			menuId: target.references ? MenuId.SCMHistoryItemRefContext : MenuId.SCMHistoryItemContext,
@@ -1166,7 +1080,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		// Another view, menu or input can own focus before this presentation finishes closing.
 		if (document.activeElement !== document.body && document.activeElement !== focus) { return; }
 		if (focus.isConnected) { focus.focus(); }
-		else { this.rowResources.get(historyItemId)?.element.focus(); }
+		else { this.focusHistoryElement(`commit:${historyItemId}`); }
 	}
 
 	private renderReferenceLabels(references: readonly ISCMHistoryItemRef[], target: SCMHistoryItemViewModelTreeElement | undefined, rowScope: IScopedContextKeyService, resources: DisposableStore): HTMLSpanElement {
@@ -1251,168 +1165,121 @@ export class SCMHistoryViewPane extends ViewPane {
 		return container;
 	}
 
-	private renderCommitChanges(historyItemViewModel: ISCMHistoryItemViewModel, expanded: ExpandedCommit, resources: DisposableStore): HTMLUListElement {
-		const historyItem = historyItemViewModel.historyItem;
+	private renderHistoryChange(element: Exclude<HistoryTreeElement, HistoryCommitElement | { kind: 'more'; }>, node: ObjectTreeNode<HistoryTreeElement>): HTMLElement {
 		const document = this.graphElement.ownerDocument;
-		const list = h(document, "ul");
-		list.className = "ash-scm-graph-changes";
-		if (expanded.state !== "ready" || expanded.result.length === 0) {
-			const state = h(document, "li");
-			state.className = `ash-scm-graph-change-state ${expanded.state}`;
-			state.textContent = expanded.state === "loading" ? localize('scm.history.loadingFiles', 'Loading changed files…') : expanded.state === "error" ? expanded.message : localize('scm.history.noFiles', 'No changed files.');
-			list.append(state);
-			return list;
+		const resources = new DisposableStore();
+		const domNode = h(document, 'div');
+		domNode.className = element.kind === 'folder' ? 'ash-scm-graph-folder' : element.kind === 'state' ? 'ash-scm-graph-change-state' : 'ash-scm-graph-change-row';
+		domNode.dataset.historyTreeId = element.id;
+		domNode.classList.toggle('selected', this.tree?.selection.some(selected => selected.id === element.id) ?? false);
+		domNode.classList.toggle('focused', this.tree?.focus?.id === element.id);
+		domNode.style.setProperty('--scm-graph-change-depth', String(Math.max(0, node.depth - 2)));
+		this.changeRows.set(domNode, resources);
+		domNode.append(renderSCMHistoryGraphPlaceholder(element.model.outputSwimlanes, document));
+		if (element.kind === 'state') {
+			const message = h(document, 'span');
+			message.textContent = element.message;
+			domNode.append(message);
+			return domNode;
 		}
-		list.setAttribute('role', 'group');
-		resources.add(addDisposableListener(list, 'keydown', event => { this.navigateHistoryChildren(event, historyItem.id); }));
-		const directories = new Map<string, HTMLUListElement>();
-		for (const change of expanded.result) {
-			let parent = list;
-			const parts = change.path.split('/');
-			if (this.viewMode === 'tree') {
-				for (let depth = 1; depth < parts.length; depth++) {
-					const path = parts.slice(0, depth).join('/');
-					let children = directories.get(path);
-					if (!children) {
-						const directory = h(document, 'li');
-						directory.className = 'ash-scm-graph-directory';
-						const folders = this.collapsedFolders.get(historyItem.id) ?? new Set<string>();
-						this.collapsedFolders.set(historyItem.id, folders);
-						const folder = resources.add(new Button(directory, {
-							...defaultButtonStyles,
-							label: parts[depth - 1],
-							icon: folders.has(path) ? Lxicon.chevronRight : Lxicon.chevronDown,
-							ariaLabel: localize('scm.history.folder', 'Folder {0}', path),
-						}));
-						folder.domNode.classList.add('ash-scm-graph-folder');
-						folder.domNode.dataset.historyFolder = path;
-						folder.domNode.style.setProperty('--scm-graph-change-depth', String(depth - 1));
-						folder.domNode.setAttribute('aria-expanded', String(!folders.has(path)));
-						folder.domNode.classList.toggle('expanded', !folders.has(path));
-						children = h(document, 'ul');
-						children.className = 'ash-scm-graph-folder-children';
-						children.setAttribute('role', 'group');
-						children.hidden = folders.has(path);
-						const toggle = (): void => {
-							if (folders.has(path)) { folders.delete(path); } else { folders.add(path); }
-							this.updateCommitHeight(historyItem);
-							Array.from(this.rowResources.get(historyItem.id)?.element.querySelectorAll<HTMLButtonElement>('.ash-scm-graph-folder') ?? []).find(button => button.dataset.historyFolder === path)?.focus();
-						};
-						resources.add(folder.onDidClick(event => { event.stopPropagation(); toggle(); }));
-						directory.append(children);
-						parent.append(directory);
-						directories.set(path, children);
-					}
-					parent = children;
-				}
-			}
-			const row = h(document, "li");
-			row.className = 'ash-scm-graph-change-row';
-			const button = h(document, "button");
-			button.className = "ash-scm-graph-change";
-			button.dataset.historyPath = change.path;
-			button.style.setProperty('--scm-graph-change-depth', String(this.viewMode === 'tree' ? parts.length - 1 : 0));
-			button.type = "button";
-			button.title = localize('scm.history.openChange', 'Open {0} from {1}', change.path, historyItem.displayId ?? historyItem.subject);
-			const name = change.path.split("/").at(-1) ?? change.path;
-			const parentPath = change.path.includes("/") ? change.path.slice(0, change.path.lastIndexOf("/")) : "";
-			const fileLabel = resources.add(this.resourceLabels.create(button));
-			fileLabel.setResource({ resource: change.uri, name, description: this.viewMode === 'list' ? parentPath || undefined : undefined }, {
-				reserveIconSpace: true,
-				title: change.path,
-				extraClasses: ["ash-scm-graph-change-label"],
-			});
-			const status = h(document, "span");
-			status.className = `ash-scm-graph-change-status ${change.status}`;
-			status.textContent = changeStatusLabel(change.status);
-			button.append(fileLabel.element, status);
-			resources.add(registerOpenEditorListeners(button, options => {
-				void this.openCommitChange(historyItem, change, options);
+		if (element.kind === 'folder') {
+			domNode.dataset.historyFolder = element.folder.relativePath;
+			const label = h(document, 'span');
+			label.className = 'ash-scm-graph-folder-label';
+			const arrow = h(document, 'span');
+			arrow.className = 'ash-scm-graph-folder-arrow';
+			arrow.setAttribute('aria-hidden', 'true');
+			appendIcon(node.collapsed ? Lxicon.chevronRight : Lxicon.chevronDown, arrow);
+			label.append(arrow);
+			const resourceLabel = resources.add(this.resourceLabels.create(label));
+			resourceLabel.setResource({ resource: element.folder.uri, name: element.folder.name }, { title: element.folder.relativePath, fileKind: FileKind.Directory });
+			domNode.append(label);
+			return domNode;
+		}
+		const { model: historyItemViewModel, change } = element;
+		const historyItem = historyItemViewModel.historyItem;
+		const content = h(document, 'div');
+		content.className = 'ash-scm-graph-change';
+		content.dataset.historyPath = change.path;
+		const name = change.path.split('/').at(-1) ?? change.path;
+		const parentPath = change.path.includes('/') ? change.path.slice(0, change.path.lastIndexOf('/')) : '';
+		const fileLabel = resources.add(this.resourceLabels.create(content));
+		fileLabel.setResource({ resource: change.uri, name, description: this.viewMode === 'list' ? parentPath || undefined : undefined }, {
+			reserveIconSpace: true, title: change.path, extraClasses: ['ash-scm-graph-change-label'],
+		});
+		const status = h(document, 'span');
+		status.className = `ash-scm-graph-change-status ${change.status}`;
+		status.textContent = changeStatusLabel(change.status);
+		content.append(status);
+		domNode.append(content);
+		const scope = resources.add(this.contextKeyService.createScoped(domNode));
+		scope.setContext('scmHistoryItemChangeStatus', change.status);
+		const repository = this.scmViewService.activeRepository;
+		if (repository) {
+			const menuTarget = { repository, historyItemViewModel, historyItemChange: change, graphColumns: historyItemViewModel.outputSwimlanes, type: 'historyItemChangeViewModel' } satisfies SCMHistoryItemChangeViewModelTreeElement;
+			const actions = h(document, 'div');
+			actions.className = 'ash-scm-graph-actions';
+			resources.add(new MenuWorkbenchToolBar(actions, this.menuService, this.contextMenuService, MenuId.SCMHistoryItemChangeContext, {
+				ariaLabel: localize('scm.history.fileActions', 'History file actions'),
+				contextKeyService: scope, menuOptions: { arg: menuTarget }, toolbarOptions: { primaryGroup: 'inline' },
 			}));
-			const scope = resources.add(this.contextKeyService.createScoped(button));
-			scope.setContext('scmHistoryItemChangeStatus', change.status);
-			const repository = this.scmViewService.activeRepository;
-			if (repository) {
-				const actions = h(document, 'div');
-				actions.className = 'ash-scm-graph-actions';
-				resources.add(new MenuWorkbenchToolBar(actions, this.menuService, this.contextMenuService, MenuId.SCMHistoryItemChangeContext, {
-					ariaLabel: localize('scm.history.fileActions', 'History file actions'),
-					contextKeyService: scope,
-					menuOptions: { arg: { repository, historyItemViewModel, historyItemChange: change, graphColumns: historyItemViewModel.outputSwimlanes, type: 'historyItemChangeViewModel' } satisfies SCMHistoryItemChangeViewModelTreeElement },
-					toolbarOptions: { primaryGroup: 'inline' },
-				}));
-				row.append(actions);
-			}
-			const showMenu = (event?: MouseEvent): void => {
-				const repository = this.scmViewService.activeRepository;
-				if (!repository) return;
-				button.focus();
-				this.contextMenuService.showContextMenu({
-					getAnchor: () => event ? {
-						x: event.clientX,
-						y: event.clientY,
-						targetWindow: event.view ?? undefined,
-					} : button,
-					menuId: MenuId.SCMHistoryItemChangeContext,
-					contextKeyService: scope,
-					menuActionOptions: {
-						arg: {
-							repository,
-							historyItemViewModel,
-							historyItemChange: change,
-							graphColumns: historyItemViewModel.outputSwimlanes,
-							type: 'historyItemChangeViewModel',
-						} satisfies SCMHistoryItemChangeViewModelTreeElement
-					},
-					onHide: cancelled => { if (cancelled) { this.restoreHistoryFocus(repository.id, historyItem.id, button); } },
-				});
-			};
-			resources.add(addDisposableListener(button, 'contextmenu', event => {
+			resources.add(addDisposableListener(actions, 'click', event => event.stopPropagation()));
+			resources.add(addDisposableListener(actions, 'dblclick', event => event.stopPropagation()));
+			domNode.append(actions);
+			resources.add(addDisposableListener(domNode, 'contextmenu', event => {
 				event.preventDefault();
 				event.stopPropagation();
-				showMenu(event);
+				this.focusHistoryElement(element.id);
+				this.tree?.setSelection([element.id]);
+				this.contextMenuService.showContextMenu({
+					getAnchor: () => event.clientX || event.clientY ? { x: event.clientX, y: event.clientY, targetWindow: event.view ?? undefined } : domNode,
+					menuId: MenuId.SCMHistoryItemChangeContext, contextKeyService: scope,
+					menuActionOptions: { arg: menuTarget },
+					onHide: cancelled => { if (cancelled) this.restoreHistoryFocus(repository.id, historyItem.id, this.tree?.element ?? domNode); },
+				});
 			}));
-			resources.add(addDisposableListener(button, 'keydown', event => {
-				if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
-					event.preventDefault();
-					event.stopPropagation();
-					showMenu();
-				}
-			}));
-			row.prepend(button);
-			parent.append(row);
 		}
-		return list;
+		return domNode;
 	}
 
-	private async toggleCommit(historyItem: ISCMHistoryItem): Promise<void> {
-		if (this.expanded.delete(historyItem.id)) {
-			this.updateCommitHeight(historyItem);
-			return;
+	private updateFolderTwistie(id: string, collapsed: boolean): void {
+		const domNode = [...this.changeRows.keys()].find(node => node.dataset.historyTreeId === id);
+		const arrow = domNode?.querySelector<HTMLElement>('.ash-scm-graph-folder-arrow');
+		if (arrow) {
+			arrow.replaceChildren();
+			appendIcon(collapsed ? Lxicon.chevronRight : Lxicon.chevronDown, arrow);
 		}
+	}
+
+	private async loadCommitChanges(historyItem: ISCMHistoryItem): Promise<void> {
+		const cached = this.commitChanges.get(historyItem.id);
+		if (cached && cached.state !== 'error') return;
 		const provider = this.provider;
 		if (!provider) return;
 		const pending = { state: 'loading' } as const;
-		this.expanded.set(historyItem.id, pending);
-		this.updateCommitHeight(historyItem);
+		this.commitChanges.set(historyItem.id, pending);
+		if (this.page) this.renderGraph(this.page);
 		const progress = this.getProgressIndicator().show(true, 100);
 		const handle = this.loadingProgress.add(toDisposable(() => progress.done()));
 		using progressLifetime = toDisposable(() => { this.loadingProgress.delete(handle); handle.dispose(); });
 		try {
 			const result = await provider.provideHistoryItemChanges(historyItem.comparison?.revision ?? historyItem.id, historyItem.comparison?.baseRevision ?? historyItem.parentIds[0]);
-			if (this.isDisposed || provider !== this.provider || this.expanded.get(historyItem.id) !== pending) return;
-			this.expanded.set(historyItem.id, { state: "ready", result: result ?? [] });
+			if (this.isDisposed || provider !== this.provider || this.commitChanges.get(historyItem.id) !== pending) return;
+			this.commitChanges.set(historyItem.id, { state: 'ready', result: result ?? [] });
 		} catch (error) {
-			if (this.isDisposed || provider !== this.provider || this.expanded.get(historyItem.id) !== pending) return;
-			this.expanded.set(historyItem.id, { state: "error", message: error instanceof Error ? error.message : String(error) });
+			if (this.isDisposed || provider !== this.provider || this.commitChanges.get(historyItem.id) !== pending) return;
+			this.commitChanges.set(historyItem.id, { state: 'error', message: error instanceof Error ? error.message : String(error) });
 		}
-		this.updateCommitHeight(historyItem);
+		if (this.page) this.renderGraph(this.page);
 	}
 
 	private async openCommitChange(historyItem: ISCMHistoryItem, change: ISCMHistoryItemChange, options: IOpenEditorOptions): Promise<void> {
 		const provider = this.provider;
 		if (!provider) return;
+		const request = ++this.openGeneration;
 		const file = await provider.resolveHistoryItemChangeContents(historyItem.comparison?.revision ?? historyItem.id, change);
+		// Rapid keyboard navigation must not let an older preview replace the latest selected file.
+		if (this.isDisposed || provider !== this.provider || request !== this.openGeneration && !options.editorOptions.pinned && !options.openToSide) return;
 		const name = change.path.split("/").at(-1) ?? change.path;
 		const original = file.original.kind === "text" ? {
 			resource: change.originalUri ?? change.uri,

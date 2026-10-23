@@ -65,6 +65,7 @@
 .ash-scm-graph-commit {
 	--scm-graph-row-background: var(--ash-sideBar-background);
 	position: relative;
+	width: 100%;
 	min-width: 0;
 	user-select: none;
 }
@@ -80,71 +81,19 @@
 	line-height: var(--ash-list-rowHeight);
 }
 
-.ash-scm-graph-commit.selected {
+.ash-scm-graph-commit.selected,
+.ash-scm-graph-change-row.selected {
 	--scm-graph-row-background: var(
 		--ash-list-style-list-inactive-selection-background,
 		var(--ash-list-inactiveSelectionBackground)
 	);
 }
 
-.ash-scm-graph:focus-within .ash-scm-graph-commit.selected {
+.ash-scm-graph-tree:focus .ash-scm-graph-commit.selected,
+.ash-scm-graph-tree:focus .ash-scm-graph-change-row.selected {
 	--scm-graph-row-background: var(
 		--ash-list-style-list-active-selection-background,
 		var(--ash-list-activeSelectionBackground)
-	);
-}
-
-.ash-scm-graph-commit.selected > .ash-scm-graph-row {
-	background: var(--scm-graph-row-background);
-}
-
-.ash-scm-graph:focus-within
-	.ash-scm-graph-commit.selected
-	> .ash-scm-graph-row {
-	color: var(
-		--ash-list-style-list-active-selection-foreground,
-		var(--ash-list-activeSelectionForeground)
-	);
-}
-
-.ash-scm-graph-commit.selected:not(:focus-visible) > .ash-scm-graph-row {
-	outline: var(--ash-strokeThickness) solid
-		var(--ash-contrastBorder, transparent);
-	outline-offset: -1px;
-}
-
-.ash-scm-graph-commit:focus-visible {
-	outline: none;
-}
-
-.ash-scm-graph-commit:focus-visible > .ash-scm-graph-row {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: -1px;
-}
-
-.ash-scm-graph-commit.selected > .ash-scm-graph-row::after,
-.ash-scm-graph-commit:focus-visible > .ash-scm-graph-row::after,
-.ash-scm-graph-change:focus-visible::after {
-	/* Keep focus and contrast outlines above the reference/action overlay and its fade. */
-	content: "";
-	position: absolute;
-	inset: 0;
-	z-index: 2;
-	border-radius: inherit;
-	outline: inherit;
-	outline-offset: inherit;
-	pointer-events: none;
-}
-
-.ash-scm-graph-row:hover {
-	background: linear-gradient(
-		to right,
-		transparent var(--scm-graph-content-x, 22px),
-		var(
-				--ash-list-style-list-hover-background,
-				var(--ash-list-hoverBackground)
-			)
-			var(--scm-graph-content-x, 22px)
 	);
 }
 
@@ -353,7 +302,7 @@
 
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay > .ash-scm-graph-actions,
 .ash-scm-graph-actions:has(button[aria-expanded="true"]),
-.ash-scm-graph-commit:focus-within
+.ash-scm-graph-commit:is(:focus-within, .focused)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay
 	> .ash-scm-graph-actions {
@@ -365,112 +314,67 @@
 	}
 }
 
-.ash-scm-graph-changes {
-	display: block;
-	margin: 0;
-	padding: 0;
-	list-style: none;
-}
-
-.ash-scm-graph-changes li:not(.ash-scm-graph-directory) {
-	height: var(--ash-list-rowHeight);
-}
-
-.ash-scm-graph-directory {
-	height: auto;
-}
-
-.ash-scm-graph-folder-children {
-	margin: 0;
-	padding: 0;
-	list-style: none;
-}
-
-.ash-scm-graph-folder.ash-button {
-	display: flex;
-	width: calc(100% - var(--scm-graph-content-x, 22px));
-	margin-left: var(--scm-graph-content-x, 22px);
-	height: var(--ash-list-rowHeight);
-	min-height: var(--ash-list-rowHeight);
-	justify-content: flex-start;
-	padding: 0 8px 0
-		calc(var(--scm-graph-change-depth, 0) * var(--ash-spacing-size120));
-	border: 0;
-	border-radius: 0;
-	color: inherit;
-}
-
-.ash-scm-graph-change-row {
+.ash-scm-graph-change-row,
+.ash-scm-graph-folder,
+.ash-scm-graph-change-state {
+	--scm-graph-row-background: var(--ash-sideBar-background);
 	position: relative;
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	width: 100%;
+	min-width: 0;
+	height: var(--ash-list-rowHeight);
+	align-items: center;
+}
+
+.ash-scm-graph-folder-label,
+.ash-scm-graph-change {
+	display: flex;
+	min-width: 0;
+	height: var(--ash-list-rowHeight);
+	align-items: center;
+	padding-left: calc(
+		var(--scm-graph-change-depth, 0) * var(--ash-spacing-size120)
+	);
+}
+
+.ash-scm-graph-folder-label > .ash-icon-label,
+.ash-scm-graph-change > .ash-icon-label {
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.ash-scm-graph-folder-arrow {
+	display: inline-flex;
+	flex: 0 0 var(--ash-lxiconFontSize);
 }
 
 .ash-scm-graph-change-row > .ash-scm-graph-actions {
 	position: absolute;
 	z-index: 1;
 	top: 0;
-	inset-inline-end: var(--ash-toolbar-actionSize);
+	inset-inline-end: var(--ash-spacing-size200);
 	padding: 0;
-	background: var(--ash-sideBar-background);
-}
-
-.ash-scm-graph-change-row:is(:hover, :focus-within) > .ash-scm-graph-actions {
 	background:
 		linear-gradient(
-			var(
-				--ash-list-style-list-hover-background,
-				var(--ash-list-hoverBackground)
-			),
-			var(
-				--ash-list-style-list-hover-background,
-				var(--ash-list-hoverBackground)
-			)
+			var(--scm-graph-row-background),
+			var(--scm-graph-row-background)
 		),
 		var(--ash-sideBar-background);
 }
 
-.ash-scm-graph-change-row:hover > .ash-scm-graph-actions,
-.ash-scm-graph-change-row:focus-within > .ash-scm-graph-actions {
+.ash-scm-graph-change-row:hover:not(.selected) {
+	--scm-graph-row-background: var(--ash-list-hoverBackground);
+}
+
+.ash-scm-graph-change-row:is(:hover, :focus-within, .focused)
+	> .ash-scm-graph-actions {
 	display: flex;
 	opacity: 1;
 	pointer-events: auto;
 	@starting-style {
 		opacity: 0;
 	}
-}
-
-.ash-scm-graph-change {
-	position: relative;
-	display: flex;
-	width: calc(100% - var(--scm-graph-content-x, 22px));
-	height: var(--ash-list-rowHeight);
-	min-width: 0;
-	align-items: center;
-	border: 0;
-	border-radius: 0;
-	margin-left: var(--scm-graph-content-x, 22px);
-	padding: 0 0 0
-		calc(var(--scm-graph-change-depth, 0) * var(--ash-spacing-size120));
-	color: inherit;
-	background: transparent;
-	font: inherit;
-	text-align: left;
-}
-
-.ash-scm-graph-change > .ash-icon-label {
-	min-width: 0;
-	flex: 1 1 auto;
-}
-
-.ash-scm-graph-change-row:is(:hover, :focus-within) > .ash-scm-graph-change {
-	background: var(
-		--ash-list-style-list-hover-background,
-		var(--ash-list-hoverBackground)
-	);
-}
-
-.ash-scm-graph-change:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: -1px;
 }
 
 .ash-scm-graph-change-status {
@@ -494,11 +398,17 @@
 	color: var(--ash-warning-foreground);
 }
 
+.ash-scm-graph-change-row.selected .ash-scm-graph-change-status {
+	color: inherit;
+}
+
 .ash-scm-graph-change-state {
-	padding-left: calc(var(--scm-graph-node-x, 11px) + 11px);
-	overflow: hidden;
 	color: var(--ash-muted-foreground);
 	font-size: var(--ash-fontSize-label2);
+}
+
+.ash-scm-graph-change-state > span {
+	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -921,7 +831,7 @@
 }
 
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay::before,
-.ash-scm-graph-commit:focus-within
+.ash-scm-graph-commit:is(:focus-within, .focused)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay::before,
 .ash-scm-graph-overlay:has(button[aria-expanded="true"])::before {
@@ -940,17 +850,17 @@
 	:is(.ash-scm-section-actions, .ash-scm-change-actions),
 .ash-scm-section-heading:focus-within > .ash-scm-section-actions,
 .ash-scm-change:focus-within > .ash-scm-change-actions,
-.ash-scm-graph-commit:focus-within
+.ash-scm-graph-commit:is(:focus-within, .focused)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay
 	> .ash-scm-graph-actions,
-.ash-scm-graph-change-row:focus-within > .ash-scm-graph-actions,
+.ash-scm-graph-change-row:is(:focus-within, .focused) > .ash-scm-graph-actions,
 :is(
 	.ash-scm-section-actions,
 	.ash-scm-change-actions,
 	.ash-scm-graph-actions
 ):has(button[aria-expanded="true"]),
-.ash-scm-graph-commit:focus-within
+.ash-scm-graph-commit:is(:focus-within, .focused)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay::before,
 .ash-scm-graph-overlay:has(button[aria-expanded="true"])::before {
