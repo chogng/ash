@@ -77,7 +77,17 @@ const historyChanged = resources.add(new Emitter<void>());
 const repositoryChanged = resources.add(new Emitter<void>());
 let repositoryBusy = false;
 let heldHistory: DeferredPromise<void> | undefined;
-let historyItems: readonly ISCMHistoryItem[] | undefined;
+const pagingQuery = new URLSearchParams(location.search);
+const paging = pagingQuery.has('paging');
+if (paging) {
+	await configuration.updateValue('scm.graph.pageSize', 80);
+	await configuration.updateValue('scm.graph.pageOnScroll', !pagingQuery.has('manual'));
+}
+let historyItems: readonly ISCMHistoryItem[] | undefined = paging ? Array.from({ length: 320 }, (_, index) => ({
+	id: `paging-${index}`, parentIds: index < 319 ? [`paging-${index + 1}`] : [],
+	subject: `Paging commit ${index}`, message: `Paging details ${index}`,
+})) : undefined;
+const historyReads: { skip: number; limit: number; }[] = [];
 let changeReads = 0;
 const heldContents = new Map<string, DeferredPromise<void>>();
 const completedContents: string[] = [];
@@ -86,6 +96,7 @@ const provider: ISCMHistoryProvider = {
 	historyItemRef: observableValue('fixture.history.head', undefined),
 	refresh() { },
 	provideHistoryItems: async options => {
+		historyReads.push({ skip: options.skip ?? 0, limit: options.limit ?? 50 });
 		await heldHistory?.p;
 		if (historyItems) return historyItems.slice(options.skip ?? 0, (options.skip ?? 0) + (options.limit ?? 50));
 		return [{ id: hash, displayId: hash.slice(0, 7), parentIds: [], subject, message, tooltip: { authorName: 'History Author', authorEmail: 'history@example.invalid', timestamp: timestamp * 1000, message, statistics: { files: 2, additions: 2, deletions: 0 } }, remoteLinks: [{ name: 'origin', uri: URI.parse(`https://github.com/ash-test/history/commit/${hash}`) }], references: [{ id: 'localBranch:metadata-topic', name: 'metadata-topic', category: 'localBranch' }, { id: 'tag:metadata-v1', name: 'metadata-v1', category: 'tag' }] }];
@@ -130,7 +141,7 @@ const panes = resources.add(services.createInstance(ViewPaneContainer, root, {
 panes.layout({ height: 600, width: 560 });
 panes.setVisible(true);
 const fixture = {
-	hash, timestamp, subject, message, opened,
+	hash, timestamp, subject, message, opened, historyReads,
 	get changeReads(): number { return changeReads; },
 	setRepositoryBusy(value: boolean): void { repositoryBusy = value; repositoryChanged.fire(); },
 	completedContents,
@@ -147,6 +158,8 @@ const fixture = {
 		historyChanged.fire();
 	},
 	beginHistoryRead(): void { heldHistory = new DeferredPromise<void>(); historyChanged.fire(); },
+	holdNextHistoryPage(): void { heldHistory = new DeferredPromise<void>(); },
+	setPageOnScroll(value: boolean): Promise<void> { return configuration.updateValue('scm.graph.pageOnScroll', value); },
 	finishHistoryRead(fail = false): void {
 		const pending = heldHistory;
 		heldHistory = undefined;

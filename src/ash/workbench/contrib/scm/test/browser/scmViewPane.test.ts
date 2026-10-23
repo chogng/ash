@@ -622,6 +622,7 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 		using historyConfiguration = new InMemoryConfigurationService();
 		using historyUiServices = createTestComponentServices(undefined, undefined, browser.window.document);
 		using historyQuickInput = new TestQuickInputService({ container: browser.window.document.body });
+		await historyConfiguration.updateValue('scm.graph.pageOnScroll', false);
 		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.pagination.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, historyConfiguration, historyQuickInput, historyUiServices.get(IStorageService), history.scmService);
 		pane.setVisible(true);
 		browser.window.document.body.append(pane.element);
