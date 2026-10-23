@@ -7,9 +7,11 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { BaseBinaryResourceEditor } from "./binaryEditor.js";
 import { EditorPaneMatch } from './editorPane.js';
 import { SideBySideEditor } from "./sideBySideEditor.js";
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
 
 /** Keeps each side's file-size metadata visible to comparison commands and status UI. */
 export class BinaryResourceDiffEditor extends SideBySideEditor {
+	private readonly scrollListeners = this._register(new DisposableStore());
 	constructor(
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
@@ -17,14 +19,39 @@ export class BinaryResourceDiffEditor extends SideBySideEditor {
 	) {
 		super(
 			BINARY_DIFF_EDITOR_ID,
-			instantiationService.createInstance(BaseBinaryResourceEditor),
-			instantiationService.createInstance(BaseBinaryResourceEditor), themeService, storageService
+			instantiationService.createInstance(BaseBinaryResourceEditor, 'comparison'),
+			instantiationService.createInstance(BaseBinaryResourceEditor, 'comparison'), themeService, storageService
 		);
 	}
 
 	override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isBinaryDiffEditorInput(input)) throw new TypeError("Binary diff editor requires two binary file inputs");
+		this.scrollListeners.clear();
 		await super.setInput(input, signal);
+		const original = this.getSecondaryEditorPane() as BaseBinaryResourceEditor;
+		const modified = this.getPrimaryEditorPane() as BaseBinaryResourceEditor;
+		original.setComparison(modified.getPreviewBytes(), 'original');
+		modified.setComparison(original.getPreviewBytes(), 'modified');
+		const before = original.getControl()!;
+		const after = modified.getControl()!;
+		let synchronizing = false;
+		for (const [source, target] of [[before, after], [after, before]]) {
+			this.scrollListeners.add(source.onDidScrollChange(() => {
+				if (synchronizing) return;
+				synchronizing = true;
+				try {
+					target.setScrollTop(source.getScrollTop());
+					target.setScrollLeft(source.getScrollLeft());
+				} finally {
+					synchronizing = false;
+				}
+			}));
+		}
+	}
+
+	override clearInput(): void {
+		this.scrollListeners.clear();
+		super.clearInput();
 	}
 
 	getMetadata(): string | undefined {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { TAB_CLOSE_ACTION_ID, TabList, type TabListItem } from "../../browser/ui/tablist/tabList.js";
+import { scheduleAtNextAnimationFrame } from '../../browser/scheduler.js';
 import type { IAction } from "../../common/actions.js";
 import { registerLxicon } from "../../common/lxiconsUtil.js";
 import { readFileSync } from "node:fs";
@@ -130,7 +131,7 @@ test("TabList exposes its ActionBar edge treatment as a presentation", () => {
 	dom.window.close();
 });
 
-test("TabList reveals selected and keyboard-focused tabs when horizontal content overflows", () => {
+test("TabList reveals selected and keyboard-focused tabs when horizontal content overflows", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const tabList = new TabList(dom.window.document.body, {
 		ariaLabel: "Overflowing tabs",
@@ -156,6 +157,7 @@ test("TabList reveals selected and keyboard-focused tabs when horizontal content
 	};
 
 	tabList.setTabs([tab("first"), tab("second")], "second");
+	await new Promise<void>(resolve => scheduleAtNextAnimationFrame(dom.window as unknown as Window, resolve));
 
 	assert.equal(viewport.scrollLeft, 100);
 	viewport.scrollLeft = 0;
@@ -175,6 +177,28 @@ test("TabList reveals selected and keyboard-focused tabs when horizontal content
 	assert.equal(viewport.scrollLeft, 100);
 	tabList.dispose();
 	dom.window.close();
+});
+
+test('TabList coalesces geometry reads and reveals the latest selection in a frame', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using tabs = new TabList(dom.window.document.body, { ariaLabel: 'Editors', onActivate: () => { } });
+		const viewport = tabs.scrollableElement;
+		installMetrics(viewport, { width: 100, height: 24, scrollWidth: 300, scrollHeight: 24 });
+		let reads = 0;
+		Object.defineProperty(viewport, 'clientWidth', { configurable: true, get: () => { reads++; return 100; } });
+		viewport.getBoundingClientRect = () => rect(0, 0, 100, 24);
+		const items = [tab('first'), tab('second')];
+		tabs.setTabs(items, 'first');
+		const second = tabs.element.querySelector<HTMLElement>('[data-action-id="second"]')!;
+		second.getBoundingClientRect = () => rect(150, 0, 200, 24);
+		tabs.setTabs(items, 'second');
+		tabs.setTabs(items, 'second');
+		assert.equal(reads, 0, 'Updating labels and selection must not force layout synchronously');
+		await new Promise<void>(resolve => scheduleAtNextAnimationFrame(dom.window as unknown as Window, resolve));
+		assert.equal(reads, 1);
+		assert.equal(viewport.scrollLeft, 100);
+	} finally { dom.window.close(); }
 });
 
 test("TabList can opt its items into native drag-source presentation", () => {

@@ -19,6 +19,7 @@ import type { IDecorationsProvider, IDecorationsService } from '../../../service
 import { MultiDiffSourceResolverService } from '../../../contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { MainThreadSCM } from '../../browser/mainThreadSCM.js';
 import { TimelineService } from '../../../contrib/timeline/common/timelineService.js';
+import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { NullLoggerService } from '../../../../platform/log/common/log.js';
 import type { IViewsService } from '../../../services/views/common/viewsService.js';
 
@@ -36,7 +37,7 @@ function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[], r
 	const contexts = lifetime.add(new ContextKeyService());
 	const commands = new CommandRegistry();
 	const timeline = lifetime.add(new TimelineService(contexts, {} as IViewsService, new NullLoggerService()));
-	const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(error), commands, { invoke, reconcile } as IExtensionHostApi, scm, view, {} as ICommandService, resolvers, quickDiff, decorations, contexts, timeline));
+	const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(error), commands, { invoke, reconcile } as IExtensionHostApi, scm, view, {} as ICommandService, resolvers, quickDiff, decorations, contexts, timeline, { activeGroup: { inputs: [] } } as unknown as IEditorPart));
 	bridge.update(fleet(providers));
 	return { lifetime, scm, view, bridge, decorationProviders, errors, contexts, commands, timeline };
 }
@@ -246,6 +247,45 @@ test('SCM reconciles resources by group and ID while replacing changed actions a
 	value.bridge.set(source, 'ash.scm', 3, [snapshot([group('changes', [second])])]);
 	assert.equal(repository.provider.groups.length, 1);
 	assert.notStrictEqual(repository.provider.groups[0]!.resources[0], before[0]!.resources[1], 'The new action state replaces the disabled action');
+});
+
+test('SCM cancels obsolete previews while retained opens survive later selections', async () => {
+	const started = new DeferredPromise<void>();
+	const pinnedResult = new DeferredPromise<JsonValue>();
+	const signals: AbortSignal[] = [];
+	const snapshot = {
+		...(provider() as Record<string, JsonValue>), groups: [{
+			id: 'changes', label: 'Changes', actions: [], resources: [
+				{ id: 'first', sourceUri: 'file:///workspace/first', path: 'first', decorations: { badge: 'M', tooltip: 'Modified', kind: 'modified' }, openLabel: 'First', actions: [] },
+				{ id: 'second', sourceUri: 'file:///workspace/second', path: 'second', decorations: { badge: 'M', tooltip: 'Modified', kind: 'modified' }, openLabel: 'Second', actions: [] },
+			]
+		}]
+	};
+	const value = fixture(async (request, signal) => {
+		if ((request.payload as Record<string, JsonValue>).method !== 'open') return null;
+		signals.push(signal!);
+		if (signals.length === 1) started.complete();
+		if (((request.payload as Record<string, JsonValue>).options as Record<string, JsonValue> | undefined)?.pinned) return pinnedResult.p;
+		return new Promise((_resolve, reject) => signal!.addEventListener('abort', () => reject(new Error('cancelled')), { once: true }));
+	}, [snapshot]);
+	using cleanup = value.lifetime;
+	const resources = value.scm.getRepository('repo')!.provider.groups[0]!.resources;
+	const first = resources[0]!.open({}, false);
+	await started.p;
+	const second = resources[1]!.open({}, false);
+	await first;
+	assert.equal(signals[0].aborted, true);
+	assert.equal(signals[1].aborted, false);
+	const pinned = resources[0]!.open({ pinned: true }, false);
+	await second;
+	assert.equal(signals[1].aborted, true);
+	const third = resources[1]!.open({}, false);
+	assert.equal(signals[2].aborted, false, 'Retained opens are independent of the preview request');
+	pinnedResult.complete(null);
+	await pinned;
+	cleanup.dispose();
+	await third;
+	assert.equal(signals[3].aborted, true);
 });
 
 test('SCM decorates collapsed ancestors from current changes and respects provider bubbling', async () => {

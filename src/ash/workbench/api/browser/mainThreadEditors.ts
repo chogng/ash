@@ -26,7 +26,7 @@ import { IOpenerService } from '../../../platform/opener/common/opener.js';
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import type { IResourceEditorInput } from '../../common/editor.js';
-import { isEditorPaneWithSelection } from '../../common/editor.js';
+import { isEditorPaneWithSelection, isResourceDiffEditorInput } from '../../common/editor.js';
 import { parseExtensionEditorInput } from './mainThreadEditorInput.js';
 import { TextEditorSelectionSource } from '../../../platform/editor/common/editor.js';
 import type { EditorOpenOptions } from '../../services/editor/common/editorService.js';
@@ -286,6 +286,22 @@ export class MainThreadEditors extends Disposable {
 			case 'diffChange':
 			case 'readTextFile':
 			case 'saveTextFile': return new MainThreadEditorChanges(this.codeEditors, this.workingCopies, this.files).handle(value, signal);
+			case 'revealDiff': {
+				const original = URI.parse(text(request.originalResource, 16 * 1024));
+				if (!Array.isArray(request.modifiedResources) || request.modifiedResources.length < 1 || request.modifiedResources.length > 2) throw new TypeError('Invalid comparison resources');
+				const modified = request.modifiedResources.map(value => URI.parse(text(value, 16 * 1024)));
+				const options = parseOptions(request.options);
+				// Compare identities before requiring any snapshot contents. Reuse only
+				// the current group, preserving normal opens into another side group.
+				const group = this.part.activeGroup;
+				const existing = group.inputs.find(input => isResourceDiffEditorInput(input)
+					&& extUriBiasedIgnorePathCase.isEqual(input.original.resource, original)
+					&& modified.some(resource => extUriBiasedIgnorePathCase.isEqual(input.modified.resource, resource)));
+				if (!existing) return false;
+				await this.editors.openEditor(existing, options, { groupId: group.id });
+				signal.throwIfAborted();
+				return true;
+			}
 			case 'open': {
 				const options = parseOptions(request.options);
 				const input = parseExtensionEditorInput(request.input);

@@ -35,6 +35,7 @@ import { editorOptionsRegistry, type IDiffEditorOptions, type IEditorOptions } f
 
 export interface DiffEditorPaneOptions extends Pick<CodeEditorWidgetOptions, 'onOpenLocation' | 'onApplyWorkspaceEdit'> {
 	readonly modelService: ITextModelResourceService;
+	/** The pane owns this provider across input changes; models cancel their own requests. */
 	readonly createComputationService: () => IDocumentDiffProvider & IDisposable;
 	readonly lineHeight?: number;
 	readonly fontFamily?: string;
@@ -55,6 +56,7 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 	private readonly selectionChangeEmitter = this._register(new Emitter<EditorPaneSelectionChangeReason>());
 	readonly onDidChangeSelection = this.selectionChangeEmitter.event;
 	private readonly modelService: ITextModelResourceService;
+	private readonly computationService: IDocumentDiffProvider & IDisposable;
 	private container: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
 
@@ -113,6 +115,14 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 			throw new TypeError("Diff editor pane requires a text model service");
 		}
 		this.modelService = options.modelService;
+		let computationService: IDocumentDiffProvider & IDisposable;
+		try { computationService = options.createComputationService(); }
+		catch (error) { this.dispose(); throw error; }
+		if (!computationService || typeof computationService.computeDiff !== 'function') {
+			this.dispose();
+			throw new TypeError('Diff editor pane factory returned an invalid Workbench diff computation service');
+		}
+		this.computationService = this._register(computationService);
 	}
 
 	public override create(parent: HTMLElement): void {
@@ -155,7 +165,7 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 			throwIfCancelled(signal, "Diff editor input loading was cancelled");
 			next = this.instantiationService.createInstance(
 				DiffEditorPaneSession, container, original, modified,
-				input.original.label, input.modified, this.options,
+				input.original.label, input.modified, this.options, this.computationService,
 			);
 			// The host keeps this candidate hidden. Build its controls while syntax
 			// initializes, then publish only when both lexical sides and the diff are ready.
@@ -239,6 +249,7 @@ class DiffEditorPaneSession extends Disposable {
 		originalLabel: string | undefined,
 		modifiedInput: IResourceEditorInput,
 		options: DiffEditorPaneOptions,
+		computationService: IDocumentDiffProvider,
 		@IConfigurationService configuration: IConfigurationService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IWorkingCopyService workingCopies: IWorkingCopyService,
@@ -253,11 +264,6 @@ class DiffEditorPaneSession extends Disposable {
 		const editorModel = this._register(new TextDiffEditorModel(originalEditorModel, modifiedEditorModel));
 		const textModels = editorModel.textDiffEditorModel;
 		assertDefined(textModels, new ReferenceError('Diff editor requires two resolved text models'));
-		const computationService = options.createComputationService();
-		if (!computationService || typeof computationService.computeDiff !== "function") {
-			throw new TypeError("Diff editor pane factory returned an invalid Workbench diff computation service");
-		}
-		this._register(computationService);
 		const model = this.model = this._register(new DiffModel({
 			original: textModels.original,
 			modified: textModels.modified,

@@ -1,3 +1,4 @@
+import { registerCodeEditorServices } from "../../../../../editor/test/browser/testCodeEditor.js";
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -19,6 +20,7 @@ import { IEditorService, type EditorOpenOptions } from '../../../../services/edi
 
 test('Binary file editor opens a bounded read-only text preview', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const resource = URI.file('C:\\project\\sample.bin');
 	let opened: IResourceEditorInput | undefined;
 	let openOptions: EditorOpenOptions | undefined;
@@ -45,6 +47,7 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 		focusActiveEditor: () => { },
 	});
 	services.registerInstance(IDialogService, dialogs);
+	registerCodeEditorServices(services);
 	const pane = services.createInstance(BinaryFileEditor);
 	pane.create(dom.window.document.body);
 	await pane.setInput({ resource }, new AbortController().signal);
@@ -66,7 +69,7 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 	opened = undefined;
 	const historical = URI.parse('git-commit:/repo/revision/image.bin');
 	await pane.setInput({ resource: historical, initialBytes: new Uint8Array([0x48, 0x00, 0xff]) }, new AbortController().signal);
-	assert.match(dom.window.document.querySelector('.ash-binary-editor-content')!.textContent!, /48 00 ff/);
+	assert.match(pane.getControl()!.getModel()!.getValue(), /48 00 ff/);
 	assert.equal(dom.window.document.querySelector<HTMLButtonElement>('.ash-binary-open-with-encoding')!.hidden, true);
 	dom.window.document.querySelector<HTMLButtonElement>('.ash-binary-open-as-text')!.click();
 	await waitFor(() => opened !== undefined);

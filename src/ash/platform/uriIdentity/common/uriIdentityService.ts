@@ -14,9 +14,10 @@ export class UriIdentityService extends Disposable implements IUriIdentityServic
 
 	constructor(@IFileService private readonly files: IFileService) {
 		super();
-		this.extUri = new ProviderExtUri(files);
+		const extUri = this.extUri = new ProviderExtUri(files);
 		this._register(toDisposable(() => this.canonicalUris.clear()));
 		const invalidate = ({ scheme }: { readonly scheme: string; }): void => {
+			extUri.invalidateComparisonKeys();
 			for (const [key, uri] of this.canonicalUris) {
 				if (uri.scheme === scheme) this.canonicalUris.delete(key);
 			}
@@ -75,18 +76,34 @@ export class UriIdentityService extends Disposable implements IUriIdentityServic
 }
 
 class ProviderExtUri extends ExtUri {
+	private comparisonKeys = new WeakMap<URI, { full?: string; withoutFragment?: string; }>();
+
 	constructor(private readonly files: IFileService) {
 		super(uri => files.hasProvider(uri) && !files.hasCapability(uri, FileSystemProviderCapabilities.PathCaseSensitive) ? ResourcePathCasing.Insensitive : ResourcePathCasing.Sensitive);
 	}
 
 	public override getComparisonKey(uri: URI): string {
+		const cached = this.comparisonKeys.get(uri);
+		if (cached?.full !== undefined) return cached.full;
 		const identity = this.files.getPathIdentity(uri);
-		return identity ? extUri.getComparisonKey(identity.comparisonResource) : super.getComparisonKey(uri);
+		const key = identity ? extUri.getComparisonKey(identity.comparisonResource) : super.getComparisonKey(uri);
+		this.comparisonKeys.set(uri, { ...cached, full: key });
+		return key;
 	}
 
 	public override getComparisonKeyIgnoringFragment(uri: URI): string {
+		const cached = this.comparisonKeys.get(uri);
+		if (cached?.withoutFragment !== undefined) return cached.withoutFragment;
 		const identity = this.files.getPathIdentity(uri);
-		return identity ? extUri.getComparisonKeyIgnoringFragment(identity.comparisonResource) : super.getComparisonKeyIgnoringFragment(uri);
+		const key = identity ? extUri.getComparisonKeyIgnoringFragment(identity.comparisonResource) : super.getComparisonKeyIgnoringFragment(uri);
+		this.comparisonKeys.set(uri, { ...cached, withoutFragment: key });
+		return key;
+	}
+
+	public invalidateComparisonKeys(): void {
+		// URI objects are immutable, but provider replacement, casing and path
+		// rules can change their comparison identity. Weak keys do not retain tabs.
+		this.comparisonKeys = new WeakMap();
 	}
 
 	public override isEqualOrParent(base: URI, parent: URI, ignoreFragment = false): boolean {

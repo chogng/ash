@@ -18,6 +18,39 @@ const options: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, max
 
 suite('Frontend diff Worker', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('first provider prepares one Worker and factory disposal releases an unused client', () => {
+		const ports: DiffTestPort[] = [];
+		using factory = new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => {
+			const port = new DiffTestPort();
+			ports.push(port);
+			return port;
+		}));
+		assert.equal(ports.length, 0);
+		using first = factory.createDiffProvider();
+		using second = factory.createDiffProvider();
+		assert.equal(ports.length, 1);
+		first.dispose();
+		second.dispose();
+		assert.equal(ports[0]!.isDisposed, false);
+		factory.dispose();
+		assert.equal(ports[0]!.isDisposed, true);
+	});
+	test('a Worker that fails during preparation is replaced on the first computation', async () => {
+		using failures = new Emitter<unknown>();
+		const ports: DiffTestPort[] = [];
+		using factory = new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => {
+			const port = Object.assign(new DiffTestPort(), { onFailure: failures.event });
+			ports.push(port);
+			return port;
+		}));
+		using provider = factory.createDiffProvider();
+		failures.fire(new Error('Preparation failed'));
+		using original = new TextModel('old');
+		using modified = new TextModel('new');
+		assert.equal((await provider.computeDiff(original, modified, options, CancellationToken.None)).changes.length, 1);
+		assert.equal(ports.length, 2);
+		assert.equal(ports[0]!.isDisposed, true);
+	});
 	test('shared Worker failure rejects pending work and allows the next comparison to recover', async () => {
 		using failures = new Emitter<unknown>();
 		const ports: DiffTestPort[] = [];

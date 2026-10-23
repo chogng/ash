@@ -21,6 +21,8 @@ import type { ISCMHistoryProvider, ISCMHistoryItem, ISCMHistoryOptions, ISCMHist
 import { IQuickDiffService } from '../../contrib/scm/common/quickDiff.js';
 import { IDecorationsService } from '../../services/decorations/common/decorations.js';
 import { ITimelineService } from '../../contrib/timeline/common/timeline.js';
+import { IEditorPart } from '../../browser/parts/editor/editorPart.js';
+import { isResourceDiffEditorInput } from '../../common/editor.js';
 class SCMRegistration extends Disposable {
 	public revision = 0;
 	public initialization: 'initializing' | 'ready' | 'failed' = 'initializing';
@@ -57,7 +59,8 @@ export class MainThreadSCM extends Disposable {
 		@IDecorationsService
 		private readonly decorations: IDecorationsService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
-		@ITimelineService private readonly timeline: ITimelineService) {
+		@ITimelineService private readonly timeline: ITimelineService,
+		@IEditorPart private readonly editorPart: IEditorPart) {
 		super();
 		this._register(commandRegistry.register('workbench.scm.action.retryInitialization', async () => {
 			const registered = new Set([...this.registrations].map(([, owner]) => owner.source.extensionId));
@@ -347,7 +350,10 @@ export class MainThreadSCM extends Disposable {
 				signal.throwIfAborted();
 			}
 			// Queueing does not consume the invocation's backend deadline or an admission slot.
-			return this.api.invoke({ ...owner.source, registrationId: owner.registrationId, operation: 'scm', payload: normalizeExtensionHostPayload(JSON.parse(JSON.stringify({ method, ...payload }))), deadlineUnixMillis: Date.now() + this.timeout }, signal);
+			const openComparisons = method === 'open' && !payload.sideBySide
+				? this.editorPart.activeGroup.inputs.slice(0, 256).flatMap(input => isResourceDiffEditorInput(input) ? [{ original: input.original.resource.toString(), modified: input.modified.resource.toString() }] : [])
+				: undefined;
+			return this.api.invoke({ ...owner.source, registrationId: owner.registrationId, operation: 'scm', payload: normalizeExtensionHostPayload(JSON.parse(JSON.stringify({ method, ...payload, ...(openComparisons ? { openComparisons } : {}) }))), deadlineUnixMillis: Date.now() + this.timeout }, signal);
 		};
 		const result = method === 'decoration'
 			? await this.decorationQueues[this.nextDecorationQueue++ % this.decorationQueues.length]!.schedule(run)
@@ -476,6 +482,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	private draftRevision = 0;
 	private syncedDraftRevision = 0;
 	private resourceGroups: readonly ISCMResourceGroup[] | undefined;
+	private openController: AbortController | undefined;
 	// Both presentations read the same repository owner. Bound retained commit messages and requests.
 	private readonly historyDetails = new LRUCache<string, ISCMHistoryItemDetails | Promise<ISCMHistoryItemDetails>>(128);
 	private readonly detailQueues = Array.from({ length: 4 }, () => new TaskQueue());
@@ -485,6 +492,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	constructor(private snapshot: ProviderSnapshot, public readonly call: (method: string, payload: Record<string, unknown>, signal?: AbortSignal) => Promise<JsonValue>, private readonly reportError: (error: unknown) => void) {
 		super();
 		this._register(toDisposable(() => {
+			this.openController?.abort();
 			this.historyDetails.clear();
 			for (const queue of this.detailQueues) queue.clearPending();
 		}));
@@ -606,7 +614,27 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 						sourceUri: URI.parse(string(resource.sourceUri)), path: string(resource.path), originalPath: optionalString(resource.originalPath),
 						decorations: { badge: string(decoration.badge), tooltip: string(decoration.tooltip), kind: string(decoration.kind) },
 						openLabel: string(resource.openLabel), actions: array(resource.actions).map(value => this.action(value)),
-						open: async (options, sideBySide) => { await this.call('open', { resourceId: string(resource.id), options, sideBySide }); },
+						open: async (options, sideBySide) => {
+							if (sideBySide) {
+								await this.call('open', { resourceId: string(resource.id), options, sideBySide });
+								return;
+							}
+							this.openController?.abort();
+							this.openController = undefined;
+							// Explicit retained opens must survive a later preview selection.
+							if (options.pinned) {
+								await this.call('open', { resourceId: string(resource.id), options, sideBySide });
+								return;
+							}
+							const controller = this.openController = new AbortController();
+							try {
+								await this.call('open', { resourceId: string(resource.id), options, sideBySide }, controller.signal);
+							} catch (error) {
+								if (!controller.signal.aborted) throw error;
+							} finally {
+								if (this.openController === controller) this.openController = undefined;
+							}
+						},
 					};
 				}),
 			};

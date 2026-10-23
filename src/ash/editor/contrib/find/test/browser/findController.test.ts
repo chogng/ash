@@ -5,6 +5,7 @@ import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Event } from '../../../../../base/common/event.js';
+import { validateJsonValue } from '../../../../../base/common/jsonValue.js';
 import { EditorOption, type IEditorFindOptions } from "../../../../common/config/editorOptions.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
@@ -201,6 +202,34 @@ test('read-only changes close replace controls and reject replacement', () => {
 	assert.equal(fixture.model.getText(), 'alpha alpha');
 });
 
+test('find restores search and replacement state without constructing unused overlays', () => {
+	using fixture = createFixture('alpha beta alpha');
+	fixture.find.restoreViewState({ searchString: 'alpha', replaceString: 'omega', isReplaceRevealed: true });
+	assert.equal(fixture.find.getState().searchString, 'alpha');
+	assert.equal(fixture.editor.getContainerDomNode().querySelector('.stanza-editor-find-widget'), null);
+	startFind(fixture, true);
+	assert.equal(fixture.searchInput.value, 'alpha');
+	assert.equal(fixture.replaceInput.value, 'omega');
+	assert.equal(fixture.find.getState().matchesCount, 2);
+	const widget = fixture.findElement;
+	fixture.find.closeFindWidget();
+	startFind(fixture);
+	assert.equal(fixture.findElement, widget);
+});
+
+test('unused find overlays save JSON view state before and after first use', () => {
+	using fixture = createFixture('alpha beta alpha');
+	fixture.find.restoreViewState({ searchString: 'alpha', replaceString: 'omega', isReplaceRevealed: true });
+	const saved = validateJsonValue(fixture.find.saveViewState(), { path: 'editor view state' });
+	assert.deepEqual(saved, { searchString: 'alpha', replaceString: 'omega', isReplaceRevealed: true });
+	assert.equal(fixture.editor.getContainerDomNode().querySelector('.stanza-editor-find-widget'), null);
+	fixture.find.restoreViewState(JSON.parse(JSON.stringify(saved)));
+	startFind(fixture, true);
+	assert.equal(fixture.searchInput.value, 'alpha');
+	assert.equal(fixture.replaceInput.value, 'omega');
+	assert.doesNotThrow(() => validateJsonValue(fixture.find.saveViewState(), { path: 'editor view state' }));
+});
+
 test('find view state restores scroll while its top spacing is visible', () => {
 	using fixture = createFixture(Array(30).fill('alpha').join('\n'));
 	startFind(fixture);
@@ -263,11 +292,12 @@ test("find options project checked classes and report invalid regular expression
 test('closed find options keep visual and accessible toggle states in sync', () => {
 	using fixture = createFixture('alpha beta');
 	const state = fixture.find.getState();
+	assert.equal(fixture.editor.getContainerDomNode().querySelector('.stanza-editor-find-options-widget'), null);
+	state.change({ matchCase: true, wholeWord: true, isRegex: true }, false);
 	const options = requiredElement<HTMLElement>(fixture.editor.getContainerDomNode(), '.stanza-editor-find-options-widget');
 	const buttons = [...options.querySelectorAll('button')];
 	const states = () => buttons.map(button => ({ checked: button.classList.contains('checked'), pressed: button.getAttribute('aria-pressed') }));
 
-	state.change({ matchCase: true, wholeWord: true, isRegex: true }, false);
 	assert.equal(options.hidden, false);
 	assert.deepEqual(states(), Array.from({ length: 3 }, () => ({ checked: true, pressed: 'true' })));
 
@@ -466,16 +496,13 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 		const find = resources.add(editor.invokeWithinContext(accessor => accessor.get(IInstantiationService)).createInstance(FindController, editor,
 			storageService ? FindWidgetSearchHistory.getOrCreate(storageService) : undefined,
 			storageService ? ReplaceWidgetHistory.getOrCreate(storageService) : undefined));
-		const findElement = requiredElement<HTMLDivElement>(container, ".stanza-editor-find-widget");
-		const searchInput = requiredElement<HTMLInputElement>(findElement, "input[aria-label=\"Find\"]");
-		const replaceInput = requiredElement<HTMLInputElement>(findElement, "input[aria-label=\"Replace\"]");
 		return {
 			dom,
 			model,
 			editor,
-			findElement,
-			searchInput,
-			replaceInput,
+			get findElement() { return requiredElement<HTMLDivElement>(container, ".stanza-editor-find-widget"); },
+			get searchInput() { return requiredElement<HTMLInputElement>(this.findElement, "input[aria-label=\"Find\"]"); },
+			get replaceInput() { return requiredElement<HTMLInputElement>(this.findElement, "input[aria-label=\"Replace\"]"); },
 			editorInput,
 			find,
 			[Symbol.dispose](): void {

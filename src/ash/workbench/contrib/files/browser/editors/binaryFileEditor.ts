@@ -33,7 +33,7 @@ export class BinaryFileEditor extends BaseBinaryResourceEditor {
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) {
-		super(files, instantiationService, themeService, storageService);
+		super('standalone', files, instantiationService, themeService, storageService);
 	}
 
 	override create(parent: HTMLElement): void {

@@ -549,6 +549,11 @@ test('Contribution selection distinguishes defaults, an empty list, and an expli
 			}
 			assert.ok(find instanceof FindController);
 			assert.equal(editor.getContribution(FindController.ID), find);
+			assert.equal(editor.getContainerDomNode().querySelector('.stanza-editor-find-widget'), null);
+			assert.equal(editor.getContainerDomNode().querySelector('.stanza-editor-find-options-widget'), null);
+			const state = find.saveViewState();
+			find.restoreViewState(state);
+			assert.equal(editor.getContainerDomNode().querySelector('.stanza-editor-find-widget'), null, 'Saving and restoring an unused controller must not construct its overlays');
 			await find.start({
 				forceRevealReplace: false,
 				seedSearchStringFromSelection: 'none',
@@ -560,6 +565,7 @@ test('Contribution selection distinguishes defaults, an empty list, and an expli
 				loop: true,
 			});
 			assert.equal(find.getState().isRevealed, true);
+			assert.ok(editor.getContainerDomNode().querySelector('.stanza-editor-find-widget'));
 			find.closeFindWidget();
 			assert.equal(find.getState().isRevealed, false);
 			assert.equal(editor.getContribution(PlaceholderTextContribution.ID) !== null, contributions === undefined);
