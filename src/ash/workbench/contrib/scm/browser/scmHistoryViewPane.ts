@@ -19,6 +19,7 @@ import { IClipboardService } from '../../../../platform/clipboard/common/clipboa
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IProgressService } from '../../../../platform/progress/common/progress.js';
 import { FileKind } from '../../../../platform/files/common/files.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IAction } from '../../../../base/common/actions.js';
@@ -63,25 +64,35 @@ registerAction2(class extends Action2 {
 		const historyItem = historyItemViewModel.historyItem;
 		const revision = historyItem.comparison?.revision ?? historyItem.id;
 		const baseRevision = comparison?.baseId ?? historyItem.comparison?.baseRevision ?? historyItem.parentIds[0];
-		const changes = await provider.provideHistoryItemChanges(revision, baseRevision);
-		const items: MultiDiffEditorInputItem[] = [];
-		for (const change of changes ?? []) {
-			const file = await provider.resolveHistoryItemChangeContents(revision, change);
-			// Missing sides represent additions and deletions; their revision URIs keep empty models distinct.
-			items.push({
-				binary: file.original.kind === 'binary' || file.modified.kind === 'binary',
-				label: change.originalPath ? `${change.originalPath} → ${change.path}` : change.path,
-				original: { resource: change.originalUri ?? change.uri, readOnly: true, initialText: file.original.kind === 'text' ? file.original.text : '' },
-				modified: { resource: change.modifiedUri ?? change.uri, readOnly: true, initialText: file.modified.kind === 'text' ? file.modified.text : '' },
-			});
-		}
-		if (items.length === 0) {
-			if (changes?.length === 0) { accessor.get(INotificationService).info(localize('scm.history.noChanges', 'There are no changes between these versions.')); }
-			return;
-		}
-		const resource = URI.from({ scheme: 'ash-multi-diff', path: `/scm-history/${repository.id}/${baseRevision ?? 'parent'}/${revision}` });
-		const title = comparison?.label ?? (historyItem.comparison ? historyItem.subject : `${historyItem.displayId ?? historyItem.id} · ${historyItem.subject}`);
-		await accessor.get(IEditorService).openEditor(createMultiDiffEditorInput(resource, items, title, { kind: 'snapshot', repositoryId: repository.id, label: historyItem.displayId ?? historyItem.id }), { pinned: true });
+		await accessor.get(IProgressService).withProgress({ location: 'ash.gitGraph', delay: 100 }, async () => {
+			const changes = await provider.provideHistoryItemChanges(revision, baseRevision);
+			if (!changes?.length) {
+				if (changes) { accessor.get(INotificationService).info(localize('scm.history.noChanges', 'There are no changes between these versions.')); }
+				return;
+			}
+			const items: MultiDiffEditorInputItem[] = [];
+			// Bound provider traffic while overlapping independent extension round trips.
+			// Batches keep Git order and stop scheduling further reads after a failure.
+			for (let offset = 0; offset < changes.length; offset += 4) {
+				const batch = await Promise.all(changes.slice(offset, offset + 4).map(async change => {
+					const file = await provider.resolveHistoryItemChangeContents(revision, change);
+					// Missing sides represent additions and deletions; their revision URIs keep empty models distinct.
+					return {
+						binary: file.original.kind === 'binary' || file.modified.kind === 'binary',
+						label: change.originalPath ? `${change.originalPath} → ${change.path}` : change.path,
+						original: { resource: change.originalUri ?? change.uri, readOnly: true, initialText: file.original.kind === 'text' ? file.original.text : '' },
+						modified: { resource: change.modifiedUri ?? change.uri, readOnly: true, initialText: file.modified.kind === 'text' ? file.modified.text : '' },
+					};
+				}));
+				items.push(...batch);
+			}
+			const resource = URI.from({ scheme: 'ash-multi-diff', path: `/scm-history/${repository.id}/${baseRevision ?? 'parent'}/${revision}` });
+			const title = comparison?.label ?? (historyItem.comparison ? historyItem.subject : `${historyItem.displayId ?? historyItem.id} · ${historyItem.subject}`);
+			await accessor.get(IEditorService).openEditor(createMultiDiffEditorInput(resource, items, title, { kind: 'snapshot', repositoryId: repository.id, label: historyItem.displayId ?? historyItem.id }), { pinned: true });
+		}).catch(error => {
+			accessor.get(INotificationService).error(error instanceof Error ? error : String(error));
+			throw error;
+		});
 	}
 });
 
@@ -536,6 +547,18 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.provider = provider;
 			const listeners = new DisposableStore();
 			this.providerListener.value = listeners;
+			if (repository) {
+				const busyProgress = listeners.add(new MutableDisposable());
+				const updateProgress = () => {
+					if (!repository.provider.isBusy) { busyProgress.clear(); }
+					else if (!busyProgress.value) {
+						const progress = this.getProgressIndicator().show(true, 250);
+						busyProgress.value = toDisposable(() => progress.done());
+					}
+				};
+				listeners.add(repository.provider.onDidChangeResources(updateProgress));
+				updateProgress();
+			}
 			if (provider) {
 				listeners.add(provider.onDidChange(() => void this.refresh()));
 				if (provider.historyItemRemoteRef) { listeners.add(provider.historyItemRemoteRef.onDidChange(() => void this.refresh())); }

@@ -5302,8 +5302,8 @@ client_methods! {
         response: GitCloneCancelResult,
         serialization: None,
     },
-    // Reads update status caches and graph cursors and use the Git operation lock too. Admit
-    // every repository operation before execution so workers never queue behind another RPC.
+    // Stateful reads update status caches or graph cursors and use the Git operation lock too.
+    // Admit them before execution so workers never queue behind another RPC holding that lock.
     GitTransport => "git/transport" { params: GitTransportParams, response: GitTransportResult, serialization: RepositoryExclusive, cancellation: "operationId", },
     GitTransportCancel => "git/transport/cancel" { params: GitCheckIgnoreCancelParams, response: GitCheckIgnoreCancelResult, serialization: None, },
     GitVersion => "git/version" { params: GitRepositoryParams, response: GitVersionResult, serialization: None, },
@@ -5356,30 +5356,32 @@ client_methods! {
         response: GitGraphResult,
         serialization: RepositoryExclusive,
     },
+    // Resolved history objects do not publish worktree/index state and must not
+    // wait behind network operations such as fetch. The owner checks read access.
     GitCommitChanges => "git/commitChanges" {
         params: GitCommitChangesParams,
         response: GitCommitChangesResult,
-        serialization: RepositoryExclusive,
+        serialization: None,
     },
     GitCompareChanges => "git/compareChanges" {
         params: GitCompareChangesParams,
         response: GitCompareChangesResult,
-        serialization: RepositoryExclusive,
+        serialization: None,
     },
     GitCommitMessage => "git/commitMessage" {
         params: GitCommitChangesParams,
         response: GitCommitMessageResult,
-        serialization: RepositoryExclusive,
+        serialization: None,
     },
     GitCommitDetails => "git/commitDetails" {
         params: GitCommitChangesParams,
         response: GitCommitDetailsResult,
-        serialization: RepositoryExclusive,
+        serialization: None,
     },
     GitCommitFile => "git/commitFile" {
         params: GitCommitFileParams,
         response: GitCommitFileResult,
-        serialization: RepositoryExclusive,
+        serialization: None,
     },
     GitChangeFile => "git/changeFile" {
         params: GitChangeFileParams,

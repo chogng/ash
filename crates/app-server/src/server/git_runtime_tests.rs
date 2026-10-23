@@ -4008,3 +4008,72 @@ fn hints_during_a_running_scan_are_refreshed_even_if_that_scan_is_cancelled() {
         );
     }
 }
+
+#[test]
+fn immutable_history_queries_do_not_wait_for_repository_mutations() {
+    let repository = TestRepository::init();
+    repository.write("scope/file.txt", "before\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "Before"]);
+    let base = repository.git_output(&["rev-parse", "HEAD"]);
+    repository.write("scope/file.txt", "after\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "After"]);
+    let head = repository.git_output(&["rev-parse", "HEAD"]);
+    let runtime = Arc::new(
+        GitRuntime::new(
+            inspection_authorization(&repository.root().join("scope")),
+            Arc::new(UpdateBroker::default()),
+        )
+        .unwrap(),
+    );
+    let owner = runtime.repository(None).unwrap();
+    let mutation = owner.operation.lock().unwrap();
+    let worker = runtime.clone();
+    let (send, receive) = std::sync::mpsc::channel();
+    let thread = std::thread::spawn(move || {
+        let comparison = worker.commit_changes_for(None, &head).unwrap();
+        assert_eq!(comparison.changes.len(), 1);
+        assert_eq!(
+            worker
+                .compare_changes_for(None, &head, &base, ash_git::GitComparisonMode::Direct)
+                .unwrap()
+                .changes
+                .len(),
+            1
+        );
+        assert_eq!(worker.commit_message_for(None, &head).unwrap(), "After");
+        assert_eq!(
+            worker
+                .commit_details_for(None, &head)
+                .unwrap()
+                .statistics
+                .files,
+            1
+        );
+        let (file, timings) = crate::git_service::with_process_timings(|| {
+            worker
+                .commit_file_for(None, &head, Path::new("file.txt"), Some(&base))
+                .unwrap()
+        });
+        assert!(
+            matches!(file.modified, ash_app_server_protocol::protocol::git::GitCommitFileContentDto::Text { text } if text == "after\n")
+        );
+        assert_eq!(
+            timings
+                .records
+                .iter()
+                .filter(|timing| !matches!(timing.kind, ash_git::GitProcessKind::Show))
+                .count(),
+            0,
+            "A cached comparison and blob reader must not rediscover the owned repository or run per-file Git queries"
+        );
+        send.send(()).unwrap();
+    });
+    let result = receive.recv_timeout(Duration::from_secs(5));
+    // Release even on failure so a regressed history read fails promptly
+    // instead of leaving a blocked thread behind the regression assertion.
+    drop(mutation);
+    thread.join().unwrap();
+    result.expect("History must complete while a mutation holds the repository lease");
+}

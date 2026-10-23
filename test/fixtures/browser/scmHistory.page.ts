@@ -68,6 +68,8 @@ const timestamp = 1_700_000_000;
 const subject = `History metadata: a long title that uses the space previously occupied by the commit hash and date ${'long-commit-identifier'.repeat(6)}`;
 const message = Array.from({ length: 24 }, (_, index) => `    Detail ${index + 1}: the complete explanation remains available without taking space from the history title.`).join('\n');
 const historyChanged = resources.add(new Emitter<void>());
+const repositoryChanged = resources.add(new Emitter<void>());
+let repositoryBusy = false;
 let heldHistory: DeferredPromise<void> | undefined;
 let changeReads = 0;
 const heldContents = new Map<string, DeferredPromise<void>>();
@@ -95,9 +97,9 @@ const provider: ISCMHistoryProvider = {
 	resolveHistoryItemChangeRangeChatContext: async () => undefined,
 };
 resources.add(scm.registerSCMProvider({
-	id: 'fixture.history', providerId: 'git', label: 'History', rootUri: URI.file('/workspace'), groups: [], onDidChangeResources: Event.None,
+	id: 'fixture.history', providerId: 'git', label: 'History', rootUri: URI.file('/workspace'), groups: [], onDidChangeResources: repositoryChanged.event,
 	input: { value: '', placeholder: '', enabled: false, canAccept: false, buttonLabel: '', buttonTooltip: '', accept: async () => undefined },
-	activeRepositoryName: undefined, statusBarCommands: [], statusMessage: '', isBusy: false, historyProvider: provider,
+	activeRepositoryName: undefined, statusBarCommands: [], statusMessage: '', get isBusy() { return repositoryBusy; }, historyProvider: provider,
 	refresh: async () => { }, activate: async () => { },
 }));
 const registry = new WorkbenchViewRegistry();
@@ -122,6 +124,7 @@ panes.setVisible(true);
 const fixture = {
 	hash, timestamp, subject, message, opened,
 	get changeReads(): number { return changeReads; },
+	setRepositoryBusy(value: boolean): void { repositoryBusy = value; repositoryChanged.fire(); },
 	completedContents,
 	holdContents(paths: string[]): void { for (const path of paths) heldContents.set(path, new DeferredPromise<void>()); },
 	finishContents(path: string): void { void heldContents.get(path)?.complete(); heldContents.delete(path); },

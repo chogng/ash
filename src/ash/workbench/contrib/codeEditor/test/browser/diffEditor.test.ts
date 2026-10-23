@@ -348,7 +348,10 @@ suite('diff browser component', () => {
 			await expect(section.locator('.stanza-multi-diff-editor-header-toggle')).toHaveAttribute('aria-expanded', 'true');
 			const regions = section.locator('.ash-diff-hidden-region');
 			await expect(regions).toHaveCount(2);
-			await expect(section.locator('.stanza-diff-inline-added')).toHaveText('changed');
+			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readCharacterChanges('modified', true))).toEqual(['changed']);
+			await expect(section.locator('.stanza-diff-inline-added')).toBeVisible();
+			await expect(section.locator('.stanza-diff-inline-added')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(section.locator('.modified .view-lines')).toContainText('changed');
 			await section.locator('.stanza-diff-editor-side.modified .ash-diff-hidden-region').first().getByRole('button', { name: localized(locale, 'Show all unchanged lines', '显示全部未修改的行'), exact: true }).click();
 			await expect(regions).toHaveCount(0);
 			await expect.poll(() => section.locator('.stanza-diff-editor-side.modified .stanza-editor').evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
@@ -453,8 +456,8 @@ suite('diff browser component', () => {
 			})).toBeLessThan(1);
 			const removed = page.locator('#single .stanza-diff-editor-side.original .stanza-diff-inline-removed');
 			const added = page.locator('#single .stanza-diff-editor-side.modified .stanza-diff-inline-added');
-			await expect.poll(async () => (await removed.allTextContents()).join('')).toBe('constExplorerDataSourcefiles, ');
-			await expect.poll(async () => (await added.allTextContents()).join('')).toBe('usingWorkspaceDataSource');
+			await expect.poll(async () => (await page.evaluate(() => window.ashDiffIntegration.readCharacterChanges('original'))).join('')).toBe('constExplorerDataSourcefiles, ');
+			await expect.poll(async () => (await page.evaluate(() => window.ashDiffIntegration.readCharacterChanges('modified'))).join('')).toBe('usingWorkspaceDataSource');
 			await expect(removed.first()).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			await expect(added.first()).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			await testInfo.attach('paired-code-diff', { body: await page.locator('#single').screenshot(), contentType: 'image/png' });
@@ -493,8 +496,8 @@ suite('diff browser component', () => {
 			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().kinds)).toEqual(['modified', 'added', 'unchanged']);
 			const removed = page.locator('#single .stanza-diff-editor-side.original .stanza-diff-inline-removed');
 			const added = page.locator('#single .stanza-diff-editor-side.modified .stanza-diff-inline-added');
-			await expect.poll(async () => (await removed.allTextContents()).join('')).toBe(originalLine.trimStart());
-			await expect.poll(async () => (await added.allTextContents()).join('')).toBe(modifiedLine.trimStart());
+			await expect.poll(async () => (await page.evaluate(() => window.ashDiffIntegration.readCharacterChanges('original'))).join('')).toBe(originalLine.trimStart());
+			await expect.poll(async () => (await page.evaluate(() => window.ashDiffIntegration.readCharacterChanges('modified'))).join('')).toBe(modifiedLine.trimStart());
 			await expect(removed.first()).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			await expect(added.first()).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			await testInfo.attach('contiguous-loop-rewrite', { body: await page.locator('#single').screenshot(), contentType: 'image/png' });
@@ -1388,13 +1391,16 @@ suite('diff browser component', () => {
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.message));
 			await openDiffPage(page, locale);
-			await expect(page.locator('#single .stanza-diff-inline-removed')).toHaveText('😀');
-			await expect(page.locator('#single .stanza-diff-inline-added')).toHaveText('🤖');
+			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readCharacterChanges('original'))).toEqual(['😀']);
+			await expect(page.locator('#single .stanza-diff-inline-removed')).toBeVisible();
+			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readCharacterChanges('modified'))).toEqual(['🤖']);
+			await expect(page.locator('#single .stanza-diff-inline-added')).toBeVisible();
 			await expect(page.locator('#single .stanza-editor')).toHaveCount(2);
 			await expect(page.locator('#multi .stanza-multi-diff-editor-section')).toHaveCount(2);
 			await expect(page.locator('#multi .stanza-diff-editor')).toHaveCount(2);
 			await expect(page.locator('#multi .stanza-editor')).toHaveCount(4);
-			await expect(page.locator('#multi .stanza-diff-inline-removed')).toHaveText('😀');
+			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readCharacterChanges('original', true))).toEqual(['😀']);
+			await expect(page.locator('#multi .stanza-diff-inline-removed')).toBeVisible();
 			await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.activeMultiControl())).toBe('same\nbefore 🤖 after\nlast');
 			await page.locator('#single .stanza-diff-editor').focus();
 			await page.keyboard.press('F7');
@@ -1750,11 +1756,13 @@ suite('diff browser component', () => {
 		await expect(originalAnchor).toBeVisible();
 		await expect(originalAnchor).toHaveCSS('border-left-style', 'solid');
 		await expect(originalAnchor).toHaveCSS('background-color', 'rgb(250, 220, 220)');
-		await expect(page.locator('#single .stanza-diff-editor-side.modified .stanza-diff-inline-added')).toContainText('new ');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readCharacterChanges('modified'))).toEqual(['new ']);
+		await expect(page.locator('#single .stanza-diff-editor-side.modified .stanza-diff-inline-added')).toBeVisible();
 		await page.evaluate(() => window.ashDiffIntegration.setComparisonText('before new after', 'before after'));
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
 		await expect(page.locator('#single .stanza-diff-editor-side.modified .stanza-diff-inline-added-empty')).toBeVisible();
-		await expect(page.locator('#single .stanza-diff-editor-side.original .stanza-diff-inline-removed')).toContainText('new ');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readCharacterChanges('original'))).toEqual(['new ']);
+		await expect(page.locator('#single .stanza-diff-editor-side.original .stanza-diff-inline-removed')).toBeVisible();
 	});
 
 	for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light']) {
@@ -2361,8 +2369,10 @@ suite('diff browser component', () => {
 		await expect(editor.locator('.stanza-diff-editor-side.original .stanza-editor')).toBeVisible();
 		await expect(editor.locator('.stanza-diff-editor-side.modified .stanza-editor')).toBeVisible();
 		await page.keyboard.press('F7');
-		await expect(editor.locator('.stanza-diff-inline-removed')).toContainText(['😀']);
-		await expect(editor.locator('.stanza-diff-inline-added')).toContainText(['🤖']);
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readCharacterChanges('original'))).toEqual(['😀', 'old']);
+		await expect(editor.locator('.stanza-diff-inline-removed').first()).toBeVisible();
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readCharacterChanges('modified'))).toEqual(['🤖', 'new']);
+		await expect(editor.locator('.stanza-diff-inline-added').first()).toBeVisible();
 		await page.locator('#single').evaluate(element => { element.style.width = '400px'; });
 		await expect.poll(() => editor.locator('.stanza-diff-editor-side.original').evaluate(element => element.getBoundingClientRect().width)).toBeLessThan(200);
 		await page.keyboard.press('F7');

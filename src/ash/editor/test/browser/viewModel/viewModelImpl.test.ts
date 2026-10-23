@@ -59,6 +59,50 @@ test('ViewModel selects the configured wrapping strategy and recomputes when it 
 	assert.deepEqual([...new Set(calls)], ['simple']);
 });
 
+test('viewport wrapping waits for available text width and preserves coordinates through hide and resize', () => {
+	const dom = new JSDOM('<body><main></main></body>');
+	using cleanup = toDisposable(() => dom.window.close());
+	using resources = new DisposableStore();
+	const container = dom.window.document.querySelector('main')!;
+	const services = createConfigurationServices(resources, container);
+	using configuration = services.createInstance(EditorConfiguration, false, MenuId.EditorContext, {
+		dimension: { width: 0, height: 120 },
+		wordWrap: 'on', minimap: { enabled: false }, lineNumbers: 'off',
+	}, container);
+	using languages = createTestLanguageConfigurationService();
+	const text = '# Heading 😀\n' + ('Markdown 中文 😀 paragraph '.repeat(6) + '\n').repeat(32);
+	using model = new TextModel(text, { languageConfigurationService: languages });
+	using theme = new TestThemeService(darkColorTheme);
+	const factory = MonospaceLineBreaksComputerFactory.create(configuration.options);
+	using viewModel = new ViewModel(1, configuration, model, factory, factory,
+		() => Disposable.None, languages, theme, { setVisibleLines: () => { } }, { batchChanges: callback => callback() });
+	const selection = new Selection(2, 10, 2, 10);
+	viewModel.setSelections('test', [selection], CursorChangeReason.Explicit);
+	const assertCoordinates = (): void => {
+		assert.deepEqual(viewModel.getSelection(), selection);
+		const position = selection.getPosition();
+		const viewPosition = viewModel.coordinatesConverter.convertModelPositionToViewPosition(position);
+		assert.deepEqual(viewModel.coordinatesConverter.convertViewPositionToModelPosition(viewPosition), position);
+	};
+	assert.equal(viewModel.getLineCount(), model.getLineCount());
+	assertCoordinates();
+	configuration.observeContainer({ width: 180, height: 120 });
+	assert.ok(viewModel.getLineCount() > model.getLineCount());
+	assertCoordinates();
+	configuration.observeContainer({ width: 0, height: 120 });
+	assert.equal(viewModel.getLineCount(), model.getLineCount());
+	model.pushStackElement();
+	model.pushEditOperations(viewModel.getSelections(), [{ range: new Range(3, 1, 3, 1), text: 'edit 😀\n' }], () => null);
+	model.pushStackElement();
+	assert.equal(viewModel.getLineCount(), model.getLineCount());
+	assertCoordinates();
+	model.undo();
+	assert.equal(model.getValue(), text);
+	configuration.observeContainer({ width: 300, height: 120 });
+	assert.ok(viewModel.getLineCount() > model.getLineCount());
+	assertCoordinates();
+});
+
 class CapturedViewEvents extends ViewEventHandler {
 	readonly cursorEvents: ViewCursorStateChangedEvent[] = [];
 	readonly revealEvents: ViewRevealRangeRequestEvent[] = [];

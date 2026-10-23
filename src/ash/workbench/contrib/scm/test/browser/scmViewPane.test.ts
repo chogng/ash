@@ -6,6 +6,7 @@ import { CancellationToken, CancellationTokenSource } from '../../../../../base/
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { EditorInputSerializers } from '../../../../services/editor/common/editorInputSerializer.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { IProgressService } from '../../../../../platform/progress/common/progress.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { isMultiDiffEditorInput } from '../../../multiDiffEditor/browser/multiDiffEditorInput.js';
 import { ActivityService } from '../../../../services/activity/browser/activityService.js';
@@ -276,6 +277,7 @@ test('SCM history details expose copy and remote actions without extension menu 
 		const uri = URI.parse(`https://github.com/test/history/commit/${id}`);
 		const openedEditors: Parameters<typeof testEditorService>[0] = [];
 		services.registerInstance(IEditorService, testEditorService(openedEditors));
+		services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
 		let requestedLimit: number | undefined;
 		let reads = 0;
 		using referenceChanges = new Emitter<readonly ISCMHistoryItem[]>();
@@ -1059,6 +1061,7 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 	const opened: Array<{ readonly input: IResourceEditorInput; readonly options: EditorOpenOptions | undefined; readonly target?: EditorOpenTarget; }> = [];
 	services.registerInstance(IEditorService, testEditorService(opened));
 	services.registerInstance(INotificationService, notifications);
+	services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
 	const requests: Array<{ readonly id: string; readonly path?: string; readonly repository?: string; }> = [];
 	const changes = [
 		{ path: 'modified.ts', status: 'modified', originalPath: undefined },
@@ -1097,10 +1100,10 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history-multidiff', title: 'Graph' }, history.viewService, menus, testContextMenuProvider as IContextMenuService, contextKeys, hover, testEditorService(opened), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, historyConfiguration, historyQuickInput, historyUiServices.get(IStorageService), history.scmService);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('.ash-scm-graph-actions button') !== null);
-		const commit = pane.element.querySelector<HTMLElement>('.ash-scm-graph-commit')!;
+		const commit = pane.element.querySelector<HTMLElement>('.ash-scm-graph-commit')!.closest<HTMLElement>('[role="treeitem"]')!;
 		const button = commit.querySelector<HTMLButtonElement>('[data-action-id="workbench.scm.action.graph.viewChanges"] > button')!;
 		assert.equal(button.getAttribute('aria-label'), 'Open Changes');
-		assert.match(pane.element.querySelector('[role="tree"]')!.getAttribute('aria-description')!, /比较该提交的所有文本文件/);
+		assert.match(pane.element.querySelector('[role="tree"]')!.getAttribute('aria-description')!, /使用 Tab 移至引用标记、“打开更改”和“打开文件”/);
 		button.click();
 		await waitFor(() => opened.length === 1);
 		assert.equal(commit.getAttribute('aria-expanded'), 'false', 'Opening the multi-diff does not expand the commit');

@@ -412,6 +412,7 @@ test('Markdown language providers navigate headings, rename links and show diagn
 	await expect(page.locator('.ash-bulk-edit-replacements')).toContainText('renamed-heading');
 	await page.locator('.ash-bulk-edit').getByRole('button', { name: 'Apply selected', exact: true }).click();
 	await group.editor.waitForEditorContents(text => text.includes('# Renamed heading') && text.includes('[go](#renamed-heading)'));
+	await workbench.quickaccess.runCommand('workbench.action.togglePanel');
 	await page.locator('[data-part="panel"]').getByRole('tab', { name: 'Problems', exact: true }).click();
 	await expect(page.getByText(/No header found: 'missing'/u).first()).toBeVisible();
 });

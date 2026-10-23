@@ -459,3 +459,266 @@ async fn file_history_follows_renames_and_blame_uses_unsaved_contents() {
             .is_err()
     );
 }
+
+#[tokio::test]
+async fn expanded_history_reuses_comparisons_and_reads_many_blobs_without_one_shot_git() {
+    #[derive(Debug, Default)]
+    struct Observer(std::sync::atomic::AtomicUsize);
+    impl crate::GitProcessObserver for Observer {
+        fn observe(&self, timing: crate::GitProcessTiming) {
+            // Saturated batch capacity intentionally uses one-shot blob reads.
+            // Comparison/discovery processes must never return per file.
+            if !matches!(timing.kind, crate::GitProcessKind::Show) {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+    }
+    let source = TestRepository::init();
+    for version in 0..2 {
+        for file in 0..60 {
+            source.write(
+                &format!("file-{file}.txt"),
+                &format!("version {version} file {file}\n"),
+            );
+        }
+        source.commit_all(&format!("Version {version}"));
+    }
+    let observer = std::sync::Arc::new(Observer::default());
+    let client = GitClient::system().with_process_observer(observer.clone());
+    let repository = client.open_repository(source.root()).await.unwrap();
+    let head = source.git(&["rev-parse", "HEAD"]);
+    let (parent, changes) = client.commit_changes(&repository, &head).await.unwrap();
+    let baseline = observer.0.load(std::sync::atomic::Ordering::Relaxed);
+    // Mirrors the real provider: expansion returns a resolved parent, which is
+    // passed back with every file request. Both forms must share the comparison.
+    for change in changes {
+        let (_, repeated) = client
+            .compare_changes(
+                &repository,
+                &head,
+                parent.as_deref().unwrap(),
+                crate::GitComparisonMode::Direct,
+            )
+            .await
+            .unwrap();
+        assert_eq!(repeated.len(), 60);
+        let file = client
+            .commit_file(
+                &repository,
+                &head,
+                parent.as_deref(),
+                change.path(),
+                change.original_path(),
+                1024,
+            )
+            .await
+            .unwrap();
+        let number = change
+            .path()
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .strip_prefix("file-")
+            .unwrap();
+        assert_eq!(
+            file.original(),
+            Some(format!("version 0 file {number}\n").as_bytes())
+        );
+        assert_eq!(
+            file.modified(),
+            Some(format!("version 1 file {number}\n").as_bytes())
+        );
+    }
+    assert_eq!(
+        observer.0.load(std::sync::atomic::Ordering::Relaxed),
+        baseline,
+        "Expanded history must not spawn per-file diff or rev-parse processes; the bounded batch child owns its separate lifetime"
+    );
+}
+
+#[tokio::test]
+async fn history_comparison_cache_resolves_moving_refs_and_shallow_boundaries() {
+    let source = TestRepository::init();
+    source.write("file.txt", "root\n");
+    source.commit_all("Root");
+    let root = source.git(&["rev-parse", "HEAD"]);
+    source.git(&["branch", "base"]);
+    source.write("file.txt", "next\n");
+    source.commit_all("Next");
+    let head = source.git(&["rev-parse", "HEAD"]);
+    let client = GitClient::system();
+    let repository = client.open_repository(source.root()).await.unwrap();
+    let (base, changes) = client
+        .compare_changes(&repository, &head, "base", crate::GitComparisonMode::Direct)
+        .await
+        .unwrap();
+    assert_eq!(base, root);
+    assert_eq!(changes.len(), 1);
+    source.git(&["branch", "-f", "base", &head]);
+    let (base, changes) = client
+        .compare_changes(&repository, &head, "base", crate::GitComparisonMode::Direct)
+        .await
+        .unwrap();
+    assert_eq!(base, head);
+    assert!(changes.is_empty());
+    assert_eq!(
+        client.commit_changes(&repository, &head).await.unwrap().0,
+        Some(root.clone())
+    );
+    source.write(".git/shallow", &format!("{head}\n"));
+    assert_eq!(
+        client.commit_changes(&repository, &head).await.unwrap().0,
+        None
+    );
+    std::fs::remove_file(source.path(".git/shallow")).unwrap();
+    assert_eq!(
+        client.commit_changes(&repository, &head).await.unwrap().0,
+        Some(root)
+    );
+}
+
+#[tokio::test]
+async fn history_reads_bypass_cached_comparisons_and_children_for_loose_and_packed_replacements() {
+    let source = TestRepository::init();
+    source.write("file.txt", "root\n");
+    source.commit_all("Root");
+    let root = source.git(&["rev-parse", "HEAD"]);
+    source.write("file.txt", "next\n");
+    source.commit_all("Next");
+    let head = source.git(&["rev-parse", "HEAD"]);
+    let client = GitClient::system();
+    let repository = client.open_repository(source.root()).await.unwrap();
+    assert_eq!(
+        client.commit_changes(&repository, &head).await.unwrap().0,
+        Some(root.clone())
+    );
+    let read = || client.commit_file(&repository, &head, None, Path::new("file.txt"), None, 1024);
+    assert_eq!(read().await.unwrap().modified(), Some(b"next\n".as_slice()));
+    source.git(&["replace", &head, &root]);
+    assert_eq!(
+        client.commit_changes(&repository, &head).await.unwrap().0,
+        None
+    );
+    assert_eq!(read().await.unwrap().modified(), Some(b"root\n".as_slice()));
+    source.git(&["pack-refs", "--all", "--prune"]);
+    if source.path(".git/refs/replace").exists() {
+        std::fs::remove_dir(source.path(".git/refs/replace")).unwrap();
+    }
+    assert_eq!(
+        client.commit_changes(&repository, &head).await.unwrap().0,
+        None
+    );
+    assert_eq!(read().await.unwrap().modified(), Some(b"root\n".as_slice()));
+    source.git(&["replace", "-d", &head]);
+    assert_eq!(
+        client.commit_changes(&repository, &head).await.unwrap().0,
+        Some(root)
+    );
+    assert_eq!(read().await.unwrap().modified(), Some(b"next\n".as_slice()));
+}
+
+#[tokio::test]
+async fn history_batch_preserves_limits_missing_files_binary_and_newline_paths() {
+    let source = TestRepository::init();
+    source.write("file.txt", "hello\n");
+    source.write("binary.dat", "\0binary\n");
+    if cfg!(unix) {
+        source.write("line\nbreak.txt", "newline\n");
+    }
+    source.commit_all("Root");
+    let head = source.git(&["rev-parse", "HEAD"]);
+    let client = GitClient::system();
+    let repository = client.open_repository(source.root()).await.unwrap();
+    assert!(matches!(
+        client
+            .commit_file(&repository, &head, None, Path::new("file.txt"), None, 1)
+            .await,
+        Err(crate::GitError::OutputLimitExceeded { .. })
+    ));
+    // An oversized reply drops the partial child. The next request must start
+    // cleanly rather than consuming the previous file's unread bytes.
+    for (path, expected) in [
+        ("file.txt", b"hello\n".as_slice()),
+        ("binary.dat", b"\0binary\n".as_slice()),
+    ]
+    .into_iter()
+    .chain(cfg!(unix).then_some(("line\nbreak.txt", b"newline\n".as_slice())))
+    {
+        let file = client
+            .commit_file(&repository, &head, None, Path::new(path), None, 1024)
+            .await
+            .unwrap();
+        assert_eq!(file.modified(), Some(expected));
+    }
+    assert_eq!(
+        client
+            .commit_file(
+                &repository,
+                &head,
+                None,
+                Path::new("missing.txt"),
+                None,
+                1024
+            )
+            .await
+            .unwrap()
+            .modified(),
+        None
+    );
+}
+
+#[tokio::test]
+async fn first_history_expansion_reads_roots_empty_commits_and_merges_in_one_query() {
+    #[derive(Debug, Default)]
+    struct Observer(std::sync::atomic::AtomicUsize);
+    impl crate::GitProcessObserver for Observer {
+        fn observe(&self, _: crate::GitProcessTiming) {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+    let source = TestRepository::init();
+    source.write("file.txt", "root\n");
+    source.commit_all("Root");
+    source.git(&["config", "log.showRoot", "false"]);
+    source.git(&["config", "log.showSignature", "true"]);
+    source.git(&["notes", "add", "-m", "Notes are not part of the file list"]);
+    let root = source.git(&["rev-parse", "HEAD"]);
+    let observer = std::sync::Arc::new(Observer::default());
+    let client = GitClient::system().with_process_observer(observer.clone());
+    let repository = client.open_repository(source.root()).await.unwrap();
+    let before = observer.0.load(std::sync::atomic::Ordering::Relaxed);
+    let (parent, changes) = client.commit_changes(&repository, &root).await.unwrap();
+    assert_eq!(parent, None);
+    assert_eq!(changes.len(), 1);
+    assert_eq!(
+        observer.0.load(std::sync::atomic::Ordering::Relaxed) - before,
+        1
+    );
+    source.git(&["commit", "--allow-empty", "-m", "Empty"]);
+    let head = source.git(&["rev-parse", "HEAD"]);
+    let (parent, changes) = client.commit_changes(&repository, &head).await.unwrap();
+    assert_eq!(parent, Some(root.clone()));
+    assert!(changes.is_empty());
+    assert_eq!(
+        observer.0.load(std::sync::atomic::Ordering::Relaxed) - before,
+        2
+    );
+
+    source.git(&["switch", "-c", "side", &root]);
+    source.write("side.txt", "side\n");
+    source.commit_all("Side");
+    source.git(&["switch", "main"]);
+    source.git(&["config", "log.diffMerges", "off"]);
+    source.git(&["merge", "--no-ff", "side", "-m", "Merge"]);
+    let merge = source.git(&["rev-parse", "HEAD"]);
+    let (parent, changes) = client.commit_changes(&repository, &merge).await.unwrap();
+    assert_eq!(parent, Some(head));
+    assert_eq!(changes.len(), 1);
+    assert_eq!(changes[0].path(), Path::new("side.txt"));
+    assert_eq!(changes[0].status(), GitChangeStatus::Added);
+    assert_eq!(
+        observer.0.load(std::sync::atomic::Ordering::Relaxed) - before,
+        3
+    );
+}

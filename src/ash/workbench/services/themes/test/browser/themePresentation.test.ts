@@ -327,7 +327,7 @@ suite('themes browser component', () => {
 			<div class="ash-tree" id="focus-tree" tabindex="0">Empty tree</div>
 			<div class="ash-menu ash-action-widget"><div class="ash-action-view-item focused"><button class="ash-button" id="focus-code-action">Code action</button></div></div>
 			<button class="stanza-document-outline-entry" id="focus-outline">Outline</button>
-			<button class="ash-scm-graph-change" id="focus-scm">Change</button>
+			<div class="ash-scm-graph"><div class="ash-tree ash-scm-graph-tree" id="focus-scm" tabindex="0" role="tree" aria-label="History"><div class="ash-tree-row ash-scm-graph-change-row focused" role="treeitem" aria-selected="true"><div class="ash-scm-graph-change">Change</div></div></div></div>
 			<section class="ash-modal-editor" id="focus-modal" tabindex="-1">Modal</section>`;
 			root.append(fixture);
 		});

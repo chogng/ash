@@ -981,10 +981,6 @@ impl GitRuntime {
         object_id: &str,
     ) -> Result<String, GitRuntimeError> {
         let repository = self.repository(repository_id)?;
-        let _operation = repository
-            .operation
-            .lock()
-            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         repository
             .service
             .commit_message(object_id)
@@ -997,10 +993,6 @@ impl GitRuntime {
         object_id: &str,
     ) -> Result<ash_git::GitCommitDetails, GitRuntimeError> {
         let repository = self.repository(repository_id)?;
-        let _operation = repository
-            .operation
-            .lock()
-            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         repository
             .service
             .commit_details(object_id)
@@ -1737,15 +1729,16 @@ impl GitRepositoryRuntime {
         })
     }
 
+    // These history reads use immutable object IDs, resolve any comparison ref
+    // once, and never accept/publish a worktree snapshot. Repository mutation
+    // leases would unnecessarily make them wait for fetch or status publication.
     pub(super) fn commit_changes(
         &self,
         object_id: &str,
     ) -> Result<GitCommitChangesResult, GitRuntimeError> {
-        let _operation = lock_current_operation(&self.operation)
-            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         let projected = self
             .service
-            .commit_changes(object_id)
+            .commit_changes(&self.identity, object_id)
             .map_err(GitRuntimeError::Service)?;
         self.project_commit_changes(projected)
     }
@@ -1756,8 +1749,6 @@ impl GitRepositoryRuntime {
         base_reference: &str,
         mode: ash_git::GitComparisonMode,
     ) -> Result<GitCompareChangesResult, GitRuntimeError> {
-        let _operation = lock_current_operation(&self.operation)
-            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         let projected = self
             .service
             .compare_changes(object_id, base_reference, mode)
@@ -1797,11 +1788,9 @@ impl GitRepositoryRuntime {
         path: &Path,
         comparison_base: Option<&str>,
     ) -> Result<GitCommitFileResult, GitRuntimeError> {
-        let _operation = lock_current_operation(&self.operation)
-            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
         let file = self
             .service
-            .commit_file(object_id, path, comparison_base)
+            .commit_file(&self.identity, object_id, path, comparison_base)
             .map_err(GitRuntimeError::Service)?;
         Ok(GitCommitFileResult {
             original: commit_file_content(file.original()),
@@ -3609,8 +3598,8 @@ fn wire_path(path: &Path) -> Result<String, GitRuntimeError> {
 #[path = "git_runtime_tests.rs"]
 mod tests;
 
-// Only watcher publication and file-content observations use this lease. Both disable
-// optional index writes; all explicit refreshes and mutations retain the exclusive lease,
+// Watcher publication and worktree file-content observations use this lease.
+// Both disable optional index writes; explicit refreshes and mutations retain the exclusive lease,
 // so two independently captured status snapshots cannot publish out of order.
 fn lock_repository_read<'a>(
     lock: &'a ash_git::RepositoryOperationLock,

@@ -6,6 +6,16 @@ import { JSDOM } from 'jsdom';
 import { suite, test, setup } from 'mocha';
 import { renderSCMHistoryGraphPlaceholder, renderSCMHistoryItemGraph, toISCMHistoryItemViewModelArray } from '../../browser/scmHistory.js';
 import type { ISCMHistoryItem } from '../../common/history.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { IProgressService } from '../../../../../platform/progress/common/progress.js';
+import { ISCMService, type ISCMRepository } from '../../common/scm.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
+import { isMultiDiffEditorInput, type MultiDiffEditorInput } from '../../../multiDiffEditor/browser/multiDiffEditorInput.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 
 
 async function expectSelectionColor(row: Locator, token: string): Promise<void> {
@@ -89,6 +99,141 @@ test('summary nodes compare captured branch revisions without changing commit pa
 	}).length, history.length);
 });
 
+suite('SCM history Open Changes', () => {
+	test('bounds independent content reads, preserves Git order and stops future batches after failure', async () => {
+		await import('../../browser/scmHistoryViewPane.js');
+		for (const fail of [false, true]) {
+			using services = new InstantiationService();
+			using commands = new CommandService(services);
+			using notifications = new TestNotificationService();
+			services.registerInstance(INotificationService, notifications);
+			const changes = Array.from({ length: 7 }, (_, index) => ({ path: `${index}.txt`, uri: URI.file(`/fixture/${index}.txt`), status: 'modified' as const }));
+			const pending = changes.map(() => new DeferredPromise<void>());
+			const started: number[] = [];
+			const opened: MultiDiffEditorInput[] = [];
+			const failure = new Error('Failed history read');
+			const repository = {
+				id: 'fixture', provider: {
+					id: 'fixture', historyProvider: {
+						provideHistoryItemChanges: async () => changes,
+						resolveHistoryItemChangeContents: async (_revision: string, change: typeof changes[number]) => {
+							const index = changes.indexOf(change);
+							started.push(index);
+							await pending[index].p;
+							if (fail && index === 0) throw failure;
+							return { original: { kind: 'missing' }, modified: { kind: 'text', text: `After ${index}` } };
+						}
+					}
+				}
+			} as unknown as ISCMRepository;
+			services.registerInstance(ISCMService, { getRepository: () => repository } as unknown as ISCMService);
+			services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
+			services.registerInstance(IEditorService, {
+				openEditor: async input => {
+					assert.ok(isMultiDiffEditorInput(input)); opened.push(input);
+				}
+			} as IEditorService);
+			const operation = commands.executeCommand('workbench.scm.action.graph.viewChanges', {
+				repository, type: 'historyItemViewModel', historyItemViewModel: { historyItem: { id: 'commit', parentIds: ['parent'], subject: 'Fixture' } },
+			});
+			const completed = fail ? assert.rejects(operation, error => error === failure) : operation;
+			try {
+				await expect.poll(() => started).toEqual([0, 1, 2, 3]);
+				for (const index of [3, 1, 2]) await pending[index].complete();
+				assert.equal(opened.length, 0);
+				assert.deepEqual(started, [0, 1, 2, 3]);
+				await pending[0].complete();
+				if (!fail) {
+					await expect.poll(() => started.length).toBe(7);
+					for (const index of [6, 4, 5]) await pending[index].complete();
+				}
+				await completed;
+				assert.deepEqual(started, fail ? [0, 1, 2, 3] : [0, 1, 2, 3, 4, 5, 6]);
+				assert.deepEqual(opened.flatMap(input => input.items.map(item => item.modified.initialText)), fail ? [] : changes.map((_, index) => `After ${index}`));
+				assert.equal(notifications.model.getNotifications().length, fail ? 1 : 0);
+			} finally {
+				for (const read of pending) if (!read.isSettled) await read.complete();
+				await completed;
+			}
+		}
+	});
+
+	for (const fail of [false, true]) {
+		test(`keeps progress through history reads and editor opening on ${fail ? 'failure' : 'success'}`, async () => {
+			await import('../../browser/scmHistoryViewPane.js');
+			using services = new InstantiationService();
+			using commands = new CommandService(services);
+			using notifications = new TestNotificationService();
+			services.registerInstance(INotificationService, notifications);
+			const pendingChanges = new DeferredPromise<void>();
+			const pendingContents = new DeferredPromise<void>();
+			const pendingEditor = new DeferredPromise<void>();
+			const started: string[] = [];
+			const opened: MultiDiffEditorInput[] = [];
+			let progressActive = false;
+			const changes = Array.from({ length: 3 }, (_, index) => ({ path: `${index}.txt`, uri: URI.file(`/fixture/${index}.txt`), status: 'modified' as const }));
+			const failure = new Error('History contents unavailable');
+			const repository = {
+				id: 'fixture', provider: {
+					id: 'fixture', historyProvider: {
+						provideHistoryItemChanges: async () => { await pendingChanges.p; return changes; },
+						resolveHistoryItemChangeContents: async (_revision: string, change: typeof changes[number]) => {
+							started.push(change.path);
+							const index = changes.indexOf(change);
+							await pendingContents.p;
+							if (fail) throw failure;
+							return { original: { kind: 'text', text: `Before ${index}` }, modified: { kind: 'text', text: `After ${index}` } };
+						},
+					}
+				}
+			} as unknown as ISCMRepository;
+			services.registerInstance(ISCMService, { getRepository: () => repository } as unknown as ISCMService);
+			services.registerInstance(IProgressService, {
+				async withProgress(options, task) {
+					assert.deepEqual(options, { location: 'ash.gitGraph', delay: 100 });
+					progressActive = true;
+					try { return await task({ report() { } }); }
+					finally { progressActive = false; }
+				},
+			});
+			services.registerInstance(IEditorService, {
+				openEditor: async input => {
+					assert.ok(isMultiDiffEditorInput(input));
+					opened.push(input);
+					await pendingEditor.p;
+				}
+			} as IEditorService);
+			const operation = commands.executeCommand('workbench.scm.action.graph.viewChanges', {
+				repository, type: 'historyItemViewModel',
+				historyItemViewModel: { historyItem: { id: 'commit', parentIds: ['parent'], subject: 'Fixture changes' } },
+			});
+			const completed = fail ? assert.rejects(operation, error => error === failure) : operation;
+			try {
+				assert.equal(progressActive, true);
+				assert.equal(started.length, 0);
+				await pendingChanges.complete();
+				await expect.poll(() => started.length).toBe(changes.length);
+				assert.equal(progressActive, true);
+				assert.equal(opened.length, 0);
+				await pendingContents.complete();
+				if (!fail) {
+					await expect.poll(() => opened.length).toBe(1);
+					assert.equal(progressActive, true);
+					await pendingEditor.complete();
+				}
+				await completed;
+				assert.equal(progressActive, false);
+				assert.deepEqual(notifications.model.getNotifications().map(notification => notification.message), fail ? [failure.message] : []);
+				assert.deepEqual(started, changes.map(change => change.path));
+				assert.deepEqual(opened.flatMap(input => input.items.map(item => ({ label: item.label, text: item.modified.initialText }))), fail ? [] : changes.map((change, index) => ({ label: change.path, text: `After ${index}` })));
+			} finally {
+				for (const read of [pendingChanges, pendingContents, pendingEditor]) if (!read.isSettled) await read.complete();
+				await completed;
+			}
+		});
+	}
+});
+
 suite('scmHistory browser component', () => {
 	const browserTests = useBrowserTests();
 	setup(async function () {
@@ -123,6 +268,22 @@ suite('scmHistory browser component', () => {
 		await page.evaluate(() => window.ashSCMHistoryIntegration.finishHistoryRead(true));
 		await expect(progress).toBeHidden();
 		await expect(pane.getByRole('button', { name: 'Retry loading commit graph', exact: true })).toBeVisible();
+	});
+
+	test('repository operations show progress below the history pane title and retain it while collapsed', async function () {
+		const { page } = browserTests;
+		const pane = page.locator('[data-view-id="fixture.history"]');
+		const progress = pane.locator('.ash-view-pane-progress-indicator');
+		await page.evaluate(() => window.ashSCMHistoryIntegration.setRepositoryBusy(true));
+		await expect(progress).toBeVisible();
+		const body = pane.locator(':scope > .ash-pane-view-content');
+		expect((await progress.boundingBox())!.y).toBe((await body.boundingBox())!.y);
+		await pane.locator('.ash-pane-view-header-button').press('ArrowLeft');
+		await expect(progress).toBeHidden();
+		await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
+		await expect(progress).toBeVisible();
+		await page.evaluate(() => window.ashSCMHistoryIntegration.setRepositoryBusy(false));
+		await expect(progress).toBeHidden();
 	});
 
 	test('the shared tree navigates, previews and pins files and returns to their parent', async function () {

@@ -29,9 +29,9 @@ use crate::GitResult;
 
 // Bound retained children across repository owners. Saturation uses the normal
 // one-shot Git path rather than queuing UI reads behind inactive repositories.
-const MAX_INDEX_BATCH_PROCESSES: usize = 8;
-static INDEX_BATCH_PROCESSES: std::sync::LazyLock<Arc<tokio::sync::Semaphore>> =
-    std::sync::LazyLock::new(|| Arc::new(tokio::sync::Semaphore::new(MAX_INDEX_BATCH_PROCESSES)));
+const MAX_BATCH_PROCESSES: usize = 8;
+static BATCH_PROCESSES: std::sync::LazyLock<Arc<tokio::sync::Semaphore>> =
+    std::sync::LazyLock::new(|| Arc::new(tokio::sync::Semaphore::new(MAX_BATCH_PROCESSES)));
 
 const DEFAULT_QUERY_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_MUTATION_TIMEOUT: Duration = Duration::from_secs(30);
@@ -127,7 +127,9 @@ pub struct GitClient {
     askpass: Option<GitAskPass>,
     version: Arc<OnceCell<GitVersion>>,
     process_observer: Option<Arc<dyn GitProcessObserver>>,
-    index_batch: Arc<tokio::sync::Mutex<Option<IndexBatchReader>>>,
+    index_batch: Arc<tokio::sync::Mutex<Option<BatchReader>>>,
+    history_batch: Arc<tokio::sync::Mutex<Option<BatchReader>>>,
+    pub(crate) history_cache: Arc<std::sync::Mutex<crate::history::HistoryCache>>,
     pub(crate) content_cache: Arc<std::sync::Mutex<crate::working_copy::ContentCache>>,
 }
 
@@ -182,17 +184,36 @@ pub trait GitProcessObserver: std::fmt::Debug + Send + Sync {
     fn observe(&self, timing: GitProcessTiming);
 }
 
-struct IndexBatchReader {
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum BatchVersion {
+    Index(crate::working_copy::IndexVersion),
+    History(crate::history::HistoryVersion),
+}
+
+impl BatchVersion {
+    fn is_current(&self, repository: &crate::GitRepository) -> bool {
+        match self {
+            Self::Index(version) => {
+                crate::working_copy::index_version(repository).as_ref() == Some(version)
+            }
+            Self::History(version) => {
+                crate::history::history_version(repository).as_ref() == Some(version)
+            }
+        }
+    }
+}
+
+struct BatchReader {
     git_dir: PathBuf,
-    version: crate::working_copy::IndexVersion,
+    version: BatchVersion,
     stream: GitQueryStream,
     // Release capacity after dropping the child/group that occupies it.
     _permit: tokio::sync::OwnedSemaphorePermit,
 }
 
-impl std::fmt::Debug for IndexBatchReader {
+impl std::fmt::Debug for BatchReader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("IndexBatchReader").finish_non_exhaustive()
+        f.debug_struct("BatchReader").finish_non_exhaustive()
     }
 }
 
@@ -302,6 +323,8 @@ impl GitClient {
             process_observer: None,
             content_cache: Arc::default(),
             index_batch: Arc::default(),
+            history_batch: Arc::default(),
+            history_cache: Arc::default(),
         }
     }
 
@@ -310,6 +333,7 @@ impl GitClient {
     pub fn with_limits(mut self, limits: GitExecutionLimits) -> Self {
         if self.limits != limits {
             self.index_batch = Arc::default();
+            self.history_batch = Arc::default();
         }
         self.limits = limits;
         self
@@ -332,6 +356,8 @@ impl GitClient {
             process_observer: None,
             content_cache: Arc::default(),
             index_batch: Arc::default(),
+            history_batch: Arc::default(),
+            history_cache: Arc::default(),
         })
     }
 
@@ -354,10 +380,12 @@ impl GitClient {
     pub fn with_shared_reads(mut self, owner: &Self) -> Self {
         if self.uses_system_executable() && owner.uses_system_executable() {
             self.content_cache = Arc::clone(&owner.content_cache);
+            self.history_cache = Arc::clone(&owner.history_cache);
             self.version = Arc::clone(&owner.version);
             // A request-bound broker must not be retained by a reusable child.
             if self.askpass.is_none() && owner.askpass.is_none() && self.limits == owner.limits {
                 self.index_batch = Arc::clone(&owner.index_batch);
+                self.history_batch = Arc::clone(&owner.history_batch);
             }
         }
         self
@@ -414,9 +442,49 @@ impl GitClient {
         version: crate::working_copy::IndexVersion,
         maximum_bytes: usize,
     ) -> GitResult<Option<Vec<u8>>> {
+        self.read_batch(
+            repository,
+            path,
+            OsString::from(":"),
+            BatchVersion::Index(version),
+            maximum_bytes,
+        )
+        .await
+    }
+
+    pub(crate) async fn read_history_batch(
+        &self,
+        repository: &crate::GitRepository,
+        path: &Path,
+        object_id: &str,
+        version: crate::history::HistoryVersion,
+        maximum_bytes: usize,
+    ) -> GitResult<Option<Vec<u8>>> {
+        self.read_batch(
+            repository,
+            path,
+            OsString::from(format!("{object_id}:")),
+            BatchVersion::History(version),
+            maximum_bytes,
+        )
+        .await
+    }
+
+    async fn read_batch(
+        &self,
+        repository: &crate::GitRepository,
+        path: &Path,
+        prefix: OsString,
+        version: BatchVersion,
+        maximum_bytes: usize,
+    ) -> GitResult<Option<Vec<u8>>> {
         let timeout_duration = self.limits.query_timeout;
         timeout(timeout_duration, async {
-            let mut pool = self.index_batch.lock().await;
+            let pool = match &version {
+                BatchVersion::Index(_) => &self.index_batch,
+                BatchVersion::History(_) => &self.history_batch,
+            };
+            let mut pool = pool.lock().await;
             // Taking ownership before await makes cancellation poison the partial
             // stream by dropping it, rather than handing unread bytes to a waiter.
             let existing = pool
@@ -425,17 +493,11 @@ impl GitClient {
             let mut batch = match existing {
                 Some(batch) => batch,
                 None => {
-                    let Ok(permit) = Arc::clone(&INDEX_BATCH_PROCESSES).try_acquire_owned() else {
+                    let Ok(permit) = Arc::clone(&BATCH_PROCESSES).try_acquire_owned() else {
                         let contents = self
-                            .read_content_object(
-                                repository,
-                                path,
-                                OsString::from(":"),
-                                maximum_bytes,
-                            )
+                            .read_content_object(repository, path, prefix.clone(), maximum_bytes)
                             .await?;
-                        if crate::working_copy::index_version(repository).as_ref() != Some(&version)
-                        {
+                        if !version.is_current(repository) {
                             return Err(GitError::IndexChanged);
                         }
                         return Ok(contents);
@@ -449,7 +511,7 @@ impl GitClient {
                     let mut client = self.clone();
                     // A persistent process lifetime is not one RPC's Git wall time.
                     client.process_observer = None;
-                    IndexBatchReader {
+                    BatchReader {
                         _permit: permit,
                         git_dir: repository.git_dir().to_owned(),
                         version: version.clone(),
@@ -467,8 +529,8 @@ impl GitClient {
                 .replace('\\', "/");
             #[cfg(windows)]
             let path_bytes = normalized.as_bytes();
-            let mut request = Vec::with_capacity(path.as_os_str().len() + 2);
-            request.push(b':');
+            let mut request = Vec::with_capacity(prefix.len() + path_bytes.len() + 1);
+            request.extend_from_slice(prefix.as_encoded_bytes());
             request.extend_from_slice(path_bytes);
             request.push(b'\n');
             let stdin = stream.stdin.as_mut().expect("batch stdin is captured");
@@ -542,9 +604,9 @@ impl GitClient {
                 }
                 Some(contents)
             };
-            // A process caches its index. It may be reused only for the verified
-            // generation it actually read, including checks around the first query.
-            if crate::working_copy::index_version(repository).as_ref() != Some(&version) {
+            // Index and replacement/shallow metadata must still match the generation
+            // read by this child. Cancellation or a changed generation drops it.
+            if !version.is_current(repository) {
                 return Err(GitError::IndexChanged);
             }
             *pool = Some(batch);

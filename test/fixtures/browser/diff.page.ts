@@ -1131,6 +1131,15 @@ const harness = {
 			accessibleContent: single.getAccessibleContent(),
 		};
 	},
+	readCharacterChanges(side: 'original' | 'modified', multiFile = false): string[] {
+		const editor = (multiFile ? multi.getActiveControl() : single)?.[side === 'original' ? 'originalEditor' : 'modifiedEditor'];
+		const text = editor?.getModel();
+		if (!editor || !text) return [];
+		const className = side === 'original' ? 'stanza-diff-inline-removed' : 'stanza-diff-inline-added';
+		return Array.from({ length: text.getLineCount() }, (_, index) => editor.getLineDecorations(index + 1) ?? []).flat()
+			.filter(decoration => decoration.options.className === className)
+			.map(decoration => text.getValueInRange(decoration.range));
+	},
 	async cancelLargeComparison() {
 		const text = Array.from({ length: 20_000 }, (_, index) => String(index)).join('\n');
 		using largeOriginal = new TextModel(text);
@@ -1196,6 +1205,8 @@ const harness = {
 		modified.setLanguage(languageId);
 	},
 	dispose(): void {
+		// Panes release retained comparisons before the shared model provider stops.
+		sessionPane.clear();
 		resources.dispose();
 	},
 };

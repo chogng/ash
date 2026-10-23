@@ -4671,7 +4671,9 @@ suite('standalone browser component', () => {
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual(selected);
 
 		const short = await page.evaluate(() => window.ashStandaloneIntegration.editWrappedText('short'));
-		expect(short).toEqual({ value: 'short', version: initial.version + 1, modelLineCount: 1, contentHeight: 80 });
+		const lineHeight = await rows.first().evaluate(element => element.getBoundingClientRect().height);
+		expect(short).toEqual({ value: 'short', version: initial.version + 1, modelLineCount: 1, contentHeight: lineHeight });
+		expect(short.contentHeight).toBeLessThan(80);
 		await expect(rows).toHaveCount(1);
 		await expect(rows.first()).toContainText('short');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
