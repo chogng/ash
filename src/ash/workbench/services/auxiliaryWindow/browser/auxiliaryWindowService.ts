@@ -53,6 +53,12 @@ export interface IAuxiliaryWindow extends Disposable {
 	readonly onBeforeUnload: Event<AuxiliaryWindowBeforeUnloadEvent>;
 	readonly onDidClose: Event<void>;
 	readonly whenStylesHaveLoaded: Promise<void>;
+	/** Native hosts expose their authoritative pin state; browser popups omit it. */
+	readonly alwaysOnTop?: {
+		readonly value: boolean;
+		readonly onDidChange: Event<boolean>;
+		set(value: boolean): Promise<void>;
+	};
 	layout(): void;
 	createState(): AuxiliaryWindowState;
 }
@@ -139,6 +145,7 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 }
 
 export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
+	readonly alwaysOnTop: IAuxiliaryWindow['alwaysOnTop'] = undefined;
 	private readonly layoutEmitter = this._register(new Emitter<IDimension>());
 	private readonly beforeUnloadEmitter = this._register(new Emitter<AuxiliaryWindowBeforeUnloadEvent>());
 	private readonly closeEmitter = this._register(new Emitter<void>());

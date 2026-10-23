@@ -1,3 +1,4 @@
+import type { IAction } from '../../../../../base/common/actions.js';
 import type { Event } from '../../../../../base/common/event.js';
 
 export interface IAgentSessionListItem {
@@ -6,6 +7,9 @@ export interface IAgentSessionListItem {
 	readonly description: string;
 	readonly kind: 'draft' | 'session';
 	readonly active: boolean;
+	readonly pinned?: boolean;
+	readonly group?: { readonly sectionId: string; readonly name: string; };
+	getActions(): readonly IAction[];
 	open(): void;
 }
 

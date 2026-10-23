@@ -29,6 +29,8 @@ export interface IProjectService {
 	list(): Promise<readonly ProjectSummary[]>;
 	read(id: string): Promise<Project>;
 	create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project>;
+	/** Adds a saved Session using the current project revision. */
+	addSession(project: Project, sessionId: string): Promise<Project>;
 	update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project>;
 }
 

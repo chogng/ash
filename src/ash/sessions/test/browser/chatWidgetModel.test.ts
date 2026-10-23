@@ -1,3 +1,4 @@
+import { observableValue } from '../../../base/common/observable.js';
 import { TestConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -747,3 +748,33 @@ test('Chat preserves the composer cancellation signal through start, queue and s
 	await f.chat.steerTurn({ ...options, turnId: 'started' });
 	assert.deepEqual(signals, [controller.signal, controller.signal, controller.signal]);
 });
+
+
+for (const kind of ['Code', 'Cowork'] as const) {
+	test(`${kind} organization adopts only its canonical draft identity and preserves composer choices without sending`, async () => {
+		const f = fixture(kind); using resources = f.resources;
+		await f.model.initialize();
+		const draft = { untitledSessionId: 'organized', title: 'Unsent', model: undefined, modelSelectionKind: 'manual' as const, agent: undefined, workspace: { type: 'current' as const } };
+		const materialized = observableValue<ReadonlyMap<string, { sessionId: string; threadId: string; }>>('test materialization', new Map());
+		const sessions = { untitledSessions: [draft], materializedSessions: materialized } as unknown as ISessionsManagementService;
+		using configuration = new TestConfigurationService();
+		using model = kind === 'Code'
+			? new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, configuration)
+			: new CoworkWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, { onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined } as unknown as ILanguageModelsConfigurationService, f.execution, configuration);
+		await model.initialize();
+		model.selectMode('plan');
+		model.selectApprovalMode('auto');
+		const generation = model.composerGeneration;
+		await assert.rejects(model.selectThread({ session: f.session, threadId: 'A' }), /another Session/);
+		materialized.set(new Map([[draft.untitledSessionId, { sessionId: f.session.sessionId, threadId: 'A' }]]));
+		await model.selectThread({ session: f.session, threadId: 'A' });
+		assert.equal(model.sessionId, f.session.sessionId);
+		assert.equal(model.composerGeneration, generation);
+		assert.equal(model.inputState.mode, 'plan');
+		assert.equal(model.inputState.approvalMode, 'auto');
+		assert.equal(f.starts.length, 0, 'Giving a chat a durable identity must never start a Turn');
+		await model.send('Send after organizing');
+		assert.equal(f.starts.length, 1);
+		assert.equal(f.starts[0]!.threadId, 'A', 'The first send must reuse the organized chat');
+	});
+}

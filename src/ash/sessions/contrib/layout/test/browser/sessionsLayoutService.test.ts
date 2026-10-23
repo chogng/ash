@@ -346,6 +346,7 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(INotificationService, { error: (message: string) => { this.errors.push(message); } } as unknown as INotificationService);
 		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
 		this.services.registerInstance(ISessionsConversationService, {
+			openInNewWindow: async () => { throw new Error("Unexpected popup"); },
 			setConversationKind: async () => {
 				if (!this.conversationStarted.isSettled) { await this.conversationStarted.complete(); }
 				await this.conversationGate;

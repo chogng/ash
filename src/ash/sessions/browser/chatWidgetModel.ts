@@ -375,6 +375,15 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	async selectThread(active: IActiveSessionThread): Promise<void> {
+		if (this.selection.kind === 'untitled') {
+			const draft = this.selection.session;
+			const promoted = this.sessionService.materializedSessions.get().get(draft.untitledSessionId);
+			if (promoted?.sessionId === active.session.sessionId && promoted.threadId === active.threadId) {
+				this.adoptUntitledSession(draft, active);
+				await this.subscribe(active);
+				return;
+			}
+		}
 		const current = this.activeSession;
 		if (!current || active.session.sessionId !== current.session.sessionId) {
 			throw new Error(`ChatWidgetModel cannot select a Thread from another Session: ${active.session.sessionId}`);
@@ -1327,6 +1336,18 @@ export class ChatWidgetModel extends Disposable {
 		this.materializingComposer = this.sessionService.activeUntitledSession?.untitledSessionId === untitledSession.untitledSessionId
 			? { untitledSessionId: untitledSession.untitledSessionId, generation: this.composerGeneration, threadId: created.threadId }
 			: undefined;
+		this.adoptUntitledSession(untitledSession, created);
+		try {
+			this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
+			await this.subscribe(created);
+			return created;
+		} finally {
+			this.materializingComposer = undefined;
+		}
+	}
+
+	/** Keep this composer's choices when organization gives its draft a durable identity. */
+	private adoptUntitledSession(untitledSession: IUntitledChatSession, created: IActiveSessionThread): void {
 		this.selection = { kind: "session", active: created };
 		// The durable Session may authorize directory Skills absent from the untitled catalog.
 		this._skillSelectors = [];
@@ -1344,14 +1365,8 @@ export class ChatWidgetModel extends Disposable {
 		this.selectedReasoningEfforts.delete(untitledSession.untitledSessionId);
 		if (untitledSession.model) this.selectedModels.set(created.threadId, untitledSession.model);
 		else this.automaticModels.add(created.threadId);
-		try {
-			this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
-			await this.subscribe(created);
-			return created;
-		} finally {
-			this.materializingComposer = undefined;
-		}
 	}
+
 }
 
 function activeTurn(thread: Thread | undefined): Turn | undefined {

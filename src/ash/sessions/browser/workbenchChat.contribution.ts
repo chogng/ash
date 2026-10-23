@@ -1,3 +1,4 @@
+import { ISessionGroupsService, SessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import { EditorInputSerializers } from '../../workbench/services/editor/common/editorInputSerializer.js';
 import { Schemas } from '../../base/common/network.js';
 import { ChatEditor } from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditor.js';
@@ -98,6 +99,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 	}]);
 }
 
+registerSingleton(ISessionGroupsService, SessionGroupsService, InstantiationType.Delayed);
 registerSingleton(IChatSessionNavigationService, ChatSessionNavigationService, InstantiationType.Delayed);
 registerAction2(ForkConversationAction);
 registerChatViews();

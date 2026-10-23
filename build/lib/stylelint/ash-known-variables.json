@@ -424,6 +424,7 @@
 		"--sessions-accent",
 		"--sessions-accent-strong",
 		"--sessions-muted-surface",
+		"--sessions-row-background",
 		"--sessions-soft-surface",
 		"--snapshot-background",
 		"--snapshot-border",

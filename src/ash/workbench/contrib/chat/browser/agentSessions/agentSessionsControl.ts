@@ -1,3 +1,4 @@
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
@@ -11,7 +12,7 @@ export class AgentSessionsControl extends Disposable {
 	private readonly emptyDomNode: HTMLParagraphElement;
 	private readonly viewer: AgentSessionsViewer;
 
-	constructor(container: HTMLElement, private readonly model: IAgentSessionsModel) {
+	constructor(container: HTMLElement, private readonly model: IAgentSessionsModel, @IContextMenuService contextMenus: IContextMenuService) {
 		super();
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'div');
@@ -23,6 +24,9 @@ export class AgentSessionsControl extends Disposable {
 		this.searchInput.setAttribute('aria-label', this.searchInput.placeholder);
 		this.domNode.append(this.searchInput);
 		this.viewer = this._register(new AgentSessionsViewer(this.domNode));
+		this._register(this.viewer.onDidRequestContextMenu(event => {
+			contextMenus.showContextMenu({ getAnchor: () => event.anchor, getActions: () => event.item.getActions(), onHide: () => event.onHide() });
+		}));
 		this.emptyDomNode = h(document, 'p');
 		this.emptyDomNode.className = 'ash-agent-sessions-empty';
 		this.domNode.append(this.emptyDomNode);

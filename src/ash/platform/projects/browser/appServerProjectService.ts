@@ -37,6 +37,14 @@ export class AppServerProjectService implements IProjectService {
 		} catch (error) { throw projectError(error); }
 	}
 
+	public async addSession(project: Project, sessionId: string): Promise<Project> {
+		try {
+			return fromDto((await appServerRequest(this.connection, 'project/session/link', {
+				commandId: generateUuid(), projectId: project.id, expectedRevision: project.revision, sessionId,
+			})).project);
+		} catch (error) { throw projectError(error); }
+	}
+
 	public async update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project> {
 		try {
 			return fromDto((await appServerRequest(this.connection, 'project/details/update', { commandId: generateUuid(), projectId: project.id, expectedRevision: project.revision, name, description, materials: toMaterials(materials) })).project);

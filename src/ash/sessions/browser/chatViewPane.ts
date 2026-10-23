@@ -1,3 +1,10 @@
+import { DisposableStore } from '../../base/common/lifecycle.js';
+import { ISessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
+import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
+import { IAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { SessionAuxiliaryWindow } from './parts/sessionView.js';
+import { Button } from '../../base/browser/ui/button/button.js';
+import { defaultButtonStyles } from '../../platform/theme/browser/defaultStyles.js';
 import { isRecord } from '../../base/common/types.js';
 import { isUntitledSession } from '../services/sessions/browser/sessionsService.js';
 import { ChatEditorInput } from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
@@ -26,7 +33,7 @@ import { SHOW_CHAT_HISTORY_COMMAND_ID, AGENT_SESSIONS_ORIENTATION_SETTING, Agent
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { AgentSessionsControl } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsControl.js';
 import { registerAgentSessionsAccessibility } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsAccessibility.js';
-import { createAgentSessionsModel } from './agentSessionsModel.js';
+import { createAgentSessionsModel, createSessionItemActions } from './agentSessionsModel.js';
 import { ILifecycleService } from '../../workbench/services/lifecycle/common/lifecycle.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { localize } from '../../nls.js';
@@ -58,7 +65,7 @@ interface ChatPaneEntry {
  *
  * Each opened untitled or durable Session owns one retained ChatWidget. Thread
  * selection remains internal to durable panes, while untitled sessions
- * materialize only when their first message is sent.
+ * materialize when sent or organized through their item actions.
  */
 export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	private readonly chatService: IChatService;
@@ -88,6 +95,8 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	private editorVisible = true;
 	private readonly inEditor: IContextKey<boolean>;
 	private focusReturn: (() => void) | undefined;
+	private readonly popouts = new Map<ChatWidget<ChatWidgetModel>, { shell: SessionAuxiliaryWindow; resources: DisposableStore; placeholder: HTMLElement; }>();
+	private readonly openingPopouts = new Map<ChatWidget<ChatWidgetModel>, Promise<void>>();
 
 	constructor(
 		container: HTMLElement,
@@ -107,6 +116,8 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		@IStorageService private readonly storage: IStorageService,
 		@IUserDataProfileService private readonly userProfile: IUserDataProfileService,
 		@ILifecycleService private readonly lifecycleService: ILifecycleService,
+		@ISessionGroupsService groups: ISessionGroupsService,
+		@IAuxiliaryWindowService private readonly auxiliaryWindows: IAuxiliaryWindowService,
 		@IContextKeyService contextKeyService?: IContextKeyService,
 		@IOpenerService private readonly openerService?: IOpenerService,
 		@IEditorService private readonly editorService?: IEditorService,
@@ -160,10 +171,11 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			if (this.sessionsPresentation === 'stacked') this.setSessionsSidebarVisible(false);
 			this.activePane?.focus();
 		}));
-		this.sessionsControl = this._register(new AgentSessionsControl(this.sessionsSidebar, createAgentSessionsModel(sessionService, () => {
-			if (this.sessionsPresentation !== 'sideBySide') this.setSessionsSidebarVisible(false);
-			this.activePane?.focus();
-		})));
+		this.sessionsControl = this._register(this.instantiationService.createInstance(AgentSessionsControl, this.sessionsSidebar, createAgentSessionsModel(sessionService, storage, groups,
+			selection => createSessionItemActions(selection, commandService, storage, notifications, () => this.openInNewWindow(selection)), () => {
+				if (this.sessionsPresentation !== 'sideBySide') this.setSessionsSidebarVisible(false);
+				this.focus();
+			})));
 		this.sessionsSidebar.hidden = true;
 		const storedWidth = storage.getNumber(sessionsSidebarWidthKey, StorageScope.WORKSPACE);
 		this.sessionsSidebarWidth = storedWidth !== undefined && storedWidth >= minimumSessionsSidebarWidth ? storedWidth : defaultSessionsSidebarWidth;
@@ -223,6 +235,8 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		}));
 		this._register(toDisposable(() => {
 			this.viewDisposed = true;
+			for (const popup of this.popouts.values()) popup.resources.dispose();
+			this.popouts.clear();
 			this.editorMount?.dispose();
 			for (const pane of this.panes.values()) pane.dispose();
 			this.panes.clear();
@@ -327,10 +341,11 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	setEditorVisible(parent: HTMLElement, visible: boolean): void {
 		if (this.editorMountParent !== parent) return;
 		this.editorVisible = visible;
-		this.activePane?.setVisible(visible);
+		this.activePane?.setVisible(visible || this.popouts.has(this.activePane));
 	}
 
 	override focus(): void {
+		if (this.activePane) this.popouts.get(this.activePane)?.shell.window.window.focus();
 		this.activePane?.focus();
 	}
 
@@ -357,6 +372,72 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
 		return this.activePane?.captureDraft() ?? Promise.resolve(undefined);
 	}
+	async openInNewWindow(selection?: SessionsViewSelection): Promise<void> {
+		if (!selection) {
+			const draft = this.sessionService.activeUntitledSession;
+			const active = this.sessionService.active;
+			selection = draft ? { kind: 'untitled', session: draft } : active ? { kind: 'session', active } : undefined;
+		}
+		if (!selection) return;
+		if (selection.kind === 'untitled') {
+			const materialized = this.sessionService.materializedSessions.get().get(selection.session.untitledSessionId);
+			const session = materialized && this.sessionService.sessions.find(session => session.sessionId === materialized.sessionId);
+			if (session && materialized) selection = { kind: 'session', active: { session, threadId: materialized.threadId } };
+		}
+		const paneId = selection.kind === 'untitled' ? untitledSessionPaneId(selection.session) : sessionPaneId(selection.active.session);
+		// Open a catalog entry without navigating the IDE's foreground conversation.
+		this.syncSessions(paneId);
+		const pane = this.panes.get(paneId);
+		if (!pane) throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
+		const existing = this.popouts.get(pane);
+		if (existing) { existing.shell.window.window.focus(); pane.focus(); return; }
+		let pending = this.openingPopouts.get(pane);
+		if (!pending) {
+			pending = this.detachPane(pane, selection.kind === 'session' ? selection.active.session.title : selection.session.title);
+			this.openingPopouts.set(pane, pending);
+		}
+		try { await pending; }
+		finally { if (this.openingPopouts.get(pane) === pending) this.openingPopouts.delete(pane); }
+	}
+
+	private async detachPane(pane: ChatWidget<ChatWidgetModel>, title: string): Promise<void> {
+		const window = await this.auxiliaryWindows.open({ title, width: 900, height: 760 });
+		if (this.viewDisposed || ![...this.panes.values()].includes(pane)) { window.dispose(); return; }
+		const resources = new DisposableStore();
+		try {
+			const shell = resources.add(this.instantiationService.createInstance(SessionAuxiliaryWindow, window, title));
+			const placeholder = h(this.paneHost.ownerDocument, 'div', { className: 'ash-sessions-detached-chat' });
+			placeholder.id = `${pane.element.id}-detached`;
+			resources.add(new Button(placeholder, {
+				...defaultButtonStyles, presentation: 'quiet', label: localize('sessions.window.focus', 'Chat is open in another window'),
+				onClick: () => { window.window.focus(); pane.focus(); },
+			}));
+			this.popouts.set(pane, { shell, resources, placeholder });
+			resources.add(toDisposable(() => {
+				this.popouts.delete(pane);
+				// Reattach the same editor before the popup document is destroyed.
+				this.paneHost.append(pane.element);
+				placeholder.remove();
+				if (!this.viewDisposed && [...this.panes.values()].includes(pane)) {
+					if (pane.sessionId && pane.threadId) this.sessionService.selectThread(pane.sessionId, pane.threadId);
+					else if (pane.model.untitledSessionId) this.sessionService.selectUntitledSession(pane.model.untitledSessionId);
+					this.syncSessions();
+					if (!this.editorMount) this.layoutService.showPart('auxiliarybar');
+					this.paneHost.ownerDocument.defaultView?.focus();
+					pane.focus();
+				}
+				window.dispose();
+			}));
+			resources.add(window.onDidClose(() => resources.dispose()));
+			this.syncSessions();
+			window.container.append(pane.element);
+			pane.setVisible(true);
+			window.layout();
+			window.window.focus();
+			pane.focus();
+		} catch (error) { resources.dispose(); window.dispose(); throw error; }
+	}
+
 	startVoiceConversation(): Promise<void> {
 		if (!this.activePane) return Promise.reject(new Error(localize('agentsVoice.noChat', 'Open a Chat before starting voice.')));
 		return this.activePane.startVoiceConversation();
@@ -377,7 +458,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		return this.editorMount ? {} : this.titleControl.partTitleProjection;
 	}
 
-	private syncSessions(): void {
+	private syncSessions(openPaneId?: string): void {
 		const focusedElement = this.element.ownerDocument.activeElement;
 		const restoreFocus = isHTMLElement(focusedElement) && this.paneHost.contains(focusedElement);
 		this.rekeyMaterializedPanes();
@@ -388,7 +469,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			const paneId = untitledSessionPaneId(untitledSession);
 			retainedPaneIds.add(paneId);
 			let pane = this.panes.get(paneId);
-			if (!pane && paneId !== activePaneId) continue;
+			if (!pane && paneId !== activePaneId && paneId !== openPaneId) continue;
 			if (!pane) {
 				pane = this.instantiationService.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
 					this.paneHost,
@@ -426,7 +507,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			let pane = this.panes.get(paneId);
 			// Catalog history is not an opened conversation. Instantiating every
 			// entry also restores every subscription and catalog read on reconnect.
-			if (!pane && paneId !== activePaneId) continue;
+			if (!pane && paneId !== activePaneId && paneId !== openPaneId) continue;
 			if (!pane) {
 				pane = this.instantiationService.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
 					this.paneHost,
@@ -460,22 +541,27 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		for (const [paneId, pane] of this.panes) {
 			if (retainedPaneIds.has(paneId)) continue;
 			this.panes.delete(paneId);
+			this.popouts.get(pane)?.resources.dispose();
 			pane.dispose();
 		}
 		const activePane = activePaneId ? this.panes.get(activePaneId) : undefined;
-		const orderedNodes = [...entries.map((entry) => entry.pane.element), this.empty];
+		const orderedNodes = [...entries.map(entry => this.popouts.get(entry.pane)?.placeholder ?? entry.pane.element), this.empty];
 		for (let index = 0; index < orderedNodes.length; index += 1) {
 			const node = orderedNodes[index]!;
 			// Keep retained Chat editors attached while Session details refresh.
 			if (this.paneHost.children[index] !== node) this.paneHost.insertBefore(node, this.paneHost.children[index] ?? null);
 		}
 		this.activePane = activePane;
-		for (const entry of entries) entry.pane.setVisible(entry.pane === this.activePane && (!this.editorMount || this.editorVisible));
+		for (const entry of entries) {
+			const popup = this.popouts.get(entry.pane);
+			entry.pane.setVisible(!!popup || entry.pane === this.activePane && (!this.editorMount || this.editorVisible));
+			if (popup) { popup.placeholder.hidden = entry.pane !== activePane; popup.shell.setTitle(entry.label); }
+		}
 		this.empty.hidden = entries.length > 0;
-		this.titleControl.update(entries.find(entry => entry.pane === activePane)?.label, activePane?.element.id);
+		this.titleControl.update(entries.find(entry => entry.pane === activePane)?.label, activePane ? this.popouts.get(activePane)?.placeholder.id ?? activePane.element.id : undefined);
 		for (const entry of entries) {
 			entry.pane.element.setAttribute('role', 'region');
-			entry.pane.setTabId(entry.pane === activePane ? this.titleControl.titleId : undefined);
+			entry.pane.setTabId(this.popouts.get(entry.pane)?.shell.title.id ?? (entry.pane === activePane ? this.titleControl.titleId : undefined));
 		}
 		this.updateSessionsLayout();
 		if (restoreFocus && activePane?.element.contains(focusedElement)) focusedElement.focus();
@@ -523,7 +609,8 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 
 	private rekeyMaterializedPanes(): void {
 		for (const [paneId, pane] of [...this.panes]) {
-			const sessionId = pane.sessionId;
+			const draftId = pane.model.untitledSessionId;
+			const sessionId = pane.sessionId ?? (draftId ? this.sessionService.materializedSessions.get().get(draftId)?.sessionId : undefined);
 			if (!sessionId) continue;
 			const materializedPaneId = sessionPaneIdFromId(sessionId);
 			if (paneId === materializedPaneId) continue;
@@ -534,10 +621,13 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 				// Keep the first submission's editor and lifetime when the catalog arrived
 				// before its create response. A deliberately selected durable draft wins.
 				if (origin && paneId === `untitled:${origin}` && pane === this.activePane && active?.session.sessionId === sessionId && active.threadId === pane.threadId) {
+					this.panes.delete(materializedPaneId);
+					this.popouts.get(existing)?.resources.dispose();
 					existing.dispose();
 				} else {
-					pane.dispose();
 					this.panes.delete(paneId);
+					this.popouts.get(pane)?.resources.dispose();
+					pane.dispose();
 					continue;
 				}
 			}
