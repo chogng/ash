@@ -294,6 +294,7 @@
 		"--ash-breadcrumbs-widget-foreground",
 		"--ash-breadcrumbs-widget-hover",
 		"--ash-breadcrumbs-widget-selection",
+		"--ash-button-small-font-size",
 		"--ash-button-style-background",
 		"--ash-button-style-foreground",
 		"--ash-button-style-hover-background",

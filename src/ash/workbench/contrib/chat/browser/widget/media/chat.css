@@ -69,7 +69,7 @@
 	border: var(--ash-strokeThickness) solid var(--ash-border);
 	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-description-foreground);
-	font-size: 11px;
+	font-size: var(--ash-fontSize-label2);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -137,7 +137,7 @@
 	flex: 0 0 auto;
 	padding: 0 12px 4px;
 	color: var(--ash-description-foreground);
-	font-size: 12px;
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-chat-status:empty {
@@ -148,7 +148,7 @@
 	overflow: hidden;
 	padding: 0 12px 4px;
 	color: var(--ash-description-foreground);
-	font-size: 12px;
+	font-size: var(--ash-fontSize-label1);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -165,7 +165,7 @@
 	border-radius: var(--ash-cornerRadius-medium);
 	color: var(--ash-foreground);
 	background: var(--ash-input-background);
-	font-size: 12px;
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-chat-interaction p {
@@ -292,7 +292,7 @@
 	margin-bottom: var(--ash-spacing-size80);
 	padding-inline: var(--ash-spacing-size80);
 	color: var(--ash-description-foreground);
-	font-size: 12px;
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-chat-input-tip > .ash-markdown {
@@ -360,7 +360,7 @@
 		var(--ash-button-foreground) 10%,
 		transparent
 	);
-	font-size: 12px;
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-chat-input-toolbars .ash-chat-input-mode-selector {

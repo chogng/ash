@@ -106,13 +106,13 @@
 
 .ash-configuration-setting-description {
 	color: var(--ash-description-foreground);
-	font-size: 12px;
+	font-size: var(--ash-fontSize-label1);
 	line-height: 1.45;
 }
 
 .ash-settings-maturity {
 	color: var(--ash-description-foreground);
-	font-size: 12px;
+	font-size: var(--ash-fontSize-label1);
 	line-height: 1.45;
 }
 

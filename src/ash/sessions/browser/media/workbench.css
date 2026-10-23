@@ -11,6 +11,15 @@
 
 /* Font rendering is shared; visual weight is owned by the Agents Window. */
 .ash-sessions-window {
+	/* Window-owned type roles also apply to shared widgets and anchored popups. */
+	--ash-fontSize-heading1: 26px;
+	--ash-fontSize-heading2: 18px;
+	--ash-fontSize-heading3: 14px;
+	--ash-fontSize-body1: 14px;
+	--ash-fontSize-body2: 11px;
+	--ash-fontSize-label1: 14px;
+	--ash-fontSize-label2: 11px;
+	--ash-fontSize-label3: 10px;
 	--ash-icon-font-family: "Ash UI Variable";
 	--ash-icon-font-weight: 550;
 }
@@ -42,6 +51,7 @@ textarea {
 }
 
 .ash-sessions-window {
+	--ash-button-small-font-size: var(--ash-fontSize-label1);
 	--sessions-accent: var(--ash-button-primaryBackground);
 	--sessions-accent-strong: color-mix(
 		in srgb,
@@ -65,6 +75,9 @@ textarea {
 	height: 100%;
 	overflow: hidden;
 	flex-direction: column;
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-regular);
+	line-height: 1.4;
 	color: var(--ash-foreground);
 	background: var(--ash-titleBar-background);
 }

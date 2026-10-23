@@ -101,6 +101,7 @@ configurationRegistry.registerConfiguration<string>({
 configurationRegistry.registerConfiguration<number>({
 	key: ChatInputConfiguration.fontSize,
 	defaultValue: 13,
+	agentsWindow: { default: 14 },
 	scope: ConfigurationScope.APPLICATION,
 	schema: { type: 'integer', minimum: 8, maximum: 40 },
 	parse(value: unknown): number {
@@ -110,7 +111,7 @@ configurationRegistry.registerConfiguration<number>({
 	setting: {
 		valueType: 'number', minimum: 8, maximum: 40,
 		get title() { return localize('chat.input.fontSize.title', 'Font size'); },
-		get description() { return localize('chat.input.fontSize.description', 'Set the message input text size in pixels. The default is 13.'); },
+		get description() { return localize('chat.input.fontSize.description', 'Set the message input text size in pixels.'); },
 	},
 });
 configurationRegistry.registerConfiguration<number>({
