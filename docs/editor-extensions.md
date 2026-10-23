@@ -163,6 +163,7 @@ PDF.js 和 Worker 随扩展客户端打包，JS／CSS 摘要覆盖其字节。�
 扩展不能访问内部模型或复制其状态。公开接口与视图消息见 [TS SDK](../sdk/typescript/README.md)。
 `workbench/services/imageEditor` 拥有 Provider 注册与交互生命周期；
 `platform/imageView` 只负责系统取屏、隔离原生窗口和图像输出，不解释代码选区或 Chat 数据。
+macOS 权限引导的布局、文案与交互由 Snapshot 扩展拥有；宿主提供当前应用标识、图标和有限的系统设置、拖动、路径复制及权限检查操作，只向权限引导窗口开放。
 Chat 通过图像服务注册附件接收逻辑，自己绑定草稿取消、截图命令和既有快捷键偏好；
 全局按键使用 `platform/globalKeybindings` 的窗口租约。SDK adapter 不导入 Chat 贡献或调用其命令。
 

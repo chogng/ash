@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { validateImageViewRequest, validateImageViewCompletion, validateImageViewImage, validateImageViewInitialization } from '../../common/imageView.js';
+import { validateImageViewRequest, validateImageViewCompletion, validateImageViewImage, validateImageViewInitialization, validateImageViewPermissionAction } from '../../common/imageView.js';
 
 function image(): Uint8Array {
 	const bytes = new Uint8Array(33);
@@ -37,4 +37,14 @@ test('image view output is finite and cannot choose arbitrary native operations'
 	assert.deepEqual(validateImageViewCompletion({ kind: 'retake' }), { kind: 'retake' });
 	assert.deepEqual(validateImageViewCompletion({ kind: 'error', message: 'Rendering failed' }), { kind: 'error', message: 'Rendering failed' });
 	for (const invalid of [{ kind: 'save', image: image(), filePath: '/tmp/private' }, { kind: 'execute', command: 'anything' }, { kind: 'error', message: 'x'.repeat(4097) }, { kind: 'copy', image: new Uint8Array(100) }]) assert.throws(() => validateImageViewCompletion(invalid));
+});
+
+
+test('permission guide can only act on the host-selected application bundle', () => {
+	for (const action of ['settings', 'drag', 'copyPath', 'retry', 'cancel']) assert.equal(validateImageViewPermissionAction(action), action);
+	for (const invalid of [{ action: 'drag', path: '/tmp/other.app' }, 'grant', 'restart', undefined]) assert.throws(() => validateImageViewPermissionAction(invalid));
+	const permission = { applicationName: 'Ash.app', icon: image() };
+	const initial = { permission, image: new Uint8Array(), presentation: presentation(), locale: 'zh-CN', bundles: { ash: {} } };
+	assert.equal(validateImageViewInitialization(initial), initial);
+	for (const invalid of [{ ...initial, path: '/tmp/other.app' }, { ...initial, image: image() }, { ...initial, permission: { ...permission, path: '/tmp/other.app' } }, { ...initial, permission: { ...permission, icon: new Uint8Array() } }, { ...initial, permission: { ...permission, applicationName: '' } }, { ...initial, presentation: presentation('content') }]) assert.throws(() => validateImageViewInitialization(invalid));
 });

@@ -10,7 +10,7 @@ export function readImageEditorTheme(document: Document) {
 	const computed = document.defaultView!.getComputedStyle(root);
 	const value = (name: string) => computed.getPropertyValue(`--ash-${name}`);
 	return {
-		colors: { foreground: value('foreground'), background: value('editor-background'), panelBackground: value('menu-background'), selectionMask: value('screenshot-maskBackground'), border: value('widget-border'), focusBorder: value('focusBorder'), contrastBorder: value('contrastBorder'), inputBackground: value('input-background'), inputForeground: value('input-foreground'), inputBorder: value('input-border'), hoverBackground: value('toolbar-hoverBackground'), buttonForeground: value('button-foreground'), buttonBackground: value('button-background') },
+		colors: { foreground: value('foreground'), background: value('editor-background'), panelBackground: value('menu-background'), selectionMask: value('screenshot-maskBackground'), border: value('widget-border'), focusBorder: value('focusBorder'), contrastBorder: value('contrastBorder'), inputBackground: value('input-background'), inputForeground: value('input-foreground'), inputBorder: value('input-border'), hoverBackground: value('toolbar-hoverBackground'), buttonForeground: value('button-primaryForeground'), buttonBackground: value('button-primaryBackground') },
 		metrics: { fontSize: value('fontSize-body1'), labelFontSize: value('fontSize-label1'), headingFontSize: value('fontSize-heading3'), borderWidth: value('strokeThickness'), smallRadius: value('cornerRadius-small'), largeRadius: value('cornerRadius-large'), spacing: [value('spacing-size40'), value('spacing-size80'), value('spacing-size120'), value('spacing-size160')] as const },
 		shadow: value('shadow-lg'),
 	};

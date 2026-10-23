@@ -81,3 +81,8 @@ names. Its package-local WOFF2 is built from the artwork listed in `media/icons.
 runtime code never imports host UI modules. Independent icon customization, font
 rebuilding and native-window validation follow the
 [Snapshot toolbar workflow](../../.agents/skills/svg-icon-font/SKILL.md#snapshot-工具栏独立图标).
+
+The package also owns the macOS screen permission guide, including its application
+card, drag instructions, keyboard alternative and translations. The host supplies
+the running application's icon and performs the finite native permission actions;
+the extension receives neither arbitrary filesystem access nor permission grants.

@@ -1,0 +1,117 @@
+.screen-permission-window {
+	margin: 0;
+	background: var(--snapshot-background);
+	color: var(--snapshot-foreground);
+	font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+	font-size: var(--snapshot-font-size);
+	line-height: 1.5;
+}
+
+.screen-permission-guide {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 24px;
+}
+
+.screen-permission-guide h1,
+.screen-permission-help h2 {
+	margin: 0;
+	font-size: var(--snapshot-heading-font-size);
+	font-weight: 600;
+}
+
+.screen-permission-guide p,
+.screen-permission-help p {
+	margin: 0;
+}
+
+.screen-permission-guide button,
+.screen-permission-help button {
+	padding: 6px 12px;
+	border: var(--snapshot-border-width) solid var(--snapshot-input-border);
+	border-radius: var(--snapshot-small-radius);
+	background: var(--snapshot-panel-background);
+	color: var(--snapshot-foreground);
+	font: inherit;
+	cursor: pointer;
+}
+
+.screen-permission-guide button:focus-visible,
+.screen-permission-guide summary:focus-visible,
+.screen-permission-help button:focus-visible {
+	outline: var(--snapshot-border-width) solid var(--snapshot-focus-border);
+	outline-offset: 2px;
+}
+
+.screen-permission-guide .primary {
+	background: var(--snapshot-button-background);
+	color: var(--snapshot-button-foreground);
+}
+
+.screen-permission-guide .screen-permission-app {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	padding: 16px;
+	text-align: start;
+	border-style: dashed;
+	cursor: grab;
+}
+
+.screen-permission-app img {
+	width: 48px;
+	height: 48px;
+	flex-shrink: 0;
+}
+
+.screen-permission-app-label {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.screen-permission-app-label strong {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 600;
+}
+
+.screen-permission-guide summary {
+	cursor: pointer;
+}
+
+.screen-permission-guide details p {
+	margin-top: 8px;
+}
+
+.screen-permission-guide footer {
+	display: flex;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.screen-permission-status:empty {
+	display: none;
+}
+
+.screen-permission-help-hint {
+	font-size: var(--snapshot-label-font-size);
+}
+
+.screen-permission-help {
+	box-sizing: border-box;
+	width: calc(100% - 32px);
+	padding: 20px;
+	border: var(--snapshot-border-width) solid var(--snapshot-input-border);
+	border-radius: var(--snapshot-large-radius);
+	background: var(--snapshot-background);
+	color: var(--snapshot-foreground);
+}
+
+.screen-permission-help p {
+	margin: 16px 0;
+}

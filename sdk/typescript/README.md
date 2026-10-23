@@ -8,6 +8,39 @@ access to Ash services.
 
 New SDK capabilities follow the [capability opening principles](../../docs/editor-extensions.md#sdk-能力开放原则): start with a concrete need in an existing extension, reuse the owning host service, and expose only the operations needed for that scenario. Unsupported API lists and differences between language bindings are not implementation queues; validate additions through the consuming extension.
 
+## Extension development
+
+Choose the package's execution host and verify its admitted capabilities before
+implementing a feature. Public types describe the author contract; they do not
+grant execution or imply that every host implements every operation. Ordinary
+TS/JS packages, trusted Browser extensions and admitted Rust editor clients have
+different entrypoints. The editor-client `ash:editor/*` modules are not an alternate
+API for an ordinary `@ash/sdk` extension.
+
+Keep optional feature logic, feature-specific views, styles, instructions and
+translations in the extension package. A feature needing a native window, drag
+operation or OS permission can still own its UI. The host owns the privileged
+mechanism, trusted resource selection and authoritative permission check, exposed
+through the smallest supported capability. Use public SDK types and declared
+dependencies; do not import private Ash source or styles, including through
+type-only imports or filesystem links.
+
+For supported isolated views, pass explicit serializable data and semantic theme
+values through their documented contract. The view does not inherit the extension
+host's services or authority. Localize visible text and accessible names, provide
+a keyboard alternative to pointer-only interactions, and distinguish an operation
+request from its completed result. Opening settings, copying a path or starting a
+drag does not mean access was granted. Dispose view resources when the interaction
+ends and invalidate outstanding work when its Provider registration is retired.
+
+Compile and package the view's assets with the extension. Verify the resources
+actually loaded by the target host, not only the source files in the checkout.
+Exercise the consuming extension through registration, invocation and disposal;
+for new privileged operations also verify denial and cancellation. When testing
+with substituted OS actions, report which native behavior remains untested.
+
+## Using the API
+
 ```ts
 import * as ash from '@ash/sdk';
 
@@ -88,6 +121,17 @@ before performing copy, save or attachment. `{ type: 'completed', accepted, erro
 reports completion or a cancelled save dialog to the same view. Registration
 retirement cancels active interactions. Other execution hosts do not currently
 grant the `imageEditor` capability.
+
+On macOS, input can contain `permission: { applicationName, icon }` instead of
+screen pixels. The extension renders its consent guide in a movable companion
+window, using its normal theme, localization and verbosity settings. In this phase
+only, `{ type: 'permission', action: ImageEditorPermissionAction }` requests opening
+System Settings (`settings`), dragging the running application (`drag`), copying
+its path (`copyPath`), checking consent and resuming capture (`retry`), or cancelling
+(`cancel`). Start `drag` from the view's `dragstart` event after preventing the
+browser's default drag. The host replies with `{ type: 'permissionResult', accepted,
+error }`. Extensions cannot supply paths, grant access or run these actions from a
+normal image editor. `retry` succeeds only when macOS reports permission granted.
 
 `ImageEditorView.html` may contain standalone inline HTML, styles and scripts.
 Optional Blob scripts and styles must be registered with `asWebviewUri`; any

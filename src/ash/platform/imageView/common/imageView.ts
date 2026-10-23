@@ -7,6 +7,7 @@ export const IMAGE_VIEW_CANCEL_CHANNEL = 'ash:image-view:cancel';
 export const IMAGE_VIEW_INITIALIZE_CHANNEL = 'ash:image-view:initialize';
 export const IMAGE_VIEW_COMPLETE_CHANNEL = 'ash:image-view:complete';
 export const IMAGE_VIEW_READY_CHANNEL = 'ash:image-view:ready';
+export const IMAGE_VIEW_PERMISSION_CHANNEL = 'ash:image-view:permission';
 
 /** Native presentation carries opaque client data, never editor models or feature settings. */
 export interface ImageViewRequest {
@@ -19,9 +20,20 @@ export interface ImageViewRequest {
 
 export interface ImageViewInitialization {
 	readonly image: Uint8Array;
+	/** Host-owned metadata for a consent guide, instead of screen pixels. */
+	readonly permission?: { readonly applicationName: string; readonly icon: Uint8Array; };
 	readonly presentation: ImageViewRequest;
 	readonly locale: string;
 	readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>;
+}
+
+export type ImageViewPermissionAction = 'settings' | 'drag' | 'copyPath' | 'retry' | 'cancel';
+
+export function validateImageViewPermissionAction(value: unknown): ImageViewPermissionAction {
+	if (typeof value !== 'string' || !['settings', 'drag', 'copyPath', 'retry', 'cancel'].includes(value)) {
+		throw new TypeError('Invalid screen permission action');
+	}
+	return value as ImageViewPermissionAction;
 }
 
 export type ImageViewCompletion =
@@ -79,15 +91,27 @@ export function validateImageViewCompletion(value: unknown): ImageViewCompletion
 }
 
 export function validateImageViewInitialization(value: unknown): ImageViewInitialization {
-	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'bundles,image,locale,presentation'
-		|| typeof value.locale !== 'string' || !/^[a-zA-Z0-9-]{1,40}$/u.test(value.locale) || !isRecord(value.bundles)) {
+	if (!isRecord(value) || !['bundles,image,locale,presentation', 'bundles,image,locale,permission,presentation'].includes(Object.keys(value).sort().join(','))) {
 		throw new TypeError('Invalid image view initialization');
 	}
 	const presentation = validateImageViewRequest(value.presentation);
-	if (presentation.source === 'screen') validateImageViewImage(value.image);
+	if (value.permission !== undefined) {
+		if (presentation.source !== 'screen' || !isRecord(value.permission)
+			|| Object.keys(value.permission).sort().join(',') !== 'applicationName,icon'
+			|| typeof value.permission.applicationName !== 'string' || !value.permission.applicationName.length || value.permission.applicationName.length > 1024
+			|| !(value.image instanceof Uint8Array) || value.image.length !== 0) throw new TypeError('Invalid screen permission initialization');
+		validateImageViewImage(value.permission.icon);
+	} else if (presentation.source === 'screen') validateImageViewImage(value.image);
 	else if (!(value.image instanceof Uint8Array) || value.image.length !== 0) throw new TypeError('Content views cannot include screen pixels');
+	validateLocalization(value);
+	return value as unknown as ImageViewInitialization;
+}
+
+function validateLocalization(value: Record<string, unknown>): void {
+	if (typeof value.locale !== 'string' || !/^[a-zA-Z0-9-]{1,40}$/u.test(value.locale) || !isRecord(value.bundles)) {
+		throw new TypeError('Invalid image view localization');
+	}
 	for (const bundle of Object.values(value.bundles)) {
 		if (!isRecord(bundle) || Object.values(bundle).some(message => typeof message !== 'string' || message.length > 100_000)) throw new TypeError('Invalid image view localization');
 	}
-	return value as unknown as ImageViewInitialization;
 }

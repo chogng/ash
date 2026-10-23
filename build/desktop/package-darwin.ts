@@ -41,6 +41,8 @@ try {
 		await cp(join(buildRoot, part), join(appStage, 'dist', part), { recursive: true });
 	}
 	await cp(join(repositoryRoot, 'resources', 'tray'), join(appStage, 'resources', 'tray'), { recursive: true });
+	await mkdir(join(appStage, 'resources', 'darwin'), { recursive: true });
+	await cp(join(repositoryRoot, 'resources', 'darwin', 'ash.png'), join(appStage, 'resources', 'darwin', 'ash.png'));
 	const electronMetadata = JSON.parse(await readFile(join(appRoot, 'node_modules', 'electron', 'package.json'), 'utf8'));
 	await prepareElectronAddons(appStage);
 	await writeApplicationChecksums(appStage);
@@ -108,6 +110,7 @@ try {
 		'Contents/Resources/app/dist/main/src/main.js',
 		'Contents/Resources/app/dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs',
 		'Contents/Resources/app/dist/renderer/ash/electron-browser/workbench/workbench.html',
+		'Contents/Resources/app/resources/darwin/ash.png',
 		'Contents/Resources/app/resources/tray/ash-black-18.png',
 		'Contents/Resources/app/resources/tray/ash-black-27.png',
 		'Contents/Resources/app/resources/tray/ash-black-36.png',
