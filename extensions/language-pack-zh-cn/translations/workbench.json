@@ -1,5 +1,13 @@
 {
   "ash": {
+    "statusbar.label": "状态栏",
+    "statusbar.hideEntry": "隐藏“{0}”",
+    "statusbar.focus": "聚焦状态栏",
+    "statusbar.focusNext": "聚焦下一个状态栏条目",
+    "statusbar.focusPrevious": "聚焦上一个状态栏条目",
+    "statusbar.focusFirst": "聚焦第一个状态栏条目",
+    "statusbar.focusLast": "聚焦最后一个状态栏条目",
+    "statusbar.clearFocus": "清除状态栏焦点",
     "changesStatsWidget.file": "{0} 个文件",
     "changesStatsWidget.files": "{0} 个文件",
     "treeView.empty": "没有项目。",

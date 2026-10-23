@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../browser/parts/statusbar/statusbarPart.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { mock } from 'node:test';
@@ -9,7 +10,7 @@ import { TestNotificationService } from '../../../services/notification/test/com
 import { CommandService } from '../../../services/commands/common/commandService.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { ProgressService } from '../../../services/progress/browser/progressService.js';
-import { StatusbarService } from '../../../services/statusbar/browser/statusbar.js';
+
 import type { IProgressService } from '../../../../platform/progress/common/progress.js';
 import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';

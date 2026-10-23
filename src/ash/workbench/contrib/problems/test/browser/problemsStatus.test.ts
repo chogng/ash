@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import assert from "node:assert/strict";
@@ -6,7 +7,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { MarkerSeverity } from "../../../../../platform/markers/common/markers.js";
 import { MarkerService } from "../../../../../platform/markers/common/markerService.js";
 import { ProblemsStatusContribution } from "../../../../../workbench/contrib/problems/browser/problemsStatus.js";
-import { StatusbarAlignment, StatusbarService } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
+import { StatusbarAlignment } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
 import type { IViewsService } from "../../../../../workbench/services/views/common/viewsService.js";
 
 test("Problems status projects and updates workspace error and warning counts", async () => {

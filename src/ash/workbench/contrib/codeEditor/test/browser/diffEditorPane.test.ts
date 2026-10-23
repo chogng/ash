@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
@@ -41,7 +42,7 @@ import { EditorPaneSelectionChangeReason, type IResourceEditorInput } from '../.
 import { TextFileContentSource, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { type ITextFileService } from "../../../../services/textfile/common/textfiles.js";
 
-import { StatusbarService, StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
+import { StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());

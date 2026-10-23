@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../browser/parts/statusbar/statusbarPart.js';
 import { IDefaultLogLevelsService } from '../../services/log/common/defaultLogLevels.js';
 import { DEFAULT_LOG_LEVEL, ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { emptyEditorServiceState } from '../common/testEditorService.js';
@@ -33,7 +34,7 @@ import { TextModelResolverService } from '../../services/textmodelResolver/commo
 import { IFileTextModelService, ITextModelResourceService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { IOutputService } from '../../services/output/common/output.js';
 import { OutputService } from '../../contrib/output/browser/outputServices.js';
-import { IStatusbarService, StatusbarService } from '../../services/statusbar/browser/statusbar.js';
+import { IStatusbarService } from '../../services/statusbar/browser/statusbar.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';

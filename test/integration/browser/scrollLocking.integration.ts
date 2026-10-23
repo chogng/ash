@@ -81,7 +81,7 @@ part.layout({ width: 1200, height: 420 });
 const editors = resources.add(new BrowserEditorService(part));
 services.registerInstance(IEditorService, editors);
 const statusbar = services.get(IStatusbarService);
-resources.add(services.createInstance(StatusbarPart, root, statusbar));
+resources.add(services.createInstance(StatusbarPart, root));
 const host = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.syncScrolling']));
 host.advance(WorkbenchPhase.Eventually);
 const text = Array.from({ length: 200 }, (_, index) => `${index}: ${'abcdefghij '.repeat(25)}`).join('\n');

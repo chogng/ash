@@ -1581,7 +1581,8 @@ if (new URLSearchParams(location.search).has('input')) {
 		close: () => terminal.close(),
 	};
 	if (new URLSearchParams(location.search).has('osc99')) {
-		const { IStatusbarService, StatusbarService, StatusbarAlignment } = await import('../../../src/ash/workbench/services/statusbar/browser/statusbar.js');
+		const { IStatusbarService, StatusbarAlignment } = await import('../../../src/ash/workbench/services/statusbar/browser/statusbar.js');
+		const { StatusbarService } = await import('../../../src/ash/workbench/browser/parts/statusbar/statusbarPart.js');
 		const [{ NotificationsToasts }, { NotificationActionRunner }] = await Promise.all([
 			import('../../../src/ash/workbench/browser/parts/notifications/notificationsToasts.js'),
 			import('../../../src/ash/workbench/browser/parts/notifications/notificationsCommands.js'),

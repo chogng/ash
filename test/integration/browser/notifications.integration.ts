@@ -43,8 +43,8 @@ import { NotificationService } from '../../../src/ash/workbench/services/notific
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
-import { StatusbarPart } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarPart.js';
-import { IStatusbarService, StatusbarAlignment, StatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
+import { StatusbarPart, StatusbarService } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarPart.js';
+import { IStatusbarService, StatusbarAlignment } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
 import { MainThreadMessageService } from '../../../src/ash/workbench/api/browser/mainThreadMessageService.js';
 import chatMessages from '../../../extensions/language-pack-zh-cn/translations/chat.json' with { type: 'json' };
 import { AgentsWindowInvitationContribution } from '../../../src/ash/workbench/contrib/chat/electron-browser/agentSessions/agentsWindowInvitation.js';
@@ -108,7 +108,7 @@ services.registerInstance(IStatusbarService, statusbar);
 const progressService = resources.add(services.createInstance(ProgressService));
 resources.add(statusbar.addEntry({ text: 'main' }, { id: 'fixture.branch', alignment: StatusbarAlignment.Left }));
 const createStatusbarPart = (): void => {
-	const part = resources.add(services.createInstance(StatusbarPart, root, statusbar));
+	const part = resources.add(services.createInstance(StatusbarPart, root));
 	part.domNode.style.position = 'absolute';
 	part.domNode.style.bottom = '0';
 };

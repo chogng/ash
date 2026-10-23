@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../workbench/browser/parts/statusbar/statusbarPart.js';
 import { ILanguageServerStatusService } from '../../workbench/services/language/common/languageServerStatusService.js';
 import { IProjectService } from '../../platform/projects/common/projectService.js';
 import { SessionsAgentSessionService } from './agentHost/sessionsAgentSessionService.js';
@@ -35,7 +36,7 @@ import { ILanguageDiagnosticsService } from '../../workbench/services/language/c
 import { LanguageDiagnosticsMarkerBridge } from '../../workbench/services/language/browser/languageDiagnosticsMarkerBridge.js';
 import { WorkbenchLanguageFeatures } from '../../workbench/services/language/browser/workbenchLanguageFeatures.js';
 import { IOutputService } from '../../workbench/services/output/common/output.js';
-import { IStatusbarService, StatusbarService } from '../../workbench/services/statusbar/browser/statusbar.js';
+import { IStatusbarService } from '../../workbench/services/statusbar/browser/statusbar.js';
 import type { IConfigurationModel } from '../../platform/configuration/common/configuration.js';
 import { BaseSecretStorageService, ISecretStorageService, ISecretStorageStatusService } from '../../platform/secrets/common/secrets.js';
 import { ICallService } from '../../platform/call/common/callService.js';

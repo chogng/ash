@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -27,7 +28,7 @@ import '../../browser/accessibleViewActions.js';
 import { AccessibleViewService } from '../../browser/accessibleView.js';
 import { AccessibilityService } from '../../../../../platform/accessibility/browser/accessibilityService.js';
 import { IAccessibilityService, AccessibilitySupport } from '../../../../../platform/accessibility/common/accessibility.js';
-import { IStatusbarService, StatusbarService, StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
+import { IStatusbarService, StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';

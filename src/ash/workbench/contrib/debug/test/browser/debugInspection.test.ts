@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import type { IViewsService } from '../../../../services/views/common/viewsService.js';
@@ -12,7 +13,7 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { ICommandService, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { StatusbarService, IStatusbarService } from '../../../../services/statusbar/browser/statusbar.js';
+import { IStatusbarService } from '../../../../services/statusbar/browser/statusbar.js';
 import { ProgressService } from '../../../../services/progress/browser/progressService.js';
 import { ChatContextPickService } from '../../../../services/chat/browser/chatContextPickService.js';
 import { TestExtensionService } from '../../../../test/common/testExtensionServices.js';

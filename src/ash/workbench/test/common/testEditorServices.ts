@@ -1,8 +1,9 @@
+import { StatusbarService } from '../../browser/parts/statusbar/statusbarPart.js';
 import { IWebWorkerService } from '../../../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../../../platform/webWorker/browser/webWorkerServiceImpl.js';
 import { IActivityService } from '../../services/activity/common/activity.js';
 import { ActivityService } from '../../services/activity/browser/activityService.js';
-import { IStatusbarService, StatusbarService } from '../../services/statusbar/browser/statusbar.js';
+import { IStatusbarService } from '../../services/statusbar/browser/statusbar.js';
 import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IMessageHistoryService } from '../../../platform/messageHistory/common/messageHistory.js';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';

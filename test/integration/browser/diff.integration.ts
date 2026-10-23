@@ -364,8 +364,9 @@ import '../../../src/ash/editor/contrib/indentation/browser/indentation.js';
 import '../../../src/ash/editor/contrib/quickAccess/browser/quickAccessController.js';
 import '../../../src/ash/workbench/contrib/codeEditor/browser/quickaccess/gotoLineQuickAccess.js';
 import { EditorStatusContribution, ChangeLanguageAction, ChangeEOLAction, ChangeEncodingAction } from '../../../src/ash/workbench/browser/parts/editor/editorStatus.js';
-import { StatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
-import { StatusbarPart } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarPart.js';
+
+import { StatusbarPart, StatusbarService } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarPart.js';
+import { IStatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
 import { ILanguageService } from '../../../src/ash/editor/common/languages/language.js';
 resources.add(registerAction2(ChangeLanguageAction));
 resources.add(registerAction2(ChangeEOLAction));
@@ -563,7 +564,8 @@ const harness = {
 		} satisfies IEditorPartOptions));
 		titleEditor.layout({ width: 1000, height: 300 });
 		const statusbar = resources.add(new StatusbarService());
-		resources.add(services.createInstance(StatusbarPart, host, statusbar));
+		services.registerInstance(IStatusbarService, statusbar);
+		resources.add(services.createInstance(StatusbarPart, host));
 		resources.add(services.createInstance(EditorStatusContribution, titleEditor, statusbar));
 		if (kind === 'git') {
 			titleGitStatus = makeTitleGitStatus(['src/first.ts', 'src/second.ts'], 1);

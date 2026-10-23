@@ -177,10 +177,7 @@ import { IUserThemeService, type IUserThemeService as IUserThemeServiceContract,
 import {
 	ViewContainerLocation,
 } from "../common/views.js";
-import {
-	IStatusbarService,
-	StatusbarService,
-} from "../services/statusbar/browser/statusbar.js";
+import { IStatusbarService } from "../services/statusbar/browser/statusbar.js";
 import type { IWebWorkspaceClient } from '../services/workspaces/browser/appServerWebWorkspaceClient.js';
 import { IHostService } from '../services/host/browser/host.js';
 import { BrowserHostService } from '../services/host/browser/browserHostService.js';
@@ -219,7 +216,7 @@ import { PanelPart } from "./parts/panel/panelPart.js";
 import { SidebarPart } from "./parts/sidebar/sidebarPart.js";
 import { ActivitybarPart } from "./parts/activitybar/activitybarPart.js";
 import { GlobalCompositeBar } from './parts/globalCompositeBar.js';
-import { StatusbarPart } from "./parts/statusbar/statusbarPart.js";
+import { StatusbarPart, StatusbarService } from "./parts/statusbar/statusbarPart.js";
 import { BannerPart } from './parts/banner/bannerPart.js';
 import { IBannerService } from '../services/banner/browser/bannerService.js';
 import {
@@ -1211,7 +1208,7 @@ export class Workbench extends Disposable {
 		const panel = this._register(services.createInstance(PanelPart, workbenchRoot));
 		this.editor = editorParts;
 		const auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, workbenchRoot));
-		const statusbar = this._register(services.createInstance(StatusbarPart, workbenchRoot, statusbarService));
+		const statusbar = this._register(services.createInstance(StatusbarPart, workbenchRoot));
 		const banner = this._register(services.createInstance(BannerPart, workbenchRoot, (visible: boolean) => {
 			if (visible) layoutService.showPart('banner');
 			else layoutService.hidePart('banner');

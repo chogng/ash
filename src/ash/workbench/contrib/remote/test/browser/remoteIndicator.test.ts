@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import { readFileSync } from 'node:fs';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -12,7 +13,7 @@ import { RemoteStatusIndicator } from "../../browser/remoteIndicator.js";
 import { ConnectToRemoteCommandId } from "../../browser/remoteActions.js";
 import { ReconnectRemoteCommandId } from "../../browser/remoteActions.js";
 import type { IAppServerRemoteAgentService } from "../../../../services/remote/common/appServerRemoteAgentService.js";
-import { StatusbarAlignment, StatusbarService } from "../../../../services/statusbar/browser/statusbar.js";
+import { StatusbarAlignment } from "../../../../services/statusbar/browser/statusbar.js";
 
 test("remote indicator owns the leading clickable left status entry", async () => {
 	using remoteAgentService = new TestRemoteAgentService("connected");

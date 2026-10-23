@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import assert from "node:assert/strict";
 import { mock } from "node:test";
 import { test } from "mocha";
@@ -9,7 +10,7 @@ import { INotificationService, NotificationPriority, NotificationsFilter } from 
 import { ProgressLocation, type IProgress, type IProgressStep } from "../../../../../platform/progress/common/progress.js";
 import { CommandService } from "../../../commands/common/commandService.js";
 import { TestNotificationService } from '../../../notification/test/common/testNotificationService.js';
-import { IStatusbarService, StatusbarAlignment, StatusbarService } from "../../../statusbar/browser/statusbar.js";
+import { IStatusbarService, StatusbarAlignment } from "../../../statusbar/browser/statusbar.js";
 import { ProgressService } from "../../browser/progressService.js";
 import { IViewsService } from '../../../views/common/viewsService.js';
 import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewContainerId, type IViewContainerDescriptor } from '../../../../common/views.js';

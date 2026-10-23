@@ -1,6 +1,6 @@
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
-import { StatusbarService, IStatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
-import { StatusbarPart } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarPart.js';
+import { IStatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
+import { StatusbarPart, StatusbarService } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarPart.js';
 import { StatusBarColorProvider } from '../../../src/ash/workbench/contrib/debug/browser/statusbarColorProvider.js';
 import { ChatContextPickService } from '../../../src/ash/workbench/services/chat/browser/chatContextPickService.js';
 import { DebugChatContextContribution } from '../../../src/ash/workbench/contrib/debug/browser/debugChatIntegration.js';
@@ -193,7 +193,7 @@ if (new URLSearchParams(location.search).has('status-color')) {
 	const root = document.createElement('div');
 	root.id = 'debug-statusbar';
 	document.body.append(root);
-	store.add(services.createInstance(StatusbarPart, root, statusbar));
+	store.add(services.createInstance(StatusbarPart, root));
 	store.add(services.createInstance(StatusBarColorProvider));
 }
 const chatContexts = new ChatContextPickService();

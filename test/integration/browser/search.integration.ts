@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarPart.js';
 import { ActivityService } from '../../../src/ash/workbench/services/activity/browser/activityService.js';
 import { IActivityService } from '../../../src/ash/workbench/services/activity/common/activity.js';
 import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
@@ -89,7 +90,7 @@ import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { ProgressService } from '../../../src/ash/workbench/services/progress/browser/progressService.js';
 import { TreeView, TreeViewPane } from '../../../src/ash/workbench/browser/parts/views/treeView.js';
 import { TreeItemCollapsibleState } from '../../../src/ash/workbench/common/views.js';
-import { IStatusbarService, StatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
+import { IStatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
 
 if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);

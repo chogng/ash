@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../browser/parts/statusbar/statusbarPart.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../base/common/async.js';
@@ -7,7 +8,7 @@ import { type ICommandService } from '../../../../platform/commands/common/comma
 import { normalizeExtensionHostPayload, normalizeExtensionHostSnapshot, normalizeExtensionStatusBarUpdate } from '../../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { type ExtensionStatusBarEntry } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { MainThreadStatusBar } from '../../browser/mainThreadStatusBar.js';
-import { StatusbarAlignment, StatusbarService } from '../../../services/statusbar/browser/statusbar.js';
+import { StatusbarAlignment } from '../../../services/statusbar/browser/statusbar.js';
 
 const source = { extensionId: 'acme.status', activationGeneration: 1, incarnation: 1 };
 const entry = (value: number): ExtensionStatusBarEntry => ({ id: 'item', text: `Status ${value}`, tooltip: 'Run status', ariaLabel: 'Run extension status', alignment: 'right', priority: 1.5, command: { command: 'acme.run', arguments: [{ value }] } });

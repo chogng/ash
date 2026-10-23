@@ -40,6 +40,7 @@ export default defineConfig({
 				sessions: resolve(import.meta.dirname, 'sessions.html'),
 				scmHistory: resolve(import.meta.dirname, 'scmHistory.html'),
 				notifications: resolve(import.meta.dirname, 'notifications.html'),
+				statusbar: resolve(import.meta.dirname, 'statusbar.html'),
 				quickAccess: resolve(import.meta.dirname, 'quickAccess.html'),
 				chatEditing: resolve(import.meta.dirname, 'chatEditing.html'),
 				appTools: resolve(import.meta.dirname, "appTools.html"),

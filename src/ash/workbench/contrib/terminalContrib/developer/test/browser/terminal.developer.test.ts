@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../../../browser/parts/statusbar/statusbarPart.js';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import { test } from 'mocha';
@@ -9,7 +10,7 @@ import { ICommandService } from '../../../../../../platform/commands/common/comm
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../../services/commands/common/commandService.js';
-import { IStatusbarService, StatusbarService, StatusbarAlignment } from '../../../../../services/statusbar/browser/statusbar.js';
+import { IStatusbarService, StatusbarAlignment } from '../../../../../services/statusbar/browser/statusbar.js';
 import { ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalInstance, type IXtermTerminal } from '../../../../terminal/browser/terminal.js';
 import type { IProcessDataEvent } from '../../../../../../platform/terminal/common/terminal.js';
 import { TerminalDeveloperCommandId } from '../../common/terminal.developer.js';

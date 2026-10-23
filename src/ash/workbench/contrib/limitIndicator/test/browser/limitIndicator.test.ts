@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { after, test } from 'mocha';
@@ -15,7 +16,7 @@ import '../../../../../editor/contrib/colorPicker/browser/colorPickerContributio
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import { IStatusbarService, StatusbarService, StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
+import { IStatusbarService, StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
 import { LimitIndicatorContribution } from '../../browser/limitIndicator.contribution.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import '../../../../../editor/common/config/editorConfigurationSchema.js';

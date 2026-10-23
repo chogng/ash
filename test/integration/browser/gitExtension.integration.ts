@@ -1,3 +1,4 @@
+import { StatusbarService } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarPart.js';
 import { TimelineService } from '../../../src/ash/workbench/contrib/timeline/common/timelineService.js';
 import { NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import type { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
@@ -52,7 +53,7 @@ import { SCMService } from '../../../src/ash/workbench/contrib/scm/common/scmSer
 import { SCMViewService } from '../../../src/ash/workbench/contrib/scm/browser/scmViewService.js';
 import { ISCMService, ISCMViewService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
 import { ScmStatusContribution } from '../../../src/ash/workbench/contrib/scm/browser/activity.js';
-import { IStatusbarService, StatusbarService, StatusbarAlignment } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
+import { IStatusbarService, StatusbarAlignment } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
 import { StatusbarEntryItem } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarItem.js';
 import { ScmViewPane } from '../../../src/ash/workbench/contrib/scm/browser/scmViewPane.js';
 import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
