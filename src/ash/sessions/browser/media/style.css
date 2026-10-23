@@ -70,6 +70,18 @@
 	content: none;
 }
 
+.ash-sessions-window .ash-context-view-menu {
+	border-radius: var(--ash-cornerRadius-xLarge);
+}
+
+.ash-sessions-window .ash-menu {
+	--ash-list-rowHeight: var(--ash-spacing-size280);
+}
+
+.ash-sessions-window .ash-menu .ash-button {
+	border-radius: var(--ash-cornerRadius-large);
+}
+
 /* Scope the palette to buttons so other uses of the accent keep their own colors.
  * Explicit widget styles and page-owned presentations can still override it. */
 .ash-sessions-window .ash-button {

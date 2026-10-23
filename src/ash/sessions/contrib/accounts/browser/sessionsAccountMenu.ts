@@ -1,71 +1,37 @@
-import { Separator, type IAction } from '../../../../base/common/actions.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import type { IAction } from '../../../../base/common/actions.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import type { Account, AccountState, IAccountService } from '../../../../platform/accounts/common/accountService.js';
-import type { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { OpenKeyboardShortcutsCommandId } from '../../../../workbench/contrib/preferences/common/preferences.js';
 import type { SessionsPreferences } from '../../preferences/browser/sessionsPreferences.js';
 
 /** Sessions account actions shown beside the Activity Bar account button. */
-export class SessionsAccountMenu extends Disposable {
-	private accountsSnapshot: readonly Account[] = [];
-	private revision = -1n;
-	private loadFailed = false;
-
+export class SessionsAccountMenu {
 	constructor(
-		private readonly accounts: IAccountService,
-		private readonly contextMenus: IContextMenuService,
 		private readonly preferences: SessionsPreferences,
 		private readonly returnToWorkbench: () => void,
-	) {
-		super();
-		this._register(this.accounts.onDidChangeAccounts(state => this.updateAccounts(state)));
-		void this.accounts.read().then(state => this.updateAccounts(state), () => { this.loadFailed = true; });
-	}
+		@IContextMenuService private readonly contextMenus: IContextMenuService,
+		@ICommandService private readonly commands: ICommandService,
+	) { }
 
 	public show(anchor: HTMLElement): void {
-		const accountActions: IAction[] = this.accountsSnapshot.map(account => {
-			const name = account.displayName ?? account.email ?? account.provider;
-			const label = account.plan
-				? localize('sessions.account.nameAndPlan', '{0} · {1}', name, account.plan)
-				: name;
-			return { id: `ash.sessions.account.${account.provider}.${account.accountId}`, label, tooltip: label, enabled: false, run() { } };
-		});
 		const settingsLabel = localize('workbench.manageSettings', 'Settings');
-		if (this.loadFailed) {
-			const label = localize('sessions.account.unavailable', 'Accounts unavailable');
-			accountActions.push({ id: 'ash.sessions.accountsUnavailable', label, tooltip: label, enabled: false, run() { } });
-		}
-		const returnLabel = localize('sessions.menu.workbench', 'Return to Workbench');
-		const actions = Separator.join(accountActions, [
-			{ id: 'ash.sessions.settings', label: settingsLabel, tooltip: settingsLabel, enabled: true, run: () => this.preferences.open() },
-			...this.accountsSnapshot.map(account => {
-				const name = account.displayName ?? account.email ?? account.provider;
-				const label = account.provider === 'github'
-					? localize('workbench.signOutGitHub', 'Sign out of GitHub ({0})', name)
-					: localize('workbench.signOutAccount', 'Sign out of {0}', name);
-				return {
-					id: `ash.sessions.signOut.${account.provider}.${account.accountId}`,
-					label,
-					tooltip: label,
-					enabled: true,
-					run: () => this.accounts.logout(account.provider, account.accountId),
-				};
-			}),
-		], [
-			{ id: 'ash.sessions.returnToWorkbench', label: returnLabel, tooltip: returnLabel, enabled: true, run: this.returnToWorkbench },
-		]);
+		const accountLabel = localize('sessions.settings.account', 'Account');
+		const ideLabel = localize('sessions.menu.openIde', 'Open IDE');
+		const shortcutsLabel = localize('sessions.settings.shortcuts', 'Keyboard Shortcuts');
+		const actions: IAction[] = [
+			{ id: 'ash.sessions.settings', label: settingsLabel, tooltip: settingsLabel, icon: Lxicon.gear, enabled: true, run: () => this.preferences.open() },
+			{ id: 'workbench.action.manageAccounts', label: accountLabel, tooltip: accountLabel, icon: Lxicon.account, enabled: true, run: () => this.commands.executeCommand('workbench.action.manageAccounts') },
+			{ id: 'ash.sessions.returnToWorkbench', label: ideLabel, tooltip: ideLabel, icon: Lxicon.code, enabled: true, run: this.returnToWorkbench },
+			{ id: OpenKeyboardShortcutsCommandId, label: shortcutsLabel, tooltip: shortcutsLabel, icon: Lxicon.command, enabled: true, run: () => this.commands.executeCommand(OpenKeyboardShortcutsCommandId) },
+		];
 		anchor.setAttribute('aria-expanded', 'true');
 		this.contextMenus.showContextMenu({
 			getAnchor: () => anchor,
 			getActions: () => actions,
+			getMenuClassName: () => 'ash-sessions-account-menu',
 			onHide: () => anchor.setAttribute('aria-expanded', 'false'),
 		});
-	}
-
-	private updateAccounts(state: AccountState): void {
-		if (state.revision < this.revision) return;
-		this.revision = state.revision;
-		this.accountsSnapshot = state.accounts;
-		this.loadFailed = false;
 	}
 }

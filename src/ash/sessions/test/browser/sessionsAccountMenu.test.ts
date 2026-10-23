@@ -3,93 +3,57 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { IAction } from '../../../base/common/actions.js';
 import { Event } from '../../../base/common/event.js';
-import type { IAccountService } from '../../../platform/accounts/common/accountService.js';
-import type { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
+import { DisposableStore } from '../../../base/common/lifecycle.js';
+import { resetNlsResolver, setNlsMessages } from '../../../nls.js';
+import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
+import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
+import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
+import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { SessionsAccountMenu } from '../../contrib/accounts/browser/sessionsAccountMenu.js';
 import type { SessionsPreferences } from '../../contrib/preferences/browser/sessionsPreferences.js';
 
-test('Sessions account menu opens its own settings and account actions', async () => {
+for (const locale of ['en', 'zh-CN']) test(`Sessions account menu opens settings, account management, IDE and shortcuts (${locale})`, async () => {
+	setNlsMessages(locale, productLanguagePackCatalogs.find(catalog => catalog.locale === locale)!.bundles);
 	const browser = new JSDOM('<!doctype html><button></button>');
-	const anchor = browser.window.document.querySelector('button')!;
-	const loggedOut: string[] = [];
-	let settingsOpened = 0;
-	let returnedToWorkbench = 0;
-	let actions: readonly IAction[] = [];
-	let hide: (() => void) | undefined;
-	const accounts: IAccountService = {
-		onDidChangeAccounts: Event.None,
-		onDidCompleteLogin: Event.None,
-		read: async () => ({ revision: 1n, accounts: [{ provider: 'chatgpt-subscription', accountId: 'one', displayName: 'Ash User', plan: 'Pro', status: 'ready', credentialRevision: 1n }] }),
-		startLogin: async () => ({ type: 'connected', loginId: 'one' }),
-		cancelLogin: async () => { },
-		logout: async provider => { loggedOut.push(provider); },
-	};
-	const contextMenus: IContextMenuService = {
-		contextMenuStyle: 'custom' as const,
-		onDidShowContextMenu: Event.None,
-		onDidHideContextMenu: Event.None,
-		showContextMenu(delegate) {
-			actions = delegate.getActions?.() ?? [];
-			hide = () => delegate.onHide?.(false);
-		},
-		hideContextMenu() { },
-	};
-	const preferences = { open: async () => { settingsOpened++; } } as SessionsPreferences;
-	using menu = new SessionsAccountMenu(accounts, contextMenus, preferences, () => { returnedToWorkbench++; });
-	await Promise.resolve();
-	menu.show(anchor);
-	assert.deepEqual(actions.map(action => [action.label, action.enabled]), [
-		['Ash User · Pro', false],
-		['', false],
-		['Settings', true],
-		['Sign out of Ash User', true],
-		['', false],
-		['Return to Workbench', true],
-	]);
-	assert.equal(anchor.getAttribute('aria-expanded'), 'true');
-	await actions[2]?.run();
-	await actions[3]?.run();
-	await actions[5]?.run();
-	assert.deepEqual({ settingsOpened, loggedOut, returnedToWorkbench }, { settingsOpened: 1, loggedOut: ['chatgpt-subscription'], returnedToWorkbench: 1 });
-	hide?.();
-	assert.equal(anchor.getAttribute('aria-expanded'), 'false');
-	browser.window.close();
-});
-
-test('Sessions settings remain available when accounts cannot be loaded', async () => {
-	const browser = new JSDOM('<!doctype html><button></button>');
-	const anchor = browser.window.document.querySelector('button')!;
-	let actions: readonly IAction[] = [];
-	let settingsOpened = 0;
-	let returnedToWorkbench = 0;
-	const accounts: IAccountService = {
-		onDidChangeAccounts: Event.None,
-		onDidCompleteLogin: Event.None,
-		read: async () => { throw new Error('Account service unavailable'); },
-		startLogin: async () => ({ type: 'connected', loginId: 'one' }),
-		cancelLogin: async () => { },
-		logout: async () => { },
-	};
-	const contextMenus: IContextMenuService = {
-		contextMenuStyle: 'custom' as const,
-		onDidShowContextMenu: Event.None,
-		onDidHideContextMenu: Event.None,
-		showContextMenu(delegate) { actions = delegate.getActions?.() ?? []; },
-		hideContextMenu() { },
-	};
-	const preferences = { open: async () => { settingsOpened++; } } as SessionsPreferences;
-	using menu = new SessionsAccountMenu(accounts, contextMenus, preferences, () => { returnedToWorkbench++; });
-	await Promise.resolve();
-	menu.show(anchor);
-	assert.deepEqual(actions.map(action => [action.label, action.enabled]), [
-		['Accounts unavailable', false],
-		['', false],
-		['Settings', true],
-		['', false],
-		['Return to Workbench', true],
-	]);
-	await actions[2]?.run();
-	await actions[4]?.run();
-	assert.deepEqual({ settingsOpened, returnedToWorkbench }, { settingsOpened: 1, returnedToWorkbench: 1 });
-	browser.window.close();
+	try {
+		using resources = new DisposableStore();
+		const services = resources.add(new InstantiationService());
+		const commands = resources.add(services.createInstance(CommandService));
+		services.registerInstance(ICommandService, commands);
+		const invoked: string[] = [];
+		for (const id of ['workbench.action.manageAccounts', 'workbench.action.openKeyboardShortcuts']) {
+			resources.add(CommandsRegistry.register(id, () => { invoked.push(id); }));
+		}
+		const anchor = browser.window.document.querySelector('button')!;
+		let actions: readonly IAction[] = [];
+		let hide: (() => void) | undefined;
+		services.registerInstance(IContextMenuService, {
+			contextMenuStyle: 'custom',
+			onDidShowContextMenu: Event.None,
+			onDidHideContextMenu: Event.None,
+			showContextMenu(delegate) {
+				assert.equal(delegate.getAnchor(), anchor);
+				assert.equal(delegate.getMenuClassName?.(), 'ash-sessions-account-menu');
+				actions = delegate.getActions?.() ?? [];
+				hide = () => delegate.onHide?.(false);
+			},
+			hideContextMenu() { },
+		});
+		const preferences = { open: async () => { invoked.push('settings'); } } as SessionsPreferences;
+		const menu = services.createInstance(SessionsAccountMenu, preferences, () => { invoked.push('ide'); });
+		menu.show(anchor);
+		assert.deepEqual(actions.map(action => action.label), locale === 'zh-CN'
+			? ['设置', '账号', '打开 IDE', '快捷键']
+			: ['Settings', 'Account', 'Open IDE', 'Keyboard Shortcuts']);
+		assert.ok(actions.every(action => action.enabled));
+		assert.equal(anchor.getAttribute('aria-expanded'), 'true');
+		for (const action of actions) { await action.run(); }
+		assert.deepEqual(invoked, ['settings', 'workbench.action.manageAccounts', 'ide', 'workbench.action.openKeyboardShortcuts']);
+		hide?.();
+		assert.equal(anchor.getAttribute('aria-expanded'), 'false');
+	} finally {
+		browser.window.close();
+		resetNlsResolver();
+	}
 });

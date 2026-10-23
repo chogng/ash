@@ -22,6 +22,7 @@ import '../workbench/contrib/commands/common/commands.contribution.js';
 import '../workbench/contrib/extensions/browser/extensions.contribution.js';
 import '../workbench/contrib/chat/browser/aiCustomization/customizationMarketplace.contribution.js';
 import '../workbench/contrib/preferences/browser/preferences.contribution.js';
+import '../workbench/contrib/authentication/browser/authentication.contribution.js';
 import '../workbench/contrib/language/browser/languageServers.contribution.js';
 import '../workbench/contrib/format/browser/format.contribution.js';
 import '../workbench/contrib/inlayHints/browser/inlayHintsAccessibilty.js';
