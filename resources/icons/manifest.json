@@ -1352,6 +1352,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "verified",
+      "file": "verified.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "verified-filled",
+      "file": "verified-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "voice-mode",
       "file": "voice-mode.svg",
       "rendering": "symbolic"
