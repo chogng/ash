@@ -17,7 +17,6 @@
 	--ash-chat-input-shadow: var(--ash-sessions-inputShadow);
 	--ash-chat-input-radius: var(--ash-cornerRadius-xLarge);
 	--ash-chat-input-toolbar-gap: var(--ash-spacing-size80);
-	--ash-toolbar-actionSize: 28px;
 	width: 100%;
 	max-width: 728px;
 	align-self: center;

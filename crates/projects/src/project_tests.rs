@@ -149,6 +149,52 @@ fn coordinator() -> ProjectCoordinator {
     ProjectCoordinator::new(Arc::new(MemoryStore::default()))
 }
 
+#[test]
+fn deletion_is_retry_safe_hides_the_catalog_and_prevents_restoration() {
+    let coordinator = coordinator();
+    let created = coordinator
+        .apply(request(
+            "delete-create",
+            0,
+            ProjectCommand::Create {
+                name: "Delete me".into(),
+                description: String::new(),
+                materials: Vec::new(),
+            },
+        ))
+        .unwrap()
+        .project;
+    coordinator
+        .apply(request(
+            "delete-link",
+            1,
+            ProjectCommand::LinkSession {
+                session_id: SessionId::new("retained-session").unwrap(),
+            },
+        ))
+        .unwrap();
+    coordinator
+        .apply(request("delete-archive", 2, ProjectCommand::Archive))
+        .unwrap();
+    let deletion = request("delete-project", 3, ProjectCommand::Delete);
+    let deleted = coordinator.apply(deletion.clone()).unwrap();
+    assert_eq!(deleted.project.status, super::ProjectStatus::Deleted);
+    assert!(deleted.project.session_ids.is_empty());
+    assert!(coordinator.list().unwrap().is_empty());
+    assert!(matches!(
+        coordinator.read(&created.project_id),
+        Err(ProjectError::NotFound(_))
+    ));
+    assert_eq!(
+        coordinator.apply(deletion).unwrap().disposition,
+        ProjectCommandDisposition::Replayed
+    );
+    assert!(matches!(
+        coordinator.apply(request("delete-restore", 4, ProjectCommand::Restore)),
+        Err(ProjectError::NotFound(_))
+    ));
+}
+
 fn request(
     command_id: &str,
     expected_revision: u64,

@@ -18,6 +18,75 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 #[test]
+fn project_delete_rpc_is_revision_checked_retry_safe_and_notifies_other_hosts() {
+    let fixture = Fixture::new();
+    let mut host = fixture.server.product_host_connection();
+    initialize(&fixture.server, &mut host);
+    let notifications = fixture.server.connection_notifications(&host);
+    let created = call(
+        &fixture.server,
+        &mut host,
+        2,
+        "project/create",
+        serde_json::json!({
+            "commandId": "create-delete-test", "projectId": "delete-test", "name": "Delete test", "description": "",
+        }),
+    );
+    assert_eq!(created["result"]["project"]["revision"], 1);
+    let stale = call(
+        &fixture.server,
+        &mut host,
+        3,
+        "project/delete",
+        serde_json::json!({
+            "commandId": "stale-delete", "projectId": "delete-test", "expectedRevision": 0,
+        }),
+    );
+    assert_eq!(stale["error"]["message"], "ProjectRevisionConflict");
+    let params = serde_json::json!({ "commandId": "delete-test", "projectId": "delete-test", "expectedRevision": 1 });
+    let deleted = call(
+        &fixture.server,
+        &mut host,
+        4,
+        "project/delete",
+        params.clone(),
+    );
+    assert_eq!(deleted["result"]["project"]["status"], "deleted");
+    assert_eq!(notifications.drain().len(), 2);
+    let replayed = call(&fixture.server, &mut host, 5, "project/delete", params);
+    assert_eq!(replayed["result"]["disposition"], "replayed");
+    assert!(notifications.drain().is_empty());
+    let list = call(
+        &fixture.server,
+        &mut host,
+        6,
+        "project/list",
+        serde_json::json!({}),
+    );
+    assert_eq!(list["result"]["projects"], serde_json::json!([]));
+    let read = call(
+        &fixture.server,
+        &mut host,
+        7,
+        "project/read",
+        serde_json::json!({"projectId": "delete-test"}),
+    );
+    assert_eq!(read["error"]["message"], "ProjectNotFound");
+    let mut renderer = fixture.server.connection();
+    initialize(&fixture.server, &mut renderer);
+    let denied = call(
+        &fixture.server,
+        &mut renderer,
+        8,
+        "project/delete",
+        serde_json::json!({
+            "commandId": "forged-delete", "projectId": "delete-test", "expectedRevision": 2,
+        }),
+    );
+    assert_eq!(denied["error"]["message"], "PermissionRequired");
+}
+
+#[test]
 fn project_rpc_keeps_catalog_associations_separate_from_directory_authority() {
     let fixture = Fixture::new();
     let root_thread = fixture.start_root("project-root-thread");

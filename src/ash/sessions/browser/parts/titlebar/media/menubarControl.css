@@ -4,7 +4,6 @@
 
 .ash-sessions-titlebar-actions {
 	--ash-actionBar-gap: var(--ash-spacing-size80);
-	--ash-toolbar-actionSize: var(--ash-spacing-size280);
 	--ash-menubar-hover-background: var(--ash-toolbar-hoverBackground);
 	color: var(--ash-titleBar-foreground);
 }

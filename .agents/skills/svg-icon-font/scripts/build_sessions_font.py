@@ -120,21 +120,18 @@ def merge_sessions(variable_path, static_path, codepoints):
     """Keep true variation for four glyphs and add fixed-width Sessions glyphs."""
     with TTFont(variable_path) as variable, TTFont(static_path) as static:
         names = set(static.getBestCmap().values())
-        color_names = {record.BaseGlyph for record in static["COLR"].table.BaseGlyphList.BaseGlyphPaintRecord} if "COLR" in static else set()
-        aliases = {name: name.removesuffix("-filled") for name in names
-                   if name.endswith("-filled") and name.removesuffix("-filled") in names and name not in color_names}
         order = list(variable.getGlyphOrder())
         varying = {name for name, variations in variable["gvar"].variations.items() if variations}
         for name in static.getGlyphOrder():
-            if name not in order and name not in aliases:
+            if name not in order:
                 variable["glyf"][name] = static["glyf"][name]
                 variable["hmtx"].metrics[name] = static["hmtx"].metrics[name]
                 variable["gvar"].variations[name] = []
                 order.append(name)
         variable.setGlyphOrder(order)
         variable["glyf"].setGlyphOrder(order)
-        cmap = {codepoint: aliases.get(name, name) for codepoint, name in static.getBestCmap().items()}
-        expected = {int(codepoints[name], 16): aliases.get(name, name) for name in names}
+        cmap = dict(static.getBestCmap())
+        expected = {int(codepoints[name], 16): name for name in names}
         for table in variable["cmap"].tables:
             if table.isUnicode():
                 table.cmap = dict(cmap)
@@ -152,4 +149,4 @@ def merge_sessions(variable_path, static_path, codepoints):
         if {name for name, variations in font["gvar"].variations.items() if variations} != varying:
             raise ValueError("Sessions font changed the variable glyph set")
         return {"codepoints": len(expected), "glyphs": len(font.getGlyphOrder()) - 1,
-                "variableGlyphs": len(varying), "outlineAliases": len(aliases)}
+                "variableGlyphs": len(varying)}

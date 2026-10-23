@@ -41,6 +41,7 @@ pub enum ProjectCommand {
     },
     Archive,
     Restore,
+    Delete,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -14,6 +14,17 @@
 	color: inherit;
 }
 
+.ash-toolbar
+	> .ash-action-view-item
+	> .ash-button-quiet:where(:not(:disabled):hover),
+.ash-toolbar
+	> .ash-action-view-item
+	> .ash-button-quiet:where([aria-expanded="true"]) {
+	background: var(--ash-toolbar-hoverBackground);
+	box-shadow: inset 0 0 0 var(--ash-strokeThickness)
+		var(--ash-contrastBorder, transparent);
+}
+
 .ash-toolbar .ash-action-view-item > .ash-button {
 	height: var(--ash-toolbar-actionSize);
 	min-height: var(--ash-toolbar-actionSize);

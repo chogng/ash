@@ -57,6 +57,20 @@
 	-webkit-app-region: no-drag;
 }
 
+.ash-sessions-titlebar-page-content {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	align-items: center;
+	align-self: stretch;
+	box-sizing: border-box;
+}
+
+.ash-sessions-titlebar-page-content:not(:empty) {
+	padding: 0 var(--ash-spacing-size120);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
 .ash-workbench[data-runtime="electron"] .ash-sessions-titlebar {
 	-webkit-app-region: drag;
 }

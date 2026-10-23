@@ -325,7 +325,7 @@ import { PaneCompositePartService } from '../../workbench/browser/parts/paneComp
 import { IPaneCompositePartService } from '../../workbench/services/panecomposite/browser/panecomposite.js';
 import { SessionsPart, type SessionsPartOptions } from "./parts/sessionsPart.js";
 import { SidebarPart, registerSessionsNavigation } from "./parts/sidebar/sidebarPart.js";
-import type { TitlebarPart } from "./parts/titlebar/titlebarPart.js";
+import { ISessionsTitlebarService, type TitlebarPart } from "./parts/titlebar/titlebarPart.js";
 
 export interface IWorkbenchOptions {
 	/** Host-owned services are borrowed before this window creates its consumers. */
@@ -734,6 +734,7 @@ export abstract class Workbench extends Disposable {
 
 		let auxiliarybar: AuxiliaryBarPart | undefined;
 		const titlebar = this._register(options.createTitlebarPart(this.domNode, services));
+		services.registerInstance(ISessionsTitlebarService, titlebar);
 		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
 		services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));

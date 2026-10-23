@@ -4125,6 +4125,11 @@ client_methods! {
         response: ProjectMutationResult,
         serialization: GlobalExclusive,
     },
+    ProjectDelete => "project/delete" {
+        params: ProjectLifecycleParams,
+        response: ProjectMutationResult,
+        serialization: GlobalExclusive,
+    },
     TeamList => "team/list" {
         params: TeamListParams,
         response: TeamListResult,

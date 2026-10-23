@@ -279,6 +279,14 @@ impl<'a> ProjectRequestProcessor<'a> {
         self.apply_project_lifecycle(connection, params, ProjectCommand::Restore)
     }
 
+    pub(super) fn project_delete(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        self.apply_project_lifecycle(connection, params, ProjectCommand::Delete)
+    }
+
     fn apply_project_lifecycle(
         &self,
         connection: &ConnectionState,

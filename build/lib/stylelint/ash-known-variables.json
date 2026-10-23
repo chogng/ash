@@ -380,6 +380,7 @@
 		"--ash-menubar-hover-background",
 		"--ash-model-picker-position",
 		"--ash-notifications-top",
+		"--ash-projects-card-background",
 		"--ash-sash-inset-gap",
 		"--ash-scrollbar-slider-size",
 		"--ash-segmented-control-count",
