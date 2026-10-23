@@ -246,6 +246,7 @@ export const lxiconsLibrary = {
 	settings: registerLxicon("settings", 0xe0e6),
 	skill: registerLxicon("skill", 0xe0e7),
 	snapshot: registerLxicon("snapshot", 0xe0e8),
+	sort: registerLxicon("sort", 0xe131),
 	sortPrecedence: registerLxicon("sort-precedence", 0xe0e9),
 	sourceControl: registerLxicon("source-control", 0xe0ea),
 	sparkle: registerLxicon("sparkle", 0xe0ec),

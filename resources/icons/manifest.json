@@ -1212,6 +1212,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "sort",
+      "file": "sort.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "sort-precedence",
       "file": "sort-precedence.svg",
       "rendering": "symbolic"
