@@ -19,7 +19,8 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
@@ -42,6 +43,45 @@ import { SessionsLayoutService, documentEntry } from '../../browser/sessionsLayo
 import type { ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 
 suite('SessionsLayoutService lifecycle and focus', () => {
+	for (const command of ['sessions.show.library', 'sessions.show.removedFeature']) {
+		test(`discards the unavailable saved entry ${command} and restores Chat`, async () => {
+			using fixture = new EntryFixture();
+			fixture.storage.store('sessions.layout.activeEntry', command, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			const calls: (readonly unknown[])[] = [];
+			using chat = CommandsRegistry.register('sessions.open.chat', async (_accessor, ...args) => {
+				calls.push(args);
+				assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), undefined);
+				await fixture.service.openEntry(chatEntry);
+			});
+			await fixture.service.restore();
+			assert.deepEqual(calls, [['restore']]);
+			assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), 'sessions.open.chat');
+			assert.equal(fixture.contextKeys.getValue('sessions.activity.chatSelected'), true);
+			assert.deepEqual(fixture.errors, []);
+		});
+	}
+
+	test('restores an available saved entry without replacing it with Chat', async () => {
+		using fixture = new EntryFixture();
+		const command = 'test.sessions.restoreEntry';
+		fixture.storage.store('sessions.layout.activeEntry', command, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const calls: (readonly unknown[])[] = [];
+		using entry = CommandsRegistry.register(command, (_accessor, ...args) => { calls.push(args); });
+		await fixture.service.restore();
+		assert.deepEqual(calls, [['restore']]);
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
+	});
+
+	test('does not hide a failure from an available restore command', async () => {
+		using fixture = new EntryFixture();
+		const command = 'test.sessions.failingRestore';
+		fixture.storage.store('sessions.layout.activeEntry', command, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const failure = new Error('Restore handler failed');
+		using entry = CommandsRegistry.register(command, () => { throw failure; });
+		await assert.rejects(fixture.service.restore(), error => error === failure);
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
+	});
+
 	test('reveals Output beside the current conversation without navigating to another entry', async () => {
 		using fixture = new EntryFixture();
 		await fixture.service.openEntry({ id: 'chat', activityContext: 'sessions.activity.chatSelected', content: 'conversation', focus: 'conversation', restoreCommand: 'sessions.open.chat' });
@@ -258,7 +298,7 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, materializedSessions: observableValue('materialized', new Map()), state: 'loading' } as unknown as ISessionsManagementService);
 		this.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 		this.services.registerInstance(INotificationService, { error: (message: string) => { this.errors.push(message); } } as unknown as INotificationService);
-		this.services.registerInstance(ICommandService, { executeCommand: async () => undefined } as unknown as ICommandService);
+		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
 		this.services.registerInstance(ISessionsConversationService, {
 			setConversationKind: async () => {
 				if (!this.conversationStarted.isSettled) { await this.conversationStarted.complete(); }

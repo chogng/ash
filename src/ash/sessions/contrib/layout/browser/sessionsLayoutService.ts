@@ -14,7 +14,7 @@ import type { IContextKey } from '../../../../platform/contextkey/common/context
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -264,7 +264,12 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		if (!saved && oldEntry !== undefined && !Object.hasOwn(oldCommands, oldEntry)) {
 			throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 		}
-		await this.commands.executeCommand(saved ?? (oldEntry ? oldCommands[oldEntry]! : 'sessions.open.chat'), 'restore');
+		const requested = saved ?? (oldEntry ? oldCommands[oldEntry]! : 'sessions.open.chat');
+		const available = CommandsRegistry.hasCommand(requested);
+		// Entry commands can disappear during development or when a contribution is
+		// removed. Discard stale navigation state without invoking an unknown command.
+		if (!available) { this.storage.remove(activeEntryKey, StorageScope.WORKSPACE); }
+		await this.commands.executeCommand(available ? requested : 'sessions.open.chat', 'restore');
 		if (this.isDisposed) { return; }
 		for (const key of ['sessions.layout.activeMode', 'sessions.layout.primaryPage', 'sessions.activityBar.activePage', 'sessions.layout.primaryEditor']) {
 			this.storage.remove(key, StorageScope.WORKSPACE);

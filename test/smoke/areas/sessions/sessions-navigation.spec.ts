@@ -2,6 +2,33 @@ import { expect, test } from '../../../automation/test.js';
 import { Menus } from '../../../automation/menus.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
+import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
+import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
+
+test('Sessions discards an unavailable saved entry and completes restoration without losing the draft', async ({ application, target, workbench }) => {
+	let page = await workbench.openAgentsWindow(target.kind);
+	const draft = 'Keep this draft when a saved entry disappears';
+	const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText(draft);
+	const identity = { scope: StorageScope.WORKSPACE, id: 'sessions' };
+	await seedStorageOnNextLoad(application, page, identity, {
+		'sessions.layout.activeEntry': { value: 'sessions.show.library', target: StorageTarget.MACHINE },
+	});
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await workbench.reloadWindow(page);
+	const navigation = page.locator('.ash-sessions-activity-content');
+	await expect(navigation.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
+	await new Editor(page.locator('.ash-sessions-chat-slot.active:visible')).waitForEditorContents(text => text === draft);
+	await expect.poll(async () => (await readStorageEntries(application, page, identity))['sessions.layout.activeEntry']?.value).toBe('sessions.open.chat');
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
+	await expect(page.locator('.ash-projects')).toBeVisible();
+	page = await workbench.reopenAgentsWindow(application, page);
+	await expect(page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('.ash-projects')).toBeVisible();
+	expect(errors).toEqual([]);
+});
 
 test('Sessions ChatGPT sidebar opens and shares its retained EditorPane', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
