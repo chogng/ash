@@ -542,8 +542,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		if (existing?.paneInstance.pane.id === descriptor.id && !options.forceReload) {
 			const wasPreview = existing.preview;
 			const previousIndex = this.model.indexOf(input);
-			this.model.updateEditor(input, options);
+			this.model.updateEditor(input, { ...options, pinned: options.pinned ?? (options.index !== undefined) });
 			if (this.model.indexOf(input) !== previousIndex) {
+				this.model.pin(input);
 				this.editorChangeEmitter.fire(Object.freeze({ kind: "editorMoved", editor: this.editorState(existing), previousIndex }));
 			}
 			existing.labelListener.value = input.onDidChangeLabel?.(() => this.publishEditorState(existing));
@@ -799,10 +800,15 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const sourceIndex = this.model.indexOf(input);
 		if (sourceIndex < 0) return;
 		const entry = this.entries[sourceIndex]!;
+		const wasPreview = entry.preview;
 		this.model.moveEditor(input, targetIndex > sourceIndex ? targetIndex - 1 : targetIndex);
+		if (this.model.indexOf(input) === sourceIndex) return;
+		// Choosing a new tab position commits the preview to the group.
+		this.model.pin(input);
 		this.renderContent();
 		this.renderChrome();
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "editorMoved", editor: this.editorState(entry), previousIndex: sourceIndex }));
+		if (wasPreview) this.publishEditorState(entry);
 	}
 
 	private async openExternalEditors(dataTransfer: DataTransfer | null, target: IResourceEditorInput | undefined, position: EditorTabDropPosition): Promise<void> {
@@ -826,7 +832,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const veto = input.canMove?.(this.id, target.id);
 		if (typeof veto === 'string') throw new Error(veto);
 		const viewState = this.saveEditorViewState(input);
-		await target.openEditor(input, { index: targetIndex, pinned: !entry.preview, preferredEditorId: entry.paneInstance.pane.id }, entry.instanceId);
+		await target.openEditor(input, { index: targetIndex, pinned: true, preferredEditorId: entry.paneInstance.pane.id }, entry.instanceId);
 		if (entry.sticky) target.stickEditor(input);
 		await this.closeEditor(input, { skipConfirmation: true, reason: "move" });
 		target.activateEditor(input);
