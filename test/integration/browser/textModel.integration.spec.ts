@@ -106,7 +106,17 @@ test("text-model editor public API, pane, undo, save, and browser worker", async
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe("fn main() {\n  answer();\n}\n");
 	await page.evaluate(() => window.ashTextModelIntegration.save());
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSavedText())).toBe("fn main() {\n  answer();\n}\n");
-	await expect.poll(() => workers.length).toBeGreaterThan(0);
+	// Editing and saving do not need a Worker. Formatting requests minimal edits
+	// from the browser Worker, so verify that work and its concrete result.
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.enableFormatting('en');
+		void window.ashTextModelIntegration.formatDocument();
+	});
+	const formatter = page.locator('.ash-quick-pick').getByRole('combobox');
+	await formatter.fill('alpha.format');
+	await formatter.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('ALPHA');
+	await expect.poll(() => workers.some(url => url.includes('editorWebWorkerMain'))).toBe(true);
 });
 
 test('switching a Workbench file keeps keyboard input on the new editor and releases the old one', async ({ page }) => {

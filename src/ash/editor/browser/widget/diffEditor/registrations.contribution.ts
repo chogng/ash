@@ -38,12 +38,14 @@ export const diffLineDeleteDecorationBackgroundWithIndicator: IModelDecorationOp
 
 export const diffAddDecoration: IModelDecorationOptions = Object.freeze({
 	description: 'diff-inline-change',
-	inlineClassName: 'stanza-diff-inline-added',
+	className: 'stanza-diff-inline-added',
+	shouldFillLineOnLineBreak: true,
 });
 
 export const diffDeleteDecoration: IModelDecorationOptions = Object.freeze({
 	description: 'diff-inline-change',
-	inlineClassName: 'stanza-diff-inline-removed',
+	className: 'stanza-diff-inline-removed',
+	shouldFillLineOnLineBreak: true,
 });
 
 // The border marks the measured character boundary. Expanding a collapsed range

@@ -1,5 +1,5 @@
 import { attachRustGit } from '../../fixtures/browser/rustGitProcessFixture.js';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 
 let stopRust: (() => Promise<void>) | undefined;
@@ -15,6 +15,12 @@ function localized(locale: DiffTestLocale, english: string, chinese: string): st
 async function openDiffPage(page: Page, locale: DiffTestLocale = 'en'): Promise<void> {
 	await page.goto(`/diff.html?locale=${locale}`);
 	await page.waitForFunction(() => !!window.ashDiffIntegration);
+}
+
+async function clickFileAction(section: Locator, name: string): Promise<void> {
+	// File actions become interactive on hover or keyboard focus.
+	await section.locator('.stanza-multi-diff-editor-header').hover();
+	await section.getByRole('button', { name, exact: true }).click();
 }
 
 test('sash dragging under CPU throttling retains inline diff zones and skips unaffected grid leaves', async ({ page }, testInfo) => {
@@ -314,7 +320,7 @@ for (const locale of ['en', 'zh-CN'] as const) test(`session Changes keeps Viewe
 	await expect(message).toBeHidden();
 	const first = page.locator('#session-changes .stanza-multi-diff-editor-section').filter({ has: page.getByText('file-0.ts', { exact: true }) });
 	const viewed = first.getByRole('button', { name: localized(locale, 'Viewed', '已查看'), exact: true });
-	await viewed.click();
+	await clickFileAction(first, localized(locale, 'Viewed', '已查看'));
 	await expect(viewed).toHaveAttribute('aria-pressed', 'true');
 	await page.evaluate(() => window.ashDiffIntegration.advanceSessionRevision());
 	await expect(message).toContainText(localized(locale, 'This Turn capture changed while loading.', '此回合的更改在加载期间已更新。'));
@@ -325,7 +331,7 @@ for (const locale of ['en', 'zh-CN'] as const) test(`session Changes keeps Viewe
 	await expect(first.getByRole('button', { name: /file-0.ts/ })).toHaveAttribute('aria-expanded', 'true');
 	await page.evaluate(() => window.ashDiffIntegration.reviewSessionFile(0, 1, true));
 	await expect(viewed).toHaveAttribute('aria-pressed', 'false');
-	await viewed.click();
+	await clickFileAction(first, localized(locale, 'Viewed', '已查看'));
 	await expect(viewed).toHaveAttribute('aria-pressed', 'true');
 	await page.evaluate(() => window.ashDiffIntegration.advanceSessionRevision());
 	await expect(message).toBeHidden();
@@ -346,7 +352,7 @@ for (const locale of ['en', 'zh-CN'] as const) test(`session Changes rejects con
 	await page.evaluate(() => window.ashDiffIntegration.selectSessionCapture('review-change'));
 	await expect(message).toBeHidden();
 	const first = page.locator('#session-changes .stanza-multi-diff-editor-section').filter({ has: page.getByText('file-0.ts', { exact: true }) });
-	await first.getByRole('button', { name: localized(locale, 'Viewed', '已查看'), exact: true }).click();
+	await clickFileAction(first, localized(locale, 'Viewed', '已查看'));
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(['ash-turn-diff:/review-change/file-0.ts?session=review&thread=review-thread&revision=2']);
 	expect(errors).toEqual([]);
 });
@@ -374,15 +380,15 @@ for (const locale of ['en', 'zh-CN'] as const) test(`session Changes reveals a l
 	await page.keyboard.press('Space');
 	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionReviewState())).toEqual(['ash-turn-diff:/review-change/file-7.ts?session=review&thread=review-thread&revision=1']);
-	await viewed.click();
+	await clickFileAction(row, localized(locale, 'Viewed', '已查看'));
 	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-	await row.getByRole('button', { name: localized(locale, 'Open File', '打开文件'), exact: true }).click();
+	await clickFileAction(row, localized(locale, 'Open File', '打开文件'));
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionOpenedFiles())).toEqual(['file:///workspace/file-7.ts']);
-	await row.getByRole('button', { name: localized(locale, 'Collapse Unchanged Regions', '折叠未更改区域'), exact: true }).click();
+	await clickFileAction(row, localized(locale, 'Collapse Unchanged Regions', '折叠未更改区域'));
 	await expect(row.locator('.ash-diff-hidden-region')).not.toHaveCount(0);
-	await row.getByRole('button', { name: localized(locale, 'Expand Full File', '展开整个文件'), exact: true }).click();
+	await clickFileAction(row, localized(locale, 'Expand Full File', '展开整个文件'));
 	await expect(row.locator('.ash-diff-hidden-region')).toHaveCount(0);
-	await row.getByRole('button', { name: localized(locale, 'Preview commit…', '预览提交…'), exact: true }).click();
+	await clickFileAction(row, localized(locale, 'Preview commit…', '预览提交…'));
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.sessionPreparedFiles())).toEqual([{ selections: [{ changeSetId: 'review-change', expectedRevision: 1, paths: ['file-7.ts'] }], message: 'Reviewed file' }]);
 	expect(await page.evaluate(() => window.ashDiffIntegration.rejectInvalidSessionReveal())).toBe(true);
 	await page.evaluate(() => window.ashDiffIntegration.advanceSessionRevision());
@@ -694,7 +700,7 @@ test('multi diff edits the shared modified model while its original column stays
 	await page.keyboard.press('ControlOrMeta+End');
 	await page.keyboard.type(' added');
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toBe('same\nbefore 🤖 after\nlast added');
-	await expect(page.locator('#single .stanza-diff-inline-added').last()).toContainText('added');
+	await expect(page.locator('#single .stanza-diff-inline-added').last()).toBeVisible();
 });
 
 test('unsaved input updates Diff and Quick Diff locally using the existing baseline', async ({ page }) => {

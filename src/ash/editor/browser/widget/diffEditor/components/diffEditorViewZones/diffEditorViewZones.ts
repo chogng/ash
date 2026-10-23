@@ -18,6 +18,7 @@ import { Position } from '../../../../../common/core/position.js';
 import { LineSource, RenderOptions, renderLines, type RenderLinesResult } from './renderLines.js';
 import { InlineDiffDeletedCodeMargin } from './inlineDiffDeletedCodeMargin.js';
 import { enableCopySelection } from './copySelection.js';
+import { diffDeleteDecoration } from '../../registrations.contribution.js';
 
 interface DiffViewZone {
 	readonly afterLineNumber: number;
@@ -265,14 +266,18 @@ export class DiffEditorViewZones extends Disposable {
 			if (ranges && !ranges.some(range => range.fromLineNumber <= lineNumber && lineNumber <= range.toLineNumber)) {
 				continue;
 			}
-			const inlineDecorations = line.inlineDecorations ??= (this.originalEditor.getLineDecorations(lineNumber) ?? []).flatMap(decoration => decoration.options.inlineClassName
-				? [new InlineDecoration(decoration.range, decoration.options.inlineClassName, InlineDecorationType.Regular)]
-				: []);
+			const inlineDecorations = line.inlineDecorations ??= (this.originalEditor.getLineDecorations(lineNumber) ?? []).flatMap(decoration => {
+				// Deleted zones have no editor overlay. Project their diff ranges into
+				// the rendered source text while retaining other inline decorations.
+				const className = decoration.options.inlineClassName
+					?? (decoration.options.className === diffDeleteDecoration.className ? decoration.options.className : undefined);
+				return className ? [new InlineDecoration(decoration.range, className, InlineDecorationType.Regular)] : [];
+			});
 			line.rendered = renderLines(new LineSource([{
 				lineNumber,
 				content: this.model.original.getLineContent(lineNumber),
 				tokens: this.model.original.tokenization.renderedTokens.getLineTokens(lineNumber - 1).map(token => ({ ...token, syntaxPresentation: resolveSemanticTokenPresentation(token, theme, semanticHighlighting) })),
-			}]), options, inlineDecorations, element);
+			}], this.originalEditor._getViewModel()!.getVisualLineProjection()), options, inlineDecorations, element);
 			renderedLines.push(line);
 		}
 		this.updateInlineMargins(renderedLines);
@@ -280,8 +285,8 @@ export class DiffEditorViewZones extends Disposable {
 
 	private updateInlineMargins(lines: readonly InlineOriginalLine[]): void {
 		const lineHeight = this.originalEditor.getOption(EditorOption.lineHeight);
-		// Native wrapping can differ from the model estimate. Read all visible text
-		// fragments before mutating margins, including zones revealed by scrolling.
+		// Count rendered rows before mutating margins, including zones that only
+		// become measurable after scrolling into view.
 		const updates: { margin: InlineDiffDeletedCodeMargin; count: number; }[] = [];
 		for (const line of lines) {
 			let firstTop = Infinity;

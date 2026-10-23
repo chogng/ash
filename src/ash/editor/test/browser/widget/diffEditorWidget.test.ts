@@ -217,7 +217,7 @@ test('DiffEditorWidget owns two editors, keeps source models caller-owned, and r
 	assert.equal(editor.originalEditor.getOption(EditorOption.scrollBeyondLastLine), true);
 	assert.equal(editor.element.querySelectorAll('.stanza-editor').length, 2);
 	assert.equal(original.getAllDecorations().some(decoration => decoration.options.className === 'stanza-diff-line-removed'), true);
-	assert.equal(modified.getAllDecorations().some(decoration => decoration.options.inlineClassName === 'stanza-diff-inline-added'), true);
+	assert.equal(modified.getAllDecorations().some(decoration => decoration.options.className === 'stanza-diff-inline-added'), true);
 	assert.equal(editor.nextChange(), 1);
 	assert.match(editor.element.querySelector('.stanza-diff-editor-accessibility-status')?.textContent ?? '', /Change 1 of 1/);
 
