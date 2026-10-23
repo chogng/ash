@@ -110,6 +110,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		this.titleContentDomNode = h(ownerDocument, "div");
 		this.titleContentDomNode.className = "ash-pane-composite-title-content";
 		this.compositeBar = this._register(new CompositeBar(this.titleContentDomNode, {
+			overflowActionSize: 22,
 			openComposite: options.openComposite,
 			activityHoverOptions: options.activityHoverOptions ?? { position: () => HoverPosition.ABOVE },
 			viewDescriptorService: options.viewDescriptorService,

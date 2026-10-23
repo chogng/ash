@@ -27,6 +27,7 @@ test('activity counts abbreviate visually while retaining complete descriptions'
 		using views = new TestViewDescriptorService({ registry }, contexts);
 		using activity = new ActivityService(views);
 		using bar = new CompositeBar(dom.window.document.body, {
+			overflowActionSize: 22,
 			openComposite: async () => null, activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: views, location: ViewContainerLocation.Sidebar, ariaLabel: 'Views',
 		}, activity);
 
@@ -52,10 +53,12 @@ test('ActivityService combines concurrent counts and descriptions and releases o
 	using views = new TestViewDescriptorService({ registry }, contextKeys);
 	using activity = new ActivityService(views);
 	using bar = new CompositeBar(dom.window.document.body, {
+		overflowActionSize: 22,
 		openComposite: async () => null, activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: views, location: ViewContainerLocation.Sidebar, ariaLabel: 'Views'
 	}, activity);
 
 	using otherBar = new CompositeBar(dom.window.document.body, {
+		overflowActionSize: 22,
 		openComposite: async () => null, activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: views, location: ViewContainerLocation.Sidebar, ariaLabel: 'Other views',
 	}, activity);
 	using first = activity.showViewContainerActivity('test', { badge: new NumberBadge(2, () => '2 unsaved files') });
@@ -98,6 +101,7 @@ test('Activity Bar badge menu uses Chinese labels and restores independent visib
 		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		using activity = new ActivityService(views);
 		using bar = new CompositeBar(dom.window.document.body, {
+			overflowActionSize: 22,
 			openComposite: async () => null,
 			activityHoverOptions: { position: () => HoverPosition.RIGHT }, viewDescriptorService: views,
 			location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical', storageService: storage,
@@ -118,6 +122,7 @@ test('Activity Bar badge menu uses Chinese labels and restores independent visib
 		using restoredStorage = new BrowserStorageService({ ...options, workspaceId: 'second' });
 		using restoredActivity = new ActivityService(views);
 		using restored = new CompositeBar(dom.window.document.body, {
+			overflowActionSize: 22,
 			openComposite: async () => null,
 			activityHoverOptions: { position: () => HoverPosition.RIGHT }, viewDescriptorService: views,
 			location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical', storageService: restoredStorage,

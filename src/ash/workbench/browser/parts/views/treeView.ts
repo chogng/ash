@@ -2,7 +2,6 @@ import './media/views.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import { localize } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -80,7 +79,7 @@ export class TreeView extends Disposable {
 			configurationService: this.configuration,
 			ariaLabel: this.title,
 			scrolling: 'managed',
-			getHeight: () => listRowHeight,
+			getHeight: () => 22,
 			identityProvider: { getId: node => node.handle },
 			collapseByDefault: node => node.collapsibleState !== TreeItemCollapsibleState.Expanded,
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: node => node.label?.label ?? node.handle },

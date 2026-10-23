@@ -13,12 +13,12 @@ Ash ships a design-system **size** ramp. These tokens are registered in [baseSiz
 
 ## Rows and toolbar actions
 
-Use the semantic tokens below for row and action geometry, use `border-box` for icon action areas, reserve spacing tokens for spacing, and keep CSS and JS defaults in sync through [uiSizes.ts](../../src/ash/base/common/uiSizes.ts).
+Use the semantic tokens below for CSS row and action geometry, use `border-box` for icon action areas, and reserve spacing tokens for spacing. Each component owns its JS layout geometry: list/tree delegates supply row heights, and action hosts supply or measure action sizes. Keep those values consistent with the component's CSS, including local overrides; theme token registration is not a dependency of JS layout code.
 
 | Use | Size | CSS | JS |
 | --- | --- | --- | --- |
-| Single-line lists, trees, suggestions and dropdown options | 22px | `var(--ash-list-rowHeight)` | `listRowHeight` |
-| Standard toolbar icon actions | 22×22px | `var(--ash-toolbar-actionSize)` | `defaultToolbarActionSize` |
+| Single-line lists, trees, suggestions and dropdown options | 22px | `var(--ash-list-rowHeight)` | Component-owned row delegate |
+| Standard toolbar icon actions | 22×22px | `var(--ash-toolbar-actionSize)` | Host-supplied or measured action size |
 | Code-adjacent icon actions | 20×20px | Override `--ash-toolbar-actionSize` locally | Match the component's geometry |
 | Explicit roomy rows / actions | 24px / 24×24px | Override the corresponding token locally | Match the component's geometry |
 

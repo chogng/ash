@@ -402,6 +402,7 @@ test('Activity Bar badge setting applies on startup and preserves per-icon choic
 		const views = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 		const activity = disposables.add(new ActivityService(views));
 		const bar = disposables.add(new CompositeBar(harness.container, {
+			overflowActionSize: 22,
 			openComposite: async () => null,
 			activityHoverOptions: { position: () => HoverPosition.RIGHT }, viewDescriptorService: views,
 			location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical',
@@ -1749,88 +1750,92 @@ test('Transient view navigation follows its active session and ignores stale res
 	}
 });
 
-test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const disposables = new DisposableStore();
-	const registry = new WorkbenchViewRegistry();
-	const panels = [
-		["ash.panel.problems", "Problems"],
-		["ash.panel.output", "Output"],
-		["ash.panel.terminal", "Terminal"],
-	] as const;
-	for (const [id, title] of panels) {
-		disposables.add(registry.registerViewContainer({
-			id,
-			title,
+for (const [overflowActionSize, availableWidth] of [[22, 110], [60, 134]] as const) {
+	test(`CompositeBar moves non-fitting label tabs into its overflow menu (${overflowActionSize}px action)`, () => {
+		const dom = new JSDOM("<!doctype html><body></body>");
+		const disposables = new DisposableStore();
+		const registry = new WorkbenchViewRegistry();
+		const panels = [
+			["ash.panel.problems", "Problems"],
+			["ash.panel.output", "Output"],
+			["ash.panel.terminal", "Terminal"],
+		] as const;
+		for (const [id, title] of panels) {
+			disposables.add(registry.registerViewContainer({
+				id,
+				title,
+				location: ViewContainerLocation.Panel,
+			}));
+		}
+		const contextKeys = disposables.add(new ContextKeyService());
+		const viewDescriptors = disposables.add(new TestViewDescriptorService({
+			registry,
+		}, contextKeys));
+		const selections: string[] = [];
+		let overflowActions: readonly IAction[] = [];
+		let hideOverflowMenu: (() => void) | undefined;
+		const contextMenuProvider: IContextMenuProvider = {
+			showContextMenu(options): void {
+				overflowActions = options.getActions();
+				hideOverflowMenu = () => options.onHide?.(true);
+			},
+		};
+		const barOptions = {
+			openComposite: async (id: string) => { selections.push(id); return null; },
+			activityHoverOptions: { position: () => HoverPosition.ABOVE },
+			viewDescriptorService: viewDescriptors,
 			location: ViewContainerLocation.Panel,
-		}));
-	}
-	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new TestViewDescriptorService({
-		registry,
-	}, contextKeys));
-	const selections: string[] = [];
-	let overflowActions: readonly IAction[] = [];
-	let hideOverflowMenu: (() => void) | undefined;
-	const contextMenuProvider: IContextMenuProvider = {
-		showContextMenu(options): void {
-			overflowActions = options.getActions();
-			hideOverflowMenu = () => options.onHide?.(true);
-		},
-	};
-	const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
-		openComposite: async id => { selections.push(id); return null; },
-		activityHoverOptions: { position: () => HoverPosition.ABOVE },
-		viewDescriptorService: viewDescriptors,
-		location: ViewContainerLocation.Panel,
-		ariaLabel: "Panel views",
-		presentation: "label",
-		contextMenuProvider,
-	}, disposables.add(new ActivityService(viewDescriptors))));
-	dom.window.document.body.append(compositeBar.domNode);
-	Object.defineProperty(compositeBar.domNode, "clientWidth", {
-		configurable: true,
-		value: 110,
+			ariaLabel: "Panel views",
+			presentation: "label" as const,
+			overflowActionSize,
+			contextMenuProvider,
+		};
+		const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, barOptions, disposables.add(new ActivityService(viewDescriptors))));
+		dom.window.document.body.append(compositeBar.domNode);
+		Object.defineProperty(compositeBar.domNode, "clientWidth", {
+			configurable: true,
+			value: availableWidth,
+		});
+		compositeBar.setActiveComposite("ash.panel.terminal");
+		const tabs = [...compositeBar.domNode.querySelectorAll<HTMLElement>(".ash-composite-bar-destination")];
+		for (const [index, tab] of tabs.entries()) {
+			tab.getBoundingClientRect = () => ({ left: index * 50, right: (index + 1) * 50, width: 50 } as DOMRect);
+		}
+		compositeBar.layout();
+
+		assert.deepEqual(
+			[...compositeBar.domNode.querySelectorAll("[role='tab']")]
+				.map((tab) => tab.textContent),
+			["Terminal", "Additional views"],
+		);
+		const overflowItem = compositeBar.domNode.querySelector<HTMLElement>(
+			".ash-composite-bar-overflow",
+		);
+		assert.ok(overflowItem);
+		assert.equal(overflowItem.getAttribute("role"), "tab");
+		assert.equal(
+			compositeBar.domNode.querySelector(".ash-composite-bar-item")?.nextElementSibling,
+			overflowItem,
+		);
+		overflowItem.click();
+		assert.equal(overflowItem.getAttribute("aria-expanded"), "true");
+		assert.deepEqual(
+			overflowActions.map((action) => action.label),
+			["Problems", "Output"],
+		);
+		const problems = overflowActions[0];
+		assert.ok(problems);
+		problems.run();
+		assert.deepEqual(selections, ["ash.panel.problems"]);
+		assert.ok(hideOverflowMenu);
+		hideOverflowMenu();
+		assert.equal(overflowItem.getAttribute("aria-expanded"), "false");
+		assert.equal(overflowItem.isConnected, true);
+
+		disposables.dispose();
+		dom.window.close();
 	});
-	compositeBar.setActiveComposite("ash.panel.terminal");
-	const tabs = [...compositeBar.domNode.querySelectorAll<HTMLElement>(".ash-composite-bar-destination")];
-	for (const [index, tab] of tabs.entries()) {
-		tab.getBoundingClientRect = () => ({ left: index * 50, right: (index + 1) * 50, width: 50 } as DOMRect);
-	}
-	compositeBar.layout();
-
-	assert.deepEqual(
-		[...compositeBar.domNode.querySelectorAll("[role='tab']")]
-			.map((tab) => tab.textContent),
-		["Terminal", "Additional views"],
-	);
-	const overflowItem = compositeBar.domNode.querySelector<HTMLElement>(
-		".ash-composite-bar-overflow",
-	);
-	assert.ok(overflowItem);
-	assert.equal(overflowItem.getAttribute("role"), "tab");
-	assert.equal(
-		compositeBar.domNode.querySelector(".ash-composite-bar-item")?.nextElementSibling,
-		overflowItem,
-	);
-	overflowItem.click();
-	assert.equal(overflowItem.getAttribute("aria-expanded"), "true");
-	assert.deepEqual(
-		overflowActions.map((action) => action.label),
-		["Problems", "Output"],
-	);
-	const problems = overflowActions[0];
-	assert.ok(problems);
-	problems.run();
-	assert.deepEqual(selections, ["ash.panel.problems"]);
-	assert.ok(hideOverflowMenu);
-	hideOverflowMenu();
-	assert.equal(overflowItem.getAttribute("aria-expanded"), "false");
-	assert.equal(overflowItem.isConnected, true);
-
-	disposables.dispose();
-	dom.window.close();
-});
+}
 
 for (const activeId of ['search', 'explorer']) {
 	test(`Activity Bar unpinning active ${activeId} opens the default or first pinned view`, async () => {
@@ -1846,6 +1851,7 @@ for (const activeId of ['search', 'explorer']) {
 			const opened: { id: string; preserveFocus: boolean | undefined; }[] = [];
 			let actions: readonly IAction[] = [];
 			const bar = disposables.add(new CompositeBar(dom.window.document.body, {
+				overflowActionSize: 22,
 				openComposite: async (id, preserveFocus) => {
 					opened.push({ id, preserveFocus });
 					bar.setActiveComposite(id);
@@ -1898,6 +1904,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 	let actions: readonly IAction[] = [];
 	const contextMenuProvider: IContextMenuProvider = { showContextMenu(options) { actions = options.getActions(); } };
 	const compositeBar = firstBar.add(new CompositeBar(dom.window.document.body, {
+		overflowActionSize: 22,
 		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
@@ -1930,6 +1937,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 
 	const restoredStorage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'other', backend: dom.window.localStorage, flushInterval: 0 });
 	const restored = new CompositeBar(dom.window.document.body, {
+		overflowActionSize: 22,
 		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
@@ -1963,6 +1971,7 @@ test("CompositeBar retains the startup language of View Container labels", () =>
 		translate: (_bundle: string, key: string, fallback: string) => key === "terminal" && locale === "zh-CN" ? "终端" : fallback,
 	} as unknown as ILocalizationService;
 	const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
+		overflowActionSize: 22,
 		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
@@ -2136,6 +2145,7 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 	const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
+		overflowActionSize: 22,
 		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE },
 		viewDescriptorService: viewDescriptors,
@@ -2313,6 +2323,7 @@ test('Activity Bar restores user container order in a new window and keeps the a
 	const contexts = disposables.add(new ContextKeyService());
 	const descriptors = disposables.add(new TestViewDescriptorService({ registry }, contexts));
 	const bar = disposables.add(new CompositeBar(dom.window.document.body, {
+		overflowActionSize: 22,
 		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: descriptors,
 		location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical', storageService: storage,
@@ -2324,6 +2335,7 @@ test('Activity Bar restores user container order in a new window and keeps the a
 	const restoredStorage = disposables.add(new BrowserStorageService({ ...storageOptions, workspaceId: 'second' }));
 	const restoredDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contexts));
 	const restored = disposables.add(new CompositeBar(dom.window.document.body, {
+		overflowActionSize: 22,
 		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: restoredDescriptors,
 		location: ViewContainerLocation.Sidebar, ariaLabel: 'Views', orientation: 'vertical', storageService: restoredStorage,

@@ -14,7 +14,6 @@ import { Lxicon } from '../../../base/common/lxicons.js';
 import { ActionBar } from '../../../base/browser/ui/actionbar/actionbar.js';
 import { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import type { IAction } from '../../../base/common/actions.js';
-import { listRowHeight } from '../../../base/common/uiSizes.js';
 
 export interface QuickInputListActiveChangeEvent<TItem> {
 	readonly item: TItem | undefined;
@@ -86,7 +85,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		container.append(this.element);
 
 		const owner = this;
-		const singleLineHeight = () => listRowHeight;
+		const singleLineHeight = () => 22;
 		this.list = this._register(new List<TItem>(this.element, {
 			styles: defaultListStyles,
 			ariaLabel: localize('quickInput.results', 'Quick Pick results'),

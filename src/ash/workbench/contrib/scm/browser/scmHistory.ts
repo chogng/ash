@@ -16,7 +16,6 @@ import type { IScopedContextKeyService } from '../../../../platform/contextkey/b
 import { IContextMenuService, type IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import type { IHoverService, IManagedHover } from '../../../../platform/hover/browser/hoverService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import { localize, getNLSLanguage } from '../../../../nls.js';
 import { findLastIdx } from "../../../../base/common/arraysFind.js";
 import { registerColor } from '../../../../platform/theme/common/colorUtils.js';
@@ -34,7 +33,7 @@ registerColor('scmGraph.historyItemHoverLabelForeground', {
 	dark: 'panel.background', light: 'panel.background', hcDark: 'panel.background', hcLight: 'panel.background',
 }, { description: 'History item hover label foreground color.', owner: 'workbench.scm' });
 
-const LaneHeight = listRowHeight;
+const LaneHeight = 22;
 const LaneWidth = 11;
 const CurveRadius = 5;
 const ColorCount = 8;

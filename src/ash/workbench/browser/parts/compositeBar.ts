@@ -1,4 +1,3 @@
-import { defaultToolbarActionSize } from '../../../base/common/uiSizes.js';
 import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
 import "./compositebar/compositebar.css";
 import { IActivityService, NumberBadge } from "../../services/activity/common/activity.js";
@@ -28,6 +27,8 @@ export interface ICompositeBarOptions {
 	readonly localizationService?: ILocalizationService;
 	readonly location: ViewContainerLocation;
 	readonly ariaLabel: string;
+	/** Width reserved by the host for the overflow action, in pixels. */
+	readonly overflowActionSize: number;
 	readonly presentation?: CompositeBarPresentation;
 	readonly orientation?: ActionBarOrientation;
 	/** Selects the View Containers represented as Composite Bar action items. */
@@ -60,6 +61,7 @@ export class CompositeBar extends Disposable {
 	private readonly contextMenuProvider: IContextMenuProvider | undefined;
 	private readonly storageService: IStorageService | undefined;
 	private readonly overflowEnabled: boolean;
+	private readonly overflowActionSize: number;
 	private readonly containerFilter: (container: IViewContainerDescriptor) => boolean;
 	private readonly openComposite: ICompositeBarOptions['openComposite'];
 	private containers: readonly IViewContainerDescriptor[] = [];
@@ -84,6 +86,7 @@ export class CompositeBar extends Disposable {
 	) {
 		super();
 		this.openComposite = options.openComposite;
+		this.overflowActionSize = options.overflowActionSize;
 		const presentation = options.presentation ?? "icon";
 		this.activityHoverOptions = options.activityHoverOptions;
 		this.viewDescriptorService = options.viewDescriptorService;
@@ -274,7 +277,7 @@ export class CompositeBar extends Disposable {
 		const availableWidth = this.domNode.clientWidth;
 		if (availableWidth <= 0) return;
 
-		const visibleContainers = this.visibleContainersForWidth(availableWidth, defaultToolbarActionSize + this.actionBarItemGap);
+		const visibleContainers = this.visibleContainersForWidth(availableWidth, this.overflowActionSize + this.actionBarItemGap);
 		const visibleContainerIds = visibleContainers.map((container) => container.id);
 		const overflowingContainerIds = new Set(this.displayedContainers
 			.filter((container) => !visibleContainerIds.includes(container.id))

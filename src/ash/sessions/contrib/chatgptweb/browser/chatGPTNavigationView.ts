@@ -16,7 +16,6 @@ import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -265,7 +264,8 @@ export class ChatGPTNavigationView extends ViewPane {
 			}
 		}
 		const gap = parseFloat(getWindow(this.contentElement).getComputedStyle(this.contentElement).rowGap) || 0;
-		this.minimumBodySize = count * listRowHeight + Math.max(0, count - 1) * gap;
+		const rowHeight = 22;
+		this.minimumBodySize = count * rowHeight + Math.max(0, count - 1) * gap;
 	}
 
 	private createRow(conversation: ChatGPTConversation): HTMLElement {

@@ -549,6 +549,7 @@ if (new URLSearchParams(location.search).has('badges')) {
 		resources.add(bindTestColorTheme(editorServices.get(IThemeService), host));
 		const activity = resources.add(services.createInstance(ActivityService));
 		const bar = resources.add(new CompositeBar(host, {
+			overflowActionSize: 22,
 			presentation,
 			location: ViewContainerLocation.Panel,
 			viewDescriptorService: services.get(IViewDescriptorService),
