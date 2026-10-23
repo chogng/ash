@@ -52,7 +52,7 @@ flowchart TD
 
 Preferences 负责搜索、分类、导航、控件、布局、主题、键盘与无障碍交互；功能模块拥有配置语义和领域业务状态。新接入只提供注册配置或数据与操作，不传 DOM、widget 或渲染回调。完整约束与迁移边界仅在 [Preferences README](../src/ash/workbench/contrib/preferences/README.md) 维护。
 
-普通配置经配置服务读写；账号、密钥、模型发现、Hook 执行与权限继续归各自领域服务。GitHub、Trace、Sandbox、Search 使用数据模型和共享 section renderer，Hooks 使用同一 renderer 提供 Agent Customizations 管理入口。Models、Advisor、Dictation、Language Server 和 Network 的控件及 CSS 归 Preferences，模型发现与批量测试继续使用 Chat 领域 view model 和服务。
+普通配置经配置服务读写；账号、密钥、模型发现、Hook 执行与权限继续归各自领域服务。GitHub、Trace、Sandbox、Search 使用数据模型和共享 section renderer，Hooks 使用同一 renderer 提供 Agent Customizations 管理入口。Advisor、Dictation、Language Server 和 Network 的控件及 CSS 归 Preferences。Models 设置使用 Chat 的共享目录 Widget 和 ViewModel；供应商配置表单及其临时探测状态归 Preferences，发现、测试和持久化继续调用 Chat 领域服务。
 
 `SettingsTreeModel` 的区段和交互标题只保存 `SettingsSectionReference`，由当前打开实例的 `SettingsRenderer` 找到保留的控件；不再在可搜索元数据中传递 DOM。Sessions 的普通设置只声明 ID 和顺序，由 `DefaultSettings` 解析注册表中的类型、文案与选项。宿主专属条目使用 `setting.included: false` 退出自动目录，仍可按 ID 显式解析，不改变配置的存储、作用域或默认值。
 
@@ -94,7 +94,7 @@ Skill 补全和引用通过 `getFullReferenceNames()`、`getFullReferenceName()`
 
 ## Models 设置
 
-以下行为由 Preferences 的 `ModelSettingsRenderer` 与 `ModelProviderSettingsRenderer` 呈现，模型目录、开关、发现和凭据仍通过所属服务操作。
+模型目录由 `ChatModelsWidget` 呈现，Preferences 的 `ModelSettingsRenderer` 将它接入设置树，`ModelProviderSettingsRenderer` 呈现供应商配置。`workbench.action.chat.manage` 打开共用该列表的语言模型编辑器；其中的“打开设置”进入供应商配置。模型目录、开关、发现和凭据仍通过所属服务操作。
 
 Workbench 和 Sessions 共用 `ModelSettingsRenderer`。模型目录按供应商排列，同一供应商内按发布时间从新到旧排列；默认收起为每家供应商的首个模型，`viewall models` 展开或收起完整列表。当前显示的列表将已开启模型排在前面，两组内部保持目录原序；关闭后回到未开启组中的原有位置，与开启先后无关。列表顶部的模型搜索框按名称和 `provider/model` ID 搜索整个目录，搜索结果使用同一排序规则，清空搜索后恢复展开状态；API key 区域不参与这个局部搜索。键盘切换开关后，保存完成时焦点留在同一个模型上。
 
@@ -104,14 +104,22 @@ Workbench 和 Sessions 共用 `ModelSettingsRenderer`。模型目录按供应商
 
 模型管理文件参考 VS Code 的职责分工：
 
-| 文件                                                                     | 职责                                                                   |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| `workbench/contrib/chat/common/languageModels.ts`                        | 模型服务契约与实现；目录加载、供应商发现和测试操作，两个窗口各一个实例 |
-| `workbench/contrib/chat/common/languageModelsConfiguration.ts`           | JSONC 设置声明、六个默认开启模型、模型开关数据格式                     |
-| `workbench/contrib/chat/browser/languageModelsConfigurationService.ts`   | 模型开关、默认模型及上一次选择的保存与事件                             |
-| `workbench/contrib/chat/browser/chatManagement/chatModelsViewModel.ts`   | 当前供应商的发现列表、手动声明、批量测试进度                           |
-| `workbench/contrib/preferences/browser/modelProviderSettingsRenderer.ts` | 供应商表单、模型表格、键盘操作与行内编辑                               |
-| `workbench/contrib/preferences/browser/modelSettingsRenderer.ts`         | 将模型管理接入两个窗口的设置树                                         |
+| 文件                                                                           | 职责                                                                       |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `workbench/contrib/chat/common/languageModels.ts`                              | 模型服务契约与实现；目录加载、供应商发现和测试操作，两个窗口各一个实例     |
+| `workbench/contrib/chat/common/languageModelsConfiguration.ts`                 | JSONC 设置声明、六个默认开启模型、模型开关数据格式                         |
+| `workbench/contrib/chat/browser/languageModelsConfigurationService.ts`         | 模型开关、默认模型及上一次选择的保存与事件                                 |
+| `workbench/contrib/chat/browser/chatManagement/chatModelsViewModel.ts`         | 模型目录的过滤、供应商分组、折叠、选中项及可见性操作                       |
+| `workbench/contrib/chat/browser/chatManagement/chatModelsWidget.ts`            | 模型目录的搜索、折叠、开关、键盘焦点和无障碍内容，供设置页与管理编辑器共用 |
+| `workbench/contrib/chat/browser/chatManagement/chatManagementEditorInput.ts`   | 语言模型管理编辑器的稳定输入标识                                           |
+| `workbench/contrib/chat/browser/chatManagement/chatManagementEditor.ts`        | 承载共用目录并导航到供应商设置                                             |
+| `workbench/contrib/chat/browser/chatManagement/chatManagement.contribution.ts` | 注册管理编辑器、打开命令、清空搜索命令和编辑器无障碍帮助                   |
+| `workbench/contrib/chat/browser/chatManagement/media/chatModelsWidget.css`     | 共用模型列表的布局与文本溢出                                               |
+| `workbench/contrib/chat/browser/chatManagement/media/chatManagementEditor.css` | 管理编辑器的尺寸、滚动与主题样式                                           |
+| `workbench/contrib/preferences/browser/modelProviderSettingsRenderer.ts`       | 供应商表单、私有探测状态、模型表格、键盘操作与行内编辑                     |
+| `workbench/contrib/preferences/browser/modelSettingsRenderer.ts`               | 将模型管理接入两个窗口的设置树                                             |
+
+公开 API、调用链和上游专属契约的逐项核对见 [chatManagement 审计](research/chat-management-api-alignment-2026-10-23.md)。目录查询、分组和显隐操作由 `ChatModelsViewModel` 提供，供应商发现与探测状态由 `ModelProviderSettingsRenderer` 的私有实现持有。选择器的“添加模型”经过 `workbench.action.chat.manage`，编辑器输入以专用 serializer 恢复单例能力；供应商凭据和手动模型仍在设置页修改。
 
 API key 输入框失焦即保存，清空即移除；成功保存不弹通知，失败显示输入框错误并进入通知服务。密钥由后端 secret store 保存，界面只用掩码表示已配置状态。
 

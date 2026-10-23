@@ -17,6 +17,7 @@ import { ILanguageModelToolsService } from '../common/tools/languageModelToolsSe
 import { LanguageModelToolsService } from './tools/languageModelToolsService.js';
 import { IChatWidgetService } from './chat.js';
 import { ChatWidgetService } from './widget/chatWidgetService.js';
+import './chatManagement/chatManagement.contribution.js';
 
 import { ChatSessionArchiveActionWording, ChatSessionArchiveActionWordingSettingId } from '../../../../platform/chat/common/sessionArchiveActions.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';

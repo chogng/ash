@@ -23,6 +23,8 @@ import { ModelPickerConfiguration } from './modelPickerConfiguration.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import { getHoverDelegate, type IManagedHover } from '../../../../../../../base/browser/ui/hover/hoverDelegate.js';
 import { renderChatInputPickerSplit, trackChatInputPickerFocus } from '../chatInputPickerActionItem.js';
+import { ICommandService } from '../../../../../../../platform/commands/common/commands.js';
+import { MANAGE_CHAT_COMMAND_ID } from '../../../../common/constants.js';
 
 let nextPickerId = 0;
 
@@ -35,7 +37,7 @@ export class ModelPickerWidget extends Disposable {
 	private enabled = true;
 	private readonly popup: MutableDisposable<DisposableStore>;
 
-	constructor(private readonly delegate: IModelPickerDelegate, @IActionWidgetService private readonly actionWidgetService: IActionWidgetService, @IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService, @IInstantiationService private readonly instantiationService: IInstantiationService) {
+	constructor(private readonly delegate: IModelPickerDelegate, @IActionWidgetService private readonly actionWidgetService: IActionWidgetService, @IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService, @IInstantiationService private readonly instantiationService: IInstantiationService, @ICommandService private readonly commands: ICommandService) {
 		super();
 		// Close the service-owned popup before releasing the controls attached to it.
 		this._register(toDisposable(() => this.hide()));
@@ -195,7 +197,7 @@ export class ModelPickerWidget extends Disposable {
 					enabled: true,
 					run: () => {
 						this.hide();
-						return this.delegate.openSettings();
+						return this.commands.executeCommand(MANAGE_CHAT_COMMAND_ID);
 					},
 				}],
 			}, defaultMenuStyles));
@@ -368,7 +370,7 @@ export class ModelPickerWidget extends Disposable {
 						{ type },
 						() => {
 							if (type === AccessibleViewType.Help) {
-								return localize('chat.modelPicker.help', 'Model menu. Space toggles Auto. When Auto is on, only its switch is shown. When Auto is off, retirement badges show confirmed shutdown dates when available. Type to search, use Up and Down Arrow to browse models, and Enter to select. Right Arrow reads the model description when available. Use the model options button beside the model button to change thinking level or context size. Alt+Left Arrow returns to search. Escape closes the menu.');
+								return localize('chat.modelPicker.help', 'Model menu. Space toggles Auto. When Auto is on, only its switch is shown. When Auto is off, retirement badges show confirmed shutdown dates when available. Type to search, use Up and Down Arrow to browse models, and Enter to select. Right Arrow reads the model description when available. Use the model options button beside the model button to change thinking level or context size. Alt+Left Arrow returns to search. Escape closes the menu. Add Models opens Language Models management.');
 							}
 							return content.innerText;
 						},

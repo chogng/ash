@@ -1653,6 +1653,8 @@ test('Models Settings keeps loading API connections when the model catalog chang
 test('Models Settings orders enabled models by catalog position and restores disabled positions', async () => {
 	using resources = new DisposableStore();
 	const root = h(browserEnvironment.window.document, 'div');
+	browserEnvironment.window.document.body.append(root);
+	resources.add(toDisposable(() => root.remove()));
 	const catalog = [
 		{ model: { provider: 'first', model: 'newest' }, displayName: 'First newest', longContext: null },
 		{ model: { provider: 'first', model: 'older' }, displayName: 'First older', longContext: null },
@@ -1699,13 +1701,18 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 	const content = resources.add(services.createInstance(ModelSettingsRenderer, root));
-	const loaded = new DeferredPromise<void>();
-	resources.add(content.onDidChange(() => {
-		if (content.getNodes()[0].children?.some(node => node.element.id === 'models.catalog.first/newest')) { void loaded.complete(); }
+	const tree = resources.add(new SettingsTreeModel<SettingsSectionReference>());
+	resources.add(new SettingsTree(root, {
+		model: tree, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list',
+		renderGroupHeader: header => content.renderItem(header), renderItem: item => content.renderItem(item.value),
 	}));
+	resources.add(content.onDidChange(() => tree.setChildren(content.getNodes())));
 	content.setVisible(true);
-	await loaded.p;
-	const names = (query?: InstanceType<typeof SettingsSearchQuery>): string[] => content.getNodes(query)[0].children!.filter(node => node.element.id.startsWith('models.catalog.') && node.element.id !== 'models.catalog.expand').map(node => node.element.title);
+	await nextTurn();
+	const names = (query?: InstanceType<typeof SettingsSearchQuery>): string[] => {
+		content.getNodes(query);
+		return [...root.querySelectorAll('.ash-models-settings-model-copy')].map(row => row.textContent!);
+	};
 	assert.deepEqual(names(), ['First newest', 'Second', 'Third']);
 	// Enable in reverse order so activation order cannot masquerade as catalog order.
 	await models.setModelVisible(catalog[3].model, true);
@@ -1716,9 +1723,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	await models.setModelVisible(catalog[3].model, false);
 	assert.deepEqual(names(), ['First newest', 'Second', 'Third']);
 	await models.setModelVisible(catalog[1].model, true);
-	const group = content.getNodes()[0].element;
-	assert.ok(group.kind === 'group');
-	const search = content.renderItem(group.header!).querySelector<HTMLInputElement>('input')!;
+	const search = root.querySelector<HTMLInputElement>('input[type="search"]')!;
 	search.value = 'first';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.deepEqual(names(), ['First older', 'First newest']);
@@ -1726,7 +1731,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	assert.deepEqual(names(), ['First newest', 'First older']);
 	search.value = '';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
-	assert.deepEqual(names(new SettingsSearchQuery('older')), ['First newest', 'First older', 'Second', 'Third']);
+	assert.deepEqual(names(new SettingsSearchQuery('older')), ['First older']);
 });
 
 test('Settings tree preserves item identity while filtering and updating', () => {
@@ -2864,7 +2869,9 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	assert.equal(expand.getAttribute('aria-expanded'), 'true');
 	expand.click();
 	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 2);
-	assert.equal(content.getNodes(new SettingsSearchQuery('Older')).flatMap(node => node.children ?? []).some(node => node.element.kind === 'item' && node.element.title === 'Older OpenAI'), true);
+	assert.equal(content.getNodes(new SettingsSearchQuery('Older')).flatMap(node => node.children ?? []).some(node => node.element.kind === 'item' && node.element.description.includes('Older OpenAI')), true);
+	assert.deepEqual([...root.querySelectorAll('.ash-models-settings-model-copy')].map(row => row.textContent), ['Older OpenAI']);
+	content.getNodes();
 	const search = root.querySelector<HTMLInputElement>('input[aria-label="Search models"]')!;
 	const searchModels = (value: string): void => {
 		search.value = value;

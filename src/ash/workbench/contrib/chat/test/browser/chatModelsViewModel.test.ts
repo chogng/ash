@@ -1,145 +1,178 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { Event } from '../../../../../base/common/event.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
+import { renderMarkdown } from '../../../../../base/browser/markdownRenderer.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
+import { Emitter } from '../../../../../base/common/event.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
-import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
-import type { CustomModelProvider } from '../../../../../platform/agentHost/common/agentModels.js';
-import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
+import type { ModelProviderCredentialStatus } from '../../../../../platform/agentHost/common/agentModels.js';
+import { modelRefIdentity, type ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
-import { ChatModelsViewModel } from '../../browser/chatManagement/chatModelsViewModel.js';
+import { ChatModelsViewModel, isLanguageModelProviderEntry, isStatusEntry, type ILanguageModelEntry, type IViewModelEntry } from '../../browser/chatManagement/chatModelsViewModel.js';
+import { getModelHoverContent } from '../../browser/chatManagement/chatModelsWidget.js';
 
-function fixture(provider: CustomModelProvider) {
-	const resources = new DisposableStore();
-	const notifications = resources.add(new TestNotificationService());
+const catalog: readonly ModelCatalogEntry[] = [
+	{ model: { provider: 'first', model: 'newest' }, displayName: 'New Model', longContext: null, inputModalities: ['text', 'image'], description: 'A supplied description.', contextWindow: 128000 },
+	{ model: { provider: 'first', model: 'older' }, displayName: 'Older Model', longContext: null, inputModalities: ['text'] },
+	{ model: { provider: 'second', model: 'other' }, displayName: 'Other', longContext: null },
+];
+
+function setup(resources: DisposableStore) {
 	const services = resources.add(new InstantiationService());
-	const enabled = new Set<string>();
-	let discoveryCalls = 0;
-	const tests: string[] = [];
-	const writes: CustomModelProvider[] = [];
-	let catalog: readonly ModelCatalogEntry[] = [];
-	let failDiscovery = false;
-	let failSave = false;
-	let pendingProbe: Promise<{ type: 'passed'; }> | undefined;
-	const models: ILanguageModelsService = {
-		readApprovalReviewModel: async () => ({ type: 'automatic' }),
-		setApprovalReviewModel: async () => { },
-		setModelPreferences: async () => { },
-		onDidChangeModels: Event.None,
-		listModels: async () => [],
-		getDefaultNewChatModel: () => undefined,
-		rememberSelectedModel: async () => { },
-		readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }),
-		saveReasoningEffort: async () => { },
-		listModelCatalog: async () => catalog,
-		listCustomModelProviders: async () => [provider],
-		saveCustomModelProvider: async value => { if (failSave) throw new Error('Write rejected'); writes.push(value); },
-		testProviderModel: async (_provider, id) => {
-			tests.push(id);
-			if (pendingProbe) return pendingProbe;
-			return id === 'rejected' ? { type: 'failed', message: 'Not authorized' } : { type: 'passed' };
-		},
-		listModelProviders: async () => [],
-		setModelProviderApiKey: async () => { },
-		removeModelProviderApiKey: async () => { },
-		listAdvisorModels: async () => [],
-		refreshModels: async () => catalog,
-		isModelVisible: model => enabled.has(model.model),
-		setModelVisible: async (model, value) => { if (value) enabled.add(model.model); else enabled.delete(model.model); },
-		discoverProviderModels: async () => {
-			discoveryCalls++;
-			if (failDiscovery) throw new Error('Endpoint unavailable');
-			return catalog;
-		},
+	const changed = resources.add(new Emitter<void>());
+	const enabled = new Set([modelRefIdentity(catalog[0].model)]);
+	const writes: { provider: string; model: string; visible: boolean; }[] = [];
+	const source = {
+		read: async (): Promise<readonly ModelCatalogEntry[]> => catalog,
+		providers: async (): Promise<readonly ModelProviderCredentialStatus[]> => [
+			{ connection: 'first', provider: 'vendor-a', displayName: 'First Provider' },
+			{ connection: 'second', provider: 'vendor-b', displayName: 'Second Provider' },
+		] as ModelProviderCredentialStatus[],
+		failWrite: false,
 	};
-	services.registerInstance(ILanguageModelsService, models);
-	services.registerInstance(INotificationService, notifications);
-	const view = resources.add(services.createInstance(ChatModelsViewModel, provider, false));
-	return {
-		resources, view, notifications, enabled, tests, writes,
-		get discoveryCalls() { return discoveryCalls; },
-		set catalog(value: readonly ModelCatalogEntry[]) { catalog = value; },
-		set failDiscovery(value: boolean) { failDiscovery = value; },
-		set failSave(value: boolean) { failSave = value; },
-		set pendingProbe(value: Promise<{ type: 'passed'; }>) { pendingProbe = value; },
-	};
+	services.registerInstance(ILanguageModelsService, {
+		onDidChangeModels: changed.event,
+		listModelCatalog: () => source.read(),
+		listModelProviders: () => source.providers(),
+		isModelVisible: model => enabled.has(modelRefIdentity(model)),
+		setModelVisible: async (model, visible) => {
+			if (source.failWrite) { throw new Error('Write rejected'); }
+			writes.push({ ...model, visible });
+			if (visible) { enabled.add(modelRefIdentity(model)); } else { enabled.delete(modelRefIdentity(model)); }
+			changed.fire();
+		},
+	} as ILanguageModelsService);
+	const view = resources.add(services.createInstance(ChatModelsViewModel));
+	const models = (filter: string): ILanguageModelEntry[] => view.filter(filter).filter((entry): entry is ILanguageModelEntry => entry.type === 'model');
+	return { view, source, changed, enabled, writes, models };
 }
-const provider: CustomModelProvider = { id: 'custom-test', name: 'Test gateway', baseUrl: 'https://test.example/v1', apiFormat: 'chatCompletions', order: 1, models: [] };
-const discovered = (id: string): ModelCatalogEntry => ({ model: { provider: provider.id, model: id }, displayName: id, longContext: null, discovered: true });
 
-test('Test models discovers an empty table once, tests every row and reports one summary without enabling models', async () => {
-	const context = fixture(provider);
-	using resources = context.resources;
-	context.catalog = [discovered('available'), discovered('rejected')];
-	await context.view.testModels(async () => { });
-	assert.equal(context.discoveryCalls, 1);
-	assert.deepEqual(context.tests, ['available', 'rejected']);
-	assert.deepEqual(context.view.rows.map(row => [row.id, row.status]), [['available', 'passed'], ['rejected', 'failed']]);
-	assert.deepEqual([...context.enabled], []);
-	assert.deepEqual(context.notifications.model.getNotifications().map(item => [item.severity, item.message]), [[Severity.Warning, 'Test gateway: 1 of 2 models passed.']]);
-	await context.view.testModels(async () => { });
-	assert.equal(context.discoveryCalls, 1);
-	assert.deepEqual(context.tests, ['available', 'rejected', 'available', 'rejected']);
+test('Catalog construction requires its domain service and refresh produces real splice events', async () => {
+	using resources = new DisposableStore();
+	const empty = resources.add(new InstantiationService());
+	assert.throws(() => empty.createInstance(ChatModelsViewModel), /languageModelsService/);
+	const { view } = setup(resources);
+	const projection: IViewModelEntry[] = [];
+	resources.add(view.onDidChange(event => {
+		projection.splice(event.at, event.removed, ...event.added);
+		assert.deepEqual(projection, view.viewModelEntries);
+	}));
+	assert.equal(view.shouldRefilter(), true);
+	await view.refresh();
+	assert.equal(view.shouldRefilter(), false);
+	assert.equal(projection.filter(entry => entry.type === 'model').length, 3);
+	assert.equal(projection.filter(isLanguageModelProviderEntry).length, 2);
 });
 
-test('Refreshing and reopening retain discovered membership, context mappings and enabled choices', async () => {
-	const config = { ...provider, models: [{ id: 'available', contextWindow: 1_000_000 }, { id: 'local-alias', contextWindow: 128_000, upstreamModel: 'available' }] };
-	const context = fixture(config);
-	using resources = context.resources;
-	context.catalog = [discovered('available'), { model: { provider: provider.id, model: 'local-alias' }, displayName: 'local-alias', longContext: null }];
-	await context.view.initialize();
-	await context.view.setEnabled('available', true);
-	await context.view.removeModel('available');
-	assert.deepEqual(context.view.rows.map(row => [row.id, row.manual]), [['available', false], ['local-alias', true]]);
-	assert.equal(context.view.isEnabled('available'), false);
-	await context.view.setEnabled('available', true);
-	await context.view.refresh(async () => { });
-	assert.equal(context.view.isEnabled('available'), true);
-	assert.deepEqual(context.view.provider.models, [{ id: 'local-alias', contextWindow: 128_000, upstreamModel: 'available' }]);
-	context.failDiscovery = true;
-	const before = context.view.rows.map(row => row.id);
-	await context.view.refresh(async () => { });
-	assert.deepEqual(context.view.rows.map(row => row.id), before);
-	assert.match(context.notifications.model.getNotifications().at(-1)!.message, /Endpoint unavailable/);
+test('Catalog filters quoted provider names, OR providers, text and declared vision without inferring unknown capabilities', async () => {
+	using resources = new DisposableStore();
+	const { view, models } = setup(resources);
+	await view.refresh();
+	assert.deepEqual(models('@provider:"FIRST Provider"').map(entry => entry.model.model.model), ['newest', 'older']);
+	assert.equal(models('@provider:first @provider:second').length, 3);
+	assert.deepEqual(models('@provider:first @capability:vision "new model"').map(entry => entry.model.model.model), ['newest']);
+	assert.equal(models('@capability:tools').length, 0);
+	assert.equal(models('@capability:agent').length, 0);
+	assert.equal(models('@capability:vision @provider:second').length, 0);
+	assert.equal(models('first/older').length, 1);
+	assert.equal(models('second provider').length, 1);
+	assert.equal(models('  ').length, 3);
 });
 
-test('Manual-only IDs test without discovery and failed deletion preserves the declaration', async () => {
-	const context = fixture({ ...provider, models: [{ id: 'manual', contextWindow: 128_000 }] });
-	using resources = context.resources;
-	await context.view.testModels(async () => { });
-	assert.equal(context.discoveryCalls, 0);
-	assert.deepEqual(context.tests, ['manual']);
-	context.failSave = true;
-	await assert.rejects(context.view.removeModel('manual'), /Write rejected/);
-	assert.deepEqual(context.view.provider.models, [{ id: 'manual', contextWindow: 128_000 }]);
+test('Group visibility is scoped by connection identity even when provider labels are identical', async () => {
+	using resources = new DisposableStore();
+	const { view, source, writes, models } = setup(resources);
+	source.providers = async () => ['first', 'second'].map(connection => ({ connection, provider: 'same-vendor', displayName: 'Same name' })) as ModelProviderCredentialStatus[];
+	await view.refresh();
+	const groups = view.viewModelEntries.filter(isLanguageModelProviderEntry);
+	assert.equal(groups.length, 2);
+	assert.notEqual(groups[0].id, groups[1].id);
+	assert.deepEqual(view.getModelsForGroup(groups[0]).map(model => model.model.model), ['newest', 'older']);
+	view.filter('@provider:first older');
+	const filteredGroup = view.viewModelEntries.find(isLanguageModelProviderEntry)!;
+	assert.equal(filteredGroup.hidden, false, 'A hidden search result does not hide another enabled model in the same connection');
+	await view.toggleGroupHidden(filteredGroup);
+	assert.deepEqual(writes.map(write => [write.provider, write.model, write.visible]), [['first', 'newest', false], ['first', 'older', false]]);
+	assert.equal(models('@provider:second')[0].model.hidden, true);
+	await view.setModelsHidden(models('@provider:first'), false);
+	assert.ok(models('@provider:first').every(entry => !entry.model.hidden));
 });
 
-test('An empty successful response stays distinct from a discovery failure', async () => {
-	const context = fixture(provider);
-	using resources = context.resources;
-	await context.view.refresh(async () => { });
-	assert.match(context.view.message, /returned no models/);
-	assert.equal(context.notifications.model.getNotifications().length, 0);
-	context.failDiscovery = true;
-	await context.view.testModels(async () => { });
-	assert.deepEqual(context.tests, []);
-	assert.equal(context.view.busy, false);
-	assert.match(context.view.message, /Endpoint unavailable/);
-	assert.equal(context.notifications.model.getNotifications().length, 1);
+test('Collapsing provider groups and searching uses one projection and preserves a surviving selection', async () => {
+	using resources = new DisposableStore();
+	const { view, models } = setup(resources);
+	await view.refresh();
+	view.selectedEntry = models('')[0];
+	const id = view.selectedEntry.id;
+	await view.refresh();
+	assert.equal(view.selectedEntry?.id, id);
+	view.collapseAll();
+	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 0);
+	const group = view.viewModelEntries.filter(isLanguageModelProviderEntry)[0];
+	view.toggleCollapsed(group);
+	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 2);
+	assert.equal(models('other').length, 1, 'A new search expands its matching groups');
+	view.collapseAll();
+	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 0, 'Collapse remains effective while searching');
+	assert.equal(models('').length, 3);
 });
 
-test('Disposing a testing card prevents its late response from announcing success', async () => {
-	const context = fixture({ ...provider, models: [{ id: 'manual', contextWindow: 128_000 }] });
-	using resources = context.resources;
-	const pending = new DeferredPromise<{ type: 'passed'; }>();
-	context.pendingProbe = pending.p;
-	const testing = context.view.testModels(async () => { });
-	await new Promise<void>(resolve => setTimeout(resolve, 0));
-	assert.equal(context.view.busy, true);
-	context.view.dispose();
-	pending.complete({ type: 'passed' });
-	await testing;
-	assert.deepEqual(context.notifications.model.getNotifications(), []);
+test('Catalog refresh is independent of a pending provider credential observation', async () => {
+	using resources = new DisposableStore();
+	const { view, source, models } = setup(resources);
+	const providers = new DeferredPromise<readonly ModelProviderCredentialStatus[]>();
+	source.providers = () => providers.p;
+	await view.refresh();
+	assert.equal(models('').length, 3);
+	assert.deepEqual(view.getConfiguredVendors().map(provider => provider.group.vendor), ['first', 'second']);
+	assert.deepEqual(view.getVendors().map(provider => provider.vendor), ['first', 'second']);
+	await providers.complete([]);
+});
+
+test('Retired refresh results and failures cannot overwrite a successor catalog or a disposed model', async () => {
+	using resources = new DisposableStore();
+	const { view, source, models } = setup(resources);
+	const first = new DeferredPromise<readonly ModelCatalogEntry[]>();
+	source.read = () => first.p;
+	const retired = view.refresh();
+	source.read = async () => [catalog[2]];
+	await view.refresh();
+	await first.complete([catalog[0]]);
+	await retired;
+	assert.deepEqual(models('').map(entry => entry.model.displayName), ['Other']);
+	const late = new DeferredPromise<readonly ModelCatalogEntry[]>();
+	source.read = () => late.p;
+	const pending = view.refresh();
+	view.dispose();
+	await late.complete(catalog);
+	await pending;
+	assert.deepEqual(view.viewModelEntries.filter(entry => entry.type === 'model').map(entry => entry.model.displayName), ['Other']);
+});
+
+test('A failed refresh keeps the last catalog with an error status and a failed visibility write keeps service truth', async () => {
+	using resources = new DisposableStore();
+	const { view, source, models } = setup(resources);
+	await view.refresh();
+	source.read = async () => { throw new Error('Offline'); };
+	await assert.rejects(view.refresh(), /Offline/);
+	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 3);
+	assert.ok(view.viewModelEntries.some(isStatusEntry));
+	source.failWrite = true;
+	const entry = models('newest')[0];
+	await assert.rejects(view.toggleModelHidden(entry), /Write rejected/);
+	assert.equal(models('newest')[0].model.hidden, false);
+});
+
+test('Model hover exposes supplied identity, description and context without fabricated pricing or capabilities', async () => {
+	using resources = new DisposableStore();
+	const { view, models } = setup(resources);
+	await view.refresh();
+	const hover = getModelHoverContent(models('newest')[0].model);
+	using rendered = renderMarkdown(hover, { ownerDocument: browserEnvironment.window.document });
+	const text = rendered.element.textContent!.replaceAll('\u00a0', ' ');
+	assert.ok(text.includes('A supplied description.'));
+	assert.ok(text.includes('128,000'));
+	assert.equal(hover.isTrusted, false);
+	assert.doesNotMatch(hover.value, /credits|cost|tool calling/iu);
 });

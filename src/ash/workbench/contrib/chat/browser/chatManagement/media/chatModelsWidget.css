@@ -1,0 +1,101 @@
+.ash-chat-models-catalog {
+	box-sizing: border-box;
+	min-width: 0;
+}
+
+.ash-chat-models-catalog.is-sized {
+	overflow: auto;
+}
+
+.ash-chat-models-catalog [hidden] {
+	display: none;
+}
+
+.ash-chat-models-catalog > .ash-input-box {
+	width: 100%;
+	margin-bottom: var(--ash-spacing-size80);
+}
+
+.ash-chat-models-catalog > .ash-button {
+	margin-bottom: var(--ash-spacing-size80);
+}
+
+.ash-chat-models-filters {
+	margin-bottom: var(--ash-spacing-size80);
+}
+
+.ash-chat-models-filters > summary {
+	cursor: pointer;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-chat-models-filters > summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-chat-models-filter-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size80) 0;
+}
+
+.ash-chat-models-provider {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size160);
+}
+
+.ash-chat-models-provider > .ash-button {
+	flex: 1;
+	min-width: 0;
+	justify-content: flex-start;
+}
+
+.ash-chat-models-catalog .ash-chat-models-provider > .ash-switch {
+	width: auto;
+	flex: 0 0 auto;
+}
+
+.ash-chat-models-catalog .ash-models-settings-model-row {
+	min-width: 0;
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+}
+
+.ash-chat-models-catalog .ash-switch {
+	width: 100%;
+}
+
+.ash-chat-models-catalog .ash-models-settings-model-copy {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-chat-models-catalog .ash-models-settings-model-copy > span {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-chat-models-catalog .ash-models-settings-empty {
+	margin: 0;
+	color: var(--ash-description-foreground);
+}
+
+.ash-chat-models-catalog .ash-models-settings-status {
+	margin: var(--ash-spacing-size120) 0 0;
+	color: var(--ash-error-foreground);
+}
+
+.ash-chat-models-catalog .ash-models-settings-expand {
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size160);
+}
+
+.ash-chat-models-catalog .ash-models-settings-expand .ash-button {
+	width: 100%;
+}

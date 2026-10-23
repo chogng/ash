@@ -2023,7 +2023,7 @@ suite('chatInput browser component', () => {
 				await page.evaluate(() => window.ashChatInputIntegration.openModels());
 				await expect(page.getByRole('switch', { name: locale === 'en' ? 'Auto' : '自动', exact: true })).not.toBeChecked();
 				await page.getByRole('menuitem', { name: locale === 'en' ? 'Add Models' : '添加模型' }).click();
-				await expect(page.getByLabel('Opened sources')).toContainText('"settings":"models"');
+				await expect(page.getByLabel('Opened sources')).toContainText('"command":"workbench.action.chat.manage"');
 				await context.click();
 				await expect(details).toBeVisible();
 				await page.evaluate(() => window.ashChatInputIntegration.dispose());
