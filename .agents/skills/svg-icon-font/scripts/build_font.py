@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from array import array
 import hashlib
 import html
 import json
@@ -22,6 +23,7 @@ from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.svgLib.path import parse_path
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables import otTables
+from fontTools.ttLib.tables._g_l_y_f import GlyphCoordinates
 from picosvg.svg import SVG
 from picosvg.svg_transform import Affine2D
 from picosvg.svg_types import SVGPath, union
@@ -184,7 +186,27 @@ def make_glyph(viewbox, outline):
     pen = TTGlyphPen(None)
     transform = (scale, 0, 0, -scale, left - viewbox.x * scale, bottom + (viewbox.y + viewbox.h) * scale)
     parse_path(outline, TransformPen(Cu2QuPen(pen, UPM / 1000), transform))
-    return pen.glyph()
+    glyph = pen.glyph()
+    # Skia can emit equivalent contours in a different order or with a different
+    # starting point. Canonicalize before serialization, preserving winding and
+    # on/off-curve flags so a rebuild cannot change bytes without changing art.
+    contours, start = [], 0
+    for end in glyph.endPtsOfContours:
+        points = [(x, y, flag) for (x, y), flag in zip(glyph.coordinates[start:end + 1], glyph.flags[start:end + 1])]
+        first = min(points)
+        contours.append(min(points[index:] + points[:index] for index, point in enumerate(points) if point == first))
+        start = end + 1
+    if contours:
+        contours.sort()
+        points = [point for contour in contours for point in contour]
+        glyph.coordinates = GlyphCoordinates((x, y) for x, y, _ in points)
+        glyph.flags = array("B", (flag for _, _, flag in points))
+        glyph.endPtsOfContours = []
+        end = -1
+        for contour in contours:
+            end += len(contour)
+            glyph.endPtsOfContours.append(end)
+    return glyph
 
 
 def build(manifest, out, color_glyphs=()):

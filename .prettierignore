@@ -23,6 +23,7 @@ src/ash/base/common/marked/
 schemas/
 # These checked-in files retain their owning generator's canonical serialization.
 build/lib/stylelint/ash-known-variables.json
+resources/icons/font/manifest.json
 crates/config/schema.json
 crates/model-provider-info/models.schema.json
 pnpm-lock.yaml

@@ -148,6 +148,16 @@ class SvgFontTests(unittest.TestCase):
             glyphs["hole"].draw(pen)
             self.assertAlmostEqual(abs(pen.value), (14 ** 2 - 8 ** 2) * (UPM / 16) ** 2)
 
+    def test_contour_order_and_start_points_do_not_change_font_bytes(self):
+        source = self.svg('<path d="M1 1H5V5H1Z M9 9Q13 9 13 13H9Z"/>')
+        manifest = self.manifest([{"id": "sample", "unicode": "E001", "source": source.name}])
+        one = build(manifest, self.root / "one")
+        source.write_text(source.read_text().replace(
+            "M1 1H5V5H1Z M9 9Q13 9 13 13H9Z",
+            "M13 13H9V9Q13 9 13 13Z M5 5H1V1H5Z"))
+        two = build(manifest, self.root / "two")
+        self.assertEqual(one["woff2Sha256"], two["woff2Sha256"])
+
     def test_white_mask_and_viewport_clip_preserve_visible_area(self):
         source = self.svg('<defs><mask id="cut" fill="white"><path d="M0 0H8V16H0Z"/></mask></defs><path mask="url(#cut)" d="M-4 -4H20V20H-4Z"/>')
         report = build(self.manifest([{"id": "clipped", "unicode": "E001", "source": source.name}]), self.root / "font")
