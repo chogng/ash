@@ -908,7 +908,8 @@ for (const locale of ['en', 'zh-CN']) {
 		const review = page.getByRole('dialog', { name: install, exact: true });
 		await expect(review).toContainText('publisher.sample@ash');
 		await review.getByRole('button', { name: install, exact: true }).click();
-		await expect(editor).toContainText(locale === 'en' ? 'Enabled' : '已启用');
+		await expect(editor.getByRole('switch')).toBeChecked();
+		await expect(editor.locator('.extension-detail-header [role="status"]')).toBeEmpty();
 		await expect(editor.getByRole('button', { name: locale === 'en' ? 'Authorize execution' : '授权执行', exact: true })).toBeVisible();
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'editorPolicy'))).toEqual([]);
 		for (const [action, policyAction] of locale === 'en' ? [['Disable', 'disable'], ['Authorize execution', 'grant'], ['Revoke execution authorization', 'revoke'], ['Enable', 'enable']] : [['禁用', 'disable'], ['授权执行', 'grant'], ['撤销执行授权', 'revoke'], ['启用', 'enable']]) {
@@ -951,7 +952,7 @@ for (const trigger of ['command', 'view']) {
 		await page.evaluate(() => window.ashExtensionsIntegration.open({ mode: 'installed' }));
 		const installedView = page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions');
 		await expect(installedView).toHaveAttribute('aria-busy', 'false');
-		await expect(installedView.getByRole('option').filter({ hasText: 'ash.language-pack-zh-cn' })).toBeVisible();
+		await expect(installedView.locator('[data-package-id="ash.language-pack-zh-cn"]')).toBeVisible();
 		const status = await view.locator('.extensions-status').textContent();
 		await page.evaluate(() => window.ashExtensionsIntegration.failHeldSearch());
 		await expect(view.locator('.extensions-status')).toHaveText(status!);
@@ -975,7 +976,10 @@ test('Extensions updates the selected exact installation to the reviewed version
 	const review = page.getByRole('dialog', { name: 'Update', exact: true });
 	await expect(review).toContainText('2.0.0');
 	await review.getByRole('button', { name: 'Update', exact: true }).click();
-	await expect(page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions')).toContainText('2.0.0');
+	const updated = page.locator('[data-view-id="ash.extensions.plugins"] [data-installation-id="updated-installation"]');
+	await expect(updated).toBeVisible();
+	await updated.click();
+	await expect(editor).toContainText('2.0.0');
 	expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'update'))).toEqual([['update', { installationId: 'version-one', version: '2.0.0' }]]);
 });
 
@@ -992,15 +996,15 @@ test('Extensions reviews bundled capabilities and uninstalls a selected version 
 	await installFixture(page);
 	await page.evaluate(() => { window.ashExtensionsIntegration.addSecondVersion(); window.ashExtensionsIntegration.setOffline(); return window.ashExtensionsIntegration.open({ mode: 'installed' }); });
 	const installedView = page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions');
-	const versions = installedView.getByRole('option').filter({ hasText: 'example/web' });
+	const versions = installedView.locator('[data-package-id="example/web"]');
 	await expect(versions).toHaveCount(2);
-	await versions.filter({ hasText: '2.0.0' }).click();
+	await installedView.locator('[data-installation-id="version-two"]').click();
 	const editor = page.locator('.ash-extension-editor');
 	await expect(editor).toContainText('2.0.0');
 	await editor.getByRole('button', { name: 'Uninstall', exact: true }).click();
 	await page.getByRole('dialog', { name: 'Uninstall extension', exact: true }).getByRole('button', { name: 'Uninstall', exact: true }).click();
 	await expect(versions).toHaveCount(1);
-	await expect(installedView.getByRole('option').filter({ hasText: 'ash.language-pack-zh-cn' })).toBeVisible();
+	await expect(installedView.locator('[data-package-id="ash.language-pack-zh-cn"]')).toBeVisible();
 	expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'uninstall'))).toEqual([['uninstall', { installationId: 'version-two', mode: 'whenUnused' }]]);
 });
 
@@ -1024,14 +1028,14 @@ test('Third-party Ash sources can be added, paused and resumed through Extension
 	expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'setSourceEnabled').map((entry: any) => entry[1]))).toEqual([{ sourceId: 'community', enabled: false, expectedRevision: 1 }, { sourceId: 'community', enabled: true, expectedRevision: 2 }]);
 });
 
-for (const [locale, disable, enable, disabled, languagePackReason] of [
-	['en', 'Disable', 'Enable', 'Disabled', 'cannot be disabled'],
-	['zh-CN', '禁用', '启用', '已禁用', '不能禁用'],
+for (const [locale, disabled, languagePackReason] of [
+	['en', 'Disabled', 'cannot be disabled'],
+	['zh-CN', '已禁用', '不能禁用'],
 ]) {
 	test(`Built-in language pack list and details use backend metadata in ${locale}`, async ({ page }) => {
 		await page.goto(`/extensions.html?rustBuiltIn&locale=${locale}`);
 		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
-		const languagePack = page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions').getByRole('option').filter({ hasText: 'ash.language-pack-zh-cn' });
+		const languagePack = page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions').locator('[data-package-id="ash.language-pack-zh-cn"]');
 		await expect(languagePack).toContainText('中文语言包（Rust 目录）');
 		await languagePack.click();
 		const editor = page.locator('.ash-extension-editor');
@@ -1044,9 +1048,9 @@ for (const [locale, disable, enable, disabled, languagePackReason] of [
 		await page.goto(`/extensions.html?locale=${locale}`);
 		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.open'));
 		const view = page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions');
-		const languagePack = view.getByRole('option').filter({ hasText: 'ash.language-pack-zh-cn' });
-		await expect(languagePack).toContainText(locale === 'en' ? 'Built-in' : '内置');
-		await expect(languagePack).toHaveAccessibleName(new RegExp(locale === 'en' ? 'Built-in' : '内置'));
+		const languagePack = view.locator('[data-package-id="ash.language-pack-zh-cn"]');
+		await expect(languagePack.locator('.extension-metadata')).toHaveText('Ash');
+		await expect(languagePack).toHaveAccessibleName(/Ash/u);
 		await expect(languagePack.getByRole('button')).toHaveCount(0);
 		await languagePack.click();
 		await expect(page.locator('.ash-extension-editor').getByRole('status')).toContainText(languagePackReason);
@@ -1056,22 +1060,22 @@ for (const [locale, disable, enable, disabled, languagePackReason] of [
 		await page.goto(`/extensions.html?locale=${locale}`);
 		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
 		const view = page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions');
-		const extension = view.getByRole('option').filter({ hasText: 'vscode.javascript' });
-		await expect(extension.getByRole('button', { name: disable, exact: true })).toBeVisible();
-		await extension.getByRole('button', { name: disable, exact: true }).focus();
-		await page.keyboard.press('Enter');
-		await expect(extension.getByRole('button', { name: enable, exact: true })).toBeVisible();
-		await expect(page.locator('.ash-extension-editor')).toHaveCount(0);
+		const extension = view.locator('[data-package-id="vscode.javascript"]');
+		await expect(extension.getByRole('button')).toHaveCount(0);
 		await extension.click();
 		const editor = page.locator('.ash-extension-editor');
-		await expect(editor.getByRole('status')).toContainText(disabled);
+		await expect(editor.getByRole('switch')).toBeChecked();
+		await editor.getByRole('switch').press('Space');
+		await expect(editor.getByRole('switch')).not.toBeChecked();
+		await expect(editor.locator('.extension-detail-header [role="status"]')).toBeEmpty();
 		await page.reload();
 		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
-		await expect(extension.getByRole('button', { name: enable, exact: true })).toBeVisible();
+		await expect(extension).toHaveAccessibleName(new RegExp(disabled, 'u'));
 		await extension.click();
+		await expect(editor.getByRole('switch')).not.toBeChecked();
 		await editor.getByRole('switch').press('Space');
-		await expect(extension.getByRole('button', { name: disable, exact: true })).toBeVisible();
-		const languagePack = view.getByRole('option').filter({ hasText: 'ash.language-pack-zh-cn' });
+		await expect(editor.getByRole('switch')).toBeChecked();
+		const languagePack = view.locator('[data-package-id="ash.language-pack-zh-cn"]');
 		await expect(languagePack.getByRole('button')).toHaveCount(0);
 		await languagePack.click();
 		await expect(editor.getByRole('status')).toContainText(languagePackReason);
@@ -1079,22 +1083,57 @@ for (const [locale, disable, enable, disabled, languagePackReason] of [
 	});
 }
 
-for (const [locale, disable, enable, disabled, running, onDemand] of [
-	['en', 'Disable', 'Enable', 'Disabled', 'Enabled · running', 'Enabled · starts on demand'],
-	['zh-CN', '禁用', '启用', '已禁用', '已启用 · 正在运行', '已启用 · 按需启动'],
+for (const [locale, disabled] of [
+	['en', 'Disabled'],
+	['zh-CN', '已禁用'],
 ]) {
-	test(`Built-in Rust provider controls use backend authority and report on-demand activation in ${locale}`, async ({ page }) => {
-		await page.goto(`/extensions.html?locale=${locale}`);
-		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
-		const provider = page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions').getByRole('option').filter({ hasText: 'ash.github-authentication' });
+	test(`Plain extension search finds and disables rust-analyzer in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?classification&locale=${locale}`);
+		const search = page.locator('#extensions').getByRole('searchbox');
+		await search.fill('rust');
+		await search.press('Enter');
+		const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
+		const provider = plugins.locator('[data-package-id="vscode.rust"]');
+		await expect(provider).toBeVisible();
+		await expect(provider.getByRole('button')).toHaveCount(0);
 		await provider.click();
 		const editor = page.locator('.ash-extension-editor');
-		await expect(editor.getByRole('status')).toHaveText(running);
 		await editor.getByRole('switch').press('Space');
-		await expect(provider.getByRole('button', { name: enable, exact: true })).toBeVisible();
-		await expect(editor.getByRole('status')).toHaveText(disabled);
-		await provider.getByRole('button', { name: enable, exact: true }).click();
-		await expect(editor.getByRole('status')).toHaveText(onDemand);
+		await expect(provider).toHaveAccessibleName(new RegExp(disabled, 'u'));
+		for (const query of ['rust-analyzer', '@installed rust-analyzer', '@builtin rust-analyzer']) {
+			await search.fill(query);
+			await search.press('Enter');
+			await expect(provider).toHaveAccessibleName(new RegExp(disabled, 'u'));
+			await expect(plugins.getByRole('option')).toHaveCount(1);
+		}
+		await search.press('ArrowDown');
+		await expect(plugins.getByRole('listbox')).toBeFocused();
+		await plugins.getByRole('listbox').press('Enter');
+		await expect(editor.getByRole('switch')).not.toBeChecked();
+		await expect(editor.locator('.extension-detail-header [role="status"]')).toBeEmpty();
+		await editor.getByRole('switch').press('Space');
+		await expect(editor.locator('.extension-detail-header [role="status"]')).toBeEmpty();
+		await expect(editor.getByRole('switch')).toBeChecked();
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'builtInPolicy'))).toEqual([
+			['builtInPolicy', { id: 'vscode.rust', enabled: false, expectedRevision: 1 }],
+			['builtInPolicy', { id: 'vscode.rust', enabled: true, expectedRevision: 2 }],
+		]);
+	});
+
+	test(`Built-in Rust provider switches use backend authority without duplicate status in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?locale=${locale}`);
+		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
+		const provider = page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions').locator('[data-package-id="ash.github-authentication"]');
+		await provider.click();
+		const editor = page.locator('.ash-extension-editor');
+		await expect(editor.getByRole('switch')).toBeChecked();
+		await expect(editor.locator('.extension-detail-header [role="status"]')).toBeEmpty();
+		await editor.getByRole('switch').press('Space');
+		await expect(provider).toHaveAccessibleName(new RegExp(disabled, 'u'));
+		await expect(editor.getByRole('switch')).not.toBeChecked();
+		await expect(editor.locator('.extension-detail-header [role="status"]')).toBeEmpty();
+		await editor.getByRole('switch').press('Space');
+		await expect(editor.locator('.extension-detail-header [role="status"]')).toBeEmpty();
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'builtInPolicy'))).toEqual([
 			['builtInPolicy', { id: 'ash.github-authentication', enabled: false, expectedRevision: 1 }],
 			['builtInPolicy', { id: 'ash.github-authentication', enabled: true, expectedRevision: 2 }],
@@ -1104,18 +1143,18 @@ for (const [locale, disable, enable, disabled, running, onDemand] of [
 	test(`Built-in Rust provider details remain readable without management authority in ${locale}`, async ({ page }) => {
 		await page.goto(`/extensions.html?locale=${locale}&readOnlyProviders`);
 		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
-		const provider = page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions').getByRole('option').filter({ hasText: 'ash.github-authentication' });
+		const provider = page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions').locator('[data-package-id="ash.github-authentication"]');
 		await expect(provider).toHaveAccessibleName(new RegExp(locale === 'en' ? 'Enabled' : '已启用', 'u'));
 		await expect(provider.getByRole('button')).toHaveCount(0);
 		await provider.click();
 		const editor = page.locator('.ash-extension-editor');
 		const reason = locale === 'en' ? 'This connection cannot enable or disable backend providers.' : '此连接无权启用或禁用后端提供程序。';
-		await expect(editor.getByRole('status')).toContainText(running);
+		await expect(editor.getByRole('switch')).toBeChecked();
 		await expect(editor.getByRole('status')).toContainText(reason);
 		await expect(editor.getByRole('switch')).toBeDisabled();
 		// A native disabled control must also reject keyboard activation.
 		await editor.getByRole('switch').press('Space');
-		await expect(editor.getByRole('status')).toContainText(running);
+		await expect(editor.getByRole('switch')).toBeChecked();
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'builtInPolicy'))).toEqual([]);
 	});
 }
@@ -1306,7 +1345,7 @@ test('Installed Extensions includes packages with different capabilities and use
 	await page.getByRole('dialog', { name: 'Install', exact: true }).getByRole('button', { name: 'Install', exact: true }).click();
 	await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.installed'));
 	const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
-	await expect(plugins.getByRole('option').filter({ hasText: 'publisher.sample' })).toHaveCount(1);
+	await expect(plugins.locator('[data-package-id="publisher.sample@ash"]')).toHaveCount(1);
 	await plugins.getByRole('option').filter({ hasText: 'Skill-only plugin' }).click();
 	await expect(page.locator('.ash-extension-editor')).toContainText('acme/skills');
 	await page.locator('#extensions').getByRole('searchbox').fill('@installed skills');
@@ -1529,9 +1568,9 @@ for (const locale of ['en', 'zh-CN']) {
 				const nameBox = (await name.boundingBox())!;
 				const contentBox = (await row.locator('.extension-row').boundingBox())!;
 				const metadataBox = (await row.locator('.extension-metadata').boundingBox())!;
-				const actionsBox = (await row.locator('.extension-row-actions').boundingBox())!;
 				expect(contentBox.x + contentBox.width - nameBox.x - nameBox.width).toBeCloseTo(12);
-				expect(actionsBox.y).toBeGreaterThanOrEqual(metadataBox.y + metadataBox.height);
+				expect(metadataBox.y).toBeGreaterThanOrEqual(nameBox.y + nameBox.height);
+				await expect(row.locator('.extension-row-actions')).toHaveCount(0);
 				expect(await row.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
 			}
 			await expect(root).toHaveCount(1);
@@ -1644,6 +1683,10 @@ for (const locale of ['en', 'zh-CN']) {
 			await search.fill('@installed ash.bat');
 			await search.press('Enter');
 			await expect(plugins.getByRole('option')).toHaveCount(1);
+			const bat = plugins.locator('[data-package-id="ash.bat"]');
+			await expect(bat.locator('.extension-body > .ash-icon-label')).toHaveText(['bat', 'Ash']);
+			await expect(bat.locator('.extension-footer, .extension-state, .extension-description')).toHaveCount(0);
+			await expect(bat.getByRole('button')).toHaveCount(0);
 			await expect(plugins.locator('.ash-count-badge')).toHaveText('1');
 			await expect(plugins.locator('.ash-count-badge')).toHaveAttribute('aria-label', locale === 'en' ? '1 plugins' : '1 个插件');
 			await expect(plugins.locator('.extensions-status')).toBeHidden();
@@ -1664,7 +1707,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.getByRole('dialog', { name: install, exact: true }).getByRole('button', { name: install, exact: true }).click();
 		const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
 		await expect(plugins.getByRole('option').filter({ hasText: 'Academy' })).toHaveCount(1);
-		await expect(plugins.getByRole('option').filter({ hasText: 'Academy' })).toContainText(locale === 'en' ? 'Editor' : '编辑器');
+		await expect(plugins.getByRole('option').filter({ hasText: 'Academy' }).locator('.extension-metadata')).toHaveText('Fixture publisher');
 		await page.locator('#extensions').getByRole('searchbox').fill('@installed Academy');
 		const installations = await page.evaluate(() => window.ashExtensionsIntegration.installationSnapshot());
 		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.browse'));
@@ -1732,7 +1775,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await search.press('Enter');
 		const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
 		await expect(plugins.getByRole('option')).toHaveCount(1);
-		await expect(plugins.getByRole('option')).toContainText('ash.bat');
+		await expect(plugins.getByRole('option').locator('.extension-name')).toHaveText('bat');
 		await search.fill('Web');
 		await search.press('Enter');
 		await expect(page.locator('[data-view-id="ash.extensions.view"]').getByRole('option')).toContainText('Web tools');
@@ -1743,7 +1786,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await search.press('Escape');
 		await expect(search).toHaveValue('');
 		await expect(page.locator('[data-view-id="ash.extensions.view"]')).toHaveCount(0);
-		await expect(plugins.getByRole('option').filter({ hasText: 'ash.bat' })).toHaveCount(1);
+		await expect(plugins.locator('[data-package-id="ash.bat"]')).toHaveCount(1);
 		await expect(plugins.getByRole('option')).not.toHaveCount(1);
 	});
 
@@ -1863,7 +1906,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(page.locator('.extensions-global-search button')).toHaveCount(2);
 		await connectors.getByRole('button', { name: locale === 'en' ? 'Connections' : '连接', exact: true }).focus();
 		await expect(add).toBeVisible();
-		const selected = page.locator('[data-view-id="ash.extensions.plugins"]').getByRole('option').filter({ hasText: 'ash.bat' });
+		const selected = page.locator('[data-view-id="ash.extensions.plugins"]').locator('[data-package-id="ash.bat"]');
 		await selected.click();
 		await expect(selected).toHaveAttribute('aria-selected', 'true');
 		await search.fill('@installed ash.bat');

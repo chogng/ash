@@ -308,6 +308,13 @@ fn server_request_response(
 ) -> Result<Vec<u8>, LanguageServerError> {
     match method {
         "workspace/configuration" => configuration_response(id, params, host),
+        "workspace/diagnostic/refresh" => {
+            if !params.is_null() {
+                return invalid_params_bytes(id, "diagnostic refresh takes no parameters");
+            }
+            host.on_event(LanguageServerEvent::DiagnosticsRefresh);
+            result_bytes(id, &Value::Null)
+        }
         "workspace/workspaceFolders" => result_bytes(
             id,
             &serde_json::to_value(workspace_folders)

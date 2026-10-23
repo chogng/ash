@@ -1,7 +1,7 @@
 import { ITextFileService } from "../../textfile/common/textfiles.js";
 import { VSBuffer } from "../../../../base/common/buffer.js";
 import { Emitter } from "../../../../base/common/event.js";
-import { Disposable, combinedDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, combinedDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
@@ -39,7 +39,8 @@ interface LanguageDocumentEntry {
 	dirId: string;
 	wireWorkspaceFolderId?: string;
 	path: string;
-	readonly languageId: string;
+	languageId: string;
+	languageGeneration: number;
 	readonly model: TextModel;
 	modelListener: IDisposable;
 	references: number;
@@ -62,6 +63,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	private readonly pullCapabilities = new Map<string, PullDiagnosticCapabilities>();
 	private readonly workspaceServerKeys = new Set<string>();
 	private readonly publishedDiagnostics = new Map<number, PublishedDiagnostics>();
+	private readonly diagnosticRefreshes = new Set<LanguageDocumentEntry>();
 	private readonly changeEmitter = this._register(new Emitter<URI>());
 	private nextPublisherId = 1;
 	private workspaceDiagnosticsQueued = false;
@@ -94,6 +96,19 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		}));
 		const subscription = events.subscribe(event => {
 			if (event.method === "language/diagnostics") this.acceptDiagnostics(event.params);
+			if (event.method === 'language/diagnosticsRefresh') {
+				const dirId = event.params.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
+				const queued = this.diagnosticRefreshes.size > 0;
+				for (const entry of this.entries.values()) {
+					const capabilities = this.pullCapabilities.get(`${entry.dirId}:${entry.languageId}`);
+					if (entry.dirId === dirId && capabilities?.supported && capabilities.server === event.params.server) this.diagnosticRefreshes.add(entry);
+				}
+				if (!queued && this.diagnosticRefreshes.size > 0) queueMicrotask(() => {
+					const entries = [...this.diagnosticRefreshes];
+					this.diagnosticRefreshes.clear();
+					if (this.alive) for (const entry of entries) this.schedule(entry, true);
+				});
+			}
 			if (event.method === 'language/serverCapabilities') {
 				const dirId = event.params.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
 				if (dirId) for (const languageId of event.params.languageIds) this.updatePullCapabilities(`${dirId}:${languageId}`, { server: event.params.server, supported: event.params.features.includes('pullDiagnostics') });
@@ -143,6 +158,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 				entry.modelListener.dispose();
 			}
 			this.entries.clear();
+			this.diagnosticRefreshes.clear();
 			this.serverSnapshots.clear();
 			this.workspaceServerKeys.clear();
 			this.publishedDiagnostics.clear();
@@ -157,19 +173,18 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	}
 
 	acquire(resource: URI, languageId: string, model: TextModel): IDisposable {
-		const jsonDiagnostics = acquireJsonLanguageDiagnostics(resource, languageId, model, () => this.createPublisher(resource));
-
 		const target = this.workspaceTarget(resource);
-		if (!target || model.largeFile.tooLargeForSynchronization) return jsonDiagnostics ?? toDisposable(() => undefined);
 		const key = resource.toString();
 		const existing = this.entries.get(key);
+		if (existing && (existing.model !== model || existing.languageId !== languageId)) throw new Error("One language document resource cannot bind multiple models or languages");
+		const localDiagnostics = this.acquireLocalDiagnostics(resource, languageId, model);
+		if (!target || model.largeFile.tooLargeForSynchronization) return localDiagnostics;
 		if (existing) {
-			if (existing.model !== model || existing.languageId !== languageId) throw new Error("One language document resource cannot bind multiple models or languages");
 			const reopening = existing.references === 0;
-			if (reopening) existing.modelListener = model.onDidChangeContent(() => this.schedule(existing, false));
+			if (reopening) existing.modelListener = this.listenToModel(existing);
 			existing.references += 1;
 			if (reopening) this.schedule(existing, true);
-			return combinedDisposable(jsonDiagnostics ?? toDisposable(() => undefined), toDisposable(() => this.release(key, existing)));
+			return combinedDisposable(localDiagnostics, toDisposable(() => this.release(key, existing)));
 		}
 		const entry: LanguageDocumentEntry = {
 			resource,
@@ -177,6 +192,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			...(this.workspace.getWorkspace().folders.length > 1 ? { wireWorkspaceFolderId: target.dirId } : {}),
 			path: target.path,
 			languageId,
+			languageGeneration: 0,
 			model,
 			modelListener: Disposable.None,
 			references: 1,
@@ -186,7 +202,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			codeIntelligenceSynchronized: false,
 			pullRequest: undefined,
 		};
-		entry.modelListener = model.onDidChangeContent(() => this.schedule(entry, false));
+		entry.modelListener = this.listenToModel(entry);
 		this.workspaceServerKeys.delete(key);
 		const previous = this.serverSnapshots.get(key);
 		// Providers can open the server document while the model is being resolved,
@@ -197,7 +213,37 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		}
 		this.entries.set(key, entry);
 		this.schedule(entry, true);
-		return combinedDisposable(jsonDiagnostics ?? toDisposable(() => undefined), toDisposable(() => this.release(key, entry)));
+		return combinedDisposable(localDiagnostics, toDisposable(() => this.release(key, entry)));
+	}
+
+	private acquireLocalDiagnostics(resource: URI, languageId: string, model: TextModel): IDisposable {
+		const diagnostics = new MutableDisposable<IDisposable>();
+		const update = (language: string): void => {
+			diagnostics.clear();
+			if (this.alive) diagnostics.value = acquireJsonLanguageDiagnostics(resource, language, model, () => this.createPublisher(resource));
+		};
+		update(languageId);
+		return combinedDisposable(diagnostics, model.onDidChangeLanguage(event => update(event.newLanguage)));
+	}
+
+	private listenToModel(entry: LanguageDocumentEntry): IDisposable {
+		return combinedDisposable(
+			entry.model.onDidChangeContent(() => this.schedule(entry, false)),
+			entry.model.onDidChangeLanguage(event => {
+				if (entry.languageId === event.newLanguage) return;
+				entry.languageId = event.newLanguage;
+				entry.languageGeneration += 1;
+				entry.pullRequest?.abort();
+				const key = entry.resource.toString();
+				if (this.serverSnapshots.delete(key)) this.changeEmitter.fire(entry.resource);
+				// Drain the previous language before reopening this path. Its last
+				// synchronization may still be in flight, even at the same text revision.
+				entry.queue = entry.queue.catch(() => undefined).then(async () => {
+					if (this.alive && this.entries.get(key) === entry) await this.closeEntry(entry);
+				});
+				this.schedule(entry, true);
+			}),
+		);
 	}
 
 	getDiagnostics(resource: URI): LanguageDiagnosticSnapshot | undefined {
@@ -253,11 +299,12 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	private enqueueSynchronization(entry: LanguageDocumentEntry, savedText?: string): void {
 		if (!this.languageAllowed) return;
 		const generation = this.permissionRefreshGeneration;
+		const languageGeneration = entry.languageGeneration;
 		const snapshot = entry.model.createVersionedSnapshot();
 		const text = snapshot.getText();
 		if (VSBuffer.fromString(text).byteLength > MAX_LANGUAGE_DOCUMENT_BYTES) return;
 		entry.queue = entry.queue.catch(() => undefined).then(async () => {
-			if (!this.languageAllowed || generation !== this.permissionRefreshGeneration || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
+			if (!this.languageAllowed || generation !== this.permissionRefreshGeneration || languageGeneration !== entry.languageGeneration || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
 			const document = { ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, languageId: entry.languageId, revision: snapshot.version, text };
 			const languageSynchronized = this.support.supports(entry.dirId, entry.languageId);
 			let codeIntelligenceSynchronized = false;
@@ -267,10 +314,12 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 					? this.codeIntelligenceDocuments?.synchronize(document).then(() => { codeIntelligenceSynchronized = true; }).catch(reportCodeIntelligenceSynchronizationError)
 					: undefined,
 			]);
-			entry.languageSynchronized = languageSynchronized;
+			// Losing provider support does not close its backend document. Retain
+			// that ownership until closeEntry drains the old language binding.
+			entry.languageSynchronized ||= languageSynchronized;
 			entry.codeIntelligenceSynchronized ||= codeIntelligenceSynchronized;
-			if (!this.languageAllowed || generation !== this.permissionRefreshGeneration || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
-			if (!entry.languageSynchronized) return;
+			if (!this.languageAllowed || generation !== this.permissionRefreshGeneration || languageGeneration !== entry.languageGeneration || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
+			if (!languageSynchronized) return;
 			if (savedText !== undefined) {
 				await this.api.save({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, text: savedText });
 			}
@@ -281,7 +330,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 				const request = entry.pullRequest = new AbortController();
 				try {
 					const report = await this.api.documentDiagnostics({ document }, { signal: request.signal });
-					if (!this.alive || request.signal.aborted || generation !== this.permissionRefreshGeneration || entry.references === 0 || this.pullCapabilities.get(key) !== capabilities) return;
+					if (!this.alive || request.signal.aborted || generation !== this.permissionRefreshGeneration || languageGeneration !== entry.languageGeneration || entry.references === 0 || this.pullCapabilities.get(key) !== capabilities) return;
 					if (report.kind === "full") this.acceptDiagnostics({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, revision: report.revision, diagnostics: report.diagnostics }, capabilities);
 				} catch (error) {
 					if (!request.signal.aborted && !isUnsupportedDiagnosticPull(error)) throw error;
@@ -408,7 +457,6 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			return;
 		}
 		for (const entry of this.entries.values()) {
-			entry.languageSynchronized = false;
 			this.schedule(entry, true);
 		}
 		this.queueWorkspaceDiagnostics();

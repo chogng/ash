@@ -54,6 +54,8 @@ import './media/extension.css';
 
 interface ExtensionListItem {
 	readonly summary: ExtensionsPackageSummary;
+	readonly publisher?: string;
+	readonly searchTerms?: readonly string[];
 	readonly installation?: ExtensionsInstalledPackage;
 	readonly source?: ExtensionsInputSource;
 	readonly enabled?: boolean;
@@ -106,7 +108,13 @@ class ExtensionsContent extends Disposable {
 			keyboardNavigation: true,
 			focusOnMouseMove: false,
 			getId: item => `${item.source ?? ExtensionsInputSource.Registry}/${item.installation?.installationId ?? item.summary.id}/${item.summary.version}`,
-			accessibilityProvider: { getAriaLabel: item => `${item.summary.displayName}, ${item.summary.version}, ${item.summary.description}, ${item.source === ExtensionsInputSource.BuiltIn ? localize({ bundle: 'ash.extensions', key: 'builtInFilter' }, 'Built-in') + ', ' : ''}${item.enabled === undefined ? '' : item.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled')}` },
+			accessibilityProvider: {
+				getAriaLabel: item => [
+					item.summary.displayName,
+					...this.isPluginsPane ? [item.publisher] : [item.summary.version, item.summary.description],
+					item.enabled === undefined ? '' : item.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled'),
+				].filter(Boolean).join(', ')
+			},
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.summary.displayName },
 			renderItem: (item, _index, row) => this.renderItem(item, row),
 			onDidRemoveRow: row => this.rowResources.deleteAndDispose(row),
@@ -129,7 +137,7 @@ class ExtensionsContent extends Disposable {
 			type: AccessibleViewType.Help, priority: 100, name: `extensions-help-${generateUuid()}`, when: ContextKeyExpr.has('extensionsFocused'), getProvider: () => {
 				const focused = mainWindow.document.activeElement;
 				if (!this.visible || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-				return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type: AccessibleViewType.Help }, () => localize({ bundle: 'ash.extensions', key: 'accessibilityHelp' }, 'Extensions opens your installed Skills, Plugins and Connections, followed by Recommended. Skills contain Agent working methods, Plugins add features, and Connections lists external services and tool servers together. The search box above all panes searches the Marketplace. Use Filter extensions to choose installed categories, built-in plugins or recommendations. Clear Search removes the query and filters. Use @installed to filter installed items, or clear the search to return to these categories. One Refresh extensions action reloads all categories. The title bar More Actions menu provides marketplace, installed, source management and installation commands. Pane actions appear on hover or keyboard focus. Use Left and Right on pane headers to collapse or expand them. Use Tab to move between controls, arrow keys to select an item, and Enter to open details. Enable or Disable in Plugins controls the feature package. Skill enablement and connection actions are managed separately in their details. Execution authorization and permissions are reviewed in package details. Language packs are managed through the display language setting. Run Install extension from Git repository in the Command Palette to install a repository package. Press Escape during installation to cancel. Escape closes this help.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+				return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type: AccessibleViewType.Help }, () => localize({ bundle: 'ash.extensions', key: 'accessibilityHelp' }, 'Extensions opens your installed Skills, Plugins and Connections, followed by Recommended. Skills contain Agent working methods, Plugins add features, and Connections lists external services and tool servers together. The search box above all panes searches the Marketplace and installed Plugins, including built-in language servers. Use Filter extensions to choose installed categories, built-in plugins or recommendations. Clear Search removes the query and filters. Use @installed to filter installed items, or clear the search to return to these categories. One Refresh extensions action reloads all categories. The title bar More Actions menu provides marketplace, installed, source management and installation commands. Pane actions appear on hover or keyboard focus. Use Left and Right on pane headers to collapse or expand them. Use Tab to move between controls, arrow keys to select an item, and Enter to open details. Open Plugin details to enable or disable it and view its version and identifier. Skill enablement and connection actions are managed separately in their details. Execution authorization and permissions are reviewed in package details. Language packs are managed through the display language setting. Run Install extension from Git repository in the Command Palette to install a repository package. Press Escape during installation to cancel. Escape closes this help.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 			}
 		}));
 	}
@@ -149,9 +157,17 @@ class ExtensionsContent extends Disposable {
 		const content = h(mainWindow.document, 'div'); content.className = 'extension-row';
 		const icon = h(mainWindow.document, 'div'); icon.className = 'extension-icon'; appendLabelIcon(icon, Lxicon.extensions); icon.setAttribute('aria-hidden', 'true');
 		const body = h(mainWindow.document, 'div'); body.className = 'extension-body';
-		for (const [className, value] of [['extension-name', item.summary.displayName], ['extension-description', item.summary.description], ['extension-metadata', `${item.summary.id} · ${item.summary.version}`]]) {
+		const labels: readonly [string, string | undefined][] = this.isPluginsPane
+			? [['extension-name', item.summary.displayName], ['extension-metadata', item.publisher]]
+			: [['extension-name', item.summary.displayName], ['extension-description', item.summary.description], ['extension-metadata', `${item.summary.id} · ${item.summary.version}`]];
+		for (const [className, value] of labels) {
+			if (!value) { continue; }
 			const label = resources.add(new IconLabel(body, { label: value, title: value, hideIcon: true }));
 			label.element.classList.add(className);
+		}
+		if (this.isPluginsPane) {
+			content.append(icon, body);
+			return content;
 		}
 		const footer = h(mainWindow.document, 'div'); footer.className = 'extension-footer';
 		const actions = h(mainWindow.document, 'div'); actions.className = 'extension-row-actions';
@@ -226,8 +242,10 @@ class ExtensionsContent extends Disposable {
 					const provider = providers?.providers.find(value => value.id === extension.id);
 					const isProvider = (manifest.ashRuntime?.kind === 'rust' && !manifest.browser) || !!manifest.ashLanguageServers;
 					return {
+						publisher: extension.publisher === 'ash' ? 'Ash' : extension.publisher,
 						source: ExtensionsInputSource.BuiltIn, enabled: isProvider ? provider?.enabled : !disabled.has(extension.id.toLowerCase()), canChangeEnablement: isProvider ? !!provider && providers?.canChangeEnablement === true : !manifest.contributes?.localizations?.length,
-						summary: { id: extension.id, version: extension.version, packageType: 'editorExtension', displayName: manifest.displayName?.startsWith('%') ? extension.id : manifest.displayName ?? extension.displayName, description: typeof manifest.description === 'string' && !manifest.description.startsWith('%') ? manifest.description : '' }
+						searchTerms: manifest.ashLanguageServers?.servers?.map((server: { id: string; }) => server.id),
+						summary: { id: extension.id, version: extension.version, packageType: 'editorExtension', displayName: manifest.displayName?.startsWith('%') ? extension.name : manifest.displayName ?? extension.displayName, description: typeof manifest.description === 'string' && !manifest.description.startsWith('%') ? manifest.description : '' }
 					};
 				}));
 			}
@@ -237,7 +255,7 @@ class ExtensionsContent extends Disposable {
 				items = installed.filter(entry => (!this.options.capabilityKind || entry.capabilities.some(capability => capability.kind === this.options.capabilityKind))).map(installation => {
 					const policy = policies.extensions.find(value => value.installationId === installation.installationId);
 					const editor = editorMetadata.find(value => value.id === installation.package.id.split('@')[0] && value.version === installation.package.version);
-					return { installation, enabled: policy?.enabled, canChangeEnablement: !!policy, summary: { id: installation.package.id, version: installation.package.version, displayName: editor?.displayName ?? installation.package.id.split('@')[0], packageType: 'installed', description: installation.capabilities.map(capability => capability.kind === 'editorExtension' ? localize({ bundle: 'ash.extensions', key: 'pluginEditorTag' }, 'Editor') : capability.kind).join(' · ') } };
+					return { installation, publisher: editor?.publisher === 'ash' ? 'Ash' : editor?.publisher, enabled: policy?.enabled, canChangeEnablement: !!policy, summary: { id: installation.package.id, version: installation.package.version, displayName: editor?.displayName ?? installation.package.id.split('@')[0], packageType: 'installed', description: installation.capabilities.map(capability => capability.kind === 'editorExtension' ? localize({ bundle: 'ash.extensions', key: 'pluginEditorTag' }, 'Editor') : capability.kind).join(' · ') } };
 				});
 				items.push(...builtInItems);
 				if (this.isPluginsPane || !this.options.capabilityKind || this.options.capabilityKind === 'editorExtension') {
@@ -255,7 +273,9 @@ class ExtensionsContent extends Disposable {
 			}
 			if (this.isDisposed || generation !== this.generation) { return; }
 			this.installed = installed;
-			this.list.items = this.options.mode === 'browse' || this.options.mode === undefined ? items : items.filter(item => [item.summary.id, item.summary.displayName, item.summary.description].some(value => value.toLowerCase().includes(query.toLowerCase())));
+			this.list.items = this.options.mode === 'browse' || this.options.mode === undefined ? items : items.filter(item =>
+				[item.summary.id, item.summary.displayName, item.summary.description, ...item.searchTerms ?? []]
+					.some(value => value.toLowerCase().includes(query.toLowerCase())));
 			this.loaded = true;
 			this.status.textContent = '';
 			this.changed.fire(this.list.items.length);
@@ -414,7 +434,7 @@ abstract class ExtensionsListViewPane extends ViewPane {
 					const focused = mainWindow.document.activeElement;
 					if (!this.isBodyVisible() || !(focused instanceof HTMLElement) || !this.element.contains(focused)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.Help
-						? localize({ bundle: 'ash.extensions', key: 'capabilityHelp' }, 'Extensions opens installed Skills, Plugins and Connections, followed by Recommended. Use Left and Right on a pane header to collapse or expand it, and Up and Down to move between headers. Use the single search box above the panes to search the Marketplace; @installed filters current resources. Clear the search to return to installed categories. Down moves to results; arrow keys select items; Enter opens details. Refresh extensions reloads all categories. Pane actions appear on hover or keyboard focus. Marketplace source selects a registry; Load more continues the search. Skill details control only that skill. Connections shows all connections in one list. Open details for account authorization, server status and available actions. A service’s associated MCP server appears only in its details. Add connection offers service account authorization or custom MCP configuration. Choose a service to sign in or connect with an API token, or configure an HTTP server or local process. Server details provide Edit, Enable or Disable, Connect, Disconnect and Remove when available. Connection actions keep packages installed. Package details manage installation, permissions and removal. Refresh reads current domain state. Run Install extension from Git repository in the Command Palette to install a repository package. Escape cancels a dialog.')
+						? localize({ bundle: 'ash.extensions', key: 'capabilityHelp' }, 'Extensions opens installed Skills, Plugins and Connections, followed by Recommended. Use Left and Right on a pane header to collapse or expand it, and Up and Down to move between headers. Use the single search box above the panes to search the Marketplace and installed Plugins, including built-in language servers; @installed filters current resources. Clear the search to return to installed categories. Down moves to results; arrow keys select items; Enter opens details. Refresh extensions reloads all categories. Pane actions appear on hover or keyboard focus. Marketplace source selects a registry; Load more continues the search. Skill details control only that skill. Connections shows all connections in one list. Open details for account authorization, server status and available actions. A service’s associated MCP server appears only in its details. Add connection offers service account authorization or custom MCP configuration. Choose a service to sign in or connect with an API token, or configure an HTTP server or local process. Server details provide Edit, Enable or Disable, Connect, Disconnect and Remove when available. Connection actions keep packages installed. Package details manage installation, permissions and removal. Refresh reads current domain state. Run Install extension from Git repository in the Command Palette to install a repository package. Escape cancels a dialog.')
 						: [localize({ bundle: 'ash.extensions', key: 'paneResults' }, '{0} items', this.list.items.length), this.status.textContent, ...this.list.items.map(item => `${item.name}\n${item.description}\n${item.metadata}`)].filter(Boolean).join('\n\n'), () => focused.focus(), this.verbositySetting);
 				},
 			}));

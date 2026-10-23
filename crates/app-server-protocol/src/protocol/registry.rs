@@ -1766,6 +1766,7 @@ use crate::protocol::language::LanguageDiagnosticReportKindDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageDiagnosticSeverityDto;
 use crate::protocol::language::LanguageDiagnosticsNotification;
+use crate::protocol::language::LanguageDiagnosticsRefreshNotification;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageDirectoryDiagnosticSnapshotDto;
 #[cfg(any(test, feature = "export"))]
@@ -6091,6 +6092,9 @@ server_notifications! {
     LanguageDirectoryDiagnostics => "language/diagnostics" {
         params: LanguageDiagnosticsNotification,
     },
+    LanguageDiagnosticsRefresh => "language/diagnosticsRefresh" {
+        params: LanguageDiagnosticsRefreshNotification,
+    },
     LanguageServerCapabilities => "language/serverCapabilities" {
         params: LanguageServerCapabilitiesNotification,
     },
@@ -7396,6 +7400,7 @@ typescript_bindings! {
     LanguageCloseParams,
     LanguageSaveParams,
     LanguageServerCapabilitiesNotification,
+    LanguageDiagnosticsRefreshNotification,
     LanguageServerFeatureDto,
     LanguageOperationParams<()>,
     LanguageCancelParams,

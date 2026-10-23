@@ -580,6 +580,10 @@ async fn dynamic_capabilities_and_progress_are_scoped_to_one_client_incarnation(
             initialize["params"]["capabilities"]["textDocument"]["hover"]["dynamicRegistration"],
             true
         );
+        assert_eq!(
+            initialize["params"]["capabilities"]["workspace"]["diagnostic"]["refreshSupport"],
+            true
+        );
         respond(
             &mut writer,
             initialize["id"].clone(),
@@ -619,6 +623,16 @@ async fn dynamic_capabilities_and_progress_are_scoped_to_one_client_incarnation(
         )
         .await;
         assert!(read_json(&mut reader).await["result"].is_null());
+        write_json(&mut writer, json!({
+            "jsonrpc": "2.0", "id": "invalid-refresh", "method": "workspace/diagnostic/refresh", "params": []
+        })).await;
+        assert_eq!(read_json(&mut reader).await["error"]["code"], -32602);
+        write_json(&mut writer, json!({
+            "jsonrpc": "2.0", "id": "refresh-diagnostics", "method": "workspace/diagnostic/refresh"
+        })).await;
+        let refreshed = read_json(&mut reader).await;
+        assert_eq!(refreshed["id"], "refresh-diagnostics");
+        assert!(refreshed["result"].is_null());
         write_json(
             &mut writer,
             json!({
@@ -686,6 +700,15 @@ async fn dynamic_capabilities_and_progress_are_scoped_to_one_client_incarnation(
     assert!(client.supports_dynamic_method("textDocument/hover"));
     assert_eq!(client.dynamic_capabilities(), registered);
     host.wait_for_progress().await;
+    assert_eq!(
+        host.events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|event| matches!(event, LanguageServerEvent::DiagnosticsRefresh))
+            .count(),
+        1
+    );
     unregister_tx.send(()).expect("request unregister");
     let unregistered = host.wait_for_dynamic_revision(2).await;
     assert!(unregistered.registrations.is_empty());

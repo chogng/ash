@@ -262,9 +262,9 @@ for (const window of ['Code', 'Agents']) {
 	test(`Built-in extension details open in the registered Editor in ${window}`, { tag: ['@electron-app-server'] }, async ({ target, workbench }, testInfo) => {
 		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await new QuickAccess(page).runCommand('ash.extensions.manageBuiltIn');
-		const extensions = page.locator('[data-view-id="ash.extensions.view"]');
+		const extensions = page.locator('[data-view-id="ash.extensions.plugins"]');
 		for (const id of ['ash.markdown-language-features', 'ash.markdown-math']) {
-			await extensions.getByRole('option').filter({ hasText: id }).click();
+			await extensions.locator(`[data-package-id="${id}"]`).click();
 			// Details inputs retain their panes; only the selected extension is visible.
 			const editor = page.locator('.ash-extension-editor:visible');
 			await expect(editor.locator('.extension-detail-header h1')).toBeVisible();
@@ -274,7 +274,8 @@ for (const window of ['Code', 'Agents']) {
 			await expect(editor).not.toContainText(id.replace('ash.', 'vscode.'));
 			await editor.getByRole('tab', { name: 'Features', exact: true }).click();
 			await expect(editor.getByRole('tabpanel', { name: 'Features', exact: true })).toBeVisible();
-			await expect(editor.getByRole('status')).toHaveText(/^Enabled · (running|starts on demand)$/u);
+			await expect(editor.getByRole('switch')).toBeChecked();
+			await expect(editor.locator('.extension-detail-header [role="status"]')).toBeEmpty();
 			if (id === 'ash.markdown-math') {
 				await expect(editor.getByRole('tabpanel', { name: 'Features', exact: true })).toContainText('math.render.v2');
 			}

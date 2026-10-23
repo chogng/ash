@@ -216,10 +216,12 @@ let sourceRevision = 0;
 let sources = [{ id: 'ash', kind: 'ash' as const, enabled: true, productOwned: true }];
 if (partialDiscoveryFailure) { sources.push({ id: 'offline-source', kind: 'ash', enabled: true, productOwned: false }); }
 if (new URLSearchParams(location.search).has('pagedDiscovery')) { sources.push({ id: 'other', kind: 'ash', enabled: true, productOwned: false }); }
-let builtInProviderEnabled = true;
-let builtInProviderRunning = true;
+const builtInProviderStates = new Map([
+	['ash.github-authentication', { enabled: true, running: true }],
+	['vscode.rust', { enabled: true, running: true }],
+]);
 function builtInProviders() {
-	return { revision: editorPolicyRevision, canChangeEnablement: !new URLSearchParams(location.search).has('readOnlyProviders'), providers: [{ id: 'ash.github-authentication', enabled: builtInProviderEnabled, running: builtInProviderRunning }] };
+	return { revision: editorPolicyRevision, canChangeEnablement: !new URLSearchParams(location.search).has('readOnlyProviders'), providers: [...builtInProviderStates].map(([id, state]) => ({ id, ...state })) };
 }
 const api: IExtensionManagementApi = {
 	searchPage: async params => {
@@ -238,9 +240,8 @@ const api: IExtensionManagementApi = {
 	setBuiltInProviderEnablement: async params => {
 		requests.push(['builtInPolicy', params]);
 		if (!builtInProviders().canChangeEnablement) { throw new Error('ResourceNotOwner'); }
-		if (params.id !== 'ash.github-authentication' || params.expectedRevision !== editorPolicyRevision) { throw new Error('Policy revision conflict'); }
-		builtInProviderEnabled = params.enabled;
-		builtInProviderRunning = false;
+		if (!builtInProviderStates.has(params.id) || params.expectedRevision !== editorPolicyRevision) { throw new Error('Policy revision conflict'); }
+		builtInProviderStates.set(params.id, { enabled: params.enabled, running: false });
 		editorPolicyRevision++;
 		generation++;
 		changed.fire();

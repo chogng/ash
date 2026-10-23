@@ -691,6 +691,46 @@ fn profile_settings_answer_ordered_scoped_configuration_sections() {
 }
 
 #[tokio::test]
+async fn diagnostic_refresh_only_comes_from_the_ready_server_incarnation() {
+    let workspace = tempfile::tempdir().unwrap();
+    let definition = LanguageServerDefinition::new(
+        "refresh-test",
+        ["rust"],
+        LanguageServerCommand::new("unused-test-server"),
+    )
+    .unwrap();
+    let name = definition.name().clone();
+    let sink = Arc::new(RecordingSink::default());
+    let (commands, _) = mpsc::unbounded_channel();
+    let mut supervisor = Supervisor::new(
+        LspManagerConfiguration::enabled(workspace.path(), vec![definition]),
+        sink.clone(),
+        None,
+        commands,
+    );
+    supervisor.servers.get_mut(&name).unwrap().epoch = 2;
+    supervisor.servers.get_mut(&name).unwrap().phase = ManagedServerPhase::Ready;
+    supervisor
+        .handle_protocol_event(name.clone(), 1, LanguageServerEvent::DiagnosticsRefresh)
+        .await;
+    assert!(sink.snapshot().is_empty());
+    supervisor
+        .handle_protocol_event(name.clone(), 2, LanguageServerEvent::DiagnosticsRefresh)
+        .await;
+    assert_eq!(
+        sink.snapshot(),
+        [LanguageServiceEvent::DiagnosticsRefresh {
+            server: name.to_string()
+        }]
+    );
+    supervisor.servers.get_mut(&name).unwrap().phase = ManagedServerPhase::Stopped;
+    supervisor
+        .handle_protocol_event(name, 2, LanguageServerEvent::DiagnosticsRefresh)
+        .await;
+    assert_eq!(sink.snapshot().len(), 1);
+}
+
+#[tokio::test]
 async fn retiring_and_readding_a_name_rejects_old_launches_without_losing_the_new_task() {
     let workspace = tempfile::tempdir().unwrap();
     let definition = LanguageServerDefinition::new(

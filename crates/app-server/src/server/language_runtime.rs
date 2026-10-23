@@ -100,6 +100,7 @@ impl LspManagerEventSink for AppServerLanguageEventSink {
             LspManagerEvent::Notification(
                 LspManagerNotification::ServerStateChanged { server, .. }
                 | LspManagerNotification::ServerMessage { server, .. }
+                | LspManagerNotification::DiagnosticsRefresh { server }
                 | LspManagerNotification::CapabilitiesChanged { server, .. },
             ) => Some(server.clone()),
             LspManagerEvent::Notification(LspManagerNotification::ServerProgress(progress)) => {
@@ -259,6 +260,19 @@ impl LspManagerEventSink for AppServerLanguageEventSink {
                     state: language_server_state_to_dto(state),
                 },
             );
+        }
+        if let LspManagerEvent::Notification(LspManagerNotification::DiagnosticsRefresh {
+            server,
+        }) = &event
+        {
+            self.diagnostics.updates.publish_language_diagnostics_refresh(
+                self.diagnostics.connection_id,
+                ash_app_server_protocol::protocol::language::LanguageDiagnosticsRefreshNotification {
+                    dir_id: self.diagnostics.dir_id.clone(),
+                    server: server.clone(),
+                },
+            );
+            return;
         }
         if let LspManagerEvent::Notification(LspManagerNotification::CapabilitiesChanged {
             server,

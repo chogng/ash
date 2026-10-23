@@ -9,6 +9,7 @@ import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { LanguageDiagnosticSeverity } from '../../../../../editor/common/languages.js';
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
+import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { AppServerRemoteError } from "../../../../../platform/agentHost/common/appServerError.js";
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
@@ -525,6 +526,153 @@ test("installing a language server synchronizes an already open document and uni
 	model.applyEdits([{ range: new Range(1, 1, 1, 1), text: "# comment\n" }]);
 	await new Promise(resolve => setTimeout(resolve, 200));
 	assert.equal(api.synchronized.length, 1);
+});
+
+test('re-enabling a language rebinds an already open model without losing unsaved changes or undo', async () => {
+	const api = new FakeLanguageApi();
+	api.availableServers = [];
+	api.documentDiagnostics = async ({ document }) => ({
+		revision: document.revision, kind: 'full', diagnostics: [{
+			range: { start: { lineIndex: 1, columnIndex: 0 }, end: { lineIndex: 1, columnIndex: 2 } },
+			severity: 'error', message: 'Rust diagnostic', code: 'fixture', source: 'rust',
+		}],
+	});
+	const events = new FakeServerEvents();
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	using service = createDiagnosticsService(api, events, workspace);
+	using languages = new LanguageService();
+	using registration = languages.registerLanguages([]);
+	const resource = URI.file('/project/main.rs');
+	using model = new TextModel('fn main() {}', { resource, languageId: 'plaintext' });
+	model.setLanguage(languages.createByFilepathOrFirstLine(resource));
+	using first = service.acquire(resource, model.getLanguageId(), model);
+	using second = service.acquire(resource, model.getLanguageId(), model);
+	model.pushEditOperations(null, [{ range: new Range(1, 1, 1, 1), text: '// unsaved\n' }], () => null);
+	const revision = model.version;
+	let generation = 1;
+	const enableRust = () => {
+		api.availableServers = [{ id: 'rust', languageIds: ['rust'] }];
+		registration.replace([{ description: { id: 'rust', extensions: ['.rs'] } }]);
+		events.fire({ method: 'extensions/changed', params: { instanceId: 'test', generation: ++generation } });
+	};
+	await tick();
+	assert.equal(api.synchronized.length, 0);
+	enableRust();
+	await tick();
+	assert.equal(model.getLanguageId(), 'rust');
+	assert.equal(api.synchronized.at(-1)?.document.languageId, 'rust');
+	assert.equal(api.synchronized.at(-1)?.document.text, model.getText());
+	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, 'Rust diagnostic');
+	api.availableServers = [];
+	registration.replace([]);
+	events.fire({ method: 'extensions/changed', params: { instanceId: 'test', generation: ++generation } });
+	await tick();
+	assert.equal(service.getDiagnostics(resource), undefined);
+	const synchronized = api.synchronized.length;
+	enableRust();
+	await tick();
+	assert.ok(api.synchronized.length > synchronized);
+	assert.equal(api.synchronized.at(-1)?.document.languageId, 'rust');
+	assert.equal(api.synchronized.at(-1)?.document.revision, revision);
+	assert.equal(service.getDiagnostics(resource)?.revision, revision);
+	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, 'Rust diagnostic');
+	assert.equal(model.getText(), '// unsaved\nfn main() {}');
+	assert.equal(model.canUndo(), true);
+	first.dispose();
+	await tick();
+	const closed = api.closed.length;
+	second.dispose();
+	await tick();
+	assert.equal(api.closed.length, closed + 1, 'only the last reference closes the live binding');
+});
+
+test('language changes retire an in-flight diagnostic binding before synchronizing the new language', async () => {
+	const api = new FakeLanguageApi();
+	let release!: () => void;
+	const blocked = new Promise<void>(resolve => { release = resolve; });
+	const synchronize = api.synchronize.bind(api);
+	api.synchronize = async request => { await synchronize(request); if (api.synchronized.length === 1) await blocked; };
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	using service = createDiagnosticsService(api, new FakeServerEvents(), workspace);
+	using model = new TextModel('fn main() {}', { languageId: 'rust' });
+	using acquisition = service.acquire(URI.file('/project/main.rs'), 'rust', model);
+	await tick();
+	model.setLanguage('typescript');
+	model.setLanguage('rust');
+	release();
+	await tick(); await tick();
+	assert.deepEqual(api.closed, [{ path: 'main.rs' }]);
+	assert.deepEqual(api.synchronized.map(request => request.document.languageId), ['rust', 'rust']);
+	assert.equal(api.diagnosticPulls.length, 1, 'the retired binding cannot pull diagnostics');
+});
+
+test('local JSON diagnostics follow the language of an acquired model', async () => {
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	using service = createDiagnosticsService(new FakeLanguageApi(), new FakeServerEvents(), workspace);
+	using model = new TextModel('{', { languageId: 'plaintext' });
+	const resource = URI.file('/project/example.json');
+	using acquisition = service.acquire(resource, 'plaintext', model);
+	await tick();
+	assert.equal(service.getDiagnostics(resource), undefined);
+	model.setLanguage('json');
+	assert.ok(service.getDiagnostics(resource)?.diagnostics.length);
+	model.setLanguage('plaintext');
+	assert.equal(service.getDiagnostics(resource), undefined);
+});
+
+test('a provider refresh retains the backend document binding until its last editor releases it', async () => {
+	const api = new FakeLanguageApi();
+	const events = new FakeServerEvents();
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	using service = createDiagnosticsService(api, events, workspace);
+	using model = new TextModel('fn main() {}', { languageId: 'rust' });
+	using acquisition = service.acquire(URI.file('/project/main.rs'), 'rust', model);
+	await tick();
+	assert.equal(api.synchronized.length, 1);
+	api.availableServers = [];
+	events.fire({ method: 'extensions/changed', params: { instanceId: 'test', generation: 2 } });
+	await tick();
+	acquisition.dispose();
+	await tick();
+	assert.deepEqual(api.closed, [{ path: 'main.rs' }]);
+});
+
+test('diagnostic refresh coalesces bursts and only pulls from the matching workspace server', async () => {
+	const api = new FakeLanguageApi();
+	api.availableServers = [{ id: 'rust-analyzer', languageIds: ['rust'] }];
+	let ready = false;
+	api.documentDiagnostics = async params => {
+		api.diagnosticPulls.push(params);
+		return {
+			revision: params.document.revision, kind: 'full', diagnostics: ready ? [{
+				range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } },
+				severity: 'error', message: 'Workspace loaded', code: null, source: 'rust-analyzer',
+			}] : []
+		};
+	};
+	const events = new FakeServerEvents();
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	using service = createDiagnosticsService(api, events, workspace);
+	using model = new TextModel('fn main() {}', { languageId: 'rust' });
+	using acquisition = service.acquire(URI.file('/project/main.rs'), 'rust', model);
+	await tick();
+	const pulls = api.diagnosticPulls.length;
+	for (const params of [{ server: 'other' }, { dirId: 'other', server: 'rust-analyzer' }]) {
+		events.fire({ method: 'language/diagnosticsRefresh', params });
+	}
+	await tick();
+	assert.equal(api.diagnosticPulls.length, pulls);
+	assert.deepEqual(service.getDiagnostics(URI.file('/project/main.rs'))?.diagnostics, []);
+	ready = true;
+	for (let index = 0; index < 3; index++) events.fire({ method: 'language/diagnosticsRefresh', params: { server: 'rust-analyzer' } });
+	await tick();
+	assert.equal(api.diagnosticPulls.length, pulls + 1);
+	assert.equal(service.getDiagnostics(URI.file('/project/main.rs'))?.diagnostics[0]?.message, 'Workspace loaded');
+	acquisition.dispose();
+	await tick();
+	events.fire({ method: 'language/diagnosticsRefresh', params: { server: 'rust-analyzer' } });
+	await tick();
+	assert.equal(api.diagnosticPulls.length, pulls + 1);
 });
 
 for (const desktop of [false, true]) test(`profile configuration changes replay open documents and retire disabled diagnostics, desktop=${desktop}`, async () => {

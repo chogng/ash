@@ -83,6 +83,10 @@
 	margin: 8px 0;
 }
 
+.ash-extension-editor .extension-detail-heading > p:empty {
+	display: none;
+}
+
 .ash-extension-editor .extension-metadata {
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-body2);

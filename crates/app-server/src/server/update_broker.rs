@@ -1420,6 +1420,18 @@ impl UpdateBroker {
         );
     }
 
+    pub(super) fn publish_language_diagnostics_refresh(
+        &self,
+        connection_id: Option<u64>,
+        refresh: ash_app_server_protocol::protocol::language::LanguageDiagnosticsRefreshNotification,
+    ) {
+        self.publish_language_notification(
+            ServerNotificationMethod::LanguageDiagnosticsRefresh,
+            &refresh,
+            connection_id,
+        );
+    }
+
     fn publish_language_notification<T: Serialize>(
         &self,
         method: ServerNotificationMethod,

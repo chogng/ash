@@ -5,18 +5,18 @@ import type { Workbench } from '../../../automation/workbench.js';
 
 async function openGitDetails(workbench: Workbench) {
 	await workbench.quickaccess.runCommand('ash.extensions.manageBuiltIn');
-	await workbench.page.getByRole('searchbox', { name: 'Search Extensions', exact: true }).fill('ash.git');
-	const extension = workbench.page.getByRole('listbox', { name: 'Extensions', exact: true }).locator('[data-package-id="ash.git"]');
-	await extension.getByText('ash.git', { exact: true }).first().click();
+	await workbench.page.locator('.ash-extensions-view-container').getByRole('searchbox').fill('ash.git');
+	const extension = workbench.page.locator('[data-view-id="ash.extensions.plugins"] [data-package-id="ash.git"]');
+	await extension.click();
 	return workbench.page.locator('.ash-extension-editor:visible').filter({ hasText: 'ash.git' });
 }
 
 async function expectReadOnlyGit(workbench: Workbench, screenshotPath: string): Promise<void> {
 	const details = await openGitDetails(workbench);
-	await expect(details.getByRole('status')).toContainText('Enabled');
+	await expect(details.getByRole('switch')).toBeChecked();
 	await expect(details.getByRole('status')).toContainText('This connection cannot enable or disable backend providers.');
-	await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeDisabled();
-	const row = workbench.page.getByRole('listbox', { name: 'Extensions', exact: true }).locator('[data-package-id="ash.git"]');
+	await expect(details.getByRole('switch')).toBeDisabled();
+	const row = workbench.page.locator('[data-view-id="ash.extensions.plugins"] [data-package-id="ash.git"]');
 	await expect(row.getByRole('button')).toHaveCount(0);
 	await workbench.page.screenshot({ path: screenshotPath });
 	await workbench.editors.groupAt(0).tabs.filter({ hasText: 'Independent comparison' }).click();
@@ -25,9 +25,9 @@ async function expectReadOnlyGit(workbench: Workbench, screenshotPath: string): 
 
 async function toggleGit(workbench: Workbench, state: 'Enabled' | 'Disabled'): Promise<void> {
 	const details = await openGitDetails(workbench);
-	await expect(details).toContainText(state);
+	await expect(details.getByRole('switch')).toBeChecked({ checked: state === 'Enabled' });
 	await details.getByRole('switch').press('Space');
-	await expect(details).toContainText(state === 'Enabled' ? 'Disabled' : 'Enabled');
+	await expect(details.getByRole('switch')).toBeChecked({ checked: state !== 'Enabled' });
 	await workbench.editors.groupAt(0).tabs.filter({ hasText: 'Independent comparison' }).click();
 	await workbench.git.open();
 }

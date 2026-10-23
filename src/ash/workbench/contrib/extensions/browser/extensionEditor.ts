@@ -552,22 +552,21 @@ export class ExtensionEditor extends EditorPane {
 			const extension = catalog.extensions.find(value => value.sourceKind === 'builtIn' && value.id === input.summary.id);
 			if (!extension) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
 			const manifest = JSON.parse(extension.manifestJson);
+			this.header.status.textContent = '';
 			void this.loadPackageDocument(input, signal, version);
 			if ((manifest.ashRuntime?.kind === 'rust' && !manifest.browser) || !!manifest.ashLanguageServers) {
 				const catalog = await this.extensions.listBuiltInProviders();
 				if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 				const provider = catalog.providers.find(value => value.id === extension.id);
 				if (!provider) { this.header.status.textContent = localize({ bundle: 'ash.extensions', key: 'backendUnavailable' }, 'This provider is unavailable on the connected backend.'); return; }
-				this.header.status.textContent = provider.enabled ? provider.running ? localize({ bundle: 'ash.extensions', key: 'providerRunning' }, 'Enabled · running') : localize({ bundle: 'ash.extensions', key: 'providerStopped' }, 'Enabled · starts on demand') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
 				this.capabilities.textContent = (manifest.ashRuntime?.capabilities ?? manifest.ashLanguageServers?.servers?.map((server: { id: string; }) => server.id) ?? []).join('\n');
 				if (!catalog.canChangeEnablement) {
-					this.header.status.textContent += '\n' + localize({ bundle: 'ash.extensions', key: 'providerEnablementReadOnly' }, 'This connection cannot enable or disable backend providers. Use an authorized desktop or remote host to manage this provider.');
+					this.header.status.textContent = localize({ bundle: 'ash.extensions', key: 'providerEnablementReadOnly' }, 'This connection cannot enable or disable backend providers. Use an authorized desktop or remote host to manage this provider.');
 				}
 				this.renderEnablement({ label: localize({ bundle: 'ash.extensions', key: 'enableExtension' }, 'Enable extension'), checked: provider.enabled, enabled: catalog.canChangeEnablement === true, change: setEnabled });
 				return;
 			}
 			const enabled = !this.enablement.getDisabledExtensions().some(value => value.id === extension.id.toLowerCase());
-			this.header.status.textContent = enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
 			this.capabilities.textContent = Object.keys(manifest.contributes ?? {}).join('\n');
 			if (manifest.contributes?.localizations?.length) {
 				this.header.status.textContent = localize({ bundle: 'ash.extensions', key: 'languagePackEnablement' }, 'Language packs are managed through the display language setting and cannot be disabled.');
@@ -580,7 +579,7 @@ export class ExtensionEditor extends EditorPane {
 			if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 			const plugin = catalog.packages.find(value => value.id === input.summary.id && value.version === input.summary.version);
 			if (!plugin) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
-			this.header.status.textContent = plugin.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
+			this.header.status.textContent = '';
 			this.contentHeading.textContent = localize({ bundle: 'ash.extensions', key: 'pluginPermissionsHeading' }, 'Permissions');
 			this.renderInfo([{
 				label: localize({ bundle: 'ash.extensions', key: 'detailInstallation' }, 'Installation'), rows: [
@@ -649,7 +648,7 @@ export class ExtensionEditor extends EditorPane {
 			if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 			const policy = catalog.extensions.find(value => value.installationId === installation.installationId);
 			if (policy) {
-				this.header.status.textContent = policy.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
+				this.header.status.textContent = '';
 				this.renderEnablement({
 					label: localize({ bundle: 'ash.extensions', key: 'enableExtension' }, 'Enable extension'), checked: policy.enabled,
 					change: async checked => { using target = new ExtensionsInput(input.summary, installation.installationId); await changeExtensionEnablement(target, this.enablement, this.extensions, this.plugins, this.editorExtensions, { enabled: checked }); }

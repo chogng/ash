@@ -1087,6 +1087,16 @@ pub enum LanguageServerFeatureDto {
     WorkspaceDiagnostics,
 }
 
+/// Requests new diagnostic pulls for open documents owned by this connection and server.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LanguageDiagnosticsRefreshNotification {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    pub server: String,
+}
+
 /// Capabilities negotiated by this connection's exact server incarnation.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

@@ -117,6 +117,9 @@ pub enum LspManagerNotification {
         state: LanguageServerState,
     },
     Diagnostics(LanguageDiagnostics),
+    DiagnosticsRefresh {
+        server: String,
+    },
     ServerMessage {
         server: String,
         severity: LanguageServerMessageSeverity,
@@ -218,6 +221,9 @@ pub enum LanguageServiceEvent {
         state: LanguageServerState,
     },
     Diagnostics(LanguageDiagnostics),
+    DiagnosticsRefresh {
+        server: String,
+    },
     PulledDiagnostics(LanguagePulledDiagnostics),
     ServerMessage {
         server: String,
@@ -275,6 +281,9 @@ impl From<LspManagerEvent> for LanguageServiceEvent {
                     Self::ServerStateChanged { server, state }
                 }
                 LspManagerNotification::Diagnostics(diagnostics) => Self::Diagnostics(diagnostics),
+                LspManagerNotification::DiagnosticsRefresh { server } => {
+                    Self::DiagnosticsRefresh { server }
+                }
                 LspManagerNotification::ServerMessage {
                     server,
                     severity,
@@ -368,6 +377,9 @@ impl From<LanguageServiceEvent> for LspManagerEvent {
             }
             LanguageServiceEvent::Diagnostics(diagnostics) => {
                 Self::Notification(LspManagerNotification::Diagnostics(diagnostics))
+            }
+            LanguageServiceEvent::DiagnosticsRefresh { server } => {
+                Self::Notification(LspManagerNotification::DiagnosticsRefresh { server })
             }
             LanguageServiceEvent::PulledDiagnostics(result) => {
                 Self::RequestResult(LspManagerRequestResult::PulledDiagnostics(result))
@@ -1795,6 +1807,11 @@ impl Supervisor {
             }
             (ManagedServerPhase::Ready, LanguageServerEvent::Diagnostics(params)) => {
                 self.publish_diagnostics(params);
+            }
+            (ManagedServerPhase::Ready, LanguageServerEvent::DiagnosticsRefresh) => {
+                self.emit_notification(LspManagerNotification::DiagnosticsRefresh {
+                    server: server.to_string(),
+                });
             }
             (ManagedServerPhase::Ready, LanguageServerEvent::LogMessage(message)) => self
                 .emit_server_message(
