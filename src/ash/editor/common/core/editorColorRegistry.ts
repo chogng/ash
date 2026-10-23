@@ -2,7 +2,7 @@ import { opaque, registerColor, transparent } from '../../../platform/theme/comm
 import { editorBackground, editorForeground } from '../../../platform/theme/common/colors/editorColors.js';
 import { listInactiveSelectionBackground } from '../../../platform/theme/common/colors/listColors.js';
 
-import { descriptionForeground, mutedForeground, selectionBackground, selectionForeground } from '../../../platform/theme/common/colors/baseColors.js';
+import { descriptionForeground, mutedForeground, selectionForeground } from '../../../platform/theme/common/colors/baseColors.js';
 
 const owner = 'editor.presentation';
 const alias = (id: string, value: string, description: string): string => registerColor(id, {
@@ -13,13 +13,15 @@ function editorColor(id: string, value: string, description: string): string {
 	return registerColor(id, { dark: value, light: value, hcDark: value, hcLight: value }, { description, owner });
 }
 
-export const editorSelectionBackground = editorColor('editor.selectionBackground', selectionBackground, 'Background of editor text selections.');
+export const editorSelectionBackground = registerColor('editor.selectionBackground', {
+	dark: '#264f78', light: '#add6ff', hcDark: '#ffffff', hcLight: '#0f4a85',
+}, { description: 'Background of editor text selections.', owner });
 export const editorSelectionForeground = registerColor('editor.selectionForeground', {
 	dark: null, light: null, hcDark: selectionForeground, hcLight: selectionForeground,
 }, { description: 'Foreground of selected editor text. Unset colors preserve syntax highlighting.', owner });
 export const editorInactiveSelection = registerColor('editor.inactiveSelectionBackground', {
-	dark: transparent(editorSelectionBackground, 0.65), light: transparent(editorSelectionBackground, 0.65),
-	hcDark: editorSelectionBackground, hcLight: editorSelectionBackground,
+	dark: '#3a3d41', light: '#e5ebf1',
+	hcDark: transparent(editorSelectionBackground, 0.7), hcLight: transparent(editorSelectionBackground, 0.5),
 }, { description: 'Background of selections in an unfocused editor.', owner });
 export const editorGutter = editorColor('editorGutter.background', editorBackground, 'Background of the editor gutter.');
 registerColor('editorGutter.itemBackground', {

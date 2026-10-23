@@ -1307,6 +1307,60 @@ suite('chatInput browser component', () => {
 		}
 	}
 
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
+		test(`Reference backgrounds use editor range geometry through selection and focus changes in ${theme}`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?inlineCode=1&theme=${theme}&locale=zh-CN`);
+			await page.evaluate(() => {
+				window.ashChatInputIntegration.showModels();
+				window.ashChatInputIntegration.addHistoryContext();
+				window.ashChatInputIntegration.appendToDraft('Explain this reference and the wrapped text around it.\nSecond line.');
+			});
+			await page.locator('main').evaluate(element => { element.style.width = '320px'; });
+			const editor = page.locator('.ash-chat-input-editor');
+			const input = editor.getByRole('textbox');
+			const reference = editor.locator('.ash-chat-code-reference');
+			await expect(reference).toHaveText('draft.txt');
+			const decoration = editor.locator('.view-overlays .cdr');
+			await expect(decoration).toHaveCount(1);
+			await expect(decoration).toHaveCSS('border-radius', '3px');
+			const referenceColors: Record<string, string> = { light: 'rgb(38, 86, 158)', dark: 'rgb(133, 182, 255)', hcDark: 'rgb(0, 0, 0)', hcLight: 'rgb(255, 255, 255)' };
+			await expect(reference).toHaveCSS('color', referenceColors[theme]!);
+			const idleBackground = await decoration.evaluate(element => getComputedStyle(element).backgroundColor);
+			await expect(reference).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			const geometry = await decoration.evaluate(element => {
+				const bounds = element.getBoundingClientRect();
+				const row = element.parentElement!.getBoundingClientRect();
+				return { height: bounds.height, rowHeight: row.height, top: bounds.top - row.top };
+			});
+			expect(geometry.height).toBe(geometry.rowHeight);
+			expect(geometry.top).toBe(0);
+			expect(idleBackground).not.toBe('rgba(0, 0, 0, 0)');
+			await input.focus();
+			await input.press('ControlOrMeta+a');
+			await editor.screenshot({ path: browserTests.info.outputPath('selected-reference.png') });
+			await expect(reference).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			const backgrounds = editor.locator('.stanza-editor-selection');
+			expect(await backgrounds.count()).toBeGreaterThan(2);
+			const selectionColors: Record<string, readonly [string, string]> = {
+				light: ['rgb(173, 214, 255)', 'rgb(229, 235, 241)'],
+				dark: ['rgb(38, 79, 120)', 'rgb(58, 61, 65)'],
+				hcDark: ['rgb(255, 255, 255)', 'rgba(255, 255, 255, 0.7)'],
+				hcLight: ['rgb(15, 74, 133)', 'rgba(15, 74, 133, 0.5)'],
+			};
+			await expect(backgrounds.first()).toHaveCSS('background-color', selectionColors[theme]![0]);
+			const focusedBackground = await backgrounds.first().evaluate(element => getComputedStyle(element).backgroundColor);
+			await input.blur();
+			await expect(reference).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(backgrounds.first()).not.toHaveCSS('background-color', focusedBackground);
+			await expect(backgrounds.first()).toHaveCSS('background-color', selectionColors[theme]![1]);
+			await input.focus();
+			await input.press('ArrowRight');
+			await expect(reference).not.toHaveClass(/stanza-editor-selected-text/u);
+			await expect(decoration).toHaveCSS('background-color', idleBackground);
+			await expect(backgrounds).toHaveCount(0);
+		});
+	}
 	for (const { locale, multiRoot } of [
 		{ locale: 'en', multiRoot: false },
 		{ locale: 'zh-CN', multiRoot: false },
@@ -1447,6 +1501,12 @@ suite('chatInput browser component', () => {
 				await input.press('ArrowRight');
 				const normalStyle = await referenceStyle();
 				expect(normalStyle.contrast, JSON.stringify(normalStyle)).toBeGreaterThanOrEqual(4.5);
+				if (theme === 'dark') {
+					// VS Code keeps the reference foreground over the selection and its translucent fill.
+					expect(selectedStyle.contrast).toBeCloseTo(4.25395, 3);
+				} else {
+					expect(selectedStyle.contrast, JSON.stringify(selectedStyle)).toBeGreaterThanOrEqual(4.5);
+				}
 				for (const style of [selectedStyle, normalStyle]) {
 					expect(style.radius).toBe('3px');
 				}

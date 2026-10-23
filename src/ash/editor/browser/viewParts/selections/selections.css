@@ -10,8 +10,12 @@
 	background: var(--ash-editor-selectionBackground);
 }
 
-[data-color-scheme="hcDark"] .stanza-editor-selection,
-[data-color-scheme="hcLight"] .stanza-editor-selection {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: -1px;
+.stanza-editor .stanza-editor-selection-corner {
+	position: absolute;
+	pointer-events: none;
+	fill: var(--ash-editor-inactiveSelectionBackground);
+}
+
+.stanza-editor .view-overlays.focused .stanza-editor-selection-corner {
+	fill: var(--ash-editor-selectionBackground);
 }
