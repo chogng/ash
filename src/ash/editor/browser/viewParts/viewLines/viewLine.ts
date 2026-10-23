@@ -334,6 +334,12 @@ export function projectStanzaSemanticTokenLine(
 		if (token?.syntaxPresentation) applySyntaxPresentation(tokenElement, token.syntaxPresentation);
 		for (const decoration of decorations) tokenElement.classList.add(...decoration.inlineClassName.split(/\s+/u).filter(Boolean));
 		tokenElement.textContent = visibleText.slice(startColumn, endColumn);
+		const fixedWidth = decorations.find(decoration => decoration.widthInEm !== undefined)?.widthInEm;
+		if (fixedWidth !== undefined) {
+			tokenElement.style.display = 'inline-block';
+			tokenElement.style.width = `${fixedWidth}em`;
+			if (tokenElement.textContent === '\uFFFC') tokenElement.dataset.ashInlineObject = 'true';
+		}
 		for (let offset = startColumn; offset < endColumn; offset += 1) {
 			characterMapping.setColumnInfo(offset + 1, index, offset - startColumn, visibleColumn);
 			visibleColumn += visibleText.charCodeAt(offset) === 9 ? tabSize - visibleColumn % tabSize : 1;

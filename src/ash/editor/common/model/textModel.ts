@@ -2262,6 +2262,27 @@ export class TextModel implements ITextModel {
 
 export function getLineTokensWithInjections(tokens: LineTokens, injectionOptions: model.InjectedTextOptions[] | null, injectionOffsets: number[] | null): LineTokens {
 	if (!injectionOffsets) return tokens;
+	if (injectionOptions?.some(options => options.replaceLength)) {
+		const pieces: { text: string; metadata: number; }[] = [];
+		const appendSource = (start: number, end: number): void => {
+			for (let index = tokens.findTokenIndexAtOffset(start); index < tokens.getCount() && start < end; index++) {
+				const stop = Math.min(end, tokens.getEndOffset(index));
+				pieces.push({ text: tokens.getLineContent().slice(start, stop), metadata: tokens.getMetadata(index) });
+				start = stop;
+			}
+		};
+		let cursor = 0;
+		for (let index = 0; index < injectionOffsets.length; index++) {
+			const offset = injectionOffsets[index]!;
+			const options = injectionOptions[index]!;
+			appendSource(cursor, offset);
+			if (options.tokens) options.tokens.forEach((range, info) => pieces.push({ text: range.substring(options.content), metadata: info.metadata }));
+			else pieces.push({ text: options.content, metadata: LineTokens.defaultTokenMetadata });
+			cursor = offset + (options.replaceLength ?? 0);
+		}
+		appendSource(cursor, tokens.getLineContent().length);
+		return LineTokens.createFromTextAndMetadata(pieces, tokens.languageIdCodec);
+	}
 	const tokensToInsert: { offset: number; text: string; tokenMetadata: number; }[] = [];
 	for (let index = 0; index < injectionOffsets.length; index += 1) {
 		const offset = injectionOffsets[index]!;
@@ -2335,6 +2356,11 @@ function validateDecorationOptions(options: IModelDecorationOptions): IModelDeco
 	}
 	if (options.stickiness !== undefined && !Object.values(TrackedRangeStickiness).includes(options.stickiness)) {
 		throw new RangeError('Unknown model decoration stickiness');
+	}
+	for (const injection of [options.before, options.after]) {
+		if (injection?.replaceLength !== undefined && (!Number.isSafeInteger(injection.replaceLength) || injection.replaceLength < 0 || injection.replaceLength > 0 && injection.content.length === 0)) {
+			throw new RangeError('Injected text replacement requires a non-negative source length and visible projection content');
+		}
 	}
 	return Object.freeze({ ...options });
 }

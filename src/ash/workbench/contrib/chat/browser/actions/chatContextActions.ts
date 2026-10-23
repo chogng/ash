@@ -64,7 +64,10 @@ export function registerChatContextActions(imageEditors: IImageEditorService, co
 			const lastLine = selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber ? selection.endLineNumber - 1 : selection.endLineNumber;
 			// Output URIs contain registry IDs; use the channel's presentation name in the composer.
 			const channel = model.uri.scheme === 'output' ? accessor.get(IOutputService).getChannel(model.uri.path.slice(1)) : undefined;
-			const file = (channel?.label ?? basename(model.uri)).replace(/\s/gu, ' ');
+			const sourceName = channel?.label ?? (model.getLanguageId() === 'debug-repl'
+				? localize('chat.context.debugConsole', 'Debug Console')
+				: basename(model.uri));
+			const file = sourceName.replace(/\s/gu, ' ');
 			const name = selection.startLineNumber === lastLine
 				? localize('chat.context.selectionLine', '{0} ({1})', file, selection.startLineNumber)
 				: localize('chat.context.selectionLines', '{0} ({1}-{2})', file, selection.startLineNumber, lastLine);

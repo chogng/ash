@@ -2,7 +2,6 @@ import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { BrowserContextMenuService } from '../../../../../platform/contextview/browser/contextMenuService.js';
-import { IImageEditorService } from '../../../../services/imageEditor/common/imageEditorService.js';
 import { BrowserImageEditorService } from '../../../../services/imageEditor/browser/browserImageEditorService.js';
 import { IHostService } from '../../../../services/host/browser/host.js';
 import { TestHostService } from '../../../../services/host/test/browser/testHostService.js';
@@ -1322,44 +1321,144 @@ suite('chatInput browser component', () => {
 			const input = editor.getByRole('textbox');
 			const reference = editor.locator('.ash-chat-code-reference');
 			await expect(reference).toHaveText('draft.txt');
-			const decoration = editor.locator('.view-overlays .cdr');
-			await expect(decoration).toHaveCount(1);
-			await expect(decoration).toHaveCSS('border-radius', '3px');
-			const referenceColors: Record<string, string> = { light: 'rgb(38, 86, 158)', dark: 'rgb(133, 182, 255)', hcDark: 'rgb(0, 0, 0)', hcLight: 'rgb(255, 255, 255)' };
-			await expect(reference).toHaveCSS('color', referenceColors[theme]!);
-			const idleBackground = await decoration.evaluate(element => getComputedStyle(element).backgroundColor);
-			await expect(reference).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-			const geometry = await decoration.evaluate(element => {
-				const bounds = element.getBoundingClientRect();
-				const row = element.parentElement!.getBoundingClientRect();
-				return { height: bounds.height, rowHeight: row.height, top: bounds.top - row.top };
-			});
-			expect(geometry.height).toBe(geometry.rowHeight);
-			expect(geometry.top).toBe(0);
+			const chip = editor.locator('.ash-chat-code-reference-chip');
+			const label = chip.locator('.ash-icon-label');
+			await expect(label).toHaveCount(1);
+			await expect(label.locator('.ash-chat-code-reference-icon')).toHaveCount(1);
+			await expect(label.locator('.ash-chat-code-reference')).toHaveText('draft.txt');
+			await expect(chip.locator('button')).toHaveCount(1);
+			await expect(label).toHaveCSS('align-items', 'center');
+			await expect(reference).toHaveCSS('font-size', '13px');
+			await expect(reference).toHaveCSS('line-height', '18.2px');
+			await expect(reference).toHaveCSS('display', 'block');
+			await expect(chip).toHaveCSS('height', '20px');
+			await expect(chip).toHaveCSS('border-radius', '4px');
+			const idleBackground = await chip.evaluate(element => getComputedStyle(element).backgroundColor);
+			const iconBounds = await label.locator('.ash-chat-code-reference-icon').boundingBox();
+			const labelBounds = await label.boundingBox();
+			expect(Math.abs(iconBounds!.y + iconBounds!.height / 2 - labelBounds!.y - labelBounds!.height / 2)).toBeLessThan(1);
 			expect(idleBackground).not.toBe('rgba(0, 0, 0, 0)');
 			await input.focus();
 			await input.press('ControlOrMeta+a');
 			await editor.screenshot({ path: browserTests.info.outputPath('selected-reference.png') });
-			await expect(reference).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(chip).toHaveClass(/selected/);
 			const backgrounds = editor.locator('.stanza-editor-selection');
 			expect(await backgrounds.count()).toBeGreaterThan(2);
-			const selectionColors: Record<string, readonly [string, string]> = {
-				light: ['rgb(173, 214, 255)', 'rgb(229, 235, 241)'],
-				dark: ['rgb(38, 79, 120)', 'rgb(58, 61, 65)'],
-				hcDark: ['rgb(255, 255, 255)', 'rgba(255, 255, 255, 0.7)'],
-				hcLight: ['rgb(15, 74, 133)', 'rgba(15, 74, 133, 0.5)'],
-			};
-			await expect(backgrounds.first()).toHaveCSS('background-color', selectionColors[theme]![0]);
-			const focusedBackground = await backgrounds.first().evaluate(element => getComputedStyle(element).backgroundColor);
+			const selected = await backgrounds.first().evaluate(element => getComputedStyle(element).backgroundColor);
+			await expect(chip).toHaveCSS('background-color', selected);
+			await expect(chip).toHaveCSS('background-image', `linear-gradient(${idleBackground}, ${idleBackground})`);
 			await input.blur();
-			await expect(reference).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-			await expect(backgrounds.first()).not.toHaveCSS('background-color', focusedBackground);
-			await expect(backgrounds.first()).toHaveCSS('background-color', selectionColors[theme]![1]);
+			await expect(editor.locator('.view-overlays')).not.toHaveClass(/focused/);
+			const inactive = await backgrounds.first().evaluate(element => getComputedStyle(element).backgroundColor);
+			await expect(chip).toHaveCSS('background-color', inactive);
 			await input.focus();
 			await input.press('ArrowRight');
-			await expect(reference).not.toHaveClass(/stanza-editor-selected-text/u);
-			await expect(decoration).toHaveCSS('background-color', idleBackground);
-			await expect(backgrounds).toHaveCount(0);
+			await expect(chip).not.toHaveClass(/selected/);
+			await expect(chip).toHaveCSS('background-color', idleBackground);
+			await expect(chip).toHaveCSS('background-image', 'none');
+
+		});
+	}
+	test('Inline attachments wrap as one IconLabel and reserve their full width after resizing', async function () {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode=1&theme=light');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const main = page.locator('main');
+		await main.evaluate(element => { element.style.width = '320px'; });
+		const editor = page.locator('.ash-chat-input-editor');
+		const input = editor.getByRole('textbox');
+		await input.focus();
+		const prefix = 'Explain this selected source code: ';
+		await page.keyboard.type(prefix);
+		await page.locator('#add-code-selection').click();
+		await page.keyboard.type('after');
+		const chip = editor.locator('.ash-chat-code-reference-chip');
+		const object = editor.locator('[data-ash-inline-object="true"]');
+		await expect(chip.locator('.ash-icon-label')).toHaveCount(1);
+		await expect(object).toHaveCount(1);
+		await expect.poll(async () => (await chip.boundingBox())!.y - (await editor.locator('.view-line').first().boundingBox())!.y).toBeGreaterThanOrEqual(20);
+		for (const width of ['480px', '320px']) {
+			await main.evaluate((element, width) => { element.style.width = width; }, width);
+			await expect.poll(async () => {
+				const [chipBox, objectBox] = await Promise.all([chip.boundingBox(), object.boundingBox()]);
+				if (!chipBox || !objectBox) return undefined;
+				return {
+					height: chipBox.height,
+					widthMatches: Math.abs(chipBox.width - objectBox.width) < 1,
+					leftMatches: Math.abs(chipBox.x - objectBox.x) < 1,
+					topMatches: Math.abs(chipBox.y - objectBox.y) < 1,
+				};
+			}).toEqual({ height: 20, widthMatches: true, leftMatches: true, topMatches: true });
+		}
+		expect(await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft())).toBe(`${prefix}example.ts (3-4) after`);
+	});
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`References keep the caret outside a restored attachment at the message start in ${locale}`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}&theme=light`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const editor = page.locator('.ash-chat-input-editor');
+			const input = editor.getByRole('textbox');
+			await page.locator('#add-code-selection').click();
+			const reference = editor.locator('.ash-chat-code-reference');
+			await expect(reference).toHaveText('example.ts (3-4)');
+			await input.press('End');
+			await input.press('Backspace');
+			await input.press('Backspace');
+			await expect(reference).toHaveCount(0);
+			await input.press('ControlOrMeta+z');
+			await expect(reference).toHaveText('example.ts (3-4)');
+			await input.press('Home');
+			await input.press('ArrowRight');
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.inputSelection())).toEqual({ anchor: 16, active: 16 });
+			await expect.poll(async () => {
+				const slot = await editor.locator('.ash-chat-code-reference-chip').boundingBox();
+				const caret = await editor.locator('.cursors-layer .cursor.primary').boundingBox();
+				return caret!.x - slot!.x - slot!.width;
+			}).toBeGreaterThanOrEqual(-1);
+			await input.press('ArrowLeft');
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.inputSelection())).toEqual({ anchor: 0, active: 0 });
+		});
+		test(`References keep the caret outside their entire surface in ${locale}`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}&theme=light`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const editor = page.locator('.ash-chat-input-editor');
+			const input = editor.getByRole('textbox');
+			await input.focus();
+			await page.keyboard.type('Before  after');
+			await input.press('Home');
+			for (let index = 0; index < 7; index++) await input.press('ArrowRight');
+			await page.locator('#add-code-selection').click();
+			const reference = editor.locator('.ash-chat-code-reference');
+			await expect(reference).toHaveText('example.ts (3-4)');
+			const selection = () => page.evaluate(() => window.ashChatInputIntegration.inputSelection());
+			await input.press('Home');
+			for (let index = 0; index < 7; index++) await input.press('ArrowRight');
+			await expect.poll(selection).toEqual({ anchor: 7, active: 7 });
+			await input.press('ArrowRight');
+			await expect.poll(selection).toEqual({ anchor: 23, active: 23 });
+			await expect.poll(async () => {
+				const slot = await editor.locator('.ash-chat-code-reference-chip').boundingBox();
+				const caret = await editor.locator('.cursors-layer .cursor.primary').boundingBox();
+				return caret!.x - slot!.x - slot!.width;
+			}).toBeGreaterThanOrEqual(-1);
+			await input.press('ArrowLeft');
+			await expect.poll(selection).toEqual({ anchor: 7, active: 7 });
+			await input.press('Shift+ArrowRight');
+			await expect.poll(selection).toEqual({ anchor: 7, active: 23 });
+			await input.press('ArrowRight');
+			await input.press(process.platform === 'darwin' ? 'Alt+ArrowLeft' : 'Control+ArrowLeft');
+			await expect.poll(selection).toEqual({ anchor: 7, active: 7 });
+			await input.press(process.platform === 'darwin' ? 'Alt+ArrowRight' : 'Control+ArrowRight');
+			await expect.poll(selection).toEqual({ anchor: 23, active: 23 });
+			await reference.dblclick();
+			await expect.poll(selection).toEqual({ anchor: 7, active: 23 });
+			await editor.screenshot({ path: browserTests.info.outputPath('atomic-reference.png') });
+			await page.keyboard.type('replacement');
+			await expect(reference).toHaveCount(0);
+			expect(await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft())).toBe('Before replacement after');
 		});
 	}
 	for (const { locale, multiRoot } of [
@@ -1378,9 +1477,11 @@ suite('chatInput browser component', () => {
 			const reference = page.locator('.ash-chat-code-reference');
 			const name = multiRoot ? 'rust-analyzer — ash (3-4)' : 'rust-analyzer (3-4)';
 			await expect(reference).toHaveText(name);
+			await expect(page.locator('.ash-chat-code-reference-icon.placeholder')).toHaveCount(1);
+			await expect(page.locator('.ash-chat-code-reference-icon.placeholder')).toBeEmpty();
 			await expect(input).toBeFocused();
 			await reference.hover();
-			const hover = page.locator('.stanza-editor-hover:not([hidden])');
+			let hover = page.locator('.ash-hover');
 			await expect(hover).toContainText(name);
 			await expect(hover.locator('pre')).toHaveText('Selected log entry\nAnother log entry\n');
 			await expect(hover).not.toContainText('output:/');
@@ -1388,6 +1489,7 @@ suite('chatInput browser component', () => {
 			expect((await hover.boundingBox())!.width).toBeLessThanOrEqual(500);
 			await input.press('Home');
 			await expect(hover).toHaveCount(0);
+			hover = page.locator('.stanza-editor-hover:not([hidden])');
 			await input.press('ControlOrMeta+k');
 			await input.press('ControlOrMeta+i');
 			await expect(hover).toBeVisible();
@@ -1399,7 +1501,7 @@ suite('chatInput browser component', () => {
 			const bounds = await reference.boundingBox();
 			expect(bounds!.height).toBeLessThan(30);
 			await page.locator('#append-output-log').click();
-			await reference.click();
+			await page.locator('.ash-chat-code-reference-source').click();
 			const opened = page.getByLabel('Opened saved content', { exact: true });
 			await expect.poll(async () => JSON.parse((await opened.textContent())!).length).toBe(1);
 			expect(JSON.parse((await opened.textContent())!)[0]).toMatchObject({ text: 'Selected log entry\nAnother log entry\n', readOnly: true, pinned: true });
@@ -1422,6 +1524,21 @@ suite('chatInput browser component', () => {
 		});
 	}
 	for (const locale of ['en', 'zh-CN']) {
+		test(`Selected Debug Console text reserves an empty icon in ${locale}`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?inlineCode=1&debugSelection=1&locale=${locale}&theme=light`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			await page.locator('#add-code-selection').click();
+			const name = `${locale === 'en' ? 'Debug Console' : '调试控制台'} (3-4)`;
+			const reference = page.locator('.ash-chat-code-reference');
+			await expect(reference).toHaveText(name);
+			const icon = page.locator('.ash-chat-code-reference-icon.placeholder');
+			await expect(icon).toHaveCount(1);
+			await expect(icon).toBeEmpty();
+			expect((await icon.boundingBox())!.width).toBe(16);
+			await reference.hover();
+			await expect(page.locator('.ash-hover pre')).toHaveText('Debug result\nDebug detail\n');
+		});
 		for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
 			test(`Inline files and selected code use the message cursor and preserve snapshots in ${locale} ${theme}`, async function () {
 				const { page } = browserTests;
@@ -1444,9 +1561,33 @@ suite('chatInput browser component', () => {
 				const reference = page.locator('.ash-chat-code-reference').filter({ hasText: /^example.ts \(3-4\)$/ });
 				await expect(reference).toHaveText('example.ts (3-4)');
 				await expect(wholeFile).toHaveText('edited.ts');
+				const icons = page.locator('.ash-chat-code-reference-icon');
+				await expect(icons).toHaveCount(2);
+				await expect(icons.locator('.ash-icon-file')).toHaveCount(2);
+				await expect(icons.first()).toHaveAttribute('aria-hidden', 'true');
+				const iconBounds = await icons.nth(1).boundingBox();
+				const textBounds = await reference.boundingBox();
+				expect(iconBounds!.x + iconBounds!.width).toBeLessThanOrEqual(textBounds!.x + 1);
+				await expect(reference).toHaveCSS('font-size', '13px');
+				const alignment = await reference.evaluate(element => {
+					const chip = element.closest('.ash-chat-code-reference-chip')!.getBoundingClientRect();
+					const icon = element.closest('.ash-icon-label')!.querySelector('.ash-icon-label-icon')!.getBoundingClientRect();
+					const line = element.getBoundingClientRect();
+					const container = getComputedStyle(element.closest('.ash-icon-label-container')!);
+					return {
+						lineOffset: line.top + line.height / 2 - chip.top - chip.height / 2,
+						iconOffset: icon.top + icon.height / 2 - chip.top - chip.height / 2,
+						transform: container.transform,
+						trim: getComputedStyle(element).textBoxTrim,
+					};
+				});
+				expect(Math.abs(alignment.lineOffset)).toBeLessThan(0.5);
+				expect(Math.abs(alignment.iconOffset)).toBeLessThan(0.5);
+				expect(alignment.transform).toBe('none');
+				expect(alignment.trim).toBe('none');
 				await expect(input).toBeFocused();
 				await reference.hover();
-				const hover = page.locator('.stanza-editor-hover:not([hidden])');
+				const hover = page.locator('.ash-hover');
 				await expect(hover.locator('pre')).toHaveText('const unsaved = 42;\nreturn unsaved;\n');
 				await expect(hover).toContainText('/workspace/example.ts');
 				await input.press('Escape');
@@ -1460,22 +1601,22 @@ suite('chatInput browser component', () => {
 				await expect(reference).toHaveText('example.ts (3-4)');
 				await input.press('Home');
 				for (let index = 0; index < 8; index++) await input.press('ArrowRight');
+				await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.inputSelection())).toEqual({ anchor: 8, active: 8 });
 				await input.press('ArrowRight');
+				await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.inputSelection())).toEqual({ anchor: 17, active: 17 });
 				await input.press('ArrowRight');
+				await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.inputSelection())).toEqual({ anchor: 18, active: 18 });
 				await input.press('Delete');
 				await expect(reference).toHaveCount(0);
 				await input.press('ControlOrMeta+z');
+				// Undo restores a native selection; select the whole draft for the selected-color assertion.
+				await input.press('ControlOrMeta+a');
 				await expect(reference).toHaveText('example.ts (3-4)');
-				const referenceStyle = () => reference.evaluate(element => {
+				const referenceStyle = () => page.evaluate(() => {
+					const editor = document.querySelector('.ash-chat-input-editor .stanza-editor')!;
+					const element = [...editor.querySelectorAll('.ash-chat-code-reference')].find(element => element.textContent === 'example.ts (3-4)')!;
 					const { color } = getComputedStyle(element);
-					const editor = element.closest('.stanza-editor')!;
-					const bounds = element.getBoundingClientRect();
-					const coversReference = (candidate: Element) => {
-						const rect = candidate.getBoundingClientRect();
-						return rect.left <= bounds.x + bounds.width / 2 && rect.right >= bounds.x + bounds.width / 2 && rect.top <= bounds.y + bounds.height / 2 && rect.bottom >= bounds.y + bounds.height / 2;
-					};
-					const decoration = [...editor.querySelectorAll('.view-overlays .cdr')].find(coversReference)!;
-					const selection = [...editor.querySelectorAll('.stanza-editor-selection')].find(coversReference);
+					const decoration = element.closest('.ash-chat-code-reference-chip')!;
 					const probe = element.ownerDocument.createElement('span');
 					probe.style.backgroundColor = 'var(--ash-input-background)';
 					editor.append(probe);
@@ -1484,11 +1625,16 @@ suite('chatInput browser component', () => {
 					probe.remove();
 					// The reference fill follows the selection in paint order; alpha must be composited
 					// before checking the text contrast of either selected or unselected references.
-					for (const layer of [selection, decoration]) {
+					for (const layer of [decoration]) {
 						if (!layer) continue;
 						const rgba = channels(getComputedStyle(layer).backgroundColor);
 						const alpha = rgba[3] ?? 1;
 						background = background.map((value, index) => rgba[index]! * alpha + value * (1 - alpha));
+					}
+					const fill = getComputedStyle(decoration).backgroundImage.match(/rgba?\([^)]+\)/)?.[0];
+					if (fill) {
+						const rgba = channels(fill);
+						background = background.map((value, index) => rgba[index]! * (rgba[3] ?? 1) + value * (1 - (rgba[3] ?? 1)));
 					}
 					const luminance = (values: number[]) => {
 						const channels = values.map(channel => channel / 255).map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
@@ -1496,7 +1642,7 @@ suite('chatInput browser component', () => {
 					};
 					const foregroundLuminance = luminance(channels(color));
 					const backgroundLuminance = luminance(background);
-					return { foreground: color, background, radius: getComputedStyle(decoration).borderRadius, contrast: (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05) };
+					return { foreground: color, background, radius: getComputedStyle(decoration).borderTopRightRadius, contrast: (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05) };
 				});
 				const selectedStyle = await referenceStyle();
 				await input.press('ArrowRight');
@@ -1509,7 +1655,7 @@ suite('chatInput browser component', () => {
 					expect(selectedStyle.contrast, JSON.stringify(selectedStyle)).toBeGreaterThanOrEqual(4.5);
 				}
 				for (const style of [selectedStyle, normalStyle]) {
-					expect(style.radius).toBe('3px');
+					expect(style.radius).toBe('4px');
 				}
 				await page.locator('main').screenshot({ path: browserTests.info.outputPath('inline-file-references.png') });
 				await input.press('Enter');

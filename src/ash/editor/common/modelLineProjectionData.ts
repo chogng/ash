@@ -83,24 +83,17 @@ export class ModelLineProjectionData {
 		}
 
 		const offsetInInputWithInjection = outputLineIndex === 0 ? outputOffset : this.breakOffsets[outputLineIndex - 1] + outputOffset;
-		let offsetInInput = offsetInInputWithInjection;
-
+		let delta = 0;
 		if (this.injectionOffsets !== null) {
 			for (let i = 0; i < this.injectionOffsets.length; i++) {
-				if (offsetInInput > this.injectionOffsets[i]) {
-					if (offsetInInput < this.injectionOffsets[i] + this.injectionOptions![i].content.length) {
-						// `inputOffset` is within injected text
-						offsetInInput = this.injectionOffsets[i];
-					} else {
-						offsetInInput -= this.injectionOptions![i].content.length;
-					}
-				} else {
-					break;
-				}
+				const start = this.injectionOffsets[i] + delta;
+				const options = this.injectionOptions![i];
+				if (offsetInInputWithInjection <= start) break;
+				if (offsetInInputWithInjection < start + options.content.length) return this.injectionOffsets[i];
+				delta += options.content.length - (options.replaceLength ?? 0);
 			}
 		}
-
-		return offsetInInput;
+		return offsetInInputWithInjection - delta;
 	}
 
 	public translateToOutputPosition(inputOffset: number, affinity: PositionAffinity = PositionAffinity.None): OutputPosition {
@@ -110,12 +103,20 @@ export class ModelLineProjectionData {
 				if (inputOffset < this.injectionOffsets[i]) {
 					break;
 				}
+				const replacedLength = this.injectionOptions![i].replaceLength ?? 0;
+				if (replacedLength > 0 && inputOffset < this.injectionOffsets[i] + replacedLength) {
+					const start = this.injectionOffsets[i];
+					const right = inputOffset > start && (affinity === PositionAffinity.Right || affinity === PositionAffinity.RightOfInjectedText
+						|| affinity === PositionAffinity.None && inputOffset - start >= replacedLength / 2);
+					const viewStart = inputOffsetInInputWithInjection - inputOffset + start;
+					return this.offsetInInputWithInjectionsToOutputPosition(viewStart + (right ? this.injectionOptions![i].content.length : 0), affinity);
+				}
 
 				if (affinity !== PositionAffinity.Right && inputOffset === this.injectionOffsets[i]) {
 					break;
 				}
 
-				inputOffsetInInputWithInjection += this.injectionOptions![i].content.length;
+				inputOffsetInInputWithInjection += this.injectionOptions![i].content.length - replacedLength;
 			}
 		}
 
@@ -197,6 +198,13 @@ export class ModelLineProjectionData {
 	private normalizeOffsetInInputWithInjectionsAroundInjections(offsetInInputWithInjections: number, affinity: PositionAffinity): number {
 		const injectedText = this.getInjectedTextAtOffset(offsetInInputWithInjections);
 		if (!injectedText) {
+			return offsetInInputWithInjections;
+		}
+		const options = this.injectionOptions![injectedText.injectedTextIndex];
+		// Replaced source has distinct model positions at each edge, so entering an edge must not skip the object.
+		if (options.replaceLength && affinity !== PositionAffinity.LeftOfInjectedText && affinity !== PositionAffinity.RightOfInjectedText
+			&& (offsetInInputWithInjections === injectedText.offsetInInputWithInjections && hasLeftCursorStop(options.cursorStops)
+				|| offsetInInputWithInjections === injectedText.offsetInInputWithInjections + injectedText.length && hasRightCursorStop(options.cursorStops))) {
 			return offsetInInputWithInjections;
 		}
 
@@ -284,7 +292,7 @@ export class ModelLineProjectionData {
 					};
 				}
 
-				totalInjectedTextLengthBefore += length;
+				totalInjectedTextLengthBefore += length - (injectionOptions![i].replaceLength ?? 0);
 			}
 		}
 

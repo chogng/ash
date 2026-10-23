@@ -11,6 +11,8 @@ export enum PositionAffinity {
 /** Configures text projected into a view without changing model contents. */
 export interface InjectedTextOptions {
 	readonly content: string;
+	/** Source characters replaced by this visual injection; model text and undo remain unchanged. */
+	readonly replaceLength?: number;
 	readonly tokens?: TokenArray | null;
 	readonly inlineClassName?: string | null;
 	readonly inlineClassNameAffectsLetterSpacing?: boolean;

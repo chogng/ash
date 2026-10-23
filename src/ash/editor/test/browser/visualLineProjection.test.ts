@@ -9,9 +9,47 @@ import { DOMLineBreaksComputerFactory } from "../../browser/view/domLineBreaksCo
 import { TextModel } from "../../common/model/textModel.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
-import { PositionAffinity } from "../../common/model.js";
+import { InjectedTextCursorStops, PositionAffinity } from "../../common/model.js";
 import { type TextMeasurer } from '../../common/viewModel.js';
 import { LineInjectedText } from '../../common/textModelEvents.js';
+
+test('An inline object replaces a source range only in the view and wraps as a whole', () => {
+	using model = new TextModel('Before settings.json (14-15) after');
+	model.deltaDecorations([], [{
+		range: new Range(1, 8, 1, 29),
+		options: { description: 'inline-object', before: { content: '\uFFFC', replaceLength: 21, widthInEm: 12, inlineClassName: 'inline-object' } },
+	}]);
+	using lines = createViewModelLines(model, new FixedTextMeasurer(), { wrapping: EditorLineWrapping.On, wrapWidth: 200 });
+	const coordinates = lines.createCoordinatesConverter();
+	const start = coordinates.convertModelPositionToViewPosition(new Position(1, 8), PositionAffinity.Left);
+	const end = coordinates.convertModelPositionToViewPosition(new Position(1, 29), PositionAffinity.Right);
+	assert.equal(start.lineNumber, end.lineNumber);
+	assert.equal(end.column - start.column, 1);
+	assert.deepEqual(coordinates.convertViewPositionToModelPosition(start), new Position(1, 8));
+	assert.deepEqual(coordinates.convertViewPositionToModelPosition(end), new Position(1, 29));
+	assert.deepEqual(coordinates.convertViewRangeToModelRange(Range.fromPositions(start)), new Range(1, 8, 1, 8));
+	assert.deepEqual(coordinates.convertViewRangeToModelRange(Range.fromPositions(end)), new Range(1, 29, 1, 29));
+	assert.deepEqual(lines.normalizePosition(start, PositionAffinity.Right), start);
+	assert.deepEqual(lines.normalizePosition(end, PositionAffinity.Left), end);
+	assert.equal(model.getValue(), 'Before settings.json (14-15) after');
+	assert.equal(Array.from({ length: lines.getViewLineCount() }, (_, i) => lines.getViewLineContent(i + 1)).join('').replace(/\uFFFC/u, '[file]'), 'Before [file] after');
+});
+
+test('A collapsed view range stays outside injected text without selecting its reserved width', () => {
+	using model = new TextModel('token ');
+	model.deltaDecorations([], [{
+		range: new Range(1, 1, 1, 6), options: {
+			description: 'inline-reference',
+			after: { content: '\uFFFC', widthInEm: 0.5, cursorStops: InjectedTextCursorStops.Right },
+		}
+	}]);
+	using lines = createViewModelLines(model, new FixedTextMeasurer(), { wrapping: EditorLineWrapping.Off, wrapWidth: 100 });
+	const coordinates = lines.createCoordinatesConverter();
+	const modelEnd = new Position(1, 6);
+	const viewEnd = coordinates.convertModelPositionToViewPosition(modelEnd, PositionAffinity.Right);
+	assert.deepEqual(viewEnd, new Position(1, 7));
+	assert.deepEqual(coordinates.validateViewRange(Range.fromPositions(viewEnd), Range.fromPositions(modelEnd)), Range.fromPositions(viewEnd));
+});
 
 test('DOM wrapping reserves injected control widths instead of measuring their placeholder glyphs', () => {
 	using model = new TextModel('abcd');

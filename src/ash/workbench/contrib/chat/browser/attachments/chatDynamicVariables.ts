@@ -5,6 +5,11 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { Range } from '../../../../../editor/common/core/range.js';
+import { Position } from '../../../../../editor/common/core/position.js';
+import { Selection } from '../../../../../editor/common/core/selection.js';
+import { CursorState, SelectionStartKind, SingleCursorState } from '../../../../../editor/common/cursorCommon.js';
+import { CursorChangeReason, type ICursorSelectionChangedEvent } from '../../../../../editor/common/cursorEvents.js';
+import { PositionAffinity } from '../../../../../editor/common/model.js';
 import { TextModelChangeReason } from '../../../../../editor/common/core/textChange.js';
 import type { IModelContentChange } from '../../../../../editor/common/model/mirrorTextModel.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
@@ -24,6 +29,7 @@ export class ChatDynamicVariableModel extends Disposable {
 	readonly onDidRemoveReference = this.removed.event;
 	// Alternative model versions identify actual undo states; matching text alone must not attach old code.
 	private readonly history = new Map<number, readonly InlineContext[]>();
+	private adjustingSelection = false;
 
 	constructor(private readonly input: IChatInputEditor) {
 		super();
@@ -53,6 +59,9 @@ export class ChatDynamicVariableModel extends Disposable {
 			}));
 		}
 		this._register(addDisposableListener(input.element, 'keydown', event => this.handleKey(event), true));
+		if (input.codeEditor) {
+			this._register(input.codeEditor.onDidChangeCursorSelection(event => this.constrainSelections(event)));
+		}
 		this._register(toDisposable(() => {
 			if (!model || !model.isDisposed()) input.renderContextReferences?.([], () => { });
 			this.history.clear();
@@ -141,8 +150,59 @@ export class ChatDynamicVariableModel extends Disposable {
 			announceStatus(localize('chat.context.removed', 'Removed {0}', context!.name));
 			this.input.focus();
 		});
+		this.constrainSelections();
 		this.remember();
 		this.changes.fire();
+	}
+
+	private constrainSelections(event?: ICursorSelectionChangedEvent): void {
+		const model = this.input.getModel?.();
+		const viewModel = this.input.codeEditor?._getViewModel();
+		// Content events can arrive before reference offsets have followed the edit.
+		if (this.adjustingSelection || !model || !viewModel || this.references.length === 0 || this.text !== this.input.value) return;
+		let changed = false;
+		const states = viewModel.getCursorStates().map((state, index) => {
+			const selection = state.modelState.selection;
+			let anchor = model.getOffsetAt(selection.getSelectionStart());
+			let active = model.getOffsetAt(selection.getPosition());
+			const snap = (offset: number, edge: 'start' | 'end' | 'nearest'): number => {
+				const reference = this.references.find(context => offset > context.reference.start && offset < context.reference.end)?.reference;
+				if (!reference) return offset;
+				return edge === 'start' || edge === 'nearest' && offset - reference.start < reference.end - offset ? reference.start : reference.end;
+			};
+			if (selection.isEmpty()) {
+				const previous = event?.oldSelections?.[index];
+				const moving = event?.source === 'keyboard' && event.modelVersionId === event.oldModelVersionId && previous;
+				const edge = moving ? active < model.getOffsetAt(previous.getPosition()) ? 'start' : 'end' : 'nearest';
+				anchor = active = snap(active, edge);
+			} else {
+				const forward = anchor < active;
+				anchor = snap(anchor, forward ? 'start' : 'end');
+				active = snap(active, forward ? 'end' : 'start');
+			}
+			const toView = (offset: number, current: Position): Position => {
+				const isEnd = this.references.some(context => context.reference.end === offset);
+				const isStart = this.references.some(context => context.reference.start === offset);
+				if (!isEnd && !isStart && model.getOffsetAt(viewModel.coordinatesConverter.convertViewPositionToModelPosition(current)) === offset) return current;
+				const position = viewModel.coordinatesConverter.convertModelPositionToViewPosition(model.getPositionAt(offset), isEnd ? PositionAffinity.Right : PositionAffinity.Left);
+				return viewModel.normalizePosition(position, PositionAffinity.None);
+			};
+			// Both model boundaries and injected icon/padding boundaries belong outside the reference.
+			const viewAnchor = toView(anchor, state.viewState.selection.getSelectionStart());
+			const viewActive = toView(active, state.viewState.position);
+			const viewSelection = Selection.fromPositions(viewAnchor, viewActive);
+			if (state.viewState.selection.equalsSelection(viewSelection)
+				&& model.getOffsetAt(selection.getSelectionStart()) === anchor && model.getOffsetAt(selection.getPosition()) === active) return state;
+			changed = true;
+			return CursorState.fromViewState(new SingleCursorState(Range.fromPositions(viewAnchor), SelectionStartKind.Simple, 0, viewActive, 0));
+		});
+		if (!changed) return;
+		this.adjustingSelection = true;
+		try {
+			viewModel.setCursorStates('chat-reference', CursorChangeReason.Explicit, states);
+		} finally {
+			this.adjustingSelection = false;
+		}
 	}
 
 	private remember(): void {

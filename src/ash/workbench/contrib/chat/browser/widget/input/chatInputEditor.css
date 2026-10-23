@@ -16,6 +16,15 @@
 	cursor: pointer;
 }
 
+/* The actual attachment is one IconLabel widget; this object only reserves its inline position. */
+.ash-chat-input-editor
+	.stanza-editor
+	.view-lines
+	.stanza-editor-line-text
+	> .ash-chat-code-reference-space {
+	color: transparent;
+}
+
 .ash-chat-input-editor
 	:is(.ash-chat-image-reference, .ash-chat-context-reference) {
 	display: inline-block;

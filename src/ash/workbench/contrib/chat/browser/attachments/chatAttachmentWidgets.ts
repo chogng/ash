@@ -3,7 +3,7 @@ import { DetachedTerminalSnapshotMirror } from '../../../terminal/browser/chatTe
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import './chatAttachmentWidgets.css';
-import { h } from '../../../../../base/browser/dom.js';
+import { h, addDisposableListener } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
@@ -21,6 +21,13 @@ import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget 
 import { PositionAffinity } from '../../../../../editor/common/model.js';
 import { ContextViewFocusRestore } from '../../../../../base/browser/ui/contextview/contextview.js';
 import type { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IResourceIconRenderer } from '../../../../browser/labels.js';
+import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { IconLabel } from '../../../../../base/browser/ui/iconlabel/iconlabel.js';
+import { getHoverDelegate, type IManagedHover } from '../../../../../base/browser/ui/hover/hoverDelegate.js';
+import type { MarkdownString } from '../../../../../base/common/htmlContent.js';
+import { EditorOption } from '../../../../../editor/common/config/editorOptions.js';
+import { renderMarkdown } from '../../../../../base/browser/markdownRenderer.js';
 
 /** Controls follow their owning reference; injected text reserves space without changing the message. */
 export class InlineChatAttachmentWidget extends Disposable {
@@ -28,20 +35,82 @@ export class InlineChatAttachmentWidget extends Disposable {
 	readonly widgets: readonly IContentWidget[];
 	private readonly thumbnail: HTMLImageElement | undefined;
 	private readonly openButton: Button | undefined;
+	private readonly codeChip: HTMLElement | undefined;
+	private readonly fileSource: HTMLButtonElement | undefined;
+	private readonly hover = this._register(new MutableDisposable<DisposableStore>());
+	private hoverControl: IManagedHover | undefined;
 
 	constructor(
 		private readonly editor: ICodeEditor,
 		public attachment: ChatContextAttachment,
 		private readonly contextViews: IContextViewService,
 		remove: () => void,
+		private readonly openSaved: (() => void) | undefined,
 		@IOpenerService private readonly opener: IOpenerService,
 		@ICommandService private readonly commands: ICommandService,
 		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IResourceIconRenderer private readonly resourceIcons: IResourceIconRenderer,
 	) {
 		super();
 		const document = editor.getDomNode()!.ownerDocument;
+		if (attachment.kind === 'file' || attachment.kind === 'codeSelection') {
+			const host = h(document, 'div');
+			host.className = 'ash-chat-code-reference-widget';
+			const chip = this.codeChip = h(document, 'div');
+			chip.className = 'ash-chat-code-reference-chip';
+			host.append(chip);
+			const source = this.fileSource = h(document, 'button');
+			source.type = 'button';
+			source.className = 'ash-chat-code-reference-source';
+			source.setAttribute('aria-label', localize('chat.context.open', 'Open {0}', attachment.name));
+			chip.append(source);
+			const label = this._register(new IconLabel(source, {
+				label: attachment.name,
+				reserveIconSpace: true,
+			}));
+			label.labelElement.classList.add('ash-chat-code-reference');
+			const renderIcon = () => {
+				const resource = this.attachment.resource;
+				const placeholder = !resource || resource.scheme === 'output' || resource.scheme === 'inmemory';
+				label.setIcon(undefined, placeholder ? undefined : container => {
+					const glyph = h(document, 'span');
+					container.append(glyph);
+					if (this.resourceIcons.getFileIconTheme().hasFileIcons) this.resourceIcons.renderFileIcon(resource, glyph);
+					else appendIcon(Lxicon.file, glyph);
+				}, true);
+				label.iconElement.classList.add('ash-chat-code-reference-icon');
+				label.iconElement.classList.toggle('placeholder', placeholder);
+			};
+			renderIcon();
+			this._register(resourceIcons.onDidChangeResourceIcons(renderIcon));
+			this._register(addDisposableListener(source, 'click', () => this.open()));
+			this._register(editor.onDidChangeCursorSelection(() => this.hoverControl?.hide()));
+			this._register(addDisposableListener(source, 'dblclick', event => {
+				event.preventDefault();
+				const model = editor.getModel()!;
+				const reference = this.attachment.reference!;
+				editor.setSelection({
+					startLineNumber: model.getPositionAt(reference.start).lineNumber, startColumn: model.getPositionAt(reference.start).column,
+					endLineNumber: model.getPositionAt(reference.end).lineNumber, endColumn: model.getPositionAt(reference.end).column,
+				});
+				editor.focus();
+			}));
+			const widget: IContentWidget = {
+				getId: () => `chat-context-${attachment.id}`,
+				getDomNode: () => host,
+				getPosition: () => ({
+					position: editor.getModel()!.getPositionAt(this.attachment.reference!.start),
+					positionAffinity: PositionAffinity.LeftOfInjectedText,
+					preference: [ContentWidgetPositionPreference.EXACT],
+				}),
+			};
+			this.widgets = [widget];
+			editor.addContentWidget(widget);
+			this._register(toDisposable(() => editor.removeContentWidget(widget)));
+			return;
+		}
 		const controls: { node: HTMLElement; before: boolean; }[] = [];
 		const controlClass = attachment.kind === 'image' ? 'ash-chat-context-reference-control ash-chat-image-reference-control' : 'ash-chat-context-reference-control';
 		if (attachment.kind === 'image' || attachment.terminalSnapshot || attachment.resource) {
@@ -95,8 +164,26 @@ export class InlineChatAttachmentWidget extends Disposable {
 		});
 	}
 
+	get widthInEm(): number {
+		const font = this.editor.getOption(EditorOption.fontInfo);
+		return (this.codeChip?.getBoundingClientRect().width || this.attachment.name.length * font.typicalHalfwidthCharacterWidth + 28) / font.fontSize;
+	}
+
+	setSelected(selected: boolean): void {
+		this.codeChip?.classList.toggle('selected', selected);
+	}
+
+	setHoverMessage(message: MarkdownString): void {
+		if (!this.fileSource) return;
+		const resources = new DisposableStore();
+		const content = resources.add(renderMarkdown(message, { ownerDocument: this.fileSource.ownerDocument }));
+		this.hoverControl = resources.add(getHoverDelegate().setupHover({ target: this.fileSource, content: content.element }));
+		this.hover.value = resources;
+	}
+
 	open(): void {
-		if (this.attachment.kind === 'image' || this.attachment.terminalSnapshot) this.showPreview();
+		if (this.openSaved) this.openSaved();
+		else if (this.attachment.kind === 'image' || this.attachment.terminalSnapshot) this.showPreview();
 		else void this.openSource();
 	}
 

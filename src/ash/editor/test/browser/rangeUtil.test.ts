@@ -6,6 +6,21 @@ import { JSDOM } from 'jsdom';
 const { DomReadingContext } = await import('../../browser/viewParts/viewLines/domReadingContext.js');
 const { RangeUtil } = await import('../../browser/viewParts/viewLines/rangeUtil.js');
 
+test('Inline objects use their reserved box for collapsed caret edges and full selection', () => {
+	const dom = new JSDOM('<!doctype html><body><div id="line"><span id="text"><span data-ash-inline-object="true">\uFFFC</span></span></div></body>');
+	using cleanup = { [Symbol.dispose]: () => dom.window.close() };
+	const line = dom.window.document.querySelector<HTMLElement>('#line')!;
+	const text = dom.window.document.querySelector<HTMLElement>('#text')!;
+	Object.defineProperty(line, 'offsetWidth', { value: 200 });
+	line.getBoundingClientRect = () => rectangle(100, 0, 200);
+	text.firstElementChild!.getBoundingClientRect = () => rectangle(120, 0, 160);
+	const context = new DomReadingContext(line, text);
+	const read = (start: number, end: number) => RangeUtil.readHorizontalRanges(text, 0, start, 0, end, context)?.map(({ left, width }) => ({ left, width }));
+	assert.deepEqual(read(0, 0), [{ left: 20, width: 0 }]);
+	assert.deepEqual(read(1, 1), [{ left: 180, width: 0 }]);
+	assert.deepEqual(read(0, 1), [{ left: 20, width: 160 }]);
+});
+
 test('RangeUtil keeps one UTF-16 offset space across syntax spans', () => {
 	const dom = new JSDOM('<!doctype html><body><div id="line"><span id="text"><span>ab</span><span>😊</span><span>cd</span></span></div></body>');
 	const line = dom.window.document.querySelector<HTMLElement>('#line');

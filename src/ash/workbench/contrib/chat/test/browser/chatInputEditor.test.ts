@@ -25,6 +25,7 @@ const { IConfigurationService } = await import('../../../../../platform/configur
 const { createChatCommandCompletionProvider, createChatSkillCompletionProvider } = await import("../../browser/widget/input/editor/chatInputCompletions.js");
 const { DesktopSlashCommands, SlashCommandCatalog } = await import("../../common/slashCommands.js");
 const { SkillSelectorCatalog } = await import('../../common/skillSelectors.js');
+const { PositionAffinity } = await import('../../../../../editor/common/model.js');
 const { Position } = await import("../../../../../editor/common/core/position.js");
 const { EditorOption } = await import('../../../../../editor/common/config/editorOptions.js');
 const { Range } = await import("../../../../../editor/common/core/range.js");
@@ -38,8 +39,89 @@ const { SelectAllCommand } = await import("../../../../../editor/browser/editorE
 const { URI } = await import('../../../../../base/common/uri.js');
 const { IEditorService } = await import('../../../../services/editor/common/editorService.js');
 const { emptyEditorServiceState } = await import('../../../../test/common/testEditorService.js');
+const { IChatSessionNavigationService } = await import('../../../../services/chat/common/chatSessionNavigationService.js');
+const { IResourceIconRenderer } = await import('../../../../browser/labels.js');
+const { noFileIconTheme } = await import('../../../../../platform/theme/common/themeService.js');
+const { Emitter, Event: AshEvent } = await import('../../../../../base/common/event.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
+
+test('References constrain mouse, keyboard and API selections to whole model and visual boundaries', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using resources = new DisposableStore();
+	const services = createChatInputServices(resources);
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using references = new ChatDynamicVariableModel(editor);
+	editor.value = 'Before  after';
+	editor.setSelection({ anchor: 7, active: 7 });
+	const context = references.addReference({ id: 'file', kind: 'file', name: 'settings.json (14-15)', resource: URI.file('/settings.json'), resolve: async () => ({ name: 'settings.json', content: 'Saved text' }) });
+	const { start, end } = context.reference!;
+	const model = editor.getModel();
+	const native = editor.codeEditor;
+	const move = (offset: number, source: string) => native.setPosition(model.getPositionAt(offset), source);
+	move(start + 2, 'mouse');
+	assert.deepEqual(editor.getSelection(), { anchor: start, active: start });
+	move(end - 2, 'mouse');
+	assert.deepEqual(editor.getSelection(), { anchor: end, active: end });
+	const view = native._getViewModel()!;
+	assert.ok(view.getPrimaryCursorState().viewState.selection.isEmpty());
+	assert.equal(view.getPrimaryCursorState().viewState.position.column, view.coordinatesConverter.convertModelPositionToViewPosition(model.getPositionAt(end), PositionAffinity.Right).column);
+	move(start, 'api');
+	move(start + 1, 'keyboard');
+	assert.deepEqual(editor.getSelection(), { anchor: end, active: end });
+	move(end - 1, 'keyboard');
+	assert.deepEqual(editor.getSelection(), { anchor: start, active: start });
+	for (const [anchor, active, expected] of [
+		[start, start + 1, { anchor: start, active: end }],
+		[end, end - 1, { anchor: end, active: start }],
+		[start + 2, end - 2, { anchor: start, active: end }],
+	] as const) {
+		native.setSelection(Selection.fromPositions(model.getPositionAt(anchor), model.getPositionAt(active)), 'mouse');
+		assert.deepEqual(editor.getSelection(), expected);
+	}
+	editor.insertText('replacement');
+	assert.equal(editor.value, 'Before replacement after');
+	assert.deepEqual(references.variables, []);
+});
+
+test('Reference icons borrow the file theme, refresh with it and leave non-file sources empty', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using resources = new DisposableStore();
+	const services = resources.add(createChatInputServices(resources).createChild());
+	using changed = new Emitter<void>();
+	let version = 'first';
+	services.registerInstance(IResourceIconRenderer, {
+		onDidChangeResourceIcons: changed.event,
+		getFileIconTheme: () => ({ ...noFileIconTheme, hasFileIcons: true }),
+		renderFileIcon: (resource, container) => { container.dataset.fileIcon = `${resource.path}:${version}`; },
+	});
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using references = new ChatDynamicVariableModel(editor);
+	for (const [id, uri] of [['file', 'file:///workspace/settings.json'], ['output', 'output:/rust-analyzer'], ['debug', 'inmemory:/debug-console'], ['anonymous', 'inmemory:/console']] as const) {
+		references.addReference({ id, kind: 'codeSelection', name: id, resource: URI.parse(uri), resolve: async () => ({ name: id, content: id }) });
+	}
+	const icons = () => [...editor.element.querySelectorAll<HTMLElement>('.ash-chat-code-reference-icon')];
+	assert.equal(icons().length, 4);
+	assert.equal(icons().filter(icon => icon.classList.contains('placeholder')).length, 3);
+	assert.ok(icons().every(icon => icon.getAttribute('aria-hidden') === 'true' && !icon.querySelector('button')));
+	assert.equal(editor.element.querySelector<HTMLElement>('[data-file-icon]')?.dataset.fileIcon, '/workspace/settings.json:first');
+	version = 'second';
+	changed.fire();
+	assert.equal(editor.element.querySelector<HTMLElement>('[data-file-icon]')?.dataset.fileIcon, '/workspace/settings.json:second');
+	assert.equal(editor.value, 'file output debug anonymous ');
+	references.removeReference('file');
+	assert.equal(icons().length, 3);
+	assert.equal(editor.element.querySelector('[data-file-icon]'), null);
+	await editor.getModel().undo();
+	assert.equal(icons().length, 4);
+	editor.dispose();
+	changed.fire();
+	assert.equal(dom.window.document.querySelector('.ash-chat-code-reference-icon'), null);
+});
 
 test('Reference previews shorten the shared snapshot without exposing output identities or changing submission', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -129,7 +211,7 @@ test('Inline code references track edits, atomic deletion, undo and redo in the 
 	references.addReference({ id: 'selection', kind: 'codeSelection', name: 'file.ts (6-9)', resolve: async () => ({ name: 'file.ts (6-9)', content: 'Unsaved code' }) });
 	assert.equal(editor.value, 'Explain file.ts (6-9) please');
 	assert.deepEqual(references.variables[0]?.reference, { start: 8, end: 21 });
-	assert.equal(editor.getModel().getAllDecorations().filter(decoration => decoration.options.inlineClassName?.split(' ').includes('ash-chat-code-reference')).length, 1);
+	assert.equal(editor.getModel().getAllDecorations().filter(decoration => decoration.options.before?.replaceLength).length, 1);
 	editor.setSelection({ anchor: 0, active: 0 });
 	editor.insertText('First: ');
 	assert.deepEqual(references.variables[0]?.reference, { start: 15, end: 28 });
@@ -486,5 +568,15 @@ teardown(() => editorFeatures.dispose());
 function createChatInputServices(resources: DisposableStore, openEditor: import('../../../../services/editor/common/editorService.js').IEditorService['openEditor'] = async () => { }): ReturnType<typeof createCodeEditorServices> {
 	const services = createCodeEditorServices(resources);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor, focusActiveEditor() { } });
+	services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: AshEvent.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
+	services.registerInstance(IChatSessionNavigationService, {
+		revision: 0,
+		getConversations: () => [],
+		getActiveConversation: () => undefined,
+		appendToActiveDraft() { throw new Error('Unexpected draft handoff'); },
+		captureActiveDraft: async () => undefined,
+		openConversation: async () => { throw new Error('Unexpected conversation navigation'); },
+		startVoiceConversation: async () => { throw new Error('Unexpected voice start'); },
+	});
 	return services;
 }

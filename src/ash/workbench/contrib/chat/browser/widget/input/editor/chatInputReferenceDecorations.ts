@@ -10,7 +10,7 @@ export function registerChatInputReferenceDecorationType(codeEditorService: ICod
 	return codeEditorService.registerDecorationType('chat-context-reference', decorationType, {
 		backgroundColor: themeColorFromId(chatSlashCommandBackground),
 		color: themeColorFromId(chatSlashCommandForeground),
-		borderRadius: '3px',
+		borderRadius: 'var(--ash-cornerRadius-small)',
 		rangeBehavior: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 	});
 }
