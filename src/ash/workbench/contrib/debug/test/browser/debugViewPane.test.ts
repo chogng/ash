@@ -2086,7 +2086,7 @@ suite('debug browser component', () => {
 		await expect(suggestions).toBeHidden();
 	});
 
-	test('debug console tools fit high contrast narrow panes without clipping focused inputs and suggestions', async function () {
+	test('debug console tools fit narrow panes across themes without clipping focused inputs and suggestions', async function () {
 		const { page } = browserTests;
 		const testInfo = browserTests.info;
 
@@ -2107,10 +2107,36 @@ suite('debug browser component', () => {
 		await input.press('Control+Space');
 		const suggestions = page.getByRole('listbox', { name: 'Debug Console suggestions', exact: true });
 		await expect(suggestions).toBeVisible();
-		for (const theme of ['hcDark', 'hcLight'] as const) {
+		for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
 			await page.evaluate(name => window.ashDebugIntegration.theme(name), theme);
-			await expect(suggestions).toHaveCSS('box-shadow', 'none');
-			await expect(page.locator('.ash-repl-input')).toHaveCSS('outline-style', 'solid');
+			if (theme === 'hcDark' || theme === 'hcLight') await expect(suggestions).toHaveCSS('box-shadow', 'none');
+			const inputGeometry = await page.locator('.ash-repl-input').evaluate(host => {
+				const probe = host.ownerDocument.createElement('span');
+				probe.style.color = 'var(--ash-focusBorder)';
+				host.append(probe);
+				const focus = getComputedStyle(probe).color;
+				probe.remove();
+				const editor = host.querySelector<HTMLElement>('.stanza-editor')!;
+				const bounds = host.getBoundingClientRect();
+				const inner = editor.getBoundingClientRect();
+				const style = getComputedStyle(host);
+				return {
+					height: bounds.height, radius: parseFloat(style.borderRadius),
+					leftInset: inner.left - bounds.left - parseFloat(style.borderLeftWidth),
+					rightInset: bounds.right - inner.right - parseFloat(style.borderRightWidth),
+					contained: inner.top >= bounds.top + parseFloat(style.borderTopWidth) && inner.bottom <= bounds.bottom - parseFloat(style.borderBottomWidth) && inner.right <= bounds.right - parseFloat(style.borderRightWidth),
+					background: style.backgroundColor, editorBackground: getComputedStyle(editor).backgroundColor,
+					border: style.borderColor, focus, outline: style.outlineStyle,
+				};
+			});
+			expect(inputGeometry.height).toBe(30);
+			expect(inputGeometry.radius).toBeGreaterThan(0);
+			expect(inputGeometry.leftInset).toBe(8);
+			expect(inputGeometry.rightInset).toBe(8);
+			expect(inputGeometry.contained).toBe(true);
+			expect(inputGeometry.editorBackground).toBe(inputGeometry.background);
+			expect(inputGeometry.border).toBe(inputGeometry.focus);
+			expect(inputGeometry.outline).toBe('none');
 			const geometry = await suggestions.evaluate(element => {
 				const pane = element.closest('.ash-view-pane')!;
 				const bounds = element.getBoundingClientRect();
@@ -2155,9 +2181,13 @@ suite('debug browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('first');
 		await fillRepl(page, input, Array.from({ length: 20 }, (_, index) => `line-${index}`).join('\n'));
 		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().lineCount)).toBe(20);
-		expect((await page.evaluate(() => window.ashDebugIntegration.consoleInput())).height).toBeLessThanOrEqual(204);
+		expect((await page.evaluate(() => window.ashDebugIntegration.consoleInput())).height).toBeLessThanOrEqual(208);
 		await page.evaluate(() => window.ashDebugIntegration.resizeConsole(240, 180));
 		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height)).toBeLessThanOrEqual(44);
+		await page.evaluate(() => window.ashDebugIntegration.resizeConsole(240, 360));
+		await fillRepl(page, input, 'wrappedExpression'.repeat(20));
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height)).toBeGreaterThan(initial.height);
+		expect(await page.locator('.ash-repl-input').evaluate(host => host.scrollWidth <= host.clientWidth)).toBe(true);
 		await input.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('');
 		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height)).toBe(initial.height);

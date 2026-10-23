@@ -67,10 +67,11 @@ export class Repl extends FilterViewPane {
 	private readonly inputModel = this._register(new TextModel('', { languageId: 'debug-repl' }));
 	private readonly replInput: CodeEditorWidget;
 	private readonly inputHost: HTMLDivElement;
+	private readonly inputEditorHost: HTMLDivElement;
 	private readonly history = this._register(new HistoryNavigator<string>(new Set(), 100));
 	private historyDraft = { value: '', selection: new Selection(1, 1, 1, 1) };
 	private navigatingHistory = false;
-	private inputHeight = 24;
+	private inputHeight = 28;
 	private inputBodyHeight: number | undefined;
 	private readonly inputLayout = this._register(new RunOnceScheduler(() => this.layoutInput(), 0));
 	private readonly suggestions: HTMLDivElement;
@@ -171,16 +172,19 @@ export class Repl extends FilterViewPane {
 		const suggestionId = `ash-repl-completions-${++replSequence}`;
 		this.inputHost = h(container.ownerDocument, 'div');
 		this.inputHost.className = 'ash-repl-input';
-		this.inputHost.style.height = `${this.inputHeight}px`;
+		this.inputEditorHost = h(container.ownerDocument, 'div');
+		this.inputEditorHost.className = 'ash-repl-input-editor';
+		this.inputHost.append(this.inputEditorHost);
 		this.form.append(this.inputHost);
 		const scope = this._register(contextKeys.createScoped(this.inputHost));
 		const editorServices = this._register(instantiation.createChild());
 		editorServices.registerInstance(IContextKeyService, scope);
 		this.replInput = this._register(editorServices.createInstance(CodeEditorWidget, {
-			container: this.inputHost, model: this.inputModel, isSimpleWidget: true,
+			container: this.inputEditorHost, model: this.inputModel, isSimpleWidget: true,
+			dimension: { width: 0, height: this.inputHeight },
 			presentation: 'embedded', ariaLabel: localize('debug.repl.expression', 'Debug Console expression'),
 			placeholder: localize('debug.repl.evaluate', 'Evaluate expression'),
-			fontSize: 13, lineHeight: 20, wordWrap: 'on', padding: { top: 2, bottom: 2 },
+			fontSize: 13, lineHeight: 20, wordWrap: 'on', padding: { top: 4, bottom: 4 },
 			lineDecorationsWidth: 0, glyphMargin: false, folding: false, overviewRulerLanes: 0,
 			scrollBeyondLastLine: false, tabFocusMode: true, suggestions: { enabled: false },
 			inlineCompletions: { enabled: false },
@@ -344,7 +348,7 @@ export class Repl extends FilterViewPane {
 	}
 
 	private layoutInput(): void {
-		const width = this.inputHost.clientWidth;
+		const width = this.inputEditorHost.clientWidth;
 		if (width <= 0) return;
 		this.replInput.layout({ width, height: this.inputHeight });
 		const lineHeight = this.replInput.getOption(EditorOption.lineHeight);
@@ -352,14 +356,14 @@ export class Repl extends FilterViewPane {
 		const minimum = lineHeight + padding.top + padding.bottom;
 		const selectStyle = this.inputHost.ownerDocument.defaultView!.getComputedStyle(this.sessionSelect);
 		const sessionHeight = this.sessionSelect.hidden ? 0 : this.sessionSelect.offsetHeight + parseFloat(selectStyle.marginTop) + parseFloat(selectStyle.marginBottom);
-		const formChrome = this.form.offsetHeight - this.inputHost.offsetHeight;
+		// The host sizes around the editor; include its border in the available-height budget.
+		const formChrome = this.form.offsetHeight - this.replInput.getDomNode()!.offsetHeight;
 		const available = this.inputBodyHeight === undefined ? Infinity : this.inputBodyHeight - 60 - sessionHeight - formChrome - this.status.offsetHeight;
 		const maximum = Math.max(minimum, Math.min(lineHeight * 10 + padding.top + padding.bottom, available));
 		const height = Math.min(maximum,
 			Math.max(minimum, this.replInput.getBottomForLineNumber(this.inputModel.lineCount) + padding.bottom));
 		if (height !== this.inputHeight) {
 			this.inputHeight = height;
-			this.inputHost.style.height = `${height}px`;
 			this.replInput.layout({ width, height });
 		}
 	}

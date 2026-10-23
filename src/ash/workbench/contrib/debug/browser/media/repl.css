@@ -49,16 +49,26 @@
 }
 
 .ash-repl-input {
+	display: flex;
 	box-sizing: border-box;
 	min-width: 0;
 	width: 100%;
+	padding: 0 var(--ash-spacing-size80);
+	overflow: clip;
+	--ash-editor-background: var(--ash-input-background);
+	--ash-editor-foreground: var(--ash-input-foreground);
 	background: var(--ash-input-background);
 	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
+}
+
+.ash-repl-input-editor {
+	flex: 1;
+	min-width: 0;
 }
 
 .ash-repl-input:focus-within {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: -1px;
+	border-color: var(--ash-focusBorder);
 }
 
 .ash-debug-console > .ash-view-filter {
