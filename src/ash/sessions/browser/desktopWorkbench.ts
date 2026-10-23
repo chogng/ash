@@ -576,17 +576,26 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 
 	/** Editor and panel changes share one geometry commit when several Parts change together. */
 	public updateParts(update: () => void): void {
+		const sidebarSize = this.getPartSize('sidebar');
 		this.partUpdateDepth++;
 		try {
 			update();
 		} finally {
-			this.partUpdateDepth--;
-			if (this.partUpdateDepth === 0) {
-				// Restore the supporting width after all centers are visible; an isolated visible leaf must fill its branch.
-				if (!this.isDocked && this.grid.isViewVisible(this.view('sessions')) && this.grid.isViewVisible(this.view('editor'))) {
-					this.grid.resizeView(this.view('sessions'), new Dimension(this.conversationWidth, this.grid.getViewSize(this.view('sessions')).height));
+			try {
+				if (this.partUpdateDepth === 1) {
+					// Restore the supporting width after all centers are visible; an isolated visible leaf must fill its branch.
+					if (!this.isDocked && this.grid.isViewVisible(this.view('sessions')) && this.grid.isViewVisible(this.view('editor'))) {
+						this.grid.resizeView(this.view('sessions'), new Dimension(this.conversationWidth, this.grid.getViewSize(this.view('sessions')).height));
+					}
+					// Replacing the only center temporarily lets navigation absorb its space.
+					// Keep the user's width, including its hidden cache, until the composition is complete.
+					this.grid.resizeView(this.view('sidebar'), sidebarSize);
 				}
-				this.layout(new Dimension(this.grid.width, this.grid.height));
+			} finally {
+				this.partUpdateDepth--;
+				if (this.partUpdateDepth === 0) {
+					this.layout(new Dimension(this.grid.width, this.grid.height));
+				}
 			}
 		}
 	}

@@ -364,6 +364,37 @@ test('Sessions compound composition changes lay out Parts once at the completed 
 	dom.window.close();
 });
 
+test('Sessions entry changes preserve navigation width when replacing the only visible center', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1600, 1000) });
+		layout.layout(new Dimension(1600, 1000));
+		layout.resizePart('sidebar', new Dimension(300, 1000));
+		for (const sidebarAvailable of [true, false]) {
+			layout.updateParts(() => {
+				layout.setPartAvailable('sessions', false);
+				layout.setPartAvailable('sidebar', sidebarAvailable);
+				layout.setPrimaryPart('editor');
+				layout.showPart('editor');
+				if (!sidebarAvailable) { layout.hidePart('sidebar'); }
+			});
+			assert.equal(layout.state.sidebar.width, 300, 'Opening a product page retains the navigation width');
+			layout.updateParts(() => {
+				layout.setPrimaryPart('sessions');
+				layout.setPartAvailable('sessions', true);
+				layout.setPartAvailable('sidebar', true);
+				layout.hidePart('editor');
+				layout.showPart('sidebar');
+			});
+			assert.equal(layout.getPartSize('sidebar').width, 300, 'Returning to Chat retains the navigation width');
+		}
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
 test('Sessions Activity Bar position changes the grid visibility and frame edge', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const container = h(dom.window.document, 'main');
