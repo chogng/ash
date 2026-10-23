@@ -465,7 +465,7 @@ tokenizers = { version = "0.23.1", default-features = false, features = ["fancy-
 toml = "0.9"
 ropey = { version = "1.6.1", default-features = false, features = ["simd"] }
 tree-sitter = "0.26.11"
-ash-grammars = { git = "https://github.com/chogng/ash-grammars", rev = "35c271b712d1bc9633ea2f1c91f078e4c3c85a95" }
+ash-grammars = { git = "https://github.com/chogng/ash-grammars", rev = "1b0906dd92167820aad912a6c4a509e2b58bc661" }
 unicode-segmentation = "1"
 unicode-width = "0.2"
 uds_windows = "1.2.1"

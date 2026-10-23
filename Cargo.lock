@@ -1915,8 +1915,8 @@ dependencies = [
 
 [[package]]
 name = "ash-grammars"
-version = "0.1.0"
-source = "git+https://github.com/chogng/ash-grammars?rev=35c271b712d1bc9633ea2f1c91f078e4c3c85a95#35c271b712d1bc9633ea2f1c91f078e4c3c85a95"
+version = "0.1.1"
+source = "git+https://github.com/chogng/ash-grammars?rev=1b0906dd92167820aad912a6c4a509e2b58bc661#1b0906dd92167820aad912a6c4a509e2b58bc661"
 dependencies = [
  "serde_json",
  "sha2 0.10.9",

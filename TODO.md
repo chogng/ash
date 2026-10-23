@@ -13,10 +13,6 @@
 - [ ] **测量** · 最终独立窗口中最慢暖点击 375.6 ms：extensionHost/invoke/read（connection 1，request 2907）客户端往返 274.3 ms，同 ID 服务端处理 0.088 ms、出站 0.040 ms，Git 请求在之后才开始且仅 3.4 ms。尚未拆清 Renderer→Main→daemon 送达与返程 decode/dispatch，不能归因扩展执行或渲染。下一步补这些边界的 method/request ID 标记，保留极值复现；本轮全部原始数据和已完成实现见[报告](.build/scm-tail-v2/report.md)。
 - [ ] **checkIgnore 排队残余** · 统计读取与普通文件读取的两层共享读已完成；新 16 窗对照中 Git RPC p99 79.8→16.6 ms、资源排队 p99 77→0 ms，暖端到端 p95/p99 均通过预设稳定规则。仍有 1/960 暖点击等待 47 ms，前方三个独占 `git/checkIgnore` 请求依次完成；后续评估该路径须保留取消、写者顺序及仓库权限约束，不直接移除序列化。原始关联与完整结果见[报告](.build/scm-statistics-concurrency/report.md)。
 
-## macOS 系统内存耗尽 · 解析器触发机制
-
-- [ ] **最小复现与底层归因** · 2026-10-22 已抓到 App Server 后台代码索引在约 31 秒内由 1.53 增至 16.54 GiB，分配栈进入 Tree-sitter reduction；隔离现场记录到 `crates/vendor/bubblewrap/uncrustify.cfg`。解析停滞预算与取消后重置已完成，93 项测试通过，双索引各 6 轮重扫峰值 0.514 GiB。剩余步骤是保留旧故障二进制，构造稳定的最小输入并定位解析器进入异常状态的原因；当前阻塞是单文件及其全部前缀均不复现，插桩、重编译或堆填充会改变触发，子集复现也不稳定。原 203.48 GB／143.86 GB 截图峰值进程均未留存，不能将本轮保护称为历史根因的彻底修复。证据、脚本与具体限制见[报告](.build/investigations/memory-20261022/report.md)。
-
 ## PR #57 · 合并后剩余项
 
 [PR #57](https://github.com/chogng/ash/pull/57) 已于 2026-10-20 正常 squash merge（`ee3dea640`）。后续仅在当前 main 本地整批修复与验证；不推送、不主动触发远端 CI、不恢复已暂停的 `pr-57-ci` heartbeat。保留其它任务修改，完整批次提交前准确 stage 并执行 `just commit-check origin/main`。
