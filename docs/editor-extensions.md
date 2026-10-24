@@ -940,6 +940,12 @@ snippet owner 更换后，下一次刷新会重新交付资源，即使扩展快
 recovery。不能把 timeout 映射为“未执行”。connection 断开时 App Server 必须取消该 connection 拥有的
 invocation，防止后台结果泄漏或孤儿 lease。
 
+调用通过 `extensionHost/invoke/start` 分配 connection-owned ID，再以 `extensionHost/invoke/read`
+读取状态。结果保存后，后端只向发起连接发送 `extensionHost/invoke/completed`；客户端收到通知后读取
+terminal result，不按固定间隔轮询。客户端先订阅，再 start；若通知早于 start response，客户端立即
+读取一次以覆盖该竞态，其余调用在完成通知后读取。terminal read 或显式 discard 释放结果；等待通知
+期间的取消、deadline 与断连仍按同一调用归属清理，通知不携带结果副本。
+
 Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终止 process tree，并在 authority
 仍有效且 restart budget 未耗尽时重新 Initialize/Activate。空闲 crash 由 App Server health loop 调用
 `reconcile()` 检测；Runtime core 不自带后台 poller。进入 crash loop 后只发布 terminal failure，不无限

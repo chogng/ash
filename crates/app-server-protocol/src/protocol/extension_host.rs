@@ -548,7 +548,7 @@ pub struct ExtensionHostInvokeReadParams {
     pub invocation_id: String,
 }
 
-/// Non-blocking result of polling one provider invocation.
+/// Non-blocking invocation state; completion is announced to the owning connection.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", tag = "state", deny_unknown_fields)]
 pub enum ExtensionHostInvokeReadResult {
@@ -573,7 +573,7 @@ pub enum ExtensionHostInvokeReadResult {
 pub struct ExtensionHostInvokeCancelParams {
     #[schemars(length(min = 1, max = 256))]
     pub invocation_id: String,
-    /// Abandons polling: release this session when its work ends, including a result
+    /// Abandons the result: release this session when its work ends, including a result
     /// that won the cancellation race. Omission preserves cancellation-and-read clients.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -611,6 +611,15 @@ pub struct ExtensionHostChanged {
     #[schemars(range(min = 1))]
     #[ts(type = "number")]
     pub generation: u64,
+}
+
+/// Sent only to the invoking connection after its terminal result is stored.
+/// May precede the start response. The result remains available until read or discarded.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionHostInvokeCompleted {
+    #[schemars(length(min = 1, max = 256))]
+    pub invocation_id: String,
 }
 
 #[cfg(test)]

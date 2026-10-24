@@ -18,6 +18,7 @@ import { AppServerFrame, type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, W
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../../remote/common/remote.js';
 import { AppServerFrameDecoder } from '../../browser/appServerFrameDecoder.js';
+import { createAppServerExtensionHostApi } from '../../browser/extensionHostApi.js';
 import { TestAppServerDecodePort } from '../common/testAppServerDecoder.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
@@ -67,6 +68,36 @@ class ProtocolTransport implements AppServerTransport {
 }
 
 const flushHandlers = (): Promise<void> => new Promise<void>(resolve => setImmediate(resolve));
+
+test('extension results wake through decoded completion notifications and stop waiting on disconnect', async () => {
+	for (const outcome of ['complete', 'disconnect'] as const) {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		await client.connect();
+		const pending = createAppServerExtensionHostApi(client).invoke({
+			extensionId: 'acme.demo', registrationId: 'command', activationGeneration: 1,
+			incarnation: 1, operation: 'execute', payload: null, deadlineUnixMillis: Date.now() + 5000,
+		}, new AbortController().signal);
+		const settled = outcome === 'disconnect' ? assert.rejects(pending, /closed|not ready/) : pending;
+		const started = transport.frames.find(frame => frame.method === 'extensionHost/invoke/start')!;
+		assert.ok(started);
+		transport.frame({ id: started.id, result: { invocationId: 'eh-1-1' } });
+		await flushHandlers();
+		assert.equal(transport.frames.some(frame => frame.method === 'extensionHost/invoke/read'), false);
+		if (outcome === 'disconnect') {
+			transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'connection closed' });
+			await settled;
+		} else {
+			transport.frame({ method: 'extensionHost/invoke/completed', params: { invocationId: 'eh-1-1' } });
+			await flushHandlers();
+			const reads = transport.frames.filter(frame => frame.method === 'extensionHost/invoke/read');
+			assert.equal(reads.length, 1);
+			transport.frame({ id: reads[0]!.id, result: { state: 'succeeded', payload: 'result' } });
+			assert.equal(await settled, 'result');
+		}
+	}
+});
 
 test('readiness waits through replacement and initialization without opening a connection', async () => {
 	const transport = new ProtocolTransport();

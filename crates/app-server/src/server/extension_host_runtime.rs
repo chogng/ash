@@ -1347,7 +1347,7 @@ impl RuntimeInner {
                     )
                 });
                 if let Some(runtime) = weak.upgrade() {
-                    runtime.complete_invocation(&invocation_id, result);
+                    runtime.complete_invocation(owner, &invocation_id, result);
                 }
             })
             .is_err()
@@ -1374,11 +1374,16 @@ impl RuntimeInner {
 
     fn complete_invocation(
         &self,
+        owner: u64,
         id: &str,
         result: Result<ash_external_ext::InvokeResult, ExtensionHostError>,
     ) {
         if let Ok(mut sessions) = self.sessions.lock() {
             sessions.complete(id, result);
+            // The notified client can read immediately, before health reconciliation.
+            drop(sessions);
+            self.updates
+                .publish_extension_host_invocation_completed(owner, id);
         }
         let Ok(_gate) = self.reconcile_gate.lock() else {
             return;

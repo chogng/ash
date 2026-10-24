@@ -9,6 +9,7 @@ use ash_app_server_protocol::protocol::common::EmptyParams;
 use ash_app_server_protocol::protocol::config::ConfigChanged;
 use ash_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostChanged;
+use ash_app_server_protocol::protocol::extension_host::ExtensionHostInvokeCompleted;
 use ash_app_server_protocol::protocol::extension_packages::ExtensionsChanged;
 use ash_app_server_protocol::protocol::fs::FsChanged;
 use ash_app_server_protocol::protocol::git::GitIgnoreChanged;
@@ -1193,6 +1194,25 @@ impl UpdateBroker {
             ));
             true
         });
+    }
+
+    pub(super) fn publish_extension_host_invocation_completed(&self, owner: u64, id: &str) {
+        let Ok(state) = self.state.lock() else {
+            return;
+        };
+        let Some(queue) = state
+            .subscribers
+            .get(&owner)
+            .and_then(|subscriber| subscriber.queue.upgrade())
+        else {
+            return;
+        };
+        queue.push(notification(
+            ServerNotificationMethod::ExtensionHostInvokeCompleted,
+            &ExtensionHostInvokeCompleted {
+                invocation_id: id.to_owned(),
+            },
+        ));
     }
 
     pub(super) fn publish_git_status_changed(&self, status: GitStatusResult) {
