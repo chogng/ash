@@ -82,6 +82,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "artifacts",
+      "file": "artifacts.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "ash-mark",
       "file": "ash-mark.svg",
       "rendering": "symbolic"

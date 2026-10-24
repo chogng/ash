@@ -307,7 +307,8 @@
     "folder": "E130",
     "sort": "E131",
     "pin-filled": "E132",
-    "pin": "E133"
+    "pin": "E133",
+    "artifacts": "E134"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -326,6 +327,7 @@
     "arrow-right": "b72dea4330d4412f4fd3edfe1790600c244e4e28e08d3ca76d0397bd37f37a2c",
     "arrow-swap": "d530bc8a2a200af39368a09ac0118c66330d32b9f43fab13a4e079d5358d926f",
     "arrow-up": "ac3d09f47fa97b06dfda18bd85a5a73141a62a97d30ac92521f6ad14fdab420c",
+    "artifacts": "8ec17a378d3d65c65764e16315b91bcb76139a141a1dccfcbabe23396f962748",
     "ash-mark": "7941c365eb7b3cd3e98435315ef71ba1c8366b45785c89aa238686f9ff449514",
     "ask": "54c423dfc247eb347dda55370f2af31a6d0ffd210825a519255f5731bc5c54ab",
     "bell-dot": "b6e467ce1ac38da0374dce31c8f2e3b4bf30b19535b0d5a6473fd250ab88f73f",

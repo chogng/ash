@@ -82,7 +82,8 @@
     "mic": [0],
     "mic-filled": [1],
     "play": [0],
-    "symbol-method": [0, 1]
+    "symbol-method": [0, 1],
+    "artifacts": [0]
   },
   "outlineShapes": {
     "account": [0, 2],
