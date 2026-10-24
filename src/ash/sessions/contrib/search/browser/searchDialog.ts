@@ -1,5 +1,5 @@
 import './searchDialog.css';
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
@@ -10,7 +10,7 @@ import { Disposable, DisposableMap, DisposableStore } from '../../../../base/com
 import { autorun } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import { defaultButtonStyles, defaultDialogStyles, defaultListStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultDialogStyles, defaultListStyles, defaultCheckboxStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
@@ -37,10 +37,17 @@ export class SessionsSearchDialog extends Disposable {
 		const document = container.ownerDocument;
 		this.model = this._register(instantiation.createInstance(SessionsSearchModel));
 		const content = h(document, 'div', { className: 'ash-sessions-search' });
-		this.dialog = this._register(new Dialog(container, { title: localize('sessions.search.title', 'Search'), content, dialogStyles: defaultDialogStyles }));
-		this.dialog.element.classList.add('ash-sessions-search-dialog');
-		this.dialog.element.setAttribute('aria-modal', 'true');
-		const scope = this._register(contextKeys.createScoped(this.dialog.element));
+		this.dialog = this._register(new Dialog(container, localize('sessions.search.title', 'Search'), [], {
+			buttonStyles: defaultButtonStyles,
+			checkboxStyles: defaultCheckboxStyles,
+			inputBoxStyles: defaultInputBoxStyles,
+			dialogStyles: defaultDialogStyles,
+			extraClasses: ['ash-sessions-search-dialog'],
+			disableCloseButton: true,
+			disableDefaultAction: true,
+			renderBody: body => body.append(content),
+		}));
+		const scope = this._register(contextKeys.createScoped(content));
 		scope.createKey('sessionsSearchFocused', true);
 		const header = h(document, 'header', { className: 'ash-sessions-search-header' });
 		this.input = h(document, 'input');
@@ -52,7 +59,7 @@ export class SessionsSearchDialog extends Disposable {
 		const hint = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.SessionsSearch);
 		this.input.setAttribute('aria-label', hint ? localize('sessions.search.ariaLabel', 'Search. {0}', hint) : this.input.placeholder);
 		header.append(this.input);
-		this._register(new Button(header, { ...defaultButtonStyles, label: localize('sessions.search.close', 'Close'), icon: Lxicon.close, iconOnly: true, presentation: 'quiet', onClick: () => this.dialog.close() }));
+		this._register(new Button(header, { ...defaultButtonStyles, label: localize('sessions.search.close', 'Close'), icon: Lxicon.close, iconOnly: true, presentation: 'quiet', onClick: () => this.dialog.dispose() }));
 		const navigation = h(document, 'div', { className: 'ash-sessions-search-tabs' });
 		const tabs = this._register(new TabList<SearchCategory>(navigation, { ariaLabel: localize('sessions.search.categories', 'Search categories'), presentation: 'inset', onActivate: category => this.model.setCategory(category) }));
 		tabs.setSizing({ mode: 'fit' });
@@ -105,7 +112,7 @@ export class SessionsSearchDialog extends Disposable {
 		};
 		this._register(this.results.onDidChangeActive(updateActive));
 		this._register(this.results.onDidRenderRows(updateActive));
-		this._register(this.results.onDidAccept(({ item }) => { this.accepted = item.target; this.dialog.close(); }));
+		this._register(this.results.onDidAccept(({ item }) => { this.accepted = item.target; this.dialog.dispose(); }));
 		this._register(addDisposableListener(this.input, 'input', () => this.model.setQuery(this.input.value)));
 		this._register(addDisposableListener(this.input, 'keydown', event => {
 			if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -116,17 +123,15 @@ export class SessionsSearchDialog extends Disposable {
 			}
 		}));
 		this._register(addDisposableListener(navigation, 'keydown', event => { if (event.key === 'ArrowDown') { event.preventDefault(); event.stopPropagation(); this.focus(); } }));
-		this._register(addDisposableListener(this.dialog.element, 'keydown', event => {
-			if (event.key === 'Escape' && !event.isComposing) {
-				event.preventDefault(); event.stopPropagation(); this.dialog.close();
+		this._register(addDisposableListener(getWindow(content), 'mousedown', event => {
+			const target = event.target as HTMLElement | null;
+			if (!target?.classList?.contains('ash-sessions-search-dialog')) return;
+			const bounds = target.getBoundingClientRect();
+			if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) {
+				event.preventDefault();
+				this.dialog.dispose();
 			}
 		}, true));
-		this._register(addDisposableListener(this.dialog.element, 'mousedown', event => {
-			const bounds = this.dialog.element.getBoundingClientRect();
-			if (event.target === this.dialog.element && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) {
-				event.preventDefault(); this.dialog.close();
-			}
-		}));
 		this._register(observeResize(resultsHost, () => this.results.layout(resultsHost.clientHeight)));
 		this._register(autorun(reader => {
 			const state = this.model.state.read(reader);

@@ -263,11 +263,15 @@ for (const window of ['Code', 'Agents']) {
 		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await new QuickAccess(page).runCommand('ash.extensions.manageBuiltIn');
 		const extensions = page.locator('[data-view-id="ash.extensions.plugins"]');
-		for (const id of ['ash.markdown-language-features', 'ash.markdown-math']) {
+		for (const id of ['ash.markdown-language-features', 'ash.markdown-math', 'ash.rust']) {
 			await extensions.locator(`[data-package-id="${id}"]`).click();
 			// Details inputs retain their panes; only the selected extension is visible.
 			const editor = page.locator('.ash-extension-editor:visible');
 			await expect(editor.locator('.extension-detail-header h1')).toBeVisible();
+			if (id === 'ash.rust') {
+				await expect(extensions.locator(`[data-package-id="${id}"] .extension-body > .ash-icon-label`)).toHaveText(['Rust', 'The Rust Programming Language', 'Rust language configuration, syntax highlighting and language server support.']);
+				await expect(editor.locator('.extension-detail-attribution')).toHaveText('The Rust Programming Language');
+			}
 			await editor.getByRole('tab', { name: 'Details', exact: true }).click();
 			await expect(editor.getByRole('tab', { name: 'Details', exact: true })).toHaveAttribute('aria-selected', 'true');
 			await expect(editor.getByRole('complementary', { name: 'Additional information', exact: true }).getByText(id, { exact: true })).toBeVisible();

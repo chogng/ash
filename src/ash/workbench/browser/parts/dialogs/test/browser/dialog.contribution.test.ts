@@ -234,6 +234,166 @@ test('desktop dialog handler returns the selected action index and checkbox stat
 
 suite('dialog browser component', () => {
 	const browserTests = useBrowserTests();
+	test('base Dialog returns logical button indices, typed values and checkbox state', async function () {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		await page.evaluate(() => window.ashDialogIntegration.showCore('standard'));
+		const dialog = page.getByRole('dialog', { name: 'Core dialog' });
+		await expect(dialog).toHaveClass(/base-dialog-contract/);
+		await expect(dialog.getByRole('textbox', { name: 'Name' })).toBeFocused();
+		const gap = await dialog.evaluate(element => element.querySelector('.ash-checkbox')!.getBoundingClientRect().top - element.querySelector('.ash-dialog-inputs')!.getBoundingClientRect().bottom);
+		expect(gap).toBe(8);
+		await dialog.getByRole('textbox', { name: 'Name' }).fill('Ada');
+		await dialog.getByPlaceholder('Secret').fill('token');
+		await dialog.getByRole('checkbox', { name: 'Remember values' }).check();
+		await dialog.getByRole('button', { name: 'Discard', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastCoreResult)).toEqual({ button: 2, checkboxChecked: true, values: ['Ada', 'token'] });
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.visibility)).toEqual([true, false]);
+	});
+
+	test('base Dialog updates its accessible message and uses cancelId for Escape and close', async function () {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		for (const close of ['Escape', 'button']) {
+			await page.evaluate(() => window.ashDialogIntegration.showCore('standard'));
+			await page.evaluate(() => window.ashDialogIntegration.updateCoreMessage('Updated message'));
+			const dialog = page.getByRole('dialog', { name: 'Updated message' });
+			await expect(dialog.locator('.ash-dialog-title')).toHaveText('Updated message');
+			if (close === 'Escape') await page.keyboard.press('Escape');
+			else await dialog.getByRole('button', { name: 'Close Dialog' }).click();
+			await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastCoreResult?.button)).toBe(1);
+			await expect(dialog).toHaveCount(0);
+		}
+	});
+
+	test('base Dialog dismisses on the first Escape from a populated native search field', async function () {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		await page.evaluate(() => window.ashDialogIntegration.showCore('search'));
+		const dialog = page.getByRole('dialog', { name: 'Core dialog' });
+		const search = dialog.getByRole('searchbox', { name: 'Search' });
+		await expect(search).toBeFocused();
+		await search.fill('A query');
+		await search.press('Escape');
+		await expect(dialog).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastCoreResult?.button)).toBe(1);
+	});
+
+	test('base Dialog navigates buttons in visual order while preserving logical result indices', async function () {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		await page.evaluate(() => window.ashDialogIntegration.showCore('custom'));
+		const dialog = page.getByRole('dialog', { name: 'Core dialog' });
+		const keep = dialog.getByRole('button', { name: 'Keep', exact: true });
+		const discard = dialog.getByRole('button', { name: 'Discard', exact: true });
+		await keep.focus();
+		await page.keyboard.press('ArrowRight');
+		await expect(discard).toBeFocused();
+		await page.keyboard.press('ArrowLeft');
+		await expect(keep).toBeFocused();
+		await page.keyboard.press('ArrowLeft');
+		await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+		await page.keyboard.press('ArrowLeft');
+		await expect(discard).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastCoreResult?.button)).toBe(2);
+	});
+
+	test('base Dialog stacks vertical actions without changing their result indices', async function () {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		await page.evaluate(() => window.ashDialogIntegration.showCore('vertical'));
+		const dialog = page.getByRole('dialog', { name: 'Core dialog' });
+		const keep = dialog.getByRole('button', { name: 'Keep', exact: true });
+		const cancel = dialog.getByRole('button', { name: 'Cancel', exact: true });
+		const discard = dialog.getByRole('button', { name: 'Discard', exact: true });
+		const bounds = await Promise.all([keep, cancel, discard].map(button => button.boundingBox()));
+		expect(bounds[0]!.y + bounds[0]!.height).toBeLessThan(bounds[1]!.y);
+		expect(bounds[1]!.y + bounds[1]!.height).toBeLessThan(bounds[2]!.y);
+		await discard.click();
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastCoreResult?.button)).toBe(2);
+	});
+
+	test('base Dialog excludes disabled actions from keyboard navigation', async function () {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		await page.evaluate(() => window.ashDialogIntegration.showCore('buttons'));
+		const dialog = page.getByRole('dialog', { name: 'Core dialog' });
+		await expect(dialog.getByRole('button', { name: 'Keep', exact: true })).toBeDisabled();
+		await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+		await page.keyboard.press('ArrowLeft');
+		await expect(dialog.getByRole('button', { name: 'Discard', exact: true })).toBeFocused();
+		await page.keyboard.press('ArrowRight');
+		await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(dialog).toHaveCount(0);
+	});
+
+	test('base Dialog leaves multiline editing and horizontal cursor keys to custom controls', async function () {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		await page.evaluate(() => window.ashDialogIntegration.showCore('custom'));
+		const dialog = page.getByRole('dialog', { name: 'Core dialog' });
+		const textarea = dialog.getByRole('textbox', { name: 'Custom text' });
+		await textarea.fill('Line');
+		await textarea.press('Enter');
+		await expect(textarea).toHaveValue('Line\n');
+		for (const control of [textarea, dialog.locator('[contenteditable]')]) {
+			const result = await control.evaluate(element => {
+				(element as HTMLElement).focus();
+				const event = new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true });
+				element.dispatchEvent(event);
+				return { focused: element.ownerDocument.activeElement === element, prevented: event.defaultPrevented };
+			});
+			expect(result).toEqual({ focused: true, prevented: false });
+		}
+		await page.keyboard.press('Escape');
+		await expect(dialog).toHaveCount(0);
+	});
+
+	test('base Dialog honors disabled dismissal and prefers pre-rendered detail', async function () {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		await page.evaluate(() => window.ashDialogIntegration.showCore('blocked'));
+		const dialog = page.getByRole('dialog', { name: 'Core dialog' });
+		await page.keyboard.press('Escape');
+		await expect(dialog).toBeVisible();
+		await expect(dialog.getByRole('button', { name: 'Close Dialog' })).toHaveCount(0);
+		await dialog.getByRole('textbox', { name: 'Custom text' }).press('Enter');
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('button', { name: 'Complete', exact: true }).click();
+		await expect(dialog).toHaveCount(0);
+		await page.evaluate(() => window.ashDialogIntegration.showCore('detail'));
+		await expect(dialog.locator('.ash-dialog-detail')).toHaveText('Details link');
+		await expect(dialog.locator('a')).toHaveAttribute('tabindex', '0');
+		await expect(dialog.locator('a')).toHaveCSS('color', 'rgb(4, 5, 6)');
+		await page.keyboard.press('Escape');
+	});
+
+	test('base Dialog supplies the standard OK action when buttons are omitted', async function () {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		await page.evaluate(() => window.ashDialogIntegration.showCore('default'));
+		const dialog = page.getByRole('dialog', { name: 'Core dialog' });
+		await expect(dialog.getByRole('button', { name: 'OK', exact: true })).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastCoreResult)).toEqual({ button: 0 });
+	});
+
+	test('base Dialog focuses a footer-only action without applying link styles to its button', async function () {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		await page.evaluate(() => window.ashDialogIntegration.showCore('footer'));
+		const dialog = page.getByRole('dialog', { name: 'Core dialog' });
+		const done = dialog.getByRole('button', { name: 'Done' });
+		await expect(done).toBeFocused();
+		await expect(done).toHaveCSS('color', 'rgb(1, 2, 3)');
+		await expect(done).toHaveCSS('text-decoration-line', 'none');
+		await expect(dialog.locator('a')).toHaveCSS('color', 'rgb(4, 5, 6)');
+		await done.click();
+		await expect(dialog).toHaveCount(0);
+	});
+
 	test('a short dialog detail stays keyboard-accessible while it scrolls', async function () {
 		const { page } = browserTests;
 
@@ -288,7 +448,7 @@ suite('dialog browser component', () => {
 		await expect(dialog.getByRole('button', { name: 'Save' }).locator('.ash-icon-label')).toHaveCSS('display', 'flex');
 		await expect(dialog.getByRole('button', { name: 'Save' })).toBeFocused();
 		await page.keyboard.press('Shift+Tab');
-		await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+		await expect(dialog.getByRole('button', { name: 'Close Dialog' })).toBeFocused();
 		await page.keyboard.press('Tab');
 		await expect(dialog.getByRole('button', { name: 'Save' })).toBeFocused();
 		await dialog.getByRole('button', { name: 'Discard' }).click();
@@ -395,7 +555,7 @@ suite('dialog browser component', () => {
 		await page.evaluate(() => window.ashDialogIntegration.disposeBare());
 		await expect(dialog).toHaveCount(0);
 		await expect(page.locator('#dialog-trigger')).toBeFocused();
-		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastResult)).toBe('');
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastResult)).toBe('0');
 	});
 
 	test('input dialog returns typed values and checkbox state', async function () {

@@ -243,6 +243,30 @@ function createLayoutHarness(
 	return { disposables, container, editor, layout, configuration, services };
 }
 
+test("Workbench layout keeps the footer inside fractional container bounds on first layout and relayout", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const container = h(dom.window.document, "main");
+	let height = 700.8;
+	container.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 1_000.2, height);
+	Object.defineProperties(container, {
+		clientWidth: { get: () => 1_000 },
+		clientHeight: { get: () => Math.round(height) },
+	});
+	const harness = createLayoutHarness(dom.window.document, {}, container);
+	try {
+		const footer = container.querySelector('[data-part="statusbar"]')!.closest<HTMLElement>('.ash-split-view-pane')!;
+		for (const nextHeight of [700.8, 700.2, 701.6]) {
+			height = nextHeight;
+			harness.layout.layout();
+			assert.deepEqual(harness.layout.mainContainerDimension, new Dimension(1_000.2, height));
+			assert.ok(Math.abs(parseFloat(footer.style.top) + parseFloat(footer.style.height) - height) < 0.001);
+		}
+	} finally {
+		harness.disposables.dispose();
+		dom.window.close();
+	}
+});
+
 test("Workbench layout hides and restores Parts with context keys", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const contextKeys = new ContextKeyService();

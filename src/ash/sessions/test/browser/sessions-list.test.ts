@@ -1,3 +1,5 @@
+import { StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
+import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import type { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
 import type { IProjectService } from '../../../platform/projects/common/projectService.js';
@@ -31,7 +33,7 @@ const emptyProjects = { onDidChange: Event.None, list: async () => [] } as unkno
 const listCommands = { executeCommand: async () => undefined } as unknown as ICommandService;
 const listContextMenus = { showContextMenu() { } } as unknown as IContextMenuService;
 
-test("SessionsList keeps session buttons and focus while refreshing", () => {
+test("SessionsList keeps session buttons and focus while refreshing", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
 	const changes = new Emitter<void>();
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: "list", flushInterval: 0 });
@@ -53,8 +55,20 @@ test("SessionsList keeps session buttons and focus while refreshing", () => {
 		openNewSession() { },
 		openUntitledSession(id: string) { opened.push(id); },
 	} as unknown as ISessionsService;
-	const list = new SessionsList(dom.window.document.body, "Sessions", "chat", sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, emptyGroups, storage, emptyProjects, listCommands, listContextMenus, listCustomViews, listMenus, listNotifications);
+	let menu: IContextMenuDelegate | undefined;
+	const executed: unknown[][] = [];
+	const contextMenus = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
+	const commands = { executeCommand: async (...args: unknown[]) => { executed.push(args); } } as ICommandService;
+	const list = new SessionsList(dom.window.document.body, "Sessions", "chat", sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications);
 	const buttons = [...list.domNode.querySelectorAll<HTMLButtonElement>(".ash-sessions-list-item")];
+	list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-actions button')!.click();
+	const actions = menu!.getActions().filter(action => action.id !== 'ash.actions.separator');
+	assert.equal(actions.length, 7);
+	assert.ok(actions.every(action => action.enabled), 'Every new chat item exposes all actions before sending');
+	for (const action of actions.slice(0, 5)) await action.run();
+	assert.deepEqual(executed.map(args => args[1]), Array.from({ length: 5 }, () => ({ untitledSessionId: 'first' })));
+	menu!.onHide?.(false);
+
 	buttons[0].focus();
 	untitledSessions = [
 		{ untitledSessionId: "first", title: "Renamed" },
@@ -88,12 +102,21 @@ test("SessionsList keeps session buttons and focus while refreshing", () => {
 });
 
 
-test('SessionsList updates passive status without changing row identity or selection', () => {
+test('SessionsList updates passive status without changing row identity or selection', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	using domLifetime = toDisposable(() => dom.window.close());
 	using changes = new Emitter<void>();
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: "list", flushInterval: 0 });
 	const opened: string[] = [];
+	const executed: unknown[][] = [];
+	let menu: IContextMenuDelegate | undefined;
+	const contextMenus = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
+	const commands = {
+		executeCommand: async (...args: unknown[]) => {
+			executed.push(args);
+			if (args[0] === 'sessions.list.togglePin') { storage.store('sessions.list.pinned.background', true, StorageScope.PROFILE, StorageTarget.USER); return 'background'; }
+		}
+	} as ICommandService;
 	let session = {
 		sessionId: 'background', title: 'Background session', status: 'active' as const, nextApprovalMode: 'manual' as const,
 		chats: [{ threadId: 'root', origin: { type: 'root' as const }, status: 'active' as const }],
@@ -102,7 +125,7 @@ test('SessionsList updates passive status without changing row identity or selec
 	const sessionService = { get sessions() { return [session]; }, untitledSessions: [], state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
 	const viewService = { onDidChange: changes.event, activeSelection: undefined, visibleSelections: [], openSession(id: string) { opened.push(id); } } as unknown as ISessionsService;
 	const request: IResolvedSessionPullRequest = { uri: URI.parse('https://github.com/fixture/repo/pull/7'), owner: 'fixture', repo: 'repo', number: 7, title: 'Synthetic PR', state: 'open', status: { hasFailingChecks: true }, icon: computePullRequestIcon('open', { hasFailingChecks: true }) };
-	using list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, emptyGroups, storage, emptyProjects, listCommands, listContextMenus, listCustomViews, listMenus, listNotifications);
+	using list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications);
 	const button = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 	button.focus();
 	const items = list.domNode.querySelector<HTMLDivElement>('.ash-sessions-list-items')!;
@@ -119,6 +142,26 @@ test('SessionsList updates passive status without changing row identity or selec
 	assert.equal(dom.window.document.activeElement, button);
 	assert.equal(items.scrollTop, 37);
 	assert.deepEqual(opened, []);
+	const more = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-actions button')!;
+	assert.equal(more.getAttribute('aria-haspopup'), 'menu');
+	more.click();
+	assert.deepEqual(opened, [], 'opening More must not select the chat');
+	assert.equal(more.getAttribute('aria-expanded'), 'true');
+	const actions = menu!.getActions().filter(action => action.id !== 'ash.actions.separator');
+	assert.deepEqual(actions.map(action => action.id), [
+		'sessions.list.togglePin', 'agentSession.rename', 'agentSession.archive',
+		'agentSession.addToProject', 'agentSession.moveToGroup', 'agentSession.delete', 'sessions.openInNewWindow',
+	]);
+	actions[1]!.run();
+	assert.deepEqual(executed, [['agentSession.rename', 'background']]);
+	menu!.onHide?.(true);
+	assert.equal(more.getAttribute('aria-expanded'), 'false');
+	button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
+	assert.equal(more.getAttribute('aria-expanded'), 'true');
+	await menu!.getActions()[0]!.run();
+	assert.ok(button.closest('[data-section="pinned"]'));
+	assert.equal(dom.window.document.activeElement, button);
+	menu!.onHide?.(false);
 	list.dispose();
 	dom.window.close();
 });

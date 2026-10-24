@@ -619,7 +619,7 @@ test('Editor settings have separate pages with keyboard navigation and global se
 	await expect(editorGroup).toHaveAttribute('aria-expanded', 'true');
 	await navigation.press('ArrowDown');
 	await workbench.page.keyboard.press('Enter');
-	await expect(settings.locator('.ash-settings-page h3')).toHaveText('Fonts and spacing');
+	await expect(settings.locator('.ash-settings-page h3')).toHaveText('Font');
 	await expect(settings.locator('[data-settings-item-id]')).toHaveCount(4);
 	const fontFamily = settings.locator('[data-configuration-key="editor.fontFamily"]');
 	await expect(fontFamily).toHaveAttribute('placeholder', 'System default');
@@ -664,17 +664,17 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await workbench.settingsEditor.openUserSettingsUI();
 	await expect(page.locator('.ash-modal-editor')).toBeVisible();
 	await workbench.settingsEditor.selectEditorCategory('editor-display');
-	await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title')).toHaveCount(0);
+	await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title')).toBeHidden();
 	await expect(page.locator('.ash-settings-card').first()).toHaveCSS('border-radius', '8px');
 	await expect(page.locator('[data-configuration-key="editor.renderWhitespace"]')).toBeVisible();
 	await expect(page.locator('[data-configuration-key="editor.renderControlCharacters"]')).toBeVisible();
 	const rootTitle = page.locator('.ash-settings-page .is-settings-root > .ash-settings-tree-group-title');
 	const rootDescription = page.locator('.ash-settings-page .is-settings-root > .ash-settings-tree-group-description');
-	await expect(rootTitle).toHaveCount(0);
+	await expect(rootTitle).toBeHidden();
 	await expect(rootDescription).toHaveCount(0);
 
 	await workbench.settingsEditor.selectEditorCategory('editor-opening');
-	await expect(page.locator('.ash-settings-page h3')).toHaveText('Tabs and editors');
+	await expect(page.locator('.ash-settings-page h3')).toHaveText('Tabs and groups');
 	for (const [category, key] of [['editor-opening', 'workbench.editor.showTabs'], ['editor-files', 'workbench.editor.defaultBinaryEditor']]) {
 		await workbench.settingsEditor.selectEditorCategory(category!);
 		const row = page.locator(`[data-settings-item-id="${key}"]`);
@@ -690,13 +690,13 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await expect(page.locator('[data-configuration-key="editor.minimap.enabled"]')).toBeVisible();
 	if (target.kind === 'electron') {
 		await page.locator('[data-settings-category-id="general"]').click();
-		await expect(rootTitle).toHaveCount(0);
+		await expect(rootTitle).toBeHidden();
 		await expect(rootDescription).toHaveCount(0);
 		await expect(page.locator('.ash-settings-page h3')).toHaveText('Application');
 		await workbench.settingsEditor.selectGroup('features');
 		await workbench.settingsEditor.selectCategory('voice-input');
 		await expect(page.getByRole('heading', { name: 'Voice input', exact: true, level: 3 })).toBeVisible();
-		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title')).toHaveCount(0);
+		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title')).toBeHidden();
 		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-description')).toHaveCount(0);
 		const voiceInput = page.locator('.ash-settings-page');
 		await expect(voiceInput.getByRole('combobox', { name: 'Dictation service' })).toBeVisible();
@@ -708,7 +708,7 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	const startupNavigationRow = page.locator('.ash-tree-row', { has: page.locator('[data-settings-category-id="startup"]') });
 	await expect(startupNavigationRow).not.toHaveAttribute('aria-expanded');
 	await expect(page.locator('[data-settings-target-id="startup.group.startup-windows"], [data-settings-target-id="startup.group.startup-editor"]')).toHaveCount(0);
-	await expect(rootTitle).toHaveCount(0);
+	await expect(rootTitle).toBeHidden();
 	await expect(rootDescription).toHaveCount(0);
 	if (target.kind === 'electron') await expect(page.locator('[data-configuration-key="window.restoreWindows"]')).toBeVisible();
 	await expect(page.locator('[data-configuration-key="workbench.editor.restoreEditors"]')).toBeVisible();

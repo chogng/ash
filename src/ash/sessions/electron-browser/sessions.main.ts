@@ -1,3 +1,4 @@
+import { ElectronAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/electron-browser/auxiliaryWindowService.js';
 import { ILoggerService } from '../../platform/log/common/log.js';
 import '../../workbench/contrib/url/browser/url.contribution.js';
 import { IPolicyService } from '../../platform/policy/common/policy.js';
@@ -223,6 +224,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				return lifecycleService;
 			},
 			nativeHostApi: api.nativeHost,
+			createAuxiliaryWindowService: (opener, root, services) => services.createInstance(ElectronAuxiliaryWindowService, opener, root),
 			keyboardLayoutProvider: api.keyboardLayout,
 			userKeyboardLayoutApi: api.userKeyboardLayout,
 			returnToWorkbench: () => { void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError); },

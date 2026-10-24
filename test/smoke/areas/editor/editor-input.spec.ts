@@ -234,7 +234,7 @@ test('editor and Chat input font settings apply independently and persist in Chi
 	({ workbench } = await restartWorkbench());
 	await workbench.settingsEditor.openUserSettingsUI();
 	await workbench.settingsEditor.selectEditorCategory('editor-fonts');
-	await expect(workbench.settingsEditor.element.locator('.ash-settings-page h3')).toHaveText('字体与排版');
+	await expect(workbench.settingsEditor.element.locator('.ash-settings-page h3')).toHaveText('字体');
 	await expect(workbench.settingsEditor.element.getByRole('textbox', { name: '字体', exact: true })).toBeVisible();
 	await expect(workbench.settingsEditor.element.getByRole('spinbutton', { name: '字号', exact: true })).toHaveValue('18');
 	const row = workbench.settingsEditor.element.locator('[data-settings-item-id="editor.lineHeight"]');

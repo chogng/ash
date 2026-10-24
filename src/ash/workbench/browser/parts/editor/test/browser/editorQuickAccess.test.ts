@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { installTestElementHeights } from '../../../../../../editor/test/browser/editorTestGlobals.js';
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../../../base/common/event.js";
@@ -92,6 +93,7 @@ test("Show All Editors opens the MRU quick access mode and activates the chosen 
 
 test("breadcrumb symbol picker reveals a nested outline item", () => {
 	const dom = new JSDOM("<!doctype html><body><button>Editor</button></body>");
+	using heights = installTestElementHeights(dom.window.document);
 	const previousGlobals = new Map<string, PropertyDescriptor | undefined>();
 	for (const [name, value] of Object.entries({
 		window: dom.window,

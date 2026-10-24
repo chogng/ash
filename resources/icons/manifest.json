@@ -82,6 +82,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "artifacts",
+      "file": "artifacts.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "ash-mark",
       "file": "ash-mark.svg",
       "rendering": "symbolic"
@@ -1049,6 +1054,16 @@
     {
       "id": "pen",
       "file": "pen.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "pin",
+      "file": "pin.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "pin-filled",
+      "file": "pin-filled.svg",
       "rendering": "symbolic"
     },
     {

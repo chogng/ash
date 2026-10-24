@@ -173,6 +173,7 @@ suite('terminalSuggest browser component', () => {
 		const { page } = browserTests;
 
 		await prompt(page, 'zh-CN');
+		const dimensions = await page.evaluate(() => window.ashTerminalInputIntegration.dimensions());
 		await page.evaluate(() => {
 			const terminal = document.querySelector<HTMLElement>('.ash-terminal-instance')!;
 			terminal.style.maxHeight = '110px'; terminal.style.maxWidth = '270px';
@@ -180,6 +181,11 @@ suite('terminalSuggest browser component', () => {
 			input.setAttribute('aria-controls', 'original-owner'); input.setAttribute('aria-autocomplete', 'none');
 			for (let index = 0; index < 12; index++) window.ashTerminalSuggestIntegration.history(`echo long-history-${index}-with-a-full-readable-description`);
 		});
+		// Fitting the split dismisses suggestions; finish that resize before typing opens them.
+		await expect.poll(async () => {
+			const fitted = await page.evaluate(() => window.ashTerminalInputIntegration.dimensions());
+			return fitted.cols < dimensions.cols && fitted.rows < dimensions.rows;
+		}).toBe(true);
 		await confirmed(page, 'h');
 		const popup = page.locator('.ash-terminal-suggest');
 		await expect(popup).toBeVisible();

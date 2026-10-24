@@ -18,7 +18,7 @@ This specification defines stable placement and state-ownership rules. Row styli
 | Top-level group/workspace order   | `ISessionSectionOrderService`      |
 | Tree composition and presentation | `SessionsView` and `SessionsList`  |
 
-Chat and Code consume the same session selection, pins and project catalog. Chat presents a flat conversation section beside pinned conversations and project entries. Code projects contain their sessions; its remaining conversations use custom groups and workspace groups. Each mode owns separate section expansion state. Project records and membership remain owned by `IProjectService`; the sidebar holds only a disposable projection.
+Chat and Code consume the same session selection, pins and project catalog. Chat presents flat conversation rows in top-level custom groups and a remaining conversation section beside pinned conversations and project entries. Code projects contain their sessions; its remaining conversations use custom groups and workspace groups. Each mode owns separate section expansion state. Project records and membership remain owned by `IProjectService`; the sidebar holds only a disposable projection.
 
 List-owned state is local presentation state. It is not synchronized back to a provider and must not mutate provider timestamps or metadata.
 
@@ -44,8 +44,8 @@ Archived
 
 - Archived sessions appear only in the final archived section.
 - Pinned sessions appear in the pinned section, retaining their project and custom-group membership. Unpinning derives placement from that membership again.
-- In Code, an unpinned project member appears beneath its project before other grouping is considered. Chat project entries open the project page; unpinned conversations remain flat in the conversation section.
-- In Code, a valid custom-group membership places an unpinned, unarchived session without project placement in that group, including a quick chat.
+- In Code, an unpinned project member appears beneath its project before other grouping is considered. Chat project entries open the project page; unpinned conversations remain flat within their custom group or the conversation section.
+- A valid custom-group membership places an unpinned, unarchived session without project placement in that group, including a quick chat.
 - When dedicated external sectioning is enabled, remaining external sessions appear together before the archived section. Pinning and custom-group membership retain their precedence; disabling sectioning returns external sessions to the ordinary grouping rules without changing that presentation state.
 - Remaining unpinned quick chats appear in the dedicated chats section.
 - Remaining sessions follow the selected workspace or date grouping.

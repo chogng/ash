@@ -111,6 +111,42 @@ impl GitRuntime {
             } else {
                 Comparison::Unstaged
             };
+            if repository.configuration.boolean("openDiffOnClick", true)
+                && payload["sideBySide"] != true
+            {
+                let (original, modified, _) =
+                    change_resources(repository, status, change, comparison)?;
+                let mut modified_resources = vec![modified];
+                if comparison == Comparison::Unstaged && change.worktree_status != "deleted" {
+                    modified_resources.push(file_uri(&repository.root_uri, &change.path)?);
+                }
+                // The client already owns open snapshots and live working copies.
+                // An exact revision match can be activated without reading either side.
+                let comparisons = match payload.get("openComparisons") {
+                    None => &[][..],
+                    Some(Value::Array(values)) if values.len() <= 256 => values.as_slice(),
+                    Some(_) => return Err(invalid("Invalid open comparisons")),
+                };
+                let mut is_open = false;
+                for candidate in comparisons {
+                    let original_resource = candidate["original"]
+                        .as_str()
+                        .ok_or_else(|| invalid("Invalid comparison original resource"))?;
+                    let modified_resource = candidate["modified"]
+                        .as_str()
+                        .ok_or_else(|| invalid("Invalid comparison modified resource"))?;
+                    is_open |= original_resource == original
+                        && modified_resources
+                            .iter()
+                            .any(|resource| resource == modified_resource);
+                }
+                if is_open && self.api.editor(
+                    json!({"method":"revealDiff","originalResource":original,"modifiedResources":modified_resources,"options":payload["options"]}),
+                    Some(token),
+                )? == true {
+                    return Ok(Value::Null);
+                }
+            }
             let (original, mut modified) =
                 self.change_inputs(repository, status, change, comparison, token)?;
             if comparison == Comparison::Unstaged
@@ -149,34 +185,10 @@ impl GitRuntime {
         let file = self
             .api
             .change_file(repository, &change.path, comparison, token)?;
-        let original_path = if matches!(
-            (if comparison == Comparison::Staged {
-                &change.index_status
-            } else {
-                &change.worktree_status
-            })
-            .as_str(),
-            "renamed" | "copied"
-        ) {
-            change.original_path.as_deref().unwrap_or(&change.path)
-        } else {
-            &change.path
-        };
-        let mut uri = url::Url::parse("git-change:/").expect("constant URI");
-        uri.set_path(&format!("/{comparison}/{}", change.path));
-        uri.query_pairs_mut()
-            .append_pair("repository", &repository.descriptor.id)
-            .append_pair("stream", &status.stream_instance_id)
-            .append_pair("revision", &status.revision.to_string())
-            .append_pair("resource", &file_uri(&repository.root_uri, &change.path)?);
-        let mut original_uri = uri.clone();
-        original_uri.set_path(&format!("/{comparison}/{original_path}"));
-        original_uri
-            .query_pairs_mut()
-            .append_pair("side", "original");
-        uri.query_pairs_mut().append_pair("side", "modified");
-        let mut original = content_input(&file.original, original_uri.to_string(), original_path);
-        let mut modified = content_input(&file.modified, uri.to_string(), &change.path);
+        let (original_uri, modified_uri, original_path) =
+            change_resources(repository, status, change, comparison)?;
+        let mut original = content_input(&file.original, original_uri, original_path);
+        let mut modified = content_input(&file.modified, modified_uri, &change.path);
         // Snapshot URIs own versioned contents; labels and navigation follow the file.
         original["preferredResource"] = json!(file_uri(
             &repository.root_uri,
@@ -865,6 +877,41 @@ impl GitRuntime {
         Ok(result)
     }
 }
+/// Comparison identity is independent of loading its potentially large contents.
+fn change_resources<'a>(
+    repository: &Repository,
+    status: &Status,
+    change: &'a Change,
+    comparison: Comparison,
+) -> Result<(String, String, &'a str), ExtensionError> {
+    let original_path = if matches!(
+        (if comparison == Comparison::Staged {
+            &change.index_status
+        } else {
+            &change.worktree_status
+        })
+        .as_str(),
+        "renamed" | "copied"
+    ) {
+        change.original_path.as_deref().unwrap_or(&change.path)
+    } else {
+        &change.path
+    };
+    let mut modified = url::Url::parse("git-change:/").expect("constant URI");
+    modified.set_path(&format!("/{comparison}/{}", change.path));
+    modified
+        .query_pairs_mut()
+        .append_pair("repository", &repository.descriptor.id)
+        .append_pair("stream", &status.stream_instance_id)
+        .append_pair("revision", &status.revision.to_string())
+        .append_pair("resource", &file_uri(&repository.root_uri, &change.path)?);
+    let mut original = modified.clone();
+    original.set_path(&format!("/{comparison}/{original_path}"));
+    original.query_pairs_mut().append_pair("side", "original");
+    modified.query_pairs_mut().append_pair("side", "modified");
+    Ok((original.to_string(), modified.to_string(), original_path))
+}
+
 pub(crate) fn content_input(content: &FileContent, resource: String, label: &str) -> Value {
     if let FileContent::Binary { data } = content {
         let mut input = json!({"resource":resource,"label":label,"readOnly":true,"contentType":"application/octet-stream"});

@@ -1,6 +1,6 @@
-import { shell } from 'electron';
-import { basename, dirname } from 'node:path';
-import { formatNlsMessage, localize2 } from '../../../nls.js';
+import { nativeImage, shell } from 'electron';
+import { basename, dirname, join } from 'node:path';
+import { localize2 } from '../../../nls.js';
 import { getDesktopScreenshots } from '../../native/electron-main/nativeHostMainService.js';
 import {
 	app,
@@ -26,6 +26,8 @@ import {
 	IMAGE_VIEW_COMPLETE_CHANNEL,
 	IMAGE_VIEW_INITIALIZE_CHANNEL,
 	IMAGE_VIEW_READY_CHANNEL,
+	IMAGE_VIEW_PERMISSION_CHANNEL,
+	validateImageViewPermissionAction,
 	validateImageViewCompletion,
 	validateImageViewId,
 	validateImageViewRequest,
@@ -289,60 +291,115 @@ export class ImageViewMainService extends Disposable {
 
 	private async showPermissionGuide(capture: Capture): Promise<void> {
 		if (this.capture !== capture || this.owner.isDestroyed()) return;
-		// TCC identifies the running bundle, which is Electron.app for an unpackaged development launch.
-		const bundlePath = process.platform === 'darwin'
-			? dirname(dirname(dirname(app.getPath('exe'))))
-			: app.getPath('exe');
-		const bundleName = basename(bundlePath);
-		const messages = this.options.localization().bundles.ash;
-		const controller = new AbortController();
-		const lifetime = capture.lifetime.add(toDisposable(() => controller.abort()));
+		// TCC grants access to the running bundle, which can differ from the installed release.
+		const bundlePath = dirname(dirname(dirname(app.getPath('exe'))));
+		// The shipped application artwork avoids an OS file-icon lookup for our own bundle.
+		const icon = nativeImage.createFromPath(join(app.getAppPath(), 'resources', 'darwin', 'ash.png')).resize({ width: 64, height: 64 });
+		if (icon.isEmpty()) throw new Error('ImageViewUnavailable');
+		if (this.capture !== capture || this.owner.isDestroyed()) return;
+		const area = screen.getDisplayMatching(this.owner.getBounds()).workArea;
+		const width = Math.min(420, area.width);
+		const height = Math.min(480, area.height);
+		const guide = new BrowserWindow({
+			x: area.x + Math.min(24, area.width - width),
+			y: area.y + Math.max(0, area.height - height - 24),
+			width, height, minWidth: Math.min(360, width), minHeight: Math.min(400, height),
+			show: false, minimizable: false, maximizable: false, fullscreenable: false,
+			alwaysOnTop: true, skipTaskbar: true,
+			webPreferences: {
+				...this.options.webPreferences,
+				partition: 'ash-image-view', backgroundThrottling: false,
+				nodeIntegration: false, contextIsolation: true, sandbox: true
+			}
+		});
+		// A modeless companion stays visible beside System Settings without owning its window or focus.
+		guide.setAlwaysOnTop(true, 'floating');
+		guide.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+		guide.webContents.session.setPermissionCheckHandler(() => false);
+		guide.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+		const navigating = (event: Electron.Event): void => event.preventDefault();
+		guide.webContents.on('will-navigate', navigating);
+		const resources = capture.windows.add(new DisposableStore());
+		let ready!: () => void;
+		const rendered = new Promise<void>(resolve => { ready = resolve; });
+		let complete!: (retry: boolean) => void;
+		const completed = new Promise<boolean>(resolve => { complete = resolve; });
+		const closed = (): void => { ready(); complete(false); };
+		guide.on('closed', closed);
+		guide.webContents.on('render-process-gone', closed);
+		resources.add(toDisposable(() => {
+			ready();
+			complete(false);
+			guide.off('closed', closed);
+			if (!guide.isDestroyed()) {
+				guide.webContents.off('will-navigate', navigating);
+				guide.webContents.off('render-process-gone', closed);
+				guide.destroy();
+			}
+		}));
+		resources.add(this.options.router.register({
+			webContents: guide.webContents,
+			allowedEntryUrls: new Set([normalizeEntryUrl(this.options.entry.url)])
+		}, [
+			{
+				channel: IMAGE_VIEW_INITIALIZE_CHANNEL, validate: noArguments,
+				invoke: () => ({
+					permission: { applicationName: basename(bundlePath), icon: new Uint8Array(icon.toPNG()) },
+					image: new Uint8Array(), presentation: capture.request,
+					locale: this.options.localization().locale, bundles: this.options.localization().bundles
+				})
+			},
+			{ channel: IMAGE_VIEW_READY_CHANNEL, validate: noArguments, invoke: ready },
+			{
+				channel: IMAGE_VIEW_COMPLETE_CHANNEL, validate: validateImageViewCompletion,
+				invoke: value => {
+					const result = value as ImageViewCompletion;
+					if (result.kind === 'cancel') setImmediate(() => complete(false));
+					else if (result.kind === 'error') setImmediate(() => this.capture === capture && this.finish(undefined, new Error(result.message)));
+					else throw new TypeError('Screen permission guide cannot export images');
+					return true;
+				}
+			},
+			{
+				channel: IMAGE_VIEW_PERMISSION_CHANNEL, validate: validateImageViewPermissionAction,
+				invoke: async action => {
+					if (this.capture !== capture || guide.isDestroyed()) return false;
+					switch (action) {
+						case 'settings': await this.openPermissionSettings(); break;
+						case 'drag': guide.webContents.startDrag({ file: bundlePath, icon }); break;
+						case 'copyPath': await clipboard.writeText(bundlePath); break;
+						case 'cancel': setImmediate(() => complete(false)); break;
+						case 'retry':
+							// A completed drag is not a permission grant. Only the OS may authorize capture.
+							if (systemPreferences.getMediaAccessStatus('screen') !== 'granted') return false;
+							setImmediate(() => complete(true));
+							break;
+					}
+					return true;
+				}
+			}
+		]));
+		const timeout = setTimeout(() => {
+			if (this.capture === capture) this.finish(undefined, new Error('ImageViewUnavailable'));
+		}, 15_000);
+		resources.add(toDisposable(() => clearTimeout(timeout)));
+		let retry = false;
 		try {
-			const result = await dialog.showMessageBox(this.owner, {
-				type: 'info',
-				message:
-					messages?.['screenshot.permission.title'] ??
-					localize2('screenshot.permission.title', 'Screen recording permission needed').original,
-				detail:
-					formatNlsMessage(
-						messages?.['screenshot.permission.detail'] ??
-						localize2(
-							'screenshot.permission.detail',
-							'macOS requires screen recording permission to capture screen images.\n\nOpen System Settings → Privacy & Security → Screen & System Audio Recording, and enable {0}. Then return to Ash and try again. Restart the app if macOS asks.\n\nIf the app is missing from the list, choose Show Application in Finder to locate it, then add it with the + button in System Settings.'
-						).original,
-						{ '0': bundleName }
-					) +
-					(app.isPackaged
-						? ''
-						: '\n\n' +
-						formatNlsMessage(
-							messages?.['screenshot.permission.development'] ??
-							localize2(
-								'screenshot.permission.development',
-								'This development version appears as {0} in System Settings.'
-							).original,
-							{ '0': bundleName }
-						)),
-				buttons: [
-					messages?.['screenshot.permission.openSettings'] ??
-					localize2('screenshot.permission.openSettings', 'Open System Settings').original,
-					messages?.['screenshot.permission.showApplication'] ??
-					localize2('screenshot.permission.showApplication', 'Show Application in Finder').original,
-					messages?.['screenshot.permission.cancel'] ??
-					localize2('screenshot.permission.cancel', 'Cancel').original
-				],
-				defaultId: 0,
-				cancelId: 2,
-				signal: controller.signal
-			});
-			if (this.capture !== capture || this.owner.isDestroyed()) return;
-			this.finish();
-			if (result.response === 0) await this.openPermissionSettings();
-			else if (result.response === 1) shell.showItemInFolder(bundlePath);
+			if (this.options.entry.useDevelopmentUrl) await guide.loadURL(this.options.entry.url);
+			else await guide.loadFile(this.options.entry.file);
+			await rendered;
+			clearTimeout(timeout);
+			if (this.capture === capture && !guide.isDestroyed()) {
+				guide.show();
+				retry = await completed;
+			}
 		} finally {
-			capture.lifetime.delete(lifetime);
-			lifetime.dispose();
+			capture.windows.delete(resources);
+			resources.dispose();
 		}
+		if (this.capture !== capture) return;
+		if (retry) await this.open(capture);
+		else this.finish();
 	}
 
 	private async complete(

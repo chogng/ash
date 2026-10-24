@@ -16,6 +16,7 @@ pub const PROJECT_SCHEMA_VERSION: u32 = 1;
 pub enum ProjectStatus {
     Active,
     Archived,
+    Deleted,
 }
 
 /// One host-resolved directory reference in a Project catalog.

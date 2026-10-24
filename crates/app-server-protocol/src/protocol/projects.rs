@@ -14,6 +14,7 @@ use serde::Serialize;
 pub enum ProjectStatusDto {
     Active,
     Archived,
+    Deleted,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

@@ -1,8 +1,4 @@
-import {
-	defaultButtonStyles,
-	defaultDialogStyles,
-	defaultInputBoxStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultDialogStyles, defaultInputBoxStyles, defaultCheckboxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { ExecutionSettingsModel } from './executionSettingsModel.js';
 import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browser/githubSettingsModel.js';
@@ -10,7 +6,7 @@ import { TraceSettingsModel } from '../../../../workbench/contrib/trace/browser/
 import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferences/browser/settingsSectionRenderer.js';
 import './media/sessionsPreferences.css';
 import '../../../../workbench/contrib/preferences/browser/media/settingsCard.css';
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { BrowserContextMenuService } from '../../../../platform/contextview/browser/contextMenuService.js';
 import { ContextView, type ContextViewOptions, type ContextViewHideReason } from '../../../../base/browser/ui/contextview/contextview.js';
@@ -101,6 +97,8 @@ interface SettingsSection {
 export class SessionsPreferences extends Disposable {
 	private readonly activeDialog = this._register(new MutableDisposable<DisposableStore>());
 	private dialog: Dialog | undefined;
+	private dialogVisible = false;
+	private focusDialog: (() => void) | undefined;
 	private navigate: ((categoryId: string) => void) | undefined;
 	private applyQuery: ((query: string) => void) | undefined;
 
@@ -137,7 +135,7 @@ export class SessionsPreferences extends Disposable {
 			// Sessions owns product preferences; resource and language editing belongs to the shared Workbench pane.
 			const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
 			const jsonEditor = validated.jsonEditor ?? this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json';
-			this.dialog?.close();
+			this.dialog?.dispose();
 			const inGroup = validated.openToSide || validated.groupId !== undefined;
 			// Revealing Code selects its document group. Settle that layout before opening and focusing the requested pane.
 			if (inGroup) await this.showEditor();
@@ -146,7 +144,7 @@ export class SessionsPreferences extends Disposable {
 			return;
 		}
 		if (validated.jsonEditor ?? this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json') {
-			this.dialog?.close();
+			this.dialog?.dispose();
 			const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
 			await preferences.openUserSettings({ ...validated, jsonEditor: true });
 			await this.showEditor();
@@ -154,10 +152,10 @@ export class SessionsPreferences extends Disposable {
 		}
 		const categoryId = validated.section;
 		const query = validated.query ?? (validated.revealSetting ? `@id:${validated.revealSetting.key}` : undefined);
-		if (this.dialog?.element.open) {
+		if (this.dialogVisible) {
 			if (categoryId) { this.navigate?.(categoryId); }
 			if (query !== undefined) this.applyQuery?.(query);
-			else this.dialog.element.focus();
+			else this.focusDialog?.();
 			return;
 		}
 		// Release the closed modal's menus and accessibility registrations before
@@ -225,19 +223,24 @@ export class SessionsPreferences extends Disposable {
 			ariaControls: page.id,
 		}));
 		if (query !== undefined) searchInput.value = query;
-		const dialog = resources.add(new Dialog(this.container, {
+		const dialog = resources.add(new Dialog(this.container, localize('sessions.settings.title', 'Sessions Settings'), [], {
 			buttonStyles: defaultButtonStyles,
 			dialogStyles: defaultDialogStyles,
-			title: localize('sessions.settings.title', 'Sessions Settings'),
-			content,
+			checkboxStyles: defaultCheckboxStyles,
+			inputBoxStyles: defaultInputBoxStyles,
+			extraClasses: ['ash-sessions-settings-dialog'],
+			disableCloseButton: true,
+			disableDefaultAction: true,
+			renderBody: body => body.append(content),
+			onVisibilityChange: (_window, visible) => { if (this.dialog === dialog) this.dialogVisible = visible; },
 		}));
-		resources.add(addDisposableListener(dialog.element, 'click', event => {
-			if (event.target === dialog.element) dialog.close();
-		}));
-		const contextView = resources.add(new ContextView(dialog.element));
+		resources.add(addDisposableListener(getWindow(content), 'click', event => {
+			if ((event.target as HTMLElement | null)?.classList?.contains('ash-sessions-settings-dialog')) dialog.dispose();
+		}, true));
+		const contextView = resources.add(new ContextView(content));
 		// Modal menus and dropdowns must live in the dialog's top layer and end with it.
 		const contentServices = resources.add(this.instantiationService.createChild(new ServiceCollection([IContextViewService, {
-			container: dialog.element,
+			container: content,
 			show: (options: ContextViewOptions) => contextView.show(options),
 			hide: (reason?: ContextViewHideReason) => contextView.hide(reason),
 			layout: () => contextView.layout(),
@@ -254,7 +257,7 @@ export class SessionsPreferences extends Disposable {
 		// the modal, whose child service scope is released by open()'s finally block.
 		const notifications = this.instantiationService.invokeFunction(accessor => accessor.get(INotificationService));
 		const handoff = async (operation: () => Promise<void>, showEditor = true): Promise<void> => {
-			dialog.close();
+			dialog.dispose();
 			try {
 				await operation();
 				if (showEditor && !this.isDisposed) await this.showEditor();
@@ -299,9 +302,9 @@ export class SessionsPreferences extends Disposable {
 		const renderer = resources.add(contentServices.createInstance(SettingsRenderer, list, settingOptions));
 		const modelContent = resources.add(this.instantiationService.createInstance(ModelSettingsRenderer, list));
 		const dictationContent = resources.add(this.instantiationService.createInstance(DictationSettingsRenderer, list));
-		const customizeContent = resources.add(contentServices.createInstance(SessionsCustomizeContent, list, async () => { dialog.close(); }, this.showEditor, () => openSettingsEditor(), () => openUserSettings()));
+		const customizeContent = resources.add(contentServices.createInstance(SessionsCustomizeContent, list, async () => { dialog.dispose(); }, this.showEditor, () => openSettingsEditor(), () => openUserSettings()));
 		const advisorContent = resources.add(contentServices.createInstance(AdvisorSettingsRenderer, list));
-		const githubSettings = resources.add(contentServices.createInstance(GitHubSettingsModel, async () => { dialog.close(); }));
+		const githubSettings = resources.add(contentServices.createInstance(GitHubSettingsModel, async () => { dialog.dispose(); }));
 		const githubContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings));
 		const traceSettings = resources.add(contentServices.createInstance(TraceSettingsModel));
 		const traceContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings));
@@ -483,9 +486,10 @@ export class SessionsPreferences extends Disposable {
 			searchInput.focus();
 		};
 		render();
-		dialog.element.classList.add('ash-sessions-settings-dialog');
 		const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.SessionsSettings);
-		if (hint) dialog.element.setAttribute('aria-description', hint);
+		if (hint) {
+			searchInput.inputElement.setAttribute('aria-description', hint);
+		}
 		resources.add(AccessibleViewRegistry.register({
 			type: AccessibleViewType.View, priority: 100, name: 'sessionsSettingsView',
 			when: ContextKeyExpr.has('sessionsSettingsFocused'),
@@ -496,8 +500,9 @@ export class SessionsPreferences extends Disposable {
 			},
 		}));
 
-		const scope = resources.add(this.contextKeys.createScoped(dialog.element));
+		const scope = resources.add(this.contextKeys.createScoped(content));
 		scope.createKey('sessionsSettingsFocused', true);
+		this.focusDialog = () => searchInput.focus();
 		this.dialog = dialog;
 		this.activeDialog.value = resources;
 		try {
@@ -511,6 +516,8 @@ export class SessionsPreferences extends Disposable {
 				this.navigate = undefined;
 				this.applyQuery = undefined;
 				this.dialog = undefined;
+				this.focusDialog = undefined;
+				this.dialogVisible = false;
 				this.activeDialog.clear();
 			}
 		}

@@ -1,0 +1,129 @@
+.ash-segmented-control {
+	--ash-segmented-control-count: 2;
+	--ash-segmented-control-selected-index: 0;
+	--ash-segmented-control-direction: 1;
+
+	position: relative;
+	display: inline-grid;
+	flex: 0 0 auto;
+	grid-template-columns: repeat(
+		var(--ash-segmented-control-count),
+		minmax(0, 1fr)
+	);
+	align-items: stretch;
+	padding: 0;
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-toolbar-hoverBackground);
+	color: var(--ash-foreground);
+}
+
+/* A single selection surface moves beneath stationary, equally sized options. */
+.ash-segmented-control::before {
+	position: absolute;
+	inset-block: 0;
+	inset-inline-start: 0;
+	box-sizing: border-box;
+	width: calc(100% / var(--ash-segmented-control-count));
+	border: var(--ash-strokeThickness) solid
+		var(--ash-widget-border, transparent);
+	border-radius: var(
+		--ash-button-border-radius,
+		var(--ash-cornerRadius-medium)
+	);
+	background: var(--ash-editor-background);
+	content: "";
+	translate: calc(
+		100% * var(--ash-segmented-control-selected-index) *
+			var(--ash-segmented-control-direction)
+	);
+	pointer-events: none;
+}
+
+[dir="rtl"] .ash-segmented-control {
+	--ash-segmented-control-direction: -1;
+}
+
+[dir="ltr"] .ash-segmented-control {
+	--ash-segmented-control-direction: 1;
+}
+
+.ash-segmented-control[dir="rtl"] {
+	--ash-segmented-control-direction: -1;
+}
+
+.ash-segmented-control[dir="ltr"] {
+	--ash-segmented-control-direction: 1;
+}
+
+.ash-segmented-control > .ash-segmented-control-option {
+	position: relative;
+	z-index: 1;
+	display: inline-flex;
+	box-sizing: border-box;
+	min-width: var(--ash-spacing-size320);
+	min-height: var(--ash-spacing-size280);
+	align-items: center;
+	justify-content: center;
+	gap: var(--ash-spacing-size40);
+	padding: 0 var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid transparent;
+	border-radius: var(
+		--ash-button-border-radius,
+		var(--ash-cornerRadius-medium)
+	);
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.ash-segmented-control-icon > .ash-segmented-control-option {
+	width: var(--ash-spacing-size320);
+	height: var(--ash-spacing-size280);
+	padding: 0;
+}
+
+.ash-segmented-control-label {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-segmented-control-option > .ash-icon {
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
+	font-size: var(--ash-lxiconFontSize);
+}
+
+.ash-segmented-control > .ash-segmented-control-option:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.ash-segmented-control > .ash-segmented-control-option:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.hc-black .ash-segmented-control-option,
+.hc-light .ash-segmented-control-option {
+	border-color: var(--ash-contrastBorder);
+}
+
+.hc-black .ash-segmented-control::before,
+.hc-light .ash-segmented-control::before {
+	border-color: var(--ash-focusBorder);
+}
+
+.hc-black .ash-segmented-control-option:focus-visible,
+.hc-light .ash-segmented-control-option:focus-visible {
+	outline-width: calc(2 * var(--ash-strokeThickness));
+	outline-offset: calc(-2 * var(--ash-strokeThickness));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.ash-segmented-control::before {
+		transition: translate var(--ash-animation-durationFast) ease-out;
+	}
+}

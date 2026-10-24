@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Position } from '../../../../common/core/position.js';
+import { ViewFocusChangedEvent } from '../../../../common/viewEvents.js';
 import { Range } from '../../../../common/core/range.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { TextModel } from '../../../../common/model/textModel.js';
@@ -48,6 +49,9 @@ test('color hover waits for the committed color presentation and rejects it afte
 	await waitFor(() => picker.querySelector<HTMLSelectElement>('select')?.value === '#ff0000');
 	const hue = picker.querySelector<HTMLInputElement>('.ash-color-picker-hue')!;
 	hue.focus();
+	assert.equal(dom.window.document.querySelector('.stanza-editor-accessibility-status')!.textContent, 'Press Alt+F1 for color picker help.');
+	// A collected input-focus event can arrive after focus has moved into the hover.
+	editor.view.onFocusChanged(new ViewFocusChangedEvent(true));
 	assert.equal(dom.window.document.querySelector('.stanza-editor-accessibility-status')!.textContent, 'Press Alt+F1 for color picker help.');
 	hue.value = '120';
 	hue.dispatchEvent(new dom.window.Event('input', { bubbles: true }));

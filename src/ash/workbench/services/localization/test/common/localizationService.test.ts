@@ -247,7 +247,6 @@ suite('Workbench localization', () => {
 			localization.translate('ash', 'sessions.activity.projects', 'Projects'),
 		], ['聊天', 'Collab', '项目']);
 		assert.equal(localization.translate('ash', 'sessions.activityBar.location.title', 'Sessions Activity Bar Position'), '活动栏位置');
-		assert.equal(localization.translate('ash', 'sessions.activityBar.compact.title', 'Compact Sessions Activity Bar'), '紧凑活动栏');
 		assert.equal(localization.translate('ash', 'dialog.input', 'Input'), '输入');
 		assert.equal(localization.translate('ash', 'call.credential', 'Administrator key or invitation key'), '管理员密钥或邀请密钥');
 		assert.equal(localization.translate('ash.regions', 'searchCommands', 'Search commands'), '搜索命令');

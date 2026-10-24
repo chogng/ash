@@ -4,6 +4,7 @@ import './media/titlebarpart.css';
 import './media/menubarControl.css';
 import '../../../common/theme.js';
 import { h } from '../../../../base/browser/dom.js';
+import { observeResize } from '../../../../base/browser/observer.js';
 import type { ActionViewItemProvider } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { environment } from '../../../../base/common/platform.js';
@@ -14,18 +15,31 @@ import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../platform/act
 import { WebTitlebarPart } from '../../../../workbench/browser/parts/titlebar/titlebarPart.js';
 import { BrowserMenubarControl } from '../../../../workbench/browser/parts/titlebar/menubarControl.js';
 import { Menus } from '../../menus.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { WindowModeControl } from '../../../../workbench/browser/parts/titlebar/windowModeControl.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { observableFromEvent } from '../../../../base/common/observable.js';
 import { Event } from '../../../../base/common/event.js';
 import { SideBarVisibleContext } from '../../../../workbench/common/contextkeys.js';
+import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+
+/** The window owns the titlebar host; the visible page owns its content and mount lifetime. */
+export interface ISessionsTitlebarService {
+	setPageContent(content: HTMLElement): IDisposable;
+}
+
+export const ISessionsTitlebarService = createServiceIdentifier<ISessionsTitlebarService>('sessionsTitlebarService');
 
 /** Window chrome and primary product actions for the dedicated Sessions Workbench. */
-export class TitlebarPart extends WebTitlebarPart {
+export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarService {
 	private readonly activityActions: WorkbenchToolBar;
+	private readonly pageContent: HTMLElement;
 	private activityActionViewItemProvider: ActionViewItemProvider | undefined;
+	private sidebarMinimumWidth = 0;
+
+	/** Intrinsic left controls, their gaps and the sidebar-aligned outer insets. */
+	public get minimumSidebarWidth(): number { return this.sidebarMinimumWidth; }
 
 	public override get minimumHeight(): number {
 		// Align this row with the whole-pixel center of macOS inset window buttons.
@@ -85,6 +99,26 @@ export class TitlebarPart extends WebTitlebarPart {
 			if (event.affectsSome(sidebarKeys)) updateModeVisibility();
 		}));
 		updateModeVisibility();
+		const updateSidebarMinimumWidth = (): void => {
+			// Keep the expanded constraint while the mode control is hidden with navigation.
+			if (modeHost.hidden) return;
+			const ownerWindow = container.ownerDocument.defaultView!;
+			const children = Array.from(left.children).filter(child => ownerWindow.getComputedStyle(child).display !== 'none');
+			const style = ownerWindow.getComputedStyle(left);
+			const pixels = (value: string): number => Number.parseFloat(value) || 0;
+			const width = Math.ceil(children.reduce((sum, child) => sum + child.getBoundingClientRect().width, 0)
+				+ Math.max(0, children.length - 1) * pixels(style.columnGap)
+				+ pixels(style.paddingLeft) + pixels(style.paddingRight)
+				+ pixels(ownerWindow.getComputedStyle(this.contentDomNode).paddingLeft));
+			if (width !== this.sidebarMinimumWidth) {
+				this.sidebarMinimumWidth = width;
+				this.notifyConstraintsChanged();
+			}
+		};
+		this._register(observeResize(Array.from(left.children), updateSidebarMinimumWidth, { box: 'border-box' }));
+		updateSidebarMinimumWidth();
+		this.pageContent = h(container.ownerDocument, 'div', { className: 'ash-sessions-titlebar-page-content' });
+		this.contentDomNode.append(this.pageContent);
 		const right = h(container.ownerDocument, 'div');
 		right.className = 'ash-sessions-titlebar-right';
 		this.contentDomNode.append(right);
@@ -99,6 +133,13 @@ export class TitlebarPart extends WebTitlebarPart {
 			presentation: 'inherit-foreground',
 			actionViewItemProvider: (action, options) => this.activityActionViewItemProvider?.(action, options),
 		}));
+	}
+
+	public setPageContent(content: HTMLElement): IDisposable {
+		this.pageContent.replaceChildren(content);
+		return toDisposable(() => {
+			if (content.parentElement === this.pageContent) { content.remove(); }
+		});
 	}
 
 	public setActivityActions(actions: readonly IAction[], actionViewItemProvider: ActionViewItemProvider): void {

@@ -35,7 +35,7 @@
     "src/ash/platform/search/**/*.ts",
     "src/ash/platform/theme/browser/**/*.ts",
     "src/ash/platform/theme/common/**/*.ts",
-    "src/ash/platform/storage/node/**/*.ts",
+    "src/ash/platform/storage/electron-main/**/*.ts",
     "src/ash/platform/workspace/**/*.ts",
     "src/ash/platform/workspaces/**/*.ts",
     "src/ash/workbench/services/statusbar/**/*.ts",

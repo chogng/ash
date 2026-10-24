@@ -1,5 +1,6 @@
 import './media/workbenchTabsControl.css';
 import { observeResize } from '../../../../base/browser/observer.js';
+import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { TabList, type TabListItem, type TabListOptions } from '../../../../base/browser/ui/tablist/tabList.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -26,6 +27,7 @@ export class WorkbenchTabsControl<T> extends Disposable {
 	private connectedTab: HTMLElement | undefined;
 	private connected = false;
 	private touchesContent = true;
+	private readonly layoutScheduler: AnimationFrameScheduler;
 
 	constructor(
 		private readonly container: HTMLElement,
@@ -35,6 +37,7 @@ export class WorkbenchTabsControl<T> extends Disposable {
 		super();
 		container.classList.add('ash-workbench-tabs-control');
 		this.tabList = this._register(new TabList(container, options));
+		this.layoutScheduler = this._register(new AnimationFrameScheduler(container.ownerDocument.defaultView!, () => this.updateClipping()));
 		this.updatePresentation();
 		this.updateSizing();
 		this.updateScrollbar();
@@ -98,6 +101,10 @@ export class WorkbenchTabsControl<T> extends Disposable {
 
 	/** Recompute geometry after a host updates custom label content. */
 	layout(): void {
+		this.layoutScheduler.schedule();
+	}
+
+	private updateClipping(): void {
 		const tab = this.connectedTab;
 		if (!tab || !this.connected) {
 			clearConnectedTabClipping(tab, this.tabList.element);

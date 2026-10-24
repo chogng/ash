@@ -1,164 +1,55 @@
-import {
-	defaultCheckboxStyles,
-	defaultDialogStyles,
-	defaultInputBoxStyles,
-	defaultButtonStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
-import { Dialog, type DialogButton } from "../../../../base/browser/ui/dialog/dialog.js";
-import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
-import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
+import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { Dialog } from "../../../../base/browser/ui/dialog/dialog.js";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { observeResize } from "../../../../base/browser/observer.js";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { localize } from "../../../../nls.js";
-import {
-	type DialogRequest,
-	DialogResult,
-	DialogSeverity,
-	type IDialogHandler,
-	type IDialogOutcome,
-} from "../../../../platform/dialogs/common/dialogs.js";
+import { type DialogRequest, DialogResult, DialogSeverity, type IDialogHandler, type IDialogOutcome } from "../../../../platform/dialogs/common/dialogs.js";
 
-/** Presents workbench dialogs with browser-native modal semantics. */
+/** Maps queued domain requests to the service-independent Dialog widget. */
 export class BrowserDialogHandler implements IDialogHandler {
-	private readonly container: HTMLElement;
+	constructor(private readonly container: HTMLElement) { }
 
-	constructor(container: HTMLElement) {
-		this.container = container;
-	}
-
-	async showDialog(
-		request: DialogRequest,
-		signal: AbortSignal,
-	): Promise<IDialogOutcome> {
+	async showDialog(request: DialogRequest, signal: AbortSignal): Promise<IDialogOutcome> {
 		if (signal.aborted) return { button: DialogResult.Cancel };
-
 		const disposables = new DisposableStore();
-		const ownerDocument = this.container.ownerDocument;
 		try {
-			const content = createDialogContent(ownerDocument, request, disposables);
-			const buttons: DialogButton[] = request.kind === 'choice'
-				? request.buttons.map((label, index) => ({ label, value: `choice:${index}`, presentation: index === 0 ? 'primary' : undefined }))
-				: [{
-					label: request.primaryButton ??
-						(request.kind === "confirmation" ? localize('dialog.confirm', 'Confirm') : localize('dialog.ok', 'OK')),
-					value: DialogResult.Primary,
-					presentation: "primary",
-				}];
-			if (request.kind === "prompt") {
-				buttons.push({ label: request.secondaryButton, value: DialogResult.Secondary });
-			}
-			if (request.kind !== "message") {
-				buttons.push({ label: request.cancelButton ?? localize('dialog.cancel', 'Cancel'), value: DialogResult.Cancel });
-			}
-			const dialog = disposables.add(new Dialog(this.container, {
+			const buttons = request.kind === 'choice'
+				? [...request.buttons]
+				: [request.primaryButton ?? (request.kind === "confirmation" ? localize('dialog.confirm', 'Confirm') : localize('dialog.ok', 'OK'))];
+			if (request.kind === "prompt") buttons.push(request.secondaryButton);
+			if (request.kind !== "message") buttons.push(request.cancelButton ?? localize('dialog.cancel', 'Cancel'));
+			const cancelId = request.kind === "message" ? -1 : buttons.length - 1;
+			const dialog = disposables.add(new Dialog(this.container, request.title ?? defaultTitle(request), buttons, {
 				buttonStyles: defaultButtonStyles,
+				checkboxStyles: defaultCheckboxStyles,
+				inputBoxStyles: defaultInputBoxStyles,
 				dialogStyles: defaultDialogStyles,
-				title: request.title ?? defaultTitle(request),
-				content: content.element,
-				buttons,
-				cancelValue: DialogResult.Cancel,
+				cancelId,
+				type: request.kind === 'message' || request.kind === 'choice' ? request.severity ?? 'question' : 'question',
+				detail: request.detail,
+				inputs: request.kind === "input" ? request.inputs.map(input => ({ ...input })) : undefined,
+				checkboxLabel: request.checkbox?.label,
+				checkboxChecked: request.checkbox?.checked,
+				renderBody: body => {
+					const message = h(body.ownerDocument, "p", { className: "ash-dialog-message" });
+					message.textContent = request.message;
+					body.append(message);
+				},
 			}));
-			dialog.element.dataset.dialogSeverity = request.kind === 'message' || request.kind === 'choice'
-				? request.severity ?? 'question' : 'question';
-			for (const input of content.inputs) {
-				disposables.add(input.onKeyDown(event => {
-					if (event.key === "Enter" && !event.isComposing) {
-						event.preventDefault();
-						dialog.close(DialogResult.Primary);
-					}
-				}));
-			}
-
-			disposables.add(addDisposableListener(signal, "abort", () => {
-				dialog.close(DialogResult.Cancel);
-			}, { once: true }));
-
-			const resultPromise = dialog.show();
-			if (content.detail) {
-				const detail = content.detail;
-				const updateFocusability = (): void => {
-					if (detail.scrollHeight > detail.clientHeight) {
-						detail.tabIndex = 0;
-					} else {
-						detail.removeAttribute("tabindex");
-					}
-				};
-				updateFocusability();
-				disposables.add(observeResize(detail, updateFocusability));
-			}
-			const result = await resultPromise;
-			const buttonIndex = request.kind === 'choice' && result.startsWith('choice:')
-				? Number(result.slice('choice:'.length)) : undefined;
-			const button = buttonIndex !== undefined ? DialogResult.Primary : result === DialogResult.Primary || result === DialogResult.Secondary
-				? result : DialogResult.Cancel;
+			disposables.add(addDisposableListener(signal, "abort", () => dialog.dispose(), { once: true }));
+			const result = await dialog.show();
+			const cancelled = result.button === cancelId;
+			const button = cancelled ? DialogResult.Cancel : request.kind === 'choice' || result.button === 0 ? DialogResult.Primary : DialogResult.Secondary;
 			return {
 				button,
-				...(buttonIndex !== undefined ? { buttonIndex } : {}),
-				checkboxChecked: content.checkbox?.checked,
-				values: button === DialogResult.Primary && request.kind === "input"
-					? content.inputs.map(input => input.value) : undefined,
+				...(request.kind === 'choice' && !cancelled ? { buttonIndex: result.button } : {}),
+				checkboxChecked: result.checkboxChecked,
+				values: button === DialogResult.Primary && request.kind === "input" ? result.values : undefined,
 			};
 		} finally {
 			disposables.dispose();
 		}
 	}
-}
-
-interface IDialogContent {
-	readonly element: HTMLDivElement;
-	readonly detail?: HTMLParagraphElement;
-	readonly checkbox?: Checkbox;
-	readonly inputs: readonly InputBox[];
-}
-
-function createDialogContent(
-	ownerDocument: Document,
-	request: DialogRequest,
-	disposables: DisposableStore,
-): IDialogContent {
-	const element = h(ownerDocument, "div");
-	element.className = "ash-dialog-content";
-
-	const message = h(ownerDocument, "p");
-	message.className = "ash-dialog-message";
-	message.textContent = request.message;
-	element.append(message);
-
-	let detail: HTMLParagraphElement | undefined;
-	if (request.detail) {
-		detail = h(ownerDocument, "p");
-		detail.className = "ash-dialog-detail";
-		detail.textContent = request.detail;
-		element.append(detail);
-	}
-	const inputs: InputBox[] = [];
-	if (request.kind === "input") {
-		const inputContainer = h(ownerDocument, "div");
-		inputContainer.className = "ash-dialog-inputs";
-		for (const [index, options] of request.inputs.entries()) {
-			const input = disposables.add(new InputBox(inputContainer, {
-				inputBoxStyles: defaultInputBoxStyles,
-				type: options.type,
-				placeholder: options.placeholder,
-				presentation: "field",
-				ariaLabel: options.placeholder ?? localize('dialog.inputNumber', '{0}, field {1}', request.message, index + 1),
-			}));
-			input.value = options.value ?? "";
-			inputs.push(input);
-		}
-		element.append(inputContainer);
-	}
-	let checkbox: Checkbox | undefined;
-	if (request.checkbox) {
-		checkbox = disposables.add(new Checkbox(element, {
-			...defaultCheckboxStyles,
-			label: request.checkbox.label,
-			checked: request.checkbox.checked,
-		}));
-	}
-
-	return { element, detail, checkbox, inputs };
 }
 
 function defaultTitle(request: DialogRequest): string {

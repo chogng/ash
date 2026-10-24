@@ -31,6 +31,9 @@ body,
 
 body {
 	overflow: hidden;
+	/* Copyable content opts into text selection in its owning component. */
+	user-select: none;
+	-webkit-user-select: none;
 	background: var(--ash-workbench-background);
 }
 

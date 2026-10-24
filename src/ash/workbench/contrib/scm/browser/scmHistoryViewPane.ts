@@ -2,6 +2,7 @@ import { defaultListStyles, defaultFindWidgetStyles } from '../../../../platform
 import { localize2, localize } from '../../../../nls.js';
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
+import { observeResize } from '../../../../base/browser/observer.js';
 import { ObjectTree } from '../../../../base/browser/ui/tree/objectTree.js';
 import type { ObjectTreeElement, ObjectTreeNode } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
@@ -15,6 +16,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
+import { getActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
@@ -38,7 +40,7 @@ import { IEditorService } from "../../../services/editor/common/editorService.js
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane, ViewPaneShowActions } from "../../../browser/parts/views/viewPane.js";
 import { createBinaryDiffEditorInput, createDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
-import { setupHistoryItemHover, toHistoryItemHoverContent, SWIMLANE_HEIGHT, renderSCMHistoryItemGraph, renderSCMHistoryGraphPlaceholder, toISCMHistoryItemViewModelArray } from './scmHistory.js';
+import { setupHistoryItemHover, toHistoryItemHoverContent, SWIMLANE_HEIGHT, SWIMLANE_WIDTH, renderSCMHistoryItemGraph, renderSCMHistoryGraphPlaceholder, toISCMHistoryItemViewModelArray } from './scmHistory.js';
 import { SCMHistoryBusyContext, SCMHistoryProviderIdContext } from '../common/scm.js';
 import { createMultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../multiDiffEditor/browser/multiDiffEditorInput.js';
 
@@ -320,12 +322,14 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.contentElement.classList.add("ash-scm-secondary-pane");
 		this.graphElement = h(container.ownerDocument, "div");
 		this.graphElement.className = "ash-scm-graph";
+		this.graphElement.style.setProperty('--scm-graph-lane-width', `${SWIMLANE_WIDTH}px`);
 		this.statusElement = h(container.ownerDocument, 'div');
 		this.statusElement.className = 'ash-scm-empty';
 		this.statusElement.setAttribute('role', 'status');
 		this.statusElement.setAttribute('aria-live', 'polite');
 		this.graphElement.append(this.statusElement);
 		this.contentElement.append(this.graphElement);
+		this._register(observeResize([this.graphElement], () => this.loadMoreIfVisible()));
 		this.busyContext = SCMHistoryBusyContext.bindTo(contextKeyService);
 		this._register(toDisposable(() => this.busyContext.reset()));
 		this.providerIdContext = SCMHistoryProviderIdContext.bindTo(contextKeyService);
@@ -343,7 +347,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		this._register(this.scmViewService.onDidChangeActiveRepository(() => void this.refresh()));
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('scm.graph.pageSize') || event.affectsConfiguration('scm.graph.showIncomingChanges') || event.affectsConfiguration('scm.graph.showOutgoingChanges')) { void this.refresh(); }
-			else if (event.affectsConfiguration('scm.graph.pageOnScroll')) { this.loadMoreIfVisible(); }
+			else if (event.affectsConfiguration('scm.graph.pageOnScroll') && this.page) { this.renderGraph(this.page); }
 			else if (event.affectsConfiguration('scm.graph.badges') && this.page) { this.renderGraph(this.page); }
 		}));
 		void this.refresh();
@@ -609,7 +613,10 @@ export class SCMHistoryViewPane extends ViewPane {
 				const refs = await provider.provideHistoryItemRefs();
 				if (this.isDisposed || generation !== this.generation) { return; }
 				this.head = provider.historyItemRef.get();
-				const remote = provider.historyItemRemoteRef?.get();
+				const remoteRef = provider.historyItemRemoteRef?.get();
+				// Provider snapshots may identify the upstream without its commit revision.
+				// Use the freshly queried ref to capture immutable comparison endpoints.
+				const remote = refs.find(ref => ref.id === remoteRef?.id && ref.revision !== undefined) ?? remoteRef;
 				let filter = this.filters.get(this.filterKey) ?? 'auto';
 				let selected = Array.isArray(filter) ? refs.filter(ref => filter.includes(ref.id)) : [];
 				if (Array.isArray(filter) && selected.length === 0) {
@@ -617,8 +624,12 @@ export class SCMHistoryViewPane extends ViewPane {
 					this.filters.delete(this.filterKey);
 					this.storageService.store('scm.graphView.referencesFilter', JSON.stringify([...this.filters]), StorageScope.WORKSPACE, StorageTarget.USER);
 				}
-				if (filter === 'auto') { selected = [this.head, remote, provider.historyItemBaseRef?.get()].filter((ref): ref is ISCMHistoryItemRef => !!ref); }
-				this.historyItemRefs = filter === 'all' ? undefined : selected.flatMap(ref => ref.revision ? [ref.revision] : []);
+				if (filter === 'auto') {
+					selected = [this.head, remote, provider.historyItemBaseRef?.get()]
+						.filter((ref): ref is ISCMHistoryItemRef => !!ref)
+						.map(ref => ref.revision ? ref : refs.find(candidate => candidate.id === ref.id) ?? ref);
+				}
+				this.historyItemRefs = filter === 'all' ? undefined : selected.map(ref => ref.revision ?? ref.id);
 				this.comparison = undefined;
 				if (this.head?.revision && remote?.revision && remote.revision !== this.head.revision && provider.resolveHistoryItemRefsCommonAncestor) {
 					// A missing merge base must not hide otherwise readable commit history.
@@ -703,8 +714,8 @@ export class SCMHistoryViewPane extends ViewPane {
 		}
 		this.rows = toISCMHistoryItemViewModelArray(page.items, new Map(), this.head, this.comparison);
 		this.currentItemContext.set(this.head?.revision !== undefined);
-		this.upstreamContext.set(this.provider?.historyItemRemoteRef?.get()?.revision !== undefined);
-		this.baseContext.set(this.provider?.historyItemBaseRef?.get()?.revision !== undefined);
+		this.upstreamContext.set(this.provider?.historyItemRemoteRef?.get() !== undefined);
+		this.baseContext.set(this.provider?.historyItemBaseRef?.get() !== undefined);
 		this.branchContext.set(this.head?.category === 'localBranch' && this.head.revision !== undefined);
 		this.statusElement.hidden = page.items.length > 0;
 		this.statusElement.textContent = localize('scm.history.empty', 'No commits yet.');
@@ -719,7 +730,7 @@ export class SCMHistoryViewPane extends ViewPane {
 				if (row) this.updateCommitRow(row, model);
 				return { element, collapsible: true, collapsed: this.tree!.isCollapsed(id) ?? true, children: this.getCommitChildren(model) };
 			});
-			if (page.hasMore) children.push({ element: this.moreItem });
+			if (page.hasMore && this.showLoadMore()) children.push({ element: this.moreItem });
 			this.tree.setChildren(children);
 			if (anchor && this.tree.model.has(anchor.id)) this.tree.scrollTop = (this.tree.getElementTop(anchor.id) ?? 0) + anchorOffset;
 			else if (scrollTop === 0) this.tree.scrollTop = 0;
@@ -782,7 +793,9 @@ export class SCMHistoryViewPane extends ViewPane {
 		tree.domNode.classList.add('ash-scm-graph-viewport');
 		tree.element.classList.add('ash-scm-graph-tree');
 		tree.element.setAttribute('aria-multiselectable', 'false');
-		tree.element.setAttribute('aria-description', localize('scm.history.help', 'Use Up and Down Arrow to navigate and select commits, folders and changed files. Navigating to a file previews it while keeping focus here. Home and End move to the first and last loaded rows; Page Up and Page Down move by a page. Right Arrow expands a commit or folder and enters its children; Left Arrow collapses it or returns to its parent. Enter or Space toggles commits and folders. Enter opens and pins a changed file; Space previews it while keeping focus in history. Click a file to preview it and double-click to pin it. Hold Ctrl, Command or Alt when clicking to open it beside the current editor. On macOS, Command+Down Arrow also opens the selected item. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges, Open Changes and Open File. Press Alt+Down Arrow on a commit to focus its details; Escape returns to history. Use Filter History References to select branches and tags; Ctrl+Space toggles a reference and Enter applies the selection. Use View as List or View as Tree to change file layout. Incoming and Outgoing Changes compare the branch with its merge base. Binary changes open a read-only hexadecimal comparison. The graph selects one row at a time. Escape clears the selection without collapsing files. Loading more or refreshing retains available selections and expanded rows.'));
+		const navigationHelp = localize('scm.history.help', 'Use Up and Down Arrow to navigate and select commits, folders and changed files. Navigating to a file previews it while keeping focus here. Home and End move to the first and last loaded rows; Page Up and Page Down move by a page. Right Arrow expands a commit or folder and enters its children; Left Arrow collapses it or returns to its parent. Enter or Space toggles commits and folders. Enter opens and pins a changed file; Space previews it while keeping focus in history. Click a file to preview it and double-click to pin it. Hold Ctrl, Command or Alt when clicking to open it beside the current editor. On macOS, Command+Down Arrow also opens the selected item. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges, Open Changes and Open File. Press Alt+Down Arrow on a commit to focus its details; Escape returns to history. Use Filter History References to select branches and tags; Ctrl+Space toggles a reference and Enter applies the selection. Use View as List or View as Tree to change file layout. Incoming and Outgoing Changes compare the branch with its merge base. Binary changes open a read-only hexadecimal comparison. The graph selects one row at a time. Escape clears the selection without collapsing files. Loading more or refreshing retains available selections and expanded rows.');
+		const pagingHelp = localize('scm.history.pagingHelp', 'Automatic loading fetches older commits before you reach the end. When it is off, use Load more commits. If loading fails, use Retry; the loaded history stays available.');
+		tree.element.setAttribute('aria-description', `${navigationHelp} ${pagingHelp}`);
 		resources.add(tree.onDidChangeSelection(event => {
 			this.updateSelection();
 			const element = event.elements[0];
@@ -811,7 +824,13 @@ export class SCMHistoryViewPane extends ViewPane {
 				if (options) void this.openCommitChange(element.model.historyItem, element.change, options);
 			} else if (element.kind === 'more') void this.loadMore();
 		}));
-		resources.add(addDisposableListener(tree.element, 'keydown', event => this.onHistoryKeyDown(event), true));
+		// The shared tree prevents native pointer focus, which can retain :focus-visible.
+		resources.add(addDisposableListener(tree.element, 'pointerdown', () => tree.element.classList.add('pointer-navigation'), true));
+		resources.add(addDisposableListener(tree.element, 'blur', () => tree.element.classList.remove('pointer-navigation')));
+		resources.add(addDisposableListener(tree.element, 'keydown', event => {
+			tree.element.classList.remove('pointer-navigation');
+			this.onHistoryKeyDown(event);
+		}, true));
 		resources.add(this.onDidChangeBodyVisibility(visible => { if (visible) this.loadMoreIfVisible(); }));
 		resources.add(tree.onDidScroll(() => {
 			this.updateSelection();
@@ -843,7 +862,20 @@ export class SCMHistoryViewPane extends ViewPane {
 	}
 
 	private loadMoreIfVisible(): void {
-		if (!this.moreError && this.configurationService.getValue<boolean>('scm.graph.pageOnScroll') && this.isBodyVisible() && this.graphElement.querySelector('.ash-scm-graph-load-more')) void this.loadMore();
+		const tree = this.tree;
+		if (!tree || !this.page?.hasMore || this.loading || this.refreshing || this.refreshFailed || this.moreError || !this.isBodyVisible() || !this.configurationService.getValue<boolean>('scm.graph.pageOnScroll')) return;
+		const height = this.graphElement.clientHeight;
+		const tail = tree.model.visibleNodes.at(-1);
+		if (height <= 0 || !tail) return;
+		// A short pane still needs a full page of runway for a provider round trip.
+		// Include expanded file rows so they do not cause premature history reads.
+		const prefetch = Math.max(height, this.configurationService.getValue<number>('scm.graph.pageSize') * SWIMLANE_HEIGHT);
+		const bottom = (tree.getElementTop(tail.id) ?? 0) + SWIMLANE_HEIGHT;
+		if (bottom - tree.scrollTop - height <= prefetch) void this.loadMore();
+	}
+
+	private showLoadMore(): boolean {
+		return !!this.moreError || !this.configurationService.getValue<boolean>('scm.graph.pageOnScroll');
 	}
 
 	private selectCommit(id: string, event?: UIEvent): void {
@@ -916,14 +948,19 @@ export class SCMHistoryViewPane extends ViewPane {
 		button.className = "ash-scm-command";
 		button.type = "button";
 		button.disabled = this.loading;
-		button.textContent = this.loading ? localize('scm.history.loadingMore', 'Loading commit history…') : this.moreError ? localize('scm.history.retry', 'Retry') : localize('scm.history.loadMore', 'Load more commits');
+		button.textContent = this.moreError ? localize('scm.history.retry', 'Retry') : localize('scm.history.loadMore', 'Load more commits');
 		button.setAttribute('aria-label', this.moreError ? localize('scm.history.retryMore', 'Retry loading commit history') : localize('scm.history.loadMore', 'Load more commits'));
+		// Native button activation must not be consumed by the containing tree.
+		this.more.add(addDisposableListener(button, 'keydown', event => event.stopPropagation()));
 		this.more.add(addDisposableListener(button, "click", () => void this.loadMore()));
 		container.append(button);
 		return container;
 	}
 
 	private updateMore(): void {
+		if (this.page?.hasMore && this.tree && this.tree.model.has(this.moreItem.id) !== this.showLoadMore()) {
+			this.renderGraph(this.page);
+		}
 		const current = this.graphElement.querySelector('.ash-scm-graph-load-more');
 		if (current) {
 			const restoreFocus = current.contains(current.ownerDocument.activeElement);
@@ -942,7 +979,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		const page = this.page;
 		const provider = this.provider;
 		if (!page || !provider || !page.hasMore || this.loading || this.refreshing || this.refreshFailed) return;
-		const progress = this.getProgressIndicator().show(true, 100);
+		const progress = this.getProgressIndicator().show(true, 250);
 		const handle = this.loadingProgress.add(toDisposable(() => progress.done()));
 		using progressLifetime = toDisposable(() => { this.loadingProgress.delete(handle); handle.dispose(); });
 
@@ -964,7 +1001,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.updateMore();
 			const active = this.graphElement.ownerDocument.activeElement;
 			if (hadLoaderFocus && (active === this.graphElement.ownerDocument.body || active === this.tree?.element || active && this.graphElement.querySelector('.ash-scm-graph-load-more')?.contains(active))) {
-				this.focusHistoryElement(`commit:${this.rows[page.items.length]?.historyItem.id}`);
+				if (items[0]) this.focusHistoryElement(`commit:${items[0].id}`);
 			}
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) return;
@@ -1030,12 +1067,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		if (repository) {
 			const actions = h(document, 'div');
 			actions.className = 'ash-scm-graph-actions';
-			resources.add(new MenuWorkbenchToolBar(actions, this.menuService, this.contextMenuService, MenuId.SCMHistoryItemContext, {
-				ariaLabel: localize('scm.history.commitActions', 'Commit actions'),
-				contextKeyService: scope,
-				menuOptions: { arg: menuTarget },
-				toolbarOptions: { primaryGroup: 'inline' },
-			}));
+			this.renderInlineActions(actions, MenuId.SCMHistoryItemContext, menuTarget, scope, resources, localize('scm.history.commitActions', 'Commit actions'));
 			resources.add(addDisposableListener(actions, 'click', event => event.stopPropagation()));
 			resources.add(addDisposableListener(actions, 'dblclick', event => event.stopPropagation()));
 			overlay.append(actions);
@@ -1050,6 +1082,21 @@ export class SCMHistoryViewPane extends ViewPane {
 			if (menuTarget) { this.showHistoryMenu(menuTarget, scope, item, event); }
 		}));
 		return rendered;
+	}
+
+	private renderInlineActions(container: HTMLElement, menuId: MenuId, target: SCMHistoryItemViewModelTreeElement | SCMHistoryItemChangeViewModelTreeElement | undefined, scope: IScopedContextKeyService, resources: DisposableStore, ariaLabel: string): void {
+		// Toolbar keys belong to its controls, rather than the containing history tree.
+		resources.add(addDisposableListener(container, 'keydown', event => event.stopPropagation()));
+		const menu = resources.add(this.menuService.createMenu(menuId, scope));
+		const toolbar = resources.add(new WorkbenchToolBar(container, this.contextMenuService, { ariaLabel }));
+		const update = (): void => {
+			// Secondary actions remain available through the row's context menu.
+			const { primary } = getActionBarActions(menu.getActions({ arg: target }), 'inline');
+			toolbar.setActions(primary);
+			toolbar.element.hidden = primary.length === 0;
+		};
+		resources.add(menu.onDidChange(update));
+		update();
 	}
 
 	private updateCommitRow(row: HistoryItemRow, model: ISCMHistoryItemViewModel): void {
@@ -1250,10 +1297,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			const menuTarget = { repository, historyItemViewModel, historyItemChange: change, graphColumns: historyItemViewModel.outputSwimlanes, type: 'historyItemChangeViewModel' } satisfies SCMHistoryItemChangeViewModelTreeElement;
 			const actions = h(document, 'div');
 			actions.className = 'ash-scm-graph-actions';
-			resources.add(new MenuWorkbenchToolBar(actions, this.menuService, this.contextMenuService, MenuId.SCMHistoryItemChangeContext, {
-				ariaLabel: localize('scm.history.fileActions', 'History file actions'),
-				contextKeyService: scope, menuOptions: { arg: menuTarget }, toolbarOptions: { primaryGroup: 'inline' },
-			}));
+			this.renderInlineActions(actions, MenuId.SCMHistoryItemChangeContext, menuTarget, scope, resources, localize('scm.history.fileActions', 'History file actions'));
 			resources.add(addDisposableListener(actions, 'click', event => event.stopPropagation()));
 			resources.add(addDisposableListener(actions, 'dblclick', event => event.stopPropagation()));
 			domNode.append(actions);
@@ -1282,6 +1326,21 @@ export class SCMHistoryViewPane extends ViewPane {
 		}
 	}
 
+	private updateCommitChildren(historyItemId: string): void {
+		const tree = this.tree;
+		const element = tree?.model.getElement(`commit:${historyItemId}`);
+		if (!tree || element?.kind !== 'commit') return;
+		const scrollTop = tree.scrollTop;
+		const anchor = tree.model.visibleNodes.find(node => (tree.getElementTop(node.id) ?? 0) + SWIMLANE_HEIGHT > scrollTop);
+		const anchorOffset = anchor ? scrollTop - (tree.getElementTop(anchor.id) ?? 0) : 0;
+		// File reads do not change graph lanes or other commits' children. Updating
+		// only this branch keeps their rows, actions and hover resources intact.
+		tree.setNodeChildren(element.id, this.getCommitChildren(element.model));
+		if (anchor && tree.model.has(anchor.id)) tree.scrollTop = (tree.getElementTop(anchor.id) ?? 0) + anchorOffset;
+		this.updateSelection();
+		this.loadMoreIfVisible();
+	}
+
 	private async loadCommitChanges(historyItem: ISCMHistoryItem): Promise<void> {
 		const cached = this.commitChanges.get(historyItem.id);
 		if (cached && cached.state !== 'error') return;
@@ -1289,7 +1348,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		if (!provider) return;
 		const pending = { state: 'loading' } as const;
 		this.commitChanges.set(historyItem.id, pending);
-		if (this.page) this.renderGraph(this.page);
+		this.updateCommitChildren(historyItem.id);
 		const progress = this.getProgressIndicator().show(true, 100);
 		const handle = this.loadingProgress.add(toDisposable(() => progress.done()));
 		using progressLifetime = toDisposable(() => { this.loadingProgress.delete(handle); handle.dispose(); });
@@ -1301,7 +1360,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			if (this.isDisposed || provider !== this.provider || this.commitChanges.get(historyItem.id) !== pending) return;
 			this.commitChanges.set(historyItem.id, { state: 'error', message: error instanceof Error ? error.message : String(error) });
 		}
-		if (this.page) this.renderGraph(this.page);
+		this.updateCommitChildren(historyItem.id);
 	}
 
 	private async openCommitChange(historyItem: ISCMHistoryItem, change: ISCMHistoryItemChange, options: IOpenEditorOptions): Promise<void> {

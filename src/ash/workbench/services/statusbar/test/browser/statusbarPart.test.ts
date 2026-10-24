@@ -428,6 +428,35 @@ test('right status entries navigate in their visual left-to-right order', () => 
 
 suite('statusbar browser component', () => {
 	const browserTests = useBrowserTests();
+	test('status bar entries center their hover area inside the desktop or browser footer', async function () {
+		const { page } = browserTests;
+		await page.goto('/statusbar.html');
+		const bar = page.locator('[data-part="statusbar"]');
+		for (const host of [
+			{ runtime: 'electron', os: 'windows' },
+			{ runtime: 'web', os: 'windows' },
+			{ runtime: 'electron', os: 'linux' },
+			{ runtime: 'electron', os: 'mac' },
+		]) {
+			await bar.evaluate((element, host) => {
+				const root = element.closest<HTMLElement>('.ash-workbench')!;
+				root.dataset.runtime = host.runtime;
+				root.dataset.os = host.os;
+			}, host);
+			const label = page.getByRole('button', { name: 'Branch main', exact: true });
+			await label.hover();
+			const gaps = await bar.evaluate(element => {
+				const bounds = element.getBoundingClientRect();
+				return [...element.querySelectorAll('.ash-statusbar-item-label')].map(label => {
+					const item = label.getBoundingClientRect();
+					return { top: item.top - bounds.top, bottom: bounds.bottom - item.bottom };
+				});
+			});
+			assert.equal(gaps.length, 3);
+			for (const gap of gaps) assert.ok(Math.abs(gap.top - gap.bottom) < 0.01, JSON.stringify({ host, gap }));
+		}
+	});
+
 	test('status bar hides a presentation while retaining its live entry and restores profile visibility after reload', async function () {
 		const { page } = browserTests;
 

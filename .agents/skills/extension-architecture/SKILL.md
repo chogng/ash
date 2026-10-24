@@ -7,6 +7,8 @@ description: Design or review Ash core, Electron/Rust-V8 TS/JS extensions, and i
 
 权威边界与当前缺口见 [扩展架构与编辑器接入](../../../docs/editor-extensions.md#0-确定的产品方向)，目标命名、根目录 SDK 与来源边界见[共享接入与语言适配](../../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界)，Plugin bundle 来源见 [Plugins](../../../docs/plugins.md)。先读受影响章节与当前代码，再决定 owner；目标设计不能当作已有运行能力。
 
+实际新增或修改扩展时，使用 [extension-development](../extension-development/SKILL.md) 衔接 SDK、包构建与运行验证；本技能维护归属和生命周期决策。
+
 ## 决策边界
 
 - 核心保留 Agent/Thread/Turn 权威状态、执行契约、最终权限裁决与通用存储、秘密、网络和进程机制。具体服务商认证、API 与可选产品工作流由扩展 Provider 拥有。

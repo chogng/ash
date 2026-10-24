@@ -15,6 +15,6 @@ export async function initializeBrowserLocalization(files: Pick<IFileService, 'r
 	const values = parseJsonc(source) as Record<string, unknown>;
 	if (!values || typeof values !== 'object' || Array.isArray(values)) throw new TypeError('Settings must be an object');
 	const preference = values['workbench.locale'];
-	const catalog = await resolveLanguagePackCatalog(typeof preference === 'string' ? preference : 'en', productLanguagePackCatalogs, store);
+	const catalog = await resolveLanguagePackCatalog(typeof preference === 'string' ? preference : 'en', productLanguagePackCatalogs, store, { preferStartupCatalogs: import.meta.env?.DEV === true });
 	setNlsMessages(catalog.locale, catalog.bundles);
 }

@@ -719,6 +719,13 @@
     "projects.loadFailed": "无法加载项目。请重试。",
     "projects.saveFailed": "无法保存项目。请重试。",
     "projects.breadcrumb": "项目导航",
+    "projects.pin": "置顶 {0}",
+    "projects.unpin": "取消置顶 {0}",
+    "projects.actions": "{0} 的项目操作",
+    "projects.archive": "归档",
+    "projects.delete": "删除",
+    "projects.deleteConfirm": "删除项目“{0}”？",
+    "projects.deleteDetail": "将移除此项目及其资料引用。会话和原始文件将保留。",
     "projects.search": "搜索项目",
     "projects.sort": "反转名称排序",
     "projects.new": "新建项目",
@@ -740,6 +747,7 @@
     "projects.noMaterials": "为此项目添加第一份资料。",
     "projects.removeMaterial": "从项目中移除 {0}",
     "projects.useFolder": "使用文件夹",
+    "projects.useFolderTooltip": "当你在这台计算机上使用此项目时，Ash 可以在此文件夹中工作。",
     "projects.referenceHint": "文件保留在原位置。",
     "projects.addMaterials": "添加项目资料",
     "projects.pickFailed": "无法添加这些资料。请重试。",
@@ -749,7 +757,6 @@
     "projects.descriptionLabel": "你希望达成什么目标？",
     "projects.descriptionPlaceholder": "描述你的项目、目标、主题等…",
     "projects.createTitle": "创建项目",
-    "projects.close": "关闭",
     "projects.cancel": "取消",
     "projects.reloadMerge": "重载并合并",
     "projects.editConflict": "此项目已在其他窗口中更改。重载并合并可保留草稿，并包含已保存的更改。",
@@ -766,6 +773,6 @@
     "projects.verbosityInvalid": "项目辅助功能提示设置必须为布尔值。",
     "projects.verbosityTitle": "项目无障碍帮助",
     "projects.verbosityDescription": "当项目获得焦点时，播报如何打开无障碍帮助。",
-    "projects.help": "项目将工作整理为具名空间。标题栏的侧栏开关可隐藏或显示全局导航，并保留当前项目页面。使用 Tab 前往搜索、排序和新建项目。在项目卡片内使用方向键、Home 和 End，按 Enter 打开项目。创建项目时填写名称与目标，也可以选择文件夹。在项目中，编辑详情可修改名称和目标。如果其他窗口更改了项目，重载并合并可保留草稿并包含已保存的资料。若两个版本修改了同一字段，请选择要保留的值，然后保存。添加文件支持图片、PDF、文档和其他类型。使用文件夹可添加文件夹引用。文件保留在原位置，移除仅解除项目中的引用。打开文件可使用对应编辑器；打开文件夹可选择其中的文件。Escape 关闭创建弹窗并恢复焦点。面包屑中的项目返回项目列表。<keybinding:editor.action.accessibleView> 朗读当前项目与资料名称。"
+    "projects.help": "项目将工作整理为具名空间。标题栏的侧栏开关可隐藏或显示全局导航，并保留当前项目页面。使用 Tab 前往搜索、排序和新建项目。在项目卡片内使用方向键、Home 和 End，按 Enter 打开项目。卡片上的置顶按钮会记住此用户配置的置顶状态。悬停或键盘聚焦卡片可显示更多操作，包含编辑详情、归档和删除。归档会从当前列表隐藏项目；删除会移除项目引用并保留会话和原始文件。创建项目时填写名称与目标，也可以选择文件夹。在项目中，编辑详情可修改名称和目标。如果其他窗口更改了项目，重载并合并可保留草稿并包含已保存的资料。若两个版本修改了同一字段，请选择要保留的值，然后保存。添加文件支持图片、PDF、文档和其他类型。使用文件夹可添加文件夹引用。文件保留在原位置，移除仅解除项目中的引用。打开文件可使用对应编辑器；打开文件夹可选择其中的文件。Escape 关闭创建弹窗并恢复焦点。标题栏面包屑中的项目返回项目列表。<keybinding:editor.action.accessibleView> 朗读当前项目与资料名称。"
   }
 }

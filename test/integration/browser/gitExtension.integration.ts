@@ -275,7 +275,7 @@ const decorationProviders = new Set<IDecorationsProvider>();
 const scmContexts = lifetime.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, scmContexts);
 const timeline = lifetime.add(new TimelineService(scmContexts, {} as IViewsService, new NullLoggerService()));
-const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(String(error)), CommandsRegistry, host, scm, view, commands, resolvers, quickDiff, { registerDecorationsProvider: (provider: IDecorationsProvider) => { decorationProviders.add(provider); return toDisposable(() => { decorationProviders.delete(provider); }); } } as unknown as IDecorationsService, scmContexts, timeline));
+const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(String(error)), CommandsRegistry, host, scm, view, commands, resolvers, quickDiff, { registerDecorationsProvider: (provider: IDecorationsProvider) => { decorationProviders.add(provider); return toDisposable(() => { decorationProviders.delete(provider); }); } } as unknown as IDecorationsService, scmContexts, timeline, { activeGroup: { inputs: [] } } as unknown as IEditorPart));
 const hostChanges = host.onDidChange(() => { void host.list().then(snapshot => bridge.update(snapshot)); });
 lifetime.add(toDisposable(() => hostChanges.dispose()));
 let scmUpdateGate: DeferredPromise<void> | undefined;

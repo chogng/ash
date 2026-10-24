@@ -12,7 +12,7 @@ import { IDialogMainService } from '../../dialogs/electron-main/dialogMainServic
 import { ILifecycleMainService } from '../../lifecycle/electron-main/lifecycleMainService.js';
 import { Disposable, toDisposable, type DisposableStore, type IDisposable } from '../../../base/common/lifecycle.js';
 import { WindowMode, LoadReason, type ILoadEvent, type ICodeWindow, type IWindowBounds, type IWindowState } from '../../window/electron-main/window.js';
-import { WINDOW_ZOOM_CHANGED_CHANNEL, type TitleBarStyleConfiguration } from '../../window/common/window.js';
+import { WINDOW_ZOOM_CHANGED_CHANNEL, WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, type IWindowClientSize, type TitleBarStyleConfiguration } from '../../window/common/window.js';
 import {
 	applyWindowState, resolveBrowserWindowOptions, resolveWindowTitleBarOptions, restoreWindowBounds, WindowControlsOverlay,
 	type IWindowConstructorOptions, type IWindowWebPreferences,
@@ -64,6 +64,8 @@ export interface ICodeWindowHandle<TWindow = Electron.BrowserWindow> {
 	show(): void;
 	getBounds(): IWindowBounds;
 	setBounds(bounds: IWindowBounds): void;
+	hookWindowMessage(message: number, callback: (wParam: Buffer, lParam: Buffer) => void): void;
+	unhookWindowMessage(message: number): void;
 	setTitleBarOverlay(colors: { color: string; symbolColor: string; height: number; }): void;
 	maximize(): void;
 	setFullScreen(fullscreen: boolean): void;
@@ -113,6 +115,7 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 	private readonly controls: WindowControlsOverlay;
 	private readonly titleBarStyle: TitleBarStyleConfiguration;
 	private readonly reopen: () => Promise<void>;
+	private clientSize: IWindowClientSize | undefined;
 
 	constructor(
 		createWindow: (options: IWindowConstructorOptions & Pick<IWindowCreationOptions, 'title' | 'icon' | 'tabbingIdentifier'>) => TWindow,
@@ -145,6 +148,28 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 			throw error;
 		}
 		const window = this.win;
+		if (process.platform === 'win32') {
+			// getContentBounds() has already rounded through integer DIPs. WM_SIZE
+			// retains the actual drawable pixel boundary at fractional display scales.
+			let pending: ReturnType<typeof setImmediate> | undefined;
+			window.hookWindowMessage(0x0005, (wParam, lParam) => {
+				if (wParam.byteLength < 4 || lParam.byteLength < 4 || wParam.readUInt32LE() === 1) return;
+				const width = lParam.readUInt16LE(0);
+				const height = lParam.readUInt16LE(2);
+				if (!width || !height || this.clientSize?.width === width && this.clientSize.height === height) return;
+				this.clientSize = { width, height };
+				pending ??= setImmediate(() => {
+					pending = undefined;
+					if (!this.isDisposed && !window.isDestroyed() && !window.webContents.isDestroyed()) {
+						this.send(WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, this.clientSize);
+					}
+				});
+			});
+			this._register(toDisposable(() => {
+				if (pending !== undefined) clearImmediate(pending);
+				if (!window.isDestroyed()) window.unhookWindowMessage(0x0005);
+			}));
+		}
 		this.controls = new WindowControlsOverlay(colors => {
 			if ((options.titleBarStyle ?? 'custom') === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) {
 				window.setTitleBarOverlay(colors);
@@ -280,6 +305,7 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 	}
 
 	public getBounds(): IWindowBounds { return this.win.getBounds(); }
+	public getClientSize(): IWindowClientSize | undefined { return this.clientSize; }
 	public isFullScreen(): boolean { return this.win.isFullScreen(); }
 
 	public serializeWindowState(): IWindowState & IWindowBounds {

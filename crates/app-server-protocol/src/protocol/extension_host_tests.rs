@@ -174,6 +174,31 @@ fn invoke_read_uses_disjoint_tagged_terminal_states() {
 }
 
 #[test]
+fn invocation_completion_notification_has_only_the_connection_owned_identity() {
+    use crate::protocol::registry::ServerNotification;
+    use crate::protocol::registry::decode_server_notification;
+
+    let notification = decode_server_notification(
+        "extensionHost/invoke/completed".into(),
+        json!({"invocationId": "eh-7-1"}),
+    )
+    .unwrap();
+    assert!(matches!(
+        notification,
+        ServerNotification::ExtensionHostInvokeCompleted(value) if value.invocation_id == "eh-7-1"
+    ));
+    for invalid in [
+        json!({}),
+        json!({"invocationId": 1}),
+        json!({"invocationId": "eh-7-1", "owner": 8}),
+    ] {
+        assert!(
+            decode_server_notification("extensionHost/invoke/completed".into(), invalid).is_err()
+        );
+    }
+}
+
+#[test]
 fn activation_intent_is_fenced_and_closed_without_granting_process_identity() {
     for event in [
         json!({"type":"capability","capability":"math.render.v2"}),

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Emitter, Event, type Event as EventContract } from '../../../../base/common/event.js';
 import { URI } from '../../../../base/common/uri.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { FileService } from '../../../files/common/fileService.js';
 import { FileSystemProviderCapabilities, IFileService } from '../../../files/common/files.js';
@@ -13,6 +14,62 @@ import { TestUriIdentityServices } from './uriIdentityTestServices.js';
 
 suite('Provider-aware URI identity', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('reuses comparison keys and refreshes the same URI after provider path identity changes', () => {
+		using changes = new Emitter<void>();
+		let reads = 0;
+		let path = '/first';
+		const provider = new class extends MemoryFileService {
+			readonly onDidChangePathIdentity = changes.event;
+			retainPathIdentity() { return Disposable.None; }
+			async resolvePathIdentity(): Promise<void> { }
+			getPathIdentity(resource: URI) {
+				reads++;
+				return { comparisonResource: resource.with({ path }) };
+			}
+		}([]);
+		using files = new FileService();
+		using registration = files.registerProvider('identity', provider);
+		using services = new TestUriIdentityServices(files);
+		const identity = services.get(IUriIdentityService);
+		const resource = URI.parse('identity:/File?revision=1#one');
+		const full = identity.extUri.getComparisonKey(resource);
+		const withoutFragment = identity.extUri.getComparisonKeyIgnoringFragment(resource);
+		assert.notEqual(full, withoutFragment);
+		for (let index = 0; index < 10; index++) {
+			assert.equal(identity.extUri.getComparisonKey(resource), full);
+			assert.equal(identity.extUri.getComparisonKeyIgnoringFragment(resource), withoutFragment);
+		}
+		assert.equal(reads, 2);
+		assert.notEqual(identity.extUri.getComparisonKey(resource.with({ query: 'revision=2' })), full);
+		assert.notEqual(identity.extUri.getComparisonKey(resource.with({ fragment: 'two' })), full);
+		assert.equal(identity.extUri.getComparisonKeyIgnoringFragment(resource.with({ fragment: 'two' })), withoutFragment);
+		path = '/second';
+		changes.fire();
+		assert.notEqual(identity.extUri.getComparisonKey(resource), full);
+		assert.notEqual(identity.extUri.getComparisonKeyIgnoringFragment(resource), withoutFragment);
+	});
+
+	test('invalidates warmed URI keys on capability changes and provider replacement', () => {
+		using changes = new Emitter<void>();
+		using files = new FileService();
+		using services = new TestUriIdentityServices(files);
+		const identity = services.get(IUriIdentityService);
+		const lower = URI.parse('identity:/file#anchor');
+		const upper = URI.parse('identity:/FILE#anchor');
+		assert.equal(identity.extUri.isEqual(lower, upper), false);
+		const provider = new IdentityProvider(false, changes.event);
+		const registration = files.registerProvider('identity', provider);
+		assert.equal(identity.extUri.isEqual(lower, upper), true);
+		provider.capabilities |= FileSystemProviderCapabilities.PathCaseSensitive;
+		changes.fire();
+		assert.equal(identity.extUri.isEqual(lower, upper), false);
+		assert.notEqual(identity.extUri.getComparisonKeyIgnoringFragment(lower), identity.extUri.getComparisonKeyIgnoringFragment(upper));
+		registration.dispose();
+		using replacement = files.registerProvider('identity', new IdentityProvider(false));
+		assert.equal(identity.extUri.isEqual(lower, upper), true);
+		assert.equal(identity.extUri.getComparisonKeyIgnoringFragment(lower), identity.extUri.getComparisonKeyIgnoringFragment(upper));
+	});
 
 	test('provider capabilities select path casing independently of the renderer OS', () => {
 		using files = new FileService();

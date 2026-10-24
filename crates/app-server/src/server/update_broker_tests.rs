@@ -26,6 +26,31 @@ use core_api::HookEventDecision;
 
 struct RecordingHooks(std::sync::mpsc::Sender<HookEventRequest>);
 
+#[test]
+fn invocation_completion_is_sent_only_to_its_live_owning_connection() {
+    let broker = UpdateBroker::default();
+    let owner = NotificationQueue::default();
+    let other = NotificationQueue::default();
+    broker.register(7, false, &owner);
+    broker.register(8, false, &other);
+
+    broker.publish_extension_host_invocation_completed(7, "eh-7-1");
+    assert_eq!(
+        owner.drain(),
+        vec![serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "extensionHost/invoke/completed",
+            "params": {"invocationId": "eh-7-1"}
+        })]
+    );
+    assert!(other.drain().is_empty());
+
+    broker.unregister(7);
+    broker.publish_extension_host_invocation_completed(7, "eh-7-2");
+    assert!(owner.drain().is_empty());
+    assert!(other.drain().is_empty());
+}
+
 impl HookService for RecordingHooks {
     fn has_enabled_event(&self, _: HookEvent) -> bool {
         true

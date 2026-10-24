@@ -20,12 +20,25 @@
 }
 
 .ash-binary-editor-content {
-	min-width: max-content;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
 	margin: 0;
-	padding: var(--ash-spacing-size120);
-	overflow: auto;
+	overflow: hidden;
 	font-family: var(--ash-font-family-monospace, monospace);
 	font-size: var(--ash-fontSize-body2);
 	line-height: 1.5;
 	user-select: text;
+}
+
+.ash-binary-byte-original {
+	background: var(--ash-diffEditor-removedTextBackground);
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+}
+
+.ash-binary-byte-modified {
+	background: var(--ash-diffEditor-insertedTextBackground);
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
 }

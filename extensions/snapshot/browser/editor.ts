@@ -1,18 +1,24 @@
-import type { ImageEditorInput, ImageEditorCompletion } from '@ash/sdk';
+import type { ImageEditorInput, ImageEditorCompletion, ImageEditorPermissionAction } from '@ash/sdk';
 import { ScreenshotEditor } from './screenshotEditor.js';
 import { renderCodeImage } from './codeImage.js';
 import { setMessages } from '../common/nls.js';
 import { addDisposableListener, DisposableStore } from './lifecycle.js';
+import { createScreenPermissionGuide } from './permissionGuide.js';
 
 const lifetime = new DisposableStore();
 let editor: ScreenshotEditor | undefined;
 let completion: { resolve(value: boolean): void; reject(error: Error): void; } | undefined;
+let permissionResult: { resolve(value: boolean): void; reject(error: Error): void; } | undefined;
 let initialized = false;
 lifetime.add(addDisposableListener(window, 'message', event => {
 	if (event.source !== parent || !event.data || typeof event.data !== 'object') return;
 	if (event.data.type === 'completed') {
 		if (event.data.error) completion?.reject(new Error(event.data.error)); else completion?.resolve(event.data.accepted === true);
 		completion = undefined;
+	} else if (event.data.type === 'permissionResult') {
+		if (event.data.error) permissionResult?.reject(new Error(event.data.error));
+		else permissionResult?.resolve(event.data.accepted === true);
+		permissionResult = undefined;
 	} else if (event.data.type === 'initialize' && !initialized) {
 		initialized = true;
 		void open(event.data as ImageEditorInput).catch(error => { parent.postMessage({ type: 'complete', result: { kind: 'error', message: String(error).slice(0, 4096) } }, '*'); });
@@ -50,6 +56,17 @@ async function open(input: ImageEditorInput): Promise<void> {
 	for (const [key, value] of Object.entries(appearance)) document.documentElement.style.setProperty(`--snapshot-${key}`, value);
 	for (const [index, value] of metrics.spacing.entries()) document.documentElement.style.setProperty(`--snapshot-spacing-${index + 1}`, value);
 	document.documentElement.dataset.colorScheme = input.colorScheme;
+	if (input.permission) {
+		lifetime.add(createScreenPermissionGuide(document, input.permission, state?.accessibilityHints !== false, (action: ImageEditorPermissionAction) => {
+			if (permissionResult) return Promise.resolve(false);
+			return new Promise<boolean>((resolve, reject) => {
+				permissionResult = { resolve, reject };
+				parent.postMessage({ type: 'permission', action }, '*');
+			});
+		}));
+		parent.postMessage({ type: 'ready' }, '*');
+		return;
+	}
 	const image = input.code ? await renderCodeImage(document, input.code, state!.code!) : input.image!;
 	editor = await ScreenshotEditor.create(document, image, {
 		defaultAction: input.defaultAction,

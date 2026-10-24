@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
-import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { JSDOM } from 'jsdom';
+import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IProjectService, type Project, type ProjectMaterial } from '../../../../../platform/projects/common/projectService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -18,7 +21,12 @@ class ProjectsFixture extends Disposable {
 
 	constructor() {
 		super();
+		const browser = new JSDOM('', { url: 'https://projects.test' });
+		const storage = this._register(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'projects-test', flushInterval: 0, onError: error => { throw error; } }));
+		this._register(toDisposable(() => browser.window.close()));
+		this.services.registerInstance(IStorageService, storage);
 		this.services.registerInstance(IProjectService, {
+			addSession: async () => { throw new Error("Unexpected project membership change"); },
 			onDidChange: this.changed.event,
 			list: async () => this.pending ? this.pending.p : [...this.projects],
 			read: async id => this.projects.find(project => project.id === id)!,
@@ -33,12 +41,50 @@ class ProjectsFixture extends Disposable {
 				this.projects = this.projects.map(value => value.id === project.id ? saved : value);
 				this.changed.fire(); return saved;
 			},
+			archive: async project => {
+				if (this.failure) { throw this.failure; }
+				const saved = { ...this.projects.find(value => value.id === project.id)!, archived: true, revision: project.revision + 1 };
+				this.projects = this.projects.map(value => value.id === project.id ? saved : value);
+				this.changed.fire(); return saved;
+			},
+			remove: async project => {
+				if (this.failure) { throw this.failure; }
+				this.projects = this.projects.filter(value => value.id !== project.id);
+				this.changed.fire();
+			},
 		});
 		this.projectsView = this._register(this.services.createInstance(ProjectsService));
 	}
 }
 
 suite('Projects browsing', () => {
+	test('pinning is profile state shared by retained views and sorts pinned projects first', async () => {
+		using fixture = new ProjectsFixture();
+		await fixture.projectsView.create('a', 'Alpha', '', []);
+		await fixture.projectsView.create('z', 'Zebra', '', []);
+		fixture.projectsView.togglePinned('z');
+		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.id), ['z', 'a']);
+		using restored = fixture.services.createInstance(ProjectsService);
+		assert.equal(restored.isPinned('z'), true);
+		restored.togglePinned('z');
+		assert.equal(fixture.projectsView.isPinned('z'), false);
+		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.id), ['a', 'z']);
+	});
+
+	test('archive and delete update the owning catalog and clear unavailable selection and pin state', async () => {
+		using fixture = new ProjectsFixture();
+		await fixture.projectsView.create('archive', 'Archive', '', []);
+		assert.equal(await fixture.projectsView.archive(fixture.projects[0]), true);
+		assert.equal(fixture.projectsView.state.get().selectedId, undefined);
+		assert.deepEqual(fixture.projectsView.getProjects(), []);
+		await fixture.projectsView.create('delete', 'Delete', '', []);
+		fixture.projectsView.togglePinned('delete');
+		assert.equal(await fixture.projectsView.remove(fixture.projects.find(project => project.id === 'delete')!), true);
+		assert.equal(fixture.projectsView.isPinned('delete'), false);
+		assert.equal(fixture.projectsView.state.get().selectedId, undefined);
+		assert.deepEqual(fixture.projects.map(project => project.id), ['archive']);
+	});
+
 	test('creates a project containing multiple material types and restores it through its owner', async () => {
 		using fixture = new ProjectsFixture();
 		const materials: ProjectMaterial[] = ['paper.pdf', 'photo.png', 'budget.xlsx'].map(name => ({ name, resource: URI.file(`/materials/${name}`), kind: 'file' }));

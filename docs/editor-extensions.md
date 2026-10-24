@@ -163,6 +163,7 @@ PDF.js 和 Worker 随扩展客户端打包，JS／CSS 摘要覆盖其字节。�
 扩展不能访问内部模型或复制其状态。公开接口与视图消息见 [TS SDK](../sdk/typescript/README.md)。
 `workbench/services/imageEditor` 拥有 Provider 注册与交互生命周期；
 `platform/imageView` 只负责系统取屏、隔离原生窗口和图像输出，不解释代码选区或 Chat 数据。
+macOS 权限引导的布局、文案与交互由 Snapshot 扩展拥有；宿主提供当前应用标识、图标和有限的系统设置、拖动、路径复制及权限检查操作，只向权限引导窗口开放。
 Chat 通过图像服务注册附件接收逻辑，自己绑定草稿取消、截图命令和既有快捷键偏好；
 全局按键使用 `platform/globalKeybindings` 的窗口租约。SDK adapter 不导入 Chat 贡献或调用其命令。
 
@@ -214,7 +215,9 @@ Skill、Plugin、编辑器扩展、MCP 和服务账号共用详情头部模板�
 
 IDE 和 Agent Window 共用 Extensions 入口，默认包含可折叠的 Skills、Plugins、Connectors 和 Recommended 窗格，选中项在右侧编辑器打开详情；Connectors 同时展示外部服务连接与 MCP 服务器，详情和手动配置保留 MCP 技术名称。产品分类不意味着所有能力已有独立窗格或共用运行状态。前端本地 Plugin 包管理契约归 `platform/extensionManagement`，后端仍拥有安装、启用和授权状态。
 
-四类详情共用已注册的 Extensions Editor：头部展示身份与操作，标签栏切换详情、功能、权限、工具或技能说明与诊断，主内容旁展示安装／来源等信息；窄编辑器把信息栏移到内容下方。编辑器扩展通过现有资源加载服务读取 README、图标和发布者信息，README 经过 Markdown 清理且不执行命令链接；资源缺失时展示目录简介。缺少下载量、评分等元数据时不生成对应统计。Skills 说明按需读取，安装和授权动作继续使用原有领域服务。
+四类详情共用已注册的 Extensions Editor：头部展示身份与操作，标签栏切换详情、功能、权限、工具或技能说明与诊断，主内容旁展示安装／来源等信息；窄编辑器把信息栏移到内容下方。编辑器扩展通过现有资源加载服务读取 README、图标和作者署名，README 经过 Markdown 清理且不执行命令链接；资源缺失时展示目录简介。缺少下载量、评分等元数据时不生成对应统计。Skills 说明按需读取，安装和授权动作继续使用原有领域服务。
+
+插件列表依次显示名称、发布者和描述。发布者显示使用清单 `author` 的姓名字符串或 `{ name }`，详情、搜索和无障碍名称保持一致；未声明时省略该行。内部 `publisher` 继续用于包命名空间和身份校验。
 
 Recommended 读取各工作区文件夹的 `.ash/extensions.json`，以及多根工作区文件中的顶层 `extensions` 对象。配置支持 JSONC，`recommendations` 声明推荐 ID，`unwantedRecommendations` 排除 ID；合并时忽略大小写并去重，任一工作区声明的排除项适用于合并结果。现有记录可能包含 Open VSX 的 `publisher.name`；Ash 包使用目录中的完整 ID，退休旧来源不能改写已有包的来源身份。读取遵循当前文件服务的授权范围，不可访问的配置会显示诊断。文件修改自动刷新；无效编辑显示诊断并保留当前工作区的上次有效配置，删除文件则清空对应声明。推荐只提供发现入口，安装和权限审核继续由包详情处理。
 
@@ -936,6 +939,12 @@ snippet owner 更换后，下一次刷新会重新交付资源，即使扩展快
 独立 control request；cancel grace 内没有 terminal response 时返回 unknown outcome，终止旧进程并进入
 recovery。不能把 timeout 映射为“未执行”。connection 断开时 App Server 必须取消该 connection 拥有的
 invocation，防止后台结果泄漏或孤儿 lease。
+
+调用通过 `extensionHost/invoke/start` 分配 connection-owned ID，再以 `extensionHost/invoke/read`
+读取状态。结果保存后，后端只向发起连接发送 `extensionHost/invoke/completed`；客户端收到通知后读取
+terminal result，不按固定间隔轮询。客户端先订阅，再 start；若通知早于 start response，客户端立即
+读取一次以覆盖该竞态，其余调用在完成通知后读取。terminal read 或显式 discard 释放结果；等待通知
+期间的取消、deadline 与断连仍按同一调用归属清理，通知不携带结果副本。
 
 Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终止 process tree，并在 authority
 仍有效且 restart budget 未耗尽时重新 Initialize/Activate。空闲 crash 由 App Server health loop 调用

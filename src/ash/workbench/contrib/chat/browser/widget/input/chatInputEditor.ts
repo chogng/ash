@@ -20,6 +20,17 @@ import { CHAT_INPUT_LANGUAGE_ID, createChatCommandCompletionProvider, createChat
 import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
 import { InlineChatAttachmentWidget } from '../../attachments/chatAttachmentWidgets.js';
 import { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
+import { ICodeEditorService } from '../../../../../../editor/browser/services/codeEditorService.js';
+import { InjectedTextCursorStops, TrackedRangeStickiness, type IModelDecorationOptions } from '../../../../../../editor/common/model.js';
+import { MarkdownString } from '../../../../../../base/common/htmlContent.js';
+import { dynamicVariableDecorationType } from '../../attachments/chatDynamicVariables.js';
+import { registerChatInputReferenceDecorationType } from './editor/chatInputReferenceDecorations.js';
+import { localize } from '../../../../../../nls.js';
+import { URI } from '../../../../../../base/common/uri.js';
+import { createUuid } from '../../../../../../base/common/uuid.js';
+import { basename } from '../../../../../../base/common/resources.js';
+import { IEditorService } from '../../../../../services/editor/common/editorService.js';
+import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 
 const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 // The input container owns the inset; editor heights exclude it to avoid applying it twice.
@@ -41,8 +52,20 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	private readonly maximumHeight: number;
 	private readonly tabFocusMode: boolean;
 	private readonly referenceWidgets = new Map<string, InlineChatAttachmentWidget>();
+	private readonly referenceStyle: IModelDecorationOptions;
+	private referenceDecorations: string[] = [];
+	private codeReferences: readonly ChatContextAttachment[] = [];
+	private readonly snapshotResources = new WeakMap<ChatContextAttachment['resolve'], URI>();
 
-	constructor(options: ChatInputEditorOptions, @IInstantiationService private readonly instantiationService: IInstantiationService, @IConfigurationService private readonly configurationService: IConfigurationService, @IContextViewService private readonly contextViews: IContextViewService) {
+	constructor(
+		options: ChatInputEditorOptions,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IContextViewService private readonly contextViews: IContextViewService,
+		@ICodeEditorService codeEditors: ICodeEditorService,
+		@IEditorService private readonly editors: IEditorService,
+		@INotificationService private readonly notifications: INotificationService,
+	) {
 		super();
 		this.minimumHeight = options.height?.minimum ?? CHAT_INPUT_MIN_HEIGHT;
 		this.maximumHeight = options.height?.maximum ?? CHAT_INPUT_MAX_HEIGHT;
@@ -58,7 +81,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			createChatSkillCompletionProvider(options.skills),
 		];
 		// Keep basic text commands alongside Chat features; unrelated editor features add work to every Chat tab.
-		const contributionIds = [EditorCoreCommandId.selectAll, 'editor.contrib.placeholderText', 'editor.contrib.suggestController'];
+		const contributionIds = [EditorCoreCommandId.selectAll, 'editor.contrib.placeholderText', 'editor.contrib.suggestController', 'editor.contrib.hover'];
 		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
 			container: this.element,
 			model: this.model,
@@ -78,11 +101,18 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			completionProviders,
 			completionWidgetContainer: this.element,
 		}));
+		this._register(registerChatInputReferenceDecorationType(codeEditors));
+		this.referenceStyle = codeEditors.resolveDecorationOptions(dynamicVariableDecorationType, false);
 		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));
 		this._register(toDisposable(() => { for (const widget of this.referenceWidgets.values()) widget.dispose(); this.referenceWidgets.clear(); }));
 		this._register(this.editor.onMouseUp(event => {
 			if (!event.event.leftButton || !event.target.position || !this.editor.getSelection()?.isEmpty()) return;
 			const offset = this.model.getOffsetAt(event.target.position);
+			const context = this.codeReferences.find(context => offset >= context.reference!.start && offset < context.reference!.end);
+			if (context && event.event.detail === 1 && !event.event.shiftKey && !event.event.altKey && !event.event.ctrlKey && !event.event.metaKey) {
+				void this.openSavedContent(context);
+				return;
+			}
 			for (const widget of this.referenceWidgets.values()) {
 				const reference = widget.attachment.reference!;
 				if (offset >= reference.start && offset < reference.end) { widget.open(); break; }
@@ -98,7 +128,18 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			this._onDidChange.fire(this.value);
 		}));
 		this._register(addDisposableListener(this.editor.controller.element, "keydown", event => {
-			if (event.defaultPrevented || event.isComposing || event.key !== "Enter" || event.shiftKey || this.editor.getOption(EditorOption.readOnly)) return;
+			if (event.defaultPrevented || event.isComposing || event.key !== "Enter" || event.shiftKey) return;
+			if (event.altKey && !event.ctrlKey && !event.metaKey) {
+				stopEvent(event);
+				const selection = this.editor.getSelection();
+				const offset = selection?.isEmpty() ? this.model.getOffsetAt(selection.getPosition()) : -1;
+				const context = this.codeReferences.find(context => offset >= context.reference!.start && offset <= context.reference!.end);
+				if (context) {
+					void this.openSavedContent(context);
+				}
+				return;
+			}
+			if (this.editor.getOption(EditorOption.readOnly)) return;
 			stopEvent(event);
 			this._onDidSubmit.fire();
 		}));
@@ -129,12 +170,61 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	}
 
 	renderContextReferences(references: readonly ChatContextAttachment[], remove: (id: string) => void): void {
-		if (references.length === 0 && this.referenceWidgets.size === 0) return;
-		const ids = new Set(references.map(reference => reference.id));
+		if (references.length === 0 && this.referenceWidgets.size === 0 && this.referenceDecorations.length === 0) return;
+		const inline = references.filter(context => context.reference);
+		this.codeReferences = inline.filter(context => context.kind === 'file' || context.kind === 'codeSelection');
+		const decorations = inline.map(context => {
+			const code = context.kind === 'file' || context.kind === 'codeSelection';
+			const hoverMessage = code || context.kind !== 'image' && context.resource ? new MarkdownString().appendText(context.name) : undefined;
+			if (context.resource && context.resource.scheme !== 'output') hoverMessage?.appendText(`\n${context.resource.toString(true)}`);
+			return {
+				range: Range.fromPositions(this.model.getPositionAt(context.reference!.start), this.model.getPositionAt(context.reference!.end)),
+				options: {
+					description: 'chat-context-reference',
+					// Background geometry belongs to the decoration overlay; text spans only carry foreground styles.
+					className: code ? this.referenceStyle.className : undefined,
+					inlineClassName: code ? [this.referenceStyle.inlineClassName, 'ash-chat-code-reference'].filter(Boolean).join(' ')
+						: context.kind === 'image' ? 'ash-chat-image-reference' : 'ash-chat-context-reference',
+					stickiness: code ? this.referenceStyle.stickiness : TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+					hoverMessage,
+					...(context.kind === 'image' ? {
+						before: { content: '\uFFFC', widthInEm: 2, inlineClassName: 'ash-chat-image-reference-space', cursorStops: InjectedTextCursorStops.None },
+						after: { content: '\uFFFC', widthInEm: 2, inlineClassName: 'ash-chat-image-reference-space', cursorStops: InjectedTextCursorStops.None },
+					} : code ? {} : {
+						...(context.resource || context.terminalSnapshot ? { before: { content: '\uFFFC', widthInEm: 2, inlineClassName: 'ash-chat-context-reference-space', cursorStops: InjectedTextCursorStops.None } } : {}),
+						after: { content: '\uFFFC', widthInEm: 2, inlineClassName: 'ash-chat-context-reference-space', cursorStops: InjectedTextCursorStops.None },
+					}),
+				},
+			};
+		});
+		this.referenceDecorations = this.model.deltaDecorations(this.referenceDecorations, decorations);
+		for (const [index, context] of inline.entries()) {
+			if (context.kind !== 'file' && context.kind !== 'codeSelection') continue;
+			const id = this.referenceDecorations[index]!;
+			const options = decorations[index]!.options;
+			const update = (message: MarkdownString) => {
+				// A delayed snapshot must not revive a removed reference or another draft's hover.
+				if (this.isDisposed || !this.model.getDecorationRange(id)) return;
+				this.model.changeDecorations(accessor => accessor.changeDecorationOptions(id, { ...options, hoverMessage: message }));
+			};
+			// Resolve through the reference's snapshot owner, shared with persistence and submission.
+			void context.resolve().then(resolved => {
+				const text = getReferenceContent(context, resolved.content);
+				const preview = text.split('\n', 13).slice(0, 12).join('\n').slice(0, 4000);
+				const message = MarkdownString.lift(options.hoverMessage!);
+				if (preview) message.appendCodeblock('plaintext', preview);
+				if (preview.length < text.length) message.appendText(localize('chat.context.previewTruncated', 'Preview shortened. The full content is attached.'));
+				else if (!preview) message.appendText(`\n${localize('chat.context.previewEmpty', 'The attached content is empty.')}`);
+				message.appendText(`\n${localize('chat.context.openSavedContentHint', 'Click to open the full saved content, or press Alt+Enter at the reference.')}`);
+				update(message);
+			}, () => update(MarkdownString.lift(options.hoverMessage!).appendText(`\n${localize('chat.context.previewUnavailable', 'Content preview unavailable.')}`)));
+		}
+		const controls = references.filter(context => context.kind !== 'file' && context.kind !== 'codeSelection');
+		const ids = new Set(controls.map(reference => reference.id));
 		for (const [id, widget] of this.referenceWidgets) {
 			if (!ids.has(id)) { widget.dispose(); this.referenceWidgets.delete(id); }
 		}
-		for (const reference of references) {
+		for (const reference of controls) {
 			let widget = this.referenceWidgets.get(reference.id);
 			if (!widget) {
 				widget = this.instantiationService.createInstance(InlineChatAttachmentWidget, this.editor, reference, this.contextViews, () => remove(reference.id));
@@ -142,8 +232,32 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			} else widget.attachment = reference;
 			for (const contentWidget of widget.widgets) this.editor.layoutContentWidget(contentWidget);
 		}
-		this.editor.updateOptions({ ...this.getFontOptions(), tabFocusMode: this.tabFocusMode || references.length > 0 });
+		this.editor.updateOptions({ ...this.getFontOptions(), tabFocusMode: this.tabFocusMode || controls.length > 0 });
 		this.layout();
+	}
+
+	private async openSavedContent(context: ChatContextAttachment): Promise<void> {
+		const isCurrent = () => !this.isDisposed && this.codeReferences.some(current => current.id === context.id && current.resolve === context.resolve);
+		try {
+			const resolved = await context.resolve();
+			if (!isCurrent()) return;
+			let resource = this.snapshotResources.get(context.resolve);
+			if (!resource) {
+				// Separate resource identity keeps snapshots independent of the live source and of each other.
+				resource = URI.from({ scheme: 'chat-context-snapshot', path: `/${createUuid()}/${context.resource ? basename(context.resource) : 'snapshot.txt'}` });
+				this.snapshotResources.set(context.resolve, resource);
+			}
+			await this.editors.openEditor({
+				resource,
+				label: localize('chat.context.savedContentTitle', '{0} — Saved content', context.name),
+				initialText: getReferenceContent(context, resolved.content),
+				readOnly: true,
+				showBreadcrumbs: false,
+				...(context.resource?.scheme === 'output' ? { languageId: 'plaintext' } : {}),
+			}, { pinned: true });
+		} catch (error) {
+			if (isCurrent()) this.notifications.error(localize('chat.context.openSavedContentFailed', 'Could not open saved content for {0}: {1}', context.name, String(error)));
+		}
 	}
 
 	set value(value: string) {
@@ -221,4 +335,9 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		this.element.style.height = `${height}px`;
 		this.layout();
 	}
+}
+
+function getReferenceContent(context: ChatContextAttachment, content: string): string {
+	const source = context.resource ? `Source: ${context.resource.toString()}\n\n` : '';
+	return context.kind === 'codeSelection' && source && content.startsWith(source) ? content.slice(source.length) : content;
 }

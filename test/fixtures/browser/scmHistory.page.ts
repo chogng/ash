@@ -31,6 +31,9 @@ import { TestConfigurationService as WorkbenchConfigurationService } from '../..
 import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
 import type { IEditorOptions } from '../../../src/ash/platform/editor/common/editor.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
+import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { IProgressService } from '../../../src/ash/platform/progress/common/progress.js';
 import { SCMHistoryViewPane } from '../../../src/ash/workbench/contrib/scm/browser/scmHistoryViewPane.js';
 import { ViewPane, ViewPaneShowActions, type IViewPaneOptions } from '../../../src/ash/workbench/browser/parts/views/viewPane.js';
 import { ViewPaneContainer } from '../../../src/ash/workbench/browser/parts/views/viewPaneContainer.js';
@@ -38,7 +41,7 @@ import { ViewContainerLocation, WorkbenchViewRegistry } from '../../../src/ash/w
 import { ViewDescriptorService } from '../../../src/ash/workbench/services/views/browser/viewDescriptorService.js';
 import { SCMViewService } from '../../../src/ash/workbench/contrib/scm/browser/scmViewService.js';
 import { SCMService } from '../../../src/ash/workbench/contrib/scm/common/scmService.js';
-import { ISCMViewService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
+import { ISCMService, ISCMViewService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
 import type { ISCMHistoryItem, ISCMHistoryProvider } from '../../../src/ash/workbench/contrib/scm/common/history.js';
 const resources = new DisposableStore();
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
@@ -51,6 +54,8 @@ const themes = services.get(IThemeService) as TestThemeService;
 themes.setColorTheme(lightColorTheme);
 resources.add(bindTestColorTheme(themes, root));
 services.registerInstance(ILayoutService, { mainContainer: root } as ILayoutService);
+services.registerInstance(ICommandService, resources.add(new CommandService(services)));
+services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
 services.registerInstance(IMenuService, services.createInstance(MenuService));
 services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
 services.registerInstance(IContextMenuService, resources.add(services.createInstance(BrowserContextMenuService)));
@@ -62,6 +67,7 @@ const opened: { resource: string; options: IEditorOptions | undefined; group: un
 services.registerInstance(IEditorService, { openEditor: async (input: IResourceEditorInput, options?: IEditorOptions, group?: unknown) => { opened.push({ resource: input.resource.toString(), options, group }); } } as unknown as IEditorService);
 const scm = resources.add(new SCMService());
 const view = resources.add(new SCMViewService(scm));
+services.registerInstance(ISCMService, scm);
 services.registerInstance(ISCMViewService, view);
 const hash = 'a'.repeat(40);
 const timestamp = 1_700_000_000;
@@ -71,7 +77,17 @@ const historyChanged = resources.add(new Emitter<void>());
 const repositoryChanged = resources.add(new Emitter<void>());
 let repositoryBusy = false;
 let heldHistory: DeferredPromise<void> | undefined;
-let historyItems: readonly ISCMHistoryItem[] | undefined;
+const pagingQuery = new URLSearchParams(location.search);
+const paging = pagingQuery.has('paging');
+if (paging) {
+	await configuration.updateValue('scm.graph.pageSize', 80);
+	await configuration.updateValue('scm.graph.pageOnScroll', !pagingQuery.has('manual'));
+}
+let historyItems: readonly ISCMHistoryItem[] | undefined = paging ? Array.from({ length: 320 }, (_, index) => ({
+	id: `paging-${index}`, parentIds: index < 319 ? [`paging-${index + 1}`] : [],
+	subject: `Paging commit ${index}`, message: `Paging details ${index}`,
+})) : undefined;
+const historyReads: { skip: number; limit: number; }[] = [];
 let changeReads = 0;
 const heldContents = new Map<string, DeferredPromise<void>>();
 const completedContents: string[] = [];
@@ -80,6 +96,7 @@ const provider: ISCMHistoryProvider = {
 	historyItemRef: observableValue('fixture.history.head', undefined),
 	refresh() { },
 	provideHistoryItems: async options => {
+		historyReads.push({ skip: options.skip ?? 0, limit: options.limit ?? 50 });
 		await heldHistory?.p;
 		if (historyItems) return historyItems.slice(options.skip ?? 0, (options.skip ?? 0) + (options.limit ?? 50));
 		return [{ id: hash, displayId: hash.slice(0, 7), parentIds: [], subject, message, tooltip: { authorName: 'History Author', authorEmail: 'history@example.invalid', timestamp: timestamp * 1000, message, statistics: { files: 2, additions: 2, deletions: 0 } }, remoteLinks: [{ name: 'origin', uri: URI.parse(`https://github.com/ash-test/history/commit/${hash}`) }], references: [{ id: 'localBranch:metadata-topic', name: 'metadata-topic', category: 'localBranch' }, { id: 'tag:metadata-v1', name: 'metadata-v1', category: 'tag' }] }];
@@ -124,7 +141,7 @@ const panes = resources.add(services.createInstance(ViewPaneContainer, root, {
 panes.layout({ height: 600, width: 560 });
 panes.setVisible(true);
 const fixture = {
-	hash, timestamp, subject, message, opened,
+	hash, timestamp, subject, message, opened, historyReads,
 	get changeReads(): number { return changeReads; },
 	setRepositoryBusy(value: boolean): void { repositoryBusy = value; repositoryChanged.fire(); },
 	completedContents,
@@ -141,6 +158,8 @@ const fixture = {
 		historyChanged.fire();
 	},
 	beginHistoryRead(): void { heldHistory = new DeferredPromise<void>(); historyChanged.fire(); },
+	holdNextHistoryPage(): void { heldHistory = new DeferredPromise<void>(); },
+	setPageOnScroll(value: boolean): Promise<void> { return configuration.updateValue('scm.graph.pageOnScroll', value); },
 	finishHistoryRead(fail = false): void {
 		const pending = heldHistory;
 		heldHistory = undefined;

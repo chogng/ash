@@ -1,7 +1,7 @@
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import type { ICodeEditor } from '../../../browser/editorBrowser.js';
 import type { Position } from '../../../common/core/position.js';
 import type { Range } from '../../../common/core/range.js';
+import type { Constructor } from '../../../../platform/instantiation/common/descriptors.js';
 
 export interface HoverAnchor {
 	readonly position: Position;
@@ -31,7 +31,7 @@ export interface IEditorHoverParticipant {
 	renderHoverParts(context: IEditorHoverRenderContext, parts: IHoverPart[]): IRenderedHoverParts;
 }
 
-type HoverParticipantConstructor = new (editor: ICodeEditor) => IEditorHoverParticipant;
+type HoverParticipantConstructor = Constructor<IEditorHoverParticipant>;
 
 /** Contributions register behavior; each editor creates its own participants and owns their rendered parts. */
 export const HoverParticipantRegistry = new class {

@@ -26,6 +26,17 @@
 | 主题颜色或标准尺寸       | Design Token             | 修改语义 token，不修改 selector |
 | 某个业务动作的显隐       | Command/Menu/Context Key | 不用 CSS 猜业务状态             |
 
+## 分段切换
+
+[`SegmentedControl`](../src/ash/base/browser/ui/segmentedControl/segmentedControl.ts) 是 Base UI 的通用分段切换控件，拥有选项 DOM、等宽布局、单个选中滑块、键盘导航、ARIA、Hover 与释放链。它不依赖平台服务、命令或业务模型。
+
+- 调用方传入有稳定 ID 的选项、已本地化的名称、当前选中 ID 和 `onActivate`。激活当前选项也会回调；激活请求不自行改变选中值。业务 owner 完成操作后通过 `setSelection` 投影结果，失败时保留原选中值。
+- `label` presentation 显示文字及可选图标，`icon` presentation 仅显示图标；两者均支持两个及以上等宽选项。文字不足时省略并通过所属 Hover 显示全名。禁用选项保留可读的选中状态，但不参与激活和键盘焦点循环。
+- 方向键、Home、End 只移动焦点；Enter、Space 请求激活。焦点轮廓独立于选中滑块，RTL 沿视觉方向导航，减少动态效果时立即定位。
+- 控件内部样式与状态由 `segmentedControl.css` 唯一拥有：单个滑块横向移动，悬停不叠加第二块按钮背景。宿主只设置直接托管根节点的布局、颜色及窗口拖动区域，不穿透修改内部按钮、滑块或焦点。
+
+`WindowModeControl` 是当前的业务适配层，只提供 Chat／Code 选项、文案、图标、Hover delegate、已有命令与可观察选中值绑定。窗口模式与会话状态仍由原服务拥有；其他场景直接复用 `SegmentedControl` 并接入自己的状态 owner。
+
 ## Settings 内容
 
 Preferences 拥有设置页面的搜索、分类、导航、控件和交互样式；功能模块只提供注册配置、

@@ -20,28 +20,54 @@
 	background: var(--ash-dialog-backdropBackground);
 }
 
+.ash-dialog-header {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size160) var(--ash-spacing-size200)
+		var(--ash-spacing-size80);
+}
+
 .ash-dialog-title {
+	flex: 1;
+	min-width: 0;
 	margin: 0;
-	padding: 16px 20px 8px;
+	padding: 0;
 	color: var(--ash-dialog-style-dialog-foreground, var(--ash-foreground));
 	font-size: var(--ash-fontSize-heading2);
 	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-dialog-close {
+	flex-shrink: 0;
+	width: var(--ash-spacing-size280);
+	height: var(--ash-spacing-size280);
+}
+
+.ash-dialog-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.ash-dialog-vertical .ash-dialog-header {
+	flex-wrap: wrap;
+}
+
+.ash-dialog-vertical .ash-dialog-icon {
+	flex-basis: 100%;
 }
 
 .ash-dialog-body {
 	padding: 0 20px 16px;
 }
 
-.ash-dialog-content {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-}
-
 .ash-dialog-message,
 .ash-dialog-detail {
 	margin: 0;
 	overflow-wrap: anywhere;
+	user-select: text;
+	-webkit-user-select: text;
 }
 
 .ash-dialog-message {
@@ -74,8 +100,11 @@
 	width: 100%;
 }
 
-.ash-dialog-content .ash-checkbox {
-	align-self: flex-start;
+.ash-dialog-body
+	> :is(.ash-dialog-detail, .ash-dialog-inputs, .ash-checkbox):not(
+		:first-child
+	) {
+	margin-top: var(--ash-spacing-size80);
 }
 
 .ash-dialog-actions {
@@ -87,6 +116,10 @@
 
 .ash-dialog-actions .ash-button {
 	min-width: 80px;
+}
+
+.ash-dialog-vertical .ash-dialog-actions {
+	flex-direction: column;
 }
 
 .ash-dialog[data-dialog-severity="warning"] {

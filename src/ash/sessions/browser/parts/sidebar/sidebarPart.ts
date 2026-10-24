@@ -102,11 +102,10 @@ export class SidebarPart extends WorkbenchSidebarPart {
 	private readonly topActivityBarHost: HTMLDivElement;
 	private readonly bottomActivityBarHost: HTMLDivElement;
 	public get activityBarAccountHost(): HTMLElement { return this.bottomActivityBarHost; }
-	override get minimumWidth(): number { return 240; }
 	override get maximumWidth(): number { return 520; }
 	override get preferredWidth(): number {
 		const width = this.activeCompositeId ? this.getComposite(this.activeCompositeId)!.getOptimalWidth() : 0;
-		return Math.max(SESSION_SIDEBAR_DEFAULT_WIDTH, width);
+		return Math.max(this.minimumWidth, SESSION_SIDEBAR_DEFAULT_WIDTH, width);
 	}
 	constructor(
 		container: HTMLElement,

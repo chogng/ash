@@ -68,7 +68,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		contentSearch: createDisconnectedContentSearchApi(unavailableOperation),
 		contentSearchConfiguration: createDisconnectedContentSearchConfigurationApi(unavailableOperation),
 		terminal: new DisconnectedTerminalProcessService(unavailableOperation, appServer),
-		projects: { onDidChange: Event.None, list: () => unavailableOperation("project/list"), read: () => unavailableOperation("project/read"), create: () => unavailableOperation("project/create"), update: () => unavailableOperation("project/details/update") },
+		projects: { addSession: () => unavailableOperation("project/session/link"), onDidChange: Event.None, list: () => unavailableOperation("project/list"), read: () => unavailableOperation("project/read"), create: () => unavailableOperation("project/create"), update: () => unavailableOperation("project/details/update"), archive: () => unavailableOperation("project/archive"), remove: () => unavailableOperation("project/delete") },
 		assets: {
 			getCatalog: () => unavailableOperation("asset/catalog"),
 			updateEntry: () => unavailableOperation("asset/catalog/update"),

@@ -1,6 +1,8 @@
-import { raceCancellationError } from '../../../base/common/async.js';
+import { DeferredPromise, raceCancellationError } from '../../../base/common/async.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { CancellationError } from '../../../base/common/errors.js';
+import { type Event } from '../../../base/common/event.js';
+import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { validateRemoteConnectionResolverPrefix } from '../../remote/common/remoteConnectionService.js';
 import { parseLinkPresentation } from '../../dataChannel/common/dataChannel.js';
 import { ExtensionHostInvocationError } from '../common/extensionHostApi.js';
@@ -9,15 +11,15 @@ import type { ExtensionHostFleetSnapshot, ExtensionHostInvocationRequest, Extens
 import type { ExtensionStatusBarEntry, JsonValue } from '../common/extensionHostApi.js';
 
 export interface ExtensionHostInvokeTransport {
+	readonly onDidComplete: Event<string>;
+	readonly onDidDisconnect: Event<Error>;
 	start(request: ExtensionHostInvocationRequest): Promise<unknown>;
 	read(invocationId: string): Promise<unknown>;
 	cancel(invocationId: string, resultRetention: 'retain' | 'discard'): Promise<unknown>;
 }
 
 export interface ExtensionHostInvokeOptions {
-	readonly pollIntervalMillis?: number;
 	readonly now?: () => number;
-	readonly wait?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
 }
 
 const FAILURE_CODES = ["authorityDenied", "staleSnapshot", "isolationUnavailable", "launchFailed", "handshakeFailed", "activationFailed", "registrationNotFound", "operationNotSupported", "cancelled", "deadlineExceeded", "quotaExceeded", "hostExited", "hostRestarted", "outcomeIndeterminate", "crashLoop", "invalidProtocol", "internal"] as const;
@@ -73,18 +75,20 @@ export function normalizeExtensionHostInvocationRequest(value: ExtensionHostInvo
 	});
 }
 
-/** Polls one connection-owned invocation and always requests cancellation on local abandonment. */
+/** Reads a connection-owned result when notified and cancels on local abandonment. */
 export async function invokeExtensionHost(transport: ExtensionHostInvokeTransport, request: ExtensionHostInvocationRequest, signal: AbortSignal, options: ExtensionHostInvokeOptions = {}): Promise<JsonValue> {
 	const normalized = normalizeExtensionHostInvocationRequest(request);
 	throwIfCancelled(signal, "Extension Host invocation cancelled");
-	const pollIntervalMillis = boundedPollInterval(options.pollIntervalMillis ?? 20);
 	const now = options.now ?? Date.now;
-	const wait = options.wait ?? waitForPoll;
 	let invocationId: string | undefined;
+	let completionBeforeStart = false;
 	let terminal = false;
 	let abandoned = false;
 	const deadline = new AbortController();
-	const pendingSignal = AbortSignal.any([signal, deadline.signal]);
+	const disconnected = new AbortController();
+	const pendingSignal = AbortSignal.any([signal, deadline.signal, disconnected.signal]);
+	const completed = new DeferredPromise<void>();
+	const subscriptions = new DisposableStore();
 	let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
 	const scheduleDeadline = () => {
 		const remaining = normalized.deadlineUnixMillis - now();
@@ -98,8 +102,15 @@ export async function invokeExtensionHost(transport: ExtensionHostInvokeTranspor
 			normalizeCancelResult(await raceCancellationError(transport.cancel(id, 'discard'), AbortSignal.timeout(1000)));
 		} catch { /* Preserve the original failure if the connection or cancellation grace expires. */ }
 	};
-	scheduleDeadline();
 	try {
+		// Before the start response supplies our ID, any completion could be ours.
+		// Only that race needs an initial read; otherwise wait and read the result once.
+		subscriptions.add(transport.onDidComplete(id => {
+			if (invocationId === undefined) completionBeforeStart = true;
+			else if (id === invocationId) void completed.complete();
+		}));
+		subscriptions.add(transport.onDidDisconnect(error => disconnected.abort(error)));
+		scheduleDeadline();
 		throwIfCancelled(pendingSignal, "Extension Host invocation cancelled");
 		const started = transport.start(normalized).then(value => {
 			const result = exactRecord(value, "Extension Host invocation start result", ["invocationId"]);
@@ -111,12 +122,15 @@ export async function invokeExtensionHost(transport: ExtensionHostInvokeTranspor
 			return id;
 		});
 		invocationId = await raceCancellationError(started, pendingSignal);
+		if (!completionBeforeStart) await raceCancellationError(completed.p, pendingSignal);
 		while (true) {
 			throwIfCancelled(pendingSignal, "Extension Host invocation cancelled");
 			if (now() >= normalized.deadlineUnixMillis) throw new ExtensionHostInvocationError("deadlineExceeded", "Extension Host invocation deadline elapsed");
+			const notified = completed.isSettled;
 			const result = normalizeReadResult(await raceCancellationError(transport.read(invocationId), pendingSignal));
 			if (result.state === "pending") {
-				await wait(pollIntervalMillis, pendingSignal);
+				if (notified) throw new ExtensionHostInvocationError('invalidProtocol', 'Extension Host completion has no terminal result');
+				await raceCancellationError(completed.p, pendingSignal);
 				continue;
 			}
 			terminal = true;
@@ -126,10 +140,12 @@ export async function invokeExtensionHost(transport: ExtensionHostInvokeTranspor
 		}
 	} catch (error) {
 		if (deadline.signal.aborted && !signal.aborted) throw new ExtensionHostInvocationError("deadlineExceeded", "Extension Host invocation deadline elapsed");
+		if (disconnected.signal.aborted && !signal.aborted) throw disconnected.signal.reason;
 		throw error;
 	} finally {
 		abandoned = true;
 		clearTimeout(deadlineTimer);
+		subscriptions.dispose();
 		if (invocationId !== undefined && !terminal) {
 			await discard(invocationId);
 		}
@@ -502,28 +518,6 @@ function normalizeJsonValue(value: unknown, depth: number, budget: { bytes: numb
 // string per property in a large, valid document/render-tree envelope.
 function jsonValuePath(path: readonly (string | number)[]): string {
 	return 'Extension Host payload' + path.map(part => typeof part === 'number' ? `[${part}]` : `.${part}`).join('');
-}
-
-function waitForPoll(milliseconds: number, signal: AbortSignal): Promise<void> {
-	throwIfCancelled(signal, "Extension Host invocation cancelled");
-	return new Promise((resolve, reject) => {
-		const timeout = setTimeout(done, milliseconds);
-		const cancel = (): void => {
-			clearTimeout(timeout);
-			signal.removeEventListener("abort", cancel);
-			reject(new CancellationError("Extension Host invocation cancelled", signal.reason));
-		};
-		function done(): void {
-			signal.removeEventListener("abort", cancel);
-			resolve();
-		}
-		signal.addEventListener("abort", cancel, { once: true });
-	});
-}
-
-function boundedPollInterval(value: number): number {
-	if (!Number.isSafeInteger(value) || value < 1 || value > 1000) throw new TypeError("Extension Host poll interval is invalid");
-	return value;
 }
 
 function record(value: unknown, owner: string): Record<string, unknown> {

@@ -1,3 +1,5 @@
+import { BrowserImageEditorService } from '../../../workbench/services/imageEditor/browser/browserImageEditorService.js';
+import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
 import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
@@ -317,6 +319,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		getScopes: () => [], getScope: () => { throw new Error('Unexpected host routing'); }, getProviderScope: () => { throw new Error('Unexpected host routing'); },
 		createScope: () => paneServices.createChild(),
 	});
+	paneServices.registerInstance(IImageEditorService, resources.add(paneServices.createInstance(BrowserImageEditorService)));
 	const cowork = resources.add(paneServices.createInstance(CoworkPaneFactory));
 	const part = paneServices.createInstance(SessionsPart, dom.window.document.body, {
 		sessionService,

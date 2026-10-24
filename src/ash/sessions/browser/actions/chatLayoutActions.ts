@@ -1,3 +1,4 @@
+import { IsNativeContext } from '../../../platform/contextkey/common/contextkeys.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { Schemas } from '../../../base/common/network.js';
 import { ChatContextKeys } from '../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
@@ -76,7 +77,6 @@ for (const [orientation, title, id] of [
 
 const ChatBrowserAvailable = ContextKeyExpr.equals("chatBrowserAvailable", true);
 
-const ChatNewWindowAvailable = ContextKeyExpr.equals("chatNewWindowAvailable", true);
 
 registerAction2(class ToggleAgentSessionsSidebarAction extends Action2 {
 	constructor() {
@@ -182,7 +182,7 @@ registerAction2(class MoveChatToNewWindowAction extends Action2 {
 			id: MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID,
 			title: localize2({ bundle: 'ash.sessions', key: 'command.MoveChatToNewWindowAction' }, "Move Chat to New Window"),
 			icon: Lxicon.linkExternal,
-			precondition: ChatNewWindowAvailable,
+			precondition: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), IsNativeContext.isEqualTo(true)),
 			menu: {
 				id: MenuId.ChatTitle,
 				group: "chatActions",
@@ -191,8 +191,9 @@ registerAction2(class MoveChatToNewWindowAction extends Action2 {
 		});
 	}
 
-	override run(): never {
-		throw new Error("Moving Chat to a New Window is not available in this build.");
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const view = await accessor.get(IViewsService).openView(CHAT_VIEW_ID);
+		if (view instanceof ChatViewPane) await view.openInNewWindow();
 	}
 });
 

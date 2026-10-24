@@ -1,9 +1,9 @@
 import { addDisposableListener } from '../../../base/browser/dom.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
-import { validateImageViewCompletion, type ImageViewCompletion } from '../common/imageView.js';
+import { validateImageViewCompletion, validateImageViewPermissionAction, type ImageViewCompletion, type ImageViewPermissionAction } from '../common/imageView.js';
 
 /** Extension HTML runs in an opaque sandbox. Only the finite image-view message contract crosses it. */
-export function createImageViewFrame(document: Document, title: string, html: string, input: object, complete: (result: ImageViewCompletion) => Promise<boolean>, ready: () => void) {
+export function createImageViewFrame(document: Document, title: string, html: string, input: object, complete: (result: ImageViewCompletion) => Promise<boolean>, ready: () => void, permissionAction?: (action: ImageViewPermissionAction) => Promise<boolean>) {
 	const lifetime = new DisposableStore();
 	const originalFocus = document.activeElement as HTMLElement | null;
 	const container = document.createElement('dialog');
@@ -24,6 +24,18 @@ export function createImageViewFrame(document: Document, title: string, html: st
 			frame.contentWindow!.postMessage({ ...input, type: 'initialize' }, '*');
 		} else if (event.data.type === 'ready' && initialized) {
 			ready();
+		} else if (event.data.type === 'permission' && initialized && !pending) {
+			pending = true;
+			void (async () => {
+				try {
+					// Only a host-created consent window receives this capability. Ordinary image
+					// editors cannot invoke OS actions by posting a permission message themselves.
+					if (!permissionAction) throw new Error('Screen permission actions are unavailable');
+					const accepted = await permissionAction(validateImageViewPermissionAction(event.data.action));
+					frame.contentWindow?.postMessage({ type: 'permissionResult', accepted }, '*');
+				} catch (error) { frame.contentWindow?.postMessage({ type: 'permissionResult', error: String(error) }, '*'); }
+				finally { pending = false; }
+			})();
 		} else if (event.data.type === 'complete' && initialized && !pending) {
 			pending = true;
 			void (async () => {

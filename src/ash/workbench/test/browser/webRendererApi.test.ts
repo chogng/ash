@@ -275,7 +275,7 @@ test('Skill adapter exposes immutable domain metadata for enabled, disabled and 
 		diagnostics: [],
 	});
 	const catalog = await listing;
-	const descriptor = { id, description: entry.description, contentDigest, enabled: true, compatible: true };
+	const descriptor = { id, description: entry.description, contentDigest, enabled: true, compatible: true, metadata: {} };
 	assert.deepEqual(catalog, {
 		generation: 4,
 		skills: [descriptor, { ...descriptor, id: { ...id, name: 'disabled' }, enabled: false }, { ...descriptor, id: { ...id, name: 'unknown' }, compatible: false }],

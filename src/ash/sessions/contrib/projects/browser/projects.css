@@ -8,6 +8,7 @@
 	background: var(--ash-editor-background);
 	font-size: var(--ash-fontSize-body1);
 	overflow: auto;
+	user-select: none;
 }
 
 .ash-projects [hidden] {
@@ -75,6 +76,7 @@
 	background: var(--ash-input-background);
 	color: var(--ash-input-foreground);
 	font: inherit;
+	user-select: text;
 }
 
 .ash-projects-search::placeholder,
@@ -153,8 +155,8 @@
 
 .ash-projects-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
-	gap: var(--ash-spacing-size200);
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--ash-spacing-size120);
 	padding: 0;
 	margin: 0;
 	list-style: none;
@@ -164,25 +166,125 @@
 	min-width: 0;
 }
 
-.ash-projects-card {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: var(--ash-spacing-size160);
-	width: 100%;
-	min-height: 168px;
-	padding: var(--ash-spacing-size240);
-	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-cornerRadius-medium);
-	background: var(--ash-editor-background);
-	color: inherit;
-	font: inherit;
-	text-align: left;
-	cursor: pointer;
+.ash-projects-row {
+	position: relative;
+	--ash-projects-card-background: var(--ash-sideBar-background);
 }
 
-.ash-projects-card:hover {
-	background: var(--ash-list-hoverBackground);
+.ash-projects-row:is(:hover, :focus-within, .menu-visible) {
+	--ash-projects-card-background: var(--ash-list-hoverBackground);
+}
+
+.ash-projects .ash-projects-card {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: var(--ash-spacing-size120);
+	width: 100%;
+	min-height: 64px;
+	padding: var(--ash-spacing-size120);
+	padding-inline-end: calc(
+		var(--ash-spacing-size120) + var(--ash-spacing-size280)
+	);
+	border-color: var(--ash-contrastBorder, transparent);
+	background: var(--ash-projects-card-background);
+	color: inherit;
+	line-height: 1.4;
+	text-align: left;
+}
+
+.ash-projects .ash-projects-card:hover {
+	background: var(--ash-projects-card-background);
+}
+
+.ash-projects-card-actions {
+	position: absolute;
+	top: 50%;
+	inset-inline-end: var(--ash-spacing-size120);
+	transform: translateY(-50%);
+}
+
+.ash-projects-card-actions .ash-toolbar-more-actions {
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--ash-animation-durationFast) ease-out;
+}
+
+.ash-projects-card-actions::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	inset-inline-end: 100%;
+	width: var(--ash-spacing-size320);
+	background: linear-gradient(
+		to right,
+		transparent,
+		color-mix(in srgb, var(--ash-projects-card-background) 16%, transparent)
+			25%,
+		color-mix(in srgb, var(--ash-projects-card-background) 50%, transparent)
+			50%,
+		color-mix(in srgb, var(--ash-projects-card-background) 84%, transparent)
+			75%,
+		var(--ash-projects-card-background)
+	);
+	opacity: 0;
+	pointer-events: none;
+}
+
+.ash-projects-row:is(:hover, :focus-within, .menu-visible)
+	.ash-projects-card-actions {
+	background: var(--ash-projects-card-background);
+}
+
+.ash-projects-row:is(:hover, :focus-within, .menu-visible)
+	.ash-toolbar-more-actions {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.ash-projects-row:is(:hover, :focus-within, .menu-visible)
+	.ash-projects-card-actions::before {
+	opacity: 1;
+}
+
+.ash-projects-row:focus-within .ash-toolbar-more-actions {
+	transition: none;
+}
+
+.ash-projects-menu [data-action-id="projects.delete"] {
+	color: var(--ash-error-foreground);
+}
+
+.ash-projects-row:dir(rtl) .ash-projects-card-actions::before {
+	transform: scaleX(-1);
+}
+
+@media (hover: none) {
+	.ash-projects .ash-projects-card {
+		padding-inline-end: calc(
+			var(--ash-spacing-size120) + 2 * var(--ash-spacing-size280)
+		);
+	}
+
+	.ash-projects-card-actions .ash-toolbar-more-actions {
+		opacity: 1;
+		pointer-events: auto;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ash-projects-card-actions .ash-toolbar-more-actions {
+		transition: none;
+	}
+}
+
+.ash-projects-card-content {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--ash-spacing-size20);
+	min-width: 0;
 }
 
 .ash-projects-card-name {
@@ -194,22 +296,51 @@
 }
 
 .ash-projects-card-mark {
-	width: 28px;
-	height: 20px;
-	border: var(--ash-strokeThickness) solid currentColor;
-	border-radius: var(--ash-cornerRadius-small);
+	display: flex;
+	flex: 0 0 var(--ash-spacing-size320);
+	align-items: center;
+	justify-content: center;
+	height: var(--ash-spacing-size320);
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-toolbar-hoverBackground);
 	color: var(--ash-description-foreground);
 }
 
-.ash-projects-card-caption,
+.ash-projects-card-caption {
+	font-size: var(--ash-fontSize-body2);
+	line-height: 1.4;
+	color: var(--ash-description-foreground);
+}
+
 .ash-projects-muted,
 .ash-projects-source-note {
 	color: var(--ash-description-foreground);
 	line-height: 1.6;
 }
 
+.ash-projects-breadcrumb {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	min-width: 0;
+	user-select: none;
+}
+
 .ash-projects-breadcrumb .ash-button {
-	padding-left: 0;
+	flex-shrink: 0;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	-webkit-app-region: no-drag;
+}
+
+.ash-projects-breadcrumb-separator {
+	color: var(--ash-description-foreground);
+}
+
+.ash-projects-breadcrumb-name {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 .ash-projects-detail {
@@ -287,16 +418,35 @@
 	padding: var(--ash-spacing-size320);
 }
 
-.ash-projects-dialog .ash-dialog-title {
-	font-size: var(--ash-fontSize-heading1);
-	padding-right: var(--ash-spacing-size320);
-	margin-bottom: var(--ash-spacing-size240);
+.ash-projects-dialog.ash-dialog {
+	border-radius: var(--ash-cornerRadius-xLarge);
 }
 
-.ash-projects-dialog-close {
-	position: absolute;
-	top: 24px;
-	right: 24px;
+.ash-projects-dialog .ash-dialog-header {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	height: var(--ash-spacing-size280);
+	padding: 0;
+	margin: var(--ash-spacing-size160) var(--ash-spacing-size200);
+}
+
+.ash-projects-dialog .ash-dialog-title {
+	flex: 1;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	font-size: var(--ash-fontSize-heading2);
+	line-height: var(--ash-spacing-size280);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-projects-dialog .ash-dialog-close {
+	flex-shrink: 0;
+	width: var(--ash-spacing-size280);
+	height: var(--ash-spacing-size280);
 }
 
 .ash-projects-form {
@@ -309,6 +459,17 @@
 	display: flex;
 	flex-direction: column;
 	gap: var(--ash-spacing-size80);
+	line-height: 1.5;
+}
+
+.ash-projects-form input,
+.ash-projects-form textarea {
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-projects-form input {
+	min-height: var(--ash-spacing-size360);
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size120);
 	line-height: 1.5;
 }
 
@@ -364,6 +525,9 @@
 	grid-template-columns: minmax(0, 1fr);
 	gap: var(--ash-spacing-size200);
 }
+.ash-projects.narrow .ash-projects-grid {
+	grid-template-columns: minmax(0, 1fr);
+}
 .ash-projects.narrow .ash-projects-empty {
 	margin-top: var(--ash-spacing-size200);
 }
@@ -380,4 +544,8 @@
 :is(.hc-black, .hc-light) .ash-projects-dialog {
 	border-color: var(--ash-contrastBorder);
 	box-shadow: none;
+}
+
+:is(.hc-black, .hc-light) .ash-projects-card-actions::before {
+	background: var(--ash-projects-card-background);
 }

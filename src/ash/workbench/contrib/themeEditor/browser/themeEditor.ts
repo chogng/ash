@@ -40,11 +40,7 @@ import { TextResourceEditor } from '../../../browser/parts/editor/textResourceEd
 import type { IResourceEditorInput, ISaveOptions } from '../../../common/editor.js';
 import { IUserThemeService } from '../../../common/userThemes.js';
 import { parseColorThemeDocument, serializeUserColorThemeDraft, userThemeId } from '../../../services/themes/common/colorThemeData.js';
-import {
-	defaultButtonStyles,
-	defaultInputBoxStyles,
-	defaultDialogStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultInputBoxStyles, defaultDialogStyles, defaultCheckboxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IWorkbenchThemeService } from '../../../services/themes/common/workbenchThemeService.js';
 import { IFileTextModelService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
@@ -473,29 +469,20 @@ export class ThemeEditor extends EditorPane {
 		const hint = h(content.ownerDocument, 'p');
 		hint.textContent = localize('themeEditor.invalidName', 'Enter a theme name of 1 to 256 characters.');
 		content.append(hint);
-		const actions = h(content.ownerDocument, 'div'); actions.className = 'ash-theme-editor-name-actions'; content.append(actions);
-		const dialog = lifetime.add(new Dialog(this.root, {
+		let save!: Button;
+		const dialog = lifetime.add(new Dialog(this.root, localize('themeEditor.saveAs', 'Save as…'), [
+			localize('themeEditor.save', 'Save'), localize('themeEditor.cancel', 'Cancel'),
+		], {
 			buttonStyles: defaultButtonStyles,
+			checkboxStyles: defaultCheckboxStyles,
+			inputBoxStyles: defaultInputBoxStyles,
 			dialogStyles: defaultDialogStyles,
-			title: localize('themeEditor.saveAs', 'Save as…'),
-			content,
-		}));
-		const accept = (): void => { if (name.value.trim().length > 0 && name.value.trim().length <= 256) dialog.close('save'); };
-		const save = lifetime.add(new Button(actions, {
-			label: localize('themeEditor.save', 'Save'),
-			...defaultButtonStyles,
-			presentation: 'primary',
-			onClick: accept,
-		}));
-		lifetime.add(new Button(actions, {
-			...defaultButtonStyles,
-			label: localize('themeEditor.cancel', 'Cancel'),
-			presentation: 'quiet',
-			onClick: () => dialog.close(),
+			cancelId: 1,
+			renderBody: body => body.append(content),
+			buttonOptions: [{ styleButton: button => { save = button; save.enabled = name.value.trim().length > 0 && name.value.trim().length <= 256; } }],
 		}));
 		lifetime.add(name.onDidChange(value => { save.enabled = value.trim().length > 0 && value.trim().length <= 256; }));
-		lifetime.add(name.onKeyDown(event => { if (event.key === 'Enter') { stopEvent(event); accept(); } }));
-		try { return await dialog.show() === 'save' ? name.value.trim() : undefined; }
+		try { return (await dialog.show()).button === 0 ? name.value.trim() : undefined; }
 		finally { if (this.nameDialog.value === lifetime) this.nameDialog.clear(); }
 	}
 

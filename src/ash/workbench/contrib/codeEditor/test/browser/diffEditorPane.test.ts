@@ -81,6 +81,39 @@ const { DiffEditorCommandsService, IDiffEditorCommandsService } = await import('
 const { DIFF_FOCUS_SECONDARY_SIDE, DIFF_OPEN_SIDE, DIFF_SWAP_SIDES, GOTO_NEXT_CHANGE, SET_DIFF_VIEW_MODE_INLINE, SET_DIFF_VIEW_MODE_SIDE_BY_SIDE, SET_DIFF_VIEW_MODE_AUTOMATIC, TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE, registerDiffEditorCommands } = await import('../../../../browser/parts/editor/diffEditorCommands.js');
 registerDiffEditorCommands();
 
+test('Diff pane prepares its provider before resolving models and owns it across input changes', async () => {
+	const dom = createTestDom();
+	try {
+		const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
+		using resources = new DisposableStore();
+		const services = createDiffServices(resources);
+		let created = 0, disposed = 0;
+		using pane = services.createInstance(DiffEditorPane, resourceStore, {
+			modelService: models,
+			createComputationService: () => {
+				created++;
+				return new class extends PaneTestDiffComputationService {
+					override dispose(): void { disposed++; }
+				}();
+			},
+		});
+		assert.equal(created, 1, 'preparation begins before setInput acquires either model');
+		pane.create(requiredElement<HTMLElement>(dom.window.document, 'main'));
+		for (let index = 0; index < 2; index++) {
+			await pane.setInput(createDiffEditorInput(
+				{ resource: URI.file(`/provider-before-${index}.txt`), initialText: 'before' },
+				{ resource: URI.file(`/provider-after-${index}.txt`), initialText: 'after' },
+			), new AbortController().signal);
+			pane.clearInput();
+			assert.equal(created, 1);
+			assert.equal(disposed, 0, 'clearing a session cancels its model without closing the pane provider');
+		}
+		pane.dispose();
+		assert.equal(disposed, 1);
+	} finally { dom.window.close(); }
+});
+
 test('Diff commands navigate and focus the active comparison through the Workbench service', async () => {
 	const dom = createTestDom();
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');

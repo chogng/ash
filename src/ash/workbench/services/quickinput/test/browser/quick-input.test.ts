@@ -1,7 +1,7 @@
-import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
+import { installEditorTestDom, installTestElementHeights } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import type { IDisposable } from '../../../../../base/common/lifecycle.js';
-import { getWindowById, getWindowId, registerWindow } from '../../../../../base/browser/window.js';
+import { getWindowById, getWindowId, mainWindow, registerWindow } from '../../../../../base/browser/window.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { PickerQuickAccessProvider, TriggerAction, type IPickerQuickAccessItem, type Picks, type FastAndSlowPicks } from '../../../../../platform/quickinput/browser/pickerQuickAccess.js';
@@ -88,6 +88,7 @@ test("Quick Pick filtering matches ordered characters and favors labels", () => 
 
 test('Quick Pick item button fires without accepting its row', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
+	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	const list = new QuickInputList(dom.window.document.body);
 	const triggered: string[] = [];
@@ -113,6 +114,7 @@ test('Quick Pick item button fires without accepting its row', () => {
 
 test('QuickInputList skips section headings and reports keyboard modifiers during acceptance', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
+	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	const list = new QuickInputList(dom.window.document.body);
 	const accepted: unknown[] = [];
@@ -133,6 +135,7 @@ test('QuickInputList skips section headings and reports keyboard modifiers durin
 
 test("QuickInputList owns filtering, looping focus, and acceptance", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
+	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	const list = new QuickInputList<{ label: string; }>(
 		dom.window.document.body,
@@ -180,6 +183,7 @@ test("QuickInputList owns filtering, looping focus, and acceptance", () => {
 
 test("Command Palette filters, executes, closes, and restores focus", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
@@ -262,6 +266,7 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 
 test('Command Palette releases its provider before an accepted command disposes the captured editor', async () => {
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
+	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	const unexpectedErrors: unknown[] = [];
 	const previousErrorHandler = errorHandler.getUnexpectedErrorHandler();
@@ -316,6 +321,7 @@ test('Command Palette releases its provider before an accepted command disposes 
 
 test('Quick Access preserves hide delivery and a new session opened before old cleanup', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
+	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	try {
 		using services = new InstantiationService();
@@ -371,6 +377,7 @@ test('Quick Access preserves hide delivery and a new session opened before old c
 
 test('Quick Access cancels old provider results when switching modes in the same picker', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
+	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	try {
 		using services = new InstantiationService();
@@ -426,6 +433,7 @@ test('Quick Access cancels old provider results when switching modes in the same
 
 test('Quick Access switches search modes in one picker and restores focus on close', () => {
 	const dom = new JSDOM('<!doctype html><body><button>Search</button></body>');
+	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	{
 		using services = new InstantiationService();
@@ -501,6 +509,7 @@ test('Quick Access switches search modes in one picker and restores focus on clo
 
 test('Quick Input preserves viewport intent across repeated focus restoration and disposal', () => {
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button><button>Other editor</button></body>');
+	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	try {
 		using contextKeys = new ContextKeyService();
@@ -556,6 +565,7 @@ test('Quick Input preserves viewport intent across repeated focus restoration an
 
 test('Quick Input replaces a visible picker and releases it with its host', () => {
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
+	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	using contextKeys = new ContextKeyService();
 	const service = new TestQuickInputService({
@@ -596,6 +606,7 @@ test('Quick Input replaces a visible picker and releases it with its host', () =
 
 test('Quick Input masks a password, validates it, clears it, and restores focus', async () => {
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
+	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	using contextKeys = new ContextKeyService();
 	using service = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
@@ -645,6 +656,7 @@ test('Quick Input masks a password, validates it, clears it, and restores focus'
 
 test('Quick Pick labels its input and reports focus leaving the picker', async () => {
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button><button>Other editor</button></body>');
+	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	using contextKeys = new ContextKeyService();
 	using service = new TestQuickInputService({
@@ -676,6 +688,7 @@ test('Quick Pick labels its input and reports focus leaving the picker', async (
 
 test('Quick Input keeps clicks inside the picker and passes outside clicks to the workbench', () => {
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button><button>Workbench action</button></body>');
+	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	{
 		using contextKeys = new ContextKeyService();
@@ -719,6 +732,7 @@ function emptyKeybindingService(): KeybindingService {
 function registerHistoryServices(services: InstantiationService): DisposableStore {
 	const resources = new DisposableStore();
 	const dom = new JSDOM('', { url: 'https://ash.test' });
+	using heights = installTestElementHeights(dom.window.document);
 	resources.add(toDisposable(() => dom.window.close()));
 	services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 	services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'commands', flushInterval: 0 })));
@@ -751,6 +765,7 @@ function installDomGlobals(dom: JSDOM): void {
 
 test('Quick Input token cancellation closes only its prompt and releases the token after acceptance', async () => {
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
+	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	using browser = toDisposable(() => dom.window.close());
 	using contextKeys = new ContextKeyService();
@@ -781,13 +796,16 @@ test('Quick Input token cancellation closes only its prompt and releases the tok
 suite('Quick Input shared foundations', () => {
 	let mainDom: JSDOM;
 	let mainGlobals: IDisposable;
+	let mainHeights: IDisposable;
 	suiteSetup(() => {
 		mainDom = new JSDOM('<!doctype html><body></body>');
 		mainGlobals = installEditorTestDom(mainDom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
 		getWindowId(mainDom.window as unknown as Window);
+		mainHeights = installTestElementHeights(mainWindow.document);
 	});
 	suiteTeardown(() => {
 		getWindowById(1)?.disposables.dispose();
+		mainHeights.dispose();
 		mainGlobals.dispose();
 		mainDom.window.close();
 	});
@@ -795,6 +813,7 @@ suite('Quick Input shared foundations', () => {
 
 	test('Quick Access is lazy and owned by its Quick Input service', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
+		using heights = installTestElementHeights(dom.window.document);
 		using browser = toDisposable(() => dom.window.close());
 		using registrationWindow = registerWindow(dom.window as unknown as Window);
 		using globals = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
@@ -807,6 +826,7 @@ suite('Quick Input shared foundations', () => {
 
 	test('Picker queries publish fast results, cancel superseded work and retain the current busy state', async () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
+		using heights = installTestElementHeights(dom.window.document);
 		using browser = toDisposable(() => dom.window.close());
 		using registrationWindow = registerWindow(dom.window as unknown as Window);
 		using globals = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
@@ -847,6 +867,7 @@ suite('Quick Input shared foundations', () => {
 
 	test('Fast picks remain acceptable while additional results are pending and close before the item recipe runs', async () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
+		using heights = installTestElementHeights(dom.window.document);
 		using browser = toDisposable(() => dom.window.close());
 		using registrationWindow = registerWindow(dom.window as unknown as Window);
 		using globals = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
@@ -873,6 +894,7 @@ suite('Quick Input shared foundations', () => {
 
 	test('Item attachment, background acceptance and async buttons share one picker lifetime', async () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
+		using heights = installTestElementHeights(dom.window.document);
 		using browser = toDisposable(() => dom.window.close());
 		using registrationWindow = registerWindow(dom.window as unknown as Window);
 		using globals = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);

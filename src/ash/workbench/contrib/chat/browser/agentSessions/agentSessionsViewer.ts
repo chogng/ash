@@ -1,63 +1,72 @@
 import './media/agentsessionsviewer.css';
 import { addDisposableListener, h, isHTMLElement } from '../../../../../base/browser/dom.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Emitter } from '../../../../../base/common/event.js';
+import { Button } from '../../../../../base/browser/ui/button/button.js';
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
+import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { localize } from '../../../../../nls.js';
 import type { IAgentSessionListItem } from './agentSessionsModel.js';
 
 /** Retains session rows while the catalog or filter changes. */
 export class AgentSessionsViewer extends Disposable {
 	readonly domNode: HTMLElement;
-	private readonly draftsList: HTMLUListElement;
-	private readonly sessionsList: HTMLUListElement;
-	private readonly draftsGroup: HTMLElement;
-	private readonly sessionsGroup: HTMLElement;
+	private readonly groups = new Map<string, { element: HTMLElement; list: HTMLUListElement; heading: HTMLElement; }>();
 	private readonly rows = this._register(new DisposableMap<string, AgentSessionRow>());
+	private readonly menuRequested = this._register(new Emitter<{ readonly item: IAgentSessionListItem; readonly anchor: ContextMenuAnchor; onHide(): void; }>());
+	readonly onDidRequestContextMenu = this.menuRequested.event;
 
 	constructor(container: HTMLElement) {
 		super();
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-agent-sessions-viewer';
-		this.draftsGroup = h(document, 'section');
-		this.draftsGroup.className = 'ash-agent-sessions-group';
-		const draftsHeading = h(document, 'h3');
-		draftsHeading.textContent = localize('chat.sessions.drafts', 'Drafts');
-		this.draftsList = h(document, 'ul');
-		this.draftsGroup.append(draftsHeading, this.draftsList);
-		this.sessionsGroup = h(document, 'section');
-		this.sessionsGroup.className = 'ash-agent-sessions-group';
-		const sessionsHeading = h(document, 'h3');
-		sessionsHeading.textContent = localize('chat.sessions.sessions', 'Sessions');
-		this.sessionsList = h(document, 'ul');
-		this.sessionsGroup.append(sessionsHeading, this.sessionsList);
-		this.domNode.append(this.draftsGroup, this.sessionsGroup);
+
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => this.onKeyDown(event)));
 	}
 
 	update(items: readonly IAgentSessionListItem[]): number {
-		const drafts: AgentSessionRow[] = [];
-		const sessions: AgentSessionRow[] = [];
+		const sections = new Map<string, { label: string; rows: AgentSessionRow[]; }>();
 		const present = new Set<string>();
 		for (const item of items) {
-			const row = this.rows.get(item.id) ?? this.rows.set(item.id, new AgentSessionRow(this.domNode.ownerDocument));
+			const row = this.rows.get(item.id) ?? this.rows.set(item.id, new AgentSessionRow(this.domNode.ownerDocument, event => this.menuRequested.fire(event)));
 			row.update(item);
-			(item.kind === 'draft' ? drafts : sessions).push(row);
+			const id = item.pinned ? 'pinned' : item.kind === 'draft' ? 'drafts' : item.group ? `group:${item.group.sectionId}` : 'sessions';
+			const label = item.pinned ? localize('sessions.list.pinned', 'Pinned') : item.kind === 'draft' ? localize('chat.sessions.drafts', 'Drafts') : item.group?.name ?? localize('chat.sessions.sessions', 'Sessions');
+			if (!sections.has(id)) sections.set(id, { label, rows: [] });
+			sections.get(id)!.rows.push(row);
 			present.add(item.id);
 		}
 		for (const key of this.rows.keys()) {
 			if (!present.has(key)) this.rows.deleteAndDispose(key);
 		}
-		this.updateList(this.draftsList, drafts);
-		this.updateList(this.sessionsList, sessions);
-		this.draftsGroup.hidden = drafts.length === 0;
-		this.sessionsGroup.hidden = sessions.length === 0;
+		const ordered = [...sections].sort(([a], [b]) => Number(b === 'pinned') - Number(a === 'pinned'));
+		for (const [index, [id, section]] of ordered.entries()) {
+			let group = this.groups.get(id);
+			if (!group) {
+				const element = h(this.domNode.ownerDocument, 'section');
+				element.className = 'ash-agent-sessions-group';
+				element.dataset.section = id;
+				const heading = h(this.domNode.ownerDocument, 'h3');
+				const list = h(this.domNode.ownerDocument, 'ul');
+				element.append(heading, list);
+				this.groups.set(id, group = { element, heading, list });
+			}
+			group.heading.textContent = section.label;
+			this.updateList(group.list, section.rows);
+			if (this.domNode.children[index] !== group.element) this.domNode.insertBefore(group.element, this.domNode.children[index] ?? null);
+		}
+		for (const [id, group] of this.groups) {
+			if (!sections.has(id)) { group.element.remove(); this.groups.delete(id); }
+		}
 		return items.length;
 	}
 
 	focusSelected(): boolean {
-		const selected = this.domNode.querySelector<HTMLButtonElement>('button[aria-current="page"]');
+		const selected = this.domNode.querySelector<HTMLButtonElement>('.ash-agent-session-row[aria-current="page"]');
 		selected?.focus();
 		return selected !== null;
 	}
@@ -92,11 +101,13 @@ class AgentSessionRow extends Disposable {
 	private readonly button: HTMLButtonElement;
 	private readonly title: HTMLSpanElement;
 	private readonly description: HTMLSpanElement;
-	private open: () => void = () => { };
+	private item: IAgentSessionListItem | undefined;
+	private readonly more: Button;
 
-	constructor(document: Document) {
+	constructor(document: Document, showMenu: (event: { item: IAgentSessionListItem; anchor: ContextMenuAnchor; onHide(): void; }) => void) {
 		super();
 		this.domNode = h(document, 'li');
+		this.domNode.className = 'ash-agent-session-item';
 		this.button = h(document, 'button');
 		this.button.type = 'button';
 		this.button.className = 'ash-agent-session-row';
@@ -106,12 +117,43 @@ class AgentSessionRow extends Disposable {
 		this.description.className = 'ash-agent-session-description';
 		this.button.append(this.title, this.description);
 		this.domNode.append(this.button);
-		this._register(addDisposableListener(this.button, 'click', () => this.open()));
+		this._register(addDisposableListener(this.button, 'click', () => this.item?.open()));
+		const openMenu = (anchor: ContextMenuAnchor) => {
+			if (!this.item) return;
+			this.domNode.classList.add('menu-visible');
+			this.more.domNode.setAttribute('aria-expanded', 'true');
+			showMenu({
+				item: this.item, anchor, onHide: () => {
+					this.domNode.classList.remove('menu-visible');
+					this.more.domNode.setAttribute('aria-expanded', 'false');
+				}
+			});
+		};
+		const actions = h(document, 'div');
+		actions.className = 'ash-agent-session-actions';
+		this.domNode.append(actions);
+		this.more = this._register(new Button(actions, {
+			...defaultButtonStyles, presentation: 'quiet', icon: Lxicon.ellipsis, iconOnly: true,
+			label: localize('sessions.list.more', 'More actions'), onClick: () => openMenu(this.more.domNode),
+		}));
+		this.more.domNode.classList.add('ash-agent-session-more');
+		this.more.domNode.setAttribute('aria-haspopup', 'menu');
+		this.more.domNode.setAttribute('aria-expanded', 'false');
+		this._register(addDisposableListener(this.button, 'contextmenu', event => {
+			event.preventDefault();
+			openMenu({ x: event.clientX, y: event.clientY, targetWindow: document.defaultView! });
+		}));
+		this._register(addDisposableListener(this.button, 'keydown', event => {
+			if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') {
+				event.preventDefault(); openMenu(this.button);
+			}
+		}));
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
 	update(item: IAgentSessionListItem): void {
-		this.open = item.open;
+		this.item = item;
+		this.domNode.dataset.item = item.id;
 		this.title.textContent = item.title;
 		this.description.textContent = item.description;
 		this.description.hidden = item.description.length === 0;

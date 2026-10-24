@@ -62,6 +62,20 @@
 	min-height: 0;
 }
 
+.ash-scm-graph-tree .ash-tree-contents {
+	/* Match the pane chevron after the row inset, tree padding and leading swimlane. */
+	margin-inline-start: calc(
+		var(--ash-spacing-size40) + var(--ash-spacing-size20) +
+			var(--ash-lxiconFontSize) / 2 - var(--ash-spacing-size80) -
+			var(--scm-graph-lane-width) - var(--scm-graph-row-inset, 0px)
+	);
+}
+
+.ash-workbench.modern-ui .ash-sidebar-part .ash-scm-graph-tree {
+	/* Modern UI insets sidebar list rows independently of their content padding. */
+	--scm-graph-row-inset: var(--ash-spacing-size40);
+}
+
 .ash-scm-graph-commit {
 	--scm-graph-row-background: var(--ash-sideBar-background);
 	position: relative;
@@ -79,6 +93,10 @@
 	align-items: center;
 	padding: 0 8px 0 0;
 	line-height: var(--ash-list-rowHeight);
+}
+
+.ash-scm-graph-change-row:hover {
+	--scm-graph-row-background: var(--ash-list-hoverBackground);
 }
 
 .ash-scm-graph-commit.selected,
@@ -250,7 +268,8 @@
 	position: absolute;
 	z-index: 1;
 	top: 0;
-	inset-inline-end: var(--ash-spacing-size80);
+	/* The tree row already supplies the trailing gutter. */
+	inset-inline-end: 0;
 	bottom: 0;
 	display: flex;
 	align-items: center;
@@ -300,9 +319,13 @@
 		display var(--ash-animation-durationFast) allow-discrete;
 }
 
+/* A remembered row focus reveals actions only while the tree has keyboard focus. */
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay > .ash-scm-graph-actions,
 .ash-scm-graph-actions:has(button[aria-expanded="true"]),
-.ash-scm-graph-commit:is(:focus-within, .focused)
+.ash-scm-graph-commit:is(
+		:focus-within,
+		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay
 	> .ash-scm-graph-actions {
@@ -367,7 +390,11 @@
 	--scm-graph-row-background: var(--ash-list-hoverBackground);
 }
 
-.ash-scm-graph-change-row:is(:hover, :focus-within, .focused)
+.ash-scm-graph-change-row:is(
+		:hover,
+		:focus-within,
+		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+	)
 	> .ash-scm-graph-actions {
 	display: flex;
 	opacity: 1;
@@ -831,7 +858,10 @@
 }
 
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay::before,
-.ash-scm-graph-commit:is(:focus-within, .focused)
+.ash-scm-graph-commit:is(
+		:focus-within,
+		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay::before,
 .ash-scm-graph-overlay:has(button[aria-expanded="true"])::before {
@@ -850,17 +880,27 @@
 	:is(.ash-scm-section-actions, .ash-scm-change-actions),
 .ash-scm-section-heading:focus-within > .ash-scm-section-actions,
 .ash-scm-change:focus-within > .ash-scm-change-actions,
-.ash-scm-graph-commit:is(:focus-within, .focused)
+.ash-scm-graph-commit:is(
+		:focus-within,
+		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay
 	> .ash-scm-graph-actions,
-.ash-scm-graph-change-row:is(:focus-within, .focused) > .ash-scm-graph-actions,
+.ash-scm-graph-change-row:is(
+		:focus-within,
+		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+	)
+	> .ash-scm-graph-actions,
 :is(
 	.ash-scm-section-actions,
 	.ash-scm-change-actions,
 	.ash-scm-graph-actions
 ):has(button[aria-expanded="true"]),
-.ash-scm-graph-commit:is(:focus-within, .focused)
+.ash-scm-graph-commit:is(
+		:focus-within,
+		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay::before,
 .ash-scm-graph-overlay:has(button[aria-expanded="true"])::before {

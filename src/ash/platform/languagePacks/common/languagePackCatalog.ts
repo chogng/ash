@@ -12,17 +12,20 @@ export function normalizeLocale(value: string): string {
 }
 
 /** Startup must remain usable when an optional language resource is missing or damaged. */
-export async function resolveLanguagePackCatalog(locale: string, startupCatalogs: readonly LanguagePackCatalog[], store: Pick<ILanguagePackStore, 'read'>): Promise<LanguagePackCatalog> {
+export async function resolveLanguagePackCatalog(locale: string, startupCatalogs: readonly LanguagePackCatalog[], store: Pick<ILanguagePackStore, 'read'>, options: { readonly preferStartupCatalogs?: boolean; } = {}): Promise<LanguagePackCatalog> {
 	let candidate = normalizeLocale(locale);
 	while (candidate) {
 		if (candidate === "en") { break; }
+		const packaged = startupCatalogs.find(catalog => catalog.locale.toLowerCase() === candidate.toLowerCase());
+		// Source catalogs must win during development so a reload can show edited
+		// translations even when the browser has saved an older installed pack.
+		if (options.preferStartupCatalogs && packaged) { return packaged; }
 		try {
 			const catalog = await store.read(candidate);
 			if (catalog) { return catalog; }
 		} catch {
 			// Keep the preference so reinstalling the pack can restore it on a later startup.
 		}
-		const packaged = startupCatalogs.find(catalog => catalog.locale.toLowerCase() === candidate.toLowerCase());
 		if (packaged) { return packaged; }
 		const separator = candidate.lastIndexOf("-");
 		candidate = separator > 0 ? candidate.slice(0, separator) : "";

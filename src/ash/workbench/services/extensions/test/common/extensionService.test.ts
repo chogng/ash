@@ -950,7 +950,7 @@ test('the Rust package defaults to on-demand analysis and preserves explicit set
 		assert.throws(() => registry.getConfiguration('rust-analyzer.cargo.features')!.parse('invalid-feature-mode'));
 		assert.equal((await configuration.read()).source.trim(), '{}', 'extension defaults must not write the profile');
 		assert.match(registry.getConfiguration(key)!.schema!.markdownDescription!, locale === 'en' ? /analysis is computed on demand/ : /改为按需分析/);
-		assert.match(registry.getConfiguration('rust-analyzer.lru.capacity')!.schema!.title!, locale === 'en' ? /Lru: Capacity/ : /语法树容量/);
+		assert.match(registry.getConfiguration('rust-analyzer.lru.capacity')!.schema!.title!, locale === 'en' ? /Cache: Syntax tree capacity/ : /语法树容量/);
 		service.dispose();
 		assert.equal(registry.getConfiguration(key), undefined, 'the setting belongs to the Rust extension');
 		assert.equal(explicit.getValue(key), true, 'withdrawing the default preserves the user setting');

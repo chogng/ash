@@ -25,7 +25,7 @@ import { ChatListWidget } from "../../../../../workbench/contrib/chat/browser/wi
 import type { ChatInputState } from "../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js";
 import type { ModelReasoningEffort } from "../../../../../workbench/services/chat/common/modelCatalog.js";
 import type { IChatListItem } from "../../../../../workbench/contrib/chat/browser/widget/chatListItems.js";
-import type { ResolvedChatContext } from "../../../../../workbench/services/chat/common/chatContextService.js";
+import { resolveChatContextAttachment, type ResolvedChatContext } from "../../../../../workbench/services/chat/common/chatContextService.js";
 import { getActiveWindow, h } from "../../../../../base/browser/dom.js";
 import type { ChatContextAttachment } from "../../../../../workbench/services/chat/common/chatContextService.js";
 import type { IOpenerService } from "../../../../../platform/opener/common/opener.js";
@@ -277,7 +277,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		this.submittedMessage = true;
 		this.updateConversationState();
 		try {
-			const resolvedContexts = await Promise.all(contexts.map(context => context.resolve()));
+			const resolvedContexts = await Promise.all(contexts.map(resolveChatContextAttachment));
 			if (this.isDisposed || signal?.aborted || generation !== this.model.composerGeneration) throw canceled();
 			if (appSource) this.appContextId(appSource);
 			await this.model.send(text, mode, skills, resolvedContexts, appSource ? { source: { sessionId: appSource.sessionId, threadId: appSource.threadId }, signal } : signal ? { signal } : undefined);

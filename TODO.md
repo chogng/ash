@@ -180,6 +180,11 @@
 | Configuration 其他契约                     | configuration variables、Remote User、缓存默认值／实验覆盖、跨 profile 规则，以及 registry／schema、typed parse/serialize、控件描述与 `ashBinding` 均按具体调用需求复核，不按上游成员表整体补齐；Rust `config.toml` 的编辑入口仍归其宿主。设置呈现与接入规则见 [Settings 接入边界](src/ash/workbench/contrib/preferences/README.md#当前实现)。                                                             |
 | 托管策略强制新鲜度门禁                     | 当前生产账户映射仅 `ChatDefaultModel`；未接入 `forceRemoteSettingsRefresh`、跨重启的刷新要求或执行端门禁。若纳入企业治理，先确定 Ash 管理来源、作用域、启动／重载要求及 App Server 执行 owner，再贯通 pending／blocked／satisfied、显式恢复和跨端校验；普通网络失败不自动升级为全产品 AI 禁用，Renderer 禁用输入不作为执行端强制保证。                                                                     |
 
+### 网络目录上的状态数据库策略
+
+- [ ] **验证 · 网络目录上的状态数据库策略**：ASH_HOME 可落在 NFS，当前共享连接及 automation／queue 等 owner 打开同一 state.sqlite3 时仍分别指定 WAL。参考 [Codex 按数据库目录选择初始化 journal](https://github.com/openai/codex/pull/56552)（2026-10-23 已合并，未确认稳定版包含），先核实支持范围及实际 NFS 启动／重开行为；统一每个数据库实际目录的探测和 owner 策略，避免仅改共享连接后被其他 owner 改回。若不支持此布局，启动时明确诊断；若纳入支持，再评估新库 DELETE，已有库不自动切换或搬迁。
+  - 前提与验收：适配 rusqlite 而非照搬 SQLx；保持 Durable 至少现有 FULL 耐久性，DELETE 评估 EXTRA，不将 WAL 改为上游 NORMAL。覆盖本地新库、NFS 新库、已有 WAL／DELETE、初始化中断、目录探测失败、多个 owner 重开和持锁并发，确认实际 pragma 返回值与错误可诊断；对回滚 journal 的读写竞争及吞吐做基线测量。是否正式支持多主机共用 profile 属单独产品决定，不由此候选授权。
+
 ### Rust 分析缓存持久化（暂缓）
 
 2026-10-23 用户决定先使用内存缓存，持久化留作后续工作。当前保持按需分析、默认保留已启动服务，自动闲置回收可选；实现和设置见 [Rust 语言支持](extensions/rust/README.md#analysis-cache-and-memory)。

@@ -20,6 +20,7 @@ import { registerEditorPane } from '../../../browser/editor.js';
 import { EditorPane, EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import { ExtensionsInput, ExtensionsInputSource, ExtensionsCapabilityInput } from '../common/extensionsInput.js';
+import { getExtensionAttribution } from '../common/extensionAttribution.js';
 import { IGlobalExtensionEnablementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
 import { IPluginManagementService } from '../../../../platform/extensionManagement/common/pluginManagementService.js';
 import { IExtensionApi, type ExtensionDescriptor } from '../../../../platform/extensions/common/extensionApi.js';
@@ -40,6 +41,8 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { MainThreadLocalization } from '../../../api/browser/mainThreadLocalization.js';
 import { alert, status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
 import './media/extensionEditor.css';
 
@@ -85,7 +88,7 @@ function describeExtensionCapabilities(details: ExtensionsPackageDetails): strin
 class ExtensionDetailHeader extends Disposable {
 	public readonly element = h(mainWindow.document, 'header');
 	public readonly title = h(mainWindow.document, 'h1');
-	public readonly publisher = h(mainWindow.document, 'p');
+	public readonly attribution = h(mainWindow.document, 'p');
 	public readonly metadata = h(mainWindow.document, 'p');
 	public readonly description = h(mainWindow.document, 'p');
 	public readonly actions = h(mainWindow.document, 'div');
@@ -105,9 +108,9 @@ class ExtensionDetailHeader extends Disposable {
 		const heading = h(mainWindow.document, 'div'); heading.className = 'extension-detail-heading';
 		const identityRow = h(mainWindow.document, 'div'); identityRow.className = 'extension-detail-identity-row';
 		const identity = h(mainWindow.document, 'div'); identity.className = 'extension-detail-identity';
-		this.publisher.className = 'extension-detail-publisher'; this.publisher.hidden = true;
+		this.attribution.className = 'extension-detail-attribution'; this.attribution.hidden = true;
 		this.metadata.className = 'extension-metadata';
-		identity.append(this.title, this.publisher, this.metadata);
+		identity.append(this.title, this.attribution, this.metadata);
 		identityRow.append(identity);
 		const descriptionRow = h(mainWindow.document, 'div'); descriptionRow.className = 'extension-detail-description';
 		descriptionRow.append(this.description);
@@ -149,6 +152,7 @@ export class ExtensionEditor extends EditorPane {
 	private working = false;
 	private currentInput: ExtensionsInput | ExtensionsCapabilityInput | undefined;
 	private currentSignal: AbortSignal | undefined;
+	private readonly localization: MainThreadLocalization;
 
 	constructor(@IExtensionManagementService private readonly extensions: IExtensionManagementService,
 		@IDialogService private readonly dialogs: IDialogService,
@@ -166,8 +170,10 @@ export class ExtensionEditor extends EditorPane {
 		@IMarkdownRendererService private readonly markdownRenderer: IMarkdownRendererService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IInstantiationService instantiation: IInstantiationService,
 		@IThemeService theme: IThemeService, @IStorageService storage: IStorageService) {
 		super('ash.extensions.editor', theme, storage);
+		this.localization = instantiation.createInstance(MainThreadLocalization);
 		const refresh = () => {
 			if (!this.working && this.currentInput && this.currentSignal && !this.currentSignal.aborted) {
 				void this.setInput(this.currentInput, this.currentSignal).catch(error => { if (!this.isDisposed) { this.header.status.textContent = error instanceof Error ? error.message : String(error); } });
@@ -221,7 +227,7 @@ export class ExtensionEditor extends EditorPane {
 				getProvider: () => {
 					const focused = mainWindow.document.activeElement;
 					if (!this.currentInput || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected plugin, skill, service account or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information moves below the content in a narrow editor. Open package opens the owning package for installation and permissions. The switch at the right of the header identity enables or disables the selected resource. Press Space to toggle it. For a service account, the switch connects or disconnects while preserving authorization and credentials. Service account details offer sign-in, API token connection, disconnect or sign-out according to the service. Associated MCP status appears in the account details; Open MCP server details shows its tools and diagnostics. Disconnect keeps the package installed. MCP server details show runtime status and diagnostics, with Edit, Connect, Disconnect and Remove for independent servers; the header switch controls saved enablement. Enablement is saved; connection actions control the running instance. Operations refresh the owning service state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected plugin, skill, service account or MCP server details. The header contains identity, publisher and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information moves below the content in a narrow editor. Open package opens the owning package for installation and permissions. The switch at the right of the header identity enables or disables the selected resource. Press Space to toggle it. For a service account, the switch connects or disconnects while preserving authorization and credentials. Service account details offer sign-in, API token connection, disconnect or sign-out according to the service. Associated MCP status appears in the account details; Open MCP server details shows its tools and diagnostics. Disconnect keeps the package installed. MCP server details show runtime status and diagnostics, with Edit, Connect, Disconnect and Remove for independent servers; the header switch controls saved enablement. Enablement is saved; connection actions control the running instance. Operations refresh the owning service state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 				},
 			}));
 		}
@@ -238,7 +244,7 @@ export class ExtensionEditor extends EditorPane {
 		this.header.iconImage.removeAttribute('src'); this.header.iconImage.hidden = true; this.header.iconText.hidden = false;
 		this.header.title.textContent = input.getName();
 		this.header.iconText.textContent = [...input.getName()].slice(0, 2).join('').toUpperCase();
-		this.header.publisher.textContent = ''; this.header.publisher.hidden = true;
+		this.header.attribution.textContent = ''; this.header.attribution.hidden = true;
 		this.header.metadata.textContent = input instanceof ExtensionsInput ? `${input.summary.id} · ${input.summary.version}` : '';
 		this.header.description.textContent = input instanceof ExtensionsInput ? input.summary.description : '';
 		this.renderOverview();
@@ -793,13 +799,15 @@ export class ExtensionEditor extends EditorPane {
 			if (descriptor) {
 				const generation = catalog.generation; const extensionId = descriptor.id;
 				resourceFor = async path => toExtensionResourceURI({ generation, extensionId, path });
-				manifest = JSON.parse(descriptor.manifestJson);
+				manifest = JSON.parse(await this.localization.localizeManifest(extensionId, descriptor.manifestJson, generation));
 			} else { return; }
 			if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) { return; }
 		} catch { return; }
 		if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
-		const publisher = descriptor?.publisher ?? (typeof manifest.publisher === 'string' ? manifest.publisher : '');
-		this.header.publisher.textContent = publisher === 'ash' ? 'Ash' : publisher; this.header.publisher.hidden = !publisher;
+		const attribution = getExtensionAttribution(manifest);
+		this.header.attribution.textContent = attribution; this.header.attribution.hidden = !attribution;
+		if (typeof manifest.displayName === 'string' && !manifest.displayName.startsWith('%')) { this.header.title.textContent = manifest.displayName; }
+		if (typeof manifest.description === 'string' && !manifest.description.startsWith('%')) { this.header.description.textContent = manifest.description; }
 		if (Array.isArray(manifest.categories) && manifest.categories.length && manifest.categories.every(category => typeof category === 'string')) {
 			const section = h(mainWindow.document, 'section'); section.className = 'extension-info-section';
 			const heading = h(mainWindow.document, 'h2'); heading.textContent = localize({ bundle: 'ash.extensions', key: 'detailCategories' }, 'Categories');

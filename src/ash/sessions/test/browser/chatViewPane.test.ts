@@ -1,3 +1,7 @@
+import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
+import { ImageEditorService } from '../../../workbench/services/imageEditor/browser/imageEditorService.js';
+import type { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
 import { TestViewDescriptorService } from '../../../workbench/test/browser/workbenchTestServices.js';
 import { ChatEditor } from '../../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditor.js';
 import { ChatEditorInput } from '../../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
@@ -69,7 +73,7 @@ import { isCancellationError } from '../../../base/common/errors.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { SessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
-import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { Lxicon } from "../../../base/common/lxicons.js";
 import { IMenuService, MenuId } from "../../../platform/actions/common/actions.js";
@@ -92,6 +96,9 @@ import { PreferencesService as BrowserPreferencesService } from "../../../workbe
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../workbench/services/chat/browser/chatService.js";
+import { IHostService } from '../../../workbench/services/host/browser/host.js';
+import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
+import { BrowserImageEditorService } from '../../../workbench/services/imageEditor/browser/browserImageEditorService.js';
 import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from "../../../workbench/services/chat/common/chatService.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
@@ -125,14 +132,18 @@ import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/b
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
 
+const unavailableAuxiliaryWindows = { open: async () => { throw new Error('Unexpected auxiliary window'); } } as unknown as IAuxiliaryWindowService;
 const inputResources = new DisposableStore();
 const userDataProfile = new UserDataProfileService();
 const testLifecycle = { onWillShutdown: Event.None } as unknown as ILifecycleService;
 suiteTeardown(() => inputResources.dispose());
 function createInputServices(contextView: IContextViewService, chat: IChatService, menus?: IMenuService, contextMenus?: IContextMenuService): InstantiationService {
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), createCodeEditorServices(inputResources)));
+	services.registerSingleton(IImageEditorService, () => new class extends ImageEditorService { async capture(): Promise<never> { throw new Error('Image capture is outside this fixture'); } }());
 	services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
+	services.registerInstance(IHostService, new TestHostService());
+	services.registerSingleton(IImageEditorService, () => services.createInstance(BrowserImageEditorService));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(IContextViewService, contextView);
@@ -216,6 +227,7 @@ const testStorageEnvironment = new JSDOM('', { url: 'https://ash.test/' });
 const storageResources = new DisposableStore();
 const testStorages: InstanceType<typeof BrowserStorageService>[] = [];
 const { ChatWidget, openChatMarkdownLink } = await import("../../../workbench/contrib/chat/browser/widget/chatWidget.js");
+const { CoworkWidget } = await import('../../contrib/cowork/browser/widget/coworkWidget.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
 const { NewCoworkInputWidget } = await import('../../contrib/cowork/browser/newCoworkInput.js');
 const { readNewChatDraftState, writeNewChatDraftState } = await import('../../contrib/chat/common/newChatDraftState.js');
@@ -315,7 +327,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 			fileService,
 			unavailableAccessibleViewService,
 			notifications,
-			createInputServices(contextViewService, paneChat, menuService, contextMenuService), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), userDataProfile, testLifecycle, contextKeys,
+			createInputServices(contextViewService, paneChat, menuService, contextMenuService), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, contextKeys,
 		);
 		dom.window.document.body.append(pane.element);
 		await sessions.initialize();
@@ -370,7 +382,7 @@ test('100 catalog sessions instantiate only opened conversations and reconnect t
 		dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 		menus, services.get(IContextMenuService), contextView, services.get(ICommandService),
 		testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
-		services, services.get(IConfigurationService), services.get(IStorageService), userDataProfile, testLifecycle,
+		services, services.get(IConfigurationService), services.get(IStorageService), userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows,
 	);
 	dom.window.document.body.append(pane.element);
 	await sessions.initialize();
@@ -475,7 +487,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(contextViewService, chat, menuService, contextMenuService), configuration, inputResources.add(createTestStorage()), userDataProfile, testLifecycle, contextKeys,
+		createInputServices(contextViewService, chat, menuService, contextMenuService), configuration, inputResources.add(createTestStorage()), userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, contextKeys,
 	);
 	chatView = pane;
 	const title = h(dom.window.document, "div");
@@ -1097,6 +1109,7 @@ test('sending from one session preserves a later draft during first-session crea
 	using editorResources = new DisposableStore();
 	const composerStorage = editorResources.add(createTestStorage());
 	const editorServices = editorResources.add(createTestEditorServices(undefined, createCodeEditorServices(editorResources), dom.window.document, composerStorage));
+	editorServices.registerSingleton(IImageEditorService, () => new class extends ImageEditorService { async capture(): Promise<never> { throw new Error('Image capture is outside this fixture'); } }());
 	editorServices.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
 	editorServices.registerInstance(ISessionsGitHubService, {
 		onDidChange: Event.None,
@@ -1259,7 +1272,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		userDataProfile, testLifecycle,
+		userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1387,7 +1400,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		userDataProfile, testLifecycle,
+		userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1461,7 +1474,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		userDataProfile, testLifecycle,
+		userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1547,7 +1560,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		userDataProfile, testLifecycle,
+		userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -3242,7 +3255,7 @@ test('ChatWidgetModel restores the mode once and keeps it when reconnecting to n
 
 test('ChatWidgetModel submits server commands using the selected mode', async () => {
 	const activeSession = session('session-1', 'thread-1');
-	const fake = fakeApi({ sessions: [activeSession] });
+	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
@@ -4148,7 +4161,7 @@ test("Advisor transcript groups the call and renders advice as a disclosure", ()
 
 test('reconnection keeps a draft and blocks submission until thread subscription finishes', async () => {
 	const activeSession = session('session-1', 'thread-1');
-	const fake = fakeApi({ sessions: [activeSession] });
+	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
 	const pending = new DeferredPromise<Awaited<ReturnType<typeof fake.api.thread.subscribe>>>();
 	let subscriptions = 0;
 	using chat = createChatService({ ...fake.api, thread: { ...fake.api.thread, subscribe: params => ++subscriptions === 1 ? fake.api.thread.subscribe(params) : pending.p } });
@@ -4213,7 +4226,7 @@ test('Chat Changes refreshes share a pending summary and reread once when durabl
 
 test('a disposed Chat model ignores its late Changes summary and starts no new reads', async () => {
 	const activeSession = session('session-1', 'thread-1');
-	const fake = fakeApi({ sessions: [activeSession] });
+	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
@@ -4338,7 +4351,7 @@ test('ChatWidgetModel inherits profile approval and preserves a conversation ove
 
 test('Chat context usage refresh ignores an estimate from an older connection', async () => {
 	const activeSession = session('session-1', 'thread-1');
-	const fake = fakeApi({ sessions: [activeSession] });
+	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
 	const sample = await fake.api.thread.readContext({ sessionId: 'session-1', threadId: 'thread-1' });
 	const oldRead = new DeferredPromise<typeof sample>();
 	const currentRead = new DeferredPromise<typeof sample>();
@@ -4364,9 +4377,44 @@ test('Chat context usage refresh ignores an estimate from an older connection', 
 	assert.equal(contextUsage()?.estimatedTokens, 400);
 });
 
-test('Chat footer permission changes use the current model and confirm full access', async () => {
+for (const kind of ['Code', 'Cowork'] as const) test(`${kind} widget submits inline snapshots in text order despite reversed reads`, async () => {
 	const activeSession = session('session-1', 'thread-1');
 	const fake = fakeApi({ sessions: [activeSession] });
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	using contextView = new BrowserContextViewService(document.body);
+	const services = createInputServices(contextView, chat);
+	const createInput = (container: HTMLElement, delegate: ChatInputDelegate) => services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible' as const, modelPickerPosition: 'leading' as const });
+	using widget = kind === 'Code'
+		? new ChatWidget(document.body, 'ordered-snapshots', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService))
+		: new CoworkWidget(document.body, 'ordered-snapshots', model, () => { }, services.get(ICommandService), undefined, undefined, undefined, createInput, services, services.get(IQuickInputService), notifications, services.get(IChatWidgetService));
+	widget.setVisible(true);
+	const first = new DeferredPromise<{ name: string; content: string; }>();
+	const second = new DeferredPromise<{ name: string; content: string; }>();
+	widget.appendToDraft(' \nBefore🙂 ');
+	widget.addContext({ id: 'first', kind: 'file', name: 'same.txt', resolve: () => first.p });
+	widget.appendToDraft('Between ');
+	widget.addContext({ id: 'second', kind: 'file', name: 'same.txt', resolve: () => second.p });
+	widget.appendToDraft('Done  \n');
+	const sending = widget.acceptInput();
+	await second.complete({ name: 'same.txt', content: 'Second captured version' });
+	assert.equal(fake.turnStartRequests.length, 0);
+	await first.complete({ name: 'same.txt', content: 'First captured version' });
+	await sending;
+	assert.deepEqual(fake.turnStartRequests[0]?.input, [
+		{ type: 'text', text: ' \nBefore🙂 ' },
+		{ type: 'context', name: 'same.txt', content: 'First captured version' },
+		{ type: 'text', text: ' \n\nBetween ' },
+		{ type: 'context', name: 'same.txt', content: 'Second captured version' },
+		{ type: 'text', text: ' \n\nDone  \n' },
+	]);
+});
+
+test('Chat footer permission changes use the current model and confirm full access', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
@@ -4558,9 +4606,54 @@ function navigationThreadSnapshot(threadId: string): import('../../../platform/a
 }
 
 
+class TestChatAuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
+	readonly dom = new JSDOM('<!doctype html><body><main></main></body>');
+	readonly window = this.dom.window as unknown as Window;
+	readonly container = this.dom.window.document.querySelector('main')!;
+	readonly onDidLayout = Event.None;
+	readonly onBeforeUnload = Event.None;
+	private readonly closed = this._register(new Emitter<void>());
+	readonly onDidClose = this.closed.event;
+	readonly whenStylesHaveLoaded = Promise.resolve();
+	focusCount = 0;
+	private closing = false;
+	private readonly closeDocument = this.dom.window.close.bind(this.dom.window);
+	constructor(readonly id: number) {
+		super();
+		this.dom.window.focus = () => { this.focusCount++; };
+		this.dom.window.close = () => this.dispose();
+	}
+	layout(): void { }
+	createState() { return { width: 900, height: 760, left: 0, top: 0, featureWidthOffset: 0, featureHeightOffset: 0 }; }
+	override dispose(): void {
+		if (this.closing) return;
+		this.closing = true;
+		this.closed.fire();
+		super.dispose();
+		this.closeDocument();
+	}
+}
+
+class TestChatAuxiliaryWindows extends Disposable implements IAuxiliaryWindowService {
+	readonly onDidOpenWindow = Event.None;
+	readonly windows: TestChatAuxiliaryWindow[] = [];
+	opening: Promise<void> | undefined;
+	openCount = 0;
+	async open(): Promise<IAuxiliaryWindow> {
+		this.openCount++;
+		await this.opening;
+		const window = this._register(new TestChatAuxiliaryWindow(this.windows.length + 1));
+		this.windows.push(window);
+		return window;
+	}
+	getWindow(id: number) { return this.windows.find(window => window.id === id); }
+}
+
 async function createNavigationInputPane(configurationSource = '{}', configurationFiles?: IFileService, threadApi: Partial<IAgentThreadService> = {}, restoredStorage?: InstanceType<typeof BrowserStorageService>, initialization?: Promise<void>) {
 	const resources = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>');
+	dom.window.focus = () => { };
+	const auxiliaryWindows = new TestChatAuxiliaryWindows();
 	const contextView = resources.add(new BrowserContextViewService(dom.window.document.body));
 	const activeSession: ISession = {
 		...session('session-1', 'thread-1', 'Navigation fixture'),
@@ -4569,7 +4662,7 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 			{ threadId: 'thread-2', origin: { type: 'fork', parentThreadId: 'thread-1', parentSequence: 1 }, status: 'active' },
 		],
 	};
-	const fake = fakeApi({ sessions: [activeSession] });
+	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
 	const api: IRendererHost = {
 		...fake.api,
 		thread: {
@@ -4595,7 +4688,8 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	const layout = testLayoutService();
 	const pane = resources.add(new ChatViewPane(dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 		menu, contextMenus, contextView, commands, layout, configurationFiles ?? configuration.fileService, unavailableAccessibleViewService, notifications,
-		inputServices, configuration, storage, userDataProfile, testLifecycle));
+		inputServices, configuration, storage, userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, auxiliaryWindows));
+	resources.add(auxiliaryWindows);
 	inputServices.registerInstance(IViewsService, { openView: async () => pane } as unknown as IViewsService);
 	dom.window.document.body.append(pane.element);
 	if (!initialization) await sessions.initialize();
@@ -4604,7 +4698,7 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	const input = chatPane.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input')!;
 	assert.ok(input);
 	resources.add(toDisposable(() => dom.window.close()));
-	return { resources, dom, fake, pane, sessions, chatPane, input, configuration, commands, inputServices, storage, layout };
+	return { resources, dom, fake, pane, sessions, chatPane, input, configuration, commands, inputServices, storage, layout, commandServices, contextMenus, auxiliaryWindows };
 }
 
 test('moving Chat after attachment preparation cannot follow A-B-A navigation', async () => {
@@ -4721,7 +4815,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await pane.acceptInput();
 			assert.equal(fake.turnStartRequests.length, 0);
 			retry.focus();
-			const help = AccessibleViewRegistry.getImplementations().find(provider => provider.type === AccessibleViewType.Help && provider.name.startsWith('chatHistory-'))!.getProvider({} as ServicesAccessor);
+			const help = AccessibleViewRegistry.getImplementations().filter(provider => provider.type === AccessibleViewType.Help && provider.name.startsWith('chatHistory-')).map(provider => provider.getProvider({} as ServicesAccessor)).find(provider => provider !== undefined);
 			assert.ok(help);
 			assert.match(help.provideContent(), locale === 'en' ? /never sends a message/u : /不会发送消息/u);
 			retry.click();
@@ -4743,7 +4837,7 @@ for (const locale of ['en', 'zh-CN']) {
 
 test('Chat history recovery actions expire across A-B-A selection and pane disposal', async () => {
 	const activeSession = session('session-1', 'thread-1');
-	const fake = fakeApi({ sessions: [activeSession] });
+	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
 	const requested: string[] = [];
 	const released: string[] = [];
 	let pending: DeferredPromise<import('../../../platform/agentHost/common/agent.js').ThreadSubscription> | undefined;
@@ -4785,7 +4879,7 @@ test('Chat history recovery actions expire across A-B-A selection and pane dispo
 
 test('Chat live-update recovery reloads retained content and keeps repeated failures recoverable', async () => {
 	const activeSession = session('session-1', 'thread-1');
-	const fake = fakeApi({ sessions: [activeSession] });
+	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
 	let reads = 0;
 	using chat = createChatService({
 		...fake.api, thread: {
@@ -4949,7 +5043,7 @@ test('composer navigation keeps the first untitled materialization in the same i
 
 test('composer navigation A-B-A during model initialization cannot dispatch an old A request', async () => {
 	const activeSession = { ...session('session-1', 'thread-1'), chats: [{ threadId: 'thread-1', origin: { type: 'root' as const }, status: 'active' as const }, { threadId: 'thread-2', origin: { type: 'fork' as const, parentThreadId: 'thread-1', parentSequence: 1 }, status: 'active' as const }] };
-	const fake = fakeApi({ sessions: [activeSession] });
+	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
 	const initial = new DeferredPromise<void>();
 	let subscriptions = 0;
 	using chat = createChatService({
@@ -5092,7 +5186,7 @@ for (const navigate of [false, true]) {
 		const chat = resources.add(createChatService(fake.api));
 		const pane = resources.add(new ChatViewPane(dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 			menu, contextMenus, contextView, commands, testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
-			createInputServices(contextView, chat, menu, contextMenus), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), userDataProfile, testLifecycle));
+			createInputServices(contextView, chat, menu, contextMenus), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows));
 		dom.window.document.body.append(pane.element);
 		await nextTask();
 		const original = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat')!;
@@ -5379,4 +5473,115 @@ test('initial naming is scoped to the accepted Thread and cannot turn a naming f
 	assert.deepEqual(names.map(({ sessionId, threadId, title, source }) => ({ sessionId, threadId, title, source })), [{ sessionId: 'session-1', threadId: 'thread-1', title: '修复 parser now', source: 'automatic' }]);
 	await assert.rejects(service.renameThread('session-1', 'thread-2', 'Manual branch name'), /Synthetic naming failure/);
 	assert.deepEqual(names.slice(1).map(({ threadId, title, source }) => ({ threadId, title, source })), [{ threadId: 'thread-2', title: 'Manual branch name', source: 'manual' }]);
+});
+
+
+test('IDE item organization retains the background composer and never submits its draft', async () => {
+	const f = await createNavigationInputPane();
+	using resources = f.resources;
+	f.commandServices.registerInstance(ISessionsManagementService, f.sessions);
+	f.commandServices.registerInstance(IStorageService, f.storage);
+	const draft = f.sessions.createUntitledSession('Organize before sending');
+	await nextTask();
+	const original = f.pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat:not([hidden])')!;
+	typeChatText(f.dom.window, original.querySelector<HTMLTextAreaElement>('textarea')!, 'Retained unsent text');
+	f.pane.addContext({ id: 'file', kind: 'file', name: 'unsent.txt', resolve: async () => ({ name: 'unsent.txt', content: 'Retained attachment' }) });
+	const originalInput = original.querySelector<HTMLTextAreaElement>('textarea')!.value;
+	const originalDraft = (await f.pane.captureActiveDraft())!.draft;
+	f.sessions.selectThread('session-1', 'thread-1');
+	await nextTask();
+	await f.commands.executeCommand('sessions.list.togglePin', { untitledSessionId: draft.untitledSessionId });
+	await nextTask();
+	assert.equal(f.sessions.active?.session.sessionId, 'session-1');
+	assert.equal(f.pane.element.querySelectorAll('.ash-chat-pane-host > .ash-chat').length, 2);
+	assert.ok(original.isConnected);
+	assert.equal(original.querySelector<HTMLTextAreaElement>('textarea')!.value, originalInput);
+	assert.equal(f.fake.turnStartRequests.length, 0);
+	assert.equal(f.pane.element.querySelectorAll('[data-section="pinned"] .ash-agent-session-row').length, 1);
+	f.sessions.selectThread('created', 'created-thread');
+	await nextTask();
+	assert.deepEqual((await f.pane.captureActiveDraft())!.draft, originalDraft);
+	await f.pane.openInNewWindow({ kind: 'untitled', session: draft });
+	const popup = f.auxiliaryWindows.windows[0]!;
+	assert.equal(popup.container.querySelector('.ash-chat'), original);
+	assert.equal(popup.window.document.title, f.sessions.active!.session.title);
+	assert.deepEqual((await f.pane.captureActiveDraft())!.draft, originalDraft);
+	popup.window.close();
+	assert.equal(f.pane.element.querySelector('.ash-chat-pane-host > .ash-chat:not([hidden])'), original);
+});
+
+test('IDE background item retains its composer in one light Agent auxiliary window and returns without sending', async () => {
+	const f = await createNavigationInputPane();
+	using resources = f.resources;
+	const draft = f.sessions.createUntitledSession('Open this draft');
+	await nextTask();
+	const draftPane = f.pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat:not([hidden])')!;
+	const draftInput = draftPane.querySelector<HTMLTextAreaElement>('textarea')!;
+	typeChatText(f.dom.window, draftInput, 'Background draft');
+	f.pane.addContext({ id: 'popup-file', kind: 'file', name: 'unsent.txt', resolve: async () => ({ name: 'unsent.txt', content: 'Retained attachment' }) });
+	const originalDraft = (await f.pane.captureActiveDraft())!.draft;
+	f.sessions.selectThread('session-1', 'thread-1');
+	await nextTask();
+	typeChatText(f.dom.window, f.input, 'Foreground stays');
+	f.commands.executeCommand = async () => { throw new Error('Auxiliary windows must not dispatch the full Agent main-window command'); };
+	const ready = new DeferredPromise<void>();
+	f.auxiliaryWindows.opening = ready.p;
+	let menu: import('../../../base/browser/contextmenu.js').IContextMenuDelegate | undefined;
+	f.contextMenus.showContextMenu = value => { menu = value as import('../../../base/browser/contextmenu.js').IContextMenuDelegate; };
+	f.pane.element.querySelector<HTMLButtonElement>('[data-section="drafts"] .ash-agent-session-more')!.click();
+	const opening = menu!.getActions().find(action => action.id === 'sessions.openInNewWindow')!.run();
+	const duplicate = f.pane.openInNewWindow({ kind: 'untitled', session: draft });
+	await ready.complete(); await Promise.all([opening, duplicate]);
+	assert.equal(f.auxiliaryWindows.openCount, 1);
+	const popup = f.auxiliaryWindows.windows[0]!;
+	assert.ok(popup.container.classList.contains('ash-sessions-auxiliary-window'));
+	assert.equal(popup.container.querySelector('.ash-chat'), draftPane);
+	assert.equal(popup.container.querySelector('textarea'), draftInput);
+	assert.equal(draftInput.value, originalDraft.text);
+	assert.equal(f.sessions.active?.session.sessionId, 'session-1');
+	assert.equal(draftPane.hidden, false);
+	assert.equal(f.pane.element.querySelector<HTMLElement>('.ash-sessions-detached-chat')!.hidden, true);
+	const focusCount = popup.focusCount;
+	await f.pane.openInNewWindow({ kind: 'untitled', session: draft });
+	assert.equal(f.auxiliaryWindows.openCount, 1);
+	assert.ok(popup.focusCount > focusCount);
+	f.sessions.createUntitledSession('Another conversation');
+	assert.equal(popup.container.querySelector('.ash-chat'), draftPane);
+	assert.equal(draftPane.hidden, false);
+	typeChatText(popup.dom.window, draftInput, originalDraft.text + ' Edited in popup');
+	popup.container.querySelector<HTMLButtonElement>('[aria-label="Return to main window"]')!.click();
+	assert.equal(f.sessions.activeUntitledSession?.untitledSessionId, draft.untitledSessionId);
+	assert.equal(f.pane.element.querySelector('.ash-chat-pane-host > .ash-chat:not([hidden])'), draftPane);
+	assert.equal(draftInput.value, originalDraft.text + ' Edited in popup');
+	assert.deepEqual((await f.pane.captureActiveDraft())!.draft.contexts, originalDraft.contexts);
+	assert.equal(f.pane.element.querySelector('.ash-sessions-detached-chat'), null);
+	assert.equal(f.input.value, 'Foreground stays');
+	assert.equal(f.fake.createSessionRequests.length, 0);
+	assert.equal(f.fake.turnStartRequests.length, 0);
+});
+
+test('IDE auxiliary opening closes a late window when its owning chat is disposed', async () => {
+	const f = await createNavigationInputPane();
+	using resources = f.resources;
+	const ready = new DeferredPromise<void>();
+	f.auxiliaryWindows.opening = ready.p;
+	const opening = f.pane.openInNewWindow();
+	f.pane.dispose();
+	await ready.complete(); await opening;
+	assert.equal(f.auxiliaryWindows.windows[0]!.isDisposed, true);
+	assert.equal(f.fake.turnStartRequests.length, 0);
+});
+
+for (const close of ['discard', 'dispose'] as const) test(`IDE auxiliary window closes when its owner is ${close === 'discard' ? 'discarded' : 'disposed'}`, async () => {
+	const f = await createNavigationInputPane();
+	using resources = f.resources;
+	const draft = f.sessions.createUntitledSession('Owned popup');
+	await f.pane.openInNewWindow();
+	const popup = f.auxiliaryWindows.windows[0]!;
+	assert.equal(popup.isDisposed, false);
+	if (close === 'discard') f.sessions.discardUntitledSession(draft.untitledSessionId);
+	else f.pane.dispose();
+	assert.equal(popup.isDisposed, true);
+	assert.equal(f.fake.createSessionRequests.length, 0);
+	assert.equal(f.fake.turnStartRequests.length, 0);
 });

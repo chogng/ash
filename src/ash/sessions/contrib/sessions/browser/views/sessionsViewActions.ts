@@ -13,11 +13,16 @@ import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.j
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
+import type { ISession } from '../../../../services/sessions/common/session.js';
+import { isRecord } from '../../../../../base/common/types.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { IsSessionsWindowContext } from '../../../../../workbench/common/contextkeys.js';
-import { IStorageService } from '../../../../../platform/storage/common/storage.js';
-import { writeNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
+import { IProjectService } from '../../../../../platform/projects/common/projectService.js';
+import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
+import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
+import { readNewChatDraftState, writeNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
 
 registerAction2(class CloseSessionAction extends Action2 {
 	constructor() {
@@ -71,25 +76,70 @@ function sessionTarget(argument: unknown): string | undefined {
 	throw new TypeError(localize('chatSession.target.invalid', 'Choose a valid session.'));
 }
 
+/** Resolve the captured item only after its picker/confirmation is accepted. */
+function sessionActionTarget(accessor: ServicesAccessor, argument: unknown, useActive = false): { readonly title: string; resolve(): Promise<ISession>; } {
+	const sessions = accessor.get(ISessionsManagementService);
+	const draftId = isRecord(argument) && typeof argument.untitledSessionId === 'string' && Object.keys(argument).length === 1
+		? argument.untitledSessionId
+		: argument === undefined && useActive ? sessions.activeUntitledSession?.untitledSessionId : undefined;
+	if (draftId !== undefined) {
+		const draft = sessions.untitledSessions.find(session => session.untitledSessionId === draftId);
+		const promoted = sessions.materializedSessions.get().get(draftId);
+		if (!draft && promoted) return sessionActionTarget(accessor, promoted.sessionId);
+		if (!draft) throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
+		const storage = accessor.get(IStorageService);
+		return {
+			title: draft.title,
+			resolve: async () => {
+				const active = await sessions.materializeUntitledSession(draftId);
+				if (sessions.untitledSessions.some(session => session.untitledSessionId === draftId)) {
+					// Park an unmounted composer's draft before the catalog removes its
+					// local identity. Mounted composers retain and migrate their live input.
+					const key = `untitled:${draftId}`;
+					const input = readNewChatDraftState(storage, key);
+					if (input) writeNewChatDraftState(storage, input, active.threadId);
+					sessions.promoteUntitledSession(draftId, active);
+					writeNewChatDraftState(storage, undefined, key);
+				}
+				return sessions.sessions.find(session => session.sessionId === active.session.sessionId) ?? active.session;
+			},
+		};
+	}
+	const id = sessionTarget(argument) ?? (useActive ? accessor.get(IChatSessionNavigationService).getActiveConversation()?.sessionId : undefined);
+	const session = sessions.sessions.find(candidate => candidate.sessionId === id);
+	if (!session) throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
+	return { title: session.title, resolve: async () => session };
+}
+
+registerAction2(class PinSessionAction extends Action2 {
+	constructor() { super({ id: 'sessions.list.togglePin', title: localize2('sessions.list.pin', 'Pin chat') }); }
+
+	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<string> {
+		const target = sessionActionTarget(accessor, argument, true);
+		const storage = accessor.get(IStorageService);
+		const session = await target.resolve();
+		const key = `sessions.list.pinned.${session.sessionId}`;
+		storage.store(key, !storage.getBoolean(key, StorageScope.PROFILE, false), StorageScope.PROFILE, StorageTarget.USER);
+		return session.sessionId;
+	}
+});
+
 registerAction2(class ArchiveSessionAction extends Action2 {
 	constructor() { super({ id: archiveId, title: localize2('chatSession.archive', 'Archive') }); }
 
 	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
-		const requested = sessionTarget(argument);
 		const sessions = accessor.get(ISessionsManagementService);
 		const configuration = accessor.get(IConfigurationService);
 		const dialogs = accessor.get(IDialogService);
-		const id = requested ?? accessor.get(IChatSessionNavigationService).getActiveConversation()?.sessionId;
 		await sessions.initialize();
-		const session = sessions.sessions.find(candidate => candidate.sessionId === id && candidate.status === 'active');
-		if (!session) throw new Error(localize('chatSession.active.missing', 'Open a session before archiving it.'));
+		const target = sessionActionTarget(accessor, argument, true);
 		const action = getChatSessionArchiveActionPresentation(getChatSessionArchiveActionWording(configuration)).archive;
 		const result = await dialogs.confirm({
-			message: localize('chatSession.archive.confirm', '{0}: {1}?', action.title.value, session.title),
+			message: localize('chatSession.archive.confirm', '{0}: {1}?', action.title.value, target.title),
 			detail: localize('chatSession.archive.detail', 'Running work in this session will be interrupted. You can restore its root conversation later.'),
 			primaryButton: action.title.value,
 		});
-		if (result.confirmed) await sessions.archiveSession(session.sessionId);
+		if (result.confirmed) await sessions.archiveSession((await target.resolve()).sessionId);
 	}
 });
 
@@ -189,17 +239,14 @@ registerAction2(class RenameSessionAction extends Action2 {
 	constructor() { super({ id: 'agentSession.rename', title: localize2('chatSession.rename', 'Chat: Rename Session'), f1: true }); }
 
 	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
-		const requested = sessionTarget(argument);
 		const sessions = accessor.get(ISessionsManagementService);
-		const id = requested ?? accessor.get(IChatSessionNavigationService).getActiveConversation()?.sessionId;
 		await sessions.initialize();
-		const session = sessions.sessions.find(candidate => candidate.sessionId === id);
-		if (!session) throw new Error(localize('chatSession.rename.missing', 'Open a session before renaming it.'));
+		const target = sessionActionTarget(accessor, argument, true);
 		const title = await accessor.get(IQuickInputService).input({
-			title: localize('chatSession.rename.prompt', 'Session name'), value: session.title,
+			title: localize('chatSession.rename.prompt', 'Session name'), value: target.title,
 			validateInput: async value => !value.trim() || Array.from(value.trim()).length > 256 ? localize('chat.rename.invalid', 'Enter a name with 1 to 256 characters.') : undefined,
 		});
-		if (title !== undefined) await sessions.renameSession(session.sessionId, title.trim());
+		if (title !== undefined) await sessions.renameSession((await target.resolve()).sessionId, title.trim());
 	}
 });
 
@@ -207,8 +254,19 @@ registerAction2(class DeleteArchivedSessionAction extends Action2 {
 	constructor() { super({ id: 'agentSession.delete', title: localize2('chatSession.delete', 'Chat: Delete Archived Session'), f1: true }); }
 
 	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
-		const requested = sessionTarget(argument);
 		const sessions = accessor.get(ISessionsManagementService);
+		// Untitled chats are local drafts; deleting one must not create a backend Session.
+		if (argument && typeof argument === 'object' && Reflect.get(argument, 'kind') === 'untitled') {
+			const draftId = Reflect.get(Reflect.get(argument, 'session') ?? {}, 'untitledSessionId');
+			if (typeof draftId !== 'string') throw new TypeError(localize('chatSession.target.invalid', 'Choose a valid session.'));
+			const draft = sessions.untitledSessions.find(session => session.untitledSessionId === draftId);
+			if (draft) {
+				sessions.discardUntitledSession(draftId);
+				writeNewChatDraftState(accessor.get(IStorageService), undefined, `untitled:${draftId}`);
+			}
+			return;
+		}
+		const requested = sessionTarget(argument);
 		const input = accessor.get(IQuickInputService);
 		const dialogs = accessor.get(IDialogService);
 		await sessions.initialize();
@@ -227,13 +285,99 @@ registerAction2(class DeleteArchivedSessionAction extends Action2 {
 			});
 		}
 		if (!id) return;
-		const session = archived.find(candidate => candidate.sessionId === id);
+		const session = sessions.sessions.find(candidate => candidate.sessionId === id);
 		if (!session) throw new Error(localize('chatSession.archived.missing', 'Archived session is unavailable: {0}', id));
 		const confirmation = await dialogs.confirm({
 			message: localize('chatSession.delete.confirm', 'Permanently delete {0}?', session.title),
 			detail: localize('chatSession.delete.detail', 'This removes the session and its conversation history and cannot be undone. Any resumed work in this session will be stopped. Other sessions and unsent drafts are kept.'),
 			primaryButton: localize('chatSession.delete.button', 'Delete permanently'),
 		});
-		if (confirmation.confirmed) await sessions.deleteSession(session.sessionId);
+		if (confirmation.confirmed) {
+			if (session.status === 'active') await sessions.archiveSession(session.sessionId);
+			await sessions.deleteSession(session.sessionId);
+		}
+	}
+});
+
+registerAction2(class AddSessionToProjectAction extends Action2 {
+	constructor() { super({ id: 'agentSession.addToProject', title: localize2('sessions.list.addToProject', 'Add to project') }); }
+
+	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+		const target = sessionActionTarget(accessor, argument);
+		const projects = accessor.get(IProjectService);
+		const input = accessor.get(IQuickInputService);
+		const available = (await projects.list()).filter(project => !project.archived);
+		if (!available.length) throw new Error(localize('sessions.list.noProjects', 'Create a project before adding this chat.'));
+		const selected = await pickSessionDestination(input, localize('sessions.list.addToProject', 'Add to project'), available.map(project => ({ label: project.name, id: project.id })));
+		if (!selected) return;
+		const session = await target.resolve();
+		// Project identities belong to this host's backend.
+		if (session.backendSessionId) throw new Error(localize('sessions.list.projectHost', 'Projects can only include chats from this host.'));
+		await projects.addSession(await projects.read(selected.id), session.sessionId);
+	}
+});
+
+registerAction2(class MoveSessionToGroupAction extends Action2 {
+	constructor() { super({ id: 'agentSession.moveToGroup', title: localize2('sessions.list.moveToGroup', 'Move to group') }); }
+
+	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+		const target = sessionActionTarget(accessor, argument);
+		const groups = accessor.get(ISessionGroupsService);
+		const input = accessor.get(IQuickInputService);
+		const selected = await pickSessionDestination(input, localize('sessions.list.moveToGroup', 'Move to group'), [
+			{ label: localize('sessions.list.newGroup', 'New group…'), id: 'new', create: true },
+			{ label: localize('sessions.list.noGroup', 'No group'), id: '' },
+			...groups.groups.map(group => ({ label: group.name, id: group.sectionId })),
+		]);
+		if (!selected) return;
+		if (selected.create) {
+			const name = await input.input({
+				title: localize('sessions.list.groupName', 'Group name'),
+				validateInput: async value => !value.trim() || value.trim().length > 128 ? localize('sessions.list.invalidGroup', 'Enter a name with 1 to 128 characters.') : undefined,
+			});
+			if (name === undefined) return;
+			const session = await target.resolve();
+			await groups.move(session.sessionId, (await groups.create(name.trim())).sectionId);
+		} else await groups.move((await target.resolve()).sessionId, selected.id || null);
+	}
+});
+
+async function pickSessionDestination(input: IQuickInputService, title: string, items: readonly (IQuickPickItem & { id: string; create?: boolean; })[]) {
+	using resources = new DisposableStore();
+	const picker = resources.add(input.createQuickPick<(typeof items)[number]>());
+	picker.ariaLabel = picker.placeholder = title;
+	picker.items = items;
+	return await new Promise<(typeof items)[number] | undefined>(resolve => {
+		resources.add(picker.onDidAccept(() => { const item = picker.selectedItems[0]; if (item) { resolve(item); picker.hide(); } }));
+		resources.add(picker.onDidHide(() => resolve(undefined)));
+		picker.show();
+	});
+}
+
+registerAction2(class OpenSessionInNewWindowAction extends Action2 {
+	constructor() { super({ id: 'sessions.openInNewWindow', title: localize2('sessions.list.openWindow', 'Open in new window') }); }
+
+	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+		const sessions = accessor.get(ISessionsManagementService);
+		const view = accessor.get(ISessionsService);
+		const conversations = accessor.get(ISessionsConversationService);
+		let selection = view.activeSelection;
+		if (argument !== undefined) {
+			if (!argument || typeof argument !== 'object') throw new TypeError(localize('chatSession.target.invalid', 'Choose a valid session.'));
+			if (Reflect.get(argument, 'kind') === 'untitled') {
+				const id = Reflect.get(Reflect.get(argument, 'session') ?? {}, 'untitledSessionId');
+				const session = sessions.untitledSessions.find(candidate => candidate.untitledSessionId === id);
+				selection = session ? { kind: 'untitled', session } : undefined;
+			} else if (Reflect.get(argument, 'kind') === 'session') {
+				const active = Reflect.get(argument, 'active');
+				const id = active && Reflect.get(Reflect.get(active, 'session') ?? {}, 'sessionId');
+				const threadId = active && Reflect.get(active, 'threadId');
+				const session = sessions.sessions.find(candidate => candidate.sessionId === id && candidate.status === 'active');
+				selection = session?.chats.some(chat => chat.threadId === threadId && chat.status === 'active') ? { kind: 'session', active: { session, threadId } } : undefined;
+			} else throw new TypeError(localize('chatSession.target.invalid', 'Choose a valid session.'));
+		}
+		if (!selection) throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
+		view.activateSelection(selection);
+		await conversations.openInNewWindow(selection);
 	}
 });

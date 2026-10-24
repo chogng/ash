@@ -46,7 +46,7 @@
 	padding: 0;
 	border: 0;
 	border-radius: var(--ash-cornerRadius-large);
-	color: var(--ash-sessions-activityBar-inactiveForeground);
+	color: var(--ash-sessions-activityBar-foreground);
 	background: transparent;
 }
 
@@ -57,9 +57,11 @@
 	min-height: var(--ash-spacing-size240);
 }
 
-.ash-sessions-activity-item:not(:disabled):hover,
+.ash-sessions-activity-item:not(:disabled):hover {
+	background: var(--ash-list-hoverBackground);
+}
+
 .ash-sessions-activity-item.selected:not(:disabled) {
-	color: var(--ash-sessions-activityBar-foreground);
 	background: var(--ash-sessions-selectionBackground);
 }
 
@@ -109,8 +111,4 @@
 	justify-content: flex-start;
 	padding: 0 var(--ash-spacing-size120);
 	font-size: var(--ash-fontSize-body1);
-}
-
-.ash-sessions-activity-item:not(.selected):not(:disabled):hover {
-	background: var(--ash-list-hoverBackground);
 }

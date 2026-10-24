@@ -53,3 +53,60 @@
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-body1);
 }
+
+.ash-sessions-auxiliary-window > .ash-sessions-chat-slot,
+.ash-sessions-auxiliary-window > .ash-chat {
+	flex: 1 1 auto;
+	height: 0;
+	border: 0;
+}
+
+.ash-sessions-auxiliary-titlebar {
+	display: flex;
+	align-items: center;
+	flex: 0 0 auto;
+	min-width: 0;
+	height: 44px;
+	gap: var(--ash-spacing-size120);
+	padding: 0 var(--ash-spacing-size120);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
+	background: var(--ash-editor-background);
+	-webkit-app-region: drag;
+}
+
+.ash-sessions-auxiliary-window[data-runtime="electron"][data-os="mac"]
+	.ash-sessions-auxiliary-titlebar {
+	padding-inline-start: calc(2 * var(--ash-spacing-size400));
+}
+
+.ash-sessions-auxiliary-window[data-runtime="electron"]:not([data-os="mac"])
+	.ash-sessions-auxiliary-titlebar {
+	padding-inline-end: calc(
+		3 * var(--ash-spacing-size400) + var(--ash-spacing-size200)
+	);
+}
+
+.ash-sessions-auxiliary-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-sessions-auxiliary-actions {
+	display: flex;
+	gap: var(--ash-spacing-size40);
+	-webkit-app-region: no-drag;
+}
+
+.ash-sessions-detached-chat {
+	display: grid;
+	place-content: center;
+	height: 100%;
+	padding: var(--ash-spacing-size200);
+}
+
+.ash-sessions-detached-chat[hidden] {
+	display: none;
+}

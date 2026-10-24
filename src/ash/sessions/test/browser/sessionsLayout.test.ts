@@ -38,6 +38,7 @@ suite('sessions browser component', () => {
 		for (const icon of await icons.all()) {
 			await expect(icon).toHaveCSS('width', `${size}px`);
 			await expect(icon).toHaveCSS('height', `${size}px`);
+			await expect(icon.locator('.ash-icon')).toHaveCSS('font-size', `${size}px`);
 			const bounds = await icon.evaluate(element => {
 				const icon = element.getBoundingClientRect();
 				const button = element.closest('button')!.getBoundingClientRect();
@@ -114,7 +115,7 @@ suite('sessions browser component', () => {
 		await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await expect(chat).toHaveCSS('background-color', 'rgb(240, 240, 240)');
-		await expect(page.locator('.ash-sessions-list-item.selected').first()).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+		await expect(page.locator('.ash-sessions-list-item[aria-current="page"]').first()).toHaveCSS('background-color', 'rgb(240, 240, 240)');
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 			await chat.click();
@@ -380,6 +381,28 @@ suite('sessions browser component', () => {
 		const titlebarBounds = await titlebar.boundingBox();
 		const buttonBounds = await titlebarButtons.evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().toJSON()));
 		expect(buttonBounds.every((button, index) => button.right < titlebarBounds!.x + titlebarBounds!.width / 2 && (index === 0 || button.left > buttonBounds[index - 1].left))).toBe(true);
+		const sidebar = page.locator('[data-part="sidebar"]');
+		const mode = titlebar.locator('.ash-window-mode-control');
+		const newSession = activityNavigation.getByRole('button', { name: 'New', exact: true });
+		for (const delta of [0, -110, 120]) {
+			if (delta) {
+				const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();
+				const bounds = (await sash.boundingBox())!;
+				const x = bounds.x + bounds.width / 2;
+				const y = bounds.y + 100;
+				await page.mouse.move(x, y);
+				await page.mouse.down();
+				await page.mouse.move(x + delta, y, { steps: 5 });
+				await page.mouse.up();
+			}
+			const modeBounds = (await mode.boundingBox())!;
+			const navigationBounds = (await newSession.boundingBox())!;
+			expect(modeBounds.x + modeBounds.width).toBeCloseTo(navigationBounds.x + navigationBounds.width, 1);
+			if (delta < 0) {
+				const forwardBounds = (await titlebarButtons.last().boundingBox())!;
+				expect(modeBounds.x - forwardBounds.x - forwardBounds.width).toBeCloseTo(8, 1);
+			}
+		}
 	});
 
 	test('Sessions titlebar colors resolve under light and dark themes', async function () {
@@ -390,6 +413,75 @@ suite('sessions browser component', () => {
 		}
 	});
 
+
+	for (const locale of ['en', 'zh-CN']) test(`Workspace mode selection slides behind stationary icons (${locale})`, async function () {
+		const { page } = browserTests;
+		if (locale === 'zh-CN') await page.goto('/sessions.html?locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.emulateMedia({ reducedMotion: 'no-preference' });
+		const control = page.locator('.ash-window-mode-control');
+		const buttons = control.getByRole('button');
+		const chat = buttons.nth(0);
+		const code = buttons.nth(1);
+		const iconBounds = () => control.locator('.ash-icon').evaluateAll(icons => icons.map(icon => icon.getBoundingClientRect().toJSON()));
+		const initialBounds = await iconBounds();
+		const initialSize = await control.boundingBox();
+		const slider = () => control.evaluate(element => {
+			const style = getComputedStyle(element, '::before');
+			return { translate: style.translate, duration: style.transitionDuration, border: style.borderTopColor, width: Number.parseFloat(style.width) };
+		});
+		expect((await slider()).translate).toBe('0%');
+		const motion = await control.evaluate(element => new Promise<{ translate: number; width: number; }>((resolve, reject) => {
+			const timeout = setTimeout(() => { element.removeEventListener('transitionrun', onRun); reject(new Error('Selection slider did not start moving')); }, 5000);
+			function onRun(event: Event): void {
+				const transition = event as TransitionEvent;
+				if (transition.propertyName !== 'translate' || transition.pseudoElement !== '::before') return;
+				element.removeEventListener('transitionrun', onRun);
+				clearTimeout(timeout);
+				const animation = element.getAnimations({ subtree: true }).find(animation => animation instanceof CSSTransition && animation.transitionProperty === 'translate')!;
+				animation.pause();
+				animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
+				const style = getComputedStyle(element, '::before');
+				const result = { translate: Number.parseFloat(style.translate), width: Number.parseFloat(style.width) };
+				animation.finish();
+				resolve(result);
+			}
+			element.addEventListener('transitionrun', onRun);
+			element.querySelectorAll<HTMLButtonElement>('button')[1]!.click();
+		}));
+		expect(motion.translate).toBeGreaterThan(0);
+		expect(motion.translate).toBeLessThan(100);
+		expect(motion.width).toBeCloseTo(initialSize!.width / 2, 1);
+		await expect(code).toHaveAttribute('aria-pressed', 'true');
+		expect((await slider()).translate).toBe('100%');
+		expect(await iconBounds()).toEqual(initialBounds);
+		await code.press('ArrowLeft');
+		await expect(chat).toBeFocused();
+		await expect(code).toHaveAttribute('aria-pressed', 'true');
+		await chat.press('Enter');
+		await expect(chat).toHaveAttribute('aria-pressed', 'true');
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+			await code.click();
+			await expect(code).toHaveAttribute('aria-pressed', 'true');
+			expect(await slider()).toMatchObject({ translate: '100%', duration: '0s' });
+			await code.press('ArrowLeft');
+			await expect(chat).toHaveCSS('outline-style', 'solid');
+			if (theme.includes('high-contrast')) {
+				expect((await slider()).border).toBe(await chat.evaluate(element => getComputedStyle(element).outlineColor));
+			}
+			await chat.press('Enter');
+			await expect(chat).toHaveAttribute('aria-pressed', 'true');
+			expect(await slider()).toMatchObject({ translate: '0%', duration: '0s' });
+			expect(await iconBounds()).toEqual(initialBounds);
+			expect(await control.boundingBox()).toEqual(initialSize);
+		}
+		await control.evaluate(element => element.setAttribute('dir', 'rtl'));
+		await code.click();
+		await expect(code).toHaveAttribute('aria-pressed', 'true');
+		expect((await slider()).translate).toBe('-100%');
+	});
 
 	for (const locale of ['en', 'zh-CN']) test(`Sessions collapsed sidebar hides all navigation and gives its width to the conversation (${locale})`, async function () {
 		const { page } = browserTests;
@@ -497,6 +589,54 @@ suite('sessions browser component', () => {
 		} finally {
 			await outside.evaluate(element => element.remove());
 		}
+	});
+
+	for (const locale of ['en', 'zh-CN']) test(`Sessions icon roles stay independent of IDE defaults (${locale})`, async function () {
+		const { page, context, info: testInfo } = browserTests;
+		if (locale === 'zh-CN') await page.goto('/sessions.html?locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await expect(page.locator('.ash-sessions-chat-slot.active :is(.ash-chat-input-send-action, .ash-chat-input-voice-action) .ash-icon')).toHaveCount(1);
+		const primary = page.locator('[data-part="titlebar"] .ash-icon-label-icon > .ash-icon, .ash-window-mode-control .ash-segmented-control-option > .ash-icon, .ash-sessions-activity-item .ash-icon, :is(.ash-chat-input-send-action, .ash-chat-input-voice-action) .ash-icon');
+		const inline = page.locator('.ash-sessions-list-section-icon').first();
+		const accounts = page.locator('[data-action-id="sessions.activity.accounts"] button');
+		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+			expect(await primary.count()).toBeGreaterThan(5);
+			for (const icon of await primary.all()) {
+				await expect(icon).toHaveCSS('font-size', '16px');
+				await expect(icon).toHaveCSS('width', '16px');
+				await expect(icon).toHaveCSS('height', '16px');
+			}
+			await expect(inline).toHaveCSS('width', '16px');
+			await expect(inline.locator('.ash-icon')).toHaveCSS('font-size', '16px');
+			await expect(page.getByRole('note').locator('.ash-icon')).toHaveCSS('font-size', '16px');
+			await page.locator('[data-action-id="sessions.newSession"] button').click({ button: 'right' });
+			const auxiliary = page.locator('.ash-menu .ash-submenu-indicator > .ash-icon').first();
+			await expect(auxiliary).toHaveCSS('font-size', '12px');
+			await expect(auxiliary).toHaveCSS('width', '12px');
+			await page.keyboard.press('Escape');
+			await accounts.press('Enter');
+			const menuIcons = page.locator('.ash-menu .ash-icon');
+			expect(await menuIcons.count()).toBeGreaterThan(0);
+			for (const icon of await menuIcons.all()) {
+				await expect(icon).toHaveCSS('font-size', '16px');
+				await expect(icon).toHaveCSS('width', '16px');
+			}
+			await page.keyboard.press('Escape');
+			await expect(accounts).toBeFocused();
+		}
+		await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-light'));
+		await page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor .stanza-editor').getByRole('textbox').focus();
+		await page.keyboard.insertText('Icon sizing draft');
+		await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-input-send-action .ash-icon')).toHaveCSS('font-size', '16px');
+		await page.screenshot({ path: testInfo.outputPath(`sessions-icon-roles-${locale}.png`) });
+		const ide = await context.newPage();
+		try {
+			await ide.goto('/chatInput.html?inlineCode=1');
+			const ideIcon = ide.locator(':is(.ash-chat-input-send-action, .ash-chat-input-voice-action) .ash-icon').first();
+			await expect(ideIcon).toHaveCSS('font-size', '16px');
+			await expect(ideIcon).toHaveCSS('width', '16px');
+		} finally { await ide.close(); }
 	});
 
 	for (const locale of ['en', 'zh-CN']) test(`Sessions typography stays independent of IDE defaults (${locale})`, async function () {

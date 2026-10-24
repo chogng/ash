@@ -22,6 +22,41 @@ const styles: IBreadcrumbsWidgetStyles = {
 };
 
 suite('BreadcrumbsWidget', () => {
+	test('coalesces path and size measurements and keeps focus reveals synchronous', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		const pending = new Set<() => void>();
+		try {
+			using widget = new BreadcrumbsWidget(dom.window.document.body, 3, undefined, Lxicon.chevronRight, styles, (_window, callback) => {
+				pending.add(callback);
+				return toDisposable(() => pending.delete(callback));
+			});
+			const viewport = dom.window.document.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+			let reads = 0;
+			Object.defineProperty(viewport, 'clientWidth', { get: () => { reads++; return 100; } });
+			widget.setItems([new LabelItem('folder'), new LabelItem('old.ts')]);
+			const last = new LabelItem('new.ts');
+			widget.setItems([new LabelItem('folder'), last]);
+			widget.layout(undefined);
+			widget.layout(undefined);
+			assert.equal(reads, 0, 'Host writes must not force synchronous layout');
+			assert.equal(pending.size, 1);
+			for (const callback of [...pending]) callback();
+			assert.ok(reads > 0);
+			assert.equal(pending.size, 0);
+			widget.layout(undefined);
+			widget.revealLast();
+			assert.equal(pending.size, 1, 'A reveal consumes the pending scrollbar measurement');
+			const previousReads = reads;
+			widget.setFocused(last);
+			assert.equal(dom.window.document.activeElement?.textContent, 'new.ts');
+			assert.ok(reads > previousReads, 'Keyboard focus reveals immediately');
+			assert.equal(pending.size, 0);
+			widget.layout(undefined);
+			widget.dispose();
+			assert.equal(pending.size, 0);
+		} finally { dom.window.close(); }
+	});
+
 	test('moves focus independently of activation and blocks disabled clicks', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {
@@ -87,7 +122,7 @@ suite('BreadcrumbsWidget', () => {
 			widget.setItems([new LabelItem('final')]);
 			widget.revealLast();
 			widget.dispose();
-			assert.deepEqual(operations, Array.from({ length: 4 }, () => ['scheduled', 'cancelled']).flat());
+			assert.deepEqual(operations, Array.from({ length: 6 }, () => ['scheduled', 'cancelled']).flat());
 		} finally {
 			dom.window.close();
 		}

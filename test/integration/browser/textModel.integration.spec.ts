@@ -153,9 +153,10 @@ test('Explicit Code assembly installs text contributions without document contro
 	await expect(page.locator('.stanza-editor')).toBeVisible();
 	await expect(page.locator('.stanza-structured-format-toolbar')).toHaveCount(0);
 	const find = page.locator('.stanza-editor-find-widget');
-	await expect(find).toHaveAttribute('role', 'dialog');
+	await expect(find).toHaveCount(0);
 	await page.locator('.stanza-editor-input').focus();
 	await page.keyboard.press('ControlOrMeta+f');
+	await expect(find).toHaveAttribute('role', 'dialog');
 	await expect(find).toBeVisible();
 	await find.locator('input[aria-label="Find"]').fill('fn');
 	await page.keyboard.press('Escape');

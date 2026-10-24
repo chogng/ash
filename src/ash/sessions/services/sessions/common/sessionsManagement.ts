@@ -14,7 +14,7 @@ export interface ISessionsManagementService {
 	readonly sessions: readonly ISession[];
 	readonly active: IActiveSessionThread | undefined;
 	readonly untitledSessions: readonly IUntitledChatSession[];
-	/** Keeps draft identity resolvable after first send, independently of foreground selection. */
+	/** Keeps draft identity resolvable after materialization, independently of foreground selection. */
 	readonly materializedSessions: IObservable<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId; }>>;
 	readonly activeUntitledSession: IUntitledChatSession | undefined;
 	readonly state: SessionsManagementState;
@@ -33,7 +33,7 @@ export interface ISessionsManagementService {
 	setUntitledSessionModel(untitledSessionId: string, model: ModelRef | undefined): void;
 	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined): void;
 	setUntitledSessionAgent(untitledSessionId: string, agent: ChatAgent | undefined): void;
-	/** Concurrent first sends share one creation; retrying a successful creation keeps its durable identity. */
+	/** Organization and first send share one creation; creating a durable identity does not submit a request. */
 	materializeUntitledSession(untitledSessionId: string): Promise<IActiveSessionThread>;
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void;
 	ensureActiveThread(): Promise<IActiveSessionThread>;

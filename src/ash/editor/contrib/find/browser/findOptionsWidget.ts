@@ -51,6 +51,9 @@ export class FindOptionsWidget extends Disposable implements IOverlayWidget {
 		updateHoverLabels();
 		this._register(keybindingService.onDidUpdateKeybindings(updateHoverLabels));
 		this.root.append(this.caseButton, this.wordButton, this.regexButton);
+		this.checked(this.caseButton, state.matchCase);
+		this.checked(this.wordButton, state.wholeWord);
+		this.checked(this.regexButton, state.isRegex);
 		this._register(state.onFindReplaceStateChange(event => {
 			this.checked(this.caseButton, state.matchCase);
 			this.checked(this.wordButton, state.wholeWord);

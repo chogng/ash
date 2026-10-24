@@ -1,5 +1,6 @@
 import "./tablist.css";
 import { addDisposableListener } from "../../dom.js";
+import { AnimationFrameScheduler } from '../../scheduler.js';
 import type { Icon } from "../../../common/icon.js";
 import type { IAction } from "../../../common/actions.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../common/lifecycle.js";
@@ -88,6 +89,8 @@ export class TabList<T> extends Disposable {
 	private readonly activate: (value: T) => void;
 	private readonly select: ((value: T, event: MouseEvent | KeyboardEvent) => boolean) | undefined;
 	private presentation: TabListPresentation;
+	private readonly layoutScheduler: AnimationFrameScheduler;
+	private selectedTab: HTMLElement | undefined;
 
 	constructor(container: HTMLElement, options: TabListOptions<T>) {
 		super();
@@ -147,6 +150,12 @@ export class TabList<T> extends Disposable {
 		);
 		this.element = this.scrollable.element;
 		this.scrollableElement = this.scrollable.scrollableElement;
+		this.layoutScheduler = this._register(new AnimationFrameScheduler(container.ownerDocument.defaultView!, () => {
+			// Selection and custom label updates can invalidate the whole editor's
+			// layout. Measure once after those writes, revealing the latest selection.
+			if (this.selectedTab?.isConnected) this.scrollable.reveal(this.selectedTab);
+			else this.scrollable.layout();
+		}));
 		if (this.select) this.actionBar.element.setAttribute("aria-multiselectable", "true");
 		// Keyboard focus may move without changing the selected tab. Reveal the
 		// focused item through the shared scrollbar so both states stay accessible.
@@ -159,7 +168,10 @@ export class TabList<T> extends Disposable {
 			// Moving the pressed tab before pointerup prevents its click from completing.
 			if (pointerActivation || target.getAttribute('role') !== 'tab') return;
 			const tab = target.closest<HTMLElement>(".ash-tab");
-			if (tab) this.scrollable.reveal(tab);
+			if (tab) {
+				this.layoutScheduler.cancel();
+				this.scrollable.reveal(tab);
+			}
 		}));
 	}
 
@@ -232,11 +244,8 @@ export class TabList<T> extends Disposable {
 			}
 		}
 		if (selectedId !== undefined) this.actionBar.setTabStop(selectedId);
-		this.scrollable.layout();
-		if (selectedId !== undefined) {
-			const selectedTab = [...this.actionBar.element.querySelectorAll<HTMLElement>(".ash-tab")]
-				.find((element) => element.dataset.actionId === selectedId);
-			if (selectedTab) this.scrollable.reveal(selectedTab);
-		}
+		this.selectedTab = selectedId === undefined ? undefined : [...this.actionBar.element.querySelectorAll<HTMLElement>('.ash-tab')]
+			.find(element => element.dataset.actionId === selectedId);
+		this.layoutScheduler.schedule();
 	}
 }

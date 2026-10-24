@@ -100,7 +100,7 @@
 	font-size: var(--ash-fontSize-body2);
 }
 
-.ash-extension-editor .extension-detail-publisher {
+.ash-extension-editor .extension-detail-attribution {
 	color: var(--ash-description-foreground);
 }
 

@@ -305,7 +305,10 @@
     "ash-mark-petal-south": "E12E",
     "folder-open": "E12F",
     "folder": "E130",
-    "sort": "E131"
+    "sort": "E131",
+    "pin-filled": "E132",
+    "pin": "E133",
+    "artifacts": "E134"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -324,6 +327,7 @@
     "arrow-right": "b72dea4330d4412f4fd3edfe1790600c244e4e28e08d3ca76d0397bd37f37a2c",
     "arrow-swap": "d530bc8a2a200af39368a09ac0118c66330d32b9f43fab13a4e079d5358d926f",
     "arrow-up": "ac3d09f47fa97b06dfda18bd85a5a73141a62a97d30ac92521f6ad14fdab420c",
+    "artifacts": "8ec17a378d3d65c65764e16315b91bcb76139a141a1dccfcbabe23396f962748",
     "ash-mark": "7941c365eb7b3cd3e98435315ef71ba1c8366b45785c89aa238686f9ff449514",
     "ask": "54c423dfc247eb347dda55370f2af31a6d0ffd210825a519255f5731bc5c54ab",
     "bell-dot": "b6e467ce1ac38da0374dce31c8f2e3b4bf30b19535b0d5a6473fd250ab88f73f",
@@ -436,7 +440,7 @@
     "fork": "c30de80f3b7a4e19755889a0aa897fd2b644ed4b6d64f7bfe8e36749ebc24a63",
     "frame": "8bca307ca4fd327ea57bd6ea7ab47e60179a69dbfb269f7dc8a9d59f0366da97",
     "gear": "17973f7afcfa59fe1592288effdbeff2b7e3535d54efac1673e9ab2f5c148f17",
-    "git-branch": "1ae83b1a5680dfe116bf458b6b8d910c0e06915f689cdb638c15a46bed22f228",
+    "git-branch": "a465ba6646be63269f318da5187edd12420bf83528ca55db96f9cf730ef64822",
     "git-commit": "0865f04d5673007ca9f265a7b5d40f9dc5b2d0b98dcf7c3b15dfe0e9d207e1a8",
     "git-pull-request-closed": "f8e75a5d30489abffb4d79777edaabd849c51c3ab811d5ec89a322458aca8aee",
     "git-pull-request-comment": "6b8635ed9166c630df7c6c0af889e47c18f6da9dd77852c7701820a0b65cba46",
@@ -518,6 +522,8 @@
     "pdf-red": "c12c91cdaaf73ecfd4189083ec29f5b3974f788f1ae2be643ae37b87fc92c38d",
     "pdf": "131e8fe28ee2dcf49d39e27cb64020f2fe0afaceaee2d65cf38283fe97c35cac",
     "pen": "84ed4ef392e6673cb843b0aa186a3acc7d780da92b75ec3e173e1b8b82463a6f",
+    "pin-filled": "9b1cbb4253adb64836bea82c461d2f749d78dae8fbdf6cc2035d08e425b8a252",
+    "pin": "26bf28411d558432bb874de32fd7dd39cfd8a16e5169588ff11f86cc7903a742",
     "pinned": "59fd14d14d1647a401bc81943f6898324859fd31337318f794c4a345e7cc77da",
     "plan": "14d1221f873d6b74c65da9037f6c6ced82ea0abc416c82436dd8e5cbcbbf80b6",
     "play": "147609dc0e03054777f67b4d0d4c3ffd8855fd4228dc9c1d197302dc17b7d509",
@@ -525,7 +531,7 @@
     "preview": "bd40c6821d8c030c4687687b900c39d9046481cfd76168e66f865fcf92fa635e",
     "primitive-square": "5baa0fc62fe952bf4c8a76e4ba6abfc99ecf89937ba0493e4498c9a3af46faac",
     "projects-filled": "feb1176166ca551e515e793aae003fe7e8e7a01250235879aa75e9031e4ce28a",
-    "projects": "f98378b81ddad7628797c6be28722476d05e2cf8a66dd4384f2cf8739a18f6d7",
+    "projects": "b4db81d87eb60a147f18d5c4c34369a93468d44184639b7b3314e6aff0724370",
     "question": "35eefe38fb71cf59c185d7343fbab02b903327e458f034c72af16a973c13ab12",
     "quote": "202be3704d70924cea6c3c275897cebe339fef7c3f0bb23efca481123cf308bf",
     "quotes": "e439ccdb0ba8be43913dec33f9c1bc0b68767a093ede532d0a19e3d12d35ff23",
@@ -537,9 +543,9 @@
     "remove": "251ed8b6ca86590659976f24178db58fb9fd292b56a85a3f6a10cccbb3fec386",
     "replace-match": "b817a61669637c6ad1b4b4d985147a4e1ea98b69126bc7453522f5fd28567753",
     "replace-matches": "a09d27d93e68ffcd7a79cecb6838cbffc8e5ffdf0cab7435b67cef8686fff9df",
-    "repo-fetch": "11cf1c4e185cc1e826dea5b655d829f064ab0441d7fee108ef5ae587caf85c40",
-    "repo-pull": "8ee2ff8a06c089f2be87f3eaac027bf75427d40f20d43fe302e5b28b6eb70cb7",
-    "repo-push": "26486988b7d6cf23adcad1b9df1aac1f36d9d157c4b74ef92c93f192b691c3a6",
+    "repo-fetch": "12224aa48fa72479679df72677c2fa910134af5ef16fab0ad28fa0274ede9783",
+    "repo-pull": "374fee804ef613406dad3149f84bd4a061694b1a8472602312eedad4aa44adb6",
+    "repo-push": "810a2f8f3f9d81c65f72cbc21eea50d13d34b2c6edccdcbcd8ff4ee4c11a4689",
     "rss": "d29bd74b68e1165236846b738470f31b0ef25e8a02f1e511c1d4a737a56d2b34",
     "sandbox": "1802f39aa40a161732aba612152e43db90c5d450d7bd0f652baf4f01f1f4fc66",
     "save": "9c68632f77449751a93a57235a5c39a5bd0f978f9ef5e3f5d5e460aac8e99731",
@@ -623,47 +629,74 @@
       {
         "id": "petal-north",
         "glyph": "ash-mark-petal-north",
-        "origin": [0.5, 0.2333984375]
+        "origin": [
+          0.5,
+          0.2333984375
+        ]
       },
       {
         "id": "petal-northwest",
         "glyph": "ash-mark-petal-northwest",
-        "origin": [0.30078125, 0.33544921875]
+        "origin": [
+          0.30078125,
+          0.33544921875
+        ]
       },
       {
         "id": "petal-northeast",
         "glyph": "ash-mark-petal-northeast",
-        "origin": [0.6982421875, 0.3349609375]
+        "origin": [
+          0.6982421875,
+          0.3349609375
+        ]
       },
       {
         "id": "petal-west",
         "glyph": "ash-mark-petal-west",
-        "origin": [0.23193359375, 0.50048828125]
+        "origin": [
+          0.23193359375,
+          0.50048828125
+        ]
       },
       {
         "id": "petal-east",
         "glyph": "ash-mark-petal-east",
-        "origin": [0.76611328125, 0.5]
+        "origin": [
+          0.76611328125,
+          0.5
+        ]
       },
       {
         "id": "petal-center",
         "glyph": "ash-mark-petal-center",
-        "origin": [0.49853515625, 0.49951171875]
+        "origin": [
+          0.49853515625,
+          0.49951171875
+        ]
       },
       {
         "id": "petal-southwest",
         "glyph": "ash-mark-petal-southwest",
-        "origin": [0.302734375, 0.66162109375]
+        "origin": [
+          0.302734375,
+          0.66162109375
+        ]
       },
       {
         "id": "petal-southeast",
         "glyph": "ash-mark-petal-southeast",
-        "origin": [0.6953125, 0.6611328125]
+        "origin": [
+          0.6953125,
+          0.6611328125
+        ]
       },
       {
         "id": "petal-south",
         "glyph": "ash-mark-petal-south",
-        "origin": [0.49951171875, 0.7529296875]
+        "origin": [
+          0.49951171875,
+          0.7529296875
+        ]
       }
     ]
   }

@@ -1,4 +1,4 @@
-import { defaultButtonStyles, defaultDialogStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultDialogStyles, defaultCheckboxStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
@@ -31,6 +31,7 @@ export class AutomationDialog extends Disposable {
 	private readonly enabled: HTMLInputElement;
 	private readonly message: HTMLElement;
 	private readonly save: Button;
+	private readonly cancel: Button;
 	private readonly preview: HTMLElement;
 	private readonly previewMessage: HTMLElement;
 	private readonly previewHeading: HTMLElement;
@@ -150,16 +151,20 @@ export class AutomationDialog extends Disposable {
 		this.form.append(preview);
 		this.message = h(document, 'p', { attributes: { role: 'status', 'aria-label': localize('automations.saveStatus', 'Save status') } });
 		this.form.append(this.message);
-		this.dialog = this._register(new Dialog(parent, {
+		const actions = h(document, 'div', { className: 'ash-dialog-actions' });
+		this.dialog = this._register(new Dialog(parent, options.existing ? localize('automations.edit', 'Edit automation') : localize('automations.new', 'New automation'), [], {
 			buttonStyles: defaultButtonStyles,
+			checkboxStyles: defaultCheckboxStyles,
+			inputBoxStyles: defaultInputBoxStyles,
 			dialogStyles: defaultDialogStyles,
-			title: options.existing ? localize('automations.edit', 'Edit automation') : localize('automations.new', 'New automation'),
-			content: this.form,
-			buttons: [{ label: localize('automations.cancel', 'Cancel'), value: 'cancel' }],
-			cancelValue: 'cancel',
+			extraClasses: ['ash-automation-dialog'],
+			disableCloseButton: true,
+			disableDefaultAction: true,
+			keyEventProcessor: event => { if (this.busy && event.key === 'Escape') event.stop({ preventDefault: true }); },
+			renderBody: body => body.append(this.form),
+			renderFooter: footer => footer.append(actions),
 		}));
-		// Keep commit/cancel reachable while the longer form scrolls, retaining native form submission.
-		const actions = this.dialog.element.querySelector<HTMLElement>('.ash-dialog-actions')!;
+		// Commit stays a native form action, and the caller owns only its business controls.
 		this.save = this._register(new Button(actions, {
 			...defaultButtonStyles,
 			label: localize('automations.save', 'Save automation'),
@@ -167,9 +172,13 @@ export class AutomationDialog extends Disposable {
 			type: 'submit',
 		}));
 		this.save.domNode.setAttribute('form', this.form.id);
-		actions.prepend(this.save.domNode);
-		this.dialog.element.classList.add('ash-automation-dialog');
-		this._register(contexts.createScoped(this.dialog.element)).createKey('sessionsAutomationDialogFocused', true);
+		this.cancel = this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('automations.cancel', 'Cancel'),
+			presentation: 'secondary',
+			onClick: () => this.dialog.dispose(),
+		}));
+		for (const scope of [this.form, actions]) this._register(contexts.createScoped(scope)).createKey('sessionsAutomationDialogFocused', true);
 		this._register(addDisposableListener(this.form, 'submit', event => {
 			event.preventDefault();
 			void this.commit();
@@ -184,12 +193,7 @@ export class AutomationDialog extends Disposable {
 		};
 		this._register(addDisposableListener(this.form, 'input', changed));
 		this._register(addDisposableListener(this.form, 'change', changed));
-		this._register(addDisposableListener(this.dialog.element, 'cancel', event => {
-			if (this.busy) {
-				event.preventDefault();
-				event.stopImmediatePropagation();
-			}
-		}, true));
+
 		this.updateSections();
 		void this.updatePreview();
 	}
@@ -204,13 +208,13 @@ export class AutomationDialog extends Disposable {
 		this.busy = true;
 		this.save.enabled = false;
 		this.form.setAttribute('aria-busy', 'true');
-		for (const button of this.dialog.element.querySelectorAll<HTMLButtonElement>('.ash-dialog-actions button')) button.disabled = true;
+		this.cancel.enabled = false;
 		try {
 			const result = this.read();
 			await this.options.commit?.(result);
 			if (!this.isDisposed) {
 				this.result = result;
-				this.dialog.close('saved');
+				this.dialog.dispose();
 			}
 		} catch (error) {
 			if (!this.isDisposed) this.message.textContent = error instanceof Error ? error.message : localize('automations.operationFailed', 'Automation operation failed.');
@@ -219,7 +223,7 @@ export class AutomationDialog extends Disposable {
 			if (!this.isDisposed) {
 				this.save.enabled = true;
 				this.form.removeAttribute('aria-busy');
-				for (const button of this.dialog.element.querySelectorAll<HTMLButtonElement>('.ash-dialog-actions button')) button.disabled = false;
+				this.cancel.enabled = true;
 			}
 		}
 	}

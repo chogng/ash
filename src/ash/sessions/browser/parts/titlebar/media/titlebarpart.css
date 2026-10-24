@@ -35,13 +35,12 @@
 
 .ash-sessions-titlebar-left {
 	align-self: stretch;
-	/* Keep a usable titlebar group when the sidebar is collapsed. */
-	width: max(
-		calc(
-			var(--ash-sessions-titlebar-sidebar-width, 0px) -
-				var(--ash-spacing-size80) - var(--ash-spacing-size160)
-		),
-		calc(6 * var(--ash-spacing-size360))
+	box-sizing: border-box;
+	/* The intrinsic minimum keeps collapsed controls usable; padding matches sidebar navigation. */
+	padding-right: calc(var(--ash-spacing-size80) + var(--ash-strokeThickness));
+	width: calc(
+		var(--ash-sessions-titlebar-sidebar-width, 0px) -
+			var(--ash-spacing-size80)
 	);
 	flex: 0 0 auto;
 	gap: var(--ash-spacing-size80);
@@ -56,6 +55,20 @@
 	align-items: center;
 	margin-left: auto;
 	-webkit-app-region: no-drag;
+}
+
+.ash-sessions-titlebar-page-content {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	align-items: center;
+	align-self: stretch;
+	box-sizing: border-box;
+}
+
+.ash-sessions-titlebar-page-content:not(:empty) {
+	padding: 0 var(--ash-spacing-size120);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
 .ash-workbench[data-runtime="electron"] .ash-sessions-titlebar {

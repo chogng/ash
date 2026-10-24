@@ -31,10 +31,10 @@
 	flex-shrink: 0;
 	padding-inline-end: var(--ash-spacing-size20);
 }
-/* The Part owns title actions; only this container's refresh waits for pointer or keyboard intent. */
+/* Keep More Actions reachable while primary title actions wait for pointer or keyboard intent. */
 .ash-workbench-part[data-active-composite="ash.extensions"]
 	.ash-pane-composite-title-menu-actions
-	[data-action-id="ash.extensions.refresh"] {
+	> .ash-action-view-item:not(.ash-toolbar-more-actions) {
 	visibility: hidden;
 }
 .ash-workbench-part[data-active-composite="ash.extensions"]:is(
@@ -42,7 +42,7 @@
 		:focus-within
 	)
 	.ash-pane-composite-title-menu-actions
-	[data-action-id="ash.extensions.refresh"] {
+	> .ash-action-view-item:not(.ash-toolbar-more-actions) {
 	visibility: visible;
 }
 .ash-pane-view.ash-extensions-view

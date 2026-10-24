@@ -19,9 +19,8 @@ export const IContextKeyService =
 	refineServiceDecorator<IContextKeyValueService, IContextKeyService>(IContextKeyValueService);
 
 interface ContextKeyState {
-	readonly emitter: Emitter<ContextKeyChangeEvent>;
 	readonly scopes: WeakMap<Node, AbstractContextKeyService>;
-	readonly bufferedKeys: Set<string>;
+	readonly bufferedChanges: Map<AbstractContextKeyService, Set<string>>;
 	bufferDepth: number;
 	root: AbstractContextKeyService | undefined;
 }
@@ -30,6 +29,7 @@ abstract class AbstractContextKeyService
 	extends Disposable
 	implements IContextKeyService {
 	private readonly values = new Map<string, ContextKeyValue>();
+	private readonly emitter = this._register(new Emitter<ContextKeyChangeEvent>());
 	private readonly parent: AbstractContextKeyService | undefined;
 	protected readonly state: ContextKeyState;
 
@@ -40,15 +40,28 @@ abstract class AbstractContextKeyService
 		super();
 		this.state = state;
 		this.parent = parent;
+		if (parent) {
+			this._register(parent.onDidChangeContext(event => {
+				// A scope inherits changes only from ancestors, and only while it
+				// does not override every affected key. Row-local changes must never
+				// invalidate menus in the rest of a virtualized list.
+				for (const key of event.keys) {
+					if (!this.values.has(key)) {
+						this.emitter.fire(event);
+						break;
+					}
+				}
+			}));
+		}
 		this._register(toDisposable(() => {
 			const keys = new Set(this.values.keys());
 			this.values.clear();
-			fireContextChange(this.state, keys);
+			this.fireChange(keys);
 		}));
 	}
 
 	get onDidChangeContext(): Event<ContextKeyChangeEvent> {
-		return this.state.emitter.event;
+		return this.emitter.event;
 	}
 
 	getValue<T extends ContextKeyValue>(key: string): T | undefined {
@@ -93,10 +106,10 @@ abstract class AbstractContextKeyService
 			callback();
 		} finally {
 			this.state.bufferDepth -= 1;
-			if (this.state.bufferDepth === 0 && this.state.bufferedKeys.size > 0) {
-				const keys = new Set(this.state.bufferedKeys);
-				this.state.bufferedKeys.clear();
-				fireContextChange(this.state, keys);
+			if (this.state.bufferDepth === 0) {
+				const changes = [...this.state.bufferedChanges];
+				this.state.bufferedChanges.clear();
+				for (const [scope, keys] of changes) scope.fireChange(keys);
 			}
 		}
 	}
@@ -106,12 +119,34 @@ abstract class AbstractContextKeyService
 			return;
 		}
 		this.values.set(key, value);
-		fireContextChange(this.state, new Set([key]));
+		this.fireChange(new Set([key]));
 	}
 
 	removeContext(key: string): void {
 		if (!this.values.delete(key)) return;
-		fireContextChange(this.state, new Set([key]));
+		this.fireChange(new Set([key]));
+	}
+
+	private fireChange(keys: ReadonlySet<string>): void {
+		if (keys.size === 0) return;
+		if (this.state.bufferDepth > 0) {
+			let buffered = this.state.bufferedChanges.get(this);
+			if (!buffered) {
+				buffered = new Set();
+				this.state.bufferedChanges.set(this, buffered);
+			}
+			for (const key of keys) buffered.add(key);
+			return;
+		}
+		this.emitter.fire({
+			keys,
+			affectsSome(candidateKeys): boolean {
+				for (const key of keys) {
+					if (candidateKeys.has(key)) return true;
+				}
+				return false;
+			},
+		});
 	}
 }
 
@@ -119,15 +154,13 @@ abstract class AbstractContextKeyService
 export class ContextKeyService extends AbstractContextKeyService {
 	constructor() {
 		const state: ContextKeyState = {
-			emitter: new Emitter<ContextKeyChangeEvent>(),
 			scopes: new WeakMap(),
-			bufferedKeys: new Set(),
+			bufferedChanges: new Map(),
 			bufferDepth: 0,
 			root: undefined,
 		};
 		super(state);
 		state.root = this;
-		this._register(state.emitter);
 	}
 }
 
@@ -183,26 +216,6 @@ class BoundContextKey<T extends ContextKeyValue>
 	get(): T | undefined {
 		return this.service.getValue<T>(this.key);
 	}
-}
-
-function fireContextChange(
-	state: ContextKeyState,
-	keys: ReadonlySet<string>,
-): void {
-	if (keys.size === 0) return;
-	if (state.bufferDepth > 0) {
-		for (const key of keys) state.bufferedKeys.add(key);
-		return;
-	}
-	state.emitter.fire({
-		keys,
-		affectsSome(candidateKeys): boolean {
-			for (const key of keys) {
-				if (candidateKeys.has(key)) return true;
-			}
-			return false;
-		},
-	});
 }
 
 function getComposedParent(node: Node): Node | null {

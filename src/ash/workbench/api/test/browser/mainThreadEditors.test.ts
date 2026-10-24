@@ -10,6 +10,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { MarkerSeverity } from '../../../../platform/markers/common/markers.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 import { MainThreadEditors } from '../../browser/mainThreadEditors.js';
+import { createBinaryDiffEditorInput, createDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import type { ExtensionHostFleetSnapshot } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import type { IActionPromptOptions, IActionPromptResult, IOpenDialogOptions } from '../../../../platform/dialogs/common/dialogs.js';
 
@@ -31,16 +32,41 @@ function bridge(
 		fileURI(path: string): Promise<URI>;
 	},
 	part: unknown = { groups: [] },
+	editors: unknown = {},
 ): MainThreadEditors {
 	// Only client-owned services used by these boundary scenarios are supplied.
 	const services = [
-		{}, part, {}, { confirm, prompt }, folderPicker ?? {}, {}, {},
+		editors, part, {}, { confirm, prompt }, folderPicker ?? {}, {}, {},
 		{ getAll: () => copies, get: (resource: URI) => copies.filter(copy => copy.resource.toString() === resource.toString()) },
 		{ invokeFunction: (callback: (accessor: { get(): unknown; }) => unknown) => callback({ get: () => ({ read: () => markers }) }) },
 		{}, {}, codeEditors, {}, models, folderPicker ?? {},
 	] as unknown as ConstructorParameters<typeof MainThreadEditors>;
 	return new MainThreadEditors(...services);
 }
+
+test('comparison reveal activates the existing snapshot or live input without supplying new contents', async () => {
+	for (const binary of [false, true]) {
+		const original = URI.parse('git-change:/unstaged/test.bin?revision=7&side=original');
+		const modified = URI.parse('git-change:/unstaged/test.bin?revision=7&side=modified');
+		const live = URI.file('/test.bin');
+		const input = binary
+			? createBinaryDiffEditorInput({ resource: original, initialBytes: new Uint8Array([0]) }, { resource: modified, initialBytes: new Uint8Array([1]) })
+			: createDiffEditorInput({ resource: original, initialText: 'before' }, { resource: live });
+		const opened: unknown[] = [];
+		const group = { id: 3, inputs: [input] };
+		using api = bridge([], async () => ({ confirmed: true }), [], {}, undefined, undefined, undefined,
+			{ activeGroup: group, groups: [group] },
+			{ openEditor: async (...args: unknown[]) => { opened.push(args); } });
+		const request = { method: 'revealDiff', originalResource: original.toString(), modifiedResources: [modified.toString(), live.toString()], options: { pinned: true, preserveFocus: true } };
+		const signal = new AbortController().signal;
+		assert.equal(await api.handle(request, signal), true);
+		assert.equal((opened[0] as unknown[])[0], input, 'Reuse must retain the original input and its snapshot/working-copy owner');
+		assert.deepEqual((opened[0] as unknown[])[2], { groupId: 3 });
+		assert.equal(await api.handle({ ...request, originalResource: original.with({ query: 'revision=8&side=original' }).toString() }, signal), false);
+		assert.equal(opened.length, 1, 'A different snapshot revision must load normally');
+		await assert.rejects(api.handle({ ...request, modifiedResources: [] }, signal), /Invalid comparison resources/);
+	}
+});
 
 test('active editor requests resolve numeric group context without reading a different group', async () => {
 	const first = { id: 1, inputs: [{ resource: URI.file('/first.ts') }], activeInput: { resource: URI.file('/active.ts') } };

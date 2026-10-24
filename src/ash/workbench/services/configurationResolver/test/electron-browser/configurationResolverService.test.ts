@@ -1,3 +1,4 @@
+import { installTestElementHeights } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { createHash } from 'node:crypto';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
@@ -337,6 +338,7 @@ test('ConfigurationResolverService preserves backslashes in Remote folder basena
 
 function inputServices(owner: DisposableStore, workspace: IWorkspaceContextService, contents: readonly (readonly [URI, string])[]): { services: InstantiationService; document: Document; press: (key: string) => void; } {
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
+	owner.add(installTestElementHeights(dom.window.document));
 	owner.add(toDisposable(() => dom.window.close()));
 	for (const name of ['window', 'document', 'Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent', 'navigator'] as const) {
 		const previous = Object.getOwnPropertyDescriptor(globalThis, name);

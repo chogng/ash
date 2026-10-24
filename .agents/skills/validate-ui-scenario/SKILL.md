@@ -47,6 +47,7 @@ node test/scenario/out/runScenario.js .build/ash-playwright-mcp/desktop-search.c
 | Target or option   | Current runner behavior                                                                                                                                                                    |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | No target flag     | Desktop from this checkout, with App Server required. Does not discover installed products.                                                                                                |
+| `--active-window` | Desktop only. Use when native keyboard focus, focus restoration or `:focus-visible` is part of the assertion; the default background window is not a substitute for those checks. |
 | `--dev`            | Accepted by the parser, but currently does not participate in target selection. It does not select a different build.                                                                      |
 | `--web --headless` | Current renderer served locally, with App Server explicitly disabled. Covers browser UI only, not full backend Web acceptance. Does not support seeded user settings or Desktop arguments. |
 | `--verbose`        | Accepted; do not assume extra diagnostics are implemented.                                                                                                                                 |

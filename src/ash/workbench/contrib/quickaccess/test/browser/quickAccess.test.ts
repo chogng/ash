@@ -764,7 +764,7 @@ suite('quickAccess browser component', () => {
 			await expect(page.getByRole('separator', { name: recent })).toHaveCount(1);
 			await expect(page.getByRole('separator', { name: other })).toHaveCount(1);
 			await input.fill('>for');
-			await expect(labels).toHaveText(variant.locale === 'en' ? ['Zulu Format', 'Alpha Format', 'Focus Status Bar', 'Format', 'Go to File'] : ['Zulu Format', 'Alpha Format', '聚焦状态栏', 'Format']);
+			await expect(labels).toHaveText(variant.locale === 'en' ? ['Zulu Format', 'Alpha Format', 'Focus Status Bar', 'Format', 'Go to File'] : ['Zulu Format', 'Alpha Format', 'Format', '聚焦状态栏']);
 			await expect(input).toBeFocused();
 			await input.fill('>Format');
 			await expect(labels.nth(0)).toHaveText('Format');
@@ -792,10 +792,10 @@ suite('quickAccess browser component', () => {
 			await open.click();
 			await expect(labels.nth(0)).toHaveText('Alpha Format');
 			await input.fill('>for');
-			await expect(labels).toHaveText(variant.locale === 'en' ? ['Alpha Format', 'Focus Status Bar', 'Format', 'Go to File', 'Zulu Format'] : ['Alpha Format', '聚焦状态栏', 'Format', 'Zulu Format']);
+			await expect(labels).toHaveText(variant.locale === 'en' ? ['Alpha Format', 'Focus Status Bar', 'Format', 'Go to File', 'Zulu Format'] : ['Alpha Format', 'Format', 'Zulu Format', '聚焦状态栏']);
 			await page.evaluate(() => window.ashQuickAccessIntegration.setHistoryLength(0));
 			await expect(page.getByRole('separator', { name: recent })).toHaveCount(0);
-			await expect(labels).toHaveText(variant.locale === 'en' ? ['Alpha Format', 'Focus Status Bar', 'Format', 'Go to File', 'Zulu Format'] : ['聚焦状态栏', 'Alpha Format', 'Format', 'Zulu Format']);
+			await expect(labels).toHaveText(variant.locale === 'en' ? ['Alpha Format', 'Focus Status Bar', 'Format', 'Go to File', 'Zulu Format'] : ['Alpha Format', 'Format', 'Zulu Format', '聚焦状态栏']);
 			await input.fill('>Zulu');
 			await page.keyboard.press('Enter');
 			await page.evaluate(() => window.ashQuickAccessIntegration.setHistoryLength(50));

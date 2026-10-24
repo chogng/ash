@@ -1,6 +1,8 @@
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 import { ChatMarkdownContentPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
+import { IImageEditorService } from '../../../src/ash/workbench/services/imageEditor/common/imageEditorService.js';
+import { ImageEditorService } from '../../../src/ash/workbench/services/imageEditor/browser/imageEditorService.js';
 const codeFeatures = registerTestCodeEditorFeatures();
 import type { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
@@ -144,6 +146,9 @@ const windowLogger = resources.add(new LogService({ level: LogLevel.Debug, sinks
 parentServices.registerInstance(ILogService, windowLogger);
 parentServices.registerInstance(ILoggerService, windowLogger);
 const services = resources.add(createTestEditorServices(resources.add(new WorkbenchConfigurationService()), parentServices, document));
+services.registerSingleton(IImageEditorService, () => new class extends ImageEditorService {
+	async capture(): Promise<never> { throw new Error('Image capture is outside this transcript fixture'); }
+}());
 const theme = services.get(IThemeService) as TestThemeService;
 const dialogs = resources.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);

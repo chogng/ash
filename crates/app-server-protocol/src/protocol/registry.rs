@@ -1025,6 +1025,7 @@ use crate::protocol::extension_host::ExtensionHostInvokeCancelDispositionDto;
 use crate::protocol::extension_host::ExtensionHostInvokeCancelParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionHostInvokeCancelResult;
+use crate::protocol::extension_host::ExtensionHostInvokeCompleted;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionHostInvokeReadParams;
 #[cfg(any(test, feature = "export"))]
@@ -4125,6 +4126,11 @@ client_methods! {
         response: ProjectMutationResult,
         serialization: GlobalExclusive,
     },
+    ProjectDelete => "project/delete" {
+        params: ProjectLifecycleParams,
+        response: ProjectMutationResult,
+        serialization: GlobalExclusive,
+    },
     TeamList => "team/list" {
         params: TeamListParams,
         response: TeamListResult,
@@ -6062,6 +6068,9 @@ server_notifications! {
     ExtensionHostChanged => "extensionHost/changed" {
         params: ExtensionHostChanged,
     },
+    ExtensionHostInvokeCompleted => "extensionHost/invoke/completed" {
+        params: ExtensionHostInvokeCompleted,
+    },
     GitStatusChanged => "git/statusChanged" {
         params: GitStatusChanged,
     },
@@ -6796,6 +6805,7 @@ typescript_bindings! {
     ExtensionHostLanguageProviderOperationDto,
     ExtensionHostInvokeStartParams,
     ExtensionHostInvokeStartResult,
+    ExtensionHostInvokeCompleted,
     ExtensionHostInvokeReadParams,
     ExtensionHostInvokeReadResult,
     ExtensionHostInvokeCancelParams,

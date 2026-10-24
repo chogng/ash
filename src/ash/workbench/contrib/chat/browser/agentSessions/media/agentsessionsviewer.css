@@ -73,11 +73,12 @@
 	font-size: var(--ash-fontSize-label2);
 }
 
-.ash-agent-session-row:hover {
+.ash-agent-session-item:hover > .ash-agent-session-row,
+.ash-agent-session-item.menu-visible > .ash-agent-session-row {
 	background: var(--ash-list-hoverBackground);
 }
 
-.ash-agent-session-row.selected {
+.ash-agent-session-item > .ash-agent-session-row.selected {
 	background: var(--ash-list-inactiveSelectionBackground);
 }
 
@@ -89,4 +90,92 @@
 
 .ash-agent-sessions-empty {
 	margin: var(--ash-spacing-size80);
+}
+
+.ash-agent-session-item {
+	position: relative;
+	border-radius: var(--ash-cornerRadius-small);
+}
+
+.ash-agent-session-actions {
+	position: absolute;
+	inset-inline-end: var(--ash-strokeThickness);
+	top: 50%;
+	transform: translateY(-50%);
+	opacity: 0;
+	pointer-events: none;
+	background: var(--ash-sideBar-background);
+	transition: opacity var(--ash-animation-durationFast) ease-out;
+}
+
+.ash-agent-session-actions::before {
+	content: "";
+	position: absolute;
+	inset-inline-end: 100%;
+	top: 0;
+	bottom: 0;
+	width: var(--ash-spacing-size320);
+	background: inherit;
+	pointer-events: none;
+	mask-image: linear-gradient(
+		to right,
+		transparent,
+		rgb(0 0 0 / 16%),
+		rgb(0 0 0 / 50%),
+		rgb(0 0 0 / 84%),
+		black
+	);
+}
+
+.ash-agent-session-item:hover .ash-agent-session-actions,
+.ash-agent-session-item:focus-within .ash-agent-session-actions,
+.ash-agent-session-item.menu-visible .ash-agent-session-actions {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.ash-agent-session-item:hover .ash-agent-session-actions,
+.ash-agent-session-item.menu-visible .ash-agent-session-actions {
+	background:
+		linear-gradient(
+			var(--ash-list-hoverBackground),
+			var(--ash-list-hoverBackground)
+		),
+		var(--ash-sideBar-background);
+}
+
+.ash-agent-session-row.selected + .ash-agent-session-actions {
+	background:
+		linear-gradient(
+			var(--ash-list-inactiveSelectionBackground),
+			var(--ash-list-inactiveSelectionBackground)
+		),
+		var(--ash-sideBar-background);
+}
+
+.ash-agent-session-item:focus-within .ash-agent-session-actions,
+.ash-reduce-motion .ash-agent-session-actions {
+	transition: none;
+}
+
+[dir="rtl"] .ash-agent-session-actions::before {
+	mask-image: linear-gradient(
+		to left,
+		transparent,
+		rgb(0 0 0 / 16%),
+		rgb(0 0 0 / 50%),
+		rgb(0 0 0 / 84%),
+		black
+	);
+}
+
+.hc-black .ash-agent-session-item .ash-agent-session-actions,
+.hc-light .ash-agent-session-item .ash-agent-session-actions {
+	background: var(--ash-sideBar-background);
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+}
+
+.hc-black .ash-agent-session-actions::before,
+.hc-light .ash-agent-session-actions::before {
+	display: none;
 }

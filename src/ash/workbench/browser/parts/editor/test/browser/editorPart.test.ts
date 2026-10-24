@@ -12,6 +12,7 @@ import { WindowTitle } from '../../../titlebar/windowTitle.js';
 import { ILocalizationService } from '../../../../../services/localization/common/localizationService.js';
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestComponentServices, registerTestComponentServices, createTestEditorServices, createTestTextFileService, createTestFileService } from '../../../../../test/common/testEditorServices.js';
+import { registerCodeEditorServices } from '../../../../../../editor/test/browser/testCodeEditor.js';
 import { MemoryFileService } from '../../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { createDocumentEditorPane } from '../../../../../contrib/documentEditor/browser/editorProfile.js';
 import { academyProfile } from '../../../../../../../../extensions/academy/browser/editorProfile.js';
@@ -957,6 +958,169 @@ test("EditorPart replaces preview tabs and preserves pinned tabs", async () => {
 
 	editor.dispose();
 	dom.window.close();
+});
+
+for (const move of ['drop', 'moveEditorTo', 'openEditor'] as const) {
+	test(`EditorPart keeps a preview after ${move} changes its position`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using registry = new EditorPaneRegistry();
+			using registration = registry.registerEditorPane(descriptor('test.previewMove', '.ts', () => new TestEditorPane('test.previewMove')));
+			using editor = createEditorPart(dom.window.document.body, { registry });
+			const group = editor.activeGroup;
+			const first = input('/project/first.ts');
+			const preview = input('/project/preview.ts');
+			const last = input('/project/last.ts');
+			await group.openEditor(first);
+			await group.openEditor(preview, { pinned: false });
+			await group.openEditor(last);
+			const previewId = group.editors[1]!.instanceId;
+			const changes: string[] = [];
+			using listener = group.onDidChangeEditors(event => changes.push(event.kind));
+			const movePreview = async (index: number): Promise<void> => {
+				if (move === 'openEditor') await group.openEditor(preview, { index, pinned: false, inactive: true });
+				else if (move === 'moveEditorTo') await group.moveEditorTo(preview, group, index);
+				else {
+					const source = group.domNode.querySelector(`.ash-tab[data-action-id="${previewId}"]`)!;
+					const target = group.domNode.querySelectorAll('.ash-tab')[index]!;
+					source.dispatchEvent(new dom.window.MouseEvent('dragstart', { bubbles: true }));
+					target.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, cancelable: true }));
+				}
+			};
+
+			// Drop indexes include the source tab; opening uses the final tab index.
+			await movePreview(move === 'openEditor' ? 1 : 2);
+			assert.deepEqual(group.inputs, [first, preview, last]);
+			assert.equal(group.isPreview(preview), true);
+			assert.deepEqual(changes, []);
+
+			await movePreview(0);
+			assert.deepEqual(group.inputs, [preview, first, last]);
+			assert.equal(group.isPreview(preview), false);
+			assert.equal(group.isSticky(preview), false);
+			assert.equal(group.editors[0]!.instanceId, previewId);
+			assert.equal(group.activeInput, last);
+			assert.deepEqual(changes, ['editorMoved', 'editorStateChanged']);
+			assert.equal(group.domNode.querySelector('.ash-tab.preview'), null);
+
+			const next = input('/project/next.ts');
+			await group.openEditor(next, { pinned: false });
+			assert.deepEqual(group.inputs, [preview, first, last, next]);
+			assert.equal(group.isPreview(next), true);
+		} finally {
+			dom.window.close();
+		}
+	});
+}
+
+test('EditorPart keeps an existing preview when reopened at an explicit position by default', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.previewMove', '.ts', () => new TestEditorPane('test.previewMove')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		const group = editor.activeGroup;
+		const preview = input('/project/preview.ts');
+		await group.openEditor(preview, { pinned: false });
+		const instanceId = group.editors[0]!.instanceId;
+		const changes: string[] = [];
+		using listener = group.onDidChangeEditors(event => changes.push(event.kind));
+
+		await group.openEditor(preview, { index: 0 });
+		assert.equal(group.isPreview(preview), false);
+		assert.equal(group.editors[0]!.instanceId, instanceId);
+		assert.deepEqual(changes, ['editorStateChanged']);
+		const next = input('/project/next.ts');
+		await group.openEditor(next, { pinned: false });
+		assert.deepEqual(group.inputs, [preview, next]);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('EditorPart keeps a preview dragged to the end and leaves another preview untouched', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.previewMove', '.ts', () => new TestEditorPane('test.previewMove')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		const group = editor.activeGroup;
+		const first = input('/project/first.ts');
+		const preview = input('/project/preview.ts');
+		const last = input('/project/last.ts');
+		await group.openEditor(first);
+		await group.openEditor(last);
+		await group.openEditor(preview, { pinned: false, index: 0 });
+
+		await group.moveEditorTo(preview, group, group.inputs.length);
+		assert.deepEqual(group.inputs, [first, last, preview]);
+		assert.equal(group.isPreview(preview), false);
+		const next = input('/project/next.ts');
+		await group.openEditor(next, { pinned: false });
+		await group.moveEditorTo(first, group, group.inputs.length);
+		assert.deepEqual(group.inputs, [last, preview, next, first]);
+		assert.equal(group.isPreview(next), true);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('EditorPart leaves both previews intact when a cross-group move is rejected', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.previewMove', '.ts', () => new TestEditorPane('test.previewMove')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		const source = editor.activeGroup;
+		const preview = { ...input('/project/preview.ts'), canMove: () => 'Move rejected' };
+		const destination = input('/project/destination.ts');
+		await source.openEditor(preview, { pinned: false });
+		const target = editor.addGroup(source.id, Direction.Right);
+		await target.openEditor(destination, { pinned: false });
+
+		await assert.rejects(source.moveEditorTo(preview, target, 0), { message: 'Move rejected' });
+		assert.deepEqual(source.inputs, [preview]);
+		assert.deepEqual(target.inputs, [destination]);
+		assert.equal(source.isPreview(preview), true);
+		assert.equal(target.isPreview(destination), true);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('EditorPart keeps a moved preview without replacing the destination preview', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.previewMove', '.ts', () => new TestEditorPane('test.previewMove')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		const source = editor.activeGroup;
+		const first = input('/project/first.ts');
+		const preview = input('/project/preview.ts');
+		const destinationPreview = input('/project/destination.ts');
+		await source.openEditor(first);
+		await source.openEditor(preview, { pinned: false });
+		const previewId = source.editors[1]!.instanceId;
+		const target = editor.addGroup(source.id, Direction.Right);
+		const destinationPane = await target.openEditor(destinationPreview, { pinned: false }) as TestEditorPane;
+
+		await source.moveEditorTo(preview, target, 0);
+		assert.deepEqual(source.inputs, [first]);
+		assert.deepEqual(target.inputs, [preview, destinationPreview]);
+		assert.equal(target.activeInput, preview);
+		assert.equal(target.isPreview(preview), false);
+		assert.equal(target.isSticky(preview), false);
+		assert.equal(target.editors[0]!.instanceId, previewId);
+		assert.equal(target.isPreview(destinationPreview), true);
+		assert.equal(destinationPane.disposed, false);
+
+		const next = input('/project/next.ts');
+		await target.openEditor(next, { pinned: false });
+		assert.deepEqual(target.inputs, [preview, next]);
+		assert.equal(target.isPreview(next), true);
+	} finally {
+		dom.window.close();
+	}
 });
 
 test("EditorPart requires an explicit dirty-close decision", async () => {
@@ -4764,6 +4928,7 @@ function createEditorParts(main: ConstructorParameters<typeof EditorParts>[0], w
 	const parts = services.createInstance(EditorParts, main, windows, factory, accessibility, storage);
 	services.registerSingleton(ICodeEditorService, () => new CodeEditorService(parts));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
+	registerCodeEditorServices(services);
 	return parts;
 }
 
@@ -4874,6 +5039,7 @@ suite('Auxiliary editor lifecycle', () => {
 				} as unknown as IAccessibilityService, services.get(IStorageService));
 				services.registerSingleton(ICodeEditorService, () => new CodeEditorService(parts));
 				services.registerSingleton(ICommandService, () => new CommandService(services));
+				registerCodeEditorServices(services);
 				const original = input('/project/original.ts');
 				const newer = input('/project/newer.ts');
 				await main.openEditor(original);

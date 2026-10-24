@@ -267,6 +267,97 @@ test('SCM history title operations keep refresh and busy state with their starti
 });
 
 
+for (const revisionSource of ['query', 'snapshot', 'id'] as const) {
+	test(`SCM history includes fetched upstream commits with ${revisionSource} references`, async () => {
+		const browser = new JSDOM('<!doctype html><body></body>');
+		const globals = installDomGlobals(browser);
+		try {
+			const { SCMHistoryViewPane } = await import('../../browser/scmHistoryViewPane.js');
+			await import('../../browser/scm.contribution.js');
+			using context = new ContextKeyService();
+			using services = new InstantiationService();
+			const menus = new MenuService(new CommandService(services), context);
+			using scm = new SCMService();
+			using view = new SCMViewService(scm);
+			using changed = new Emitter<void>();
+			const head = { id: 'refs/heads/main', name: 'main', revision: 'local', category: 'localBranch' };
+			// The real Git extension publishes the upstream identity without a revision.
+			const upstream = { id: 'refs/remotes/origin/main', name: 'origin/main', category: 'remoteBranch' };
+			const baseRef = { id: 'refs/heads/develop', name: 'develop', category: 'localBranch' };
+			let remote = 'remote';
+			const upstreamRef = observableValue('fetched.upstream', { ...upstream, ...(revisionSource === 'snapshot' ? { revision: remote } : {}) });
+			let commits: ISCMHistoryItem[] = [
+				{ id: remote, parentIds: ['base'], subject: 'Fetched upstream commit', message: '' },
+				{ id: 'local', parentIds: ['base'], subject: 'Local outgoing commit', message: '' },
+				{ id: 'base', parentIds: [], subject: 'Common base', message: '' },
+			];
+			const requests: Parameters<ISCMHistoryProvider['provideHistoryItems']>[0][] = [];
+			const comparisons: (readonly string[])[] = [];
+			const changes: (readonly (string | undefined)[])[] = [];
+			const provider: ISCMHistoryProvider = {
+				onDidChange: changed.event, historyItemRef: observableValue('fetched.head', head),
+				historyItemRemoteRef: upstreamRef,
+				historyItemBaseRef: observableValue('fetched.base', baseRef), refresh() { },
+				provideHistoryItemRefs: async () => [head, { ...upstream, ...(revisionSource === 'query' ? { revision: remote } : {}) }, { ...baseRef, ...(revisionSource === 'query' ? { revision: 'base' } : {}) }],
+				resolveHistoryItemRefsCommonAncestor: async refs => { comparisons.push(refs); return 'base'; },
+				provideHistoryItems: async options => {
+					requests.push(options);
+					return commits.slice(options.skip ?? 0, (options.skip ?? 0) + (options.limit ?? 50));
+				},
+				provideHistoryItemChanges: async (id, parent) => { changes.push([id, parent]); return []; },
+				resolveHistoryItemChangeContents: async () => { throw new Error('Unexpected content read'); },
+				resolveHistoryItemChatContext: async () => undefined,
+				resolveHistoryItemChangeRangeChatContext: async () => undefined,
+			};
+			using registration = scm.registerSCMProvider(testSCMProvider('fetched', 'Fetched repository', provider));
+			using configuration = new InMemoryConfigurationService();
+			await configuration.updateValue('scm.graph.pageSize', 2);
+			await configuration.updateValue('scm.graph.pageOnScroll', false);
+			using ui = createTestComponentServices(undefined, undefined, browser.window.document);
+			using quickInput = new TestQuickInputService({ container: browser.window.document.body });
+			using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history.fetched.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
+				setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(), hideHover() { },
+			}, testEditorService(), testResourceLabelService(), {
+				show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { }, dispose() { }, [Symbol.dispose]() { },
+			}, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, configuration, quickInput, ui.get(IStorageService), scm);
+			const row = (id: string): HTMLElement | null => pane.element.querySelector(`[data-history-item-id="${id}"]`);
+			await waitFor(() => row('remote') !== null && pane.element.querySelector('.ash-scm-graph-load-more button') !== null);
+			const roots = (): string[] => ['local', revisionSource === 'id' ? upstream.id : remote, revisionSource === 'query' ? 'base' : baseRef.id];
+			assert.deepEqual(requests[0].historyItemRefs, roots());
+			assert.equal(row('base'), null, 'The first page remains bounded');
+			assert.equal(context.getValue('scmCurrentHistoryItemRefHasRemote'), true);
+			assert.equal(context.getValue('scmCurrentHistoryItemRefHasBase'), true);
+			pane.element.querySelector<HTMLButtonElement>('.ash-scm-graph-load-more button')!.click();
+			await waitFor(() => row('base') !== null);
+			assert.deepEqual(requests.at(-1)?.historyItemRefs, roots(), 'Pagination retains the upstream root');
+			if (revisionSource !== 'id') {
+				assert.deepEqual(comparisons[0], ['local', 'remote']);
+				assert.ok(row('scm-graph-outgoing-changes'));
+				row('scm-graph-incoming-changes')!.click();
+				await waitFor(() => changes.length > 0);
+				assert.deepEqual(changes[0], ['remote', 'base'], 'Incoming changes use captured commit IDs');
+			}
+			remote = 'new-remote';
+			commits = [{ id: remote, parentIds: ['remote'], subject: 'Newly fetched commit', message: '' }, ...commits];
+			if (revisionSource === 'snapshot') upstreamRef.set({ ...upstream, revision: remote });
+			changed.fire();
+			await waitFor(() => row(remote) !== null);
+			assert.deepEqual(requests.at(-1)?.historyItemRefs, roots(), 'Refresh reads the latest fetched tip');
+			assert.ok(row('local'));
+			assert.ok(row('base'), 'Refresh retains the loaded tail');
+			if (revisionSource !== 'id') {
+				assert.deepEqual(comparisons.at(-1), ['local', 'new-remote']);
+				row('scm-graph-incoming-changes')!.click();
+				await waitFor(() => changes.length === 2);
+				assert.deepEqual(changes[1], ['new-remote', 'base']);
+			}
+		} finally {
+			browser.window.close();
+			for (const name of globals) Reflect.deleteProperty(globalThis, name);
+		}
+	});
+}
+
 test('SCM history details expose copy and remote actions without extension menu entries', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const globals = installDomGlobals(browser);
@@ -531,6 +622,7 @@ test("SCMHistoryViewPane loads another history page only on demand", async () =>
 		using historyConfiguration = new InMemoryConfigurationService();
 		using historyUiServices = createTestComponentServices(undefined, undefined, browser.window.document);
 		using historyQuickInput = new TestQuickInputService({ container: browser.window.document.body });
+		await historyConfiguration.updateValue('scm.graph.pageOnScroll', false);
 		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: "ash.gitGraph.pagination.test", title: "Graph" }, history.viewService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, historyConfiguration, historyQuickInput, historyUiServices.get(IStorageService), history.scmService);
 		pane.setVisible(true);
 		browser.window.document.body.append(pane.element);

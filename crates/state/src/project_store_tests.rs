@@ -69,3 +69,30 @@ fn create_request() -> ProjectCommandRequest {
         },
     }
 }
+
+#[test]
+fn sqlite_project_deletion_survives_reopen_and_replays_its_receipt() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.sqlite3");
+    let coordinator = ProjectCoordinator::new(Arc::new(SqliteProjectStore::open(&path).unwrap()));
+    let create = create_request();
+    coordinator.apply(create.clone()).unwrap();
+    let deletion = ProjectCommandRequest {
+        command_id: CommandId::new("delete-project").unwrap(),
+        project_id: create.project_id.clone(),
+        expected_revision: 1,
+        command: ProjectCommand::Delete,
+    };
+    coordinator.apply(deletion.clone()).unwrap();
+    drop(coordinator);
+    let reopened = ProjectCoordinator::new(Arc::new(SqliteProjectStore::open(&path).unwrap()));
+    assert!(reopened.list().unwrap().is_empty());
+    assert!(matches!(
+        reopened.read(&create.project_id),
+        Err(ash_projects::ProjectError::NotFound(_))
+    ));
+    assert_eq!(
+        reopened.apply(deletion).unwrap().disposition,
+        ProjectCommandDisposition::Replayed
+    );
+}

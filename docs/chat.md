@@ -10,6 +10,10 @@ VS Code 只读对照为 `../vscode/src/vs/workbench/contrib/chat`，首次参照
 
 Stanza 与 textarea 默认文本高度 40px，含工具栏默认总高 84px，最大文本高度 314px，文本增长向上扩展。textarea 根据内容与容器宽度布局，ResizeObserver／调度器随输入释放。附件与草稿归 `ChatAttachmentModel`／`ChatDynamicVariableModel`；输入框不展示当前编辑器文件推荐栏，切换文件或 SCM diff 不自动附加文件。添加上下文、粘贴、拖放和代码选区仍生成消息内引用。
 
+引用快照与偏移归 `ChatDynamicVariableModel`；`ChatInputEditor` 拥有引用装饰和内联控件，沿 `editor/chatInputReferenceDecorations.ts` 注册可释放的共享样式。输出选区使用通道的可读名称：单根工作区省略重复的目录名，多根工作区保留目录名以区分同名语言服务器；原始 URI、行范围和选中时的内容仍完整保留。点击文件／代码引用或在引用处按 Alt+Enter，通过 `IEditorService` 在独立的只读标签中打开同一 resolver 保存的完整正文；快照资源身份按 resolver 区分，避免覆盖实时来源或另一份同名选区，重复打开复用原标签。移除引用、换草稿或释放输入会阻止迟到的打开请求。引用 hover 通过同一快照 resolver 预览附加的文件或选区正文，最多 12 行、4000 字符，缩短时明确提示；输出不展示内部通道 URI，文件保留来源路径。通用 Editor 的 `markdownHoverParticipant.ts` 读取装饰的 `hoverMessage`，通过原 Markdown renderer 显示正文并接收延迟快照更新。鼠标悬停或在引用处使用 Show or focus hover（Ctrl／Command+K，Ctrl／Command+I）均可查看，Escape 返回输入；移除引用或释放输入会清理对应展示，迟到结果不恢复旧引用。
+
+正文中的引用位置用于表达材料顺序及其与前后说明的关系，设计缘由见[为什么 Ash 把上下文放进正文](blog/inline-context-references.md)。`resolveChatContextAttachment` 将正文引用偏移与保存的快照一起传给发送模型；Code 和 Cowork 保留未经裁剪的原始正文，`ChatService` 在普通发送、排队和 steering 中按引用位置拆分文字，将标签替换成相应的上下文或图片输入。同名引用保留各自快照，附件读取完成的先后不影响顺序。没有位置的旧草稿附件和来源上下文保持前置；空白片段不单独生成后端不接受的空文本输入，有效文字片段保留原有空白。越界或重叠的引用在提交前报错并保留草稿。Rust 的输入规范化、持久化与模型消息组装沿用输入顺序。
+
 Profile 输入历史沿 `platform/messageHistory` 领域服务 → App Server → `SqliteMessageHistory`，普通 Workbench 与 Sessions 共用。仅主动提交文本追加历史；上下键导航、Ctrl+R 搜索／分页和确认只回填，Escape 恢复文本、光标、附件及 Skill 版本。远端 Thread 不改变本机 Profile 归属；取消、过期回包和连接替换不能改写新草稿，失败写入不自动重试。详见[输入历史](chat-input-history.md)。
 
 已接受请求的“编辑消息”沿 `ChatListWidget` → `workbench.action.chat.resendRequest` → `IChatService.rewriteRequest` → `RewriteThread`，从原请求前创建新聊天并提交修改后的文本，保留原上下文、图片和音频。Enter 换行，Ctrl／Command+Enter 发送，Escape 取消；失败保留编辑内容，同一内容重试复用命令身份。原聊天与未发送草稿仍可恢复，后续 steering 和工具输出不会重放。

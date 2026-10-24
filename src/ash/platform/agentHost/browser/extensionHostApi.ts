@@ -25,6 +25,12 @@ export function createDisconnectedExtensionHostApi(unavailable: UnavailableOpera
 
 export function createAppServerExtensionHostApi(connection: AppServerProtocolClient): IExtensionHostApi {
 	const transport = {
+		onDidComplete: (listener: (id: string) => void) => connection.onNotification(event => {
+			if (event.method === 'extensionHost/invoke/completed') listener(event.params.invocationId);
+		}),
+		onDidDisconnect: (listener: (error: Error) => void) => connection.onStateChange((state, error) => {
+			if (state !== 'ready') listener(error ?? new Error(`App Server is not ready: ${state}`));
+		}),
 		start: (request: Parameters<IExtensionHostApi["invoke"]>[0]) => appServerRequest(connection, "extensionHost/invoke/start", request),
 		read: (invocationId: string) => appServerRequest(connection, "extensionHost/invoke/read", { invocationId }),
 		cancel: (invocationId: string, resultRetention: 'retain' | 'discard') => appServerRequest(connection, "extensionHost/invoke/cancel", { invocationId, discardResult: resultRetention === 'discard' }),

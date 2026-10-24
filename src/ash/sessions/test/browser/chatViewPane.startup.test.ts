@@ -1,3 +1,10 @@
+import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { registerCodeEditorServices } from '../../../editor/test/browser/testCodeEditor.js';
+import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
+import { ChatWidgetService } from '../../../workbench/contrib/chat/browser/widget/chatWidgetService.js';
+import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
+import { ImageEditorService } from '../../../workbench/services/imageEditor/browser/imageEditorService.js';
+import type { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { UserDataProfileService } from '../../../workbench/services/userDataProfile/browser/userDataProfileService.js';
@@ -85,6 +92,8 @@ test("opens a local Chat conversation before the backend session request settles
 	});
 	using notifications = new TestNotificationService();
 	services.registerInstance(INotificationService, notifications);
+	services.registerSingleton(IImageEditorService, () => new class extends ImageEditorService { async capture(): Promise<never> { throw new Error('Image capture is outside this fixture'); } }());
+	services.registerSingleton(IChatWidgetService, () => new ChatWidgetService());
 	services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, focusActiveEditor() { }, openEditor: async () => { } });
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -112,6 +121,7 @@ test("opens a local Chat conversation before the backend session request settles
 	services.registerInstance(IMenuService, emptyMenuService());
 	services.registerInstance(IContextMenuService, {} as IContextMenuService);
 	using files = new TestConfigurationFiles();
+	registerCodeEditorServices(services);
 	using view = new ChatViewPane(
 		document.body,
 		{ id: "workbench.chat", title: "Chat" },
@@ -129,7 +139,7 @@ test("opens a local Chat conversation before the backend session request settles
 		services.get(IConfigurationService),
 		services.get(IStorageService),
 		new UserDataProfileService(),
-		services.get(ILifecycleService),
+		services.get(ILifecycleService), { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, services.get(IAuxiliaryWindowService),
 	);
 
 	assert.deepEqual(escaped, []);

@@ -36,6 +36,7 @@ struct Client {
     editor_sequence: AtomicU64,
     editor_resources: Mutex<Vec<Value>>,
     binary_comparison: AtomicBool,
+    reveal_comparison: AtomicBool,
     conflict_comparison: AtomicBool,
     cancel_protected_commit: AtomicBool,
     cancel_clone_input: AtomicBool,
@@ -106,6 +107,7 @@ impl Client {
                         Some("openEditorResources") => {
                             json!(*self.editor_resources.lock().unwrap())
                         }
+                        Some("revealDiff") => json!(self.reveal_comparison.load(Ordering::Acquire)),
                         Some("activeEditor") => {
                             json!({"input":self.editor_document.lock().unwrap().as_ref().map(|uri|json!({"resource":uri})),"selection":null,"version":null,"contents":null})
                         }
@@ -426,6 +428,7 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
             editor_sequence: AtomicU64::new(0),
             editor_resources: Mutex::new(Vec::new()),
             binary_comparison: AtomicBool::new(false),
+            reveal_comparison: AtomicBool::new(false),
             conflict_comparison: AtomicBool::new(false),
             cancel_protected_commit: AtomicBool::new(true),
             cancel_clone_input: AtomicBool::new(false),
@@ -1205,6 +1208,44 @@ fn verify_binary_comparisons(supervisor: &host::ExtensionHostSupervisor, client:
             4
         );
     }
+    client.reveal_comparison.store(true, Ordering::Release);
+    let open_comparisons: Vec<Value> = client.editor_requests.lock().unwrap().iter().filter_map(|request| {
+        let input = &request["input"];
+        Some(json!({"original":input["original"]["resource"].as_str()?,"modified":input["modified"]["resource"].as_str()?}))
+    }).collect();
+    let reads = client.requests.lock().unwrap().len();
+    let editor_requests = client.editor_requests.lock().unwrap().len();
+    for group in ["changes", "staged"] {
+        execute(
+            supervisor,
+            client,
+            invocation(
+                "ash.scm",
+                "scm",
+                json!({"method":"open","providerId":"root","resourceId":format!("{group}:image.bin"),"options":{"pinned":false},"openComparisons":open_comparisons}),
+            ),
+        );
+    }
+    assert_eq!(
+        client.requests.lock().unwrap().len(),
+        reads,
+        "Revealing an existing comparison must not read either side"
+    );
+    {
+        let requests = client.editor_requests.lock().unwrap();
+        assert_eq!(requests.len() - editor_requests, 2);
+        for request in &requests[editor_requests..] {
+            assert_eq!(request["method"], "revealDiff");
+            assert!(
+                request["originalResource"]
+                    .as_str()
+                    .unwrap()
+                    .contains("revision=")
+            );
+            assert!(request["modifiedResources"].as_array().unwrap().len() <= 2);
+        }
+    }
+    client.reveal_comparison.store(false, Ordering::Release);
     let baseline = execute(
         supervisor,
         client,

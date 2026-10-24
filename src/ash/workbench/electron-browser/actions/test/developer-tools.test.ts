@@ -52,6 +52,7 @@ test("native host routes validate folder picking and developer tools", async () 
 		markAgentsWindowInvitationShown: () => { throw new Error('Unused invitation capability'); },
 		releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
 		getTitleBarStyle: () => 'custom',
+		getWindowClientSize: () => undefined,
 		isAdmin: async () => false,
 		performDialogOperation: () => undefined,
 		pickFolder: async () => {
@@ -190,6 +191,8 @@ test("desktop commands are available from the command palette", async () => {
 		releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
 		onDidChangeAgentHostEditorState: () => { throw new Error('Unused invitation capability'); },
 		getTitleBarStyle: async () => 'custom',
+		getWindowClientSize: async () => undefined,
+		onDidChangeWindowClientSize: () => ({ dispose() { } }),
 		isAdmin: async () => false,
 		onDidRequestOpenExternalUri: () => ({ dispose() { } }),
 		openExternal: async () => { throw new Error('unused'); },

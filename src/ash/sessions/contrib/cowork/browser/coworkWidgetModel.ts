@@ -302,6 +302,15 @@ export class CoworkWidgetModel extends Disposable {
 	}
 
 	async selectThread(active: IActiveSessionThread): Promise<void> {
+		if (this.selection.kind === 'untitled') {
+			const draft = this.selection.session;
+			const promoted = this.sessionService.materializedSessions.get().get(draft.untitledSessionId);
+			if (promoted?.sessionId === active.session.sessionId && promoted.threadId === active.threadId) {
+				this.adoptUntitledSession(draft, active);
+				await this.subscribe(active);
+				return;
+			}
+		}
 		const current = this.activeSession;
 		if (!current || active.session.sessionId !== current.session.sessionId) {
 			throw new Error(`CoworkWidgetModel cannot select a Thread from another Session: ${active.session.sessionId}`);
@@ -395,8 +404,7 @@ export class CoworkWidgetModel extends Disposable {
 	}
 
 	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions): Promise<void> {
-		const input = text.trim();
-		if (!input && !contexts?.length) return;
+		if (!text.trim() && !contexts?.length) return;
 		this.assertAIEnabled();
 		const operation = this.captureOperation(options);
 		const stateRequest = ++this.stateRequest;
@@ -424,7 +432,8 @@ export class CoworkWidgetModel extends Disposable {
 				sessionId: active.session.sessionId,
 				threadId: active.threadId,
 				expectedSequence: thread.sequence,
-				text: input,
+				// Reference offsets belong to the exact composer text, including leading whitespace.
+				text,
 				mode,
 				approvalMode: this.inputState.approvalMode,
 				model: this.isAutomaticModel ? undefined : this.selectedModel,
@@ -1056,13 +1065,21 @@ export class CoworkWidgetModel extends Disposable {
 	private async ensureActiveSession(): Promise<IActiveSessionThread> {
 		if (this.selection.kind === "session") return this.selection.active;
 		const untitledSession = this.selection.session;
-		const selectedModel = this.selectedModel;
 		const created = await this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId);
 		if (this.isDisposed || this.selection.kind !== 'untitled' || this.selection.session.untitledSessionId !== untitledSession.untitledSessionId) {
 			// Keep the completed durable session, but never replace a newer conversation selection.
 			this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
 			throw canceled();
 		}
+		this.adoptUntitledSession(untitledSession, created);
+		this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
+		await this.subscribe(created);
+		return created;
+	}
+
+	/** Keep this composer's choices when organization gives its draft a durable identity. */
+	private adoptUntitledSession(untitledSession: IUntitledChatSession, created: IActiveSessionThread): void {
+		const selectedModel = this.selectedModel;
 		this.selection = { kind: "session", active: created };
 		// The durable Session may authorize directory Skills absent from the untitled catalog.
 		this._skillSelectors = [];
@@ -1082,10 +1099,8 @@ export class CoworkWidgetModel extends Disposable {
 		else this.automaticModels.add(created.threadId);
 		this.selectedModels.delete(untitledSession.untitledSessionId);
 		this.automaticModels.delete(untitledSession.untitledSessionId);
-		this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
-		await this.subscribe(created);
-		return created;
 	}
+
 }
 
 function activeTurn(thread: Thread | undefined): Turn | undefined {

@@ -29,6 +29,9 @@ import { generateUuid } from '../../../../base/common/uuid.js';
 import { posix } from '../../../../base/common/path.js';
 import type { ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
 import { Menus } from '../../menus.js';
+import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
+import { createSessionItemActions } from '../../agentSessionsModel.js';
+import type { SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends DomWidget {
@@ -136,7 +139,7 @@ export class SessionsList extends DomWidget {
 
 	public getViewState(): { readonly top: number; readonly focus: string | undefined; } {
 		const active = this.domNode.ownerDocument.activeElement;
-		const item = [...this.items].find(([, item]) => item.domNode === active);
+		const item = [...this.items].find(([, item]) => item.domNode.contains(active));
 		const section = [...this.sections].find(([, section]) => section.button === active);
 		const navigation = [...this.navigationButtons].find(([, button]) => button.domNode === active);
 		return { top: this.list.scrollTop, focus: navigation ? `navigation:${navigation[0]}` : section ? `section:${section[0]}` : item?.[0] };
@@ -150,7 +153,7 @@ export class SessionsList extends DomWidget {
 		else if (state.focus) {
 			const item = this.items.get(state.focus)?.domNode;
 			const collapsed = item?.closest<HTMLElement>('[hidden]');
-			(collapsed?.parentElement?.querySelector<HTMLButtonElement>('h3 button') ?? item)?.focus({ preventScroll: true });
+			(collapsed?.parentElement?.querySelector<HTMLButtonElement>('h3 button') ?? item?.querySelector<HTMLButtonElement>('.ash-sessions-list-item'))?.focus({ preventScroll: true });
 		}
 	}
 
@@ -171,18 +174,15 @@ export class SessionsList extends DomWidget {
 
 	private pinKey(id: string): string { return `sessions.list.pinned.${id}`; }
 
-	private showItemMenu(id: string, anchor: ContextMenuAnchor): void {
-		const pinned = this.storage.getBoolean(this.pinKey(id), StorageScope.PROFILE, false);
+	private showItemMenu(selection: SessionsViewSelection, item: SessionListItem, anchor: ContextMenuAnchor): void {
+
+		item.setMenuVisible(true);
 		this.contextMenus.showContextMenu({
 			getAnchor: () => anchor,
-			getActions: () => [{
-				id: 'sessions.list.togglePin', enabled: true, tooltip: '',
-				label: pinned ? localize('sessions.list.unpin', 'Unpin chat') : localize('sessions.list.pin', 'Pin chat'),
-				run: () => {
-					this.storage.store(this.pinKey(id), !pinned, StorageScope.PROFILE, StorageTarget.USER);
-					this.restoreViewState({ top: this.list.scrollTop, focus: `session:${id}` });
-				},
-			}],
+			getActions: () => createSessionItemActions(selection, this.commands, this.storage, this.notifications,
+				() => this.commands.executeCommand('sessions.openInNewWindow', selection),
+				sessionId => this.restoreViewState({ top: this.list.scrollTop, focus: `session:${sessionId}` })),
+			onHide: () => { item.setMenuVisible(false); },
 		});
 	}
 
@@ -216,6 +216,7 @@ export class SessionsList extends DomWidget {
 			const selected = activeSelection?.kind === 'untitled' && activeSelection.session.untitledSessionId === session.untitledSessionId;
 			const item = itemFor(`untitled:${session.untitledSessionId}`);
 			item.update(session.title || localize('chat.sessions.new', 'New Session'), selected, () => this.viewService.openUntitledSession(session.untitledSessionId));
+			item.setContextMenu(anchor => this.showItemMenu(selection, item, anchor));
 			recent.push(item.domNode);
 		}
 		for (const session of this.sessionService.sessions) {
@@ -226,13 +227,14 @@ export class SessionsList extends DomWidget {
 			if (!thread || session.status !== 'active') continue;
 			const item = itemFor(`session:${session.sessionId}`);
 			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current !== undefined, () => this.viewService.openSession(session.sessionId, thread.threadId), session.management);
-			item.setContextMenu(event => this.showItemMenu(session.sessionId, event.type === 'contextmenu' ? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: getWindow(item.domNode) } : item.domNode));
+			item.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor));
 			const requests = this.github.getSessionPullRequests(session.sessionId);
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
 			if (this.storage.getBoolean(this.pinKey(session.sessionId), StorageScope.PROFILE, false)) pinned.push(item.domNode);
 			else remaining.set(session.sessionId, item.domNode);
 		}
 		const projects: HTMLElement[] = [];
+		const chatGroups: HTMLElement[] = [];
 		for (const project of this.projects) {
 			if (this.mode === 'chat') {
 				const item = itemFor(`project:${project.id}`);
@@ -248,15 +250,15 @@ export class SessionsList extends DomWidget {
 			}
 		}
 		if (this.projectsFailed) projects.push(this.projectError);
-		if (this.mode === 'code') {
-			for (const group of this.groups.groups) {
-				const members: HTMLElement[] = [];
-				for (const id of group.sessionIds) {
-					const item = remaining.get(id);
-					if (item) { members.push(item); remaining.delete(id); }
-				}
-				recent.push(sectionFor(`group:${group.sectionId}`, group.name, members, true));
+		for (const group of this.groups.groups) {
+			const members: HTMLElement[] = [];
+			for (const id of group.sessionIds) {
+				const item = remaining.get(id);
+				if (item) { members.push(item); remaining.delete(id); }
 			}
+			(this.mode === 'code' ? recent : chatGroups).push(sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code'));
+		}
+		if (this.mode === 'code') {
 			const workspaces = new Map<string, { title: string; items: HTMLElement[]; }>();
 			for (const session of this.sessionService.sessions) {
 				const item = remaining.get(session.sessionId);
@@ -272,13 +274,14 @@ export class SessionsList extends DomWidget {
 			}
 			for (const [key, group] of workspaces) recent.push(sectionFor(`workspace:${key}`, group.title, group.items, true));
 		} else recent.push(...remaining.values());
-		const showEmpty = recent.length === 0 && pinned.length === 0;
+		const showEmpty = recent.length === 0 && pinned.length === 0 && chatGroups.length === 0;
 		if (showEmpty) {
 			this.empty.textContent = this.sessionService.state === 'loading' ? localize('sessions.list.loading', 'Loading sessions…') : this.sessionService.error ?? localize('sessions.list.empty', 'Create a session to begin.');
 		}
 		const ordered: HTMLElement[] = [];
 		if (pinned.length) ordered.push(sectionFor('pinned', localize('sessions.list.pinned', 'Pinned'), pinned));
 		if (projects.length) ordered.push(sectionFor('projects', localize('projects.title', 'Projects'), projects));
+		ordered.push(...chatGroups);
 		if (recent.length) ordered.push(sectionFor('recent', this.mode === 'chat' ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents'), recent));
 		if (showEmpty) ordered.push(this.empty);
 		for (const key of this.items.keys()) if (!present.has(key)) this.items.deleteAndDispose(key);
@@ -351,7 +354,9 @@ class SessionListSection extends AbstractDisposable {
 }
 
 class SessionListItem extends AbstractDisposable {
-	readonly domNode: HTMLButtonElement;
+	readonly domNode: HTMLElement;
+	private readonly button: HTMLButtonElement;
+	private readonly actions: ActionBar;
 	private readonly label: HTMLSpanElement;
 	private readonly pullRequest: HTMLSpanElement;
 	private readonly management: HTMLSpanElement;
@@ -360,13 +365,25 @@ class SessionListItem extends AbstractDisposable {
 	private open: () => void = () => { };
 	private readonly clickListener;
 	private readonly contextListeners;
-	private contextMenu: ((event: MouseEvent | KeyboardEvent) => void) | undefined;
+	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
 
 	constructor(ownerDocument: Document, icon?: ThemeIcon) {
 		super();
-		this.domNode = h(ownerDocument, "button");
-		this.domNode.type = "button";
-		this.domNode.className = "ash-sessions-list-item";
+		this.domNode = h(ownerDocument, 'div', { className: 'ash-sessions-list-row' });
+		this.button = h(ownerDocument, 'button', { className: 'ash-sessions-list-item' });
+		this.button.type = 'button';
+		this.domNode.append(this.button);
+		this.actions = new ActionBar(this.domNode, {
+			ariaLabel: localize('sessions.list.actions', 'Chat actions'),
+			actions: [{
+				id: 'sessions.list.more', label: localize('sessions.list.more', 'More actions'),
+				tooltip: localize('sessions.list.more', 'More actions'), icon: Lxicon.ellipsis, enabled: true,
+				run: () => this.contextMenu?.(this.actions.element),
+			}],
+		});
+		this.actions.element.classList.add('ash-sessions-list-actions');
+		this.actions.element.hidden = true;
+		this.actions.element.querySelector('button')?.setAttribute('aria-haspopup', 'menu');
 		this.label = h(ownerDocument, 'span');
 		this.label.className = 'ash-sessions-list-label';
 		this.management = h(ownerDocument, 'span');
@@ -380,12 +397,14 @@ class SessionListItem extends AbstractDisposable {
 		this.pullRequest.className = 'ash-sessions-list-pr';
 		this.pullRequest.setAttribute('aria-hidden', 'true');
 		this.pullRequest.hidden = true;
-		if (icon) appendIcon(icon, this.domNode);
-		this.domNode.append(content, this.pullRequest);
-		this.clickListener = addDisposableListener(this.domNode, "click", () => this.open());
+		if (icon) appendIcon(icon, this.button);
+		// Keep attention metadata clear of the trailing hover actions.
+		this.button.append(this.pullRequest, content);
+		this.clickListener = addDisposableListener(this.button, "click", () => this.open());
 		const showMenu = (event: MouseEvent | KeyboardEvent): void => {
 			if (!this.contextMenu) return;
-			event.preventDefault(); event.stopPropagation(); this.contextMenu(event);
+			event.preventDefault(); event.stopPropagation();
+			this.contextMenu(event.type === 'contextmenu' ? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: getWindow(this.domNode) } : this.button);
 		};
 		this.contextListeners = [
 			addDisposableListener(this.domNode, 'contextmenu', showMenu),
@@ -395,18 +414,26 @@ class SessionListItem extends AbstractDisposable {
 		];
 	}
 
-	setContextMenu(menu: (event: MouseEvent | KeyboardEvent) => void): void { this.contextMenu = menu; }
+	setContextMenu(menu: (anchor: ContextMenuAnchor) => void): void {
+		this.contextMenu = menu;
+		this.actions.element.hidden = false;
+	}
+
+	setMenuVisible(visible: boolean): void {
+		this.domNode.classList.toggle('menu-visible', visible);
+		this.actions.element.querySelector('button')?.setAttribute('aria-expanded', String(visible));
+	}
 
 	update(title: string, selected: boolean, open: () => void, management?: SessionManagementInfo): void {
 		if (this.label.textContent !== title) this.label.textContent = title;
 		const state = sessionManagementLabel(management);
 		if (this.management.textContent !== (state ?? '')) this.management.textContent = state ?? '';
 		this.management.hidden = state === undefined;
-		this.domNode.classList.toggle('has-management', state !== undefined);
+		this.button.classList.toggle('has-management', state !== undefined);
 		this.managementDescription = [state, management?.activity?.text, management?.summary].filter(Boolean).join('. ');
 		this.updateDescription();
 		this.domNode.classList.toggle("selected", selected);
-		this.domNode.setAttribute("aria-current", selected ? "page" : "false");
+		this.button.setAttribute("aria-current", selected ? "page" : "false");
 		this.open = open;
 	}
 
@@ -423,12 +450,13 @@ class SessionListItem extends AbstractDisposable {
 
 	private updateDescription(): void {
 		const parts = [this.label.textContent, this.managementDescription, this.pullRequestDescription].filter(Boolean);
-		this.domNode.title = parts.join('\n');
-		this.domNode.setAttribute('aria-label', parts.join('. '));
+		this.button.title = parts.join('\n');
+		this.button.setAttribute('aria-label', parts.join('. '));
 	}
 
 	protected override disposeCore(): void {
 		this.clickListener.dispose();
+		this.actions.dispose();
 		for (const listener of this.contextListeners) listener.dispose();
 		this.domNode.remove();
 	}

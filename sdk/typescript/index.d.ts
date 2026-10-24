@@ -160,6 +160,8 @@ export interface ImageEditorProvider {
 	resolveImageEditor(context: ImageEditorContext, view: ImageEditorView, token: CancellationToken): ProviderResult<void>;
 }
 export type ImageEditorCompletion = { readonly kind: 'cancel' | 'retake'; } | { readonly kind: 'error'; readonly message: string; } | { readonly kind: 'copy' | 'save' | 'attach'; readonly image: Uint8Array; };
+/** Finite native operations available only while displaying a host-requested permission guide. */
+export type ImageEditorPermissionAction = 'settings' | 'drag' | 'copyPath' | 'retry' | 'cancel';
 /** Resolved appearance values independent of the host's CSS variable names. */
 export interface ImageEditorTheme {
 	readonly colors: {
@@ -194,6 +196,8 @@ export interface ImageEditorInput {
 	/** Preferred explicit export action, determined by the interaction's entry point. */
 	readonly defaultAction: 'copy' | 'attach';
 	readonly image?: Uint8Array;
+	/** Present instead of image/code when macOS requires screen capture consent. The host selects the running application. */
+	readonly permission?: { readonly applicationName: string; readonly icon: Uint8Array; };
 	readonly code?: CodeImageSnapshot;
 	readonly state?: JsonValue;
 	readonly theme: ImageEditorTheme;

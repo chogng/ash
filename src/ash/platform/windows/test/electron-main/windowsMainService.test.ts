@@ -105,6 +105,8 @@ type RendererListener = (() => void)
 	| ((event: unknown, code: number, description: string, url: string, mainFrame: boolean) => void);
 
 class TestWindow implements IWorkbenchWindow<TestWindow> {
+	public hookWindowMessage(_message: number, _callback: (wParam: Buffer, lParam: Buffer) => void): void { }
+	public unhookWindowMessage(_message: number): void { }
 	public readonly calls: string[] = [];
 	public readonly messages: { readonly channel: string; readonly level: unknown; }[] = [];
 	private readonly zoomListeners = new Set<() => void>();

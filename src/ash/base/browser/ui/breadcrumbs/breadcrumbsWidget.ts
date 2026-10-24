@@ -45,6 +45,7 @@ export class BreadcrumbsWidget extends Disposable {
 	private selected: BreadcrumbsItem | undefined;
 	private enabled = true;
 	private readonly pendingReveal = this._register(new MutableDisposable());
+	private readonly pendingLayout = this._register(new MutableDisposable());
 	private readonly focusEmitter = this._register(new Emitter<IBreadcrumbsItemEvent>());
 	private readonly selectionEmitter = this._register(new Emitter<IBreadcrumbsItemEvent>());
 	private readonly domFocusEmitter = this._register(new Emitter<boolean>());
@@ -211,6 +212,7 @@ export class BreadcrumbsWidget extends Disposable {
 			candidate.button.tabIndex = candidate === (entry ?? this.entries.at(-1)) ? 0 : -1;
 		}
 		if (this.enabled && entry) {
+			this.pendingLayout.clear();
 			entry.button.focus({ preventScroll: true });
 			this.scrollable.reveal(entry.button);
 		}
@@ -246,15 +248,25 @@ export class BreadcrumbsWidget extends Disposable {
 			this.scrollable.element.style.width = `${dimension.width}px`;
 			this.scrollable.element.style.height = `${dimension.height}px`;
 		}
-		this.scrollable.layout();
+		if (!this.pendingLayout.value) {
+			// Path and symbol updates share a frame with editor publication. Read
+			// geometry after those writes instead of flushing each intermediate path.
+			this.pendingLayout.value = this.scheduleMeasure(this.listDomNode.ownerDocument.defaultView!, () => {
+				this.pendingLayout.clear();
+				this.scrollable.layout();
+			});
+		}
 	}
 
 	public reveal(item: BreadcrumbsItem): void {
 		this.pendingReveal.clear();
 		const entry = this.entries.find(candidate => candidate.item === item);
 		if (entry) {
+			// reveal measures the scrollbar itself; it also consumes a queued layout.
+			this.pendingLayout.clear();
 			// Hosts update the path before its layout settles; focus reveals remain synchronous.
 			this.pendingReveal.value = this.scheduleMeasure(this.listDomNode.ownerDocument.defaultView!, () => {
+				this.pendingReveal.clear();
 				this.scrollable.reveal(entry.button);
 			});
 		}

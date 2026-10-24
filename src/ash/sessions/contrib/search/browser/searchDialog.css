@@ -5,7 +5,7 @@
 	background: var(--ash-editor-background);
 }
 
-.ash-sessions-search-dialog > .ash-dialog-title {
+.ash-sessions-search-dialog > .ash-dialog-header {
 	position: absolute;
 	width: 1px;
 	height: 1px;

@@ -1,7 +1,7 @@
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import type { INativeHostApi } from '../../platform/native/common/nativeHost.js';
-import { WINDOW_ZOOM_LEVEL_SETTING, WINDOW_ZOOM_PER_WINDOW_SETTING } from '../../platform/window/common/window.js';
+import { WINDOW_ZOOM_LEVEL_SETTING, WINDOW_ZOOM_PER_WINDOW_SETTING, type IWindowClientSize } from '../../platform/window/common/window.js';
 import { IOpenerService } from '../../platform/opener/common/opener.js';
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import { URI } from '../../base/common/uri.js';
@@ -16,6 +16,7 @@ import { ITitleService } from '../services/title/browser/titleService.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
 import { ILogService } from '../../platform/log/common/log.js';
 import { localize } from '../../nls.js';
+import { addDisposableListener } from '../../base/browser/dom.js';
 
 /** The renderer owns file completion because it owns every editor group, including moved tabs. */
 export class ElectronWindow extends Disposable {
@@ -133,6 +134,50 @@ export class NativeWindow extends Disposable {
 			if ((event.affectsConfiguration(WINDOW_ZOOM_LEVEL_SETTING) || event.affectsConfiguration(WINDOW_ZOOM_PER_WINDOW_SETTING)) && this.pendingZoomLevel === undefined) void this.applyConfiguredZoom().catch(onUnexpectedError);
 		}));
 		void this.applyConfiguredZoom().catch(onUnexpectedError);
+	}
+
+	/** Constrains the whole Workbench to the native drawable area, including fractional CSS pixels. */
+	public async initialize(container: HTMLElement): Promise<void> {
+		this.assertNotDisposed();
+		const target = container.ownerDocument.defaultView!;
+		const originalWidth = container.style.maxWidth;
+		const originalHeight = container.style.maxHeight;
+		let size: IWindowClientSize | undefined;
+		let revision = 0;
+		let frame: number | undefined;
+		const update = (): void => {
+			if (frame !== undefined || this.isDisposed) return;
+			frame = target.requestAnimationFrame(() => {
+				frame = undefined;
+				if (!size) {
+					container.style.maxWidth = originalWidth;
+					container.style.maxHeight = originalHeight;
+					return;
+				}
+				// Chromium's integer DIP viewport can extend beyond the client pixels.
+				// Limit the root at the measured boundary; never reserve a fixed inset.
+				container.style.maxWidth = `${size.width / target.devicePixelRatio}px`;
+				container.style.maxHeight = `${size.height / target.devicePixelRatio}px`;
+			});
+		};
+		const subscription = this.host.onDidChangeWindowClientSize(value => {
+			revision++;
+			size = value;
+			update();
+		});
+		this._register(toDisposable(() => {
+			subscription.dispose();
+			if (frame !== undefined) target.cancelAnimationFrame(frame);
+			container.style.maxWidth = originalWidth;
+			container.style.maxHeight = originalHeight;
+		}));
+		this._register(addDisposableListener(target, 'resize', update));
+		// Subscribe before reading so a late initial reply cannot replace a newer resize.
+		const currentRevision = revision;
+		const initial = await this.host.getWindowClientSize();
+		if (this.isDisposed || revision !== currentRevision) return;
+		size = initial;
+		update();
 	}
 
 	private async applyConfiguredZoom(): Promise<void> {

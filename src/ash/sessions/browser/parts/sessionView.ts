@@ -1,5 +1,14 @@
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { INotificationService } from '../../../platform/notification/common/notification.js';
+import type { IAuxiliaryWindow } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { Button } from '../../../base/browser/ui/button/button.js';
+import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
+import { Lxicon } from '../../../base/common/lxicons.js';
 import './media/sessionView.css';
-import { addDisposableListener, h } from '../../../base/browser/dom.js';
+import './media/sessionsPart.css';
+import '../media/style.css';
+import { addDisposableListener, h, isHTMLElement } from '../../../base/browser/dom.js';
 import type { IView } from '../../../base/browser/ui/grid/grid.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
@@ -63,6 +72,8 @@ export class SessionView extends Disposable implements IView {
 		this._register(addDisposableListener(this.element, 'pointerdown', activate));
 		this._register(toDisposable(() => this.element.remove()));
 	}
+
+	get currentSelection(): SessionsViewSelection { return this.selection; }
 
 	get activeChat(): ISessionsConversationPane { return this.panes.get(this.kind)!; }
 
@@ -132,5 +143,69 @@ export class SessionView extends Disposable implements IView {
 		}
 		const session = this.selection.kind === 'session' ? this.selection.active.session : this.selection.session;
 		pane.element.setAttribute('aria-label', session.title.trim() || localize('sessions.conversation.editorName', 'Session'));
+	}
+}
+
+/** Shared light Agent chrome; each opener retains ownership of its conversation tree. */
+export class SessionAuxiliaryWindow extends Disposable {
+	readonly header: HTMLElement;
+	readonly title: HTMLElement;
+
+	constructor(
+		readonly window: IAuxiliaryWindow,
+		title: string,
+		@IAccessibleViewService accessibleViews: IAccessibleViewService,
+		@INotificationService notifications: INotificationService,
+	) {
+		super();
+		window.container.classList.add('ash-sessions-window', 'ash-sessions-auxiliary-window');
+		this.header = h(window.window.document, 'header', { className: 'ash-sessions-auxiliary-titlebar' });
+		this.title = h(window.window.document, 'span', { className: 'ash-sessions-auxiliary-title' });
+		this.title.id = `session-window-title-${window.id}`;
+		this.setTitle(title);
+		const toolbar = h(window.window.document, 'div', { className: 'ash-sessions-auxiliary-actions' });
+		this.header.append(this.title, toolbar);
+		window.container.append(this.header);
+		this._register(toDisposable(() => this.header.remove()));
+		this._register(addDisposableListener<KeyboardEvent>(window.window, 'keydown', event => {
+			if (!isHTMLElement(event.target) || !window.container.contains(event.target)) return;
+			if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (event.key === 'F1' || event.key === 'F2')) {
+				event.preventDefault(); event.stopPropagation();
+				accessibleViews.show(event.key === 'F1' ? AccessibleViewType.Help : AccessibleViewType.View, event.target);
+			}
+		}, { capture: true }));
+		this._register(AccessibleViewRegistry.register({
+			name: `sessions-window-${window.id}`, type: AccessibleViewType.Help, priority: 95,
+			getProvider: () => {
+				if (!window.window.document.hasFocus()) return undefined;
+				const focused = window.window.document.activeElement as HTMLElement | null;
+				if (!focused || !this.header.contains(focused)) return undefined;
+				return new AccessibleContentProvider(
+					AccessibleViewProviderId.SessionsChat, { type: AccessibleViewType.Help },
+					() => localize('sessions.window.help', 'A chat opened in a separate Agent window keeps its conversation and draft. Use Tab to reach Return to main window and Keep window on top in the title bar. Closing the window returns the chat to the IDE or Agent window that opened it.'),
+					() => focused.focus(), AccessibilityVerbositySettingId.Chat,
+				);
+			},
+		}));
+		this._register(new Button(toolbar, {
+			...defaultButtonStyles, presentation: 'quiet', icon: Lxicon.screenNormal, iconOnly: true,
+			label: localize('sessions.window.return', 'Return to main window'), onClick: () => window.window.close(),
+		}));
+		const pin = window.alwaysOnTop;
+		if (pin) {
+			const button = this._register(new Button(toolbar, {
+				...defaultButtonStyles, presentation: 'quiet', iconOnly: true, icon: Lxicon.pinned,
+				label: localize('sessions.window.pin', 'Keep window on top'),
+				onClick: () => { void pin.set(!pin.value).catch(error => notifications.error(String(error))); },
+			}));
+			const update = (value: boolean) => button.domNode.setAttribute('aria-pressed', String(value));
+			update(pin.value);
+			this._register(pin.onDidChange(update));
+		}
+	}
+
+	setTitle(title: string): void {
+		this.title.textContent = this.title.title = this.window.window.document.title = title;
+		this.window.container.setAttribute('aria-label', title);
 	}
 }

@@ -286,6 +286,141 @@ suite('scmHistory browser component', () => {
 		await expect(progress).toBeHidden();
 	});
 
+	for (const locale of ['en', 'zh-CN']) {
+		test(`automatic paging appends silently with stable rows, selection and viewport (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/scmHistory.html?paging&locale=${locale}`);
+			const graph = page.locator('.ash-scm-graph');
+			const tree = graph.locator('.ash-scm-graph-tree');
+			const viewport = graph.locator('.ash-scrollbar-viewport');
+			await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '160');
+			expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads)).toEqual([{ skip: 0, limit: 81 }, { skip: 80, limit: 81 }]);
+			await expect(tree).toHaveAttribute('aria-description', locale === 'en' ? /Automatic loading fetches older commits/u : /启用自动加载时/u);
+			await tree.focus();
+			await tree.press('Home');
+			await tree.press('ArrowDown');
+			await page.evaluate(() => window.ashSCMHistoryIntegration.holdNextHistoryPage());
+			await viewport.evaluate(element => { element.scrollTop = element.scrollHeight - element.clientHeight * 2 + 44; });
+			await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(3);
+			await expect(graph).toHaveAttribute('aria-busy', 'true');
+			await expect(graph.locator('.ash-scm-graph-load-more')).toHaveCount(0);
+			const position = await viewport.evaluate(element => {
+				const top = element.getBoundingClientRect().top;
+				const anchor = [...element.querySelectorAll<HTMLElement>('.ash-list-row')].find(row => row.getBoundingClientRect().bottom > top)!;
+				return { scrollTop: element.scrollTop, anchorId: anchor.id, anchorTop: anchor.getBoundingClientRect().top };
+			});
+			const anchor = await page.locator(`[id="${position.anchorId}"]`).elementHandle();
+			assert.ok(anchor);
+			const progress = page.locator('[data-view-id="fixture.history"] .ash-view-pane-progress-indicator');
+			await expect(progress).toBeVisible();
+			expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(3);
+			await page.screenshot({ path: browserTests.info.outputPath(`silent-paging-pending-${locale}.png`) });
+			await page.evaluate(() => window.ashSCMHistoryIntegration.finishHistoryRead());
+			await expect(graph).toHaveAttribute('aria-busy', 'false');
+			await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '240');
+			await expect(progress).toBeHidden();
+			await expect(tree).toBeFocused();
+			expect(await viewport.evaluate(element => element.scrollTop)).toBe(position.scrollTop);
+			expect(await anchor.evaluate(element => element.isConnected)).toBe(true);
+			expect(await anchor.evaluate(element => element.getBoundingClientRect().top)).toBeCloseTo(position.anchorTop, 1);
+			expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(3);
+			await expect(graph.locator('.ash-scm-graph-load-more')).toHaveCount(0);
+			await page.screenshot({ path: browserTests.info.outputPath(`silent-paging-appended-${locale}.png`) });
+			await viewport.evaluate(element => { element.scrollTop = 0; });
+			await expect(tree.locator('[data-history-item-id="paging-1"]').locator('xpath=ancestor::*[@role="treeitem"]')).toHaveAttribute('aria-selected', 'true');
+			await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
+			await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '320');
+			await expect(graph).toHaveAttribute('aria-busy', 'false');
+			expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads)).toEqual([
+				{ skip: 0, limit: 81 }, { skip: 80, limit: 81 }, { skip: 160, limit: 81 }, { skip: 240, limit: 81 },
+			]);
+			await expect(graph.locator('.ash-scm-graph-load-more')).toHaveCount(0);
+			await anchor.dispose();
+		});
+	}
+
+	test('automatic paging failures retain the graph and wait for keyboard retry', async function () {
+		const { page } = browserTests;
+		await page.goto('/scmHistory.html?paging');
+		const graph = page.locator('.ash-scm-graph');
+		const tree = graph.locator('.ash-scm-graph-tree');
+		const viewport = graph.locator('.ash-scrollbar-viewport');
+		await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '160');
+		await page.evaluate(() => window.ashSCMHistoryIntegration.holdNextHistoryPage());
+		await viewport.evaluate(element => { element.scrollTop = element.scrollHeight - element.clientHeight * 2 + 44; });
+		await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(3);
+		await page.evaluate(() => window.ashSCMHistoryIntegration.finishHistoryRead(true));
+		const retry = graph.getByRole('button', { name: 'Retry loading commit history', exact: true });
+		await expect(graph).toHaveAttribute('aria-busy', 'false');
+		await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
+		await expect(retry).toBeVisible();
+		expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(3);
+		await page.evaluate(() => window.ashSCMHistoryIntegration.holdNextHistoryPage());
+		await retry.focus();
+		await retry.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(4);
+		await expect(graph.locator('.ash-scm-graph-load-more')).toHaveCount(0);
+		await expect(tree).toBeFocused();
+		await page.evaluate(() => window.ashSCMHistoryIntegration.finishHistoryRead());
+		await expect(graph).toHaveAttribute('aria-busy', 'false');
+		await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '320');
+		expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(5);
+		await expect(tree.locator('[data-history-item-id="paging-160"]').locator('xpath=ancestor::*[@role="treeitem"]')).toHaveClass(/focused/u);
+	});
+
+	test('expanded file rows count toward the prefetch distance', async function () {
+		const { page } = browserTests;
+		await page.goto('/scmHistory.html?paging&manyChanges');
+		const graph = page.locator('.ash-scm-graph');
+		const tree = graph.locator('.ash-scm-graph-tree');
+		const viewport = graph.locator('.ash-scrollbar-viewport');
+		await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '160');
+		await tree.focus();
+		await tree.press('Home');
+		await tree.press('ArrowRight');
+		await expect(tree.locator('.ash-scm-graph-change').first()).toBeVisible();
+		await page.evaluate(() => window.ashSCMHistoryIntegration.holdNextHistoryPage());
+		await viewport.evaluate(element => { element.scrollTop = 4400; });
+		await expect(tree.locator('[data-history-item-id="paging-1"]')).toBeVisible();
+		expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(2);
+		await expect(graph).toHaveAttribute('aria-busy', 'false');
+		await page.evaluate(() => window.ashSCMHistoryIntegration.finishHistoryRead());
+	});
+
+	test('manual paging keeps its action and transfers focus to the appended commits', async function () {
+		const { page } = browserTests;
+		await page.goto('/scmHistory.html?paging&manual');
+		const graph = page.locator('.ash-scm-graph');
+		const tree = graph.locator('.ash-scm-graph-tree');
+		const viewport = graph.locator('.ash-scrollbar-viewport');
+		await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '81');
+		await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
+		const more = graph.getByRole('button', { name: 'Load more commits', exact: true });
+		await expect(more).toBeVisible();
+		expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(1);
+		await page.evaluate(() => window.ashSCMHistoryIntegration.holdNextHistoryPage());
+		await more.focus();
+		await more.press('Enter');
+		await expect(more).toBeDisabled();
+		await expect(more).toHaveText('Load more commits');
+		await expect(graph).toHaveAttribute('aria-busy', 'true');
+		await page.evaluate(() => window.ashSCMHistoryIntegration.finishHistoryRead());
+		await expect(graph).toHaveAttribute('aria-busy', 'false');
+		await expect(tree).toBeFocused();
+		await expect(tree.locator('[data-history-item-id="paging-80"]').locator('xpath=ancestor::*[@role="treeitem"]')).toHaveClass(/focused/u);
+		await page.evaluate(() => {
+			window.ashSCMHistoryIntegration.holdNextHistoryPage();
+			return window.ashSCMHistoryIntegration.setPageOnScroll(true);
+		});
+		await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '160');
+		await expect(graph.locator('.ash-scm-graph-load-more')).toHaveCount(0);
+		await page.evaluate(() => window.ashSCMHistoryIntegration.setPageOnScroll(false));
+		await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '161');
+		await page.evaluate(() => window.ashSCMHistoryIntegration.finishHistoryRead());
+		await expect(graph).toHaveAttribute('aria-busy', 'false');
+		await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '241');
+	});
+
 	test('the shared tree navigates, previews and pins files and returns to their parent', async function () {
 		const { page } = browserTests;
 		await page.goto('/scmHistory.html?changes');
@@ -428,6 +563,37 @@ suite('scmHistory browser component', () => {
 		await tree.press('Home');
 		await expect(tree.getByRole('treeitem', { name: /History metadata:/u })).toBeVisible();
 	});
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`loading another commit preserves expanded file rows (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/scmHistory.html?paging&manual&changes&locale=${locale}`);
+			const tree = page.locator('.ash-scm-graph-tree');
+			const first = tree.getByRole('treeitem').filter({ has: page.locator('[data-history-item-id="paging-0"]') });
+			const second = tree.getByRole('treeitem').filter({ has: page.locator('[data-history-item-id="paging-1"]') });
+			await first.click();
+			const file = tree.locator('[data-history-tree-id="file:paging-0:src/first.ts"]');
+			await expect(file).toBeVisible();
+			const retainedFile = await file.elementHandle();
+			const retainedActions = await second.locator('.ash-scm-graph-actions').elementHandle();
+			try {
+				await second.click();
+				await expect(tree.locator('[data-history-tree-id="file:paging-1:src/first.ts"]')).toBeVisible();
+				expect(await retainedFile!.evaluate(element => element.isConnected)).toBe(true);
+				expect(await retainedActions!.evaluate(element => element.isConnected)).toBe(true);
+				await expect(first).toHaveAttribute('aria-expanded', 'true');
+				await second.press('ArrowLeft');
+				await expect(second).toHaveAttribute('aria-expanded', 'false');
+				await second.press('ArrowRight');
+				await expect(second).toHaveAttribute('aria-expanded', 'true');
+				expect(await page.evaluate(() => window.ashSCMHistoryIntegration.changeReads)).toBe(2);
+				expect(await retainedFile!.evaluate(element => element.isConnected)).toBe(true);
+			} finally {
+				await retainedFile?.dispose();
+				await retainedActions?.dispose();
+			}
+		});
+	}
 
 	for (const locale of ['en', 'zh-CN']) {
 		test(`expanded files use one tree selection and full-width rows (${locale})`, async function () {
@@ -619,6 +785,107 @@ suite('scmHistory browser component', () => {
 		await browserTests.info.attach('scm-history-row-overlay', { body: await commit.screenshot(), contentType: 'image/png' });
 		await retainedCommit?.dispose();
 		await retainedActions?.dispose();
+	});
+
+	test('history graph aligns with the pane chevron and keeps Open Changes at the trailing edge', async function () {
+		const { page } = browserTests;
+		for (const [locale, modernUI] of [['en', false], ['zh-CN', false], ['en', true], ['zh-CN', true]] as const) {
+			await page.goto(`/scmHistory.html?headerActions&locale=${locale}${modernUI ? '&modernUI' : ''}`);
+			const pane = page.locator('[data-view-id="fixture.history"]');
+			const commit = pane.getByRole('treeitem', { name: /History metadata:/u });
+			const row = commit.locator('.ash-scm-graph-row');
+			const openChanges = row.locator('[data-action-id="workbench.scm.action.graph.viewChanges"] > button');
+			for (const width of [280, 560]) {
+				await page.evaluate(width => window.ashSCMHistoryIntegration.resize(width), width);
+				await row.hover({ position: { x: 80, y: 10 } });
+				await expect(openChanges).toBeVisible();
+				const geometry = await commit.evaluate(element => {
+					const pane = element.closest('.ash-pane-view')!;
+					const chevron = pane.querySelector('.ash-pane-view-header-twisty-container')!.getBoundingClientRect();
+					const graph = element.querySelector<SVGSVGElement>('.ash-scm-graph-graph')!;
+					const point = graph.createSVGPoint();
+					point.x = Number(graph.dataset.nodeX);
+					const action = element.querySelector('[data-action-id="workbench.scm.action.graph.viewChanges"] > button')!.getBoundingClientRect();
+					const labels = element.querySelector('.ash-scm-graph-label-container')!.getBoundingClientRect();
+					return {
+						axisOffset: point.matrixTransform(graph.getScreenCTM()!).x - (chevron.left + chevron.width / 2),
+						trailingInset: element.getBoundingClientRect().right - action.right,
+						labelsBeforeAction: labels.right <= action.left,
+					};
+				});
+				expect(geometry.axisOffset).toBeCloseTo(0, 1);
+				expect(geometry.trailingInset).toBeCloseTo(8, 1);
+				expect(geometry.labelsBeforeAction).toBe(true);
+				await browserTests.info.attach(`scm-row-layout-${locale}-${modernUI ? 'modern' : 'classic'}-${width}.png`, { body: await pane.screenshot(), contentType: 'image/png' });
+			}
+		}
+	});
+
+	test('history actions reveal on hover or keyboard focus without following retained row focus', async function () {
+		const { page } = browserTests;
+		await page.goto('/scmHistory.html?changes');
+		const tree = page.locator('.ash-scm-graph-tree');
+		const commit = tree.getByRole('treeitem', { name: /History metadata:/u });
+		const row = commit.locator('.ash-scm-graph-row');
+		const actions = row.locator('.ash-scm-graph-actions');
+		const retainedActions = await actions.elementHandle();
+		const outside = page.locator('#outside');
+		try {
+			for (let theme = 0; theme < 4; theme++) {
+				await page.evaluate(index => window.ashSCMHistoryIntegration.setTheme(index), theme);
+				await commit.locator('.ash-scm-graph-subject').click({ position: { x: 3, y: 8 } });
+				await outside.hover();
+				await expect(commit.locator('.ash-scm-graph-commit')).toHaveClass(/focused/u);
+				await expect(actions).toBeHidden();
+				await expect(actions).toHaveCSS('pointer-events', 'none');
+				await tree.press('Home');
+				await expect(actions).toBeVisible();
+				await outside.click();
+				await expect(actions).toBeHidden();
+				await row.hover({ position: { x: 80, y: 10 } });
+				await expect(actions).toBeVisible();
+				expect(await retainedActions!.evaluate(element => element.isConnected)).toBe(true);
+				await outside.hover();
+				await expect(actions).toBeHidden();
+			}
+			await tree.press('Home');
+			if (await commit.getAttribute('aria-expanded') === 'false') { await tree.press('ArrowRight'); }
+			await tree.press('ArrowRight');
+			const file = tree.locator('.ash-scm-graph-change-row').first();
+			const fileActions = file.locator('.ash-scm-graph-actions');
+			await expect(fileActions).toBeVisible();
+			await outside.click();
+			await expect(fileActions).toBeHidden();
+			await file.locator('.ash-scm-graph-change').click();
+			await outside.hover();
+			await expect(fileActions).toBeHidden();
+			await file.hover();
+			await expect(fileActions).toBeVisible();
+		} finally {
+			await retainedActions?.dispose();
+		}
+	});
+
+	test('Open Changes activates from the inline toolbar without toggling the commit', async function () {
+		const { page } = browserTests;
+		await page.goto('/scmHistory.html?changes');
+		const tree = page.locator('.ash-scm-graph-tree');
+		const commit = tree.getByRole('treeitem', { name: /History metadata:/u });
+		const action = commit.getByRole('button', { name: 'Open Changes', exact: true });
+		await tree.press('Home');
+		await tree.press('Tab');
+		await page.keyboard.press('Tab');
+		await page.keyboard.press('Tab');
+		await expect(action).toBeFocused();
+		await expect(commit).toHaveAttribute('aria-expanded', 'false');
+		for (const [index, key] of ['Enter', 'Space'].entries()) {
+			await action.press(key);
+			await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.opened.length)).toBe(index + 1);
+			await expect(commit).toHaveAttribute('aria-expanded', 'false');
+		}
+		await action.click();
+		await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.opened.length)).toBe(3);
+		await expect(commit).toHaveAttribute('aria-expanded', 'false');
 	});
 
 	test('floating history actions preserve the complete keyboard focus outline across themes', async function () {

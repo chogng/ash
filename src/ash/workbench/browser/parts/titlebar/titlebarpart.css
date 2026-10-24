@@ -78,9 +78,12 @@
 }
 
 .ash-titlebar-app-icon {
+	display: flex;
 	width: 16px;
 	height: 16px;
 	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
 }
 
 .ash-workbench[data-os="mac"] .ash-titlebar-app-icon {

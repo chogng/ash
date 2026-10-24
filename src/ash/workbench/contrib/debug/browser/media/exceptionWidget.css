@@ -20,6 +20,8 @@
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 	font-family: inherit;
+	user-select: text;
+	-webkit-user-select: text;
 }
 
 .ash-debug-exception pre:focus-visible {

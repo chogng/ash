@@ -263,15 +263,27 @@ export class CommonFindController extends Disposable {
 export class FindController extends CommonFindController {
 	constructor(
 		editor: ICodeEditor,
-		searchHistory: FindWidgetSearchHistory | undefined,
-		replaceHistory: ReplaceWidgetHistory | undefined,
-		@IKeybindingService keybindingService: IKeybindingService,
-		@IHoverService hoverService: IHoverService,
+		private readonly searchHistory: FindWidgetSearchHistory | undefined,
+		private readonly replaceHistory: ReplaceWidgetHistory | undefined,
+		@IKeybindingService private readonly keybindingService: IKeybindingService,
+		@IHoverService private readonly hoverService: IHoverService,
 		@IClipboardService clipboardService: IClipboardService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
 		super(editor, clipboardService, contextKeyService);
-		this.widget = this._register(new FindWidget(editor, {
+		this._register(this.state.onFindReplaceStateChange(event => {
+			if (!this.optionsWidget && !this.state.isRevealed && (event.matchCase || event.wholeWord || event.isRegex)) {
+				this.createWidgets();
+				this.optionsWidget!.highlightFindOptions();
+			}
+		}));
+	}
+
+	private createWidgets(): void {
+		if (this.widget) return;
+		// The eager controller preserves find state without creating hidden overlays
+		// in every new editor. Construct the controls only when they are used.
+		this.widget = this._register(new FindWidget(this._editor, {
 			replace: () => this.replace(),
 			replaceAll: () => this.replaceAll(),
 			getGlobalBufferTerm: () => this.getGlobalBufferTerm(),
@@ -280,16 +292,24 @@ export class FindController extends CommonFindController {
 			closeFindWidget: () => this.closeFindWidget(),
 			toggleSearchScope: () => this.toggleSearchScope(),
 			isSearchScopeAvailable: () => this.hasSelectionScope,
-		}, this.state, this.model, hoverService, keybindingService,
-			searchHistory, replaceHistory));
-		this.optionsWidget = this._register(new FindOptionsWidget(editor, this.state, keybindingService, hoverService));
+		}, this.state, this.model, this.hoverService, this.keybindingService,
+			this.searchHistory, this.replaceHistory));
+		this.optionsWidget = this._register(new FindOptionsWidget(this._editor, this.state, this.keybindingService, this.hoverService));
 	}
 
 	protected override _start(options: IFindStartOptions, newState: INewFindReplaceState = {}): Promise<void> {
+		if (this._store.isDisposed || !this._editor.hasModel()) return Promise.resolve();
+		this.createWidgets();
 		const completion = super._start(options, newState);
 		if (options.shouldFocus === FindStartFocusAction.FocusReplaceInput) this.widget?.focusReplaceInput();
 		else if (options.shouldFocus === FindStartFocusAction.FocusFindInput) this.widget?.focusFindInput();
 		return completion;
+	}
+
+	public override highlightFindOptions(ignoreWhenVisible = false): void {
+		if (this._store.isDisposed || !this._editor.hasModel()) return;
+		this.createWidgets();
+		super.highlightFindOptions(ignoreWhenVisible);
 	}
 
 	public saveViewState(): unknown {
@@ -297,7 +317,7 @@ export class FindController extends CommonFindController {
 			searchString: this.state.searchString,
 			replaceString: this.state.replaceString,
 			isReplaceRevealed: this.state.isReplaceRevealed,
-			widget: this.widget?.getViewState(),
+			...(this.widget ? { widget: this.widget.getViewState() } : {}),
 		};
 	}
 	public restoreViewState(value: unknown): void {

@@ -168,22 +168,29 @@ impl GitClient {
         object_id: &str,
     ) -> GitResult<GitCommitDetails> {
         validate_object_id(object_id)?;
+        let version = history_version(repository);
         let output = self
             .run_query(
                 repository.worktree_root(),
                 [
                     "show",
                     "--first-parent",
+                    "--diff-merges=first-parent",
+                    "--no-notes",
+                    "--no-show-signature",
+                    "--no-decorate",
+                    "--root",
+                    "--raw",
                     "--numstat",
                     &self.rename_argument(),
                     "-z",
-                    "--format=format:%an%x00%ae%x00%ct%x00%B%x00",
+                    "--format=format:%H%x00%P%x00%an%x00%ae%x00%ct%x00%B%x00",
                     object_id,
                     "--",
                 ],
             )
             .await?;
-        let mut fields = output.stdout.splitn(5, |byte| *byte == 0);
+        let mut fields = output.stdout.splitn(7, |byte| *byte == 0);
         let mut text = || -> GitResult<String> {
             let value = fields.next().ok_or_else(|| {
                 GitError::invalid_output(&output.command, "commit details omitted metadata")
@@ -192,22 +199,36 @@ impl GitClient {
                 GitError::invalid_output(&output.command, "commit details were not UTF-8")
             })
         };
+        if text()? != object_id {
+            return Err(GitError::invalid_output(
+                &output.command,
+                "commit details did not begin with the requested object",
+            ));
+        }
+        let parent = text()?.split_ascii_whitespace().next().map(str::to_owned);
+        if let Some(parent) = &parent {
+            validate_object_id(parent)?;
+        }
         let author_name = text()?;
         let author_email = text()?;
         let timestamp_seconds = text()?.parse().map_err(|_| {
             GitError::invalid_output(&output.command, "commit timestamp was invalid")
         })?;
         let message = text()?.trim_end_matches('\n').to_owned();
-        let statistics = fields.next().ok_or_else(|| {
+        let diff = fields.next().ok_or_else(|| {
             GitError::invalid_output(&output.command, "commit details omitted statistics")
         })?;
-        let statistics = statistics.strip_prefix(b"\n").unwrap_or(statistics);
+        let (changes, statistics) =
+            parse_commit_details_diff(diff.strip_prefix(b"\n").unwrap_or(diff), &output.command)?;
+        // Details already compute the first-parent diff for line counts. Retain its
+        // paths in the existing versioned cache so expansion needs no second process.
+        self.cache_history_changes(repository, version, object_id, None, parent, &changes);
         Ok(GitCommitDetails {
             author_name,
             author_email,
             timestamp_seconds,
             message,
-            statistics: crate::objects::commit_statistics(statistics, &output.command)?,
+            statistics,
         })
     }
 
@@ -402,7 +423,9 @@ impl GitClient {
             .history_cache
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        while cache.entries.len() >= 16
+        // Page details arrive before any item is expanded; keep a normal page
+        // available while retaining the same total byte budget.
+        while cache.entries.len() >= 128
             || cache.entries.iter().map(|entry| entry.bytes).sum::<usize>() + bytes > MAXIMUM_BYTES
         {
             cache.entries.pop_front();
@@ -535,6 +558,42 @@ impl GitClient {
         }
         Ok(Some(output.stdout))
     }
+}
+
+/// Git emits raw records before numstat records, with NUL-delimited paths in both.
+fn parse_commit_details_diff(
+    mut bytes: &[u8],
+    command: &str,
+) -> GitResult<(Vec<GitCommitChange>, GitCommitStatistics)> {
+    let mut names = Vec::new();
+    while bytes.starts_with(b":") {
+        let end = bytes.iter().position(|byte| *byte == 0).ok_or_else(|| {
+            GitError::invalid_output(command, "raw commit change omitted its header terminator")
+        })?;
+        let header = &bytes[..end];
+        let status = header.rsplit(|byte| *byte == b' ').next().ok_or_else(|| {
+            GitError::invalid_output(command, "raw commit change omitted its status")
+        })?;
+        names.extend_from_slice(status);
+        names.push(0);
+        let paths = if matches!(status.first(), Some(b'R' | b'C')) {
+            2
+        } else {
+            1
+        };
+        bytes = &bytes[end + 1..];
+        for _ in 0..paths {
+            let end = bytes.iter().position(|byte| *byte == 0).ok_or_else(|| {
+                GitError::invalid_output(command, "raw commit change omitted its path terminator")
+            })?;
+            names.extend_from_slice(&bytes[..=end]);
+            bytes = &bytes[end + 1..];
+        }
+    }
+    Ok((
+        parse_commit_changes(&names, command)?,
+        crate::objects::commit_statistics(bytes, command)?,
+    ))
 }
 
 fn parse_commit_changes(bytes: &[u8], command: &str) -> GitResult<Vec<GitCommitChange>> {

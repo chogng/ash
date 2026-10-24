@@ -64,6 +64,9 @@ teardown(() => {
 ensureNoDisposablesAreLeakedInTestSuite();
 
 class TestWindow extends EventEmitter implements ICodeWindowHandle<TestWindow> {
+	public readonly messageHooks = new Map<number, (wParam: Buffer, lParam: Buffer) => void>();
+	public hookWindowMessage(message: number, callback: (wParam: Buffer, lParam: Buffer) => void): void { this.messageHooks.set(message, callback); }
+	public unhookWindowMessage(message: number): void { this.messageHooks.delete(message); }
 	public readonly id = 1;
 	public readonly loads: string[] = [];
 	public reloads = 0;
@@ -105,6 +108,7 @@ class TestWindow extends EventEmitter implements ICodeWindowHandle<TestWindow> {
 	public destroy(): void {
 		if (this.destroyed) return;
 		this.destroyed = true;
+		this.messageHooks.clear();
 		this.emit('closed');
 	}
 }
@@ -244,6 +248,33 @@ function createHost(window = new TestWindow(), reopen: () => Promise<void> = asy
 		title: 'Workbench',
 	}, new DisposableStore());
 }
+
+test('CodeWindow preserves native client pixels, coalesces resize and releases its message hook', async function () {
+	if (process.platform !== 'win32') this.skip();
+	const window = new TestWindow();
+	using host = createHost(window);
+	const resize = (width: number, height: number, kind = 0): void => {
+		const wParam = Buffer.alloc(8);
+		const lParam = Buffer.alloc(8);
+		wParam.writeUInt32LE(kind);
+		lParam.writeUInt16LE(width, 0);
+		lParam.writeUInt16LE(height, 2);
+		window.messageHooks.get(0x0005)!(wParam, lParam);
+	};
+	assert.equal(host.getClientSize(), undefined);
+	resize(1500, 999);
+	assert.deepEqual(host.getClientSize(), { width: 1500, height: 999 });
+	resize(1501, 1001);
+	resize(0, 0, 1);
+	resize(1501, 1001);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(window.messages, [{ channel: 'ash:window:client-size-changed', token: { width: 1501, height: 1001 } }]);
+	resize(1500, 997);
+	host.dispose();
+	assert.equal(window.messageHooks.size, 0);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(window.messages.length, 1);
+});
 
 const packagedEntry = { file: '/synthetic/workbench.html', url: 'file:///synthetic/workbench.html', useDevelopmentUrl: false };
 

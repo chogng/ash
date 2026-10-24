@@ -6,6 +6,36 @@ import { SignedExtensionRegistry } from '../../../automation/extensionRegistry.j
 
 test.use({ openWorkspace: false });
 
+test('browser reload resolves saved Chinese translations according to the development mode', { tag: ['@browser-ui'] }, async ({ workbench, reloadWorkbench }) => {
+	const catalog = JSON.parse(await readFile(resolve('.build/desktop/localization/extensions/ash.language-pack-zh-cn/localization/package.json'), 'utf8'));
+	catalog.bundles['ash.settings']['categories.editor-fonts.label'] = '旧字体标题';
+	const current = await readUserSettings(workbench.page);
+	await writeUserSettings(workbench.page, JSON.stringify({ ...JSON.parse(current.content), 'workbench.locale': 'zh-CN' }), current.revision);
+	await workbench.page.evaluate(async catalog => {
+		const database = await new Promise<IDBDatabase>((resolve, reject) => {
+			const request = indexedDB.open('ash-language-packs', 1);
+			request.onupgradeneeded = () => request.result.createObjectStore('catalogs', { keyPath: 'locale' });
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+		try {
+			await new Promise<void>((resolve, reject) => {
+				const transaction = database.transaction('catalogs', 'readwrite');
+				transaction.objectStore('catalogs').put(catalog);
+				transaction.oncomplete = () => resolve();
+				transaction.onerror = () => reject(transaction.error);
+				transaction.onabort = () => reject(transaction.error);
+			});
+		} finally { database.close(); }
+	}, catalog);
+	({ workbench } = await reloadWorkbench());
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectEditorCategory('editor-fonts');
+	const expected = process.env.ASH_PLAYWRIGHT_SERVER === 'development' ? '字体' : '旧字体标题';
+	await expect(workbench.settingsEditor.element.locator('.ash-settings-page h3')).toHaveText(expected);
+	await expect(workbench.settingsEditor.element.locator('[data-settings-category-id="editor-fonts"]')).toHaveText(expected);
+});
+
 test.describe('signed language pack installation', () => {
 	test.use({
 		backendFixture: async ({ testWorkspace }, use, testInfo) => {

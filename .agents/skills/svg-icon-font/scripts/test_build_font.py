@@ -2,6 +2,8 @@
 
 import json
 import math
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,8 +15,8 @@ from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables import otTables
 
 from build_font import UPM, build, normalize_svg
-from build_sessions_font import build_sessions
-from build_product_font import rebuild
+from build_sessions_font import build_sessions, merge_sessions
+from build_product_font import ROOT, publish, rebuild, write_manifest
 
 
 class SvgFontTests(unittest.TestCase):
@@ -32,6 +34,39 @@ class SvgFontTests(unittest.TestCase):
         path = self.root / "manifest.json"
         path.write_text(json.dumps({"family": "Ash Test Icons", "glyphs": sources}))
         return path
+
+    def test_product_manifest_formatting_preserves_data_and_avoids_republication(self):
+        path = self.root / "manifest.json"
+        table = {"family": "Ash Test Icons", "layers": {"ash-mark": [
+            {"id": "petal-north", "origin": [0.5, 0.2333984375]},
+        ]}}
+        write_manifest(path, table)
+        content = path.read_bytes()
+        self.assertEqual(json.loads(content), table)
+        self.assertIn(b'"origin": [0.5, 0.2333984375]', content)
+        self.assertNotIn(b"\r", content)
+        destination = self.root / "published.json"
+        self.assertTrue(publish(destination, content))
+        modified = destination.stat().st_mtime_ns
+        write_manifest(path, table)
+        self.assertFalse(publish(destination, path.read_bytes()))
+        self.assertEqual(destination.stat().st_mtime_ns, modified)
+
+    def test_product_manifest_formatter_failure_keeps_previous_contents(self):
+        path = self.root / "manifest.json"
+        path.write_bytes(b"previous generation")
+        with patch("build_product_font.subprocess.run", side_effect=subprocess.CalledProcessError(1, "formatter")):
+            with self.assertRaises(subprocess.CalledProcessError):
+                write_manifest(path, {"layers": {}})
+        self.assertEqual(path.read_bytes(), b"previous generation")
+
+    def test_product_manifest_formats_ignored_build_staging_paths(self):
+        with tempfile.TemporaryDirectory(prefix="manifest-format-", dir=ROOT / ".build") as temporary:
+            path = Path(temporary) / "manifest.json"
+            table = {"layers": {"ash-mark": [{"origin": [0.5, 0.2333984375]}]}}
+            write_manifest(path, table)
+            self.assertEqual(json.loads(path.read_bytes()), table)
+            self.assertIn(b'"origin": [0.5, 0.2333984375]', path.read_bytes())
 
     def test_stroked_circle_keeps_its_hole_and_metrics(self):
         source = self.svg('<circle cx="8" cy="8" r="5" fill="none" stroke="currentColor"/>')
@@ -114,6 +149,16 @@ class SvgFontTests(unittest.TestCase):
             glyphs["hole"].draw(pen)
             self.assertAlmostEqual(abs(pen.value), (14 ** 2 - 8 ** 2) * (UPM / 16) ** 2)
 
+    def test_contour_order_and_start_points_do_not_change_font_bytes(self):
+        source = self.svg('<path d="M1 1H5V5H1Z M9 9Q13 9 13 13H9Z"/>')
+        manifest = self.manifest([{"id": "sample", "unicode": "E001", "source": source.name}])
+        one = build(manifest, self.root / "one")
+        source.write_text(source.read_text().replace(
+            "M1 1H5V5H1Z M9 9Q13 9 13 13H9Z",
+            "M13 13H9V9Q13 9 13 13Z M5 5H1V1H5Z"))
+        two = build(manifest, self.root / "two")
+        self.assertEqual(one["woff2Sha256"], two["woff2Sha256"])
+
     def test_white_mask_and_viewport_clip_preserve_visible_area(self):
         source = self.svg('<defs><mask id="cut" fill="white"><path d="M0 0H8V16H0Z"/></mask></defs><path mask="url(#cut)" d="M-4 -4H20V20H-4Z"/>')
         report = build(self.manifest([{"id": "clipped", "unicode": "E001", "source": source.name}]), self.root / "font")
@@ -191,6 +236,21 @@ class SvgFontTests(unittest.TestCase):
         self.assertAlmostEqual(self.glyph_area(sessions, "ring"), expected, delta=0.4)
         self.assertEqual(source.read_bytes(), original)
         self.assertEqual(build(manifest, self.root / "ide-again")["woff2Sha256"], ide["woff2Sha256"])
+
+    def test_sessions_merge_keeps_distinct_outline_and_filled_semantic_glyphs(self):
+        outline = self.svg('<rect x="2" y="2" width="12" height="12" fill="none" stroke="currentColor"/>', "shape")
+        filled = self.svg('<rect x="2" y="2" width="12" height="12"/>', "shape-filled")
+        manifest = self.manifest([
+            {"id": "shape", "unicode": "E001", "source": outline.name},
+            {"id": "shape-filled", "unicode": "E002", "source": filled.name},
+        ])
+        report = build(manifest, self.root / "static")
+        variable = self.root / "variable.woff2"
+        shutil.copyfile(ROOT / "src/ash/base/browser/ui/lxicons/lxicon-variable.woff2", variable)
+        merge_sessions(variable, Path(report["woff2"]), {"shape": "E001", "shape-filled": "E002"})
+        with TTFont(variable) as font:
+            self.assertEqual(font.getBestCmap()[0xE002], "shape-filled")
+        self.assertGreater(self.glyph_area({"woff2": variable}, "shape-filled"), self.glyph_area({"woff2": variable}, "shape"))
 
     def test_sessions_offsets_filled_outline_but_keeps_solid_dot(self):
         source = self.svg('<path fill-rule="evenodd" d="M2 2H14V14H2Z M3 3H13V13H3Z"/><circle cx="8" cy="8" r="1"/>', "mixed")

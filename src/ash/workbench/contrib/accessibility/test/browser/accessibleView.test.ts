@@ -196,6 +196,7 @@ test('editor help reads the editor state and its focus hint respects verbosity a
 	let restored = 0;
 	const editor = {
 		getId: () => 'test.editor',
+		getModel: () => null,
 		isSimpleWidget: false,
 		hasTextFocus: () => true,
 		hasWidgetFocus: () => false,

@@ -29,7 +29,12 @@ export interface IProjectService {
 	list(): Promise<readonly ProjectSummary[]>;
 	read(id: string): Promise<Project>;
 	create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project>;
+	/** Adds a saved Session using the current project revision. */
+	addSession(project: Project, sessionId: string): Promise<Project>;
 	update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project>;
+	archive(project: ProjectSummary): Promise<Project>;
+	/** Removes the project and its references, preserving conversations and source files. */
+	remove(project: ProjectSummary): Promise<void>;
 }
 
 export const IProjectService = createServiceIdentifier<IProjectService>('projectService');

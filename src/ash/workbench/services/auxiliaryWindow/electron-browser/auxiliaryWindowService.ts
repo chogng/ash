@@ -1,5 +1,6 @@
 import { AuxiliaryWindow, BrowserAuxiliaryWindowService, type AuxiliaryWindowOpenOptions, type AuxiliaryWindowState, type IAuxiliaryWindow } from '../browser/auxiliaryWindowService.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { Emitter } from '../../../../base/common/event.js';
 import { INativeHostService } from '../../../common/services.js';
 import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
 import type { IAuxiliaryWindowState } from '../../../../platform/window/common/window.js';
@@ -37,15 +38,25 @@ export class ElectronAuxiliaryWindowService extends BrowserAuxiliaryWindowServic
 class ElectronAuxiliaryWindow extends AuxiliaryWindow {
 	private state: IAuxiliaryWindowState | undefined;
 	private revision = 0;
+	private readonly pinChanged = this._register(new Emitter<boolean>());
+	override readonly alwaysOnTop: NonNullable<IAuxiliaryWindow['alwaysOnTop']>;
 
 	constructor(source: Window, target: Window, root: HTMLElement, themes: IThemeService, title: string, private readonly host: INativeHostApi) {
 		super(source, target, root, themes, title);
+		const owner = this;
+		this.alwaysOnTop = {
+			get value() { return owner.state?.alwaysOnTop ?? false; },
+			onDidChange: this.pinChanged.event,
+			set: value => host.setAlwaysOnTop(value, target.name),
+		};
 		const changed = host.onDidChangeAuxiliaryWindowState(event => {
 			if (event.windowName !== target.name) {
 				return;
 			}
 			this.revision++;
+			const previous = this.state?.alwaysOnTop;
 			this.state = event.state;
+			if (previous !== this.state.alwaysOnTop) this.pinChanged.fire(this.state.alwaysOnTop);
 		});
 		this._register(toDisposable(() => changed.dispose()));
 	}
