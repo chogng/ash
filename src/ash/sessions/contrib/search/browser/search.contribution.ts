@@ -42,7 +42,7 @@ AccessibleViewRegistry.register({
 		const search = accessor.get(ISessionsSearchService);
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.SessionsSearch, { type: AccessibleViewType.Help },
-			() => localize('sessions.search.help', 'Search finds saved sessions, drafts, projects and schedules by name. Type to filter results. Use Up and Down to select a result, then Enter to open it. Tab reaches the category tabs; use Left and Right to focus a category and Enter or Space to select it. Down returns to the search input. Escape closes Search and restores focus to the previous control.'),
+			() => localize('sessions.search.help', 'Search finds saved sessions, loaded ChatGPT conversations, drafts, projects and schedules by name. ChatGPT conversations appear in All and Sessions and also match their project names. Type to filter results. Use Up and Down to select a result, then Enter to open it. Tab reaches the category buttons; use Left and Right to focus a category and Enter or Space to select it. Down returns to the search input. Escape closes Search and restores focus to the previous control.'),
 			() => search.focus(), AccessibilityVerbositySettingId.SessionsSearch,
 		);
 	},

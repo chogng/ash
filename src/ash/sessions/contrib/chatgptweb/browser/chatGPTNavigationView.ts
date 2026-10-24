@@ -43,7 +43,7 @@ function focusConversation(root: HTMLElement, id: string, preventScroll = false)
 	const item = [...root.querySelectorAll<HTMLButtonElement>('.ash-chatgpt-conversation')].find(item => item.dataset.conversation === id);
 	const pane = item?.closest('.ash-view-pane.collapsed');
 	const target = pane?.querySelector<HTMLButtonElement>('.ash-pane-view-header-button') ?? item;
-	(target ?? root.querySelector<HTMLInputElement>('input'))?.focus({ preventScroll });
+	(target ?? root.querySelector<HTMLButtonElement>('.ash-pane-view-header-button'))?.focus({ preventScroll });
 }
 
 /** The sidebar's retained composite; registered ViewPanes own all group chrome and expansion. */
@@ -76,11 +76,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 		newChat.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-new-chat';
 		newChat.textContent = localize('sessions.chatgpt.newChat', 'New chat');
 		this._register(addDisposableListener(newChat, 'click', () => { chat.newChat(); editors.focusActiveEditor(); }));
-		const search = document.createElement('input');
-		search.type = 'search';
-		search.placeholder = localize('sessions.chatgpt.search', 'Search conversations');
-		search.setAttribute('aria-label', search.placeholder);
-		root.prepend(newChat, search);
+		root.prepend(newChat);
 		const scrollable = this.scrollable!;
 		scrollable.element.classList.add('ash-chatgpt-navigation-scrollable');
 		const list = scrollable.contentElement;
@@ -104,7 +100,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 		const loadMoreIfNeeded = (retry: boolean): void => {
 			const state = chat.state.get();
 			const viewport = scrollable.state;
-			if (!this.isVisible() || !viewport.height || search.value.trim() || !state.connected || state.busy || state.sending || state.managing || !state.hasMore || (!retry && state.error)) { return; }
+			if (!this.isVisible() || !viewport.height || !state.connected || state.busy || state.sending || state.managing || !state.hasMore || (!retry && state.error)) { return; }
 			if (this.panes.at(-1)?.isExpanded() === false) { return; }
 			if (viewport.maximumTop - viewport.top <= 96) { void chat.loadMore(); }
 		};
@@ -146,7 +142,6 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 			const focusedId = focused?.closest<HTMLElement>('[data-conversation]')?.dataset.conversation;
 			const focusedGroup = focused?.classList.contains('ash-pane-view-header-button') ? focused.closest<HTMLElement>('[data-group]')?.dataset.group : undefined;
 			const top = scrollable.state.top;
-			const query = search.value.trim().toLocaleLowerCase();
 			const groups = this.groups(state);
 			const wanted = new Set(groups.map(group => group.key));
 			for (const [key, entry] of this.registrations) {
@@ -158,21 +153,20 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 				if (entry && (entry.title !== group.title || entry.order !== group.order)) {
 					entry.registration.dispose(); entry.visible.reset(); this.registrations.delete(group.key); entry = undefined;
 				}
-				const matches = group.conversations.some(conversation => `${conversation.title} ${state.projects.find(project => project.id === conversation.projectId)?.title ?? ''}`.toLocaleLowerCase().includes(query));
 				if (!entry) {
 					const id = `${chatGPTNavigationContainerId}.${group.key}`;
 					const context = `sessions.chatgpt.groupVisible.${group.key}`;
 					const visible = contextKeys.createKey<boolean>(context, false);
-					visible.set(matches);
+					visible.set(true);
 					const registration = SessionsViewRegistry.registerViews(this.id, [{
 						id, title: group.title, order: group.order, when: ContextKeyExpr.has(context), canToggleVisibility: false,
 						ctorDescriptor: new SyncDescriptor(ChatGPTNavigationView, [group.key]),
 					}]);
 					entry = { title: group.title, order: group.order, visible, registration };
 					this.registrations.set(group.key, entry);
-				} else { entry.visible.set(matches); }
+				}
 				const pane = this.getView(`${chatGPTNavigationContainerId}.${group.key}`);
-				if (pane instanceof ChatGPTNavigationView) { pane.render(group.conversations, state, query); }
+				if (pane instanceof ChatGPTNavigationView) { pane.render(group.conversations, state); }
 			}
 			list.setAttribute('aria-busy', String(state.busy));
 			newChat.disabled = !state.connected || state.sending || state.managing;
@@ -182,7 +176,6 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 			scrollable.scrollTo(0, top);
 			scheduleLoad();
 		};
-		this._register(addDisposableListener(search, 'input', () => render(chat.state.get())));
 		this._register(autorun(reader => render(chat.state.read(reader))));
 	}
 
@@ -207,7 +200,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 		this.scrollable?.layout(); this.scheduleLoad();
 	}
 
-	public override focus(): void { this.element.querySelector<HTMLElement>('button:not(:disabled), input')?.focus(); }
+	public override focus(): void { this.element.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus(); }
 }
 
 /** One ordinary ViewPane per group, with content-sized rows and no custom header implementation. */
@@ -242,7 +235,7 @@ export class ChatGPTNavigationView extends ViewPane {
 
 	public override get maximumSize(): number { return this.minimumSize; }
 
-	public render(conversations: readonly ChatGPTConversation[], state: ChatGPTState, query: string): void {
+	public render(conversations: readonly ChatGPTConversation[], state: ChatGPTState): void {
 		if (state.busy && !this.loadingProgress.value) {
 			const progress = this.getProgressIndicator().show(true, 150);
 			this.loadingProgress.value = toDisposable(() => progress.done());
@@ -252,20 +245,19 @@ export class ChatGPTNavigationView extends ViewPane {
 			this.conversations = conversations;
 			this.contentElement.replaceChildren(...conversations.map(conversation => this.createRow(conversation)));
 		}
-		let count = 0;
 		for (const [index, row] of [...this.contentElement.querySelectorAll<HTMLElement>('.ash-chatgpt-navigation-row')].entries()) {
 			const conversation = conversations[index]!;
-			const project = state.projects.find(project => project.id === conversation.projectId)?.title ?? '';
-			row.hidden = !`${conversation.title} ${project}`.toLocaleLowerCase().includes(query);
-			if (!row.hidden) { count++; }
 			for (const button of row.querySelectorAll('button')) {
 				button.disabled = state.sending || state.managing || (state.busy && !button.classList.contains('ash-chatgpt-conversation'));
 				if (button.classList.contains('ash-chatgpt-conversation') && conversation.id === state.conversationId) { button.setAttribute('aria-current', 'page'); }
 				else { button.removeAttribute('aria-current'); }
 			}
 		}
-		const gap = parseFloat(getWindow(this.contentElement).getComputedStyle(this.contentElement).rowGap) || 0;
-		const rowHeight = 22;
+		// Pane sizing follows the host's row metric, including its text and action targets.
+		const styles = getWindow(this.contentElement).getComputedStyle(this.contentElement);
+		const gap = parseFloat(styles.rowGap) || 0;
+		const rowHeight = parseFloat(styles.getPropertyValue('--ash-list-rowHeight'));
+		const count = conversations.length;
 		this.minimumBodySize = count * rowHeight + Math.max(0, count - 1) * gap;
 	}
 

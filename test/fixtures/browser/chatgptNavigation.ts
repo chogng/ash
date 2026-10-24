@@ -59,7 +59,7 @@ import { DialogService } from '../../../src/ash/workbench/services/dialogs/commo
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 
 declare global {
-	interface Window { ashChatGPTIntegration: { draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; connectVoicePeer(connection: ChatGPTVoiceConnection): Promise<void>; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; }; }
+	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; connectVoicePeer(connection: ChatGPTVoiceConnection): Promise<void>; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; }; }
 }
 
 const parameters = new URLSearchParams(location.search);
@@ -158,6 +158,7 @@ services.registerInstance(IChatGPTService, chat);
 window.ashChatGPTIntegration = {
 	setMathEnabled: enabled => services.get(IConfigurationService).updateValue('markdown.math.enabled', enabled),
 	setMathMacros: macros => services.get(IConfigurationService).updateValue('markdown.math.macros', macros),
+	newChat: () => chat.newChat(),
 	draft: () => chat.state.get().draft,
 	storageKeys: () => storage.keys(StorageScope.PROFILE, StorageTarget.MACHINE),
 	dictate: (text, final) => transcript?.(text, final),

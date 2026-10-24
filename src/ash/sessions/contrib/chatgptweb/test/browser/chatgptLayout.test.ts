@@ -125,7 +125,7 @@ suite('chatgptweb browser component', () => {
 	});
 
 	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
-		test(`ChatGPT conversations use the shared scrollbar with fixed controls (${theme})`, async function () {
+		test(`ChatGPT conversations use the shared scrollbar without a sidebar search field (${theme})`, async function () {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
 
@@ -133,25 +133,22 @@ suite('chatgptweb browser component', () => {
 			await mockChatGPTRequests(page);
 			await page.route('**/service/backend-api/conversations?*', route => route.fulfill({
 				json: {
-					items: Array.from({ length: 20 }, (_, index) => ({ id: `chat-${index}`, title: `Conversation ${index} ${'long title '.repeat(8)}` })), total: 20,
+					items: Array.from({ length: 40 }, (_, index) => ({ id: `chat-${index}`, title: `Conversation ${index} ${'long title '.repeat(8)}` })), total: 40,
 				}
 			}));
 			await page.goto(`/chatgptNavigation.html?locale=zh-CN&theme=${theme}`);
 			const list = page.locator('.ash-chatgpt-navigation-list');
-			await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveCount(20);
+			await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveCount(40);
 			const scrollable = page.locator('.ash-chatgpt-navigation-scrollable');
 			const viewport = scrollable.locator(':scope > .ash-scrollbar-viewport');
 			const scrollbar = scrollable.getByRole('scrollbar', { name: 'Vertical scrollbar' });
 			await expect(scrollbar).toHaveAttribute('aria-disabled', 'false');
 			expect(await viewport.evaluate(element => getComputedStyle(element).scrollbarWidth)).toBe('none');
 			expect(await list.evaluate(element => getComputedStyle(element).overflowY)).toBe('visible');
-			const search = page.getByRole('searchbox', { name: '搜索会话' });
-			const newChat = page.getByRole('button', { name: '新聊天', exact: true });
-			const controls = await Promise.all([newChat.boundingBox(), search.boundingBox()]);
+			await expect(page.locator('.ash-chatgpt-navigation').getByRole('searchbox')).toHaveCount(0);
 			await list.hover();
 			await page.mouse.wheel(0, 300);
 			await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-			expect(await Promise.all([newChat.boundingBox(), search.boundingBox()])).toEqual(controls);
 			await expect(scrollbar).toHaveCSS('opacity', '1');
 			const thumb = scrollbar.locator('.ash-scrollbar-thumb');
 			expect(await thumb.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
@@ -164,10 +161,10 @@ suite('chatgptweb browser component', () => {
 		});
 	}
 
-	test('ChatGPT conversation pagination fills the viewport after resize and pauses while searching or collapsed', async function () {
+	test('ChatGPT conversation pagination fills the viewport after resize and pauses while collapsed', async function () {
 		const { page } = browserTests;
 
-		await page.setViewportSize({ width: 1000, height: 600 });
+		await page.setViewportSize({ width: 1000, height: 400 });
 		await mockChatGPTRequests(page);
 		const offsets: number[] = [];
 		await page.route('**/service/backend-api/conversations?*', async route => {
@@ -187,15 +184,9 @@ suite('chatgptweb browser component', () => {
 		await expect(recent).toHaveAttribute('aria-expanded', 'false');
 		await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveCount(0);
 		expect(offsets).toEqual([0, 2]);
-		await page.setViewportSize({ width: 1000, height: 600 });
+		await page.setViewportSize({ width: 1000, height: 400 });
 		await recent.click();
-		const search = page.getByRole('searchbox', { name: '搜索会话' });
-		await search.fill('Conversation 21');
 		await page.setViewportSize({ width: 1000, height: 1600 });
-		await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveCount(1);
-		await expect(list).toHaveAttribute('aria-busy', 'false');
-		expect(offsets).toEqual([0, 2]);
-		await search.fill('');
 		await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveCount(42);
 		expect(offsets).toEqual([0, 2, 22]);
 	});
@@ -439,7 +430,7 @@ suite('chatgptweb browser component', () => {
 				await fillMessage(page, 'Hi');
 				await expect(editor).toHaveCSS('height', '20px');
 				await page.mouse.move(1, 1);
-				await page.getByRole('searchbox').focus();
+				await page.locator('.ash-chatgpt-navigation .ash-pane-view-header-button').first().focus();
 				await expect.poll(() => composer.evaluate(element => getComputedStyle(element).boxShadow)).toBe(restingShadow);
 				await composer.hover();
 				if (!theme.startsWith('hc')) {
@@ -490,16 +481,12 @@ suite('chatgptweb browser component', () => {
 		await expect(conversation).toHaveAttribute('aria-current', 'page');
 		const input = page.getByRole('textbox', { name: '询问 ChatGPT' });
 		await fillMessage(page, 'Sidebar switch keeps this draft');
-		await sidebar.getByRole('button', { name: '新聊天', exact: true }).click();
+		await page.evaluate(() => window.ashChatGPTIntegration.newChat());
 		await expectDraft(page, '');
 		await conversation.click();
 		await expectDraft(page, 'Sidebar switch keeps this draft');
-		await sidebar.getByRole('searchbox').fill('no match');
-		await expect(conversation).toBeHidden();
-		await sidebar.getByRole('searchbox').fill('Synthetic');
-		await expect(conversation).toBeVisible();
+		await expect(sidebar.getByRole('searchbox')).toHaveCount(0);
 		await expect(sidebar.locator('details')).toHaveCount(0);
-		await sidebar.getByRole('searchbox').fill('');
 		await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
 		await expect(sidebar.locator('.ash-chatgpt-conversation').last()).toBeInViewport();
 		await viewport.evaluate(element => { element.scrollTop = 0; });
@@ -731,11 +718,7 @@ suite('chatgptweb browser component', () => {
 			await toggle(first).focus(); await page.keyboard.press('Enter');
 			await expect(first.getByRole('button', { name: 'First project chat', exact: true })).toBeVisible();
 			await toggle(first).click();
-			await page.getByRole('searchbox').fill('Renamed project');
-			await expect(first).toBeVisible();
-			await expect(toggle(first)).toHaveAttribute('aria-expanded', 'false');
-			await expect(first.getByRole('button', { name: 'First project chat', exact: true })).toBeHidden();
-			await page.getByRole('searchbox').fill('');
+
 			await page.reload();
 			await expect(toggle(first)).toHaveAttribute('aria-expanded', 'false');
 			await expect(toggle(recent)).toHaveAttribute('aria-expanded', 'true');
@@ -788,29 +771,19 @@ suite('chatgptweb browser component', () => {
 			await expect(list.locator('[data-group="projects"]')).toHaveCount(0);
 			await expect(list.locator('.ash-chatgpt-conversation')).toHaveCount(5);
 			await testInfo.attach('grouped-sidebar', { body: await page.screenshot(), contentType: 'image/png' });
-			const search = page.getByRole('searchbox');
-			await search.fill('Project One');
-			await expect(pinned.locator('.ash-chatgpt-conversation:visible')).toHaveText(['Pinned project chat']);
-			await expect(project.locator('.ash-chatgpt-conversation:visible')).toHaveText(['Project chat']);
-			await expect(recent).toBeHidden();
-			await search.fill('');
+
 			const row = list.locator('.ash-chatgpt-navigation-row[data-conversation="pinned-project"]');
 			await row.hover();
 			await row.getByRole('button', { name: zh ? '取消置顶聊天' : 'Unpin chat', exact: true }).click();
 			await expect(project.locator('.ash-chatgpt-conversation')).toHaveText(['Project chat', 'Pinned project chat']);
 			await expect(project.getByRole('button', { name: 'Pinned project chat', exact: true })).toBeFocused();
 			await expect(pinned.locator('.ash-chatgpt-conversation')).toHaveText(['Old pinned chat']);
-			await search.fill('Project One');
-			await expect(pinned).toBeHidden(); await expect(recent).toBeHidden();
-			await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveText(['Project chat', 'Pinned project chat']);
+
 			const first = project.getByRole('button', { name: 'Project chat', exact: true });
 			await first.focus(); await page.keyboard.press('ArrowDown');
 			await expect(project.getByRole('button', { name: 'Pinned project chat', exact: true })).toBeFocused();
-			await page.keyboard.press('ArrowDown'); await expect(first).toBeFocused();
-			await search.fill('no matches');
-			await expect(list.locator('.ash-chatgpt-navigation-group:visible')).toHaveCount(0);
-			await search.fill('');
-			await expect(pinned).toBeVisible(); await expect(recent).toBeVisible();
+			await page.keyboard.press('ArrowUp'); await expect(first).toBeFocused();
+
 			expect(await project.evaluate((element, previous) => element === previous, projectInstance)).toBe(true);
 			await expect(list.locator('.ash-chatgpt-conversation')).toHaveCount(5);
 		});
@@ -850,10 +823,19 @@ suite('chatgptweb browser component', () => {
 			const more = row.getByRole('button', { name: labels.more, exact: true });
 			const openMore = async () => { await row.hover(); await more.click(); };
 			await expect(title).toBeVisible();
-			expect((await row.boundingBox())!.height).toBe(22);
-			await expect(more).toHaveCSS('width', '22px');
-			await expect(more).toHaveCSS('height', '22px');
-			expect(await more.boundingBox()).toMatchObject({ width: 22, height: 22 });
+			for (const forcedColors of ['none', 'active'] as const) {
+				await page.emulateMedia({ forcedColors });
+				expect((await row.boundingBox())!.height).toBe(36);
+				for (const action of [more, row.getByRole('button', { name: labels.pin, exact: true })]) {
+					await expect(action).toHaveCSS('width', '28px');
+					await expect(action).toHaveCSS('height', '28px');
+					const bounds = (await action.boundingBox())!;
+					const rowBounds = (await row.boundingBox())!;
+					expect(bounds).toMatchObject({ width: 28, height: 28 });
+					expect(bounds.y + bounds.height / 2).toBe(rowBounds.y + rowBounds.height / 2);
+				}
+			}
+			await page.emulateMedia({ forcedColors: 'none' });
 			await page.locator('#editor').hover();
 			await expect(toolbar).toHaveCSS('opacity', '0');
 			await row.hover();

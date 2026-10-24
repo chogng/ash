@@ -1,5 +1,5 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { derived, observableSignalFromEvent, observableValue } from '../../../../base/common/observable.js';
+import { derived, observableSignalFromEvent, observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { localize } from '../../../../nls.js';
@@ -14,6 +14,7 @@ export type SearchTarget =
 	| { readonly kind: 'session'; readonly sessionId: SessionId; readonly threadId: ThreadId; }
 	| { readonly kind: 'project'; readonly id: string; }
 	| { readonly kind: 'automation'; readonly id: string; }
+	| { readonly kind: 'contributed'; readonly open: () => Promise<void>; }
 	| { readonly kind: 'newSession'; }
 	| { readonly kind: 'projects'; };
 
@@ -42,6 +43,7 @@ export class SessionsSearchModel extends Disposable {
 	readonly state;
 
 	constructor(
+		sourceResults: IObservable<readonly SearchResult[]>,
 		@ISessionsManagementService sessions: ISessionsManagementService,
 		@IProjectsService private readonly projects: IProjectsService,
 		@IAutomationService private readonly automations: IAutomationService,
@@ -55,7 +57,7 @@ export class SessionsSearchModel extends Disposable {
 			const projectState = projects.state.read(reader);
 			const schedules = automations.automations.read(reader);
 			const scheduleState = automations.catalogueState.read(reader);
-			const results: SearchResult[] = [];
+			const results: SearchResult[] = [...sourceResults.read(reader)];
 			for (const draft of sessions.untitledSessions) {
 				results.push({
 					id: `draft:${draft.untitledSessionId}`, category: 'sessions',

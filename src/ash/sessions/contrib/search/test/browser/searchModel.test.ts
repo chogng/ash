@@ -7,7 +7,8 @@ import type { ISession } from '../../../../services/sessions/common/session.js';
 import type { IAutomationService, AutomationCatalogueState } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
 import type { IAutomationDescriptor } from '../../../../../workbench/contrib/chat/common/automations/automation.js';
 import type { IProjectsService, ProjectsState } from '../../../projects/browser/projectsService.js';
-import { SessionsSearchModel } from '../../browser/searchModel.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
+import { SessionsSearchModel, type SearchResult } from '../../browser/searchModel.js';
 
 function fixture() {
 	const session: ISession = {
@@ -27,14 +28,15 @@ function fixture() {
 		automations: observableValue<readonly IAutomationDescriptor[]>('plans', []),
 		catalogueState: observableValue<AutomationCatalogueState>('planState', 'ready'), refresh: async () => { },
 	} as unknown as IAutomationService;
-	return { sessions, projects, projectState, automations };
+	const results = observableValue<readonly SearchResult[]>('contributed', []);
+	return { sessions, projects, projectState, automations, results };
 }
 
 suite('Sessions search model', () => {
 	test('queries and categories belong to each search, independently of the source page filter', () => {
 		const source = fixture();
-		using first = new SessionsSearchModel(source.sessions, source.projects, source.automations);
-		using second = new SessionsSearchModel(source.sessions, source.projects, source.automations);
+		using first = new SessionsSearchModel(source.results, source.sessions, source.projects, source.automations);
+		using second = new SessionsSearchModel(source.results, source.sessions, source.projects, source.automations);
 		first.setQuery('beta');
 		first.setCategory('projects');
 		assert.deepEqual(first.state.get().results.map(result => result.target), [{ kind: 'project', id: 'beta' }]);
@@ -45,15 +47,39 @@ suite('Sessions search model', () => {
 
 	test('filters active threads by title and host while retaining the exact navigation target', () => {
 		const source = fixture();
-		using model = new SessionsSearchModel(source.sessions, source.projects, source.automations);
+		using model = new SessionsSearchModel(source.results, source.sessions, source.projects, source.automations);
 		model.setCategory('sessions');
 		model.setQuery('alpha host a');
 		assert.deepEqual(model.state.get().results.map(result => result.target), [{ kind: 'session', sessionId: 'alpha', threadId: 'root' }]);
 	});
 
+	test('contributed conversations match their project in All and Sessions and follow their source', async () => {
+		const source = fixture();
+		let opened = false;
+		const result: SearchResult = {
+			id: 'chatgpt:one', category: 'sessions', title: 'Design review', description: 'ChatGPT · Website project',
+			icon: Lxicon.openai, target: { kind: 'contributed', open: async () => { opened = true; } },
+		};
+		source.results.set([result]);
+		using model = new SessionsSearchModel(source.results, source.sessions, source.projects, source.automations);
+		model.setQuery('website design');
+		assert.deepEqual(model.state.get().results, [result]);
+		model.setCategory('sessions');
+		assert.deepEqual(model.state.get().results, [result]);
+		model.setCategory('projects');
+		assert.deepEqual(model.state.get().results, []);
+		model.setCategory('sessions');
+		const target = model.state.get().results[0]!.target;
+		assert.equal(target.kind, 'contributed');
+		if (target.kind === 'contributed') { await target.open(); }
+		assert.equal(opened, true);
+		source.results.set([]);
+		assert.deepEqual(model.state.get().results, []);
+	});
+
 	test('projects source changes without copying the catalogue into search state', () => {
 		const source = fixture();
-		using model = new SessionsSearchModel(source.sessions, source.projects, source.automations);
+		using model = new SessionsSearchModel(source.results, source.sessions, source.projects, source.automations);
 		model.setCategory('projects');
 		assert.deepEqual(model.state.get().results.map(result => result.title), ['Beta project']);
 		source.projectState.set({ ...source.projectState.get(), projects: [] });

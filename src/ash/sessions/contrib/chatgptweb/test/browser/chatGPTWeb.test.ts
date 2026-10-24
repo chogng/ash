@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { observableValue, type IObservable } from '../../../../../base/common/observable.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -8,6 +9,9 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 import { ChatGPTWebContribution, chatGPTScrollOptimization } from '../../browser/chatGPTWeb.js';
 import { IChatGPTService, chatGPTNavigationContainerId } from '../../browser/chatGPTService.js';
+import { ISessionsSearchService } from '../../../search/browser/searchService.js';
+import type { SearchResult } from '../../../search/browser/searchModel.js';
+import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import '../../browser/chatGPTWeb.contribution.js';
 import { localize, setNlsMessages } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
@@ -37,6 +41,8 @@ suite('ChatGPT Web entry', () => {
 		let initialized = 0;
 		const services = resources.add(new InstantiationService(new ServiceCollection(
 			[IChatGPTService, { initialize: () => initialized++ } as unknown as IChatGPTService],
+			[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
+			[IEditorService, {} as IEditorService],
 			[ISessionsLayoutService, { openEntry: async (entry, _arg, options) => { entries.push({ entry, source: options?.source }); } } as ISessionsLayoutService],
 		)));
 		resources.add(services.createInstance(ChatGPTWebContribution));
@@ -51,5 +57,36 @@ suite('ChatGPT Web entry', () => {
 			assert.equal(entry.showEditorTabs, false);
 			assert.equal(entry.editorInput!.resource.scheme, 'ash-chatgpt');
 		}
+	});
+	test('unified search projects the live ChatGPT catalogue and opens the exact conversation after navigation', async () => {
+		using resources = new DisposableStore();
+		const state = observableValue('chatgpt-search', {
+			conversations: [{ id: 'one', title: 'Design review', projectId: 'g-p-project', pinned: false }],
+			projects: [{ id: 'g-p-project', title: 'Website project' }],
+		});
+		let source: IObservable<readonly SearchResult[]> | undefined;
+		const opened: string[] = [];
+		const services = resources.add(new InstantiationService(new ServiceCollection(
+			[IChatGPTService, { state, initialize() { }, select: async (id: string) => { opened.push(id); } } as unknown as IChatGPTService],
+			[ISessionsSearchService, {
+				registerSource: value => { source = value; return toDisposable(() => { source = undefined; }); },
+			} as ISessionsSearchService],
+			[IEditorService, { focusActiveEditor: () => { opened.push('focus'); } } as unknown as IEditorService],
+			[ISessionsLayoutService, { openEntry: async () => { opened.push('open'); } } as unknown as ISessionsLayoutService],
+		)));
+		const contribution = resources.add(services.createInstance(ChatGPTWebContribution));
+		assert.deepEqual(source!.get().map(({ id, category, title, description }) => ({ id, category, title, description })), [
+			{ id: 'chatgpt:one', category: 'sessions', title: 'Design review', description: 'ChatGPT · Website project' },
+		]);
+		state.set({ ...state.get(), conversations: [{ ...state.get().conversations[0]!, title: 'Renamed review' }] });
+		assert.equal(source!.get()[0]!.title, 'Renamed review');
+		const target = source!.get()[0]!.target;
+		assert.equal(target.kind, 'contributed');
+		if (target.kind === 'contributed') { await target.open(); }
+		assert.deepEqual(opened, ['open', 'one', 'focus']);
+		state.set({ ...state.get(), conversations: [] });
+		assert.deepEqual(source!.get(), []);
+		contribution.dispose();
+		assert.equal(source, undefined);
 	});
 });

@@ -61,7 +61,7 @@ test('Sessions Search opens categorized results and creates a new session', asyn
 	const picker = page.locator('.ash-sessions-search-dialog');
 	const input = picker.getByRole('combobox');
 	await expect(input).toBeFocused();
-	await expect(picker.getByRole('tab')).toHaveText(['All', 'Sessions', 'Projects', 'Scheduled']);
+	await expect(picker.getByRole('toolbar', { name: 'Search categories', exact: true }).getByRole('button')).toHaveText(['All', 'Sessions', 'Projects', 'Scheduled']);
 	await expect(page.locator('.ash-quick-input-host:not([hidden])')).toHaveCount(0);
 	await input.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });

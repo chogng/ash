@@ -114,12 +114,25 @@
 .hc-black .ash-segmented-control::before,
 .hc-light .ash-segmented-control::before {
 	border-color: var(--ash-focusBorder);
+	background: var(--ash-foreground);
+	transition: none;
+}
+
+.hc-black .ash-segmented-control-option.checked,
+.hc-light .ash-segmented-control-option.checked {
+	color: var(--ash-editor-background);
 }
 
 .hc-black .ash-segmented-control-option:focus-visible,
 .hc-light .ash-segmented-control-option:focus-visible {
 	outline-width: calc(2 * var(--ash-strokeThickness));
 	outline-offset: calc(-2 * var(--ash-strokeThickness));
+}
+
+.hc-black .ash-segmented-control-option.checked:focus-visible,
+.hc-light .ash-segmented-control-option.checked:focus-visible {
+	/* Keep keyboard focus visible inside the solid selected surface. */
+	outline-color: var(--ash-editor-background);
 }
 
 @media (prefers-reduced-motion: no-preference) {

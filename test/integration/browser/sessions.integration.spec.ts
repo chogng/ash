@@ -72,9 +72,13 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions Search filters host session
 	await search.focus();
 	await search.press('Enter');
 	const picker = page.locator('.ash-sessions-search-dialog');
+	const categories = picker.getByRole('toolbar', { name: locale === 'en' ? 'Search categories' : '搜索分类', exact: true });
 	const input = picker.getByRole('combobox');
 	await expect(input).toBeFocused();
 	await expect(picker).toHaveAttribute('aria-modal', 'true');
+	await expect(picker.locator('.ash-sessions-search-body > h2')).toHaveCount(0);
+	await expect(picker.locator('.ash-sessions-search-footer kbd')).toHaveText(['Esc', '↑', '↓', '↵']);
+	expect(await picker.locator('.ash-sessions-search-footer .ash-keybinding-label').evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual(['Escape', 'Up', 'Down', 'Enter']);
 	await expect(page.locator('.ash-quick-input-host:not([hidden])')).toHaveCount(0);
 	if (locale === 'en') {
 		await input.press('Alt+F1');
@@ -93,18 +97,18 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions Search filters host session
 		expect(await picker.evaluate(element => element.contains(document.activeElement))).toBe(true);
 	}
 	await input.focus();
-	await expect(picker.getByRole('tab')).toHaveText(locale === 'en' ? ['All', 'Sessions', 'Projects', 'Scheduled'] : ['全部', '会话', '项目', '计划']);
+	await expect(categories.getByRole('button')).toHaveText(locale === 'en' ? ['All', 'Sessions', 'Projects', 'Scheduled'] : ['全部', '会话', '项目', '计划']);
 	await expect(picker.getByRole('option', { name: /Search project fixture/ })).toBeVisible();
 	await page.screenshot({ path: testInfo.outputPath(`sessions-search-full-${locale}.png`) });
 	await input.fill('Task from Host B');
 	await expect(picker.getByRole('option')).toHaveCount(1);
 	await expect(picker.getByRole('option')).toContainText('Task from Host B');
-	await picker.getByRole('tab', { name: locale === 'en' ? 'Projects' : '项目', exact: true }).click();
+	await categories.getByRole('button', { name: locale === 'en' ? 'Projects' : '项目', exact: true }).click();
 	await expect(picker.getByRole('option')).toHaveCount(0);
 	await expect(input).toHaveValue('Task from Host B');
 	await page.keyboard.press('ArrowLeft');
 	await page.keyboard.press('Enter');
-	await expect(picker.getByRole('tab', { name: locale === 'en' ? 'Sessions' : '会话', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(categories.getByRole('button', { name: locale === 'en' ? 'Sessions' : '会话', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	await expect(picker.getByRole('option')).toHaveCount(1);
 	await page.keyboard.press('ArrowDown');
 	await expect(input).toBeFocused();
@@ -120,7 +124,7 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions Search filters host session
 	await expect(search).toBeFocused();
 	await search.click();
 	await input.fill('Daily search fixture');
-	await picker.getByRole('tab', { name: locale === 'en' ? 'Scheduled' : '计划', exact: true }).click();
+	await categories.getByRole('button', { name: locale === 'en' ? 'Scheduled' : '计划', exact: true }).click();
 	await expect(picker.getByRole('option')).toHaveCount(1);
 	await picker.getByRole('option').click();
 	const scheduleDialog = page.getByRole('dialog', { name: locale === 'en' ? 'Edit automation' : '编辑自动化', exact: true });
@@ -138,6 +142,47 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions Search filters host session
 		await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 		await search.click();
 		expect(await picker.evaluate(element => getComputedStyle(element).color !== getComputedStyle(element).backgroundColor)).toBe(true);
+		await expect(categories).toHaveCSS('border-radius', '8px');
+		const keycaps = picker.locator('.ash-sessions-search-footer kbd');
+		for (const keycap of await keycaps.all()) {
+			await expect(keycap).toHaveCSS('height', '20px');
+			await expect(keycap).toHaveCSS('border-radius', '4px');
+			await expect(keycap).toHaveCSS('box-shadow', 'none');
+			await expect(keycap).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			const borders = await keycap.evaluate(element => {
+				const styles = getComputedStyle(element);
+				return [styles.borderTopColor, styles.borderRightColor, styles.borderBottomColor, styles.borderLeftColor];
+			});
+			expect(new Set(borders).size).toBe(1);
+		}
+		const buttons = categories.getByRole('button');
+		const widths: number[] = [];
+		for (const button of await buttons.all()) {
+			await expect(button).toHaveCSS('height', '28px');
+			await expect(button).toHaveCSS('border-radius', '8px');
+			await expect(button).toHaveCSS('font-size', '14px');
+			widths.push((await button.boundingBox())!.width);
+		}
+		expect(Math.max(...widths) - Math.min(...widths)).toBeLessThan(1);
+		await input.focus();
+		await page.keyboard.press('Tab');
+		await page.keyboard.press('Tab');
+		await expect(buttons.first()).toBeFocused();
+		await expect(buttons.first()).toHaveCSS('outline-style', 'solid');
+		await page.keyboard.press('ArrowRight');
+		await expect(buttons.nth(1)).toBeFocused();
+		await expect(buttons.first()).toHaveAttribute('aria-pressed', 'true');
+		await page.keyboard.press('Enter');
+		await expect(buttons.nth(1)).toHaveAttribute('aria-pressed', 'true');
+		if (theme.includes('high-contrast')) {
+			const selectedColor = await buttons.nth(1).evaluate(element => getComputedStyle(element).color);
+			expect(await buttons.first().evaluate(element => getComputedStyle(element).color)).not.toBe(selectedColor);
+		}
+		await page.keyboard.press('ArrowDown');
+		await expect(input).toBeFocused();
+		await categories.evaluate(element => Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished)));
+		await page.screenshot({ path: testInfo.outputPath(`sessions-search-categories-${locale}-${theme}.png`) });
+		await picker.locator('.ash-sessions-search-footer').screenshot({ path: testInfo.outputPath(`sessions-search-keycaps-${locale}-${theme}.png`) });
 		await input.press('Escape');
 	}
 	await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-light'));
