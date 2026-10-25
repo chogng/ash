@@ -72,7 +72,13 @@ services.registerInstance(ISCMViewService, view);
 const hash = 'a'.repeat(40);
 const timestamp = 1_700_000_000;
 const subject = `History metadata: a long title that uses the space previously occupied by the commit hash and date ${'long-commit-identifier'.repeat(6)}`;
-const message = Array.from({ length: 24 }, (_, index) => `    Detail ${index + 1}: the complete explanation remains available without taking space from the history title.`).join('\n');
+const message = new URLSearchParams(location.search).has('markdown') ? [
+	'## Why', '', 'Render **commit details** with `Markdown`.', '',
+	'## What changed', '', '- Headings and lists', '- [Documentation](https://example.invalid/docs)', '',
+	'```ts', 'const message = "rendered";', '```', '',
+	'<script>window.commitScriptRan = true</script>', '',
+	'[Unsafe command](command:workbench.action.closeWindow)',
+].join('\n') : Array.from({ length: 24 }, (_, index) => `    Detail ${index + 1}: the complete explanation remains available without taking space from the history title.`).join('\n');
 const historyChanged = resources.add(new Emitter<void>());
 const repositoryChanged = resources.add(new Emitter<void>());
 let repositoryBusy = false;

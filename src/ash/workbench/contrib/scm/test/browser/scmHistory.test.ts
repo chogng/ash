@@ -1019,7 +1019,7 @@ suite('scmHistory browser component', () => {
 		}
 	});
 
-	test('commit details preserve whitespace, metadata, scrolling and long-title geometry', async function () {
+	test('commit details preserve code whitespace, metadata, scrolling and long-title geometry', async function () {
 		const { page } = browserTests;
 
 		const { hash, timestamp, subject, message: body } = await page.evaluate(() => window.ashSCMHistoryIntegration);
@@ -1030,8 +1030,7 @@ suite('scmHistory browser component', () => {
 		await expect(hover.locator('.ash-scm-graph-hover-author > span[title]')).toHaveText('History Author');
 		await expect(hover.locator('.ash-scm-graph-hover-author > span[title]')).toHaveAttribute('title', 'history@example.invalid');
 		await expect(hover.locator('time')).toHaveAttribute('datetime', new Date(Number(timestamp) * 1000).toISOString());
-		await expect(hover.locator('.ash-scm-graph-hover-message')).toHaveText(body);
-		expect(await hover.locator('.ash-scm-graph-hover-message').textContent()).toBe(body);
+		expect(await hover.locator('.ash-scm-graph-hover-message pre code').textContent()).toBe(`${body.replace(/^ {4}/gm, '')}\n`);
 		const messageScroll = hover.getByRole('region', { name: 'Commit message', exact: true });
 		const messageViewport = messageScroll.locator('.ash-scrollbar-viewport');
 		await expect(messageScroll).toHaveCSS('height', '180px');
@@ -1067,6 +1066,47 @@ suite('scmHistory browser component', () => {
 		await expect(openOnGitHub).toHaveText('Open on GitHub');
 		await expect(openOnGitHub.locator('.ash-icon')).toHaveAttribute('aria-hidden', 'true');
 		await browserTests.info.attach('scm-history-hover', { body: await hover.screenshot(), contentType: 'image/png' });
+	});
+
+	test('commit details render Markdown within the existing themed and keyboard-accessible hover', async function () {
+		const { page } = browserTests;
+		await page.goto('/scmHistory.html?markdown&locale=zh-CN');
+		const tree = page.locator('.ash-scm-graph-tree');
+		const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
+		for (let theme = 0; theme < 4; theme++) {
+			await page.evaluate(index => window.ashSCMHistoryIntegration.setTheme(index), theme);
+			await tree.focus();
+			await tree.press('Home');
+			await tree.press('Alt+ArrowDown');
+			const message = hover.locator('.ash-scm-graph-hover-message');
+			await expect(message.locator('h2')).toHaveText(['Why', 'What changed']);
+			await expect(message.locator('strong')).toHaveText('commit details');
+			await expect(message.locator('li')).toHaveText(['Headings and lists', 'Documentation']);
+			await expect(message.locator('p code')).toHaveText('Markdown');
+			await expect(message.locator('pre code')).toHaveText('const message = "rendered";');
+			await expect(message.locator('script')).toHaveCount(0);
+			await expect(message.locator('a[href^="command:"]')).toHaveCount(0);
+			await expect(message.locator('a[href]')).toHaveAttribute('href', 'https://example.invalid/docs');
+			await expect(message).toHaveCSS('white-space', 'normal');
+			expect(await message.evaluate(element => {
+				const heading = element.querySelector('h2')!;
+				const link = element.querySelector('a[href]')!;
+				return {
+					headingIsLarger: parseFloat(getComputedStyle(heading).fontSize) > parseFloat(getComputedStyle(element).fontSize),
+					linkIsDistinct: getComputedStyle(link).color !== getComputedStyle(element).color,
+					inheritsHoverText: getComputedStyle(element).color === getComputedStyle(element.closest('.ash-hover')!).color
+						&& getComputedStyle(element).fontSize === getComputedStyle(element.closest('.ash-hover')!).fontSize,
+					fitsCard: element.scrollWidth <= element.clientWidth,
+				};
+			})).toEqual({ headingIsLarger: true, linkIsDistinct: true, inheritsHoverText: true, fitsCard: true });
+			await expect(hover.getByRole('region', { name: '提交消息', exact: true })).toBeVisible();
+			await hover.getByRole('link', { name: 'Documentation', exact: true }).focus();
+			await expect(hover.getByRole('link', { name: 'Documentation', exact: true })).toBeFocused();
+			await browserTests.info.attach(`scm-history-markdown-${theme}`, { body: await hover.screenshot(), contentType: 'image/png' });
+			await page.keyboard.press('Escape');
+			await expect(hover).toHaveCount(0);
+			await expect(tree).toBeFocused();
+		}
 	});
 
 	test('slow pointer movement and action tooltip delays retain the details card', async function () {
