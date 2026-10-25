@@ -1,11 +1,13 @@
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { expect, type Locator } from '@playwright/test';
 import { expectVisibleFocusOutline } from '../../../../../../../test/fixtures/browser/focusOutline.js';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { suite, test, setup } from 'mocha';
+import { suite, test, setup, suiteSetup } from 'mocha';
 import { renderSCMHistoryGraphPlaceholder, renderSCMHistoryItemGraph, toISCMHistoryItemViewModelArray } from '../../browser/scmHistory.js';
-import type { ISCMHistoryItem } from '../../common/history.js';
+import { SCMHistoryItemUri, type ISCMHistoryItem } from '../../common/history.js';
+import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IProgressService } from '../../../../../platform/progress/common/progress.js';
@@ -97,6 +99,107 @@ test('summary nodes compare captured branch revisions without changing commit pa
 	assert.equal(toISCMHistoryItemViewModelArray(history, new Map(), { id: 'main', name: 'main', revision: 'local' }, {
 		remote: { id: 'origin/main', name: 'origin/main', revision: 'remote' }, base: 'base', incoming: false, outgoing: false,
 	}).length, history.length);
+});
+
+suite('SCM attachment source commands', () => {
+	suiteSetup(async () => { await import('../../browser/scmHistoryViewPane.js'); });
+	ensureNoDisposablesAreLeakedInTestSuite();
+	for (const changeSource of [false, true]) for (const revisionUris of [false, true]) test(`opens the captured ${changeSource ? 'revision file' : 'commit changes'} through the SCM owner with ${revisionUris ? 'provider' : 'snapshot'} URIs`, async () => {
+		await import('../../browser/scmHistoryViewPane.js');
+		using services = new InstantiationService();
+		using commands = new CommandService(services);
+		const calls: unknown[] = [];
+		const opened: unknown[] = [];
+		const change = { path: 'src/name:中文.ts', uri: URI.file('/working/name.ts'), modifiedUri: revisionUris ? URI.parse('git:/captured/name.ts?revision=tip') : undefined, status: 'modified' };
+		const repository = {
+			id: 'repo:original', provider: {
+				historyProvider: {
+					provideHistoryItemChanges: async (...args: unknown[]) => { calls.push(args); return [change]; },
+					resolveHistoryItemChangeContents: async (...args: unknown[]) => { calls.push(args); return { original: { kind: 'text', text: 'Before' }, modified: { kind: 'text', text: 'Captured after' } }; },
+				}
+			}
+		} as unknown as ISCMRepository;
+		services.registerInstance(ISCMService, { getRepository: id => id === repository.id ? repository : undefined } as ISCMService);
+		services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
+		services.registerInstance(IEditorService, { openEditor: async (...args: unknown[]) => { opened.push(args); } } as unknown as IEditorService);
+		const source = SCMHistoryItemUri.toUri({ repositoryId: repository.id, revision: 'captured:tip', baseRevision: 'captured:parent', ...(changeSource ? { path: change.path } : {}) });
+		await commands.executeCommand(changeSource ? 'workbench.scm.action.graph.openFile' : 'workbench.scm.action.graph.viewChanges', URI.parse(source.toString()), 'Captured label');
+		assert.deepEqual(calls, [['captured:tip', 'captured:parent'], ['captured:tip', change]]);
+		assert.equal(opened.length, 1);
+		const [input, options] = opened[0] as [import('../../../../common/editor.js').IResourceEditorInput, unknown];
+		assert.deepEqual(options, { pinned: true });
+		if (changeSource) {
+			if (change.modifiedUri) assert.equal(input.resource.toString(), change.modifiedUri.toString());
+			else {
+				assert.notEqual(input.resource.toString(), change.uri.toString());
+				assert.equal(input.resource.query.includes('captured:tip'), true);
+			}
+			assert.equal(input.initialText, 'Captured after');
+			assert.equal(input.readOnly, true);
+		} else {
+			assert.ok(isMultiDiffEditorInput(input));
+			assert.equal(input.label, 'Captured label');
+			assert.equal(input.items[0].modified.initialText, 'Captured after');
+			assert.equal(input.items[0].modified.readOnly, true);
+			assert.notEqual(input.items[0].original.resource.toString(), input.items[0].modified.resource.toString());
+		}
+	});
+
+	for (const kind of ['deleted', 'binary']) test(`revision file sources retain ${kind} contents without reading the working file`, async () => {
+		using services = new InstantiationService();
+		using commands = new CommandService(services);
+		const change = { path: 'file.bin', uri: URI.file('/working/file.bin'), originalUri: URI.parse('git:/original/file.bin'), modifiedUri: URI.parse('git:/modified/file.bin'), status: kind };
+		const repository = {
+			id: 'repo', provider: {
+				historyProvider: {
+					provideHistoryItemChanges: async () => [change],
+					resolveHistoryItemChangeContents: async () => ({ parentId: 'captured-parent', original: { kind: 'text', text: 'Deleted content' }, modified: kind === 'deleted' ? { kind: 'missing' } : { kind: 'binary', bytes: new Uint8Array([1, 2, 3]) } }),
+				}
+			}
+		} as unknown as ISCMRepository;
+		services.registerInstance(ISCMService, { getRepository: () => repository } as unknown as ISCMService);
+		let opened = 0;
+		services.registerInstance(IEditorService, {
+			openEditor: async input => {
+				opened++;
+				assert.equal(input.resource.toString(), (kind === 'deleted' ? change.originalUri : change.modifiedUri).toString());
+				assert.equal(input.readOnly, true);
+				if (kind === 'deleted') assert.equal(input.initialText, 'Deleted content');
+				else assert.deepEqual(input.initialBytes, new Uint8Array([1, 2, 3]));
+			}
+		} as IEditorService);
+		await commands.executeCommand('workbench.scm.action.graph.openFile', SCMHistoryItemUri.toUri({ repositoryId: repository.id, revision: 'captured-tip', baseRevision: 'captured-parent', path: change.path }));
+		assert.equal(opened, 1);
+	});
+
+	for (const changeSource of [false, true]) for (const retired of ['cancelled', 'removed', 'replaced']) test(`${changeSource ? 'file' : 'commit'} source cannot open after its owner is ${retired}`, async () => {
+		await import('../../browser/scmHistoryViewPane.js');
+		using services = new InstantiationService();
+		using commands = new CommandService(services);
+		using lifetime = new CancellationTokenSource();
+		const pending = new DeferredPromise<void>();
+		let reads = 0;
+		const change = { path: 'saved.ts', uri: URI.file('/saved.ts'), status: 'modified' };
+		const repository = {
+			id: 'repo', provider: {
+				historyProvider: {
+					provideHistoryItemChanges: async () => [change],
+					resolveHistoryItemChangeContents: async () => { reads++; await pending.p; return { original: { kind: 'missing' }, modified: { kind: 'text', text: 'Saved' } }; },
+				}
+			}
+		} as unknown as ISCMRepository;
+		let current: ISCMRepository | undefined = repository;
+		services.registerInstance(ISCMService, { getRepository: () => current } as unknown as ISCMService);
+		services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
+		services.registerInstance(IEditorService, { openEditor: async () => { assert.fail('Retired source opened an editor'); } } as unknown as IEditorService);
+		const source = SCMHistoryItemUri.toUri({ repositoryId: repository.id, revision: 'captured', ...(changeSource ? { path: change.path } : {}) });
+		const operation = commands.executeCommand(changeSource ? 'workbench.scm.action.graph.openFile' : 'workbench.scm.action.graph.viewChanges', source, 'Saved', lifetime.token);
+		await expect.poll(() => reads).toBe(1);
+		if (retired === 'cancelled') lifetime.cancel();
+		else current = retired === 'removed' ? undefined : { ...repository };
+		await pending.complete();
+		await operation;
+	});
 });
 
 suite('SCM history Open Changes', () => {

@@ -1,10 +1,40 @@
 import type { Event } from '../../../../base/common/event.js';
 import type { IObservable } from '../../../../base/common/observable.js';
-import type { URI } from '../../../../base/common/uri.js';
+import { URI } from '../../../../base/common/uri.js';
+import { Schemas } from '../../../../base/common/network.js';
 import type { ISCMRepository } from './scm.js';
 
 /** A history provider cannot serve the current workspace until its repository appears. */
 export class SCMHistoryUnavailableError extends Error { }
+
+/** Stable source identity for references restored from drafts or another window's clipboard. */
+export namespace SCMHistoryItemUri {
+	interface Source {
+		readonly repositoryId: string;
+		readonly revision: string;
+		readonly baseRevision?: string;
+		readonly path?: string;
+	}
+
+	export function toUri(source: Source): URI {
+		return URI.from({ scheme: Schemas.internal, authority: 'scm-history', path: source.path === undefined ? '/commit' : '/change', query: JSON.stringify(source) });
+	}
+
+	/** This URI crosses persistence and clipboard boundaries; names and composite IDs are never identities. */
+	export function fromUri(resource: URI | undefined): Source | undefined {
+		if (!resource || resource.scheme !== Schemas.internal || resource.authority !== 'scm-history' || resource.fragment || (resource.path !== '/commit' && resource.path !== '/change')) return undefined;
+		try {
+			const value: unknown = JSON.parse(resource.query);
+			if (!value || typeof value !== 'object') return undefined;
+			const { repositoryId, revision, baseRevision, path } = value as Record<string, unknown>;
+			if (typeof repositoryId !== 'string' || !repositoryId || typeof revision !== 'string' || !revision || baseRevision !== undefined && typeof baseRevision !== 'string') return undefined;
+			if (resource.path === '/change' ? typeof path !== 'string' || !path : path !== undefined) return undefined;
+			return { repositoryId, revision, baseRevision, path: path as string | undefined };
+		} catch {
+			return undefined;
+		}
+	}
+}
 
 export interface ISCMHistoryOptions {
 	readonly skip?: number;

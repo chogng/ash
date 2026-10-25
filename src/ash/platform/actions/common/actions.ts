@@ -100,6 +100,8 @@ export class MenuId {
 	static readonly ChatTitleLayout = new MenuId("ChatTitleLayout");
 	static readonly ChatInputSecondary = new MenuId('ChatInputSecondary');
 	static readonly ChatInputStatus = new MenuId('ChatInputStatus');
+	static readonly ChatInputResourceAttachmentContext = new MenuId('ChatInputResourceAttachmentContext');
+	static readonly ChatInputSymbolAttachmentContext = new MenuId('ChatInputSymbolAttachmentContext');
 	static readonly AgentSidebarTitle = new MenuId("AgentSidebarTitle");
 	static readonly SCMTitle = new MenuId('SCMTitle');
 	static readonly SCMInputBox = new MenuId('SCMInputBox');

@@ -2,11 +2,13 @@ import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { BrowserContextMenuService } from '../../../../../platform/contextview/browser/contextMenuService.js';
+import { IImageEditorService } from '../../../../services/imageEditor/common/imageEditorService.js';
 import { BrowserImageEditorService } from '../../../../services/imageEditor/browser/browserImageEditorService.js';
 import { IHostService } from '../../../../services/host/browser/host.js';
 import { TestHostService } from '../../../../services/host/test/browser/testHostService.js';
 import '../../browser/chat.shared.contribution.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../browser/speechToText/chatSpeechToTextService.js';
+import { IDictationOnboardingService } from '../../browser/speechToText/dictationOnboarding.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -55,6 +57,13 @@ import type { IChatWidgetModel } from '../../browser/widget/chatWidget.js';
 import type { IWillShutdownEvent } from '../../../../services/lifecycle/common/lifecycle.js';
 import type { IChatDraftStorage } from '../../browser/widget/input/chatInputPart.js';
 import { ChatInputPart } from '../../browser/widget/input/chatInputPart.js';
+import { IChatPasteTargetService } from '../../browser/chat.js';
+import { ChatPasteTargetService } from '../../browser/attachments/chatPasteTargetService.js';
+import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../../browser/attachments/chatAttachmentResolveService.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import type { IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
+import type { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import type { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import type { ChatInputDelegate, ChatInputState } from '../../browser/widget/input/chatInput.js';
 import type { ChatAgent } from '../../../../services/chat/common/chatService.js';
@@ -102,6 +111,17 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 		registerTestDictationOnboarding(services);
 	}
 	const partServices = inputResources.add(services.createChild());
+	if (!partServices.has(IFileService)) partServices.registerInstance(IFileService, { hasProvider: () => false } as unknown as IFileService);
+	if (!partServices.has(IChatPasteTargetService)) partServices.registerSingleton(IChatPasteTargetService, () => new ChatPasteTargetService());
+	if (!partServices.has(IChatAttachmentResolveService)) {
+		// This small composer fixture only resolves image bytes acquired by native FileReader.
+		partServices.registerInstance(IChatAttachmentResolveService, new ChatAttachmentResolveService(
+			{} as IFileService,
+			{} as IWorkingCopyService,
+			{} as IFileSearchService,
+			{} as IWorkspaceContextService,
+		));
+	}
 	if (!partServices.has(IHostService)) partServices.registerInstance(IHostService, new TestHostService());
 	if (!partServices.has(IImageEditorService)) partServices.registerSingleton(IImageEditorService, () => partServices.createInstance(BrowserImageEditorService));
 	if (!partServices.has(IEditorService)) partServices.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
@@ -746,6 +766,16 @@ test('Input construction rejects a missing window dictation service', () => {
 	assert.throws(() => services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, {} as IContextViewService, {} as IAccessibleViewService, sharedNotifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' }), /Unknown service: chatSpeechToTextService/);
 });
 
+test('Input construction requires the window attachment resolver', () => {
+	using services = new InstantiationService();
+	services.registerInstance(IChatSpeechToTextService, {} as IChatSpeechToTextService);
+	services.registerInstance(IDictationOnboardingService, {} as IDictationOnboardingService);
+	services.registerInstance(IQuickInputService, {} as IQuickInputService);
+	services.registerInstance(IMenuService, {} as IMenuService);
+	assert.throws(() => services.createInstance(ChatInputPart, document.body, {} as ChatInputDelegate, {} as IContextMenuService, {} as IContextViewService, {} as IAccessibleViewService, sharedNotifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' }), /Unknown service: chatAttachmentResolveService/u);
+});
+
+
 test('approval shows every exact target as text and dispatches both decisions', async () => {
 	const responses: unknown[] = [];
 	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
@@ -1290,6 +1320,399 @@ test('a hidden cleared composer does not overwrite the active renderer draft dur
 });
 suite('chatInput browser component', () => {
 	const browserTests = useBrowserTests();
+	for (const locale of ['en', 'zh-CN']) for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) test(`a corrupt saved image stays removable through undo, restore and clipboard in ${locale}, ${theme}`, async () => {
+		const { page } = browserTests;
+		const chinese = locale === 'zh-CN';
+		await page.goto(`/chatInput.html?inlineCode=1&sendFailure=1&locale=${locale}&theme=${theme}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const input = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		await input.focus();
+		await input.evaluate(element => {
+			const transfer = new DataTransfer();
+			const text = 'broken.png';
+			transfer.setData('text/plain', text);
+			transfer.setData('application/vnd.chat.attachment+json', JSON.stringify({
+				version: 1, draft: {
+					text, mode: 'agent', contexts: [{ id: 'broken', kind: 'image', name: text, content: 'data:image/png;base64,Y2FwdHVyZWQ=', reference: { start: 0, end: text.length } }],
+				}
+			}));
+			element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
+		});
+		const message = chinese ? '无法预览：broken.png' : 'Preview unavailable: broken.png';
+		const failed = page.getByRole('button', { name: message, exact: true });
+		const remove = page.getByRole('button', { name: `${chinese ? '移除' : 'Remove'} broken.png`, exact: true });
+		await expect(failed).toBeDisabled();
+		await expect(page.locator('.ash-chat-image-reference-control')).toHaveAttribute('aria-busy', 'false');
+		await expect(failed.locator('img')).toBeHidden();
+		await input.press('Home');
+		await input.press('Alt+Enter');
+		await expect(page.locator('.ash-chat-image-reference-preview')).toHaveCount(0);
+		await input.press('Tab');
+		await expect(remove).toBeFocused();
+		await remove.press('Delete');
+		await expect(failed).toHaveCount(0);
+		await expect(input).toBeFocused();
+		await input.press('ControlOrMeta+z');
+		await expect(failed).toBeDisabled();
+		await input.press('ControlOrMeta+Shift+z');
+		await expect(failed).toHaveCount(0);
+		await input.press('ControlOrMeta+z');
+		await expect(failed).toBeDisabled();
+		assert.equal(await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft()), 'broken.png');
+		await expect(failed).toBeDisabled();
+		await input.press('ControlOrMeta+a');
+		const copied = await input.evaluate(element => {
+			const transfer = new DataTransfer();
+			element.dispatchEvent(new ClipboardEvent('copy', { clipboardData: transfer, bubbles: true, cancelable: true }));
+			return transfer.types.map(type => [type, transfer.getData(type)]);
+		});
+		await input.press('Backspace');
+		await input.evaluate((element, values) => {
+			const transfer = new DataTransfer();
+			for (const [type, value] of values) transfer.setData(type!, value!);
+			element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
+		}, copied);
+		await expect(failed).toBeDisabled();
+		await expect(page.locator('.ash-chat-image-reference-control')).toHaveAccessibleName(message);
+		await expect(page.getByLabel('Submission')).toHaveText('');
+		const help = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility().help);
+		assert.match(help!, chinese ? /无法解码/u : /cannot be decoded/u);
+		await input.press('Enter');
+		await expect(page.getByLabel('Submission')).toContainText('data:image/png;base64,Y2FwdHVyZWQ=');
+		await expect(failed).toBeDisabled();
+	});
+	async function dropResources(values: readonly string[]): Promise<{ prevented: boolean; overlay: boolean; }> {
+		return browserTests.page.getByRole('textbox', { name: 'Chat message', exact: true }).evaluate((element, values) => {
+			const dataTransfer = new DataTransfer();
+			dataTransfer.setData('ResourceURLs', JSON.stringify(values));
+			dataTransfer.setData('text/uri-list', values.join('\r\n'));
+			element.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer }));
+			const overlay = element.closest('form')!.querySelector<HTMLElement>('.ash-chat-drop-overlay')!;
+			const visible = !overlay.hidden && overlay.getBoundingClientRect().width > 0 && getComputedStyle(overlay).pointerEvents === 'none';
+			const event = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer });
+			element.dispatchEvent(event);
+			return { prevented: event.defaultPrevented, overlay: visible };
+		}, values);
+	}
+	test('a resource URI drop captures through the existing composer and restores its snapshot with undo', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode=1&contextSources=1');
+		const input = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		await input.pressSequentially('Review ');
+		const prevented = await input.evaluate(element => {
+			const dataTransfer = new DataTransfer();
+			dataTransfer.setData('ResourceURLs', JSON.stringify(['file:///workspace/dropped.ts']));
+			dataTransfer.setData('text/uri-list', 'file:///workspace/dropped.ts');
+			const event = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer });
+			element.dispatchEvent(event);
+			return event.defaultPrevented;
+		});
+		assert.equal(prevented, true);
+		const source = page.getByRole('button', { name: 'Open dropped.ts', exact: true });
+		await expect(source).toBeVisible();
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Review dropped.ts ');
+		await input.press('ControlOrMeta+z');
+		await expect(source).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Review ');
+		await input.press('ControlOrMeta+Shift+z');
+		await source.click();
+		await expect(page.getByLabel('Opened saved content')).toContainText('Workspace file content');
+		await expect(page.getByLabel('Submission')).toHaveText('');
+	});
+
+	for (const locale of ['en', 'zh-CN']) for (const theme of ['dark', 'light', 'hcDark', 'hcLight']) test(`mixed resource drops share one snapshot and undo batch in ${locale}, ${theme}`, async () => {
+		const { page } = browserTests;
+		const chinese = locale === 'zh-CN';
+		await page.goto(`/chatInput.html?inlineCode=1&contextSources=1&dropSources=1&sendFailure=1&locale=${locale}&theme=${theme}`);
+		const input = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		await input.pressSequentially('Review done');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		await input.press('Home');
+		for (let i = 0; i < 7; i++) await input.press('ArrowRight');
+		assert.deepEqual(await dropResources([
+			'file:///workspace/drop-file.ts', 'file:///workspace/drop-folder', 'file:///workspace/drop-image.png',
+			'file:///workspace/drop-range.ts#2,1-2,7', 'file:///workspace/drop-file.ts',
+		]), { prevented: true, overlay: true });
+		const names = ['drop-file.ts', 'drop-folder', 'drop-image.png', 'drop-range.ts (2)'];
+		const references = page.locator('.ash-chat-input-editor-host [role="group"]');
+		await expect(references).toHaveCount(4);
+		await expect(input).toBeFocused();
+		const help = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility().help);
+		assert.match(help!, chinese ? /一次撤销可移除本次拖入/u : /Undo removes that drop in one step/u);
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe(`Review ${names.join(' ')} done`);
+		await input.press('ControlOrMeta+z');
+		await expect(references).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Review done');
+		await input.press('ControlOrMeta+Shift+z');
+		await expect(references).toHaveCount(4);
+		await page.evaluate(() => window.ashChatInputIntegration.setDropSourceText('Changed after the drop'));
+		await page.getByRole('button', { name: `${chinese ? '打开' : 'Open'} drop-file.ts`, exact: true }).click();
+		await expect(page.getByLabel('Opened saved content')).toContainText('first captured line');
+		await page.getByRole('button', { name: `${chinese ? '打开' : 'Open'} drop-range.ts (2)`, exact: true }).click();
+		await expect.poll(async () => JSON.parse((await page.getByLabel('Opened saved content').textContent())!).at(-1).text).toBe('second');
+		await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+		await expect(page.getByLabel('Submission')).toContainText('first captured line');
+		await expect(page.getByLabel('Submission')).toContainText('child.ts');
+		await expect(page.getByLabel('Submission')).toContainText('data:image/png;base64,');
+		await expect(page.getByLabel('Submission')).not.toContainText('Changed after the drop');
+		await expect(references).toHaveCount(4);
+	});
+
+	test('sending waits for a pending resource drop and captures its eventual reference text', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode=1&contextSources=1&dropSources=1&sendFailure=1');
+		const input = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		await input.pressSequentially('Review ');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		await dropResources(['file:///workspace/drop-pending.ts']);
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().pending)).toBe(true);
+		await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+		await expect(page.getByLabel('Submission')).toHaveText('');
+		await page.evaluate(() => window.ashChatInputIntegration.releaseDropRead());
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: 'Review drop-pending.ts ' }] });
+		await expect(page.getByLabel('Submission')).toContainText('first captured line');
+	});
+
+	for (const retirement of ['hide', 'dispose', 'replace'] as const) test(`a ${retirement} input cannot receive or refocus a late resource drop`, async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode=1&contextSources=1&dropSources=1');
+		const input = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		await input.pressSequentially('Review ');
+		await dropResources(['file:///workspace/drop-pending.ts']);
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().pending)).toBe(true);
+		await page.evaluate(retirement => {
+			if (retirement === 'hide') window.ashChatInputIntegration.setVisible(false);
+			else if (retirement === 'dispose') window.ashChatInputIntegration.dispose();
+			else window.ashChatInputIntegration.replaceDropDraft();
+			const outside = document.createElement('button');
+			outside.textContent = 'Outside drop target';
+			document.body.append(outside);
+			outside.focus();
+			window.ashChatInputIntegration.releaseDropRead();
+		}, retirement);
+		if (retirement !== 'dispose') {
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().pending)).toBe(false);
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe(retirement === 'replace' ? 'Replacement draft' : 'Review ');
+		} else await expect(page.locator('.ash-chat-input-part')).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Outside drop target', exact: true })).toBeFocused();
+		await expect(page.getByRole('button', { name: 'Open drop-pending.ts', exact: true })).toHaveCount(0);
+	});
+
+	test('mixed resource errors and model changes cannot partially insert a drop', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode=1&contextSources=1&dropSources=1');
+		const input = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		await input.pressSequentially('Review ');
+		await dropResources(['file:///workspace/drop-file.ts', 'file:///workspace/drop-missing.ts']);
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().pending)).toBe(false);
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Review ');
+		await page.evaluate(() => window.ashChatInputIntegration.setImageCapability('text'));
+		await dropResources(['file:///workspace/drop-image.png']);
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().pending)).toBe(false);
+		assert.ok(!(await page.evaluate(() => window.ashChatInputIntegration.dropState().reads)).includes('bytes:file:///workspace/drop-image.png'));
+		await page.evaluate(() => window.ashChatInputIntegration.setImageCapability('image'));
+		await dropResources(['file:///workspace/drop-pending.ts', 'file:///workspace/drop-image.png']);
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().reads)).toContain('bytes:file:///workspace/drop-image.png');
+		await page.evaluate(() => {
+			window.ashChatInputIntegration.setImageCapability('text');
+			window.ashChatInputIntegration.releaseDropRead();
+		});
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().pending)).toBe(false);
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Review ');
+		await expect(page.locator('.ash-chat-input-editor-host [role="group"]')).toHaveCount(0);
+	});
+
+	test('URI-list and native-file aliases capture one source range from its unsaved working copy', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode=1&contextSources=1&dropSources=1');
+		const input = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		await input.pressSequentially('Review ');
+		await input.evaluate(element => {
+			const dataTransfer = new DataTransfer();
+			dataTransfer.setData('text/uri-list', '# source alias\r\nfile:///workspace/edited.ts#1,1-1,8\r\nfile:///workspace/edited.ts#1,1-1,8');
+			const native = new File(['Stale native bytes'], 'edited.ts', { type: 'text/plain' });
+			Object.defineProperty(native, 'path', { value: '/workspace/edited.ts' });
+			dataTransfer.items.add(native);
+			element.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }));
+		});
+		await expect(page.locator('.ash-chat-input-editor-host [role="group"]')).toHaveCount(1);
+		await page.getByRole('button', { name: 'Open edited.ts (1)', exact: true }).click();
+		await expect.poll(async () => JSON.parse((await page.getByLabel('Opened saved content').textContent())!)[0].text).toBe('Unsaved');
+		assert.deepEqual(await page.evaluate(() => window.ashChatInputIntegration.dropState().reads), []);
+	});
+
+	test('a folder with an image extension remains text context for a text-only model', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode=1&contextSources=1&dropSources=1');
+		await page.getByRole('textbox', { name: 'Chat message', exact: true }).focus();
+		await page.evaluate(() => window.ashChatInputIntegration.setImageCapability('text'));
+		await dropResources(['file:///workspace/drop-folder.PNG']);
+		await expect(page.getByRole('button', { name: 'Open drop-folder.PNG', exact: true })).toBeVisible();
+		assert.deepEqual(await page.evaluate(() => window.ashChatInputIntegration.dropState().reads), []);
+	});
+
+	test('invalid resource transfers do not edit the draft and ordinary URL drops remain unclaimed', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode=1&contextSources=1&dropSources=1');
+		await page.getByRole('textbox', { name: 'Chat message', exact: true }).pressSequentially('Review ');
+		const results = await page.locator('form.ash-chat-input-container').evaluate(element => {
+			return ['not-json', '[null]', '["command:unsafe"]', 'http'].map(data => {
+				const dataTransfer = new DataTransfer();
+				dataTransfer.setData(data === 'http' ? 'text/uri-list' : 'ResourceURLs', data === 'http' ? 'https://example.invalid/page' : data);
+				const event = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer });
+				element.dispatchEvent(event);
+				return event.defaultPrevented;
+			});
+		});
+		assert.deepEqual(results, [true, true, true, false]);
+		assert.deepEqual(await page.evaluate(() => window.ashChatInputIntegration.dropState()), { text: 'Review ', pending: false, reads: [] });
+		await expect(page.getByLabel('Opened sources')).toHaveText('[]');
+	});
+	for (const locale of ['en', 'zh-CN']) {
+		for (const method of ['copy', 'cut'] as const) {
+			test(`Editor code ${method} pastes as a frozen Chat reference through undo and send in ${locale}`, async function () {
+				const { page } = browserTests;
+				await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}`);
+				await page.evaluate(() => window.ashChatInputIntegration.showModels());
+				const source = page.locator('#code-selection-source').getByRole('textbox');
+				await source.press('ControlOrMeta+a');
+				const copied = await source.evaluate((element, method) => {
+					const transfer = new DataTransfer();
+					element.dispatchEvent(new ClipboardEvent(method, { clipboardData: transfer, bubbles: true, cancelable: true }));
+					return transfer.types.map(type => [type, transfer.getData(type)]);
+				}, method);
+				await source.press('ControlOrMeta+a');
+				await source.pressSequentially('Changed after copying');
+				const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+				await input.pressSequentially('Explain ');
+				await input.evaluate((element, values) => {
+					const transfer = new DataTransfer();
+					for (const [type, value] of values) transfer.setData(type!, value!);
+					element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
+				}, copied);
+				await page.evaluate(() => window.ashChatInputIntegration.finishPaste());
+				const reference = page.locator('.ash-chat-code-reference');
+				await expect(reference).toHaveCount(0);
+				const selector = page.locator('.stanza-editor-post-edit-selector button');
+				await selector.click();
+				await page.getByRole('menuitem', { name: locale === 'en' ? 'Pasted Code Attachment' : '粘贴为代码附件', exact: true }).click();
+				await expect(reference).toHaveText('example.ts (1-5)');
+				await expect(input).toBeFocused();
+				await input.press('ControlOrMeta+z');
+				await expect(reference).toHaveCount(0);
+				await input.press('ControlOrMeta+Shift+z');
+				await expect(reference).toHaveText('example.ts (1-5)');
+				const accessibility = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
+				expect(accessibility.help).toContain(locale === 'en' ? 'Paste options offers Pasted Code Attachment' : '可在粘贴选项中选择“粘贴为代码附件”');
+				expect(await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft())).toBe('Explain example.ts (1-5)');
+				await input.press('Enter');
+				const submission = page.getByLabel('Submission', { exact: true });
+				await expect(submission).toContainText('const unsaved = 42;');
+				const contexts = JSON.parse((await submission.textContent())!);
+				expect(contexts).toHaveLength(1);
+				expect(contexts[0].content).toContain('first\nsecond\nconst unsaved = 42;\nreturn unsaved;\nlast');
+				expect(contexts[0].content).not.toContain('Changed after copying');
+			});
+		}
+	}
+
+	test('A pending reference paste cannot return after an empty draft is hidden and shown again', async function () {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode=1');
+		await page.evaluate(() => {
+			window.ashChatInputIntegration.showModels();
+			window.ashChatInputIntegration.addDeferredContext('Snapshot from the retired draft');
+		});
+		const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+		await input.press('ControlOrMeta+a');
+		const copied = await input.evaluate(element => {
+			const transfer = new DataTransfer();
+			element.dispatchEvent(new ClipboardEvent('copy', { clipboardData: transfer, bubbles: true, cancelable: true }));
+			return transfer.types.map(type => [type, transfer.getData(type)]);
+		});
+		await input.press('Backspace');
+		await input.evaluate((element, values) => {
+			const transfer = new DataTransfer();
+			for (const [type, value] of values) transfer.setData(type!, value!);
+			element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
+			window.ashChatInputIntegration.setVisible(false);
+			window.ashChatInputIntegration.setVisible(true);
+		}, copied);
+		await page.evaluate(async () => {
+			await window.ashChatInputIntegration.finishPaste();
+			window.ashChatInputIntegration.releaseReferencePreview();
+		});
+		// A subsequent copy/paste must work, without reviving the cancelled preparation.
+		await input.pressSequentially('current draft');
+		await input.press('ControlOrMeta+a');
+		const ordinary = await input.evaluate(element => {
+			const transfer = new DataTransfer();
+			element.dispatchEvent(new ClipboardEvent('copy', { clipboardData: transfer, bubbles: true, cancelable: true }));
+			return transfer.types.map(type => [type, transfer.getData(type)]);
+		});
+		await input.press('End');
+		await input.evaluate((element, values) => {
+			const transfer = new DataTransfer();
+			for (const [type, value] of values) transfer.setData(type!, value!);
+			element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
+		}, ordinary);
+		await page.evaluate(() => window.ashChatInputIntegration.finishPaste());
+		await expect(page.locator('.ash-chat-code-reference')).toHaveCount(0);
+		expect(await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft())).toBe('current draftcurrent draft');
+	});
+
+	for (const locale of ['en', 'zh-CN']) {
+		for (const method of ['copy', 'cut'] as const) {
+			test(`Chat reference ${method} preserves snapshots through paste options, undo, draft restore and send in ${locale}`, async function () {
+				const { page } = browserTests;
+				await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}`);
+				await page.evaluate(() => window.ashChatInputIntegration.showModels());
+				const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+				const reference = page.locator('.ash-chat-code-reference');
+				await input.focus();
+				await page.keyboard.type('Original ');
+				await page.evaluate(() => window.ashChatInputIntegration.addHistoryContext());
+				await input.press('ControlOrMeta+a');
+				const copied = await input.evaluate((element, method) => {
+					const transfer = new DataTransfer();
+					element.dispatchEvent(new ClipboardEvent(method, { clipboardData: transfer, bubbles: true, cancelable: true }));
+					return transfer.types.map(type => [type, transfer.getData(type)]);
+				}, method);
+				if (method === 'cut') {
+					await expect(reference).toHaveCount(0);
+					await input.press('ControlOrMeta+z');
+					await expect(reference).toHaveText('draft.txt');
+				}
+				await input.press('ControlOrMeta+a');
+				await input.press('Backspace');
+				await page.keyboard.type('Later: ');
+				await input.evaluate((element, values) => {
+					const transfer = new DataTransfer();
+					for (const [type, value] of values) transfer.setData(type!, value!);
+					element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
+				}, copied);
+				await expect(reference).toHaveText('draft.txt');
+				await expect(input).toBeFocused();
+				const selector = page.locator('.stanza-editor-post-edit-selector button');
+				await selector.click();
+				await page.getByRole('menuitem', { name: locale === 'en' ? 'Insert Plain Text' : '插入纯文本', exact: true }).click();
+				await expect(reference).toHaveCount(0);
+				await selector.click();
+				await page.getByRole('menuitem', { name: locale === 'en' ? 'Insert Prompt & Attachments' : '插入消息和附件', exact: true }).click();
+				await expect(reference).toHaveText('draft.txt');
+				await input.press('ControlOrMeta+z');
+				await expect(reference).toHaveCount(0);
+				await input.press('ControlOrMeta+Shift+z');
+				await expect(reference).toHaveText('draft.txt');
+				const accessibility = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
+				expect(accessibility.help).toContain(locale === 'en' ? 'Undo and redo restore the pasted text and references together.' : '撤销和重做会一起恢复粘贴的文字与引用。');
+				expect(await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft())).toBe('Later: Original draft.txt ');
+				await input.press('Enter');
+				await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'draft.txt', content: 'synthetic context' }]));
+			});
+		}
+	}
+
 	for (const locale of ['en', 'zh-CN']) {
 		for (const theme of ['light', 'hcDark']) {
 			test(`Reference hover updates a delayed snapshot, bounds its preview and keeps keyboard focus in ${locale} ${theme}`, async function () {
@@ -1354,11 +1777,12 @@ suite('chatInput browser component', () => {
 			const reference = editor.locator('.ash-chat-code-reference');
 			await expect(reference).toHaveText('draft.txt');
 			const chip = editor.locator('.ash-chat-code-reference-chip');
-			const label = chip.locator('.ash-icon-label');
+			const label = chip.locator('.ash-chat-code-reference-source > .ash-icon-label');
 			await expect(label).toHaveCount(1);
 			await expect(label.locator('.ash-chat-code-reference-icon')).toHaveCount(1);
 			await expect(label.locator('.ash-chat-code-reference')).toHaveText('draft.txt');
-			await expect(chip.locator('button')).toHaveCount(1);
+			await expect(chip.locator('button')).toHaveCount(2);
+			await expect(chip.getByRole('button', { name: '移除 draft.txt', exact: true })).toBeVisible();
 			await expect(label).toHaveCSS('align-items', 'center');
 			await expect(reference).toHaveCSS('font-size', '13px');
 			await expect(reference).toHaveCSS('line-height', '18.2px');
@@ -1406,7 +1830,7 @@ suite('chatInput browser component', () => {
 		await page.keyboard.type('after');
 		const chip = editor.locator('.ash-chat-code-reference-chip');
 		const object = editor.locator('[data-ash-inline-object="true"]');
-		await expect(chip.locator('.ash-icon-label')).toHaveCount(1);
+		await expect(chip.locator('.ash-chat-code-reference-source > .ash-icon-label')).toHaveCount(1);
 		await expect(object).toHaveCount(1);
 		await expect.poll(async () => (await chip.boundingBox())!.y - (await editor.locator('.view-line').first().boundingBox())!.y).toBeGreaterThanOrEqual(20);
 		for (const width of ['480px', '320px']) {
@@ -2920,7 +3344,7 @@ suite('chatInput browser component', () => {
 					const transfer = new DataTransfer();
 					transfer.items.add(new File(['const captured = 42;'], 'sample.ts', { type: 'text/plain' }));
 					const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg=='), char => char.charCodeAt(0));
-					transfer.items.add(new File([bytes], 'preview.png', { type: 'image/png' }));
+					transfer.items.add(new File([bytes], 'preview.png', { type: method === 'paste' ? '' : 'application/octet-stream' }));
 					const event = method === 'paste'
 						? new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true })
 						: new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true });
@@ -2965,7 +3389,7 @@ suite('chatInput browser component', () => {
 	}
 
 	for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
-		test(`Inline image controls follow wrapped names and support keyboard preview and deletion in ${theme}`, async function () {
+		test(`Inline image controls keep long names bounded and support keyboard preview and deletion in ${theme}`, async function () {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
 
@@ -2990,17 +3414,19 @@ suite('chatInput browser component', () => {
 				const transfer = new DataTransfer(); transfer.items.add(new File([bytes], name, { type: 'image/png' }));
 				element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
 			}, name);
-			const labels = page.locator('.ash-chat-image-reference:not(.ash-chat-image-reference-space)');
+			const labels = page.locator('.ash-chat-image-reference-control .ash-button-label').first();
 			await expect.poll(async () => (await labels.allTextContents()).join('')).toBe(name);
 			const preview = page.getByRole('button', { name: `预览 ${name}`, exact: true });
 			const remove = page.getByRole('button', { name: `移除 ${name}`, exact: true });
 			await expect(preview).toBeVisible();
 			await expect(remove).toBeVisible();
 			const placement = await page.locator('.ash-chat-input-editor').evaluate(element => {
-				const labels = [...element.querySelectorAll('.ash-chat-image-reference:not(.ash-chat-image-reference-space)')];
-				const controls = [...element.querySelectorAll('.ash-chat-image-reference-control')];
+				const chip = element.querySelector('.ash-chat-image-reference-control')!;
+				const label = chip.querySelector('.ash-button-label')!;
+				const thumbnail = chip.querySelector('img')!;
+				const remove = chip.querySelector('.ash-chat-attachment-remove')!;
 				const bounds = element.getBoundingClientRect();
-				return { overflow: element.scrollWidth > element.clientWidth, clipped: labels.some(label => label.getBoundingClientRect().right > bounds.right + 1), firstLabel: labels[0]!.getBoundingClientRect().toJSON(), lastLabel: labels.at(-1)!.getBoundingClientRect().toJSON(), before: controls[0]!.getBoundingClientRect().toJSON(), after: controls[1]!.getBoundingClientRect().toJSON() };
+				return { overflow: element.scrollWidth > element.clientWidth, clipped: chip.getBoundingClientRect().right > bounds.right + 1, firstLabel: label.getBoundingClientRect().toJSON(), lastLabel: label.getBoundingClientRect().toJSON(), before: thumbnail.getBoundingClientRect().toJSON(), after: remove.getBoundingClientRect().toJSON() };
 			});
 			expect(placement.overflow).toBe(false);
 			expect(placement.clipped).toBe(false);

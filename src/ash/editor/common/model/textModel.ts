@@ -1863,7 +1863,10 @@ export class TextModel implements ITextModel {
 	): CommitResult | undefined {
 		const previousEOL = this.getEndOfLineSequence();
 		const targetEOL = context.eol ?? previousEOL;
-		const prepared = this.prepareEdits(edits);
+		const replayingHistory = context.reason === TextModelChangeReason.Undo
+			|| context.reason === TextModelChangeReason.Redo
+			|| context.reason === TextModelChangeReason.HistoryCancellation;
+		const prepared = this.prepareEdits(edits, replayingHistory);
 		const eolChanged = targetEOL !== previousEOL;
 		if (prepared.length === 0 && !eolChanged) return undefined;
 		const previousLineIds = this.plainLineIds;
@@ -2019,7 +2022,7 @@ export class TextModel implements ITextModel {
 		this.pendingMaintenance.value = pending;
 	}
 
-	private prepareEdits(edits: readonly AnnotatedOffsetEdit[]): PreparedEdit[] {
+	private prepareEdits(edits: readonly AnnotatedOffsetEdit[], replayingHistory: boolean): PreparedEdit[] {
 		const sorted = edits.map(edit => {
 			this.assertOffsetRange(edit);
 			return {
@@ -2045,7 +2048,9 @@ export class TextModel implements ITextModel {
 
 		return sorted.flatMap<PreparedEdit>(edit => {
 			const replacedText = this.buffer.getValueInRange(this.buffer.getRangeAt(edit.startOffset, edit.endOffset - edit.startOffset));
-			if (replacedText === edit.text) return [];
+			// A forced replacement moves markers even when its characters match. Keep
+			// that semantic edit and its history replay observable to model consumers.
+			if (replacedText === edit.text && !edit.forceMoveMarkers && !replayingHistory) return [];
 			return [{
 				...edit,
 				range: Range.fromPositions(

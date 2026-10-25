@@ -1,4 +1,12 @@
 import type { ISandboxGlobals } from "../../../base/parts/sandbox/electron-browser/sandboxTypes.js";
+import type { URI } from '../../../base/common/uri.js';
+import type { ITextEditorSelection } from '../../editor/common/editor.js';
+
+export interface IResourceStat {
+	readonly resource: URI;
+	readonly isDirectory?: boolean;
+	readonly selection?: ITextEditorSelection;
+}
 
 export const CodeDataTransfers = {
 	EDITORS: "CodeEditors",

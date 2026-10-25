@@ -9,13 +9,11 @@ import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { basename, extUri } from '../../../../../base/common/resources.js';
 import { localize } from '../../../../../nls.js';
-import { FileKind } from '../../../../../platform/files/common/files.js';
-import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { isResourceDiffEditorInput } from '../../../../common/editor.js';
 import { isBinaryDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
-import { FilesAndFoldersPickerPick } from '../../../search/browser/searchChatContext.js';
+import { IChatAttachmentResolveService } from './chatAttachmentResolveService.js';
 import type { ChatAttachmentModel } from './chatAttachmentModel.js';
 
 /** A suggestion reads editor state; only an explicit click creates a draft attachment. */
@@ -30,7 +28,7 @@ export class ImplicitContextAttachmentWidget extends Disposable {
 		private readonly attachments: Pick<ChatAttachmentModel, 'attachments' | 'acquireContext' | 'onDidChange'>,
 		private readonly focusInput: () => void,
 		@IEditorService private readonly editors: IEditorService,
-		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IChatAttachmentResolveService private readonly attachmentResolver: IChatAttachmentResolveService,
 		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
@@ -95,8 +93,8 @@ export class ImplicitContextAttachmentWidget extends Disposable {
 			// Capture the clicked source, while the shared draft owner gates sending and cancels stale reads.
 			const attached = await this.attachments.acquireContext(async draftSignal => {
 				const signal = AbortSignal.any([this.controller.signal, draftSignal]);
-				const attachment = await this.instantiation.createInstance(FilesAndFoldersPickerPick).asAttachment(resource, FileKind.File, signal, input.initialText);
-				return this.attachments.attachments.some(entry => entry.kind === 'file' && extUri.isEqual(entry.resource, resource)) ? [] : [attachment];
+				const attachment = await this.attachmentResolver.resolveEditorAttachContext(input, signal);
+				return !attachment || this.attachments.attachments.some(entry => entry.kind === 'file' && extUri.isEqual(entry.resource, resource)) ? [] : [attachment];
 			}, this.controller.signal);
 			if (this.isDisposed) return;
 			if (attached.length > 0) status(localize('chat.context.added', 'Added {0}', attached[0]!.name));

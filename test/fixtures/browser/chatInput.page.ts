@@ -1,4 +1,6 @@
+import { IChatContextPickService, picksWithPromiseFn } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatContextPickService.js';
 import { ChatContextKeys } from '../../../src/ash/workbench/contrib/chat/common/actions/chatContextKeys.js';
+import { ChatReferenceAttachmentWidgetContribution } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatReferenceAttachmentWidget.contribution.js';
 import { startSnapshotFixture } from './snapshotFixture.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 const codeFeatures = registerTestCodeEditorFeatures();
@@ -51,7 +53,7 @@ import { XtermTerminal } from '../../../src/ash/workbench/contrib/terminal/brows
 import { IAccessibilitySignalService } from '../../../src/ash/platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { IThemeService, noFileIconTheme } from '../../../src/ash/platform/theme/common/themeService.js';
 import { IResourceIconRenderer } from '../../../src/ash/workbench/browser/labels.js';
-import { Disposable } from '../../../src/ash/base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IFileSearchService } from '../../../src/ash/platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../../src/ash/platform/search/browser/browserFileSearchService.js';
 import '../../../src/ash/base/browser/ui/styles.css';
@@ -68,8 +70,8 @@ import { IEditorService } from '../../../src/ash/workbench/services/editor/commo
 import '../../../src/ash/workbench/contrib/quickaccess/browser/quickAccess.contribution.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
-import { IChatContextPickService } from '../../../src/ash/workbench/services/chat/common/chatContextService.js';
-import { ChatContextPickService } from '../../../src/ash/workbench/services/chat/browser/chatContextPickService.js';
+
+import { ChatContextPickService } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatContextPickService.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../src/ash/platform/actionWidget/browser/actionWidget.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
@@ -80,6 +82,8 @@ import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
 import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { ChatInputEditors } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
+import { CopyPasteController } from '../../../src/ash/editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
+import { CopyTextProvider } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/editor/chatPasteProviders.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
@@ -92,6 +96,9 @@ import type { ChatInputDelegate, ChatInputState } from '../../../src/ash/workben
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { IContextViewService, IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
+import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
+import type { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
+import { ILabelService } from '../../../src/ash/platform/label/common/label.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { TestNotificationService } from './notificationFixture.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
@@ -120,13 +127,16 @@ import { HoverService, IHoverService } from '../../../src/ash/platform/hover/bro
 import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDelegate.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { inputSelection(): { anchor: number; active: number; }; changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; addDeferredContext(content: string): void; releaseReferencePreview(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
+	interface Window { ashChatInputIntegration: { finishPaste(): Promise<void>; dropState(): { text: string; pending: boolean; reads: readonly string[]; }; setDropSourceText(text: string): void; releaseDropRead(): void; replaceDropDraft(): void; inputSelection(): { anchor: number; active: number; }; changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; addDeferredContext(content: string): void; releaseReferencePreview(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseContextSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
 	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
 	setNlsMessages(catalog.locale, catalog.bundles);
+}
+if (new URLSearchParams(location.search).has('resourceMenus')) {
+	await import('../../../src/ash/workbench/contrib/files/browser/fileActions.contribution.js');
 }
 const resources = new DisposableStore();
 setARIAContainer(document.body);
@@ -311,7 +321,12 @@ const gitHubContextService: Pick<IGitHubService, 'listAccounts' | 'listIssues' |
 services.registerInstance(IGitHubService, gitHubContextService as unknown as IGitHubService);
 services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(document.body)));
-services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None });
+services.registerInstance(ILabelService, { getUriLabel: resource => resource.scheme === 'file' ? resource.fsPath : resource.toString() } as ILabelService);
+services.registerSingleton(IContextMenuService, () => new BrowserContextMenuService(
+	services.get(IMenuService), contextKeys,
+	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService,
+	services.get(IContextViewService), services.get(INotificationService),
+));
 const accessibleView = { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService;
 services.registerInstance(IAccessibleViewService, accessibleView);
 const modelChanged = resources.add(new Emitter<void>());
@@ -406,12 +421,20 @@ services.registerInstance(IEditorService, {
 } satisfies IEditorService);
 const contextPicks = new ChatContextPickService();
 services.registerInstance(IChatContextPickService, contextPicks);
-resources.add(contextPicks.registerPicker({
-	id: 'integration.context', label: 'Test source', isEnabled: () => true,
-	providePicks: async query => {
-		if (query === 'error') { throw new Error('Context source failed'); }
-		return [{ label: 'Source context', attachment: { id: 'source', kind: 'source', name: 'Source context', resolve: async () => ({ name: 'Source context', content: 'Registered context content' }) } }];
-	},
+const contextSearchWaiters = new Map<string, () => void>();
+resources.add(toDisposable(() => { for (const release of contextSearchWaiters.values()) release(); contextSearchWaiters.clear(); }));
+resources.add(contextPicks.registerChatContextItem({
+	type: 'pickerPick', label: 'Test source', icon: Lxicon.file, isEnabled: () => true,
+	asPicker: () => ({
+		placeholder: 'Select Test source', picks: picksWithPromiseFn(async query => {
+			if (query === 'error') { throw new Error('Context source failed'); }
+			const controlledSearch = new URLSearchParams(location.search).has('deferContextSearch');
+			if (controlledSearch && query === 'pending') await new Promise<void>(resolve => contextSearchWaiters.set(query, resolve));
+			const name = controlledSearch && query ? `Source context: ${query}` : 'Source context';
+			const content = controlledSearch && query ? `Registered context content: ${query}` : 'Registered context content';
+			return [{ label: name, asAttachment: () => ({ id: 'source', kind: 'source', name, resolve: async () => ({ name, content }) }) }];
+		})
+	}),
 }));
 const hasContextSources = new URLSearchParams(location.search).has('contextSources');
 const languageFeatures = resources.add(new LanguageFeaturesService());
@@ -480,7 +503,10 @@ if (hasContextSources) resources.add(registerCodebaseSymbolsWorkspaceSymbolProvi
 		};
 	},
 } as unknown as ICodebaseSymbolsService, services.get(IWorkspaceContextService)));
-services.registerInstance(IEditorGroupsService, { groups: [{ inputs: [{ resource: edited }] }] } as unknown as IEditorGroupsService);
+const contextEditorInputs = new URLSearchParams(location.search).has('openImageEditor')
+	? [{ resource: URI.parse('git-image:/index/picture.PNG'), initialBytes: png, contentType: 'image/png', readOnly: true }]
+	: [{ resource: edited, ...(new URLSearchParams(location.search).has('readonlyEditorSnapshot') ? { readOnly: true, initialText: 'Displayed readonly editor version' } : {}) }];
+services.registerInstance(IEditorGroupsService, { groups: [{ inputs: contextEditorInputs }] } as unknown as IEditorGroupsService);
 services.registerInstance(IWorkingCopyService, { get: (resource: URI) => resource.path === '/workspace/symbol.ts' ? [{ backupKind: 'text', backup: () => symbolSource }] : resource.path === edited.path ? [{ backupKind: 'text', backup: () => 'Unsaved editor text' }] : [] } as unknown as IWorkingCopyService);
 const fileSearchWaiters = new Map<number, () => void>();
 let fileSearchReads = 0;
@@ -490,9 +516,17 @@ searchReads.setAttribute('aria-label', 'File search reads');
 const searchCompleted = document.createElement('output');
 searchCompleted.setAttribute('aria-label', 'Completed file search reads');
 document.body.append(searchReads, searchCompleted);
+const dropSources = new URLSearchParams(location.search).has('dropSources');
+let dropSourceText = 'first captured line\nsecond captured line\nthird captured line';
+let finishDropRead: (() => void) | undefined;
+const dropReads: string[] = [];
+resources.add(toDisposable(() => finishDropRead?.()));
 services.registerInstance(IFileService, {
 	hasProvider: () => true,
 	readDirectory: async (resource: URI) => {
+		if (dropSources && resource.path === '/workspace/drop-folder') {
+			return [{ resource: URI.file('/workspace/drop-folder/child.ts'), name: 'child.ts', kind: FileKind.File }];
+		}
 		if (resource.path === '/workspace' && new URLSearchParams(location.search).has('deferFileSearch')) {
 			searchReads.textContent = String(++fileSearchReads);
 			await new Promise<void>(resolve => fileSearchWaiters.set(fileSearchReads, resolve));
@@ -501,9 +535,23 @@ services.registerInstance(IFileService, {
 		return resource.path === '/workspace' ? [
 			{ resource: URI.file('/workspace/src'), name: 'src', kind: FileKind.Directory },
 			{ resource: URI.file('/workspace/brief.txt'), name: 'brief.txt', kind: FileKind.File },
+			...(dropSources ? [{ resource: URI.file('/workspace/drop-folder'), name: 'drop-folder', kind: FileKind.Directory }] : []),
+			...(new URLSearchParams(location.search).has('workspaceImage') ? [{ resource: URI.file('/workspace/picture.PNG'), name: 'picture.PNG', kind: FileKind.File }] : []),
 		] : [{ resource: URI.file('/workspace/src/nested.txt'), name: 'nested.txt', kind: FileKind.File }];
 	},
-	readFile: async (resource: URI) => ({ resource, content: 'Workspace file content', revision: '1' }),
+	stat: async (resource: URI) => ({ resource, kind: dropSources && ['/workspace/drop-folder', '/workspace/drop-folder.PNG'].includes(resource.path) ? FileKind.Directory : FileKind.File, sizeBytes: png.length, readonly: false, modifiedAtMillis: undefined }),
+	readFileBytes: async (resource: URI) => {
+		if (dropSources) dropReads.push(`bytes:${resource.toString()}`);
+		return { resource, bytes: png, revision: '1' };
+	},
+	readFile: async (resource: URI) => {
+		if (!dropSources) return { resource, content: 'Workspace file content', revision: '1' };
+		dropReads.push(resource.toString());
+		if (resource.path === '/workspace/drop-missing.ts') throw new Error('Missing dropped source');
+		const content = dropSourceText;
+		if (resource.path === '/workspace/drop-pending.ts') await new Promise<void>(resolve => { finishDropRead = resolve; });
+		return { resource, content, revision: '1' };
+	},
 } as unknown as IFileService);
 services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
 // Attachment Quick Access uses the same file-query owner as Search. This fixture
@@ -565,6 +613,8 @@ const delegate: ChatInputDelegate = {
 const cowork = new URLSearchParams(location.search).get('surface') === 'cowork';
 const inlineCode = new URLSearchParams(location.search).has('inlineCode');
 registerCodeEditorServices(services);
+resources.add(services.createInstance(ChatReferenceAttachmentWidgetContribution));
+resources.add(languageFeatures.documentPasteEditProvider.register({ scheme: '*', hasAccessToAllModels: true }, services.createInstance(CopyTextProvider)));
 if (inlineCode || new URLSearchParams(location.search).has('screenshotFixture')) {
 	ChatContextKeys.enabled.bindTo(services.get(IContextKeyService)).set(true);
 	resources.add(registerChatContextActions(services.get(IImageEditorService), services.get(ICommandService)));
@@ -719,6 +769,7 @@ function renderModels(): void {
 part.render(state);
 let releaseReferencePreview: (() => void) | undefined;
 window.ashChatInputIntegration = {
+	finishPaste: () => CopyPasteController.get(inlineEditor!.codeEditor)!.finishedPaste(),
 	inputSelection: () => inlineEditor!.getSelection(),
 	changeTools: () => { toolsChanged = true; toolCatalogChanges.fire(); },
 	setActiveDiff: (original, modified, text) => {
@@ -760,6 +811,16 @@ window.ashChatInputIntegration = {
 	setFooterStatus: visible => footerStatusVisible.set(visible),
 	removeFooterStatus: () => footerStatus?.dispose(),
 	historyState: () => ({ writes: historyWrites, submissions: historySubmissions, reads: historyReads }),
+	dropState: () => ({ text: part.inputEditor!.getModel()!.getValue(), pending: part.attachmentModel.hasPendingContext, reads: [...dropReads] }),
+	setDropSourceText: text => { dropSourceText = text; },
+	replaceDropDraft: () => {
+		state = { ...state, draftIdentity: { id: 'drop-before', generation: 1 } };
+		part.render(state);
+		state = { ...state, draftIdentity: { id: 'drop-after', generation: 2 } };
+		part.render(state);
+		part.appendToDraft('Replacement draft');
+	},
+	releaseDropRead: () => { const release = finishDropRead; finishDropRead = undefined; release?.(); },
 	holdNextHistoryRead: () => { holdHistoryRead = true; },
 	releaseHistorySearch: query => historyWaits.get(query)?.(),
 	addHistoryContext: () => part.addContext({ id: 'history-context', kind: 'file', name: 'draft.txt', resource: URI.parse('file:///workspace/draft.txt'), resolve: async () => ({ name: 'draft.txt', content: 'synthetic context' }) }),
@@ -784,6 +845,7 @@ window.ashChatInputIntegration = {
 	appendToDraft: text => part.appendToDraft(text),
 	restoreCapturedDraft: async () => { const captured = await part.captureDraft(); if (captured) { captured.clear(); part.restoreDraft(captured.draft); } return captured?.draft.text; },
 	setImageCapability: capability => { models = models.map(entry => ({ ...entry, inputModalities: capability === 'unknown' ? null : capability === 'text' ? ['text'] : ['text', 'image'] })); renderModels(); modelChanged.fire(); },
+	releaseContextSearch: query => { const release = contextSearchWaiters.get(query)!; contextSearchWaiters.delete(query); release(); },
 	releaseGitHubSearch: query => { const release = gitHubSearchWaiters.get(query)!; gitHubSearchWaiters.delete(query); release(); },
 	releaseFileSearch: index => {
 		const release = fileSearchWaiters.get(index)!;

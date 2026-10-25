@@ -15,6 +15,7 @@ import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browse
 import type { ChatInputDelegate, ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
+import { IChatAttachmentResolveService } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import { ChatDragAndDrop } from '../../../../workbench/contrib/chat/browser/widget/chatDragAndDrop.js';
 import { NewChatContextAttachments } from './newChatContextAttachments.js';
 import { NewChatPermissionPicker } from './newChatPermissionPicker.js';
@@ -56,6 +57,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		@ILifecycleService lifecycle: ILifecycleService,
 		@IQuickInputService quickInput: IQuickInputService,
 		@IMenuService menuService: IMenuService,
+		@IChatAttachmentResolveService attachmentResolver: IChatAttachmentResolveService,
 	) {
 		super(container, {
 			...delegate,
@@ -88,7 +90,7 @@ export class NewChatInputWidget extends ChatInputPart {
 			icon: Lxicon.add,
 			enabled: true,
 			run: () => this.contextAttachments.showPicker(),
-		}], { modePicker: 'visible', modelPickerPosition: 'leading', renderSecondaryToolbar: false, fileEvents: 'host', draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService);
+		}], { modePicker: 'visible', modelPickerPosition: 'leading', renderSecondaryToolbar: false, fileEvents: 'host', draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver);
 		this.element.classList.add('ash-sessions-chat-input', 'floating-card');
 		this.element.classList.add('chat-composer');
 		const pullRequests = this._register(instantiationService.createInstance(SessionChatInputToolbar, this.element, model));
@@ -96,7 +98,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		pullRequests.render();
 		this.contextAttachments = this._register(new NewChatContextAttachments(this.inputContainer, files => this.attachFiles(files)));
 		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
-		const dragAndDrop = this._register(new ChatDragAndDrop(files => this.contextAttachments.attachFiles(files)));
+		const dragAndDrop = this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages()));
 		dragAndDrop.addOverlay(this.inputContainer, this.inputContainer);
 		const tipContainer = h(container.ownerDocument, 'div');
 		tipContainer.className = 'ash-sessions-chat-tip-slot';

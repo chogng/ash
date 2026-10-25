@@ -16,7 +16,7 @@ import { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
 import { ScmWorkingSetController } from "./workingSet.js";
 import { ScmHistoryChatContextContribution } from "./scmHistoryChatContext.js";
 import { SCMViewPaneContainer } from './scmViewPaneContainer.js';
-import { IChatContextPickService } from "../../../services/chat/common/chatContextService.js";
+
 import "./quickDiff.contribution.js";
 import { localize, localize2 } from '../../../../nls.js';
 import { registerEditorPane } from '../../../browser/editor.js';
@@ -439,7 +439,4 @@ registerWorkbenchContribution("workbench.contrib.scmWorkingSets", WorkbenchPhase
 	storageService: accessor.get(IStorageService),
 }));
 
-registerWorkbenchContribution("workbench.contrib.scmHistoryChatContext", WorkbenchPhase.BlockRestore, accessor => new ScmHistoryChatContextContribution(
-	accessor.get(IChatContextPickService),
-	accessor.get(ISCMService),
-));
+registerWorkbenchContribution("workbench.contrib.scmHistoryChatContext", WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ScmHistoryChatContextContribution));

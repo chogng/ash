@@ -13,6 +13,7 @@ import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IExplorerService } from './files.js';
 import { VIEW_ID } from '../common/files.js';
 import { EditorResourceAccessor, SideBySideEditor } from '../../../common/editor.js';
+import { extractSelection } from '../../../../platform/opener/common/opener.js';
 
 export async function copyFilePath(accessor: ServicesAccessor, resourceArgument?: unknown, selectedResources?: unknown): Promise<void> {
 	const paths = resolveCopyResources(accessor, resourceArgument, selectedResources).map(resource => resource.scheme === Schemas.file ? resource.fsPath : getRemoteWorkspacePath(resource));
@@ -37,10 +38,12 @@ function resolveCopyResources(accessor: ServicesAccessor, argument: unknown, sel
 		return selectedResources.map(resource => resolveFileResource(accessor, resource));
 	}
 	if (argument === undefined || argument instanceof URI) {
-		const explorer = accessor.get(IExplorerService);
-		const selection = explorer.getContext();
-		if (argument === undefined && explorer.hasViewFocus() && selection.length) {
-			return selection.map(item => resolveFileResource(accessor, item.resource));
+		if (argument === undefined) {
+			const explorer = accessor.get(IExplorerService);
+			const selection = explorer.getContext();
+			if (explorer.hasViewFocus() && selection.length) {
+				return selection.map(item => resolveFileResource(accessor, item.resource));
+			}
 		}
 		return [resolveFileResource(accessor, argument)];
 	}
@@ -65,7 +68,7 @@ export function resolveFileResource(accessor: ServicesAccessor, resourceArgument
 	if (resource.scheme !== Schemas.file && !isRemoteResource(resource)) {
 		throw new Error(localize({ bundle: 'ash', key: 'workbench.copyPathUnsupported' }, 'This editor does not have a file path.'));
 	}
-	return resource;
+	return extractSelection(resource).uri;
 }
 
 export async function revealInExplorer(accessor: ServicesAccessor, resourceArgument?: unknown): Promise<void> {

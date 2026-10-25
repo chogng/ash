@@ -194,17 +194,17 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 					const id = this.appContextId(source);
 					const model = this.inputPart.attachmentModel;
 					const owned = (attachment: ChatContextAttachment) => attachment.id === id || attachment.id.startsWith(`${id}:image:`);
-					for (const attachment of model.attachments.filter(owned)) model.delete(attachment.id);
 					const lifetime = new DisposableStore();
 					const name = localize('chat.mcpApp.contextLabel', 'App context');
 					const attachments: ChatContextAttachment[] = [
 						...(text ? [{ id, kind: 'mcpApp', lifetime: 'source' as const, name, resolve: async () => ({ name, content: text }) }] : []),
 						...images.map((image, index) => ({ ...image, id: `${id}:image:${index}`, lifetime: 'source' as const })),
 					];
-					for (const attachment of attachments) {
-						model.addContext(attachment);
-						lifetime.add(toDisposable(() => { if (model.attachments.includes(attachment)) model.delete(attachment.id); }));
-					}
+					model.updateContext(model.attachments.filter(owned).map(attachment => attachment.id), attachments);
+					lifetime.add(toDisposable(() => {
+						// An older App lease cannot revoke a capture published by its replacement.
+						model.delete(...attachments.filter(attachment => model.attachments.includes(attachment)).map(attachment => attachment.id));
+					}));
 					return lifetime;
 				},
 				sendMessage: async (source, text, signal, images = []) => {

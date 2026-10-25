@@ -20,6 +20,7 @@ import { IWorkingCopyService } from '../../../../../services/workingCopy/common/
 import { emptyEditorServiceState } from '../../../../../test/common/testEditorService.js';
 import { ChatAttachmentModel } from '../../../browser/attachments/chatAttachmentModel.js';
 import { ImplicitContextAttachmentWidget } from '../../../browser/attachments/implicitContextAttachment.js';
+import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../../../browser/attachments/chatAttachmentResolveService.js';
 
 setARIAContainer(document.body);
 
@@ -35,10 +36,11 @@ function setup(resources: DisposableStore, read: (resource: URI) => Promise<stri
 		get activeEditor() { return activeEditor; },
 		openEditor: async () => { }, focusActiveEditor() { },
 	});
-	services.registerInstance(IFileService, { readFile: async (resource: URI) => ({ content: await read(resource) }) } as unknown as IFileService);
+	services.registerInstance(IFileService, { hasProvider: () => true, readFile: async (resource: URI) => ({ content: await read(resource) }) } as unknown as IFileService);
 	services.registerInstance(IWorkingCopyService, { get: () => unsaved === undefined ? [] : [{ backupKind: 'text', backup: () => unsaved }] } as unknown as IWorkingCopyService);
 	services.registerInstance(IWorkspaceContextService, {} as IWorkspaceContextService);
 	services.registerInstance(IFileSearchService, {} as IFileSearchService);
+	services.registerSingleton(IChatAttachmentResolveService, () => services.createInstance(ChatAttachmentResolveService));
 	const notifications = resources.add(new TestNotificationService());
 	services.registerInstance(INotificationService, notifications);
 	const attachments = resources.add(new ChatAttachmentModel());

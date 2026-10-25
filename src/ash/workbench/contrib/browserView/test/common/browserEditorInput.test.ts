@@ -1,3 +1,13 @@
+import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { observableValue } from '../../../../../base/common/observable.js';
+import {
+	isChatContextPickerPickItem,
+	type IChatContextPickerItem,
+	type IChatContextValueItem,
+	type IChatContextPickerPickItem,
+} from '../../../chat/browser/attachments/chatContextPickService.js';
+import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
+import { IChatContextPickService } from '../../../chat/browser/attachments/chatContextPickService.js';
 import type { BrowserEditor } from '../../electron-browser/browserEditor.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -15,8 +25,8 @@ import { BrowserViewUri } from '../../../../../platform/browserView/common/brows
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { BrowserEditorChatIntegration } from '../../electron-browser/features/browserEditorChatFeatures.js';
-import { ChatContextPickService } from '../../../../services/chat/browser/chatContextPickService.js';
-import { IChatContextPickService } from '../../../../services/chat/common/chatContextService.js';
+import { ChatContextPickService } from '../../../../contrib/chat/browser/attachments/chatContextPickService.js';
+
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 
 const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
@@ -124,9 +134,9 @@ suite('Browser editor page model and restoration', () => {
 		modelChanges.fire({ model, isNew: false });
 		assert.equal(contexts.items.length, 1);
 		f.events.fire({ type: 'elementPicked', targetId: id, data: { elementId: 'element-one', comment: 'Review spacing', outerHTML: '<button>Pick</button>', computedStyle: 'display: block', bounds: { x: 0, y: 0, width: 30, height: 20 } } });
-		const picks = await contexts.items[0]!.providePicks('Review');
+		const picks = await readContextPicks(contexts.items[0]!, 'Review');
 		assert.equal(picks.length, 1);
-		assert.match((await picks[0]!.attachment.resolve()).content, /Review spacing/);
+		assert.match((await (await selectedAttachment(picks[0]!)).resolve()).content, /Review spacing/);
 		left.dispose();
 		assert.equal(contexts.items.length, 1);
 		const screenshot = promiseWithResolvers<VSBuffer>();
@@ -175,4 +185,33 @@ function fixture() {
 		getOrCreateLazy: input, createBrowserView: async () => { throw new Error('Not used in serializer fixture'); },
 	});
 	return Object.assign(f, { service, instantiation, input });
+}
+
+
+async function readContextPicks(source: IChatContextPickerItem | IChatContextValueItem, query: string): Promise<IChatContextPickerPickItem[]> {
+	if (source.type !== 'pickerPick') throw new Error('Expected the registered picker contract');
+	const picker = source.asPicker();
+	const cancellation = new CancellationTokenSource();
+	try {
+		if (typeof picker.picks !== 'function') return (await picker.picks).filter(isChatContextPickerPickItem);
+		const state = picker.picks(observableValue('test.query', query), cancellation.token);
+		if (!state.get().busy) {
+			if (state.get().error) throw state.get().error;
+			return state.get().picks.filter(isChatContextPickerPickItem);
+		}
+		return await new Promise((resolve, reject) => {
+			const listener = state.onDidChange(value => {
+				if (value.busy) return;
+				listener.dispose();
+				if (value.error) reject(value.error);
+				else resolve(value.picks.filter(isChatContextPickerPickItem));
+			});
+		});
+	} finally { cancellation.dispose(true); picker.dispose?.(); }
+}
+
+async function selectedAttachment(item: IChatContextPickerPickItem): Promise<ChatContextAttachment> {
+	const result = await item.asAttachment();
+	if (result === 'noop' || Array.isArray(result)) throw new Error('Expected one captured context');
+	return result;
 }

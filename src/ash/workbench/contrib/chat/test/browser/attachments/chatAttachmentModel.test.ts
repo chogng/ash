@@ -2,12 +2,46 @@ import { isCancellationError } from '../../../../../../base/common/errors.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
-import { ChatAttachmentModel } from '../../../browser/attachments/chatAttachmentModel.js';
+import { ChatAttachmentModel, type IChatAttachmentChangeEvent } from '../../../browser/attachments/chatAttachmentModel.js';
 import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
 
 function attachment(id: string): ChatContextAttachment {
 	return { id, kind: 'file', name: id, resolve: async () => ({ name: id, content: id }) };
 }
+
+test('Attachment replacement publishes one committed change and preserves source identity', () => {
+	using model = new ChatAttachmentModel();
+	const first = attachment('first');
+	const source = { ...attachment('source'), lifetime: 'source' as const };
+	const changes: IChatAttachmentChangeEvent[] = [];
+	using changed = model.onDidChange(event => {
+		changes.push(event);
+		assert.deepEqual(model.getAttachmentIDs(), new Set(model.attachments.map(entry => entry.id)));
+	});
+	model.addContext(first, source);
+	const replacement = { ...first, name: 'Updated first' };
+	model.updateContext(['source'], [replacement, attachment('next')]);
+	assert.deepEqual(changes, [
+		{ deleted: [], added: [first, source], updated: [] },
+		{ deleted: ['source'], added: [model.attachments[1]], updated: [replacement] },
+	]);
+	model.addContext(replacement);
+	assert.equal(changes.length, 2);
+	model.clearAndSetContext(source);
+	assert.equal(changes.length, 3);
+	assert.equal(model.attachments[0], source);
+	model.dispose();
+	assert.deepEqual(model.attachments, []);
+	assert.equal(changes.length, 3);
+});
+
+test('Image admission deduplicates one capture both within a batch and across batches', () => {
+	using model = new ChatAttachmentModel();
+	const original = { ...attachment('image'), kind: 'image', name: 'Original image' };
+	model.addContext(original, { ...original, name: 'Duplicate name' });
+	model.addContext({ ...original, name: 'Later image' });
+	assert.deepEqual(model.attachments, [original]);
+});
 
 test('Attachment preparation waits for every batch and adds each batch atomically', async () => {
 	using model = new ChatAttachmentModel();

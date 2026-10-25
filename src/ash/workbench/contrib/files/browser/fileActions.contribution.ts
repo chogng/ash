@@ -14,7 +14,7 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
-import { EditorsVisibleContext, MultipleEditorsSelectedInGroupContext, ResourceSchemeContext, WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
+import { EditorsVisibleContext, MultipleEditorsSelectedInGroupContext, ResourceSchemeContext, ResourceSetContext, WorkspaceFolderCountContext } from '../../../common/contextkeys.js';
 import { IUntitledTextEditorService } from '../../../services/untitled/common/untitledTextEditorService.js';
 import { UntitledTextEditorInput } from '../../../services/untitled/common/untitledTextEditorInput.js';
 import { ASH_REMOTE_SCHEME, isRemoteResource } from '../../../../platform/remote/common/remote.js';
@@ -279,6 +279,26 @@ MenusRegistry.appendMenuItem(MenuId.EditorTitleContext, {
 	group: '2_files',
 	order: 20,
 });
+
+for (const id of [MenuId.ChatInputResourceAttachmentContext, MenuId.ChatInputSymbolAttachmentContext]) {
+	MenusRegistry.appendMenuItem(id, {
+		command: { id: OPEN_TO_SIDE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.openToSide' }, 'Open to the Side') },
+		when: ContextKeyExpr.and(ResourceSetContext.isEqualTo(true), ExplorerFolderContext.isEqualTo(false)),
+		group: 'navigation', order: 10,
+	});
+	MenusRegistry.appendMenuItem(id, {
+		command: { id: REVEAL_IN_EXPLORER_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'files.revealInExplorer' }, 'Reveal in Explorer View') },
+		when: fileResourceWhen, group: 'navigation', order: 20,
+	});
+	MenusRegistry.appendMenuItem(id, {
+		command: { id: COPY_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path') },
+		when: fileResourceWhen, group: '1_cutcopypaste', order: 10,
+	});
+	MenusRegistry.appendMenuItem(id, {
+		command: { id: COPY_RELATIVE_PATH_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path') },
+		when: fileResourceWhen, group: '1_cutcopypaste', order: 20,
+	});
+}
 
 MenusRegistry.appendMenuItem(MenuId.ExplorerContext, {
 	command: { id: NEW_FILE_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.newFile' }, 'New File...') },

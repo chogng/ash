@@ -98,7 +98,6 @@ import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibi
 import { ChatService } from "../../../workbench/services/chat/browser/chatService.js";
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
-import { BrowserImageEditorService } from '../../../workbench/services/imageEditor/browser/browserImageEditorService.js';
 import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from "../../../workbench/services/chat/common/chatService.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
@@ -114,7 +113,8 @@ import { ContextKeyService, IContextKeyService } from "../../../platform/context
 import { DialogResult, IDialogService, type IMessageDialogOptions } from '../../../platform/dialogs/common/dialogs.js';
 import { TestQuickInputService } from "../../../platform/quickinput/test/browser/testQuickInputService.js";
 import { Dimension, h } from "../../../base/browser/dom.js";
-import type { IFileService } from '../../../platform/files/common/files.js';
+import { FileKind, IFileService } from '../../../platform/files/common/files.js';
+import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import { URI } from "../../../base/common/uri.js";
 import { ICommandService } from "../../../platform/commands/common/commands.js";
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -143,7 +143,6 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 	services.registerInstance(IHostService, new TestHostService());
-	services.registerSingleton(IImageEditorService, () => services.createInstance(BrowserImageEditorService));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(IContextViewService, contextView);
@@ -941,6 +940,40 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 	} catch (error) { resources.dispose(); throw error; }
 }
 
+for (const surface of ['chat', 'cowork'] as const) test(`Sessions ${surface} receives source drops through shared snapshot and undo owners`, async () => {
+	using fixture = await sessionsInputFixture();
+	fixture.input.dispose();
+	let sourceText = 'Original dropped source';
+	fixture.services.registerInstance(IFileService, {
+		hasProvider: () => true,
+		stat: async () => ({ kind: FileKind.File }),
+		readFile: async () => ({ content: sourceText }),
+	} as unknown as IFileService);
+	fixture.services.registerSingleton(IChatAttachmentResolveService, () => fixture.services.createInstance(ChatAttachmentResolveService));
+	fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
+	using input = surface === 'chat'
+		? fixture.services.createInstance(SessionsInputForTest, document.body, fixture.delegate, fixture.model)
+		: fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model);
+	input.render(fixture.model.inputState);
+	input.appendToDraft('Review ');
+	const values = ['file:///workspace/first.ts', 'file:///workspace/second.ts'];
+	const event = new browserEnvironment.window.MouseEvent('drop', { bubbles: true, cancelable: true });
+	Object.defineProperty(event, 'dataTransfer', { value: { types: ['ResourceURLs'], files: [], getData: (type: string) => type === 'ResourceURLs' ? JSON.stringify(values) : '' } });
+	input.element.querySelector('.ash-chat-input-container')!.dispatchEvent(event);
+	assert.equal(event.defaultPrevented, true);
+	const captured = (await input.captureDraft())!.draft;
+	assert.equal(captured.text, 'Review first.ts second.ts ');
+	assert.deepEqual(captured.contexts.map(context => [context.resource, context.content]), values.map(resource => [resource, 'Original dropped source']));
+	sourceText = 'Changed after the drop';
+	const model = input.inputEditor!.getModel()!;
+	model.undo();
+	assert.equal(model.getValue(), 'Review ');
+	model.redo();
+	const restored = (await input.captureDraft())!.draft;
+	assert.equal(restored.text, captured.text);
+	assert.deepEqual(restored.contexts, captured.contexts);
+});
+
 test('Cowork composer submits the exact Skill reference through the shared input', async () => {
 	const canvas = browserEnvironment.window.HTMLCanvasElement.prototype;
 	const originalGetContext = canvas.getContext;
@@ -1328,7 +1361,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.equal(contextResolutions, 1);
 	assert.deepEqual(fake.turnStartRequests[0]?.input, [
 		{ type: "context", name: "Git commit abc1234", content: "diff --git a/file b/file" },
-		{ type: "text", text: "abc1234 · Explain context transport Hello from an untitled session" },
+		{ type: "text", text: " Hello from an untitled session" },
 	]);
 	assert.equal(untitledPane.querySelector(".ash-chat-input-attachment-item"), null);
 	assert.equal(sessions.untitledSessions.length, 0);
@@ -4830,7 +4863,7 @@ for (const locale of ['en', 'zh-CN']) {
 			assert.deepEqual((await pane.captureActiveDraft())?.draft.contexts?.map(context => context.name), ['fixture.txt']);
 			assert.equal(fake.turnStartRequests.length, 0);
 			await pane.acceptInput();
-			assert.deepEqual(fake.turnStartRequests.map(request => request.input), [[{ type: 'context', name: 'fixture.txt', content: 'Synthetic context' }, { type: 'text', text: originalDraft.trim() }]]);
+			assert.deepEqual(fake.turnStartRequests.map(request => request.input), [[{ type: 'text', text: 'Keep this draft ' }, { type: 'context', name: 'fixture.txt', content: 'Synthetic context' }]]);
 		} finally { resetNlsResolver(); }
 	});
 }
@@ -5014,7 +5047,10 @@ test('composer navigation stable A sends held file context exactly once', async 
 	await sending;
 	assert.equal(fake.turnStartRequests.length, 1);
 	assert.equal(fake.turnStartRequests[0]!.threadId, 'thread-1');
-	assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'context', name: 'stable-A.txt', content: 'Stable A contents' }, { type: 'text', text: 'Stable A request stable-A.txt' }]);
+	assert.deepEqual(fake.turnStartRequests[0]!.input, [
+		{ type: 'text', text: 'Stable A request ' },
+		{ type: 'context', name: 'stable-A.txt', content: 'Stable A contents' },
+	]);
 	assert.equal(input.value, '');
 	assert.equal(chatPane.querySelectorAll('.ash-chat-input-attachment-item').length, 0);
 });
@@ -5223,8 +5259,8 @@ for (const navigate of [false, true]) {
 			assert.equal(fake.turnStartRequests[0]!.threadId, 'thread-1');
 			assert.equal(contextResolutions, 1);
 			assert.deepEqual(fake.turnStartRequests[0]!.input, [
+				{ type: 'text', text: 'Original first request ' },
 				{ type: 'context', name: 'original.txt', content: 'Original request context' },
-				{ type: 'text', text: 'Original first request original.txt' },
 			]);
 			assert.equal(original.querySelectorAll('.ash-chat-input-attachment-item').length, 0);
 		}
@@ -5306,7 +5342,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await configuration.updateValue(ChatAIDisabledSettingId, false);
 			await pane.acceptInput();
 			assert.equal(fake.turnStartRequests.length, 1);
-			assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'context', name: 'fixture.txt', content: 'Synthetic context' }, { type: 'text', text: originalDraft.trim() }]);
+			assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'text', text: 'Keep this AI-disabled draft ' }, { type: 'context', name: 'fixture.txt', content: 'Synthetic context' }]);
 		} finally { resetNlsResolver(); }
 	});
 }

@@ -277,8 +277,6 @@ import { IKeyboardShortcutTroubleshootingService } from "../../workbench/service
 import { IPreferencesService } from "../../workbench/services/preferences/common/preferences.js";
 import { PreferencesService } from "../../workbench/services/preferences/browser/preferencesService.js";
 import "../../workbench/services/quickinput/browser/quickInputService.js";
-import { ChatContextPickService } from "../../workbench/services/chat/browser/chatContextPickService.js";
-import { IChatContextPickService } from "../../workbench/services/chat/common/chatContextService.js";
 import { WorkbenchWindow } from "../../workbench/browser/window.js";
 import { IAccountService } from '../../platform/accounts/common/accountService.js';
 import { IGitHubService } from '../../platform/github/common/githubService.js';
@@ -703,7 +701,6 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IMenuService, menus);
 		const contextViews = this._register(new BrowserContextViewService(this.layoutService.activeContainer, this.layoutService));
 		services.registerInstance(IContextViewService, contextViews);
-		services.registerInstance(IChatContextPickService, new ChatContextPickService());
 		const contextMenus = this._register(options.createContextMenuService(services));
 		services.registerInstance(IContextMenuService, contextMenus);
 		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, this.domNode, notificationService.model, feedbackHost, notificationActionRunner, undefined, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));

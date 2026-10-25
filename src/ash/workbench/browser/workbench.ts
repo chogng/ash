@@ -331,8 +331,6 @@ import { IKeyboardShortcutTroubleshootingService } from "../services/keybinding/
 import { IPreferencesService } from "../services/preferences/common/preferences.js";
 import { PreferencesService } from "../services/preferences/browser/preferencesService.js";
 import "../services/quickinput/browser/quickInputService.js";
-import { ChatContextPickService } from "../services/chat/browser/chatContextPickService.js";
-import { IChatContextPickService } from "../services/chat/common/chatContextService.js";
 import type { IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { BrowserClipboardService } from "../services/clipboard/browser/clipboardService.js";
 import { IClipboardService } from "../../platform/clipboard/common/clipboardService.js";
@@ -991,7 +989,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IMenuService, menus);
 		const contextViews = this._register(new BrowserContextViewService(layoutService.activeContainer, layoutService));
 		services.registerInstance(IContextViewService, contextViews);
-		services.registerInstance(IChatContextPickService, new ChatContextPickService());
 		services.registerSingleton(IPreferencesService, () => services.createInstance(PreferencesService));
 		const contextMenus = this._register(createContextMenuService(services));
 		services.registerInstance(IContextMenuService, contextMenus);

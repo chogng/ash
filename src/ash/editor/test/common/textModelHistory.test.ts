@@ -5,6 +5,27 @@ import { Selection } from "../../common/core/selection.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { UndoRedoGroup } from "../../../platform/undoRedo/common/undoRedo.js";
 
+test('Same-text forced replacements move markers and keep their alternative versions through undo and redo', () => {
+	using model = new TextModel('same.ts');
+	const marker = model.deltaDecorations([], [{ range: new Range(1, 3, 1, 3), options: { description: 'replacement-marker' } }])[0]!;
+	const before = model.getAlternativeVersionId();
+	const events: number[] = [];
+	using listener = model.onDidChangeContent(() => events.push(model.getAlternativeVersionId()));
+	model.pushEditOperations(null, [{ range: model.getFullModelRange(), text: 'same.ts', forceMoveMarkers: true }], () => null);
+	model.pushStackElement();
+	const after = model.getAlternativeVersionId();
+	assert.notEqual(after, before);
+	assert.equal(model.getText(), 'same.ts');
+	assert.equal(model.getDecorationRange(marker)!.startColumn, 8);
+	model.undo();
+	assert.equal(model.getText(), 'same.ts');
+	assert.equal(model.getAlternativeVersionId(), before);
+	model.redo();
+	assert.equal(model.getText(), 'same.ts');
+	assert.equal(model.getAlternativeVersionId(), after);
+	assert.deepEqual(events, [after, before, after]);
+});
+
 test("TextModel applyEdits bypasses history and returns identified inverse operations", () => {
 	using model = new TextModel("abc");
 	const identifier = { major: 7, minor: 3 };

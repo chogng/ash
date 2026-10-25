@@ -1,5 +1,6 @@
 {
   "ash": {
+    "scm.history.sourceUnavailable": "原源代码管理仓库不可用。仍可查看保存的附件内容。",
     "statusbar.label": "状态栏",
     "statusbar.hideEntry": "隐藏“{0}”",
     "statusbar.focus": "聚焦状态栏",
@@ -1419,6 +1420,9 @@
     "terminal.title.useProfile": "使用 {0}",
     "bulkEdit.noneApplied": "未应用任何修改",
     "bulkEdit.resourcesChanged": "已修改 {0} 个资源",
+    "bulkEdit.embeddedStale": "应用编辑前，输入内容已更改。",
+    "bulkEdit.embeddedChangedDuringEdit": "应用编辑时，输入内容发生了更改。",
+    "bulkEdit.embeddedReplacementStale": "替换粘贴选项前，输入内容已更改。",
     "bulkEdit.autoSaveFailed": "修改已应用，但自动保存失败：{0}",
     "bulkEdit.autoSaveDescription": "控制是否自动保存重构修改的文件。",
     "bulkEdit.autoSaveTitle": "重构后保存文件",

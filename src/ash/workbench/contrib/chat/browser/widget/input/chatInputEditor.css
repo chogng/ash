@@ -16,40 +16,14 @@
 	cursor: pointer;
 }
 
-/* The actual attachment is one IconLabel widget; this object only reserves its inline position. */
+/* Each attachment owns its visible control; this object reserves its atomic inline position. */
 .ash-chat-input-editor
 	.stanza-editor
 	.view-lines
 	.stanza-editor-line-text
-	> .ash-chat-code-reference-space {
+	> :is(
+		.ash-chat-code-reference-space,
+		.ash-chat-attachment-reference-space
+	) {
 	color: transparent;
-}
-
-.ash-chat-input-editor
-	:is(.ash-chat-image-reference, .ash-chat-context-reference) {
-	display: inline-block;
-	line-height: var(--ash-chat-context-reference-height);
-	vertical-align: top;
-	color: var(--ash-foreground);
-	background-color: var(--ash-button-secondaryBackground);
-	border-radius: var(--ash-cornerRadius-small);
-	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
-	box-decoration-break: clone;
-	cursor: pointer;
-}
-
-.ash-chat-input-editor
-	:is(.ash-chat-image-reference-space, .ash-chat-context-reference-space) {
-	display: inline-block;
-	width: 2em;
-	color: transparent;
-}
-
-.ash-chat-input-editor
-	:is(
-		.ash-chat-image-reference,
-		.ash-chat-context-reference
-	).stanza-editor-selected-text {
-	color: var(--ash-editor-selectionForeground);
-	background-color: var(--ash-editor-selectionBackground);
 }

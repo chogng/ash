@@ -16,6 +16,8 @@ import { IFilesConfigurationService } from '../../../services/filesConfiguration
 import { IExplorerService } from './files.js';
 import { IWorkspaceEditingService } from '../../../services/workspaces/common/workspaceEditing.js';
 import { FileEditorInput } from './editors/fileEditorInput.js';
+import { extractSelection } from '../../../../platform/opener/common/opener.js';
+import { Range } from '../../../../editor/common/core/range.js';
 
 // Command registration lives in fileActions.contribution.ts. Download is implemented there by FileDownload.
 export const NEW_FILE_COMMAND_ID = 'explorer.newFile';
@@ -196,8 +198,15 @@ export async function deleteExplorerItem(accessor: ServicesAccessor): Promise<vo
 	for (const item of items) await files.delete(item.resource, 'error', 'recursive');
 }
 
-/** Handles {@link OPEN_TO_SIDE_COMMAND_ID} for a selected file. */
-export async function openExplorerItemToSide(accessor: ServicesAccessor): Promise<void> {
+/** Explicit resource menus must not borrow a different Explorer selection. */
+export async function openExplorerItemToSide(accessor: ServicesAccessor, resource?: unknown): Promise<void> {
+	if (resource !== undefined) {
+		if (!URI.isUri(resource)) throw new TypeError('Open to the side requires a resource URI');
+		const { uri, selection } = extractSelection(resource);
+		const range = selection ? new Range(selection.startLineNumber, selection.startColumn, selection.endLineNumber ?? selection.startLineNumber, selection.endColumn ?? selection.startColumn) : undefined;
+		await accessor.get(IEditorService).openEditor({ resource: uri }, { pinned: true, selection: range }, 'sideGroup');
+		return;
+	}
 	const item = accessor.get(IExplorerService).getContext()[0];
 	if (item?.kind === FileKind.File) {
 		await accessor.get(IEditorService).openEditor(new FileEditorInput(item.resource, { label: item.name }), { pinned: true }, 'sideGroup');

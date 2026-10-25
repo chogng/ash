@@ -3,11 +3,17 @@ import { CancellationError } from '../../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 
+export interface IChatAttachmentChangeEvent {
+	readonly deleted: readonly string[];
+	readonly added: readonly ChatContextAttachment[];
+	readonly updated: readonly ChatContextAttachment[];
+}
+
 /** Owns the attachments of one composer, including identity during an in-flight submission. */
 export class ChatAttachmentModel extends Disposable {
 	private readonly entries = new Map<string, ChatContextAttachment>();
 	private readonly pending = new Map<Promise<readonly ChatContextAttachment[]>, { readonly controller: AbortController; readonly editsMessage: boolean; }>();
-	private readonly changes = this._register(new Emitter<void>());
+	private readonly changes = this._register(new Emitter<IChatAttachmentChangeEvent>());
 	public readonly onDidChange = this.changes.event;
 	private readonly preparationChanges = this._register(new Emitter<void>());
 	/** Draft lifetimes must also observe unfinished acquisitions, without treating them as attached entries. */
@@ -15,7 +21,7 @@ export class ChatAttachmentModel extends Disposable {
 
 	constructor() {
 		super();
-		this._register(toDisposable(() => this.cancelPendingContext()));
+		this._register(toDisposable(() => { this.cancelPendingContext(); this.entries.clear(); }));
 	}
 
 	public get hasPendingContext(): boolean {
@@ -82,23 +88,41 @@ export class ChatAttachmentModel extends Disposable {
 		return this.entries.size;
 	}
 
+	public getAttachmentIDs(): Set<string> {
+		return new Set(this.entries.keys());
+	}
+
 	public addContext(...attachments: ChatContextAttachment[]): void {
-		if (attachments.length === 0) return;
-		for (const attachment of attachments) {
-			// Identical image bytes share one entry, including the original preview name and in-flight identity.
-			if (attachment.kind !== 'image' || !this.entries.has(attachment.id)) this.entries.set(attachment.id, attachment);
-		}
-		this.changes.fire();
+		// Content-identical image IDs retain the original capture and preview name.
+		const imageIds = this.getAttachmentIDs();
+		this.updateContext([], attachments.filter(attachment => {
+			if (attachment.kind !== 'image') return true;
+			if (imageIds.has(attachment.id)) return false;
+			imageIds.add(attachment.id);
+			return true;
+		}));
+	}
+
+	/** Replaces current identities atomically; undo snapshots remain owned by the reference history. */
+	public clearAndSetContext(...attachments: ChatContextAttachment[]): void {
+		this.updateContext(this.entries.keys(), attachments);
 	}
 
 	public delete(...ids: string[]): void {
-		let changed = false;
-		for (const id of ids) {
-			changed = this.entries.delete(id) || changed;
-		}
-		if (changed) {
-			this.changes.fire();
-		}
+		this.updateContext(ids, []);
+	}
+
+	public updateContext(toDelete: Iterable<string>, upsert: Iterable<ChatContextAttachment>): void {
+		const next = new Map(this.entries);
+		for (const id of toDelete) next.delete(id);
+		for (const attachment of upsert) next.set(attachment.id, attachment);
+		const deleted = [...this.entries.keys()].filter(id => !next.has(id));
+		const added = [...next.values()].filter(attachment => !this.entries.has(attachment.id));
+		const updated = [...next.values()].filter(attachment => this.entries.has(attachment.id) && this.entries.get(attachment.id) !== attachment);
+		if (!deleted.length && !added.length && !updated.length) return;
+		this.entries.clear();
+		for (const [id, attachment] of next) this.entries.set(id, attachment);
+		this.changes.fire({ deleted, added, updated });
 	}
 
 	public clear(): void {
@@ -106,7 +130,6 @@ export class ChatAttachmentModel extends Disposable {
 		if (this.entries.size === 0) {
 			return;
 		}
-		this.entries.clear();
-		this.changes.fire();
+		this.clearAndSetContext();
 	}
 }

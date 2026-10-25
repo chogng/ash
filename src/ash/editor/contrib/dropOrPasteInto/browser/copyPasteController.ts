@@ -12,7 +12,7 @@ import {
 } from '../../../../base/common/dataTransfer.js';
 import { onUnexpectedExternalError } from '../../../../base/common/errors.js';
 import { HierarchicalKind } from '../../../../base/common/hierarchicalKind.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Mimes } from '../../../../base/common/mime.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
@@ -32,6 +32,7 @@ import { CodeEditorStateFlag, EditorState, EditorStateCancellationTokenSource } 
 import { DefaultTextPasteOrDropEditProvider } from './defaultProviders.js';
 import { sortEditsByYieldTo } from './edit.js';
 import { PostEditWidgetManager } from './postEditWidget.js';
+import { PasteEditSession } from './pasteEditSession.js';
 
 type PasteEditWithProvider = DocumentPasteEdit & { readonly provider: DocumentPasteEditProvider; };
 interface PreparedCopy {
@@ -87,7 +88,10 @@ export class CopyPasteController extends Disposable implements IEditorContributi
 	}
 
 	changePasteType(): void { this.postEditWidget.tryShowSelector(); }
-	clearWidgets(): void { this.postEditWidget.clear(); }
+	clearWidgets(): void {
+		this.currentOperation?.dispose(true);
+		this.postEditWidget.clear();
+	}
 
 	async pasteAs(preferred?: PastePreference): Promise<void> {
 		if (!this.editor.hasModel() || this.editor.inComposition || this.editor.getOption(EditorOption.readOnly)) return;
@@ -192,9 +196,17 @@ export class CopyPasteController extends Disposable implements IEditorContributi
 			text: event.dataToCopy.text,
 			mimeTypes: providers.flatMap(provider => provider.copyMimeTypes),
 			source,
-			results: providers.map(provider => Promise.resolve()
-				.then(() => provider.prepareDocumentPaste!(model, event.dataToCopy.sourceRanges, transfer, source.token))
-				.catch(error => onUnexpectedExternalError(error))),
+			// A cut removes the selection as soon as this event returns. Providers must
+			// capture their source now, although their transferred data may settle later.
+			results: providers.map(provider => {
+				try {
+					return Promise.resolve(provider.prepareDocumentPaste!(model, event.dataToCopy.sourceRanges, transfer, source.token))
+						.catch(error => onUnexpectedExternalError(error));
+				} catch (error) {
+					onUnexpectedExternalError(error);
+					return Promise.resolve(undefined);
+				}
+			}),
 		};
 	}
 
@@ -252,7 +264,8 @@ export class CopyPasteController extends Disposable implements IEditorContributi
 		const model = this.editor.getModel();
 		if (!model) return;
 		const state = new EditorStateCancellationTokenSource(this.editor, CodeEditorStateFlag.Value | CodeEditorStateFlag.Selection, undefined, operation.token);
-		using sessions = new DisposableStore();
+		using sessionOwner = new MutableDisposable<DisposableStore>();
+		const sessions = sessionOwner.value = new DisposableStore();
 		let edits: PasteEditWithProvider[] = [];
 		try {
 			if (prepared) {
@@ -344,6 +357,7 @@ export class CopyPasteController extends Disposable implements IEditorContributi
 			activeEditIndex = 0;
 			showSelector = false;
 		}
+		using editSession = new PasteEditSession(selectedEdits, sessionOwner.clearAndLeak());
 		await this.postEditWidget.applyEditAndShowIfNeeded(
 			ranges,
 			{ allEdits: selectedEdits, activeEditIndex },
@@ -352,6 +366,7 @@ export class CopyPasteController extends Disposable implements IEditorContributi
 				? { ...edit, ...await edit.provider.resolveDocumentPasteEdit(edit, token) }
 				: edit,
 			operation.token,
+			editSession,
 		);
 	}
 

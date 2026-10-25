@@ -34,6 +34,7 @@ import { createBinaryDiffEditorInput, createDiffEditorInput } from '../../../../
 import { JSDOM } from 'jsdom';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { Range } from '../../../../../editor/common/core/range.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { IClipboardService, type IClipboardResources } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -70,6 +71,19 @@ const fileCommandRoots = [
 	{ name: 'Windows drive', uri: 'file:///C:/project' },
 	{ name: 'UNC', uri: 'file://fileserver/share/project' },
 ] as const;
+
+test('attachment side-open commands preserve explicit source and range without consulting Explorer selection', async () => {
+	await import('../../browser/fileActions.contribution.js');
+	using services = createFileActionServices();
+	const calls: unknown[] = [];
+	services.registerInstance(IExplorerService, { getContext: () => { assert.fail('Explicit attachment must not read Explorer selection'); } } as unknown as IExplorerService);
+	services.registerInstance(IEditorService, { openEditor: async (input, options, target) => { calls.push({ input, options, target }); } } as EditorServiceContract);
+	using commands = new CommandService(services);
+	const resource = URI.parse('file:///project/captured.ts#3,2-5,6');
+	await commands.executeCommand(OPEN_TO_SIDE_COMMAND_ID, resource);
+	assert.deepEqual(calls, [{ input: { resource: URI.file('/project/captured.ts') }, options: { pinned: true, selection: new Range(3, 2, 5, 6) }, target: 'sideGroup' }]);
+	await assert.rejects(commands.executeCommand(OPEN_TO_SIDE_COMMAND_ID, 'file:///project/invalid.ts'), /requires a resource URI/);
+});
 
 test('Explorer path and side-opening defaults match VS Code inside and outside editor focus', async () => {
 	await import('../../browser/fileActions.contribution.js');

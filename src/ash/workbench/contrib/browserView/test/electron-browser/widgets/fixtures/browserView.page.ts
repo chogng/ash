@@ -1,3 +1,4 @@
+import { IChatContextPickService } from '../../../../../chat/browser/attachments/chatContextPickService.js';
 import '../../../../electron-browser/browserView.contribution.js';
 import { Emitter, Event } from '../../../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../../../base/common/lifecycle.js';
@@ -34,8 +35,8 @@ import { IEditorPart } from '../../../../../../browser/parts/editor/editorPart.j
 import { IBrowserViewWorkbenchService } from '../../../../common/browserView.js';
 import { BrowserZoomService, IBrowserZoomService } from '../../../../common/browserZoomService.js';
 import { IBrowserAutoReloadService } from '../../../../electron-browser/features/browserAutoReloadFeatures.js';
-import { IChatContextPickService } from '../../../../../../services/chat/common/chatContextService.js';
-import { ChatContextPickService } from '../../../../../../services/chat/browser/chatContextPickService.js';
+
+import { ChatContextPickService } from '../../../../../../contrib/chat/browser/attachments/chatContextPickService.js';
 import { productLanguagePackCatalogs } from '../../../../../../services/localization/common/localizationCatalogs.js';
 import { BrowserStorageService } from '../../../../../../services/storage/browser/storageService.js';
 import { IQuickInputService } from '../../../../../../../platform/quickinput/common/quickInput.js';

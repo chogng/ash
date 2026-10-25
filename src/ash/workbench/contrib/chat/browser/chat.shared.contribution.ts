@@ -3,6 +3,10 @@ import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTra
 import { parseBackend, parseLocalModel, parseCloudProvider, parseInputDevice, parseLanguage } from '../common/constants.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService, DICTATION_MODEL_SETTING } from './speechToText/chatSpeechToTextService.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from './speechToText/voiceCodeTranscriptionClient.js';
+import { IChatContextPickService, ChatContextPickService } from './attachments/chatContextPickService.js';
+import { ChatAttachmentResolveService, IChatAttachmentResolveService } from './attachments/chatAttachmentResolveService.js';
+import { ChatPasteTargetService } from './attachments/chatPasteTargetService.js';
+import { IChatPasteTargetService } from './chat.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -17,6 +21,11 @@ import { ILanguageModelToolsService } from '../common/tools/languageModelToolsSe
 import { LanguageModelToolsService } from './tools/languageModelToolsService.js';
 import { IChatWidgetService } from './chat.js';
 import { ChatWidgetService } from './widget/chatWidgetService.js';
+import { CopyTextProvider } from './widget/input/editor/chatPasteProviders.js';
+import { ChatAttachmentWidgetRegistry, IChatAttachmentWidgetRegistry } from './attachments/chatAttachmentWidgetRegistry.js';
+import { ChatReferenceAttachmentWidgetContribution } from './attachments/chatReferenceAttachmentWidget.contribution.js';
+import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import './chatManagement/chatManagement.contribution.js';
 
 import { ChatSessionArchiveActionWording, ChatSessionArchiveActionWordingSettingId } from '../../../../platform/chat/common/sessionArchiveActions.js';
@@ -25,8 +34,24 @@ import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSe
 registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Delayed);
 registerSingleton(IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, InstantiationType.Delayed);
 registerSingleton(IChatWidgetService, ChatWidgetService, InstantiationType.Delayed);
+registerSingleton(IChatContextPickService, ChatContextPickService, InstantiationType.Delayed);
+registerSingleton(IChatAttachmentResolveService, ChatAttachmentResolveService, InstantiationType.Delayed);
+registerSingleton(IChatPasteTargetService, ChatPasteTargetService, InstantiationType.Delayed);
+registerSingleton(IChatAttachmentWidgetRegistry, ChatAttachmentWidgetRegistry, InstantiationType.Delayed);
+
+registerWorkbenchContribution(ChatReferenceAttachmentWidgetContribution.ID, WorkbenchPhase.BlockStartup, accessor =>
+	accessor.get(IInstantiationService).createInstance(ChatReferenceAttachmentWidgetContribution));
 
 registerSingleton(ILanguageModelToolsService, LanguageModelToolsService, InstantiationType.Delayed);
+
+// Copy can happen before any composer exists. Its prepared clipboard data belongs
+// to the window; receiving paste providers remain owned by each live input.
+registerWorkbenchContribution('workbench.contrib.chatCopyText', WorkbenchPhase.BlockStartup, accessor => {
+	return accessor.get(ILanguageFeaturesService).documentPasteEditProvider.register(
+		{ scheme: '*', hasAccessToAllModels: true },
+		accessor.get(IInstantiationService).createInstance(CopyTextProvider),
+	);
+});
 
 registerWorkbenchContribution('workbench.contrib.chatEnablement', WorkbenchPhase.BlockStartup, accessor => {
 	const configuration = accessor.get(IConfigurationService);

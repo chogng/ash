@@ -11,6 +11,7 @@ import { Lxicon } from "../../../../base/common/lxicons.js";
 
 import { equals } from '../../../../base/common/arrays.js';
 import { URI } from '../../../../base/common/uri.js';
+import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { ResourceTree, type IResourceNode } from '../../../../base/common/resourceTree.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -33,7 +34,7 @@ import { toOpenEditorOptions, type IOpenEditorOptions } from "../../../../platfo
 import { IHoverService, type IManagedHover } from "../../../../platform/hover/browser/hoverService.js";
 import { IResourceLabelService, type ResourceLabels } from "../../../browser/labels.js";
 import { IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
-import { SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId, SCMHistoryUnavailableError, type ISCMHistoryItemComparison, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel, type ISCMHistoryProvider, type SCMHistoryItemChangeViewModelTreeElement, type SCMHistoryItemViewModelTreeElement } from '../common/history.js';
+import { SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId, SCMHistoryUnavailableError, SCMHistoryItemUri, type ISCMHistoryItemComparison, type ISCMHistoryItem, type ISCMHistoryItemChange, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel, type ISCMHistoryProvider, type SCMHistoryItemChangeViewModelTreeElement, type SCMHistoryItemViewModelTreeElement } from '../common/history.js';
 import { ISCMService, ISCMViewService } from '../common/scm.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IEditorService } from "../../../services/editor/common/editorService.js";
@@ -55,19 +56,27 @@ registerAction2(class extends Action2 {
 		});
 	}
 
-	public override async run(accessor: ServicesAccessor, element: SCMHistoryItemViewModelTreeElement, comparison?: ISCMHistoryItemComparison): Promise<void> {
-		if (element?.type !== 'historyItemViewModel') { return; }
-		// Extension commands return serialized repository identities, so resolve the SCM owner.
-		const repository = accessor.get(ISCMService).getRepository(element.repository?.provider?.id);
-		if (!repository) { return; }
-		const { historyItemViewModel } = element;
-		const provider = repository.provider.historyProvider;
-		if (!provider) { return; }
-		const historyItem = historyItemViewModel.historyItem;
-		const revision = historyItem.comparison?.revision ?? historyItem.id;
-		const baseRevision = comparison?.baseId ?? historyItem.comparison?.baseRevision ?? historyItem.parentIds[0];
+	public override async run(accessor: ServicesAccessor, element: SCMHistoryItemViewModelTreeElement | URI, comparison?: ISCMHistoryItemComparison | string, token: CancellationToken = CancellationToken.None): Promise<void> {
+		if (!CancellationToken.isCancellationToken(token) || token.isCancellationRequested) return;
+		const source = URI.isUri(element) ? SCMHistoryItemUri.fromUri(element) : undefined;
+		if (URI.isUri(element) ? !source || source.path !== undefined : element?.type !== 'historyItemViewModel') return;
+		const scm = accessor.get(ISCMService);
+		const repository = scm.getRepository(source ? source.repositoryId : (element as SCMHistoryItemViewModelTreeElement).repository?.provider?.id);
+		const provider = repository?.provider.historyProvider;
+		if (!repository || !provider) {
+			if (source) throw new SCMHistoryUnavailableError(localize('scm.history.sourceUnavailable', 'The original source control repository is unavailable. The saved attachment content is still available.'));
+			return;
+		}
+		const historyItem = source ? undefined : (element as SCMHistoryItemViewModelTreeElement).historyItemViewModel.historyItem;
+		const selectedComparison = typeof comparison === 'object' ? comparison : undefined;
+		const revision = source?.revision ?? historyItem!.comparison?.revision ?? historyItem!.id;
+		const baseRevision = source ? source.baseRevision : selectedComparison?.baseId ?? historyItem!.comparison?.baseRevision ?? historyItem!.parentIds[0];
+		const title = source ? (typeof comparison === 'string' ? comparison : revision) : selectedComparison?.label ?? (historyItem!.comparison ? historyItem!.subject : `${historyItem!.displayId ?? historyItem!.id} · ${historyItem!.subject}`);
+		const isCurrent = () => !token.isCancellationRequested && scm.getRepository(repository.id) === repository && repository.provider.historyProvider === provider;
 		await accessor.get(IProgressService).withProgress({ location: 'ash.gitGraph', delay: 100 }, async () => {
+			if (!isCurrent()) return;
 			const changes = await provider.provideHistoryItemChanges(revision, baseRevision);
+			if (!isCurrent()) return;
 			if (!changes?.length) {
 				if (changes) { accessor.get(INotificationService).info(localize('scm.history.noChanges', 'There are no changes between these versions.')); }
 				return;
@@ -82,17 +91,19 @@ registerAction2(class extends Action2 {
 					return {
 						binary: file.original.kind === 'binary' || file.modified.kind === 'binary',
 						label: change.originalPath ? `${change.originalPath} → ${change.path}` : change.path,
-						original: { resource: change.originalUri ?? change.uri, readOnly: true, initialText: file.original.kind === 'text' ? file.original.text : '' },
-						modified: { resource: change.modifiedUri ?? change.uri, readOnly: true, initialText: file.modified.kind === 'text' ? file.modified.text : '' },
+						original: { resource: source ? historyFileResource(source, change, true, file.parentId) : change.originalUri ?? change.uri, readOnly: true, initialText: file.original.kind === 'text' ? file.original.text : '' },
+						modified: { resource: source ? historyFileResource(source, change, false) : change.modifiedUri ?? change.uri, readOnly: true, initialText: file.modified.kind === 'text' ? file.modified.text : '' },
 					};
 				}));
+				if (!isCurrent()) return;
 				items.push(...batch);
 			}
 			const resource = URI.from({ scheme: 'ash-multi-diff', path: `/scm-history/${repository.id}/${baseRevision ?? 'parent'}/${revision}` });
-			const title = comparison?.label ?? (historyItem.comparison ? historyItem.subject : `${historyItem.displayId ?? historyItem.id} · ${historyItem.subject}`);
-			await accessor.get(IEditorService).openEditor(createMultiDiffEditorInput(resource, items, title, { kind: 'snapshot', repositoryId: repository.id, label: historyItem.displayId ?? historyItem.id }), { pinned: true });
+			await accessor.get(IEditorService).openEditor(createMultiDiffEditorInput(resource, items, title, { kind: 'snapshot', repositoryId: repository.id, label: historyItem?.displayId ?? revision }), { pinned: true });
 		}).catch(error => {
-			accessor.get(INotificationService).error(error instanceof Error ? error : String(error));
+			if (!isCurrent()) return;
+			// The attachment owns source-action errors; menu invocations retain graph notifications.
+			if (!source) accessor.get(INotificationService).error(error instanceof Error ? error : String(error));
 			throw error;
 		});
 	}
@@ -110,27 +121,50 @@ registerAction2(class extends Action2 {
 		});
 	}
 
-	public override async run(accessor: ServicesAccessor, element: SCMHistoryItemChangeViewModelTreeElement): Promise<void> {
-		if (element?.type !== 'historyItemChangeViewModel') { return; }
-		const { repository, historyItemViewModel, historyItemChange } = element;
-		const provider = repository.provider.historyProvider;
-		if (!provider) { return; }
-		const historyItem = historyItemViewModel.historyItem;
-		const file = await provider.resolveHistoryItemChangeContents(historyItem.comparison?.revision ?? historyItem.id, historyItemChange);
-		if (file.modified.kind === 'missing') { return; }
-		if (file.modified.kind === 'binary' && !file.modified.bytes) {
+	public override async run(accessor: ServicesAccessor, element: SCMHistoryItemChangeViewModelTreeElement | URI, _label?: string, token: CancellationToken = CancellationToken.None): Promise<void> {
+		if (!CancellationToken.isCancellationToken(token) || token.isCancellationRequested) return;
+		const source = URI.isUri(element) ? SCMHistoryItemUri.fromUri(element) : undefined;
+		if (URI.isUri(element) ? !source?.path : element?.type !== 'historyItemChangeViewModel') return;
+		const scm = source ? accessor.get(ISCMService) : undefined;
+		const repository = source ? scm!.getRepository(source.repositoryId) : (element as SCMHistoryItemChangeViewModelTreeElement).repository;
+		const provider = repository?.provider.historyProvider;
+		if (!repository || !provider) {
+			if (source) throw new SCMHistoryUnavailableError(localize('scm.history.sourceUnavailable', 'The original source control repository is unavailable. The saved attachment content is still available.'));
+			return;
+		}
+		const isCurrent = () => !token.isCancellationRequested && (!source || scm!.getRepository(repository.id) === repository) && repository.provider.historyProvider === provider;
+		const historyItem = source ? undefined : (element as SCMHistoryItemChangeViewModelTreeElement).historyItemViewModel.historyItem;
+		const revision = source?.revision ?? historyItem!.comparison?.revision ?? historyItem!.id;
+		const historyItemChange = source ? (await provider.provideHistoryItemChanges(revision, source.baseRevision))?.find(change => change.path === source.path) : (element as SCMHistoryItemChangeViewModelTreeElement).historyItemChange;
+		if (!isCurrent() || !historyItemChange) return;
+		const file = await provider.resolveHistoryItemChangeContents(revision, historyItemChange);
+		if (!isCurrent()) return;
+		// A copied deletion still has a historical file: use its captured parent, never the workspace.
+		const original = !!source && file.modified.kind === 'missing';
+		const contents = original ? file.original : file.modified;
+		if (contents.kind === 'missing') return;
+		if (contents.kind === 'binary' && !contents.bytes) {
 			accessor.get(INotificationService).info(localize('scm.history.binaryUnavailable', 'The history provider did not supply binary file contents.'));
 			return;
 		}
 		const name = historyItemChange.path.split('/').at(-1) ?? historyItemChange.path;
 		await accessor.get(IEditorService).openEditor({
-			resource: historyItemChange.modifiedUri ?? historyItemChange.uri,
-			label: `${name} (${historyItem.displayId ?? historyItem.comparison?.revision.slice(0, 7) ?? historyItem.id})`,
+			resource: source ? historyFileResource(source, historyItemChange, original, file.parentId) : historyItemChange.modifiedUri ?? historyItemChange.uri,
+			label: `${name} (${original ? (source?.baseRevision ?? file.parentId)?.slice(0, 7) ?? 'empty' : historyItem?.displayId ?? revision.slice(0, 7)})`,
 			readOnly: true,
-			...(file.modified.kind === 'text' ? { initialText: file.modified.text } : { initialBytes: file.modified.bytes, contentType: 'application/octet-stream' }),
-		});
+			...(contents.kind === 'text' ? { initialText: contents.text } : { initialBytes: contents.bytes, contentType: 'application/octet-stream' }),
+		}, source ? { pinned: true } : undefined);
 	}
 });
+
+/** Providers may omit revision URIs. Such snapshots must not borrow a working-file model or alias diff sides. */
+function historyFileResource(source: NonNullable<ReturnType<typeof SCMHistoryItemUri.fromUri>>, change: ISCMHistoryItemChange, original: boolean, parentId?: string): URI {
+	return (original ? change.originalUri : change.modifiedUri) ?? SCMHistoryItemUri.toUri({
+		repositoryId: source.repositoryId,
+		revision: original ? source.baseRevision ?? parentId ?? source.revision : source.revision,
+		path: original ? change.originalPath ?? change.path : change.path,
+	}).with({ fragment: original ? 'original' : 'modified' });
+}
 
 type HistoryItemRefsFilter = 'auto' | 'all' | readonly string[];
 const HistoryViewMode = new RawContextKey<'list' | 'tree'>('scmHistoryViewMode', 'list');

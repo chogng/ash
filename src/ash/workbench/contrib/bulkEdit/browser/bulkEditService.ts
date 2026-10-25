@@ -3,6 +3,9 @@ import { BulkFileEdits } from './bulkFileEdits.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { normalizeTextLineEndings } from '../../../../editor/common/core/textChange.js';
 import { TextModel, type TextModelUndoRedoSnapshot } from '../../../../editor/common/model/textModel.js';
+import { EditOperation } from '../../../../editor/common/core/editOperation.js';
+import { Range } from '../../../../editor/common/core/range.js';
+import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { ITextModelResourceService, type TextModelReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { FileKind, FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
@@ -144,6 +147,13 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 			previewed = true;
 			if (signal.aborted || edits.length === 0) return { ariaSummary: localize('bulkEdit.noneApplied', 'No edits were applied'), isApplied: false };
 		}
+		const editorModel = options.editor?.getModel();
+		if (!sourceEdit && editorModel instanceof TextModel && !this.files.hasProvider(editorModel.uri)
+			&& edits.every((edit): edit is ResourceTextEdit => edit instanceof ResourceTextEdit && edit.resource.toString() === editorModel.uri.toString())) {
+			// Embedded inputs own their models, not a persisted file. Keep their text,
+			// cursor history and reference metadata on that exact model's undo stack.
+			return this.applyToEmbeddedEditor(options.editor!, editorModel, edits, signal);
+		}
 		const edit = sourceEdit && !previewed ? sourceEdit : await toLanguageWorkspaceEdit(edits);
 		throwIfCancelled(signal);
 		if (edit.entries.length === 0) return { ariaSummary: localize('bulkEdit.noneApplied', 'No edits were applied'), isApplied: false };
@@ -190,6 +200,43 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 			}
 		};
 		return { ariaSummary: localize('bulkEdit.resourcesChanged', '{0} resources changed', result.resources.length), isApplied: true, undo, resources: result.resources };
+	}
+
+	private applyToEmbeddedEditor(editor: ICodeEditor, model: TextModel, edits: readonly ResourceTextEdit[], signal: AbortSignal): IBulkEditResult {
+		throwIfCancelled(signal);
+		for (const edit of edits) {
+			if (edit.versionId !== undefined && edit.versionId !== model.getVersionId() || !model.isValidRange(edit.textEdit.range)) {
+				throw new WorkspaceEditConflictError(localize('bulkEdit.embeddedStale', 'The input changed before the edit could be applied.'));
+			}
+		}
+		const before = model.getAlternativeVersionId();
+		const appliedVersion = model.getVersionId() + 1;
+		model.pushStackElement();
+		model.pushEditOperations(editor.getSelections(), edits.map(edit => EditOperation.replaceMove(Range.lift(edit.textEdit.range), edit.textEdit.text)), () => null);
+		model.pushStackElement();
+		if (before === model.getAlternativeVersionId()) return { ariaSummary: localize('bulkEdit.noneApplied', 'No edits were applied'), isApplied: false };
+		// A content listener may retire this input and install a newer draft. Never
+		// return an undo handle (or roll back cancellation) against that newer state.
+		if (model.getVersionId() !== appliedVersion) {
+			throw new WorkspaceEditConflictError(localize('bulkEdit.embeddedChangedDuringEdit', 'The input changed while the edit was being applied.'));
+		}
+		const after = model.getAlternativeVersionId();
+		const text = model.getText();
+		if (signal.aborted) {
+			model.undo();
+			throwIfCancelled(signal);
+		}
+		return {
+			ariaSummary: localize('bulkEdit.resourcesChanged', '{0} resources changed', 1),
+			isApplied: true,
+			resources: [model.uri],
+			undo: async () => {
+				if (model.isDisposed() || model.getAlternativeVersionId() !== after || model.getText() !== text) {
+					throw new WorkspaceEditConflictError(localize('bulkEdit.embeddedReplacementStale', 'The input changed before the paste option could be replaced.'));
+				}
+				model.undo();
+			},
+		};
 	}
 
 	private async applyTransaction(value: LanguageWorkspaceEdit, signal: AbortSignal, options: IBulkEditOptions): Promise<WorkspaceEditResult> {

@@ -1,8 +1,17 @@
+import { CancellationTokenSource } from '../../../../../../base/common/cancellation.js';
+import { observableValue } from '../../../../../../base/common/observable.js';
+import {
+	isChatContextPickerPickItem,
+	type IChatContextPickerItem,
+	type IChatContextValueItem,
+	type IChatContextPickerPickItem,
+} from '../../../../chat/browser/attachments/chatContextPickService.js';
+import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
 import { IExtensionService } from '../../../../../services/extensions/common/extensionService.js';
 import { IStatusbarService } from '../../../../../services/statusbar/browser/statusbar.js';
 import { StatusbarPart, StatusbarService } from '../../../../../browser/parts/statusbar/statusbarPart.js';
 import { StatusBarColorProvider } from '../../../browser/statusbarColorProvider.js';
-import { ChatContextPickService } from '../../../../../services/chat/browser/chatContextPickService.js';
+import { ChatContextPickService, IChatContextPickService } from '../../../../../contrib/chat/browser/attachments/chatContextPickService.js';
 import { DebugChatContextContribution } from '../../../browser/debugChatIntegration.js';
 import { ContentHoverController } from '../../../../../../editor/contrib/hover/browser/contentHoverController.js';
 import { ICodeEditorService } from '../../../../../../editor/browser/services/codeEditorService.js';
@@ -197,7 +206,8 @@ if (new URLSearchParams(location.search).has('status-color')) {
 	store.add(services.createInstance(StatusBarColorProvider));
 }
 const chatContexts = new ChatContextPickService();
-store.add(new DebugChatContextContribution(debug, chatContexts));
+services.registerInstance(IChatContextPickService, chatContexts);
+store.add(services.createInstance(DebugChatContextContribution));
 const disassemblyContainer = document.createElement('div');
 document.body.append(disassemblyContainer);
 const disassembly = store.add(registerTestComponentServices(services).createInstance(DisassemblyView));
@@ -239,7 +249,7 @@ window.ashDebugIntegration = {
 	},
 	endSessions: () => { for (const candidate of debug.sessions) (candidate as MockDebugSession).state = 'terminated'; debug.activate(undefined); },
 	loadedSourcesView: async () => { await services.get(IViewsService).openView('workbench.debug.loadedScriptsView', true); },
-	chatContext: async () => (await chatContexts.items[0].providePicks('parent'))[0]?.attachment.resolve(),
+	chatContext: async () => readContextPicks(chatContexts.items[0]!, 'parent').then(async picks => picks[0] ? (await selectedAttachment(picks[0])).resolve() : undefined),
 	debugHover: () => { editor.setPosition(new Position(2, 14)); editor.getContribution<ContentHoverController>('editor.contrib.hover')!.showContentHover(new Position(2, 14)); },
 	quickAccess: () => services.get(IQuickInputService).quickAccess.show('debug '),
 	showDebugHelp: () => services.get(IAccessibleViewService).show(AccessibleViewType.Help),
@@ -407,4 +417,33 @@ declare global {
 			dispose(): void;
 		};
 	}
+}
+
+
+async function readContextPicks(source: IChatContextPickerItem | IChatContextValueItem, query: string): Promise<IChatContextPickerPickItem[]> {
+	if (source.type !== 'pickerPick') throw new Error('Expected the registered picker contract');
+	const picker = source.asPicker();
+	const cancellation = new CancellationTokenSource();
+	try {
+		if (typeof picker.picks !== 'function') return (await picker.picks).filter(isChatContextPickerPickItem);
+		const state = picker.picks(observableValue('test.query', query), cancellation.token);
+		if (!state.get().busy) {
+			if (state.get().error) throw state.get().error;
+			return state.get().picks.filter(isChatContextPickerPickItem);
+		}
+		return await new Promise((resolve, reject) => {
+			const listener = state.onDidChange(value => {
+				if (value.busy) return;
+				listener.dispose();
+				if (value.error) reject(value.error);
+				else resolve(value.picks.filter(isChatContextPickerPickItem));
+			});
+		});
+	} finally { cancellation.dispose(true); picker.dispose?.(); }
+}
+
+async function selectedAttachment(item: IChatContextPickerPickItem): Promise<ChatContextAttachment> {
+	const result = await item.asAttachment();
+	if (result === 'noop' || Array.isArray(result)) throw new Error('Expected one captured context');
+	return result;
 }

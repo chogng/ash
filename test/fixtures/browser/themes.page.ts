@@ -229,11 +229,12 @@ window.mountDefaultStyleProbes = (withDisabledSelectOption = false) => {
 	tree.setFocus('Styled tree item');
 	window.openStyledTreeFind = () => tree.openFind();
 	window.openStyledDialog = () => {
-		const dialog = resources.add(new Dialog(host, {
-			title: 'Styled dialog', content: 'Style inheritance probe',
+		const dialog = resources.add(new Dialog(host, 'Styled dialog', ['Styled done'], {
+			detail: 'Style inheritance probe',
 			dialogStyles: { ...defaultDialogStyles, dialogBackground: 'var(--ash-selection-background)' },
 			buttonStyles: getButtonStyles({ buttonBackground: 'error.foreground' }),
-			buttons: [{ label: 'Styled done', value: 'done', presentation: 'primary' }],
+			checkboxStyles: defaultCheckboxStyles,
+			inputBoxStyles: defaultInputBoxStyles,
 		}));
 		void dialog.show().finally(() => dialog.dispose());
 	};

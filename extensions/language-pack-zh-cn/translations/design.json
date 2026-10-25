@@ -747,7 +747,7 @@
     "projects.noMaterials": "为此项目添加第一份资料。",
     "projects.removeMaterial": "从项目中移除 {0}",
     "projects.useFolder": "使用文件夹",
-    "projects.useFolderTooltip": "当你在这台计算机上使用此项目时，Ash 可以在此文件夹中工作。",
+    "projects.useFolderTooltip": "在此电脑上使用此项目时，Ash 可以在该文件夹中工作。",
     "projects.referenceHint": "文件保留在原位置。",
     "projects.addMaterials": "添加项目资料",
     "projects.pickFailed": "无法添加这些资料。请重试。",

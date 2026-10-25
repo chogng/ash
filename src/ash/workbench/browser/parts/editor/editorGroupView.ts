@@ -27,6 +27,7 @@ import type { EditorOpenOptions } from "./editorInput.js";
 import type { EditorCloseOptions } from '../../../services/editor/common/editorGroupsService.js';
 import type { ISaveEditorsOptions } from '../../../services/editor/common/editorService.js';
 import { Schemas } from '../../../../base/common/network.js';
+import { extractSelection } from '../../../../platform/opener/common/opener.js';
 import type { IEditorGroupView } from './editor.js';
 import { ActiveEditorContext, ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceLanguageIdContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
@@ -58,7 +59,7 @@ import type { FileElement } from './breadcrumbsModel.js';
 import type { IBreadcrumbsService } from './breadcrumbs.js';
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { LanguageDocumentSymbol } from '../../../../editor/common/languages.js';
-import type { Range } from '../../../../editor/common/core/range.js';
+import { Range } from '../../../../editor/common/core/range.js';
 import { associatedEditorId, DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration, EditorEnablePreviewConfiguration, type EditorAssociations } from './editorConfiguration.js';
 import { ActiveEditorGroupLockedContext } from '../../../common/contextkeys.js';
 import { EditorFocusRecentEditorAfterCloseConfiguration } from '../../../services/editor/common/editorConfiguration.js';
@@ -816,9 +817,12 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const inputs = await extractExternalEditorInputs(dataTransfer);
 		let index = this.getEditorInsertionIndex(target, position);
 		for (const input of inputs) {
+			const { uri, selection } = extractSelection(input.resource);
+			const source = selection ? { ...input, resource: uri } : input;
 			// A specialized host must not replace its content with an unsupported file drop.
-			if (!this.registry.getEditorPanesForInput(input).length) continue;
-			await this.openEditor(input, { index });
+			if (!this.registry.getEditorPanesForInput(source).length) continue;
+			const range = selection ? new Range(selection.startLineNumber, selection.startColumn, selection.endLineNumber ?? selection.startLineNumber, selection.endColumn ?? selection.startColumn) : undefined;
+			await this.openEditor(source, { index, selection: range });
 			index += 1;
 		}
 	}
