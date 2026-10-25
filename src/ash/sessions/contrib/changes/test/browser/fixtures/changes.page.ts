@@ -50,6 +50,7 @@ import { ChecksOperationService } from '../../../browser/checksOperationService.
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
 import type { IRendererHost } from '../../../../../../platform/renderer/common/rendererHost.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../../../../browser/agentHost/sessionProviderScopeService.js';
+import { CustomViewService, ICustomViewService } from '../../../../../services/customView/browser/customViewService.js';
 
 const chineseMessages = { ash: { ...chinese.ash, ...chineseWorkbench.ash } };
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', chineseMessages); }
@@ -59,6 +60,7 @@ const services = resources.add(new InstantiationService());
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'changes-integration', flushInterval: 0 })));
 registerTestComponentServices(services);
 services.registerInstance(ILogService, new NullLoggerService());
+services.registerSingleton(ICustomViewService, () => services.createInstance(CustomViewService));
 services.registerSingleton(IDecorationsService, () => services.createInstance(DecorationsService, document));
 services.registerSingleton(IChangesViewService, () => resources.add(services.createInstance(ChangesViewService)));
 services.registerSingleton(ISessionChangesService, () => services.createInstance(SessionChangesService));
