@@ -23,6 +23,7 @@ import { Emitter, Event } from "../../../base/common/event.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import type { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
 import { SessionsList } from "../../browser/parts/sidebar/sessionsList.js";
+import { readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
 
 
 const listCustomViews = { activeCustomView: observableValue('testCustomView', undefined) } as unknown as ICustomViewService;
@@ -42,6 +43,9 @@ test("SessionsList keeps session buttons and focus while refreshing", async () =
 		{ untitledSessionId: "first", title: "First" },
 		{ untitledSessionId: "second", title: "Second" },
 	];
+	for (const session of untitledSessions) {
+		writeNewChatDraftState(storage, { mode: 'agent', text: session.title, contexts: [] }, `untitled:${session.untitledSessionId}`);
+	}
 	const sessionService = {
 		get untitledSessions() { return untitledSessions; },
 		sessions: [],
@@ -80,7 +84,7 @@ test("SessionsList keeps session buttons and focus while refreshing", async () =
 	assert.equal(refreshed[0], buttons[0]);
 	assert.equal(refreshed[1], buttons[1]);
 	assert.equal(dom.window.document.activeElement, buttons[0]);
-	assert.equal(refreshed[0].textContent, "Renamed");
+	assert.equal(refreshed[0].textContent, "Renamed (draft)");
 	refreshed[0].click();
 	assert.deepEqual(opened, ["first"]);
 	assert.equal(list.domNode.querySelector('input[type=search]'), null);
@@ -100,6 +104,66 @@ test("SessionsList keeps session buttons and focus while refreshing", async () =
 	changes.dispose();
 	dom.window.close();
 });
+
+for (const mode of ['chat', 'code'] as const) {
+	for (const locale of ['en', 'zh-CN']) {
+		test(`SessionsList hides empty drafts and retains content drafts in ${mode} in ${locale}`, () => {
+			const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+			setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(locale === 'zh-CN' ? chinese.bundles[bundle]?.[key] ?? fallback : fallback, parameters));
+			try {
+				const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+				using domLifetime = toDisposable(() => dom.window.close());
+				using changes = new Emitter<void>();
+				using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'draft-list', flushInterval: 0 });
+				const blank = { untitledSessionId: 'blank', title: '' };
+				const attachment = { untitledSessionId: 'attachment', title: 'Attachment' };
+				const corrupt = { untitledSessionId: 'corrupt', title: 'Unreadable' };
+				let drafts = [blank, attachment, corrupt];
+				const saved = { sessionId: 'saved', title: 'Saved conversation', status: 'active', chats: [{ threadId: 'root', origin: { type: 'root' }, status: 'active' }] };
+				const management = { get untitledSessions() { return drafts; }, sessions: [saved], state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
+				const opened: string[] = [];
+				const view = {
+					onDidChange: changes.event,
+					activeSelection: { kind: 'untitled', session: blank },
+					visibleSelections: [{ kind: 'untitled', session: blank }],
+					openUntitledSession(id: string) { opened.push(id); },
+				} as unknown as ISessionsService;
+				using list = new SessionsList(dom.window.document.body, 'Sessions', mode, management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, emptyGroups, storage, emptyProjects, listCommands, listContextMenus, listCustomViews, listMenus, listNotifications);
+				const rowIds = (): string[] => [...list.domNode.querySelectorAll<HTMLElement>('[data-item]')].map(row => row.dataset.item!);
+				assert.deepEqual(rowIds(), ['session:saved']);
+				writeNewChatDraftState(storage, { mode: 'agent', text: ' \n\t', contexts: [] }, 'untitled:blank');
+				assert.deepEqual(rowIds(), ['session:saved']);
+
+				writeNewChatDraftState(storage, { mode: 'agent', text: 'Keep this draft', contexts: [] }, 'untitled:blank');
+				assert.deepEqual(rowIds(), ['untitled:blank', 'session:saved']);
+				const button = list.domNode.querySelector<HTMLButtonElement>('[data-item="untitled:blank"] .ash-sessions-list-item')!;
+				const label = locale === 'zh-CN' ? '新建会话（草稿）' : 'New Session (draft)';
+				assert.equal(button.textContent, label);
+				assert.equal(button.getAttribute('aria-label'), label);
+				assert.equal(button.getAttribute('aria-current'), 'page');
+				button.focus();
+				writeNewChatDraftState(storage, { mode: 'agent', text: 'Keep this draft updated', contexts: [] }, 'untitled:blank');
+				assert.equal(dom.window.document.activeElement, button);
+				assert.equal(list.domNode.querySelector('[data-item="untitled:blank"] .ash-sessions-list-item'), button);
+
+				// The attachment-only draft is parked outside the visible arrangement.
+				writeNewChatDraftState(storage, { mode: 'agent', text: '', contexts: [{ id: 'source', kind: 'file', name: 'source.txt', content: 'Synthetic attachment' }] }, 'untitled:attachment');
+				assert.deepEqual(rowIds(), ['untitled:blank', 'untitled:attachment', 'session:saved']);
+				list.domNode.querySelector<HTMLButtonElement>('[data-item="untitled:attachment"] .ash-sessions-list-item')!.click();
+				assert.deepEqual(opened, ['attachment']);
+				storage.store('sessions.inputDraft:untitled:corrupt', 'invalid JSON', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+				assert.deepEqual(rowIds(), ['untitled:blank', 'untitled:attachment', 'session:saved']);
+
+				writeNewChatDraftState(storage, undefined, 'untitled:blank');
+				assert.deepEqual(rowIds(), ['untitled:attachment', 'session:saved']);
+				drafts = [blank, corrupt];
+				changes.fire();
+				assert.deepEqual(rowIds(), ['session:saved']);
+				assert.equal(readNewChatDraftState(storage, 'untitled:attachment')?.contexts[0]?.name, 'source.txt');
+			} finally { resetNlsResolver(); }
+		});
+	}
+}
 
 
 test('SessionsList updates passive status without changing row identity or selection', async () => {

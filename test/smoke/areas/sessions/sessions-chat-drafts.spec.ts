@@ -10,6 +10,54 @@ import { connectProfile } from './sessionProfileFixture.js';
 
 test.use({ video: 'on' });
 
+test('Sessions sidebar hides blank drafts and restores parked content drafts', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
+	let page = await workbench.openAgentsWindow(target.kind);
+	if (target.kind === 'browser') {
+		await expect.poll(() => page.evaluate(() => globalThis.ashWebWorkbenchHost?.api.appServer.getConnectionState())).toBe('ready');
+	}
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const active = () => page.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork):visible');
+	const drafts = () => page.locator('.ash-sessions-list:visible [data-item^="untitled:"]');
+	await page.locator('[data-action-id="sessions.newSession"] button').click();
+	await expect(drafts()).toHaveCount(0);
+	const identity = await active().getAttribute('data-untitled-session-id');
+	expect(identity).toBeTruthy();
+	let editor = new Editor(active());
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('Keep this unsent sidebar draft');
+	await expect(drafts()).toHaveCount(1);
+	await expect(drafts().locator('.ash-sessions-list-item')).toHaveText('New Session (draft)');
+	await expect(editor.input).toBeFocused();
+
+	await page.locator('[data-action-id="sessions.newSession"] button').click();
+	await expect(active()).not.toHaveAttribute('data-untitled-session-id', identity!);
+	await expect(drafts()).toHaveCount(1);
+	await expect(drafts()).toHaveAttribute('data-item', `untitled:${identity}`);
+	const row = drafts().locator('.ash-sessions-list-item');
+	await row.focus();
+	await row.press('Enter');
+	await expect(active()).toHaveAttribute('data-untitled-session-id', identity!);
+	await new Editor(active()).waitForEditorContents(text => text === 'Keep this unsent sidebar draft');
+
+	page = await workbench.reopenAgentsWindow(application, page);
+	if (target.kind === 'browser') {
+		await expect.poll(() => page.evaluate(() => globalThis.ashWebWorkbenchHost?.api.appServer.getConnectionState())).toBe('ready');
+	}
+	await expect(drafts()).toHaveCount(1);
+	await expect(drafts()).toHaveAttribute('data-item', `untitled:${identity}`);
+	await expect(active()).toHaveAttribute('data-untitled-session-id', identity!);
+	await new Editor(active()).waitForEditorContents(text => text === 'Keep this unsent sidebar draft');
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	await expect(drafts()).toHaveCount(1);
+	editor = new Editor(active());
+	await editor.waitForEditorFocus();
+	await page.keyboard.press('ControlOrMeta+A');
+	await page.keyboard.press('Backspace');
+	await expect(drafts()).toHaveCount(0);
+	await expect(editor.input).toBeFocused();
+	await page.screenshot({ path: testInfo.outputPath('empty-draft-hidden.png') });
+});
+
 for (const locale of ['en', 'zh-CN']) {
 	test(`Sessions file preparation and source drafts survive submission and reopen in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, webAppServer, workbench, restartWorkbench, testWorkspace }, testInfo) => {
 		test.setTimeout(180_000);
@@ -21,8 +69,8 @@ for (const locale of ['en', 'zh-CN']) {
 			({ application, workbench } = await restartWorkbench());
 		}
 		const copy = locale === 'zh-CN'
-			? { code: '代码', picker: '选择聊天模型', auto: '自动', enable: '启用', open: '打开 draft-source.txt' }
-			: { code: 'Code', picker: 'Choose a chat model', auto: 'Auto', enable: 'Enable', open: 'Open draft-source.txt' };
+			? { code: '代码', picker: '选择聊天模型', auto: '自动', enable: '启用', open: '打开 draft-source.txt', addContext: '添加上下文', attachments: '搜索附件' }
+			: { code: 'Code', picker: 'Choose a chat model', auto: 'Auto', enable: 'Enable', open: 'Open draft-source.txt', addContext: 'Add context', attachments: 'Search attachments' };
 		const provider = 'custom-sessions-draft-fixture';
 		const model = { provider, model: 'sessions-draft-model' };
 		const requests: unknown[] = [];
@@ -62,7 +110,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(enabled).toBeChecked();
 			await workbench.page.locator('.ash-modal-editor-close').click();
 			let page = await workbench.openAgentsWindow(target.kind);
-			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 			await page.locator('[data-action-id="sessions.newSession"] button').click();
 			const active = () => page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 			await active().locator('.ash-chat-input-model-action').press('ArrowDown');
@@ -104,9 +152,13 @@ for (const locale of ['en', 'zh-CN']) {
 			const commands = new QuickAccess(page);
 			await commands.open('draft-source.txt');
 			await commands.select('draft-source.txt');
-			const suggested = active().locator('.ash-chat-suggested-context button');
-			await expect(suggested).toBeVisible();
-			await suggested.press('Enter');
+			await new Editor(page.locator('[data-part="editor"]')).waitForEditorContents(text => text.trimEnd() === 'original draft source snapshot');
+			await active().getByRole('button', { name: copy.addContext, exact: true }).click();
+			const attachments = page.getByRole('dialog', { name: copy.attachments, exact: true });
+			await expect(attachments).toBeVisible();
+			await attachments.getByRole('combobox').fill('draft-source.txt');
+			await expect(attachments.getByRole('option')).toHaveCount(1);
+			await attachments.getByRole('combobox').press('Enter');
 			const source = () => active().getByRole('button', { name: copy.open, exact: true });
 			await expect(source()).toBeVisible();
 			await source().hover();
@@ -118,13 +170,13 @@ for (const locale of ['en', 'zh-CN']) {
 			await page.keyboard.insertText('Keep this source draft');
 			const identity = await active().getAttribute('data-untitled-session-id');
 			page = await workbench.reopenAgentsWindow(application, page);
-			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 			await expect(active()).toHaveAttribute('data-untitled-session-id', identity!);
 			await expect(source()).toBeVisible();
 			await source().hover();
 			await expect(page.locator('.ash-hover')).toContainText(sourceUri);
 			await page.mouse.move(0, 0);
-			await new Editor(active()).waitForEditorContents(text => text === 'Keep this source draft');
+			await new Editor(active()).waitForEditorContents(text => text.endsWith('Keep this source draft'));
 			await page.screenshot({ path: testInfo.outputPath('restored-source-draft.png') });
 		} finally {
 			await connection?.close();
