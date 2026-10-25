@@ -48,6 +48,8 @@ import { ILocalTranscriptionModelService, DictationModelState, type ILocalTransc
 import { bindTestColorTheme } from './themeFixture.js';
 import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
+import { noFileIconTheme } from '../../../src/ash/platform/theme/common/themeService.js';
+import { IResourceIconRenderer } from '../../../src/ash/workbench/browser/labels.js';
 import { LocalTranscriptionModelControls } from '../../../src/ash/workbench/contrib/preferences/browser/localTranscriptionModelControls.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
@@ -219,6 +221,7 @@ services.registerInstance(IChatAttachmentResolveService, {
 	resolveImageAttachContext: unexpectedAttachment,
 });
 registerCodeEditorServices(services);
+services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 setARIAContainer(document.body);
 const inputContainer = document.createElement('div');
 inputContainer.style.width = '600px';

@@ -26,6 +26,7 @@ class Connection {
 	readonly waiters = new Set<(request: Request) => void>();
 	startGate: Promise<void> = Promise.resolve();
 	stopGate: Promise<void> = Promise.resolve();
+	cancelGate: Promise<void> = Promise.resolve();
 	stopText: string | null = 'final';
 	onCancel: () => void = () => { };
 	onStop: (resourceId: string) => void = () => { };
@@ -37,7 +38,7 @@ class Connection {
 		for (const listener of this.waiters) listener(request);
 		if (method.method === 'dictation/start') await this.startGate;
 		if (method.method === 'dictation/stop') { this.onStop(params.resourceId); await this.stopGate; return { text: this.stopText }; }
-		if (method.method === 'dictation/cancel') this.onCancel();
+		if (method.method === 'dictation/cancel') { this.onCancel(); await this.cancelGate; }
 		if (method.method === 'dictation/options') return { inputDevices: [], languages: ['en', 'zh'] };
 		return null;
 	}
@@ -76,6 +77,58 @@ test('production DI shares one transcription client and missing host registratio
 	using missing = new InstantiationService();
 	missing.registerSingleton(IConfigurationService, () => new TestConfigurationService());
 	assert.throws(() => missing.createInstance(VoiceCodeTranscriptionClient), /voiceCodeTranscriptionBackendService/);
+});
+
+test('disconnect cancels a pending connection without reviving the transcription session', async () => {
+	using owner = new DisposableStore();
+	const connection = new Connection();
+	const { client } = fixture(owner, connection);
+	const connecting = client.connect({} as Window & typeof globalThis, '');
+	const cancelled = assert.rejects(connecting, isCancellationError);
+	client.disconnect();
+	await cancelled;
+	assert.equal(client.isConnected, false);
+	await assert.rejects(client.startSession(), /connection is unavailable/);
+	assert.deepEqual(connection.requests, []);
+	await open(client);
+	assert.equal(client.isConnected, true);
+});
+
+test('a newer connection supersedes an older attempt waiting for resource release', async () => {
+	using owner = new DisposableStore();
+	const connection = new Connection();
+	const { client } = fixture(owner, connection);
+	const first = client.connect({} as Window & typeof globalThis, '');
+	const cancelled = assert.rejects(first, isCancellationError);
+	const replacement = client.connect({} as Window & typeof globalThis, '');
+	await Promise.all([cancelled, replacement]);
+	assert.equal(client.isConnected, true);
+	await client.startSession();
+	assert.equal(connection.requests.filter(request => request.method === 'dictation/start').length, 1);
+});
+
+test('disconnect settles a pending connection while the previous resource is still cancelling', async () => {
+	using owner = new DisposableStore();
+	const connection = new Connection();
+	const { client } = fixture(owner, connection);
+	await open(client);
+	client.sendPttStart('previous-turn');
+	const gate = new DeferredPromise<void>();
+	connection.cancelGate = gate.p;
+	const connecting = client.connect({} as Window & typeof globalThis, '');
+	const outcome = connecting.then(() => 'connected', error => isCancellationError(error) ? 'cancelled' : 'failed');
+	await connection.whenRequest('dictation/cancel');
+	client.disconnect();
+	try {
+		// Cancellation must settle before the next task even though backend release is still blocked.
+		assert.equal(await Promise.race([outcome, new Promise(resolve => setImmediate(() => resolve('waiting')))]), 'cancelled');
+		assert.equal(client.isConnected, false);
+	} finally {
+		await gate.complete();
+		await outcome;
+	}
+	await open(client);
+	assert.equal(client.isConnected, true);
 });
 
 test('PTT preserves start audio end ordering over the host PCM contract', async () => {
