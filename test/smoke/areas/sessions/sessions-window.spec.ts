@@ -2525,10 +2525,77 @@ test('Sessions Activity Bar changes layout while retaining the same session, dra
 	await editor.waitForEditorContents(text => text === 'Edited from Code context.ts ');
 });
 
+focusTest('Open IDE focuses or creates an IDE while keeping the Agents window and draft', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
+	if (target.kind !== 'electron' || !('windows' in application)) throw new Error('Open IDE requires Electron');
+	const ide = workbench.page;
+	const agents = await workbench.openAgentsWindow(target.kind);
+	await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const editor = new Editor(agents.locator('.ash-sessions-chat-slot.active:visible'));
+	const draft = 'Keep this unsent Agent draft while opening the IDE';
+	await replaceChatInput(editor, draft);
+	const input = await editor.input.elementHandle();
+	const accounts = agents.getByRole('button', { name: 'Accounts', exact: true });
+	const openIde = async (): Promise<void> => {
+		await agents.bringToFront();
+		await accounts.press('Enter');
+		const action = agents.getByRole('menuitem', { name: 'Open IDE', exact: true });
+		await expect(action).toBeVisible();
+		await action.press('Enter');
+		await expect(accounts).toHaveAttribute('aria-expanded', 'false');
+	};
+	// Embedded browser pages also appear in Playwright; only native windows determine coexistence.
+	const windowIds = () => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => window.id).sort((a, b) => a - b));
+	const originalIds = await windowIds();
+	const ideWindow = await application.browserWindow(ide);
+	const ideId = await ideWindow.evaluate(window => window.id);
+	try {
+		for (let attempt = 0; attempt < 2; attempt++) {
+			if (attempt === 0) {
+				await openIde();
+			} else {
+				await agents.bringToFront();
+				await new QuickAccess(agents).runCommand('agents.openAshWindow');
+			}
+			await expect.poll(() => application.evaluate(({ BrowserWindow }, id) => BrowserWindow.getFocusedWindow()?.id, ideId)).toBe(ideId);
+			expect(await windowIds()).toEqual(originalIds);
+			await editor.waitForEditorContents(text => text === draft);
+		}
+
+		const closed = ide.waitForEvent('close');
+		await ideWindow.evaluate(window => window.close());
+		await closed;
+		await expect.poll(async () => (await windowIds()).length).toBe(1);
+		const opened = application.waitForEvent('window');
+		await openIde();
+		const reopened = await opened;
+		await new Workbench(reopened).waitForReady();
+		await expect.poll(async () => (await windowIds()).length).toBe(2);
+		const reopenedWindow = await application.browserWindow(reopened);
+		try {
+			const reopenedId = await reopenedWindow.evaluate(window => window.id);
+			expect(reopenedId).not.toBe(ideId);
+			await expect.poll(() => application.evaluate(({ BrowserWindow }, id) => BrowserWindow.getFocusedWindow()?.id, reopenedId)).toBe(reopenedId);
+			const reopenedIds = await windowIds();
+			await openIde();
+			await expect.poll(() => application.evaluate(({ BrowserWindow }, id) => BrowserWindow.getFocusedWindow()?.id, reopenedId)).toBe(reopenedId);
+			expect(await windowIds()).toEqual(reopenedIds);
+			await expect(agents.locator('.ash-code-sessions-window')).toBeVisible();
+			await editor.waitForEditorContents(text => text === draft);
+			expect(await editor.input.evaluate((element, original) => element === original, input)).toBe(true);
+			await agents.screenshot({ path: testInfo.outputPath('agents-draft-after-open-ide.png') });
+		} finally {
+			await reopenedWindow.dispose();
+		}
+	} finally {
+		await input?.dispose();
+		await ideWindow.dispose();
+	}
+});
+
 test('closing the Workbench keeps Sessions usable and Return to Workbench reopens the workspace', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target }) => {
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-dedicated-close-'));
 	try {
-		const { application, driver, close } = await launchElectron({ appServerMode: target.appServerMode, userDataDirectory });
+		const { application, driver, close } = await launchElectron({ appServerMode: target.appServerMode, userDataDirectory, windowMode: process.platform === 'darwin' ? 'active' : undefined });
 		try {
 			const parent = driver.workbench.page;
 			const childPromise = application.waitForEvent('window');
@@ -2546,7 +2613,7 @@ test('closing the Workbench keeps Sessions usable and Return to Workbench reopen
 			});
 			expect(windows).toEqual({ titles: [expect.stringContaining('Sessions')], connectionKind: 'local' });
 			const workbenchPromise = application.waitForEvent('window');
-			await returnFromSessions(child, application);
+			await new Menus(child).selectApplication(application, ['File', 'Return to Workbench']);
 			const reopened = await workbenchPromise;
 			await expect(reopened.locator('.ash-workbench')).toBeVisible();
 			await expect.poll(() => application.windows().length).toBe(1);

@@ -5,12 +5,12 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { OpenKeyboardShortcutsCommandId } from '../../../../workbench/contrib/preferences/common/preferences.js';
 import type { SessionsPreferences } from '../../preferences/browser/sessionsPreferences.js';
+import { OPEN_ASH_WINDOW_COMMAND_ID } from '../../../common/sessionCommands.js';
 
 /** Sessions account actions shown beside the Activity Bar account button. */
 export class SessionsAccountMenu {
 	constructor(
 		private readonly preferences: SessionsPreferences,
-		private readonly returnToWorkbench: () => void,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@ICommandService private readonly commands: ICommandService,
 	) { }
@@ -23,7 +23,7 @@ export class SessionsAccountMenu {
 		const actions: IAction[] = [
 			{ id: 'ash.sessions.settings', label: settingsLabel, tooltip: settingsLabel, icon: Lxicon.gear, enabled: true, run: () => this.preferences.open() },
 			{ id: 'workbench.action.manageAccounts', label: accountLabel, tooltip: accountLabel, icon: Lxicon.account, enabled: true, run: () => this.commands.executeCommand('workbench.action.manageAccounts') },
-			{ id: 'ash.sessions.returnToWorkbench', label: ideLabel, tooltip: ideLabel, icon: Lxicon.code, enabled: true, run: this.returnToWorkbench },
+			{ id: OPEN_ASH_WINDOW_COMMAND_ID, label: ideLabel, tooltip: ideLabel, icon: Lxicon.code, enabled: true, run: () => this.commands.executeCommand(OPEN_ASH_WINDOW_COMMAND_ID) },
 			{ id: OpenKeyboardShortcutsCommandId, label: shortcutsLabel, tooltip: shortcutsLabel, icon: Lxicon.command, enabled: true, run: () => this.commands.executeCommand(OpenKeyboardShortcutsCommandId) },
 		];
 		anchor.setAttribute('aria-expanded', 'true');
