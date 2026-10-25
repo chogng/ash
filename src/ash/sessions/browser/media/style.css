@@ -2,6 +2,8 @@
  * Layout belongs to workbench.css; page-specific appearances stay with their owners. */
 /* Font rendering is shared; visual weight is owned by the Agents Window. */
 .ash-sessions-window {
+	/* Sizes outside the shared ramp stay scoped to this window. */
+	--ash-sessions-size180: 18px;
 	/* Window-owned type roles also apply to shared widgets and anchored popups. */
 	--ash-fontSize-heading1: 26px;
 	--ash-fontSize-heading2: 18px;

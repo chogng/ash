@@ -63,6 +63,12 @@
 	gap: var(--ash-spacing-size80);
 }
 
+.ash-projects-tools .ash-button .ash-icon-sort {
+	width: 1em;
+	height: 1em;
+	font-size: var(--ash-sessions-size180);
+}
+
 .ash-projects-sort-menu {
 	border-radius: var(--ash-cornerRadius-xLarge);
 }

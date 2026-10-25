@@ -22,6 +22,7 @@ If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `
 
 ## Common rules
 
+- 只修改任务所需的内容；原文无问题就保留，不顺手重写；非必要不添加引用。
 - In `AGENTS.md`, instructions and skills, keep concrete actions, prohibitions and necessary exceptions in one place. Delete duplicated rules, skill triggers or documentation indexes, and prose that adds no constraint.
 - Do not keep competing copies of business state; update it through its owning model or service.
 - Product consumers use domain contracts, not generated transport DTOs.

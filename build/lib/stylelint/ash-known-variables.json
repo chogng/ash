@@ -393,6 +393,7 @@
 		"--ash-select-style-select-list-background",
 		"--ash-sessions-activity-bar-icon-size",
 		"--ash-sessions-inverse-zoom-factor",
+		"--ash-sessions-size180",
 		"--ash-sessions-titlebar-sidebar-width",
 		"--ash-shadow-lg",
 		"--ash-split-view-separator-border",
