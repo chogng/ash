@@ -1,12 +1,208 @@
 import { localize } from '../../../../nls.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { CancellationError } from '../../../../base/common/errors.js';
+import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { basename, dirname } from '../../../../base/common/resources.js';
+import { extname } from '../../../../base/common/path.js';
+import { URI } from '../../../../base/common/uri.js';
+import { ILanguageService } from '../../../../editor/common/languages/language.js';
+import { IModelService } from '../../../../editor/common/services/model.js';
+import { IExtensionManagementService } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { RecommendationSource } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
+import { IFileService, FileKind, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
+import { IFileTextModelService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkspaceExtensionsConfigService } from '../../../services/extensionRecommendations/common/workspaceExtensionsConfig.js';
-import { ExtensionRecommendationReason, type ExtensionRecommendationsSnapshot, type IExtensionRecommendationsService } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
+import { ExtensionRecommendationReason, IExtensionIgnoredRecommendationsService, extensionRecommendationKey as identity, type ExtensionRecommendation, type ExtensionRecommendationsSnapshot, type IExtensionRecommendationsService } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
 
-/** Combines workspace declarations and exclusions without owning package installation state. */
-export class ExtensionRecommendationsService implements IExtensionRecommendationsService {
-	public readonly onDidChangeRecommendations;
-	constructor(@IWorkspaceExtensionsConfigService private readonly configs: IWorkspaceExtensionsConfigService) { this.onDidChangeRecommendations = configs.onDidChangeExtensionsConfigs; }
+const recentKey = 'extensionsAssistant/recentRecommendations';
+const recentDuration = 7 * 24 * 60 * 60 * 1000;
+// Product editor suggestions use package identities, rather than guessing from marketplace search text.
+const editorTips = [
+	{ extensions: ['.ash-doc', '.ash-academy', '.ash-paper'], id: 'ash.academy@ash', name: 'Docs', query: 'academy' },
+	{ extensions: ['.pdf'], id: 'ash.pdf-viewer@ash', name: 'PDF', query: 'pdf' },
+] as const;
+const projectLanguages = [
+	{ filename: 'Cargo.toml', language: 'rust' }, { filename: 'pyproject.toml', language: 'python' },
+	{ filename: 'requirements.txt', language: 'python' }, { filename: 'Pipfile', language: 'python' },
+	{ filename: 'package.json', language: 'javascript' }, { filename: 'go.mod', language: 'go' },
+	{ filename: 'tsconfig.json', language: 'typescript' }, { filename: 'jsconfig.json', language: 'javascript' },
+	{ filename: 'pom.xml', language: 'java' }, { filename: 'build.gradle', language: 'groovy' },
+	{ filename: 'build.gradle.kts', language: 'kotlin' }, { filename: 'composer.json', language: 'php' },
+	{ filename: 'Gemfile', language: 'ruby' }, { filename: 'Dockerfile', language: 'dockerfile' },
+	{ filename: 'CMakeLists.txt', language: 'cmake' }, { filename: 'Makefile', language: 'makefile' },
+] as const;
+
+/** Derives recommendations from the current editors, language catalog and workspace declarations. */
+export class ExtensionRecommendationsService extends Disposable implements IExtensionRecommendationsService {
+	private readonly changed = this._register(new Emitter<void>());
+	public readonly onDidChangeRecommendations = this.changed.event;
+	private readonly watches = this._register(new DisposableStore());
+	private readonly requestedResources = new Map<string, URI>();
+	private generation = 0;
+	private pending: Promise<ExtensionRecommendationsSnapshot> | undefined;
+
+	constructor(
+		@IWorkspaceExtensionsConfigService private readonly configs: IWorkspaceExtensionsConfigService,
+		@IFileTextModelService private readonly models: IFileTextModelService,
+		@IModelService private readonly editorModels: IModelService,
+		@IEditorService private readonly editors: IEditorService,
+		@ILanguageService private readonly languages: ILanguageService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IFileService private readonly files: IFileService,
+		@IExtensionManagementService private readonly packages: IExtensionManagementService,
+		@IExtensionService private readonly extensions: IExtensionService,
+		@IStorageService private readonly storage: IStorageService,
+		@IExtensionIgnoredRecommendationsService private readonly ignored: IExtensionIgnoredRecommendationsService,
+		@IUriIdentityService private readonly uriIdentity: IUriIdentityService,
+	) {
+		super();
+		for (const event of [configs.onDidChangeExtensionsConfigs, editors.onDidActiveEditorChange, editors.onDidVisibleEditorsChange, languages.onDidChange, packages.onDidChangeInstalled, extensions.onDidChange]) {
+			this._register(event(() => this.invalidate()));
+		}
+		this._register(models.onModelAdded(() => this.invalidate()));
+		this._register(models.onModelRemoved(() => this.invalidate()));
+		this._register(models.onModelLanguageChanged(() => this.invalidate()));
+		this._register(editorModels.onModelAdded(() => this.invalidate()));
+		this._register(editorModels.onModelRemoved(() => this.invalidate()));
+		this._register(editorModels.onModelLanguageChanged(() => this.invalidate()));
+		this._register(ignored.onDidChangeIgnoredRecommendations(() => this.invalidate()));
+		this._register(storage.onDidChangeValue(event => { if (event.external && event.scope === StorageScope.PROFILE && event.key === recentKey) { this.invalidate(); } }));
+		this._register(workspace.onDidChangeWorkspace(() => { this.requestedResources.clear(); this.watchProjects(); this.invalidate(); }));
+		this._register(files.onDidChangeFileSystemProviderRegistrations(() => { this.watchProjects(); this.invalidate(); }));
+		this._register(files.onDidChangeFiles(event => {
+			if (!event.resources || this.projectResources().some(({ resource }) => event.resources!.some(changed => uriIdentity.extUri.isEqual(changed, resource) || uriIdentity.extUri.isEqual(changed, dirname(resource))))) { this.invalidate(); }
+		}));
+		this.watchProjects();
+	}
+
+	private invalidate(): void { ++this.generation; this.pending = undefined; this.changed.fire(); }
 	public refresh(): void { this.configs.refresh(); }
+	public recommendForResource(resource: URI): void {
+		// These are recommendation intents, not an additional catalog of open documents.
+		this.requestedResources.set(this.uriIdentity.extUri.getComparisonKey(resource), resource);
+		if (this.requestedResources.size > 32) { this.requestedResources.delete(this.requestedResources.keys().next().value!); }
+		this.invalidate();
+	}
+
+	public getRecommendations(): Promise<ExtensionRecommendationsSnapshot> {
+		this.assertNotDisposed();
+		return this.pending ??= this.collect(this.generation);
+	}
+
+	private async collect(generation: number): Promise<ExtensionRecommendationsSnapshot> {
+		const [declared, configs, installed] = await Promise.all([this.getWorkspaceRecommendations(), this.configs.getExtensionsConfigs(), this.packages.listInstalled()]);
+		const excluded = new Set([
+			...this.ignored.globalIgnoredRecommendations,
+			...configs.flatMap(config => config.unwantedRecommendations).map(identity),
+			...installed.map(item => identity(item.package.id)),
+			...this.extensions.currentCatalog.extensions.map(item => identity(item.id)),
+		]);
+		const recommendations = new Map<string, ExtensionRecommendation>();
+		const add = (recommendation: ExtensionRecommendation): void => {
+			const key = identity(recommendation.extensionId);
+			if (!excluded.has(key) && !recommendations.has(key)) { recommendations.set(key, recommendation); }
+		};
+		for (const recommendation of declared.recommendations) {
+			add({ ...recommendation, context: { source: RecommendationSource.WORKSPACE, name: localize({ bundle: 'ash.extensions', key: 'recommendationWorkspace' }, 'this workspace') } });
+		}
+		const languageQueries = new Map<string, ReturnType<IExtensionManagementService['search']>>();
+		const forLanguage = async (languageId: string, name: string, reasonId: ExtensionRecommendationReason): Promise<void> => {
+			if (languageId === 'plaintext') { return; }
+			let query = languageQueries.get(languageId);
+			if (!query) {
+				// The languageId filter discovers executable providers. Language assets without a server
+				// are discovered through the language packages' searchable metadata as well.
+				query = Promise.all([
+					this.packages.search('', { languageId, limit: 5 }).catch(() => []),
+					this.packages.search(languageId, { packageType: 'language', limit: 5 }).catch(() => []),
+				]).then(groups => groups.flat());
+				languageQueries.set(languageId, query);
+			}
+			try {
+				for (const candidate of await query) {
+					add({ extensionId: candidate.id, reason: { reasonId, reasonText: localize({ bundle: 'ash.extensions', key: 'contextRecommendationReason' }, 'Recommended for {0}', name) }, context: { source: reasonId === ExtensionRecommendationReason.WorkspaceConfig ? RecommendationSource.WORKSPACE : RecommendationSource.FILE, name, ...(candidate.packageType === 'language' ? { searchValue: languageId } : { languageId, searchValue: '' }) } });
+				}
+			} catch { /* Offline language discovery must not prevent declared or editor recommendations. */ }
+		};
+		const resources = new Map<string, { resource: URI; languageId?: string; }>();
+		for (const resource of this.requestedResources.values()) { resources.set(this.uriIdentity.extUri.getComparisonKey(resource), { resource }); }
+		for (const input of this.editors.visibleEditors) { resources.set(this.uriIdentity.extUri.getComparisonKey(input.resource), { resource: input.resource, languageId: input.languageId }); }
+		for (const model of [...this.editorModels.getModels(), ...this.models.getModels()]) {
+			if (!model.isForSimpleWidget) { resources.set(this.uriIdentity.extUri.getComparisonKey(model.uri), { resource: model.uri, languageId: model.getLanguageId() }); }
+		}
+		const work: Promise<void>[] = [];
+		for (const { resource, languageId } of resources.values()) {
+			if (!['file', 'untitled', 'ash-remote', ...this.workspace.getWorkspace().folders.map(folder => folder.uri.scheme)].includes(resource.scheme)) { continue; }
+			const extension = extname(resource.path).toLowerCase();
+			const tip = editorTips.find(tip => (tip.extensions as readonly string[]).includes(extension));
+			if (tip) {
+				const name = tip.name === 'Docs' ? localize({ bundle: 'ash.extensions', key: 'recommendationDocs' }, 'Docs') : localize({ bundle: 'ash.extensions', key: 'recommendationPdf' }, 'PDF');
+				add({ extensionId: tip.id, reason: { reasonId: ExtensionRecommendationReason.File, reasonText: localize({ bundle: 'ash.extensions', key: 'fileRecommendationReason' }, 'Recommended for {0} files', extension) }, context: { source: RecommendationSource.FILE, name, searchValue: tip.query } });
+			}
+			const language = languageId && languageId !== 'plaintext' ? languageId : this.languages.guessLanguageIdByFilepathOrFirstLine(resource);
+			if (language) { work.push(forLanguage(language, this.languages.getLanguageName(language) ?? language, ExtensionRecommendationReason.Application)); }
+			else if (!tip && extension) {
+				// Language packages publish file extensions in their searchable catalog metadata, even before installation.
+				const key = `file:${extension}`;
+				let query = languageQueries.get(key);
+				if (!query) { query = this.packages.search(extension, { packageType: 'language', limit: 5 }); languageQueries.set(key, query); }
+				work.push(query.then(candidates => {
+					for (const candidate of candidates) {
+						add({ extensionId: candidate.id, reason: { reasonId: ExtensionRecommendationReason.File, reasonText: localize({ bundle: 'ash.extensions', key: 'fileRecommendationReason' }, 'Recommended for {0} files', extension) }, context: { source: RecommendationSource.FILE, name: extension, searchValue: extension } });
+					}
+				}, () => { /* Missing catalogs leave the built-in editor available. */ }));
+			}
+		}
+		await Promise.all(work);
+		const diagnostics = [...declared.diagnostics];
+		await Promise.all(this.projectResources().map(async ({ resource, language }) => {
+			try {
+				if ((await this.files.stat(resource)).kind === FileKind.File) { await forLanguage(language, basename(resource), ExtensionRecommendationReason.WorkspaceConfig); }
+			} catch (error) {
+				if (toFileSystemProviderErrorCode(error instanceof Error ? error : undefined) !== FileSystemProviderErrorCode.FileNotFound) {
+					diagnostics.push(localize({ bundle: 'ash.extensions', key: 'projectRecommendationsReadError' }, 'Could not inspect {0}: {1}', resource.toString(), error instanceof Error ? error.message : String(error)));
+				}
+			}
+		}));
+		if (this.isDisposed || generation !== this.generation) { throw new CancellationError(); }
+		const recent = this.readRecent();
+		for (const recommendation of recommendations.values()) {
+			if (recommendation.context?.source === RecommendationSource.FILE) { recent[recommendation.extensionId] = Date.now(); }
+		}
+		const remembered = Object.entries(recent).sort((a, b) => b[1] - a[1]).slice(0, 200);
+		const serialized = JSON.stringify(Object.fromEntries(remembered));
+		if (serialized !== this.storage.get(recentKey, StorageScope.PROFILE, '{}')) { this.storage.store(recentKey, serialized, StorageScope.PROFILE, StorageTarget.MACHINE); }
+		for (const [extensionId] of remembered) {
+			add({ extensionId, reason: { reasonId: ExtensionRecommendationReason.File, reasonText: localize({ bundle: 'ash.extensions', key: 'recentRecommendationReason' }, 'Recommended because of recently opened files') } });
+		}
+		return { recommendations: [...recommendations.values()], resources: declared.resources, diagnostics };
+	}
+
+	private readRecent(): Record<string, number> {
+		try {
+			const value: unknown = JSON.parse(this.storage.get(recentKey, StorageScope.PROFILE, '{}'));
+			if (!value || typeof value !== 'object' || Array.isArray(value)) { return {}; }
+			const now = Date.now();
+			return Object.fromEntries(Object.entries(value).slice(0, 2000).filter(([id, time]) => /^[a-z0-9][a-z0-9_.@/-]{0,255}$/iu.test(id) && typeof time === 'number' && Number.isFinite(time) && time <= now && now - time < recentDuration));
+		} catch { return {}; }
+	}
+
+	private projectResources(): { resource: URI; language: string; }[] {
+		return this.workspace.getWorkspace().folders.flatMap(folder => projectLanguages.map(tip => ({ resource: URI.joinPath(folder.uri, tip.filename), language: tip.language })));
+	}
+	private watchProjects(): void {
+		this.watches.clear();
+		for (const folder of this.workspace.getWorkspace().folders) {
+			try {
+				if (this.files.hasProvider(folder.uri)) { this.watches.add(this.files.watch(folder.uri, { recursive: false, excludes: [] })); }
+			} catch { /* Optional discovery cannot prevent opening a workspace whose provider cannot watch. */ }
+		}
+	}
 	public async getWorkspaceRecommendations(): Promise<ExtensionRecommendationsSnapshot> {
 		const configs = await this.configs.getExtensionsConfigs();
 		const excluded = new Set(configs.flatMap(config => config.unwantedRecommendations));

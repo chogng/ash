@@ -239,7 +239,7 @@ function readDocument(content: string, allowLibraries: boolean): DesignDocument 
 		|| Object.keys(artifact).some(key => !['kind', 'mode', 'roots', 'objects', 'background'].includes(key))) { throw new TypeError(localize('sessions.design.invalidComposition', 'Invalid design composition')); }
 	if (artifact.background !== undefined && (typeof artifact.background !== 'string' || !/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/iu.test(artifact.background))) { throw new TypeError(localize('sessions.design.invalidComposition', 'Invalid design composition')); }
 	const mode = artifact.mode === undefined ? CreatorMode.Design : artifact.mode;
-	if (!Object.values(CreatorMode).includes(mode as CreatorMode)) { throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Creator document mode.')); }
+	if (!Object.values(CreatorMode).includes(mode as CreatorMode)) { throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Artifacts document mode.')); }
 	const objects = artifact.objects;
 	const visited = new Set<string>();
 	function readObject(id: unknown): unknown {

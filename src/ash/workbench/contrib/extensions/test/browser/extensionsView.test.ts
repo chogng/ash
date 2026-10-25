@@ -871,6 +871,34 @@ suite('extensions browser component', () => {
 	}
 
 	for (const [locale, title, reason] of [['en', 'Recommended', 'Recommended by this workspace'], ['zh-CN', '推荐', '此工作区推荐']]) {
+		test(`Recommendations can be ignored and restored by keyboard in ${locale}`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/extensions.html?locale=${locale}`);
+			await page.locator('#extensions').getByRole('button', { name: title, exact: true }).click();
+			const pane = page.locator('[data-view-id="ash.extensions.recommended"]');
+			await page.evaluate(() => window.ashExtensionsIntegration.startCommand('ash.extensions.ignoreRecommendation'));
+			const picker = page.locator('.ash-quick-pick').getByRole('combobox');
+			await expect(picker).toBeFocused();
+			await picker.fill('publisher.sample@ash'); await picker.press('Enter');
+			await page.evaluate(() => window.ashExtensionsIntegration.waitCommand());
+			await expect(pane.getByRole('option').filter({ hasText: 'publisher.sample@ash' })).toHaveCount(0);
+			await page.evaluate(() => window.ashExtensionsIntegration.startCommand('ash.extensions.undoIgnoreRecommendation'));
+			await expect(picker).toBeFocused();
+			await picker.fill('publisher.sample'); await picker.press('Enter');
+			await page.evaluate(() => window.ashExtensionsIntegration.waitCommand());
+			await expect(pane.getByRole('option').filter({ hasText: 'publisher.sample@ash' })).toBeVisible();
+			await expect(pane).not.toContainText('excluded/tool');
+		});
+
+		test(`Context recommendations display file reasons in ${locale}`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/extensions.html?locale=${locale}`);
+			await page.evaluate(() => window.ashExtensionsIntegration.recommendResource('untitled:/document.ash-doc'));
+			await page.locator('#extensions').getByRole('button', { name: title, exact: true }).click();
+			const row = page.locator('[data-view-id="ash.extensions.recommended"]').getByRole('option').filter({ hasText: 'ash.academy@ash' });
+			await expect(row).toContainText(locale === 'zh-CN' ? '为 .ash-doc 文件推荐' : 'Recommended for .ash-doc files');
+		});
+
 		test(`Workspace recommendations open package details by keyboard in ${locale}`, async function () {
 			const { page } = browserTests;
 
@@ -909,7 +937,7 @@ suite('extensions browser component', () => {
 		await expect(page.locator('.ash-extension-editor')).toHaveCount(0);
 		await page.evaluate(() => window.ashExtensionsIntegration.leaveWorkspace());
 		await expect(recommended.getByRole('option')).toHaveCount(0);
-		await expect(recommended.getByRole('status')).toContainText('Open a workspace');
+		await expect(recommended.getByRole('status')).toContainText('Open a file or workspace');
 	});
 
 	test('Recommendations retain declared IDs when the catalog is offline', async function () {

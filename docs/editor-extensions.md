@@ -219,7 +219,15 @@ IDE 和 Agent Window 共用 Extensions 入口，默认包含可折叠的 Skills�
 
 插件列表依次显示名称、发布者和描述。发布者显示使用清单 `author` 的姓名字符串或 `{ name }`，详情、搜索和无障碍名称保持一致；未声明时省略该行。内部 `publisher` 继续用于包命名空间和身份校验。
 
-Recommended 读取各工作区文件夹的 `.ash/extensions.json`，以及多根工作区文件中的顶层 `extensions` 对象。配置支持 JSONC，`recommendations` 声明推荐 ID，`unwantedRecommendations` 排除 ID；合并时忽略大小写并去重，任一工作区声明的排除项适用于合并结果。现有记录可能包含 Open VSX 的 `publisher.name`；Ash 包使用目录中的完整 ID，退休旧来源不能改写已有包的来源身份。读取遵循当前文件服务的授权范围，不可访问的配置会显示诊断。文件修改自动刷新；无效编辑显示诊断并保留当前工作区的上次有效配置，删除文件则清空对应声明。推荐只提供发现入口，安装和权限审核继续由包详情处理。
+Recommended 读取各工作区文件夹的 `.ash/extensions.json`，以及多根工作区文件中的顶层 `extensions` 对象。配置支持 JSONC，`recommendations` 声明推荐 ID，`unwantedRecommendations` 排除 ID；合并时忽略大小写并去重，任一工作区声明的排除项适用于合并结果。现有记录可能包含 Open VSX 的 `publisher.name`；Ash 包使用目录中的完整 ID，退休旧来源不能改写已有包的来源身份。读取遵循当前文件服务的授权范围，不可访问的配置会显示诊断。文件修改自动刷新；无效编辑显示诊断并保留当前工作区的上次有效配置，删除文件则清空对应声明。推荐提供发现入口，安装和权限审核继续由包详情处理。
+
+场景触发的推荐通知由 Workbench 的 `IExtensionRecommendationNotificationService` 统一持有：已安装、已忽略及工作区排除的扩展不再提示，未能从启用源查到的包不产生通知；注册源不可用不阻塞编辑。通知在同一窗口内按扩展身份去重，“不再显示”对场景推荐保存到 profile，对工作区推荐保存到工作区状态。`extensions.ignoreRecommendations` 隐藏自动通知，仍允许主动浏览扩展。`extensions.showRecommendationsOnlyOnDemand` 可将推荐改为仅在扩展列表中查看。
+
+打开文件、切换语言、工作区声明和项目配置变化统一由 `IExtensionRecommendationsService` 汇总。文件工作副本和编辑器模型分别通过其 owner 事件接入，内部模型和简单输入控件不参与推荐。文件后缀与语言推荐查询当前启用目录的语言元数据，语言服务器和不含服务器的语言资源包分别查询；富文档和 PDF 使用产品指定的编辑器包身份。工作区根目录的 Cargo、Python、JavaScript/TypeScript、Go、JVM、PHP、Ruby、Docker、CMake 和 Make 配置可触发对应语言推荐，目录监听负责新增和删除后的刷新；多根工作区各根分别检查。Recommended 展示合并后的推荐原因，按扩展身份去重并排除已安装项和工作区排除项；目录离线时仍显示未知的声明 ID。异步发现以当前编辑器、语言和工作区代次为准，过期结果不发布。Docs 缺少富文档 Provider 时也只提交目标文件资源，不拥有推荐包、安装、启用或精确授权状态。
+
+近期文件推荐以包 ID 和时间戳保存到 profile 的 machine 状态，最多保留 200 项，七天后过期；不保存文件路径或文档内容。关闭文件或重启后仍能在 Recommended 查阅历史原因，历史项不重放自动通知。全局忽略由 `IExtensionIgnoredRecommendationsService` 唯一持有并与工作区排除项合并，列表和通知共用；扩展菜单和命令面板可忽略或恢复单项推荐，恢复不会覆盖工作区排除文件。通知的“不再显示”单独保留其原有作用域，“恢复已关闭的扩展推荐通知”可撤销这些选择，保留用户的全局配置开关。每个窗口工作区最多显示三条文件/工具自动推荐，显式工作区推荐保留独立策略；上下文取消不计为用户关闭。多包通知的查看入口打开 Recommended，安装继续逐包审核。
+
+对照上游场景时，必须区分推荐机制与产品目录。上游的可执行程序检测、键位方案、远程/虚拟工作区和纯 Web 推荐由产品专属 tips 目录驱动；Ash 当前没有这些目录和原生工具发现契约，因此没有填入上游专属包 ID、创建空推荐源或在 renderer 检测本机 PATH。现有远程文件和自定义工作区 URI scheme 仍使用共用的文件、语言和配置推荐机制；目录未提供候选时保持安静。
 
 扩展包是安装、更新和卸载单位，capability 是发现和使用单位。纯 Skill 保留标准 `SKILL.md`，由 Skills authority 校验并加载；包含 executable Provider 的能力才进入 `external-ext`。Connector 账号、MCP 会话、Skill 上下文和编辑器文档分别保留原领域 owner。
 

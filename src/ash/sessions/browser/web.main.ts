@@ -90,6 +90,7 @@ export class SessionsBrowserMain extends Disposable {
 					'workbench.contrib.partsSplash',
 					'workbench.contrib.webUpdate',
 					'workbench.contrib.preferences',
+					'workbench.contrib.extensionRecommendations',
 					'workbench.contrib.snippets',
 					'workbench.contrib.defaultFormatter',
 					'workbench.contrib.sessionsLayout',

@@ -95,13 +95,21 @@ import { TestQuickInputService } from '../../../../../../platform/quickinput/tes
 import { McpServersViewPane } from '../../../browser/extensionsViews.js';
 import { IFileService, type IFileChangeEvent } from '../../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../../platform/files/common/fileService.js';
-import { MemoryFileService } from '../../../../bulkEdit/test/browser/bulkEditTestServices.js';
+import { MemoryFileService, MemoryResourceStore } from '../../../../bulkEdit/test/browser/bulkEditTestServices.js';
+import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
+import { LanguageService } from '../../../../../../editor/common/services/languageService.js';
+import { IModelService } from '../../../../../../editor/common/services/model.js';
+import { ModelService } from '../../../../../../editor/common/services/modelService.js';
+import { IFileTextModelService } from '../../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { BrowserTextModelService } from '../../../../../services/textmodelResolver/browser/browserTextModelService.js';
+import { IExtensionService } from '../../../../../services/extensions/common/extensionService.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';
 import { IUriIdentityService } from '../../../../../../platform/uriIdentity/common/uriIdentity.js';
 import { UriIdentityService } from '../../../../../../platform/uriIdentity/common/uriIdentityService.js';
 import { IWorkspaceExtensionsConfigService, WorkspaceExtensionsConfigService } from '../../../../../services/extensionRecommendations/common/workspaceExtensionsConfig.js';
-import { IExtensionRecommendationsService } from '../../../../../services/extensionRecommendations/common/extensionRecommendations.js';
+import { IExtensionRecommendationsService, IExtensionIgnoredRecommendationsService } from '../../../../../services/extensionRecommendations/common/extensionRecommendations.js';
+import { ExtensionIgnoredRecommendationsService } from '../../../../../services/extensionRecommendations/common/extensionIgnoredRecommendationsService.js';
 import { ExtensionRecommendationsService } from '../../../browser/extensionRecommendationsService.js';
 import { ILanguageModelToolsService } from '../../../../chat/common/tools/languageModelToolsService.js';
 import { IMcpServerStatusService, type McpServerStatus } from '../../../../../../platform/mcp/common/mcpServerStatusService.js';
@@ -285,7 +293,7 @@ const api: IExtensionManagementApi = {
 		}
 		return { packages: [params.capabilityKind === 'editorExtension' || params.query === 'publisher.sample@ash' ? extensionSummary : summary], unavailableSources: [] };
 	},
-	get: async params => { requests.push(['get', params]); if (offline) { throw new Error('Catalog unavailable'); } const details = params.packageId === extensionSummary.id ? extensionDetails : params.packageId === mcpSummary.id ? mcpDetails : packageDetails; return { ...details, package: { ...details.package, version: params.version ?? '2.0.0' } }; },
+	get: async params => { requests.push(['get', params]); if (offline) { throw new Error('Catalog unavailable'); } if (![summary.id, extensionSummary.id, mcpSummary.id].includes(params.packageId)) { throw new Error('Unknown package'); } const details = params.packageId === extensionSummary.id ? extensionDetails : params.packageId === mcpSummary.id ? mcpDetails : packageDetails; return { ...details, package: { ...details.package, version: params.version ?? '2.0.0' } }; },
 	listInstalled: async () => (managementReads.installed++, { instanceId: 'fixture', generation, packages: installed.map(entry => ({ ...entry, capabilities: entry.capabilities.map(capability => ({ ...capability, permissions: [...capability.permissions] })) })) }),
 	download: async () => { throw new Error('Install owns downloading'); },
 	install: async params => {
@@ -429,6 +437,13 @@ let editorAbort = new AbortController();
 disposables.add(toDisposable(() => { editorAbort.abort(); pane?.dispose(); }));
 services.registerInstance(IEditorService, {
 	onDidActiveEditorChange: Event.None,
+	onDidVisibleEditorsChange: Event.None,
+	visibleEditors: [],
+	activeEditor: undefined,
+	activeEditorPane: undefined,
+	visibleEditorPanes: [],
+	save: async () => ({ success: true, editors: [] }),
+	saveAll: async () => ({ success: true, editors: [] }),
 	focusActiveEditor: () => pane?.focus(),
 	openEditor: async (input, options) => {
 		if (!(input instanceof ExtensionsInput) && !(input instanceof ExtensionsCapabilityInput)) { requests.push(['document', input], ['documentOptions', options]); return; }
@@ -454,7 +469,13 @@ disposables.add(files.registerProvider('file', recommendationFiles));
 services.registerInstance(IFileService, files);
 services.registerInstance(IUriIdentityService, disposables.add(new UriIdentityService(files)));
 services.registerInstance(IWorkspaceExtensionsConfigService, disposables.add(services.createInstance(WorkspaceExtensionsConfigService)));
-services.registerInstance(IExtensionRecommendationsService, services.createInstance(ExtensionRecommendationsService));
+services.registerInstance(IExtensionIgnoredRecommendationsService, disposables.add(services.createInstance(ExtensionIgnoredRecommendationsService)));
+const recommendationLanguages = disposables.add(new LanguageService());
+services.registerInstance(ILanguageService, recommendationLanguages);
+services.registerInstance(IModelService, disposables.add(new ModelService(services.get(IConfigurationService), { _serviceBrand: undefined, getEOL: () => '\n' }, recommendationLanguages)));
+services.registerInstance(IExtensionService, { onDidChange: Event.None, currentCatalog: { extensions: [], generation: 1, diagnostics: [] } } as unknown as IExtensionService);
+services.registerInstance(IFileTextModelService, disposables.add(services.createInstance(BrowserTextModelService, disposables.add(new MemoryResourceStore([])), { languageService: recommendationLanguages })));
+services.registerInstance(IExtensionRecommendationsService, disposables.add(services.createInstance(ExtensionRecommendationsService)));
 let mcpServers: readonly McpServerStatus[] = [{ id: 'marketplace:example/web:mcp:fixture-server', displayName: 'fixture-server', httpOrigin: 'https://example.com', state: { status: 'connected' }, catalogGeneration: 1, connectionGeneration: 1, toolCount: 1 }];
 let mcpStatusFailure = false;
 let mcpToolsFailure = false;
@@ -696,6 +717,7 @@ window.ashExtensionsIntegration = {
 		connectorChanges.fire(++connectorGeneration);
 	},
 	setRecommendations: async (content: string) => { await files.writeFile({ resource: recommendationsResource, content }); recommendationChanges.fire({ resources: [recommendationsResource] }); },
+	recommendResource: (resource: string) => services.get(IExtensionRecommendationsService).recommendForResource(URI.parse(resource)),
 	leaveWorkspace: () => workspace.updateWorkspace({ id: 'empty', folders: [] }),
 	startCommand: id => { commandCompletion = commands.executeCommand(id).catch((error: unknown) => requests.push(['commandError', String(error)])); },
 	waitCommand: async () => { await commandCompletion; },
@@ -737,7 +759,7 @@ window.ashExtensionsIntegration = {
 declare global {
 	interface Window {
 
-		ashExtensionsIntegration: { holdSkillEnablement(): void; skillEnablementStarted(): boolean; completeSkillEnablement(): void; managementReads(): { installed: number; skills: number; connectors: number; }; installationSnapshot(): ExtensionsInstalledPackage[]; notifyConnectorsChanged(): void; setConnectors(entries: readonly ConnectorView[]): void; failConnectorList(fail: boolean): void; addConnector(binding?: { declarationId: string; serverId: string | null; }): void; enableMcpOAuth(): void; completeMcpLogin(): void; mcpLoginWaiting(): boolean; holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
+		ashExtensionsIntegration: { holdSkillEnablement(): void; skillEnablementStarted(): boolean; completeSkillEnablement(): void; managementReads(): { installed: number; skills: number; connectors: number; }; installationSnapshot(): ExtensionsInstalledPackage[]; notifyConnectorsChanged(): void; setConnectors(entries: readonly ConnectorView[]): void; failConnectorList(fail: boolean): void; addConnector(binding?: { declarationId: string; serverId: string | null; }): void; enableMcpOAuth(): void; completeMcpLogin(): void; mcpLoginWaiting(): boolean; holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; recommendResource(resource: string): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
 	}
 }
 
