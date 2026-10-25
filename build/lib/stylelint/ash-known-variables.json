@@ -410,6 +410,12 @@
 		"--ash-z-index-quick-input",
 		"--ash-z-index-sash",
 		"--dropdown-trigger-width",
+		"--font-height",
+		"--min-font-size",
+		"--rotate",
+		"--scale-round-x",
+		"--scale-round-y",
+		"--scale-x",
 		"--scm-graph-accent",
 		"--scm-graph-change-depth",
 		"--scm-graph-content-x",
@@ -471,7 +477,8 @@
 		"--stanza-sticky-line-height",
 		"--stanza-zone-widget-arrow-color",
 		"--stanza-zone-widget-arrow-size",
-		"--stanza-zone-widget-frame-color"
+		"--stanza-zone-widget-frame-color",
+		"--total-scale-factor"
 	],
 	"sizes": [
 		"--ash-actionBar-gap",

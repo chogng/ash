@@ -4,6 +4,14 @@ PDF Viewer (`ash.pdf-viewer`) is an optional, independently installed editor ext
 
 The extension owns PDF rendering, extracted text, highlight/ink/note annotations and their undo history. It keeps the source PDF immutable and saves annotations in `<file>.pdf.ash-annotations.json` through the window's authorized file service. Existing `ash.workbench.pdfViewer` editor identities and version-1 annotation files remain supported. Saved annotations reload when the file is reopened; unsaved annotations are pane-local and must be saved before closing. This is not an embedded-PDF annotation exporter, reference manager, or OCR engine.
 
+## Reading controls
+
+The reader supports 25–400% zoom, a percentage selector and Fit width. Zoom reuses the parsed document, keeps the reading position and preserves annotation drafts and undo history. Rapid zoom changes cancel superseded canvas paints; large canvases have a pixel budget.
+
+Select mode exposes the PDF's text layer for native selection and copy. Ctrl/Cmd+A while the pages are focused selects the document text. Ctrl/Cmd+F opens case-insensitive literal search across pages, including phrases spanning text runs and line breaks. Results show the current match, count and page; Enter/Shift+Enter navigate with wraparound, and Escape closes search and restores page focus. Search displays at most the first 10,000 matches and reports that limit. Image-only PDFs report that no searchable text is available. Reading controls also work in read-only attachment previews.
+
+Ctrl/Cmd plus `+`, `-` and `0` zoom in, out and reset to 100%. The annotation tools still use page-relative coordinates. Select mode leaves text selectable; choosing a drawing or note tool routes page gestures to annotations instead.
+
 ## Planned PDF reading, annotations and AI use
 
 The separate [PDF content plan](docs/pdf-content.md) scopes future work to viewing, extension-owned annotations and AI access to text or page images, composed with a Skill and a Plugin bundle where supported. It does not require a general document-editing API. The plan distinguishes existing viewer behavior from unimplemented AI/tool/Skill integration; it does not change package admission or add runtime capabilities.

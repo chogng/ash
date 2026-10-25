@@ -215,3 +215,148 @@
 .ash-pdf-annotation-layer:focus-visible > .ash-pdf-annotation-cursor {
 	display: block;
 }
+
+.ash-pdf-reading-tools,
+.ash-pdf-find {
+	align-items: center;
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 6px 8px;
+}
+
+.ash-pdf-find[hidden] {
+	display: none;
+}
+
+.ash-pdf-zoom,
+.ash-pdf-find-input {
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-medium);
+	box-sizing: border-box;
+	color: var(--ash-input-foreground);
+	font: inherit;
+	min-block-size: 28px;
+	padding: 4px 8px;
+}
+
+.ash-pdf-find-input {
+	flex: 1 1 180px;
+	min-inline-size: 0;
+}
+
+.ash-pdf-find-input::placeholder {
+	color: var(--ash-input-placeholderForeground);
+}
+
+.ash-pdf-zoom:focus-visible,
+.ash-pdf-find-input:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-pdf-find-status {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+
+/* PDF.js supplies text positions and font transforms; the page remains the coordinate owner. */
+.ash-pdf-text-layer {
+	--scale-round-x: 1px;
+	--scale-round-y: 1px;
+	inset: 0;
+	line-height: 1;
+	overflow: clip;
+	position: absolute;
+	text-align: initial;
+	text-size-adjust: none;
+	transform-origin: 0 0;
+	user-select: text;
+	z-index: 2;
+}
+
+.ash-pdf-text-layer > span {
+	color: transparent;
+	cursor: text;
+	font-size: calc(
+		var(--font-height) * var(--total-scale-factor) * var(--min-font-size)
+	);
+	position: absolute;
+	transform: rotate(var(--rotate, 0deg)) scaleX(var(--scale-x, 1))
+		scale(calc(1 / var(--min-font-size)));
+	transform-origin: 0 0;
+	white-space: pre;
+}
+
+.ash-pdf-text-layer ::selection {
+	background: var(--ash-editor-selectionBackground);
+	color: var(--ash-editor-selectionForeground, var(--ash-editor-foreground));
+}
+
+.ash-pdf-text-layer[data-main-rotation="90"] {
+	transform: rotate(90deg) translateY(-100%);
+}
+
+.ash-pdf-text-layer[data-main-rotation="180"] {
+	transform: rotate(180deg) translate(-100%, -100%);
+}
+
+.ash-pdf-text-layer[data-main-rotation="270"] {
+	transform: rotate(270deg) translateX(-100%);
+}
+
+.ash-pdf-annotation-layer {
+	z-index: 3;
+}
+
+.ash-pdf-annotation-layer[data-annotation-mode="select"],
+.ash-pdf-editor.retired .ash-pdf-annotation-layer {
+	pointer-events: none;
+	touch-action: auto;
+}
+
+.ash-pdf-annotation-note {
+	pointer-events: auto;
+}
+
+.ash-pdf-search-highlights {
+	inset: 0;
+	pointer-events: none;
+	position: absolute;
+	z-index: 1;
+}
+
+.ash-pdf-search-match {
+	background: color-mix(
+		in srgb,
+		var(--ash-search-matchBackground) 65%,
+		transparent
+	);
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	position: absolute;
+}
+
+.ash-pdf-search-match.current {
+	background: color-mix(
+		in srgb,
+		var(--ash-search-matchBackground) 65%,
+		transparent
+	);
+	outline: 2px solid var(--ash-focusBorder);
+}
+
+.ash-pdf-editor.high-contrast .ash-pdf-search-match {
+	background: transparent;
+	/* PDF colors are immutable; paired theme borders stay visible on light or dark paper. */
+	border: var(--ash-strokeThickness) solid var(--ash-editor-background);
+	box-sizing: border-box;
+	outline-color: var(--ash-contrastBorder);
+}
+
+.ash-pdf-editor.high-contrast .ash-pdf-search-match.current {
+	border-width: 2px;
+	outline-color: var(--ash-focusBorder);
+}
