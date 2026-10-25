@@ -555,7 +555,7 @@ suite('sessions browser component', () => {
 				await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 				await page.mouse.move(0, 0);
 				for (const button of [primary, secondary]) {
-					await expect(button).toHaveCSS('padding', '4px 8px');
+					await expect(button).toHaveCSS('padding', button === primary ? '0px 8px' : '4px 8px');
 					expect((await button.boundingBox())!.height).toBeLessThan(36);
 					await expect(button).toHaveCSS('border-radius', '8px');
 					await expect(button).toHaveCSS('font-size', '14px');
@@ -568,7 +568,7 @@ suite('sessions browser component', () => {
 				expect(colors.background).not.toBe(colors.foreground);
 				await expect(primary).toHaveCSS('background-color', colors.expected);
 				if (!theme.includes('high-contrast')) await expect(primary).not.toHaveCSS('background-color', await outside.evaluate(element => getComputedStyle(element).backgroundColor));
-				const search = projects.getByRole('button', { name: chinese ? '搜索项目' : 'Search projects', exact: true });
+				const search = projects.getByRole('button', { name: chinese ? '关闭项目搜索' : 'Close project search', exact: true });
 				await search.hover();
 				await expect(search).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 				await expect(search).toHaveCSS('height', '28px');

@@ -79,7 +79,7 @@
 }
 
 .ash-sessions-window .ash-context-view-menu {
-	border-radius: var(--ash-cornerRadius-xLarge);
+	border-radius: var(--ash-cornerRadius-xxLarge);
 }
 
 .ash-sessions-window :is(.ash-notification, .ash-notifications-center) {
@@ -97,10 +97,17 @@
 
 .ash-sessions-window .ash-menu {
 	--ash-list-rowHeight: var(--ash-spacing-size280);
+	min-width: 160px;
+	padding: var(--ash-spacing-size60);
 }
 
 .ash-sessions-window .ash-menu .ash-button {
+	padding-inline: var(--ash-spacing-size120);
 	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-sessions-window .ash-menu-leading-check > .ash-icon {
+	font-size: var(--ash-spacing-size200);
 }
 
 .ash-sessions-window .ash-keybinding-label-keycap kbd {
