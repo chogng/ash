@@ -310,7 +310,9 @@
     "pin": "E133",
     "artifacts": "E134",
     "terminal-session": "E135",
-    "folder-opened": "E136"
+    "folder-opened": "E136",
+    "diff-added": "E137",
+    "diff-changes": "E138"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -398,6 +400,8 @@
     "design": "35cf4c5e0f6bf79e639b9ed3ff418b9a11d8f5f391d8851b504807c0d2efd95d",
     "device-mobile": "b109ab7d94ccf20f3e08e73e755715385a6124ee42175f0e873ed89e43977132",
     "diagnostics": "2ca117f19cd1bcd7fde7282cec6d274075b9f6058e449cb8d9657437341303a0",
+    "diff-added": "f0f7b934fef76dd6b8ce62e345c8b53d97bd04dc7229a01a54dff4ae7c772d90",
+    "diff-changes": "dc7b784d95bc98dcc2ab4ebcb96b4503f0d172337ee857baa53fa72cf564cd35",
     "diff-line-add": "722078aa4b9dbfabecd94b55ebbac159b4cb92f84481ad0c9d054bf0002344f5",
     "diff-line-delete": "fb998af4d56f9ebcd890a75802f0a18015304f62a005eb8090e19b00e8d6ec2d",
     "diff-multiple-1": "d1d2b308e6f781759a78a58930140d814ffd81b80f46b77001191e14f86c0afc",
@@ -599,7 +603,7 @@
     "unfold": "a8416caeb9bbc30f1b9568abdf3ed061c9f4a819dff77719da79d9162b94bf34",
     "unlimited": "38fbb405bce4a90b18334d7845f0c246fa5ffd8fe23accdee6fdc20f60ca5657",
     "unmute": "4a08b8b37276d39bfde5f2b34b1a9d3e14ed415d9f5d0a2d9240c03171fff871",
-    "unpin": "a5ec67903303ed3b85f8bfdb04c23894880449fd76d2ec0f7c4fce465478bcf6",
+    "unpin": "7ba8198f714c92203c6f3462566a3557672644e4b3273f2fbaeba94bb711a97d",
     "verified-filled": "ef402fd2f3ac391e2cbb96da3c1726e8847826fd21529b63319826a0052536fc",
     "verified": "5ed2ef2dc0a95464499f6856a2e88e9107bf37a56a843ed153fbf5e7980da75a",
     "voice-mode": "25e2e464e78880111d11bba9f5a49b005d3e030f7b29bf9adfb46886eb904115",

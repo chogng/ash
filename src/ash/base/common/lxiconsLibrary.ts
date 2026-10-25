@@ -90,6 +90,8 @@ export const lxiconsLibrary = {
 	deviceMobile: registerLxicon("device-mobile", 0xe053),
 	diagnostics: registerLxicon("diagnostics", 0xe054),
 	diff: registerLxicon("diff", 0xe057),
+	diffAdded: registerLxicon("diff-added", 0xe137),
+	diffChanges: registerLxicon("diff-changes", 0xe138),
 	diffLineAdd: registerLxicon("diff-line-add", 0xe11e),
 	diffLineDelete: registerLxicon("diff-line-delete", 0xe11f),
 	diffMultiple1: registerLxicon("diff-multiple-1", 0xe055),

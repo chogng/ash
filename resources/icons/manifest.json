@@ -432,6 +432,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "diff-added",
+      "file": "diff-added.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "diff-changes",
+      "file": "diff-changes.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "diff-line-add",
       "file": "diff-line-add.svg",
       "rendering": "symbolic"
