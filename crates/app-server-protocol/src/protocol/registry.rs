@@ -2679,7 +2679,11 @@ use ash_protocol::AudioMediaType;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::Automation;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::AutomationCondition;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::AutomationDefinition;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::AutomationEvent;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::AutomationRun;
 #[cfg(any(test, feature = "export"))]
@@ -7143,6 +7147,8 @@ typescript_bindings! {
     SymphonyMessages,
     Automation,
     AutomationDefinition,
+    AutomationCondition,
+    AutomationEvent,
     AutomationSchedule,
     AutomationSession,
     AutomationStatus,

@@ -10,6 +10,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { isCancellationError, getErrorMessage } from '../../../../base/common/errors.js';
 import { localize } from '../../../../nls.js';
 import { GitHubError, GitHubErrorCode } from '../../../../platform/github/common/githubService.js';
+import { PullRequestFollowUpWidget } from './pullRequestFollowUpWidget.js';
 import { ChecksViewModel, checkDetailsText } from './checksViewModel.js';
 import { getCheckStateLabel } from './checksActions.js';
 import { IChangesViewService } from '../common/changesViewService.js';
@@ -20,6 +21,7 @@ import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 export class ChecksWidget extends Disposable {
 	public readonly element: HTMLElement;
 	private readonly header: Button;
+	private readonly followUp: PullRequestFollowUpWidget;
 	private readonly body: HTMLElement;
 	private readonly entries = this._register(new DisposableStore());
 
@@ -32,6 +34,7 @@ export class ChecksWidget extends Disposable {
 		@ISessionsService sessions: ISessionsService,
 	) {
 		super();
+		this.followUp = this._register(instantiation.createInstance(PullRequestFollowUpWidget, container));
 		this.element = h(container.ownerDocument, 'section', { className: 'ash-sessions-checks' });
 		container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
@@ -140,4 +143,8 @@ export class ChecksWidget extends Disposable {
 			this.body.append(list);
 		}));
 	}
+	public getAccessibleContent(): string {
+		return [this.followUp.element.textContent, this.element.textContent].filter(Boolean).join('\n');
+	}
+
 }

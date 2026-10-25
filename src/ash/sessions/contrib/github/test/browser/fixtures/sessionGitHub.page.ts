@@ -1,3 +1,5 @@
+import { AppServerAutomationService } from '../../../../../../platform/agentHost/browser/appServerAutomationService.js';
+import type { Automation } from '../../../../../../platform/agentHost/common/automation.js';
 import { ChecksOperationService } from '../../../../changes/browser/checksOperationService.js';
 import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
 import { IChecksOperationService } from '../../../../changes/common/checksOperationService.js';
@@ -9,9 +11,9 @@ import { IGitHubService as IGitHubApi } from '../../../../../../platform/github/
 import { IGitHubService as ISessionGitHubService } from '../../../browser/githubService.js';
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
 import type { IRendererHost } from '../../../../../../platform/renderer/common/rendererHost.js';
-import type { ISessionProviderScope, ISessionProviderScopeService, SessionProviderServices } from '../../../../../browser/agentHost/sessionProviderScopeService.js';
+import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../../../../browser/agentHost/sessionProviderScopeService.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
-import type { ICustomViewService } from '../../../../../services/customView/browser/customViewService.js';
+import { ICustomViewService } from '../../../../../services/customView/browser/customViewService.js';
 import type { IMenuService } from '../../../../../../platform/actions/common/actions.js';
 import { CommandsRegistry, type ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import type { ISCMService } from '../../../../../../workbench/contrib/scm/common/scm.js';
@@ -47,7 +49,7 @@ import { TestQuickInputService } from '../../../../../../platform/quickinput/tes
 import type { GitHubPullRequestReference, GitHubIssueReference } from '../../../../../../platform/github/common/githubService.js';
 
 
-const listCustomViews = { activeCustomView: observableValue('testCustomView', undefined) } as unknown as ICustomViewService;
+const listCustomViews = { showCustomView: (id: string) => { document.body.dataset.openedView = id; }, activeCustomView: observableValue('testCustomView', undefined) } as unknown as ICustomViewService;
 const listMenus = { createMenu: () => ({ getActions: () => [], onDidChange: Event.None, ...toDisposable(() => { }) }) } as unknown as IMenuService;
 const listNotifications = { error: (error: unknown) => { throw error; } } as unknown as INotificationService;
 interface Request { readonly id: number; readonly method: string; readonly params: Record<string, unknown>; }
@@ -59,6 +61,7 @@ class Transport implements AppServerTransport {
 	public readonly states = new Map<number, State>([[7, 'open'], [8, 'draft']]);
 	public readonly issueStates = new Map<number, { state: string; stateReason?: string; }>([[11, { state: 'open' }], [12, { state: 'closed', stateReason: 'completed' }]]);
 	private issueReferences: GitHubIssueReference[] = JSON.parse(sessionStorage.getItem('test-backend-issue-references') ?? '[]');
+	public plans: Automation[] = JSON.parse(sessionStorage.getItem('test-backend-follow-ups') ?? '[]');
 	public failingChecks = false;
 	public unresolvedComments = false;
 	public mergeable: boolean | null = null;
@@ -121,7 +124,26 @@ class Transport implements AppServerTransport {
 				}
 				break;
 			}
-			case 'initialize': this.reply(request, createTestInitializeResult()); break;
+            case 'automation/list': this.reply(request, { automations: this.plans }); break;
+            case 'automation/runs': this.reply(request, { runs: [] }); break;
+            case 'automation/write': {
+                const p = request.params;
+                const previous = this.plans.find(plan => plan.id === p.id);
+                if ((previous?.revision ?? 0) !== p.expectedRevision) throw new Error('AutomationConflict');
+                const plan = { id: p.id, revision: Number(p.expectedRevision) + 1, definition: p.definition,
+                    status: p.status, createdAt: previous?.createdAt ?? Date.now(), updatedAt: Date.now(), nextRunAt: p.status === 'enabled' ? Date.now() + 60_000 : null } as Automation;
+                this.plans = [...this.plans.filter(item => item.id !== plan.id), plan];
+                sessionStorage.setItem('test-backend-follow-ups', JSON.stringify(this.plans));
+                this.reply(request, plan);
+                this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', method: 'automation/changed', params: {} }) });
+                break;
+            }
+            case 'initialize': {
+                const result = createTestInitializeResult();
+                this.reply(request, { ...result, capabilities: { ...result.capabilities,
+                    contracts: { ...result.capabilities.contracts, automationConditions: { version: 1 } } } });
+                break;
+            }
 			case 'github/account/list': this.reply(request, { accounts: this.signedIn ? [{ id: 'account', host: 'github.com', login: 'User', status: 'ready', credentialRevision: '1' }] : [] }); break;
 			case 'github/pullRequest/list': this.reply(request, { pullRequests: request.params.state === pr.state ? [pr] : [], nextPage: null }); break;
 			case 'github/pullRequest/read': this.reply(request, pr); break;
@@ -184,7 +206,7 @@ const baseHost = createDisconnectedRendererApi();
 const hostEvents = resources.add(new Emitter<Parameters<Parameters<IRendererHost['events']['subscribe']>[0]>[0]>());
 resources.add(accountsChanged.event(() => hostEvents.fire({ method: 'account/updated', params: {} } as never)));
 const host: IRendererHost = {
-	...baseHost, github: new AppServerGitHubService(client), events: { subscribe: hostEvents.event },
+	...baseHost, automation: resources.add(new AppServerAutomationService(client)), github: new AppServerGitHubService(client), events: { subscribe: hostEvents.event },
 	appServer: { ...baseHost.appServer, getConnectionState: async () => 'ready', onConnectionState: listener => client.onStateChange(listener) },
 	localGit: {
 		...baseHost.localGit, readRepositoryContexts: async () => Promise.all(git.repositories.map(async repository => ({
@@ -212,6 +234,8 @@ if (new URL(location.href).searchParams.has('checks')) {
 	transport.failingChecks = true;
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(ISessionsService, sessions);
+	services.registerInstance(ISessionProviderScopeService, scopes);
+	services.registerInstance(ICustomViewService, listCustomViews);
 	services.registerInstance(ISessionGitHubService, github);
 	services.registerInstance(IGitHubApi, host.github);
 	services.registerInstance(IAccountService, { onDidChangeAccounts: accountsChanged.event } as IAccountService);

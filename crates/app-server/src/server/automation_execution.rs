@@ -25,6 +25,31 @@ impl AppServer {
         };
         let now = ash_automation::now().map_err(automation_error)?;
         let mut changed = false;
+        for plan in store.list().map_err(automation_error)? {
+            if plan.status == ash_protocol::AutomationStatus::Enabled
+                && plan.definition.condition.is_some()
+                && matches!(&plan.definition.session, AutomationSession::Continue { session_id: target, .. } if target == session_id)
+            {
+                store
+                    .write(
+                        &ash_automation::AutomationWrite {
+                            command_id: command_id(
+                                "retire",
+                                &format!("{}:{}", plan.id, plan.revision),
+                            )
+                            .map_err(|error| core_error(CoreError::Execution(error)))?
+                            .to_string(),
+                            id: plan.id,
+                            expected_revision: plan.revision,
+                            definition: plan.definition,
+                            status: ash_protocol::AutomationStatus::Paused,
+                        },
+                        now,
+                    )
+                    .map_err(automation_error)?;
+                changed = true;
+            }
+        }
         for mut run in store.active_runs().map_err(automation_error)? {
             let target_session = match &run.session_id {
                 Some(id) => Some(id.clone()),
@@ -57,6 +82,34 @@ impl AppServer {
         Ok(())
     }
 
+    /// Stops are driven by the request thread as well as the scheduler: an unrelated slow
+    /// Provider observation must not delay interruption of an already accepted Turn.
+    pub(super) fn advance_stopping_automations(&self) -> Result<(), RpcError> {
+        let Some(store) = self.automation_processor.store() else {
+            return Ok(());
+        };
+        let now = ash_automation::now().map_err(automation_error)?;
+        let mut changed = false;
+        for run in store.active_runs().map_err(automation_error)? {
+            if run.status != AutomationRunStatus::Stopping {
+                continue;
+            }
+            let observed = self
+                .advance_automation_run(&run, now)
+                .unwrap_or_else(|error| {
+                    let mut observed = run;
+                    observed.message = Some(error);
+                    observed
+                });
+            store.observe(&observed).map_err(automation_error)?;
+            changed = true;
+        }
+        if changed {
+            self.updates.publish_automation_changed();
+        }
+        Ok(())
+    }
+
     /// Advances one durable automation run through the existing Session and Turn execution path.
     /// The caller supplies a directory-scoped server and retains the original run identity.
     pub fn advance_automation_run(
@@ -64,6 +117,17 @@ impl AppServer {
         run: &AutomationRun,
         now: UnixMillis,
     ) -> Result<AutomationRun, String> {
+        // Always reload the durable stop/event state; the scheduler's snapshot may predate a write.
+        let current;
+        let run = if let Some(store) = self.automation_processor.store() {
+            current = store.get_run(&run.id).map_err(|error| error.to_string())?;
+            &current
+        } else {
+            run
+        };
+        if run.status.is_finished() {
+            return Ok(run.clone());
+        }
         let mut observed = run.clone();
         observed.message = None;
         let command = command_id("start", &run.id)?;
@@ -147,27 +211,82 @@ impl AppServer {
             observed.finished_at = Some(now);
             return Ok(observed);
         }
+        if accepted.is_none() && run.definition.condition.is_some() {
+            if snapshot.turns.iter().any(|turn| {
+                !matches!(
+                    turn.status,
+                    TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+                )
+            }) {
+                return Ok(observed);
+            }
+            match self.prepare_automation_event(run, now)? {
+                Some(prepared) => observed.event = prepared.event,
+                None => {
+                    let latest = self
+                        .automation_processor
+                        .store()
+                        .ok_or("Automation store unavailable")?
+                        .get_run(&run.id)
+                        .map_err(|error| error.to_string())?;
+                    observed.status = if latest.status == AutomationRunStatus::Stopping {
+                        AutomationRunStatus::Stopped
+                    } else {
+                        AutomationRunStatus::Skipped
+                    };
+                    observed.finished_at = Some(now);
+                    return Ok(observed);
+                }
+            }
+        }
         self.bind_session_runtime(&snapshot.session_id)
             .map_err(|error| error.to_string())?;
         let snapshot = if accepted.is_none() {
-            let start = self.agent_processor().start_turn_request(
-                ThreadMutation {
-                    ide_window_id: None,
-                    connection_id: None,
-                    command_id: command.clone(),
-                    session_id: snapshot.session_id.clone(),
-                    expected_sequence: snapshot.sequence,
-                },
-                snapshot.thread_id.clone(),
-                ash_protocol::ApprovalMode::default(),
-                ash_protocol::CollaborationMode::Agent,
-                TurnModelSelection::Current,
-                None,
-                None,
-                vec![InputItem::Text {
-                    text: run.definition.prompt.clone(),
-                }],
-            );
+            let dispatch = || {
+                if let Some(condition) = &run.definition.condition {
+                    self.validate_follow_up_account(condition).map_err(|message| RpcError::with_details(
+                        -32030, ash_app_server_protocol::protocol::error::AppServerErrorName::AccountAuthenticationRequired, message,
+                    ))?;
+                }
+                self.agent_processor().start_turn_request(
+                    ThreadMutation {
+                        ide_window_id: None,
+                        connection_id: None,
+                        command_id: command.clone(),
+                        session_id: snapshot.session_id.clone(),
+                        expected_sequence: snapshot.sequence,
+                    },
+                    snapshot.thread_id.clone(),
+                    ash_protocol::ApprovalMode::default(),
+                    ash_protocol::CollaborationMode::Agent,
+                    TurnModelSelection::Current,
+                    None,
+                    None,
+                    vec![InputItem::Text {
+                        text: match &observed.event {
+                            Some(event) => {
+                                format!("{}\n\n{}", run.definition.prompt, event.context)
+                            }
+                            None => run.definition.prompt.clone(),
+                        },
+                    }],
+                )
+            };
+            let start = if let Some(store) = self.automation_processor.store() {
+                match store
+                    .dispatch_if_current(&run.id, dispatch)
+                    .map_err(|error| error.to_string())?
+                {
+                    Some(result) => result,
+                    None => {
+                        observed.status = AutomationRunStatus::Stopped;
+                        observed.finished_at = Some(now);
+                        return Ok(observed);
+                    }
+                }
+            } else {
+                dispatch()
+            };
             let current = self
                 .agent_runtime()
                 .read_thread(&snapshot.thread_id)
@@ -239,6 +358,140 @@ impl AppServer {
             observed.status = AutomationRunStatus::Stopping;
         }
         Ok(observed)
+    }
+    fn validate_follow_up_account(
+        &self,
+        condition: &ash_protocol::AutomationCondition,
+    ) -> Result<(), String> {
+        let ash_protocol::AutomationCondition::GitHubChecks {
+            host,
+            account_id,
+            credential_revision,
+            ..
+        } = condition;
+        let accounts = self
+            .github_accounts
+            .as_ref()
+            .ok_or("GitHub accounts unavailable")?
+            .accounts()
+            .map_err(|error| error.to_string())?;
+        if !accounts.iter().any(|account| {
+            account.id == *account_id
+                && account.host == *host
+                && account.credential_revision.to_string() == *credential_revision
+                && account.status == ash_login::AccountStatus::Ready
+        }) {
+            return Err(
+                "PR follow-up account changed; enable follow-up again with the current account"
+                    .into(),
+            );
+        }
+        Ok(())
+    }
+
+    /// Conditions consume optional domain Providers; the automation store owns dispatch and receipts.
+    fn prepare_automation_event(
+        &self,
+        run: &AutomationRun,
+        now: UnixMillis,
+    ) -> Result<Option<AutomationRun>, String> {
+        let Some(ash_protocol::AutomationCondition::GitHubChecks {
+            host,
+            owner,
+            repository,
+            number,
+            account_id,
+            ..
+        }) = &run.definition.condition
+        else {
+            return Ok(Some(run.clone()));
+        };
+        self.validate_follow_up_account(
+            run.definition
+                .condition
+                .as_ref()
+                .ok_or("Missing provider condition")?,
+        )?;
+        let source = ash_async_utils::CancellationSource::new();
+        let _guard = source.cancel_on_drop();
+        let client = self
+            .github_processor()
+            .map_err(|error| format!("{:?}", error.message))?
+            .selected_client(&source.token(), account_id)
+            .map_err(|error| format!("{:?}", error.message))?;
+        let repository = github::Repository::new(host.clone(), owner.clone(), repository.clone())
+            .map_err(|error| error.to_string())?;
+        let observation = super::request_dispatch::runtime()
+            .map_err(|error| error.to_string())?
+            .block_on(async {
+                tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    client.pull_request_follow_up(&repository, *number),
+                )
+                .await
+            })
+            .map_err(|_| "PR follow-up observation timed out".to_owned())?
+            .map_err(|error| error.to_string())?;
+        self.validate_follow_up_account(
+            run.definition
+                .condition
+                .as_ref()
+                .ok_or("Missing provider condition")?,
+        )?;
+        let store = self
+            .automation_processor
+            .store()
+            .ok_or("Automation store unavailable")?;
+        match observation {
+            github::PullRequestFollowUp::Closed => {
+                if let Some(plan) = store
+                    .list()
+                    .map_err(|error| error.to_string())?
+                    .into_iter()
+                    .find(|plan| {
+                        plan.id == run.automation_id
+                            && plan.revision == run.revision
+                            && plan.status == ash_protocol::AutomationStatus::Enabled
+                    })
+                {
+                    store
+                        .write(
+                            &ash_automation::AutomationWrite {
+                                command_id: command_id("closed", &run.id)?.to_string(),
+                                id: plan.id,
+                                expected_revision: plan.revision,
+                                definition: plan.definition,
+                                status: ash_protocol::AutomationStatus::Paused,
+                            },
+                            now,
+                        )
+                        .map_err(|error| error.to_string())?;
+                }
+                Ok(None)
+            }
+            github::PullRequestFollowUp::Waiting => Ok(None),
+            github::PullRequestFollowUp::Failed { head, context } => {
+                let key = serde_json::to_string(&(host, owner, &repository.name, number, head))
+                    .map_err(|error| error.to_string())?;
+                if run.event.as_ref().is_some_and(|event| event.key != key) {
+                    return Ok(None);
+                }
+                let event = run
+                    .event
+                    .clone()
+                    .unwrap_or(ash_protocol::AutomationEvent { key, context });
+                if !store
+                    .claim_event(&run.id, event)
+                    .map_err(|error| error.to_string())?
+                {
+                    return Ok(None);
+                }
+                store
+                    .get_run(&run.id)
+                    .map(Some)
+                    .map_err(|error| error.to_string())
+            }
+        }
     }
 }
 

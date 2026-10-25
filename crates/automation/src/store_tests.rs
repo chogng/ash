@@ -16,6 +16,7 @@ fn request(directory: &Path) -> AutomationWrite {
             prompt: "Inspect the build".into(),
             directory: directory.to_string_lossy().into_owned(),
             session: AutomationSession::New,
+            condition: None,
             schedule: AutomationSchedule::Interval {
                 anchor: time(60_000),
                 minutes: 1,
@@ -206,4 +207,133 @@ fn persisted_rules_are_validated_before_they_can_be_dispatched() {
         Err(AutomationError::Invalid(_))
     ));
     assert!(store.active_runs().unwrap().is_empty());
+}
+
+fn follow_up(directory: &Path) -> AutomationWrite {
+    let mut request = request(directory);
+    request.definition.session = AutomationSession::Continue {
+        session_id: ash_protocol::SessionId::new("session").unwrap(),
+        thread_id: ash_protocol::ThreadId::new("thread").unwrap(),
+    };
+    request.definition.condition = Some(ash_protocol::AutomationCondition::GitHubChecks {
+        host: "github.com".into(),
+        owner: "team".into(),
+        repository: "repo".into(),
+        number: 7,
+        account_id: "account".into(),
+        credential_revision: "1".into(),
+    });
+    request
+}
+
+#[test]
+fn provider_events_survive_restart_and_deduplicate_across_plans_and_revisions() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("automation.db");
+    let event = ash_protocol::AutomationEvent {
+        key: "pr-head-a".into(),
+        context: "diagnostics".into(),
+    };
+    let store = AutomationStore::open(&path).unwrap();
+    let mut request = follow_up(directory.path());
+    let plan = store.write(&request, time(0)).unwrap();
+    let run = store.run_now(&plan.id, "first", time(1)).unwrap();
+    assert!(store.claim_event(&run.id, event.clone()).unwrap());
+    drop(store);
+    let store = AutomationStore::open(&path).unwrap();
+    assert_eq!(store.get_run(&run.id).unwrap().event, Some(event.clone()));
+    assert!(store.claim_event(&run.id, event.clone()).unwrap());
+    let mut settled = store.get_run(&run.id).unwrap();
+    settled.status = AutomationRunStatus::Completed;
+    settled.finished_at = Some(time(2));
+    store.observe(&settled).unwrap();
+    request.command_id = "second-plan".into();
+    request.id = "other-window".into();
+    store.write(&request, time(3)).unwrap();
+    let duplicate = store.run_now(&request.id, "second", time(3)).unwrap();
+    assert!(!store.claim_event(&duplicate.id, event.clone()).unwrap());
+    request.id = plan.id.clone();
+    request.command_id = "edit-plan".into();
+    request.expected_revision = plan.revision;
+    store.write(&request, time(3)).unwrap();
+    let edited = store.run_now(&plan.id, "edited", time(4)).unwrap();
+    assert!(!store.claim_event(&edited.id, event).unwrap());
+    assert!(
+        store
+            .claim_event(
+                &edited.id,
+                ash_protocol::AutomationEvent {
+                    key: "pr-head-b".into(),
+                    context: "new diagnostics".into(),
+                }
+            )
+            .unwrap()
+    );
+}
+
+#[test]
+fn stopping_or_pausing_fences_dispatch_even_after_an_event_was_reserved() {
+    for pause in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let store = AutomationStore::open(&directory.path().join("automation.db")).unwrap();
+        let mut request = follow_up(directory.path());
+        let plan = store.write(&request, time(0)).unwrap();
+        let run = store.run_now(&plan.id, "run", time(1)).unwrap();
+        assert!(
+            store
+                .claim_event(
+                    &run.id,
+                    ash_protocol::AutomationEvent {
+                        key: "pr-head".into(),
+                        context: "diagnostics".into(),
+                    }
+                )
+                .unwrap()
+        );
+        if pause {
+            request.expected_revision = plan.revision;
+            request.command_id = "pause".into();
+            request.status = AutomationStatus::Paused;
+            store.write(&request, time(2)).unwrap();
+        } else {
+            store.stop_run(&run.id).unwrap();
+        }
+        assert_eq!(
+            store.get_run(&run.id).unwrap().status,
+            AutomationRunStatus::Stopping
+        );
+        assert_eq!(
+            store
+                .dispatch_if_current(&run.id, || panic!("revoked dispatch"))
+                .unwrap(),
+            None::<()>
+        );
+        assert!(
+            !store
+                .claim_event(
+                    &run.id,
+                    ash_protocol::AutomationEvent {
+                        key: "another-head".into(),
+                        context: "late observation".into(),
+                    }
+                )
+                .unwrap()
+        );
+    }
+}
+
+#[test]
+fn older_clients_cannot_turn_a_conditional_plan_into_an_unconditional_schedule() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = AutomationStore::open(&directory.path().join("automation.db")).unwrap();
+    let mut request = follow_up(directory.path());
+    let plan = store.write(&request, time(0)).unwrap();
+    request.command_id = "old-client-edit".into();
+    request.expected_revision = plan.revision;
+    request.definition.condition = None;
+    assert!(matches!(
+        store.write(&request, time(1)),
+        Err(AutomationError::Invalid(_))
+    ));
+    assert_eq!(store.list().unwrap(), [plan]);
 }

@@ -313,6 +313,20 @@ impl GitHubRequestProcessor {
         .map_err(github_authentication_error)
     }
 
+    pub(super) fn selected_client(
+        &self,
+        cancellation: &CancellationToken,
+        account_id: &str,
+    ) -> Result<github::GitHub, RpcError> {
+        github::GitHub::for_selected_account(
+            Arc::clone(&self.credentials),
+            Arc::clone(&self.provider),
+            cancellation.clone(),
+            account_id,
+        )
+        .map_err(github_authentication_error)
+    }
+
     pub(super) fn handles(method: ClientMethod) -> bool {
         matches!(
             method,

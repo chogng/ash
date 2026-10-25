@@ -543,9 +543,9 @@ export class AutomationsCardsWidget extends Disposable {
 				next.textContent = plan?.nextRunAt ? new Date(plan.nextRunAt).toLocaleString(getNLSLanguage()) : localize('automations.noScheduledRun', 'No scheduled run');
 				const provider = providers.find(provider => provider.id === plan?.target.providerId);
 				host.textContent = provider?.label ?? localize('automations.hostOffline', 'Host unavailable');
-				edit.enabled = this.automations.canUpdateAutomation(selected.id) && !this.pending.has('edit:' + selected.id);
+				edit.enabled = !plan?.kind && this.automations.canUpdateAutomation(selected.id) && !this.pending.has('edit:' + selected.id);
 				run.enabled = this.automations.canRunAutomation(selected.id) && !this.pending.has(selected.id);
-				duplicate.enabled = !!provider && !this.pending.has('duplicate:' + selected.id);
+				duplicate.enabled = !plan?.kind && !!provider && !this.pending.has('duplicate:' + selected.id);
 				pause.label = plan?.enabled ? localize('automations.pause', 'Pause') : localize('automations.enable', 'Enable');
 				pause.enabled = this.automations.canUpdateAutomation(selected.id) && !this.pending.has(selected.id);
 				notice.textContent = runs.some(run => !['completed', 'failed', 'stopped', 'skipped'].includes(run.status))

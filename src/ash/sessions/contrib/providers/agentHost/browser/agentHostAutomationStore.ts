@@ -115,7 +115,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 
 	canUpdateAutomation(id: string): boolean { return this.catalogueState.get() === 'ready' && !!this.getAutomation(id); }
 
-	canDeleteAutomation(id: string): boolean { return this.canUpdateAutomation(id) && !this.getActiveRunFor(id); }
+	canDeleteAutomation(id: string): boolean { return this.canUpdateAutomation(id) && !this.getAutomation(id)?.kind && !this.getActiveRunFor(id); }
 
 	canStopRun(run: IAutomationRun): boolean { return this.connection.get() === 'connected' && run.providerId === this.providerId && !terminal(run); }
 
@@ -138,6 +138,17 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		this.assertReady();
 		const current = this.getAutomation(id);
 		if (!current || current.revision !== expected.revision) return { kind: 'conflict', current };
+		if (current.kind) {
+			if (Object.keys(patch).some(key => key !== 'enabled')) {
+				throw new Error(localize('automations.followUpControls', 'Use the PR follow-up controls in Checks to change this automation.'));
+			}
+			const connectionEpoch = this.connectionEpoch;
+			const source = (await this.backend.list()).find(plan => plan.id === this.backendId(id));
+			if (!this.isCurrentConnection(connectionEpoch)) throw canceled();
+			if (!source || source.revision !== expected.revision) return { kind: 'conflict', current: this.getAutomation(id) };
+			const value = await this.backend.save(source.id, source.revision, source.definition, patch.enabled ? 'enabled' : 'paused');
+			return { kind: 'updated', automation: this.acceptAutomation(value, connectionEpoch) };
+		}
 		const options = { ...current, ...patch };
 		this.assertTarget(options.target.providerId);
 		const connectionEpoch = this.connectionEpoch;
@@ -281,6 +292,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		return {
 			id: this.identity(value.id),
 			name: value.definition.title,
+			...(value.definition.condition ? { kind: 'pullRequestFollowUp' as const } : {}),
 			prompt: value.definition.prompt,
 			target: { providerId: this.providerId, directory: value.definition.directory, session: value.definition.session },
 			schedule: value.definition.schedule,

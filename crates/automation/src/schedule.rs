@@ -29,6 +29,45 @@ pub fn validate_definition(definition: &AutomationDefinition) -> Result<(), Auto
             "directory must be absolute".into(),
         ));
     }
+    if let Some(ash_protocol::AutomationCondition::GitHubChecks {
+        host,
+        owner,
+        repository,
+        number,
+        account_id,
+        credential_revision,
+    }) = &definition.condition
+    {
+        if !matches!(
+            definition.session,
+            ash_protocol::AutomationSession::Continue { .. }
+        ) || !matches!(definition.schedule, AutomationSchedule::Interval { .. })
+            || *number == 0
+            || *number > 9_007_199_254_740_991
+            || host.is_empty()
+            || host.len() > 253
+            || !host
+                .bytes()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || b".-".contains(&c))
+            || [owner, repository].iter().any(|value| {
+                value.is_empty()
+                    || value.len() > 100
+                    || value.as_str() == "."
+                    || value.as_str() == ".."
+                    || !value.bytes().all(|c| {
+                        c.is_ascii_lowercase() || c.is_ascii_digit() || b"-_.".contains(&c)
+                    })
+            })
+            || account_id.is_empty()
+            || account_id.len() > 256
+            || account_id.contains('\0')
+            || credential_revision.parse::<u64>().is_err()
+        {
+            return Err(AutomationError::Invalid(
+                "invalid PR follow-up condition".into(),
+            ));
+        }
+    }
     validate_schedule(&definition.schedule)
 }
 

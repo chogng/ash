@@ -1,3 +1,4 @@
+import { localize } from '../../../nls.js';
 import { AppServerRemoteError } from '../common/appServerError.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { Emitter } from '../../../base/common/event.js';
@@ -18,11 +19,18 @@ export class AppServerAutomationService extends Disposable implements IAutomatio
 		}));
 	}
 
+	public get supportsPullRequestFollowUp(): boolean {
+		return this.client.capabilities?.contracts?.automationConditions?.version === 1;
+	}
+
 	public async list(): Promise<readonly Automation[]> {
 		return (await this.client.request(APP_SERVER_METHODS['automation/list'], {}).catch(explain)).automations;
 	}
 
 	public save(id: string, revision: number, definition: AutomationDefinition, status: AutomationStatus): Promise<Automation> {
+		if (definition.condition && !this.supportsPullRequestFollowUp) {
+			return Promise.reject(new Error(localize('automations.followUpUnavailable', 'PR follow-up requires a backend that supports conditional automations. Update or reconnect to the owning host.')));
+		}
 		const schedule = definition.schedule.type === 'weekly' ? { ...definition.schedule, weekdays: [...definition.schedule.weekdays] } : definition.schedule;
 		return this.client.request(APP_SERVER_METHODS['automation/write'], { id, expectedRevision: revision, commandId: generateUuid(), definition: { ...definition, schedule }, status }).catch(explain);
 	}

@@ -650,6 +650,8 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
             )
             .map_err(core_error)?;
         self.notify_session_end(&mutation.session_id);
+        self.context
+            .stop_session_automations(&mutation.session_id)?;
         self.context.clear_session_dirs(&mutation.session_id);
         self.updates.publish_session_changed(&mutation.session_id);
         self.enforce_turn_changes_cleanup();

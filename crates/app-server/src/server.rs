@@ -3604,7 +3604,11 @@ impl AppServer {
                 .automation_processor
                 .automation_preview(&request.params),
             Some(ClientMethod::AutomationWrite) => {
-                self.automation_processor.automation_write(&request.params)
+                let response = self
+                    .automation_processor
+                    .automation_write(&request.params)?;
+                self.advance_stopping_automations()?;
+                Ok(response)
             }
             Some(ClientMethod::AutomationDelete) => {
                 self.automation_processor.automation_delete(&request.params)
@@ -3619,7 +3623,9 @@ impl AppServer {
                 self.automation_processor.automation_runs(&request.params)
             }
             Some(ClientMethod::AutomationStop) => {
-                self.automation_processor.automation_stop(&request.params)
+                let response = self.automation_processor.automation_stop(&request.params)?;
+                self.advance_stopping_automations()?;
+                Ok(response)
             }
             Some(ClientMethod::ProjectRead) => self
                 .project_processor()

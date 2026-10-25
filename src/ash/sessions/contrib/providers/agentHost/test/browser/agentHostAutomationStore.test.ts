@@ -175,3 +175,29 @@ test('read-only run results and schedule previews retire with their originating 
 	await preview.complete([120]);
 	await Promise.all([reading, previewing]);
 });
+
+test('PR follow-up pause preserves the backend condition and rejects generic editing', async () => {
+	const value = fixture();
+	using resources = value.resources;
+	const plan: Automation = {
+		...value.automation,
+		definition: {
+			...value.automation.definition,
+			session: { type: 'continue', sessionId: 'session', threadId: 'thread' },
+			condition: { type: 'gitHubChecks', host: 'github.com', owner: 'team', repository: 'repo', number: 7, accountId: 'account', credentialRevision: '1' }
+		},
+	};
+	await value.reconnect([plan]);
+	const descriptor = value.store.automations.get()[0]!;
+	assert.equal(descriptor.kind, 'pullRequestFollowUp');
+	const writes: unknown[] = [];
+	value.backend.save = async (_id, _revision, definition, status) => {
+		writes.push({ definition, status });
+		return { ...plan, definition, status, revision: 2 };
+	};
+	await assert.rejects(value.store.updateAutomation(descriptor.id, { prompt: 'Unconditional repair' }), /PR follow-up controls/);
+	assert.deepEqual(writes, []);
+	await value.store.updateAutomation(descriptor.id, { enabled: false });
+	assert.deepEqual(writes, [{ definition: plan.definition, status: 'paused' }]);
+	assert.equal(value.store.canDeleteAutomation(descriptor.id), false);
+});

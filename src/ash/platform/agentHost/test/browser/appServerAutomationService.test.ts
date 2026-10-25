@@ -72,3 +72,26 @@ test('Automation results read only the recorded Turn in a continued conversation
 		assert.deepEqual(requests, []);
 	} finally { service.dispose(); }
 });
+
+test('PR follow-up refuses an older backend before sending a conditional plan', async () => {
+	let writes = 0;
+	const client = {
+		capabilities: { contracts: {} as Record<string, { version: number; }> },
+		onStateChange: Event.None, onNotification: Event.None,
+		async request(): Promise<unknown> { writes++; return {}; },
+	};
+	using service = new AppServerAutomationService(client as unknown as AppServerProtocolClient);
+	const definition = {
+		title: 'Follow PR', prompt: 'Fix CI', directory: '/workspace',
+		session: { type: 'continue' as const, sessionId: 'session', threadId: 'thread' },
+		schedule: { type: 'interval' as const, anchor: 1, minutes: 1 },
+		condition: { type: 'gitHubChecks' as const, host: 'github.com', owner: 'team', repository: 'repo', number: 7, accountId: 'account', credentialRevision: '1' },
+	};
+	assert.equal(service.supportsPullRequestFollowUp, false);
+	await assert.rejects(service.save('follow-up', 0, definition, 'enabled'), /requires a backend/);
+	assert.equal(writes, 0);
+	client.capabilities.contracts.automationConditions = { version: 1 };
+	assert.equal(service.supportsPullRequestFollowUp, true);
+	await service.save('follow-up', 0, definition, 'enabled');
+	assert.equal(writes, 1);
+});

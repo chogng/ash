@@ -231,6 +231,10 @@ impl AppServer {
         }
         if self.automation_processor.is_available() {
             capabilities.contracts.insert(
+                "automationConditions".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
+            capabilities.contracts.insert(
                 "automation".into(),
                 ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
             );
