@@ -58,8 +58,10 @@
       "important": false
     }
   ],
-  "keymaps": [{ "id": "ash.keymap-sublime@ash", "name": "Sublime Text" }],
-  "remote": [{ "id": "ash.remote-workspace@ash", "name": "SSH" }],
+  "keymaps": [
+    { "id": "marketplace.keymap-sublime@ash", "name": "Sublime Text" }
+  ],
+  "remote": [{ "id": "marketplace.remote-workspace@ash", "name": "SSH" }],
   "web": [
     { "id": "marketplace.markdown@ash", "name": "Markdown" },
     { "id": "marketplace.aurora-theme@ash", "name": "Aurora" }

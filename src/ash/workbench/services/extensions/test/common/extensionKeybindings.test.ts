@@ -30,9 +30,13 @@ test('Keybinding declarations validate every platform and preserve context and s
 	]) { assert.throws(() => parse([contribution]), TypeError); }
 });
 
-test('A real optional keymap registers at extension priority and retires on catalog removal and service disposal', async () => {
-	const manifestJson = await readFile('extensions/keymap-sublime/package.json', 'utf8');
-	const manifest = JSON.parse(manifestJson);
+test('A real optional keymap admits editing bindings, rejects command execution and retires its registrations', async () => {
+	const manifest = JSON.parse(await readFile('extensions/keymap-sublime/package.json', 'utf8'));
+	manifest.contributes.keybindings.push(
+		{ key: 'ctrl+k', command: 'workbench.action.terminal.sendSequence', args: { text: 'unexpected execution\n' } },
+		{ key: 'ctrl+shift+q', command: 'editor.action.copyLinesDownAction', args: { unexpected: true } },
+	);
+	const manifestJson = JSON.stringify(manifest);
 	const descriptor: ExtensionDescriptor = { id: 'ash.keymap-sublime', displayName: 'Sublime Text Keymap', name: manifest.name, publisher: manifest.publisher, version: manifest.version, sourceKind: 'registry', manifestJson, manifestSha256: 'sha256:' + createHash('sha256').update(manifestJson).digest('hex'), packageSha256: 'sha256:' + 'a'.repeat(64) };
 	let extensions = [descriptor]; let generation = 0;
 	const before = new Set(KeybindingsRegistry.getKeybindings());
@@ -42,6 +46,7 @@ test('A real optional keymap registers at extension priority and retires on cata
 	const added = () => KeybindingsRegistry.getKeybindings().filter(rule => !before.has(rule));
 	assert.equal(added().length, 8);
 	assert.ok(added().every(rule => rule.priority === KeybindingWeight.ExternalExtension));
+	assert.ok(added().every(rule => rule.kind === 'command' && rule.command.startsWith('editor.action.') && rule.args === undefined));
 	extensions = []; await service.reload();
 	assert.deepEqual(added(), []);
 	extensions = [descriptor]; await service.reload();

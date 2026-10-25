@@ -108,30 +108,30 @@ suite('Workspace extension recommendations', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('product tips resolve available packages and share installed and ignored filtering', async () => {
 		const f = fixture(); using lifetime = f.lifetime;
-		f.setProductIds(['ash.keymap-sublime@ash', 'marketplace.python@ash']);
+		f.setProductIds(['marketplace.keymap-sublime@ash', 'marketplace.python@ash']);
 		f.setEnvironment({ platform: 'linux', executables: ['python3'] });
 		let snapshot = await f.recommendations.getRecommendations();
-		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId).sort(), ['ash.keymap-sublime@ash', 'marketplace.python@ash']);
+		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId).sort(), ['marketplace.keymap-sublime@ash', 'marketplace.python@ash']);
 		assert.equal(snapshot.recommendations.find(item => item.extensionId.includes('python'))?.context?.source, RecommendationSource.EXE);
 		assert.equal(snapshot.recommendations.find(item => item.extensionId.includes('keymap'))?.context, undefined, 'keymaps are offered on demand');
 		f.ignored.toggleGlobalIgnoredRecommendation('MARKETPLACE.PYTHON', true);
-		f.setInstalled(['ash.keymap-sublime@ash']);
+		f.setInstalled(['marketplace.keymap-sublime@ash']);
 		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);
 	});
 
 	test('remote authority changes refresh remote tips and keep executable suggestions quiet', async () => {
 		const f = fixture(); using lifetime = f.lifetime;
-		f.setProductIds(['ash.remote-workspace@ash', 'marketplace.python@ash']);
+		f.setProductIds(['marketplace.remote-workspace@ash', 'marketplace.python@ash']);
 		f.setEnvironment({ platform: 'linux', executables: ['python'] });
 		assert.equal((await f.recommendations.getRecommendations()).recommendations.length, 1);
 		f.setConnection({ kind: 'ssh', generation: 2 } as NonNullable<IAppServerRemoteAgentService['connection']>);
 		const snapshot = await f.recommendations.getRecommendations();
-		assert.ok(snapshot.recommendations.some(item => item.extensionId === 'ash.remote-workspace@ash'));
+		assert.ok(snapshot.recommendations.some(item => item.extensionId === 'marketplace.remote-workspace@ash'));
 		const python = snapshot.recommendations.find(item => item.extensionId.includes('python'))!;
 		assert.equal(python.reason.reasonId, ExtensionRecommendationReason.Executable);
 		assert.equal(python.context, undefined, 'remote tool discovery cannot create a local installation prompt');
 		f.setConnection(undefined);
-		assert.ok(!(await f.recommendations.getRecommendations()).recommendations.some(item => item.extensionId === 'ash.remote-workspace@ash'));
+		assert.ok(!(await f.recommendations.getRecommendations()).recommendations.some(item => item.extensionId === 'marketplace.remote-workspace@ash'));
 	});
 
 	test('merges Ash JSONC and multi-root workspace declarations, normalizes IDs and applies exclusions', async () => {

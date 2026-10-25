@@ -307,7 +307,7 @@ const api: IExtensionManagementApi = {
 	get: async params => {
 		requests.push(['get', params]);
 		if (offline) { throw new Error('Catalog unavailable'); }
-		if (new URLSearchParams(location.search).has('productTips') && ['ash.keymap-sublime@ash', 'marketplace.markdown@ash', 'marketplace.aurora-theme@ash', 'marketplace.python@ash'].includes(params.packageId)) {
+		if (new URLSearchParams(location.search).has('productTips') && ['marketplace.keymap-sublime@ash', 'marketplace.markdown@ash', 'marketplace.aurora-theme@ash', 'marketplace.python@ash'].includes(params.packageId)) {
 			return { ...packageDetails, packageType: 'editor', package: { ...packageDetails.package, id: params.packageId }, displayName: params.packageId };
 		}
 		const catalog = sources.filter(source => source.enabled).flatMap(source => [
@@ -592,7 +592,7 @@ const previewHeight = new URLSearchParams(location.search).has('preview') ? 780 
 if (new URLSearchParams(location.search).has('preview')) { document.getElementById('lsp')!.hidden = true; document.getElementById('details')!.style.width = '850px'; document.getElementById('details')!.style.height = `${previewHeight}px`; }
 host.style.width = paneLayout ? '280px' : '360px'; host.style.height = paneLayout ? '260px' : `${previewHeight}px`;
 // The product model drives the classification scenarios; component scenarios mount every list independently.
-const contributions = disposables.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }));
+const contributions = disposables.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.dialogHandler', 'workbench.contrib.extensions', 'workbench.contrib.extensionRecommendations']));
 contributions.advance(WorkbenchPhase.BlockStartup);
 const classification = new URLSearchParams(location.search).has('classification');
 const descriptor = ViewsRegistry.getViewContainer('ash.extensions')!;

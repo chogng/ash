@@ -61,6 +61,15 @@ interface LanguageConfigurationContribution {
 	readonly priority?: number;
 }
 
+// External declarative assets can remap text editing, but cannot invoke general
+// Workbench commands or supply arguments that carry process or terminal actions.
+const declarativeEditingCommands = new Set([
+	'editor.action.addSelectionToNextFindMatch', 'editor.action.selectHighlights',
+	'editor.action.insertCursorAbove', 'editor.action.insertCursorBelow',
+	'editor.action.copyLinesDownAction', 'editor.action.deleteLines',
+	'editor.action.insertLineAfter', 'editor.action.insertLineBefore',
+]);
+
 /** Activates Rust-discovered declarative extensions without materializing legacy grammar resources. */
 export class AppServerExtensionService extends Disposable implements IExtensionService {
 	private readonly colorContributions = this._register(new ColorExtensionPoint());
@@ -359,7 +368,9 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			for (const extension of transportCatalog.extensions) {
 				activeExtension = projectExtensionDescriptor(extension);
 				const manifest = preparedManifests.get(extension.id)!;
-				keybindings.push(...manifest.contributes.keybindings.map(rule => ({ ...rule, source: KeybindingSource.Workbench, priority: extension.sourceKind === 'builtIn' ? KeybindingWeight.BuiltinExtension : KeybindingWeight.ExternalExtension })));
+				keybindings.push(...manifest.contributes.keybindings
+					.filter(rule => extension.sourceKind === 'builtIn' || rule.args === undefined && declarativeEditingCommands.has(rule.command))
+					.map(rule => ({ ...rule, source: KeybindingSource.Workbench, priority: extension.sourceKind === 'builtIn' ? KeybindingWeight.BuiltinExtension : KeybindingWeight.ExternalExtension })));
 				manifests.push({ description: activeExtension, manifest });
 				welcome.push(...manifest.contributes.viewsWelcome.map(entry => [entry.view, { content: entry.contents, when: entry.when ? ContextKeyExpr.deserialize(entry.when) : undefined, precondition: entry.precondition ? ContextKeyExpr.deserialize(entry.precondition) : undefined, group: entry.group, order: entry.order }] as Parameters<typeof ViewsRegistry.registerViewWelcomeContent>));
 				configurations.push(...manifest.contributes.configuration);

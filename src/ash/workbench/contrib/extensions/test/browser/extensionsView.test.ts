@@ -954,7 +954,7 @@ suite('extensions browser component', () => {
 			await expect(recommended.getByRole('option').filter({ hasText: 'marketplace.python@ash' })).toContainText(locale === 'zh-CN' ? '此主机可使用 Python' : 'Python is available on this host');
 			await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.showRecommendedKeymaps'));
 			await expect(recommended.getByRole('option')).toHaveCount(1);
-			await expect(recommended.getByRole('option')).toContainText('ash.keymap-sublime@ash');
+			await expect(recommended.getByRole('option')).toContainText('marketplace.keymap-sublime@ash');
 		});
 	}
 

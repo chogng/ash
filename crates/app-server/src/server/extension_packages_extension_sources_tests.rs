@@ -156,7 +156,14 @@ fn another_artifact_grant_cannot_authorize_an_installed_product_client() {
 #[test]
 fn manifest_self_declaration_and_policy_grant_cannot_authorize_a_registry_client() {
     let root = tempfile::tempdir().unwrap();
-    let manager = installed_manager(root.path(), SourceAuthority::Registry, manifest());
+    let mut declaration = manifest();
+    let keybindings = serde_json::json!([{"key":"ctrl+shift+d","command":"editor.action.copyLinesDownAction","when":"editorTextFocus && !editorReadonly"}]);
+    declaration["contributes"]["keybindings"] = keybindings.clone();
+    declaration["contributes"]["debuggers"] =
+        serde_json::json!([{"type":"blocked","program":"bin/adapter"}]);
+    declaration["main"] = "extension.js".into();
+    declaration["browser"] = "browser.js".into();
+    let manager = installed_manager(root.path(), SourceAuthority::Registry, declaration);
     let policy = Arc::new(EditorExtensionPolicy::open(root.path().join("policy.json")).unwrap());
     let source = manager
         .local_capability_sources(CapabilityKind::Executable)
@@ -187,6 +194,10 @@ fn manifest_self_declaration_and_policy_grant_cannot_authorize_a_registry_client
     .unwrap();
     assert!(normalized.get("ashRuntime").is_none());
     assert!(normalized["contributes"].get("customEditors").is_none());
+    assert_eq!(normalized["contributes"]["keybindings"], keybindings);
+    assert!(normalized.get("main").is_none());
+    assert!(normalized.get("browser").is_none());
+    assert!(normalized["contributes"].get("debuggers").is_none());
 }
 
 #[test]
