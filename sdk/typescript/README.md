@@ -77,6 +77,19 @@ client-owned documents and configuration in `workspace`, UI and comparison opera
 Each group exposes implemented domain operations with self-contained TypeScript types.
 Registration, execution and events retain their existing admission and disposal owners.
 
+`languages.registerDocumentFormattingEditProvider` registers document formatting for
+the selected language IDs. The provider receives an immutable document snapshot,
+indentation options and a cancellation token, and returns `TextEdit[]`; the host
+applies current-version edits through its existing undo and save owners. Disposing
+the registration or disabling the extension withdraws the provider.
+
+`languages.getJsonSchemaContributions()` reads detached JSON schemas and their file
+patterns from the window's schema registry. `languages.onDidChangeJsonSchemas`
+invalidates cached analysis when schemas or associations change. The consuming
+[`json-language-features`](../../extensions/json-language-features/README.md) extension
+owns JSON/JSONC editing enhancements; neither API grants schema mutation or network
+access. Configuration parsing and comment-preserving file editing remain host-owned.
+
 `context.storage.get(key)` reads a fresh JSON value from this extension's profile state;
 `update(key, value)` stores one value, or removes it with `undefined`. Missing keys return
 `undefined`; JSON `null` remains a stored value. SQLite applies each key update to the latest

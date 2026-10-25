@@ -229,6 +229,8 @@ async function preparePackages(): Promise<boolean> {
 					configFile: false, logLevel: 'error',
 					plugins: [sourcePlugin, {
 						name: 'ash-extension-webview',
+						// Bind the SDK before Vite resolves an author's installed SDK package.
+						enforce: 'pre',
 						async resolveId(source, importer) {
 							if (source === '@ash/sdk') return '\0ash-public-api';
 							if (source === '\0ash-api-bridge') return source;

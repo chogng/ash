@@ -39,6 +39,8 @@ import { TestWorkspaceService } from '../../../configuration/test/common/testSer
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { MainThreadConfiguration } from '../../../../api/browser/mainThreadConfiguration.js';
+import { Registry } from '../../../../../platform/registry/common/platform.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { MainThreadWorkspace } from '../../../../api/browser/mainThreadWorkspace.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { MockDebugSession } from '../../../../contrib/debug/test/common/mockDebug.js';
@@ -1653,6 +1655,39 @@ test('configuration bridge preserves owner commit order, falsy values, language 
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.equal(api.invocations.length, count);
 	assert.deepEqual(errors, []);
+});
+
+test('JSON schema bridge returns detached owner contributions and retires schema notifications', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [{ kind: 'workspaceEvents', registrationId: 'window' }]));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using bridge = services.createInstance(MainThreadConfiguration, 1_000, (error: unknown) => { throw error; });
+	using schemas = new DisposableStore();
+	const registry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
+	const uri = 'test://json-bridge/schema';
+	const schema = { type: 'object' as const, description: undefined, properties: { enabled: { type: 'boolean' as const } } };
+	bridge.update(api.current);
+	await waitFor(() => api.invocations.length === 1);
+	registry.registerSchema(uri, schema, schemas);
+	using association = registry.registerSchemaAssociation(uri, '**/sample.jsonc');
+	await waitFor(() => api.invocations.length === 3);
+	assert.deepEqual(api.invocations.slice(1).map(request => request.payload), [{ type: 'jsonSchemas', revision: 1, emit: true }, { type: 'jsonSchemas', revision: 2, emit: true }]);
+	const contributions = bridge.getJsonSchemaContributions() as { uri: string; fileMatch: string[]; schema: { properties: { enabled: { type: string; }; }; }; }[];
+	const contribution = contributions.find(value => value.uri === uri)!;
+	assert.deepEqual(contribution.fileMatch, ['**/sample.jsonc']);
+	assert.equal(Object.hasOwn(contribution.schema, 'description'), false);
+	assert.notEqual(contribution.schema, schema);
+	assert.throws(() => { contribution.schema.properties.enabled.type = 'string'; }, TypeError);
+	assert.throws(() => { contribution.fileMatch.push('**/other.json'); }, TypeError);
+	assert.equal(schema.properties.enabled.type, 'boolean');
+	assert.deepEqual(registry.getSchemaAssociations()[uri], ['**/sample.jsonc']);
+	registry.notifySchemaChanged(uri);
+	await waitFor(() => api.invocations.length === 4);
+	bridge.clear();
+	association.dispose();
+	registry.notifySchemaChanged(uri);
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(api.invocations.length, 4);
 });
 
 test('workspace bridge reads the actual workspace owner and fences cleared subscriptions', async () => {

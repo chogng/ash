@@ -176,6 +176,19 @@ test('JSON editing shares the open model, retains unsaved edits and refuses dirt
 	assert.equal(await f.read(), '{ invalid');
 });
 
+test('JSON editing saves removal of the only trailing-comma property without losing comments', async () => {
+	using resources = new DisposableStore();
+	const f = await fixture(resources, '{\n  // keep before\n  "other": 1, // keep after\n}\n');
+	using reference = await f.services.get(IFileTextModelService).acquire({ resource: f.environment.argvResource }, new AbortController().signal);
+	await f.services.get(IJSONEditingService).write(f.environment.argvResource, [{ path: ['other'], value: undefined }], true);
+	const saved = await f.read();
+	assert.deepEqual(parseJsonc(saved), {});
+	assert.match(saved, /keep before/u);
+	assert.match(saved, /keep after/u);
+	assert.equal(reference.model.getValue(), saved);
+	assert.equal(reference.isDirty, false);
+});
+
 test('disposal ignores an in-flight external reload and retires the file listener', async () => {
 	using resources = new DisposableStore();
 	const f = await fixture(resources);

@@ -101,26 +101,30 @@ export class LanguagesRegistry extends Disposable {
 	}
 
 	getLanguageName(languageId: string): string | null {
-		const description = this.get(languageId);
+		// Association-only contributions must not hide the language package's display name.
+		const named = this.descriptions.get(languageId)?.filter(entry => entry.description.aliases?.length);
+		const description = selectDescription(named)?.description ?? this.get(languageId);
 		return description?.aliases?.[0] ?? description?.id ?? null;
 	}
 
 	getLanguageIdByLanguageName(languageName: string): string | null {
 		const normalized = languageName.toLocaleLowerCase();
-		return this.getRegisteredLanguageIds().find(languageId => this.get(languageId)?.aliases?.some(alias => alias.toLocaleLowerCase() === normalized)) ?? null;
+		return this.getRegisteredLanguageIds().find(languageId => languageId.toLocaleLowerCase() === normalized
+			|| this.descriptions.get(languageId)?.some(entry => entry.description.aliases?.some(alias => alias.toLocaleLowerCase() === normalized))) ?? null;
 	}
 
 	getLanguageIdByMimeType(mimeType: string | null | undefined): string | null {
 		if (!mimeType) return null;
 		const normalized = mimeType.toLocaleLowerCase();
-		return this.getRegisteredLanguageIds().find(languageId => this.get(languageId)?.mimetypes?.includes(normalized)) ?? null;
+		return this.getRegisteredLanguageIds().find(languageId => this.descriptions.get(languageId)?.some(entry => entry.description.mimetypes?.includes(normalized))) ?? null;
 	}
 
 	resolveLanguageId(input: TextResourceLanguageInput): string | undefined {
 		this.assertNotDisposed();
 		if (!input || typeof input !== "object") throw new TypeError("Language resolution input is required");
 		const path = normalizePath(input.resource.path);
-		const encodedPath = input.resource.toEncodedComponents().path;
+		// Windows separators delimit filenames; an escaped forward slash remains part of a URI segment.
+		const encodedPath = input.resource.toEncodedComponents().path.replace(/%5c/gi, "/");
 		const fileName = normalizePath(decodeURIComponent(encodedPath.slice(encodedPath.lastIndexOf("/") + 1)));
 		const contentType = input.contentType?.toLowerCase();
 		const firstLine = normalizeFirstLineText(input.firstLine);

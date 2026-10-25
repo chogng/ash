@@ -602,6 +602,8 @@ VS Code 来源的内部编辑器、Workbench、语言和生命周期代码继续
 
 文档事件更新已有 handle，语言 Provider 使用固定请求快照；`workspace.textDocuments` 在事件送达或显式读取后建立，不是激活时完整初始列表。状态栏在停用、重启、卸载或断连时释放；不同调用和进程代次不能借用旧权限。扩展私有 Secrets 的宿主接口见下文；统一认证作者接口仍待真实消费者驱动实现。
 
+JSON 与 JSONC 共用内置 `ash.json-language-features` Browser 扩展的补全、悬停、文档格式化和诊断，IDE 与 Agents 窗口走同一公共 SDK。`ash.json` 继续贡献两种语言的声明、文件关联、编辑规则与语法资源。扩展通过 `languages.getJsonSchemaContributions()` 读取窗口 Schema 注册表的分离快照，通过 `onDidChangeJsonSchemas` 失效语言服务缓存；注册、配置解析、保留注释的读写及保存仍属于核心 owner。停用扩展撤销 Provider 和诊断，不影响这些配置能力。扩展仅解析已注册的 Schema，不额外获取远程 Schema。
+
 `context.storage.get(key)` 读取该扩展 profile 命名空间的最新 JSON 值，缺失返回 undefined；
 `update(key, value)` 更新单个 key，undefined 删除、null 保留为值。SQLite 写事务基于最新数据
 更新对应 key，避免不同窗口的不同 key 写入互相覆盖。SDK 不保存值缓存，作者不接触整份快照、

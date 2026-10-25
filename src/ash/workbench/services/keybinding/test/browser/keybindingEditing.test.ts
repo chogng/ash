@@ -27,7 +27,7 @@ test('keybindings JSONC validates complete ordered rules before installation', (
 
 test('shortcut editing preserves comments, arguments and OS overrides in the shared JSON model', async () => {
 	using fixture = new KeybindingTestServices();
-	const source = '// user shortcuts\n[\n  {"key":"ctrl+k", /* explain binding */ "command":"ash.test","args":{"kind":"text"},"mac":"cmd+k","systemWide":true},\n]\n';
+	const source = '// user shortcuts\n[\n  /* keep list note */\n  {"key":"ctrl+k", /* explain binding */ "command":"ash.test","args":{"kind":"text"},"mac":"cmd+k","systemWide":true},\n  // keep trailing note\n]\n';
 	await fixture.writeSource(source);
 	const resource = fixture.profiles.currentProfile.keybindingsResource;
 	using reference = await fixture.models.acquire({ resource, languageId: 'jsonc' }, new AbortController().signal);
@@ -44,6 +44,8 @@ test('shortcut editing preserves comments, arguments and OS overrides in the sha
 	await editing.removeKeybinding(userItem(result.content));
 	assert.deepEqual(await fixture.read(), []);
 	assert.match((await fixture.files.readFile(resource)).content, /user shortcuts/u);
+	assert.match((await fixture.files.readFile(resource)).content, /keep list note/u);
+	assert.match((await fixture.files.readFile(resource)).content, /keep trailing note/u);
 });
 
 test('shortcut list refuses dirty JSON; saving conflicts retain text and the external file', async () => {

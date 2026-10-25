@@ -211,6 +211,8 @@
     "test:component-fixtures:ci:prepared": "pnpm test:component-fixtures:unit && node --test build/lib/test/screenshotBlocksCi.test.ts build/lib/test/screenshotDiffReport.test.ts && pnpm test:component-fixtures:prepared && pnpm test:component-fixtures:screenshots:prepared && node build/lib/screenshotBlocksCi.ts .build/component-fixtures/screenshots/current/manifest.json test/componentFixtures/blocks-ci-screenshots.md ../../.build/component-fixtures/screenshots/current > .build/component-fixtures/blocks-ci-updated.md"
   },
   "devDependencies": {
+    "jsonc-parser": "3.3.1",
+    "vscode-json-languageservice": "5.7.2",
     "@ash/typescript-compiler": "npm:typescript@7.0.2",
     "@electron/rebuild": "4.2.0",
     "@playwright/test": "1.61.1",

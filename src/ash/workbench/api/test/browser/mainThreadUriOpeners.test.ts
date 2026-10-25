@@ -23,7 +23,7 @@ import { IExternalUriOpenerService } from '../../../contrib/externalUriOpener/co
 import '../../../contrib/externalUriOpener/common/externalUriOpener.contribution.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { UserSettingsResource } from '../../../services/preferences/common/settingsEditorInput.js';
-import { createJsonCompletionProvider } from '../../../services/language/common/jsonLanguageFeatures.js';
+import { createJsonCompletionProvider } from '../../../../../../test/fixtures/jsonLanguageFeatures.js';
 import { MainThreadUriOpeners } from '../../browser/mainThreadUriOpeners.js';
 
 const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
@@ -97,7 +97,7 @@ test('configured extension opener receives resolved and original URLs without a 
 		requestId: 1, languageId: 'jsonc', resource: UserSettingsResource, position: new Position(1, 39),
 		context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: settings.createVersionedSnapshot(),
 	}, new AbortController().signal);
-	assert.deepEqual(suggestions?.items.map(item => [item.label, item.detail]), [
+	assert.deepEqual(suggestions?.items.map(item => [item.label, item.documentation]), [
 		['"default"', 'Open in default browser'], ['"ash.browser.open"', 'Open in Ash browser'], [JSON.stringify(openerId), 'Acme browser'],
 	]);
 });

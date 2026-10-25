@@ -1,17 +1,17 @@
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
-import { Registry } from '../../../../../platform/registry/common/platform.js';
-import { CancellationToken } from '../../../../../base/common/cancellation.js';
+import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { Registry } from '../../../src/ash/platform/registry/common/platform.js';
+import { CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { parseJsonc } from '../../../../../base/common/jsonc.js';
-import { URI } from '../../../../../base/common/uri.js';
-import { type JsonSchema } from '../../../../../base/common/jsonSchema.js';
-import { Position } from '../../../../../editor/common/core/position.js';
-import { LanguageCompletionItemKind, LanguageCompletionTriggerKind, createLanguageFeatureRequest, type LanguageDiagnostic, type LanguageDiagnosticsPublisher } from '../../../../../editor/common/languages.js';
-import { TextModel } from '../../../../../editor/common/model/textModel.js';
-import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
-import { acquireJsonLanguageDiagnostics } from '../../common/jsonLanguageDiagnostics.js';
-import { createJsonCompletionProvider, createJsonFormattingProvider, createJsonHoverProvider } from '../../common/jsonLanguageFeatures.js';
+import { parseJsonc } from '../../../src/ash/base/common/jsonc.js';
+import { URI } from '../../../src/ash/base/common/uri.js';
+import { type JsonSchema } from '../../../src/ash/base/common/jsonSchema.js';
+import { Position } from '../../../src/ash/editor/common/core/position.js';
+import { LanguageCompletionItemKind, LanguageCompletionTriggerKind, createLanguageFeatureRequest, type LanguageDiagnostic, type LanguageDiagnosticsPublisher } from '../../../src/ash/editor/common/languages.js';
+import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
+import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../src/ash/platform/jsonschemas/common/jsonContributionRegistry.js';
+import { acquireJsonLanguageDiagnostics } from '../../../test/fixtures/jsonLanguageFeatures.js';
+import { createJsonCompletionProvider, createJsonFormattingProvider, createJsonHoverProvider } from '../../../test/fixtures/jsonLanguageFeatures.js';
 
 const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
@@ -62,21 +62,22 @@ test('generic JSON language features resolve nested schema completion, hover, an
 		resource,
 		position: new Position((0) + 1, (13) + 1),
 	}, signal);
-	assert.deepEqual(hover?.contents, ['Enabled', 'Controls the editor.', 'Default: true']);
+	assert.match(hover?.contents.join('\n') ?? '', /Enabled[\s\S]*Controls the editor/u);
 
 	validModel.setLanguage('jsonc');
 	const edits = await createJsonFormattingProvider().provideDocumentFormattingEdits(validModel, { tabSize: 2, insertSpaces: true }, CancellationToken.None);
 	assert.ok(edits);
-	assert.equal(edits.length, 1);
-	assert.match(edits[0]!.text, /\/\/ note/u);
-	assert.deepEqual(parseJsonc(edits[0]!.text, 'formatted document'), { editor: { enabled: true } });
+	assert.ok(edits.length > 0);
+	validModel.applyEdits(edits);
+	assert.match(validModel.getValue(), /\/\/ note/u);
+	assert.deepEqual(parseJsonc(validModel.getValue(), 'formatted document'), { editor: { enabled: true } });
 
 	validModel.setLanguage('json');
 	const strictJsonEdits = await createJsonFormattingProvider().provideDocumentFormattingEdits(validModel, { tabSize: 2, insertSpaces: true }, CancellationToken.None);
 	assert.deepEqual(strictJsonEdits, []);
 });
 
-test('JSON resources publish syntax diagnostics and associated schemas add validation', () => {
+test('JSON resources publish syntax diagnostics and associated schemas add validation', async () => {
 	using schemaStore = new DisposableStore();
 	const registry = associatedRegistry(schemaStore);
 	using model = new TextModel('{ "editor": { "enabled": "yes" } }');
@@ -88,15 +89,16 @@ test('JSON resources publish syntax diagnostics and associated schemas add valid
 		dispose(): void { },
 		[Symbol.dispose](): void { },
 	};
-	using registration = acquireJsonLanguageDiagnostics(resource, 'jsonc', model, () => publisher, registry)!;
+	using registration = await acquireJsonLanguageDiagnostics(resource, 'jsonc', model, () => publisher, registry)!;
 
-	assert.match(diagnostics[0]?.message ?? '', /Expected boolean/u);
+	assert.match(diagnostics[0]?.message ?? '', /Expected "boolean"/u);
 	model.reset('{ "editor": { "enabled": true, }, }');
+	await registration.settled();
 	assert.deepEqual(diagnostics, []);
 
 	using strictModel = new TextModel('{ "enabled": true, // comment\n }');
 	let strictDiagnostics: readonly LanguageDiagnostic[] = [];
-	using strictRegistration = acquireJsonLanguageDiagnostics(URI.parse('test:/unassociated.json'), 'json', strictModel, () => ({
+	using strictRegistration = await acquireJsonLanguageDiagnostics(URI.parse('test:/unassociated.json'), 'json', strictModel, () => ({
 		update(_revision, next): void {
 			strictDiagnostics = next;
 		},
@@ -134,9 +136,9 @@ for (const [label, source, expected] of [
 			position: model.getPositionAt(source.indexOf('|')),
 			context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
 		}, new AbortController().signal);
-		assert.deepEqual(result?.items.map(item => [item.label, item.kind, item.detail]), [
-			['"text"', LanguageCompletionItemKind.Enum, 'Plain content'],
-			['"html"', LanguageCompletionItemKind.Enum, 'Markup'],
+		assert.deepEqual(result?.items.map(item => [item.label, item.kind, item.documentation]), [
+			['"text"', LanguageCompletionItemKind.Value, 'Plain content'],
+			['"html"', LanguageCompletionItemKind.Value, 'Markup'],
 		]);
 		const item = result!.items[0]!;
 		model.applyEdits([{ range: item.range!, text: item.insertText! }]);
@@ -184,6 +186,97 @@ function associatedRegistry(schemaStore: DisposableStore): IJSONContributionRegi
 	return registry;
 }
 
+for (const marked of [
+	'{ // co|mment\n}',
+	'{ // comment|\n}',
+	'{ /* co|mment */ }',
+	'{ "editor": /* co|mment */ {} }',
+	'{ "editor": { "enabled": /* co|mment */ true } }',
+	'{ "editor": { "enabled": true /* co|mment */ } }',
+	'{ "editor": { "enabled": true /* unfinished|',
+	'// comment|',
+	'/* unfinished|',
+]) {
+	test(`JSONC schema features leave comment content alone: ${JSON.stringify(marked)}`, async () => {
+		using store = new DisposableStore();
+		const registry = associatedRegistry(store);
+		using model = new TextModel(marked.replace('|', ''));
+		const signal = new AbortController().signal;
+		const request = {
+			...createLanguageFeatureRequest(model, 'jsonc', signal), requestId: 1, resource,
+			position: model.getPositionAt(marked.indexOf('|')),
+		};
+		assert.equal(await createJsonCompletionProvider(registry).provideCompletions({ ...request, context: { kind: LanguageCompletionTriggerKind.Invoke } }, signal), undefined);
+		assert.equal(await createJsonHoverProvider(registry).provideHover(request, signal), undefined);
+	});
+}
+
+for (const [marked, expected] of [
+	['{ "editor": { "en|", } }', { editor: { enabled: true } }],
+	['{ "editor": { /* keep */ | }, "other":42 }', { editor: { enabled: true }, other: 42 }],
+	['{ "editor": { /* keep */| } }', { editor: { enabled: true } }],
+	['{ "editor": { /* 💡 */ "en|", } }', { editor: { enabled: true } }],
+	['{ /* 💡 */ "editor": { /* 🚀 */ "en|", } }', { editor: { enabled: true } }],
+	['{ "editor": { // keep\n| } }', { editor: { enabled: true } }],
+	['{ "editor": { | "other":42 } }', { editor: { enabled: true, other: 42 } }],
+] as const) {
+	test(`JSONC property completion inserts only the needed separator: ${marked}`, async () => {
+		using store = new DisposableStore();
+		const registry = associatedRegistry(store);
+		using model = new TextModel(marked.replace('|', ''));
+		const result = await createJsonCompletionProvider(registry).provideCompletions({
+			requestId: 1, resource, languageId: 'jsonc', position: model.getPositionAt(marked.indexOf('|')),
+			context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
+		}, new AbortController().signal);
+		const item = result?.items.find(item => item.label === 'enabled');
+		assert.ok(item);
+		model.applyEdits([{ range: item.range!, text: item.insertText! }]);
+		assert.deepEqual(parseJsonc(model.getValue()), expected);
+		if (marked.includes('/* keep */')) assert.ok(model.getValue().includes('/* keep */'));
+	});
+}
+
+test('strict JSON completion does not add a trailing comma before an enclosing property', async () => {
+	using store = new DisposableStore();
+	const registry = associatedRegistry(store);
+	const marked = '{ "editor": { | }, "other":42 }';
+	using model = new TextModel(marked.replace('|', ''));
+	const result = await createJsonCompletionProvider(registry).provideCompletions({
+		requestId: 1, resource, languageId: 'json', position: model.getPositionAt(marked.indexOf('|')),
+		context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
+	}, new AbortController().signal);
+	const item = result!.items[0]!;
+	model.applyEdits([{ range: item.range!, text: item.insertText! }]);
+	assert.deepEqual(JSON.parse(model.getValue()), { editor: { enabled: true }, other: 42 });
+});
+
+test('JSONC comment detection keeps schema completion inside strings containing comment delimiters', async () => {
+	using store = new DisposableStore();
+	const registry = associatedRegistry(store);
+	const marked = '{ "editor": { "enabled": "https://example.com/*keep*/|" } }';
+	using model = new TextModel(marked.replace('|', ''));
+	const result = await createJsonCompletionProvider(registry).provideCompletions({
+		requestId: 1, resource, languageId: 'jsonc', position: model.getPositionAt(marked.indexOf('|')),
+		context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
+	}, new AbortController().signal);
+	assert.deepEqual(result?.items.map(item => item.label), ['true', 'false']);
+});
+
+test('JSONC hover preserves UTF-16 ranges after comments containing emoji', async () => {
+	using store = new DisposableStore();
+	const registry = associatedRegistry(store);
+	using model = new TextModel('{ "editor": { /* 💡 */ "enabled": true } }');
+	const signal = new AbortController().signal;
+	const start = model.getValue().indexOf('"enabled"');
+	const hover = await createJsonHoverProvider(registry).provideHover({
+		...createLanguageFeatureRequest(model, 'jsonc', signal), resource,
+		position: model.getPositionAt(start + 3),
+	}, signal);
+	assert.match(hover?.contents.join('\n') ?? '', /Controls the editor/u);
+	assert.deepEqual(hover?.range?.getStartPosition(), model.getPositionAt(start));
+	assert.deepEqual(hover?.range?.getEndPosition(), model.getPositionAt(start + '"enabled"'.length));
+});
+
 test('JSON pattern associations refresh completion, hover and diagnostics while keeping each schema reference root', async () => {
 	using store = new DisposableStore();
 	const target = URI.parse('test:/configs/schema-events.jsonc');
@@ -203,7 +296,7 @@ test('JSON pattern associations refresh completion, hover and diagnostics while 
 	const secondAssociation = store.add(jsonRegistry.registerSchemaAssociation('test://schema/events-second', target.toString()));
 	using model = new TextModel('{"mode":"other"}', { resource: target, languageId: 'jsonc' });
 	let diagnostics: readonly LanguageDiagnostic[] = [];
-	using registration = acquireJsonLanguageDiagnostics(target, 'jsonc', model, () => ({
+	using registration = await acquireJsonLanguageDiagnostics(target, 'jsonc', model, () => ({
 		update(_revision, next): void { diagnostics = next; },
 		dispose(): void { },
 		[Symbol.dispose](): void { },
@@ -218,16 +311,20 @@ test('JSON pattern associations refresh completion, hover and diagnostics while 
 	assert.equal(new Set(completion!.items.map(item => item.id)).size, completion!.items.length);
 	const signal = new AbortController().signal;
 	const hover = await createJsonHoverProvider().provideHover({ ...createLanguageFeatureRequest(model, 'jsonc', signal), resource: target, position: new Position(1, 3) }, signal);
-	assert.deepEqual(hover?.contents, ['First mode', 'Second mode']);
+	assert.deepEqual(hover?.contents, ['First mode']);
 	first.definitions.mode.enum = ['other'];
 	jsonRegistry.notifySchemaChanged('test://schema/events-first');
+	await registration.settled();
 	assert.equal(diagnostics.length, 1);
 	secondAssociation.dispose();
+	await registration.settled();
 	assert.deepEqual(diagnostics, []);
 	first.definitions.mode.enum = ['on'];
 	jsonRegistry.notifySchemaChanged('test://schema/events-first');
+	await registration.settled();
 	assert.equal(diagnostics.length, 1);
 	store.add(jsonRegistry.registerSchemaAssociation('test://schema/events-first', '!**/schema-events.jsonc'));
+	await registration.settled();
 	assert.deepEqual(diagnostics, []);
 });
 

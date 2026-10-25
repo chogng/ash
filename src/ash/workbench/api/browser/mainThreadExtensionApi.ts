@@ -218,6 +218,10 @@ export class MainThreadExtensionApi extends Disposable {
 			case 'backendRequest': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, operation.method, operation.params, 0, signal, operation.progress) };
 			case 'backendState': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, undefined, {}, operation.after, signal, undefined, operation.waitForChange === true) };
 			case 'editorOperation':
+				if (operation.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload) && 'method' in operation.payload && operation.payload.method === 'jsonSchemaContributions') {
+					if (Object.keys(operation.payload).length !== 1) throw new TypeError('Invalid JSON schema contribution request');
+					return { result: 'value', value: this.configurationApi.getJsonSchemaContributions() };
+				}
 				if (operation.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload) && 'method' in operation.payload && operation.payload.method === 'showImageEditor') { await (this.imageEditors ??= this._register(this.instantiation.createInstance(MainThreadImageEditors, this.invocationTimeoutMillis))).show(operation.payload, signal, source); return { result: 'value', value: null }; }
 				return { result: 'value', value: (this.treeViews?.handleChange(operation.payload, source) || this.handleOutput(source, operation.payload)) ? null : await (this.editorsApi ??= this._register(this.instantiation.createInstance(MainThreadEditors))).handle(operation.payload, signal, source) };
 			case 'addDebugBreakpoints':

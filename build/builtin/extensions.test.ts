@@ -116,6 +116,9 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 		await mkdir(join(directory, 'extensions/theme-defaults/themes'), { recursive: true });
 		await writeFile(join(directory, 'extensions/theme-defaults/package.json'), JSON.stringify({ publisher: 'test', name: 'theme-defaults', version: '1.0.0' }));
 		await mkdir(join(directory, 'extensions/git/browser'), { recursive: true });
+		// Real author packages install the SDK for its types; the Worker must still use its host facade.
+		await mkdir(join(directory, 'extensions/git/node_modules/@ash'), { recursive: true });
+		await symlink(resolve(import.meta.dirname, '../../sdk/typescript'), join(directory, 'extensions/git/node_modules/@ash/sdk'), process.platform === 'win32' ? 'junction' : 'dir');
 		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', browser: 'browser/main.ts', contributes: { commands: [{ command: 'test.browser.command', title: 'Ash browser command' }, { command: 'test.browser.disposeImage', title: 'Dispose image editor' }], imageEditors: [{ id: 'test.image', displayName: 'Image' }] } }));
 		await writeFile(join(directory, 'extensions/git/browser/main.ts'), `import { marker } from './helper.js'; import { commands, window, workspace } from '@ash/sdk';
 export function activate(context) {

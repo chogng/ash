@@ -1,7 +1,8 @@
 {
   "name": "json",
   "ashUiTargets": [
-    "ide"
+    "ide",
+    "agents"
   ],
   "publisher": "ash",
   "version": "0.1.0",
@@ -34,6 +35,8 @@
         ],
         "extensions": [
           ".jsonc",
+          ".ash-workspace",
+          ".code-workspace",
           ".eslintrc",
           ".eslintrc.json",
           ".jsfmtrc",
@@ -43,6 +46,12 @@
           ".babelrc"
         ],
         "filenames": [
+          "settings.json",
+          "keybindings.json",
+          "tasks.json",
+          "launch.json",
+          "extensions.json",
+          "argv.json",
           "babel.config.json",
           "bun.lock",
           ".babelrc.json",

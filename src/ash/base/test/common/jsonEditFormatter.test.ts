@@ -33,3 +33,20 @@ for (const source of ['[{"a":1},{"b":2}]', '[\n  {"a":1},\n  {"b":2},\n]']) {
 		assert.deepEqual(parseJsonc(result), [{ a: 1 }]);
 	});
 }
+
+for (const [source, path, expected] of [
+	['{"enabled":true,}', ['enabled'], {}],
+	['{"editor":{"enabled":true,},}', ['editor', 'enabled'], { editor: {} }],
+	['{ /* before */ "enabled":true, /* after */ }', ['enabled'], {}],
+	['{"enabled":true, /* keep */ "other":42}', ['enabled'], { other: 42 }],
+	['{"other":42, /* keep */ "enabled":true}', ['enabled'], { other: 42 }],
+	['[ /* before */ 1, /* after */ ]', [0], []],
+	['[1, /* keep */ 2, // after\n]', [1], [1]],
+	['[1, /* keep */ 2]', [0], [2]],
+] as const) {
+	test(`JSONC removal preserves surrounding comments and a valid container: ${source}`, () => {
+		const result = applyEdits(source, removeProperty(source, [...path], { insertSpaces: true, tabSize: 2 }));
+		assert.deepEqual(parseJsonc(result), expected);
+		for (const comment of source.match(/\/\*.*?\*\/|\/\/[^\r\n]*/g) ?? []) assert.ok(result.includes(comment), comment);
+	});
+}

@@ -42,7 +42,7 @@ import { PreferencesService } from '../../../../../workbench/services/preference
 import type { IOpenSettingsOptions } from '../../../../../workbench/services/preferences/common/preferences.js';
 import { configurationSettingBinding, SettingModel } from '../../../../../workbench/services/preferences/common/settingsModels.js';
 import { createSettingsEditorInput, SettingsEditorInput, UserSettingsResource } from '../../../../../workbench/services/preferences/common/settingsEditorInput.js';
-import { createJsonCompletionProvider } from '../../../../../workbench/services/language/common/jsonLanguageFeatures.js';
+import { createJsonCompletionProvider } from '../../../../../../../test/fixtures/jsonLanguageFeatures.js';
 import { SmartSnippetInserter } from '../../../../../workbench/contrib/preferences/common/smartSnippetInserter.js';
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 
@@ -185,14 +185,15 @@ test('generic JSON schema completion is resource-scoped and omits configured key
 		snapshot: triggeredModel.createVersionedSnapshot(),
 	}, new AbortController().signal);
 	assert.deepEqual(triggered?.items.map(item => item.label), ['editor.enabled', 'editor.fontFamily']);
-	assert.equal(await provider.provideCompletions({
+	const unassociated = await provider.provideCompletions({
 		requestId: 3,
 		languageId: 'jsonc',
 		resource: UserSettingsResource.with({ path: '/user/other.json' }),
 		position,
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
 		snapshot: model.createVersionedSnapshot(),
-	}, new AbortController().signal), undefined);
+	}, new AbortController().signal);
+	assert.deepEqual(unassociated?.items.map(item => item.label), ['$schema']);
 
 	using valueModel = new TextModel('{ "editor.fontFamily": "editor. }');
 	const valuePosition = valueModel.getLineContent((0) + 1).lastIndexOf('editor.') + 'editor.'.length;
@@ -360,6 +361,30 @@ test('Preferences routes UI and JSON to numeric groups, falls back for closed gr
 	assert.equal(opens.at(-1)?.input.resource.toString(), UserSettingsResource.toString());
 	await preferences.openSettings({ jsonEditor: true, groupId: 7, openToSide: true, revealSetting: { key: 'editor.fontSize', edit: true } });
 	assert.equal(opens.at(-1)?.target, 'sideGroup');
+});
+
+test('settings schema changes notify cached language services when contributed settings arrive and retire', async () => {
+	using configuration = new WorkbenchConfigurationService();
+	using textFiles = createTestTextFileService(configuration.fileService);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
+	using contribution = new PreferencesContribution(models, new UserDataProfileService(), new NullLoggerService());
+	const changes: string[] = [];
+	using listener = jsonRegistry.onDidChangeSchema(uri => changes.push(uri));
+	const registry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
+	const node = { properties: { 'test.json.dynamicExtension': { type: 'boolean' as const, default: true } } };
+	try {
+		registry.updateConfigurations({ add: [node], remove: [] });
+		assert.deepEqual(changes, [ConfigurationSchemaId]);
+		assert.equal(jsonRegistry.getSchemaContributions().schemas[ConfigurationSchemaId]?.properties?.['test.json.dynamicExtension']?.default, true);
+		registry.updateConfigurations({ add: [], remove: [node] });
+		assert.deepEqual(changes, [ConfigurationSchemaId, ConfigurationSchemaId]);
+		assert.equal(jsonRegistry.getSchemaContributions().schemas[ConfigurationSchemaId]?.properties?.['test.json.dynamicExtension'], undefined);
+		contribution.dispose();
+		registry.updateConfigurations({ add: [node], remove: [] });
+		assert.equal(changes.length, 3, 'disposing the schema emits its final removal, then retires the configuration listener');
+	} finally {
+		registry.updateConfigurations({ add: [], remove: [node] });
+	}
 });
 
 test('settings JSON saves validate registered values through the text model participant', async () => {

@@ -40,7 +40,6 @@ import { AppServerLanguageLifecycleService } from '../../workbench/services/lang
 import { AppServerLanguageProviders } from '../../workbench/services/language/browser/appServerLanguageProviders.js';
 import { ILanguageDiagnosticsService } from '../../workbench/services/language/common/languageDiagnosticsService.js';
 import { LanguageDiagnosticsMarkerBridge } from '../../workbench/services/language/browser/languageDiagnosticsMarkerBridge.js';
-import { WorkbenchLanguageFeatures } from '../../workbench/services/language/browser/workbenchLanguageFeatures.js';
 import { IOutputService } from '../../workbench/services/output/common/output.js';
 import { IStatusbarService } from '../../workbench/services/statusbar/browser/statusbar.js';
 import type { IConfigurationModel } from '../../platform/configuration/common/configuration.js';
@@ -575,7 +574,6 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IConnectorService, this._register(new AppServerConnectorService(options.api.connectors, options.api.events)));
 		services.registerInstance(IWorkspaceTrustApi, options.api.workspaceTrust);
 		services.registerInstance(IWorkspaceTrustManagementService, this._register(services.createInstance(WorkspaceTrustManagementService)));
-		this._register(services.createInstance(WorkbenchLanguageFeatures));
 		const checkWorkspaceTrust = !!options.nativeHostApi;
 		services.registerInstance(ILanguageServerService, options.api.languageServers);
 		const languageLifecycle = this._register(services.createInstance(AppServerLanguageLifecycleService));

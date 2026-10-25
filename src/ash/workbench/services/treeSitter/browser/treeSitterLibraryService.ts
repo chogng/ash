@@ -148,8 +148,10 @@ export class TreeSitterSyntaxProviders extends Disposable {
 		}));
 		this._register(features.foldingRangeProvider.register(languages, { id: 'ash.treeSitter.syntax', provideFoldingRanges: async (request, signal) => (await request.model.tokenization.syntaxTree?.getFacts(signal))?.folds ?? [] }));
 		this._register(features.selectionRangeProvider.register(languages, { provideSelectionRanges: async (request, signal) => await request.model.tokenization.syntaxTree?.getSelectionRanges(request.ranges, signal) ?? [] }));
+		// JSON's grammar also backs JSONC, but rejects its legal trailing commas.
+		// The JSON parser owns validation; the shared tree still supplies structural features.
 		this._register(features.syntaxProvider.register({
-			id: 'ash.treeSitter.syntax', languageIds: languages, diagnosticPriority: 100, provideDiagnostics: async (request, signal) => {
+			id: 'ash.treeSitter.syntax', languageIds: languages.filter(language => language !== 'json' && language !== 'jsonc'), diagnosticPriority: 100, provideDiagnostics: async (request, signal) => {
 				const tree = request.model?.tokenization.syntaxTree; if (!tree) return undefined;
 				const facts = await tree.getFacts(signal);
 				return { diagnostics: facts.diagnostics.map(diagnostic => ({ range: Range.lift(diagnostic.range), severity: LanguageDiagnosticSeverity.Error, message: diagnostic.missing ? localize('treeSitter.missingSyntax', 'Missing required syntax') : localize('treeSitter.syntaxError', 'Syntax error'), code: diagnostic.missing ? 'syntax-missing' : 'syntax-error', source: 'ash-syntax' })) };

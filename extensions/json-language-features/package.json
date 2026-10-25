@@ -1,0 +1,30 @@
+{
+  "name": "json-language-features",
+  "publisher": "ash",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "ashUiTargets": [
+    "ide",
+    "agents"
+  ],
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "engines": {
+    "ash": "*"
+  },
+  "browser": "./extension.ts",
+  "l10n": "l10n",
+  "activationEvents": [
+    "onLanguage:json",
+    "onLanguage:jsonc"
+  ],
+  "dependencies": {
+    "@vscode/l10n": "0.0.18",
+    "jsonc-parser": "3.3.1",
+    "vscode-json-languageservice": "5.7.2"
+  },
+  "devDependencies": {
+    "@ash/sdk": "link:../../sdk/typescript"
+  }
+}

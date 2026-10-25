@@ -242,7 +242,6 @@ import { LanguageFeaturesService } from '../../editor/common/services/languageFe
 import { ILanguageService } from '../../editor/common/languages/language.js';
 import { LanguageService } from '../../editor/common/services/languageService.js';
 import { ILanguageConfigurationService } from '../../editor/common/languages/languageConfigurationRegistry.js';
-import { WorkbenchLanguageFeatures } from '../services/language/browser/workbenchLanguageFeatures.js';
 import { ChatService } from "../services/chat/browser/chatService.js";
 import { IChatService } from "../services/chat/common/chatService.js";
 import { ICodebaseService } from "../../platform/codebase/common/codebaseService.js";
@@ -786,7 +785,6 @@ export class Workbench extends Disposable {
 		services.registerSingleton(IKeybindingEditingService, () => services.createInstance(KeybindingsEditingService));
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 		const bulkEditService = services.get(IBulkEditService);
-		this._register(services.createInstance(WorkbenchLanguageFeatures));
 		// Only the desktop host may inspect directory grants. Web language requests
 		// are authorized by the server for the authenticated workspace.
 		const checkWorkspaceTrust = !!nativeHostApi;

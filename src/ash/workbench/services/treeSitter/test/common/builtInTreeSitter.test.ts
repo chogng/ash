@@ -19,6 +19,11 @@ import { editorLanguageForSyntaxLanguage, syntaxLanguageForEditorLanguage, synta
 import { getWorkbenchColorTheme } from '../../../../common/theme.js';
 import { createTestSyntaxBackend as createTreeSitterSyntaxTokenBackend } from '../../../../../../../test/fixtures/codeSyntaxBackend.js';
 import { getLanguageFoldingRules } from '../../../../../platform/language/common/languageFolding.generated.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
+import type { LanguageDiagnostic } from '../../../../../editor/common/languages.js';
+import { acquireJsonLanguageDiagnostics } from '../../../../../../../test/fixtures/jsonLanguageFeatures.js';
+import { TreeSitterSyntaxProviders } from '../../browser/treeSitterLibraryService.js';
 
 const runtime = (treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace; }).default ?? treeSitterNamespace;
 interface Grammar { name: string; languages: { id: string; }[]; highlights: string[]; tags: string[]; folds: string[]; injections: string[]; }
@@ -288,6 +293,36 @@ test('Hypothetical tokenization uses the shared parser without a legacy token pr
 	assert.ok(Array.from({ length: tokens[0]!.getCount() }, (_, index) => tokens[0]!.getStandardTokenType(index)).includes(StandardTokenType.String));
 	assert.equal(model.getValue(), 'fn main() {}');
 });
+
+for (const [language, text, valid] of [
+	['jsonc', '{\n /* keep */ "items": [1,],\n}', true],
+	['json', '{"items":[1]}', true],
+	['json', '{ /* keep */ "items": [1,], }', false],
+	['jsonc', '{"items":[1,,]}', false],
+] as const) {
+	test(`JSON parser diagnostics take precedence over the shared grammar: ${language} ${text}`, async () => {
+		using themeService = new TestThemeService(getWorkbenchColorTheme('ash-dark'));
+		const resource = URI.parse(`test:/validation.${language}`);
+		using model = new TextModel(text, {
+			resource, languageId: language,
+			tokenization: { createSyntaxTokenBackend: value => createTreeSitterSyntaxTokenBackend(value, configuration, library, themeService) },
+		});
+		await model.tokenization.whenReady(new AbortController().signal);
+		const facts = await model.tokenization.syntaxTree!.getFacts(new AbortController().signal);
+		if (language === 'jsonc' && valid) assert.ok(facts.diagnostics.length > 0, 'exercise the grammar error caused by legal trailing commas');
+		using features = new LanguageFeaturesService();
+		using providers = new TreeSitterSyntaxProviders(features);
+		assert.deepEqual(features.syntaxProvider.getDiagnosticProviders(language), []);
+		assert.equal(features.foldingRangeProvider.ordered(model).length, 1);
+		assert.equal(features.documentSymbolProvider.ordered(model).length, 1);
+		let diagnostics: readonly LanguageDiagnostic[] = [];
+		using registration = await acquireJsonLanguageDiagnostics(resource, language, model, () => ({
+			update(_revision, value) { diagnostics = value; },
+			dispose() { }, [Symbol.dispose]() { },
+		}))!;
+		assert.equal(diagnostics.length === 0, valid);
+	});
+}
 
 interface StructureFixture { language: string; text: string; symbols: string[]; folds: [number, number][]; noFolds?: boolean; exactSymbols?: boolean; }
 const structureFixtures = JSON.parse(readFileSync('test/fixtures/tree-sitter/structure.json', 'utf8')) as StructureFixture[];

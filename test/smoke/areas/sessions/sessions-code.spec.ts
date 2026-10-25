@@ -7,10 +7,51 @@ import { QuickAccess } from '../../../automation/quickaccess.js';
 import { Workbench } from '../../../automation/workbench.js';
 import { Menus } from '../../../automation/menus.js';
 import { installMainChannelTestClient } from '../../../automation/mainProcessIpc.js';
+import { readUserSettings } from '../../../automation/settings.js';
 import type { IBrowserViewInfo } from '../../../../src/ash/platform/browserView/common/browserView.js';
 
 // Native application menus follow OS focus on macOS.
 const focusTest = test.extend({ electronWindowMode: process.platform === 'darwin' ? 'active' : undefined });
+
+test('Code Sessions consumes the shared JSON extension for settings completion, hover, formatting and diagnostics', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await installMainChannelTestClient(page);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const commands = new QuickAccess(page);
+	await commands.runCommand('workbench.action.openSettingsJson');
+	const content = page.locator('[data-part="editor"] .ash-editor-group:visible > .ash-editor-group-content');
+	const editor = new Editor(content);
+	const replace = async (text: string): Promise<void> => {
+		await editor.input.press('ControlOrMeta+A');
+		await editor.input.evaluate((element, text) => {
+			const clipboardData = new DataTransfer();
+			clipboardData.setData('text/plain', text);
+			element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+		}, text);
+	};
+	await replace('{\n// shared JSON extension\n/* 💡 */ "editor.fo",\n}');
+	await editor.input.press('ControlOrMeta+Home');
+	await editor.input.press('ArrowDown');
+	await editor.input.press('ArrowDown');
+	await editor.input.press('End');
+	await editor.input.press('ArrowLeft');
+	await editor.input.press('ArrowLeft');
+	await editor.input.press(process.platform === 'darwin' ? 'Control+Space' : 'ControlOrMeta+Space');
+	await content.locator('.stanza-editor-completion-option').filter({ has: page.locator('.stanza-editor-completion-label').getByText('editor.fontSize', { exact: true }) }).click();
+	await commands.runCommand('editor.action.formatDocument');
+	await editor.input.press('ControlOrMeta+S');
+	await expect.poll(async () => (await readUserSettings(page)).content).toMatch(/\n\s+(?:\/\* 💡 \*\/\s*)?"editor.fontSize"\s*:\s*\d+/u);
+	expect((await readUserSettings(page)).content).toContain('// shared JSON extension');
+	expect((await readUserSettings(page)).content).toContain('/* 💡 */');
+	await replace('{ "editor.fontSize": "invalid" }');
+	await expect(editor.element.locator('.squiggly-warning')).not.toHaveCount(0);
+	await replace('{// shared JSON extension\n"editor.fontSize":19,}');
+	await expect(editor.element.locator('.squiggly-warning, .squiggly-error')).toHaveCount(0);
+	await editor.input.press('ControlOrMeta+S');
+	await expect.poll(async () => (await readUserSettings(page)).content).toContain('"editor.fontSize":19');
+	await editor.element.getByText('"editor.fontSize"', { exact: true }).hover();
+	await expect(page.locator('.stanza-editor-hover:visible')).toContainText('Set the editor text size in pixels');
+});
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Sessions browser tabs support keyboard selection, reload and Main cleanup in ${locale}`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
