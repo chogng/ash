@@ -1760,6 +1760,32 @@ suite('chatInput browser component', () => {
 			return { prevented: event.defaultPrevented, overlay: visible };
 		}, values);
 	}
+	const mixedDropResources = [
+		'file:///workspace/drop-file.ts', 'file:///workspace/drop-folder', 'file:///workspace/drop-image.png',
+		'file:///workspace/drop-range.ts#2,1-2,7', 'file:///workspace/drop-file.ts',
+	];
+	for (const locale of ['en', 'zh-CN']) test(`mixed resource drop controls stay visible and keyboard accessible across themes in ${locale}`, async () => {
+		const { page } = browserTests;
+		for (const theme of ['dark', 'light', 'hcDark', 'hcLight']) {
+			await page.goto(`/chatInput.html?inlineCode&contextSources&dropSources&locale=${locale}&theme=${theme}`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const input = page.getByRole('textbox', { name: 'Chat message', exact: true });
+			await input.pressSequentially('Review ');
+			assert.deepEqual(await dropResources(mixedDropResources), { prevented: true, overlay: true });
+			const references = page.locator('.ash-chat-input-editor-host [role="group"]');
+			await expect(references).toHaveCount(4);
+			await expect(input).toBeFocused();
+			expect(await references.evaluateAll(elements => elements.map(element => {
+				const box = element.getBoundingClientRect();
+				const composer = element.closest('.ash-chat-input-container')!.getBoundingClientRect();
+				return { visible: box.width > 0 && box.height > 0, contained: box.left >= composer.left && box.right <= composer.right && box.top >= composer.top && box.bottom <= composer.bottom };
+			})), theme).toEqual(Array.from({ length: 4 }, () => ({ visible: true, contained: true })));
+			await input.press('Tab');
+			const open = page.getByRole('button', { name: `${locale === 'zh-CN' ? '打开' : 'Open'} drop-file.ts`, exact: true });
+			await expect(open).toBeFocused();
+			await expect(open).toHaveCSS('outline-style', 'solid');
+		}
+	});
 	test('a resource URI drop captures through the existing composer and restores its snapshot with undo', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatInput.html?inlineCode=1&contextSources=1');
@@ -1786,19 +1812,16 @@ suite('chatInput browser component', () => {
 		await expect(page.getByLabel('Submission')).toHaveText('');
 	});
 
-	for (const locale of ['en', 'zh-CN']) for (const theme of ['dark', 'light', 'hcDark', 'hcLight']) test(`mixed resource drops share one snapshot and undo batch in ${locale}, ${theme}`, async () => {
+	for (const locale of ['en', 'zh-CN']) test(`mixed resource drops share one snapshot and undo batch in ${locale}`, async () => {
 		const { page } = browserTests;
 		const chinese = locale === 'zh-CN';
-		await page.goto(`/chatInput.html?inlineCode=1&contextSources=1&dropSources=1&sendFailure=1&locale=${locale}&theme=${theme}`);
+		await page.goto(`/chatInput.html?inlineCode=1&contextSources=1&dropSources=1&sendFailure=1&locale=${locale}&theme=dark`);
 		const input = page.getByRole('textbox', { name: 'Chat message', exact: true });
 		await input.pressSequentially('Review done');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		await input.press('Home');
 		for (let i = 0; i < 7; i++) await input.press('ArrowRight');
-		assert.deepEqual(await dropResources([
-			'file:///workspace/drop-file.ts', 'file:///workspace/drop-folder', 'file:///workspace/drop-image.png',
-			'file:///workspace/drop-range.ts#2,1-2,7', 'file:///workspace/drop-file.ts',
-		]), { prevented: true, overlay: true });
+		assert.deepEqual(await dropResources(mixedDropResources), { prevented: true, overlay: true });
 		const names = ['drop-file.ts', 'drop-folder', 'drop-image.png', 'drop-range.ts (2)'];
 		const references = page.locator('.ash-chat-input-editor-host [role="group"]');
 		await expect(references).toHaveCount(4);

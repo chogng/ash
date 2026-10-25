@@ -505,7 +505,7 @@ suite('sessionGitHub browser component', () => {
 		await expect(pills).toHaveCount(2);
 		await expect(first).toHaveAccessibleName(/Changes in one · Open/);
 		await expect(sidebar.locator('[data-ash-icon-id="git-pull-request"]')).toHaveCount(1);
-		expect(await pills.locator('.ash-icon').evaluateAll(elements => elements.every(element => element.getAttribute('aria-hidden') === 'true'))).toBe(true);
+		await expect.poll(() => pills.locator('.ash-icon').evaluateAll(elements => elements.map(element => element.getAttribute('aria-hidden')))).toEqual(['true', 'true']);
 		await first.focus();
 		await page.keyboard.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.opened)).toEqual(['https://github.com/team/one/pull/7']);

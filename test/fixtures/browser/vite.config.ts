@@ -32,6 +32,15 @@ const fixturePages = [
 	...globSync('test/componentFixtures/*.html', { cwd: root }),
 	...globSync('test/integration/browser/**/*.html', { cwd: root }),
 ];
+const themePreviewPages = [{
+	url: '/browser/theme-preview/themePreview.html',
+	inputFile: resolve(root, 'test/integration/browser/browser/theme-preview/themePreview.html'),
+	sourceFile: resolve(import.meta.dirname, '../../../src/ash/workbench/contrib/themeEditor/browser/themePreview.html'),
+}, {
+	url: '/browser/theme-preview/sessionsThemePreview.html',
+	inputFile: resolve(root, 'test/integration/browser/browser/theme-preview/sessionsThemePreview.html'),
+	sourceFile: resolve(import.meta.dirname, '../../../src/ash/sessions/contrib/themeEditor/browser/sessionsThemePreview.html'),
+}];
 
 // Fixture URLs are independent of their source owner. Keep existing browser drivers stable.
 function fixturePageUrls(): Plugin {
@@ -61,15 +70,7 @@ export default defineConfig({
 	root,
 	plugins: [fixturePageUrls(), fixtureBaselineSources(), webUpdatePlugin(), workbenchEntryPlugin('/themeEditor.html', [...fixturePages.map(path => ({
 		url: '/' + basename(path), inputFile: resolve(root, path), sourceFile: resolve(root, path),
-	})), {
-		url: '/browser/theme-preview/themePreview.html',
-		inputFile: resolve(root, 'test/integration/browser/browser/theme-preview/themePreview.html'),
-		sourceFile: resolve(import.meta.dirname, '../../../src/ash/workbench/contrib/themeEditor/browser/themePreview.html'),
-	}, {
-		url: '/browser/theme-preview/sessionsThemePreview.html',
-		inputFile: resolve(root, 'test/integration/browser/browser/theme-preview/sessionsThemePreview.html'),
-		sourceFile: resolve(import.meta.dirname, '../../../src/ash/sessions/contrib/themeEditor/browser/sessionsThemePreview.html'),
-	}])],
+	})), ...themePreviewPages])],
 	server: {
 		host: "127.0.0.1", port: 5185, strictPort: true,
 		// The repository root also contains large build trees, which are not fixture inputs.
@@ -80,7 +81,10 @@ export default defineConfig({
 		emptyOutDir: true,
 		rolldownOptions: {
 			output: rendererOutput,
-			input: Object.fromEntries(fixturePages.map(path => [basename(path, '.html'), resolve(root, path)])),
+			input: Object.fromEntries([
+				...fixturePages.map(path => [basename(path, '.html'), resolve(root, path)]),
+				...themePreviewPages.map(page => [basename(page.inputFile, '.html'), page.inputFile]),
+			]),
 		},
 	},
 });

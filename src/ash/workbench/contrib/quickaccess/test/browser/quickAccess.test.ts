@@ -326,11 +326,10 @@ suite('quickAccess browser component', () => {
 			const narrowEditor = (await editor.boundingBox())!;
 			const narrowSearch = (await search.boundingBox())!;
 			expect(narrowSearch.x + narrowSearch.width).toBeLessThanOrEqual(narrowEditor.x + narrowEditor.width);
-			const chordsFit = await grid.locator('.ash-keybinding-label-chord').evaluateAll(chords => chords.every(chord => {
+			await expect.poll(() => grid.locator('.ash-keybinding-label-chord').evaluateAll(chords => chords.length > 0 && chords.every(chord => {
 				const cell = chord.closest('.ash-keybindings-key')!.getBoundingClientRect();
 				return chord.getBoundingClientRect().width <= cell.width - 20;
-			}));
-			expect(chordsFit).toBe(true);
+			}))).toBe(true);
 			await modal.screenshot({ path: testInfo.outputPath('keybindings-compact-narrow.png') });
 		});
 

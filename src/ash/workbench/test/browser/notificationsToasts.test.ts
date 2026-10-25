@@ -718,13 +718,19 @@ suite('notifications browser component', () => {
 	test('transient status messages replace one another without creating notification history', async function () {
 		const { page } = browserTests;
 
+		await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
 		await page.goto('/notifications.html');
+		await page.clock.pauseAt(new Date('2026-01-01T00:00:05Z'));
 		const status = page.locator('[data-statusbar-item-id="status.message"]');
 		await page.evaluate(() => window.ashNotificationsIntegration.status('Delayed message', 100, 400));
+		await page.clock.runFor(99);
+		await expect(status).toHaveCount(0);
+		await page.clock.runFor(1);
 		await expect(status).toHaveText('Delayed message');
 		await page.evaluate(() => window.ashNotificationsIntegration.status('Replacement'));
+		await page.clock.runFor(1);
 		await expect(status).toHaveText('Replacement');
-		await page.waitForTimeout(450);
+		await page.clock.runFor(450);
 		await expect(status).toHaveText('Replacement');
 		expect(await page.evaluate(() => window.ashNotificationsIntegration.history())).toEqual([]);
 	});

@@ -4,6 +4,10 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 
 suite('Chat image generation', () => {
 	const browserTests = useBrowserTests();
+	async function pauseAnimationTimers(): Promise<void> {
+		await browserTests.page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+		await browserTests.page.clock.pauseAt(new Date('2026-01-01T00:00:01Z'));
+	}
 
 	test('live image generation hands its painted loading surface to a visible result without replacing tool focus', async () => {
 		const { page, info } = browserTests;
@@ -21,15 +25,7 @@ suite('Chat image generation', () => {
 		})).toBe(true);
 		const surface = await loading.locator('canvas').elementHandle();
 		expect(await loading.evaluate(element => { const bounds = element.getBoundingClientRect(); return { width: bounds.width, height: bounds.height }; })).toEqual({ width: 200, height: 200 });
-		await page.evaluate(() => {
-			const fixture = window as Window & { imageGeometry?: number[][]; imageGeometryObserver?: MutationObserver; };
-			fixture.imageGeometry = [];
-			fixture.imageGeometryObserver = new MutationObserver(() => {
-				const frame = document.querySelector('.ash-chat-image-frame.revealing');
-				if (frame) { const bounds = frame.getBoundingClientRect(); fixture.imageGeometry!.push([bounds.width, bounds.height]); }
-			});
-			fixture.imageGeometryObserver.observe(document.querySelector('main')!, { attributes: true, attributeFilter: ['style'], subtree: true });
-		});
+		await pauseAnimationTimers();
 		await summary.focus();
 		await page.evaluate(() => window.ashChatTranscriptIntegration.showImageGeneration('success'));
 		const result = page.getByRole('region', { name: 'Generated images (1)', exact: true });
@@ -40,18 +36,32 @@ suite('Chat image generation', () => {
 		const frame = result.locator('.ash-chat-image-frame');
 		await expect(frame).toHaveClass(/revealing/);
 		expect(await frame.locator('canvas').evaluate((canvas, previous) => canvas === previous, surface)).toBe(true);
+		// The browser's Web Animation timeline is separate from Playwright's timer clock.
+		const animation = await frame.locator('canvas').evaluateHandle(canvas => {
+			const animation = canvas.getAnimations()[0]!;
+			animation.pause();
+			return animation;
+		});
+		try {
+			const geometry = [];
+			for (const progress of [0, 0.25, 0.5, 0.75, 1]) {
+				await animation.evaluate((animation, progress) => { animation.currentTime = Number(animation.effect!.getTiming().duration) * progress; }, progress);
+				await page.clock.runFor(32);
+				geometry.push(await frame.evaluate(element => { const bounds = element.getBoundingClientRect(); return { width: bounds.width, height: bounds.height }; }));
+			}
+			expect(geometry[0]).toEqual({ width: 200, height: 200 });
+			expect(geometry[2]).toEqual({ width: 280, height: 210 });
+			expect(geometry[4]).toEqual({ width: 360, height: 220 });
+			expect(geometry.every(({ width, height }) => width >= 200 && width <= 360 && height >= 200 && height <= 220)).toBe(true);
+		} finally {
+			await animation.dispose();
+		}
 		await expect(result.getByRole('button', { name: 'Open image', exact: true })).toBeVisible();
 		await expect(result.getByRole('button', { name: 'Download', exact: true })).toBeVisible();
+		await page.clock.runFor(700);
 		await expect(frame.locator('canvas')).toHaveCount(0);
 		await expect(result.locator('img')).toHaveCSS('opacity', '1');
 		expect(await result.locator('img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBe(360);
-		const geometry = await page.evaluate(() => {
-			const fixture = window as Window & { imageGeometry?: number[][]; imageGeometryObserver?: MutationObserver; };
-			fixture.imageGeometryObserver?.disconnect();
-			return fixture.imageGeometry!;
-		});
-		expect(geometry.some(([width]) => width! > 200 && width! < 360)).toBe(true);
-		expect(geometry.every(([width, height]) => width! >= 200 && width! <= 360 && height! >= 200 && height! <= 220)).toBe(true);
 		await page.screenshot({ path: info.outputPath('generated-image.png') });
 		await surface?.dispose();
 	});
@@ -99,7 +109,7 @@ suite('Chat image generation', () => {
 		]);
 		await expect(page.locator('.ash-chat-image-generation-placeholder')).toBeVisible();
 		await page.evaluate(() => window.ashChatTranscriptIntegration.finishMedia());
-		await expect.poll(() => page.locator('.ash-chat-generated-image-result img').evaluateAll(images => images.every(image => (image as HTMLImageElement).naturalWidth === 360))).toBe(true);
+		await expect.poll(() => page.locator('.ash-chat-generated-image-result img').evaluateAll(images => images.map(image => (image as HTMLImageElement).naturalWidth))).toEqual([360, 360]);
 		await expect(page.locator('.ash-chat-image-glyphs')).toHaveCount(0);
 		await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
 		await expect(page.locator('.ash-chat-generated-image-result')).toHaveCount(0);
@@ -125,6 +135,7 @@ suite('Chat image generation', () => {
 			await page.goto('/chatTranscript.html');
 			await page.evaluate(async reduced => { await window.ashChatTranscriptIntegration.setReducedMotion(reduced); window.ashChatTranscriptIntegration.showImageGeneration('pending'); }, reduced);
 			await expect(page.locator('.ash-chat-image-generation-placeholder')).toBeVisible();
+			await pauseAnimationTimers();
 			await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(false));
 			await page.evaluate(() => window.ashChatTranscriptIntegration.showImageGeneration('success'));
 			await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(true));
@@ -164,6 +175,7 @@ suite('Chat image generation', () => {
 		await page.goto('/chatTranscript.html');
 		await page.evaluate(() => window.ashChatTranscriptIntegration.showImageGeneration('pending'));
 		await expect(page.locator('.ash-chat-image-generation-placeholder')).toBeVisible();
+		await pauseAnimationTimers();
 		await page.evaluate(() => window.ashChatTranscriptIntegration.showImageGeneration('success'));
 		await expect(page.locator('.ash-chat-image-reveal.revealing')).toHaveCount(1);
 		await page.evaluate(() => window.ashChatTranscriptIntegration.setReducedMotion(true));

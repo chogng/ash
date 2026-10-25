@@ -3,6 +3,7 @@ import { setup, suiteSetup, suiteTeardown } from 'mocha';
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync, copyFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import assert from 'node:assert/strict';
 
 /** Real browser fixtures for source-owned Mocha component tests. Each test gets a fresh context. */
 export function useBrowserTests() {
@@ -10,6 +11,7 @@ export function useBrowserTests() {
 	let context: BrowserContext;
 	let page: Page;
 	let currentTest: Mocha.Test;
+	let pageErrors: string[] = [];
 	let options: BrowserContextOptions = {};
 	const baseURL = process.env.ASH_BROWSER_UNIT_BASE_URL;
 	const outputRoot = process.env.ASH_BROWSER_UNIT_RESULTS;
@@ -25,18 +27,21 @@ export function useBrowserTests() {
 		// Register after the suite has finished declaring its own teardown hooks.
 		// Those hooks still need their live page, as they did under Playwright.
 		this.test!.parent!.afterEach('close browser context', async () => {
-			try { await context?.tracing.stop(currentTest.state === 'failed' ? { path: outputPath('trace.zip') } : {}); }
+			try { await context?.tracing.stop(currentTest.state === 'failed' || pageErrors.length > 0 ? { path: outputPath('trace.zip') } : {}); }
 			finally { await context?.close(); }
+			assert.deepEqual(pageErrors, [], 'Unhandled browser errors');
 		});
 		if (!baseURL) throw new Error('Run browser component tests through pnpm test:unit.');
 		browser = await chromium.launch();
 	});
 	setup(async function () {
 		currentTest = this.currentTest!;
+		pageErrors = [];
 		context = await browser.newContext({ viewport: { width: 1280, height: 720 }, baseURL, ...options });
+		// Context events also cover popups and errors raised by the suite's teardown.
+		context.on('weberror', error => pageErrors.push(`${error.page()?.url() ?? 'Browser'}\n${error.error().stack ?? error.error().message}`));
 		await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
 		page = await context.newPage();
-		page.on('pageerror', error => console.error(`${page.url()}\n${error.stack ?? error.message}`));
 	});
 	suiteTeardown(async () => { await browser?.close(); });
 	return {

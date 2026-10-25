@@ -87,8 +87,12 @@ suite('viewpaneLayout browser component', () => {
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			const list = page.locator(content);
 			await expect.poll(() => list.locator('..').evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
-			if (await list.locator(':scope > *').count()) {
+			if (view === 'problems') {
+				await expect(list).toContainText('Fixture problem');
 				await expect.poll(() => list.evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(22);
+			} else {
+				await expect(list.locator(':scope > *')).toHaveCount(0);
+				await expect(page.getByRole('status')).toContainText(view === 'bulk' ? 'No bulk edit is awaiting approval.' : 'Port discovery failed.');
 			}
 			expect(errors).toEqual([]);
 		});

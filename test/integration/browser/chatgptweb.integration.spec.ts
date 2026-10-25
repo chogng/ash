@@ -1,12 +1,6 @@
 import { startMarkdownMathExtension, startMarkdownExtension } from '../../fixtures/markdownExtension.js';
 import { chatGPTModelCatalog, simpleChatGPTModelCatalog } from '../../fixtures/chatGPTModels.js';
 import { readFileSync } from 'node:fs';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
-import { createHmac } from 'node:crypto';
-import { spawn } from 'node:child_process';
-import { createServer } from 'node:net';
-import { createSocket } from 'node:dgram';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { expectVisibleFocusOutline } from '../../fixtures/browser/focusOutline.js';
@@ -16,7 +10,8 @@ const preload = transpileModule(readFileSync(new URL('../../../src/ash/platform/
 }).outputText;
 const rule = { origin: 'https://chatgpt.com', selector: '.ash-chatgpt-turn.complete' };
 type TestHost = { configureRendering: (value: typeof rule | undefined) => void; };
-const voiceTest = test.extend({ launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] } });
+// Fake-device flags alone can leave the local ICE candidates hidden.
+const voiceTest = test.extend({ permissions: ['microphone'], launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] } });
 
 async function fixture(page: Page, origin = rule.origin): Promise<void> {
 	await page.route(`${origin}/**`, route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><style>body{margin:0;font:16px/1.5 sans-serif}main{width:70%;margin:auto}.turn{padding:16px;border-bottom:1px solid #ccc}p{margin:0}</style><main>${Array.from({ length: 100 }, (_, i) => `<section class="turn ash-chatgpt-turn complete"><p>${(`Synthetic reply ${i}. `).repeat(40)}</p><button>Copy ${i}</button></section>`).join('')}<section id="stream" class="ash-chatgpt-turn">Synthetic reply in progress</section></main>` }));
@@ -306,13 +301,13 @@ test('ChatGPT retries failed uploads and keeps removed or old-draft files out of
 	expect(attempts).toBe(2);
 });
 
-test('ChatGPT can stop pending voice setup and rejects a stale or untrusted room ticket', async ({ page }) => {
+voiceTest('ChatGPT can stop pending voice negotiation and rejects a late or invalid SDP answer', async ({ page }) => {
 	await mockChatGPTRequests(page);
 	let release!: () => Promise<void>;
 	let requests = 0;
-	await page.route('**/service/voice/get_token', route => {
+	await page.route('**/service/realtime/vp**', route => {
 		requests++;
-		release = async () => { await route.fulfill({ json: { url: 'wss://attacker.invalid', token: 'fixture', e2ee_key: 'fixture-key', conversation_id: 'late-chat' } }).catch(() => { }); };
+		release = async () => { await route.fulfill({ contentType: 'application/sdp', body: 'Invalid SDP answer' }).catch(() => { }); };
 	});
 	await page.goto('/chatgptNavigation.html?locale=en');
 	const voice = page.getByRole('button', { name: 'Voice conversation', exact: true });
@@ -332,86 +327,113 @@ test('ChatGPT can stop pending voice setup and rejects a stale or untrusted room
 	await expect(voice).toBeEnabled();
 });
 
-voiceTest.describe('ChatGPT encrypted voice media', () => {
-	voiceTest('exchanges encrypted audio in a real room and releases the microphone on stop and navigation', async ({ context, page }) => {
-		voiceTest.setTimeout(60_000);
-		voiceTest.skip(!process.env.ASH_TEST_LIVEKIT_SERVER, 'Requires the verified LiveKit Server executable');
-		const directory = await mkdtemp(join(tmpdir(), 'ash-chatgpt-voice-'));
-		const listener = createServer();
-		await new Promise<void>(resolve => listener.listen(0, '127.0.0.1', resolve));
-		const port = (listener.address() as { port: number; }).port;
-		await new Promise<void>((resolve, reject) => listener.close(error => error ? reject(error) : resolve()));
-		const udp = createSocket('udp4');
-		await new Promise<void>(resolve => udp.bind(0, '127.0.0.1', resolve));
-		const udpPort = udp.address().port;
-		await new Promise<void>(resolve => udp.close(resolve));
-		const secret = 'ash-test-livekit-secret-thirty-two-bytes';
-		const config = join(directory, 'livekit.yaml');
-		await writeFile(config, `port: ${port}\nbind_addresses: [127.0.0.1]\nrtc:\n  udp_port: ${udpPort}\n  tcp_port: 0\n  node_ip: 127.0.0.1\n  use_external_ip: false\nkeys:\n  ash-test: ${secret}\nlogging:\n  level: error\n`);
-		const server = spawn(process.env.ASH_TEST_LIVEKIT_SERVER!, ['--config', config], { stdio: 'ignore' });
-		const exited = new Promise<void>(resolve => { server.once('exit', () => resolve()); server.once('error', () => resolve()); });
-		const token = (identity: string): string => {
-			const encode = (value: object): string => Buffer.from(JSON.stringify(value)).toString('base64url');
-			const data = `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ iss: 'ash-test', sub: identity, exp: Math.floor(Date.now() / 1000) + 120, video: { room: 'chatgpt-voice-test', roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: true } })}`;
-			return `${data}.${createHmac('sha256', secret).update(data).digest('base64url')}`;
+voiceTest('ChatGPT WebRTC exchanges audio and releases the microphone on stop and navigation', async ({ context, page }) => {
+	voiceTest.setTimeout(60_000);
+	await context.addInitScript(() => {
+		if (!navigator.mediaDevices) return;
+		const tracks: MediaStreamTrack[] = [];
+		Object.assign(window, { testMediaTracks: tracks });
+		const capture = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+		navigator.mediaDevices.getUserMedia = async constraints => {
+			const stream = await capture(constraints);
+			tracks.push(...stream.getTracks());
+			return stream;
 		};
-		try {
-			await expect.poll(async () => {
-				if (server.exitCode !== null) { throw new Error('LiveKit exited before readiness'); }
-				return fetch(`http://127.0.0.1:${port}`).then(response => response.ok, () => false);
-			}).toBe(true);
-			// Keep production ticket validation intact; only this test's signaling host is local.
-			await context.addInitScript(({ port }) => {
-				const OriginalWebSocket = window.WebSocket;
-				window.WebSocket = class extends OriginalWebSocket {
-					constructor(url: string | URL, protocols?: string | string[]) {
-						const target = new URL(String(url));
-						if (target.hostname === 'chatgpt.livekit.cloud') { target.protocol = 'ws:'; target.host = `127.0.0.1:${port}`; }
-						super(target, protocols);
-					}
-				};
-				const tracks: MediaStreamTrack[] = [];
-				Object.assign(window, { testMediaTracks: tracks });
-				const capture = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-				navigator.mediaDevices.getUserMedia = async constraints => {
-					const stream = await capture(constraints); tracks.push(...stream.getTracks()); return stream;
-				};
-			}, { port });
-			await context.route('https://chatgpt.livekit.cloud/**', route => route.fulfill({ json: { regions: [{ region: 'local', url: 'wss://chatgpt.livekit.cloud', distance: 0 }] } }));
-			const peer = await context.newPage();
-			await mockChatGPTRequests(peer);
-			await peer.goto('/chatgptNavigation.html?locale=en');
-			const connection = { url: 'wss://chatgpt.livekit.cloud', token: token('peer'), encryptionKey: 'synthetic-shared-media-key' };
-			await peer.evaluate(connection => window.ashChatGPTIntegration.connectVoicePeer(connection), connection);
-			await mockChatGPTRequests(page);
-			await page.route('**/service/voice/get_token', route => route.fulfill({ json: { url: connection.url, token: token('user'), e2ee_key: connection.encryptionKey, conversation_id: 'fixture-chat' } }));
-			await page.goto('/chatgptNavigation.html?locale=en');
-			const voice = page.getByRole('button', { name: 'Voice conversation', exact: true });
-			await voice.click();
-			await expect(page.locator('.ash-chatgpt-voice-status')).toHaveText('Voice conversation is active');
-			for (const participant of [page, peer]) {
-				await expect.poll(() => participant.evaluate(() => [...document.querySelectorAll('audio')].some(audio => audio.readyState >= 2 && !audio.paused))).toBe(true);
-			}
-			const microphoneEnded = (): Promise<boolean> => page.evaluate(() => {
-				const tracks = (window as unknown as { testMediaTracks: MediaStreamTrack[]; }).testMediaTracks;
-				return tracks.length > 0 && tracks.every(track => track.readyState === 'ended');
-			});
-			await page.getByRole('button', { name: 'Stop voice conversation', exact: true }).click();
-			await expect.poll(microphoneEnded).toBe(true);
-			await expect(page.locator('audio')).toHaveCount(0);
-			await expect(voice).toBeEnabled();
-			await voice.click();
-			await expect(page.locator('.ash-chatgpt-voice-status')).toHaveText('Voice conversation is active');
-			await page.getByRole('button', { name: 'New chat', exact: true }).click();
-			await expect.poll(microphoneEnded).toBe(true);
-			await expect(page.locator('audio')).toHaveCount(0);
-			await expect(page.locator('.ash-chatgpt-voice-status')).toBeHidden();
-			await peer.close();
-		} finally {
-			server.kill('SIGKILL'); await exited;
-			await rm(directory, { recursive: true, force: true });
-		}
 	});
+	const peer = await context.newPage();
+	await mockChatGPTRequests(peer);
+	await peer.goto('/chatgptNavigation.html?locale=en');
+	// The remote peer answers the real client's SDP and negotiated data channel;
+	// only the HTTP service boundary is synthetic.
+	const remote = await peer.evaluateHandle(() => {
+		const resources: { peer: RTCPeerConnection; channel: RTCDataChannel; stream: MediaStream; audio: HTMLAudioElement; }[] = [];
+		return {
+			async answer(sdp: string): Promise<string> {
+				const peer = new RTCPeerConnection();
+				const channel = peer.createDataChannel('', { negotiated: true, id: 0 });
+				const audio = document.createElement('audio');
+				audio.autoplay = true;
+				document.body.append(audio);
+				const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+				resources.push({ peer, channel, stream, audio });
+				for (const track of stream.getTracks()) peer.addTrack(track, stream);
+				peer.ontrack = event => { if (event.track.kind === 'audio') audio.srcObject = new MediaStream([event.track]); };
+				await peer.setRemoteDescription({ type: 'offer', sdp });
+				await peer.setLocalDescription(await peer.createAnswer());
+				if (peer.iceGatheringState !== 'complete') {
+					await new Promise<void>(resolve => {
+						const gathered = (): void => {
+							if (peer.iceGatheringState !== 'complete') return;
+							peer.removeEventListener('icegatheringstatechange', gathered);
+							resolve();
+						};
+						peer.addEventListener('icegatheringstatechange', gathered);
+					});
+				}
+				return peer.localDescription!.sdp;
+			},
+			state(): { connection: string; ice: string; channel: string; }[] {
+				return resources.map(({ peer, channel }) => ({ connection: peer.connectionState, ice: peer.iceConnectionState, channel: channel.readyState }));
+			},
+			dispose(): boolean {
+				for (const { peer, channel, stream, audio } of resources) {
+					peer.ontrack = null;
+					channel.close();
+					peer.close();
+					for (const track of stream.getTracks()) track.stop();
+					audio.pause();
+					audio.srcObject = null;
+					audio.remove();
+				}
+				return resources.length > 0 && resources.every(({ stream }) => stream.getTracks().every(track => track.readyState === 'ended'));
+			},
+		};
+	});
+	try {
+		await mockChatGPTRequests(page);
+		let negotiations = 0;
+		await page.route('**/service/realtime/vp**', async route => {
+			const request = route.request();
+			const form = await new Response(request.postData()!, { headers: { 'Content-Type': request.headers()['content-type']! } }).formData();
+			const offer = form.get('sdp');
+			expect(typeof offer).toBe('string');
+			expect(offer).toMatch(/^v=0\r?\n/u);
+			const answer = await remote.evaluate((remote, offer) => remote.answer(offer), String(offer));
+			negotiations++;
+			await route.fulfill({ contentType: 'application/sdp', body: answer });
+		});
+		await page.goto('/chatgptNavigation.html?locale=en');
+		const voice = page.getByRole('button', { name: 'Voice conversation', exact: true });
+		await voice.click();
+		await expect.poll(async () => ({ status: await page.locator('.ash-chatgpt-voice-status').textContent(), peers: await remote.evaluate(remote => remote.state()) })).toEqual({
+			status: 'Voice conversation is active', peers: [{ connection: 'connected', ice: expect.stringMatching(/^(connected|completed)$/u), channel: 'open' }],
+		});
+		await expect(page.locator('audio')).toHaveCount(1);
+		for (const participant of [page, peer]) {
+			await expect.poll(() => participant.evaluate(() => [...document.querySelectorAll('audio')].some(audio => audio.readyState >= 2 && !audio.paused))).toBe(true);
+		}
+		const microphoneStates = (): Promise<MediaStreamTrackState[]> => page.evaluate(() => {
+			const tracks = (window as unknown as { testMediaTracks: MediaStreamTrack[]; }).testMediaTracks;
+			return tracks.map(track => track.readyState);
+		});
+		await expect.poll(microphoneStates).toEqual(['live']);
+		await page.getByRole('button', { name: 'Stop voice conversation', exact: true }).click();
+		await expect.poll(microphoneStates).toEqual(['ended']);
+		await expect(page.locator('audio')).toHaveCount(0);
+		await expect(voice).toBeEnabled();
+		await voice.click();
+		await expect(page.locator('.ash-chatgpt-voice-status')).toHaveText('Voice conversation is active');
+		expect(negotiations).toBe(2);
+		await expect.poll(microphoneStates).toEqual(['ended', 'live']);
+		// The host can navigate while the in-chat New button is disabled during voice.
+		await page.evaluate(() => window.ashChatGPTIntegration.newChat());
+		await expect.poll(microphoneStates).toEqual(['ended', 'ended']);
+		await expect(page.locator('audio')).toHaveCount(0);
+		await expect(page.locator('.ash-chatgpt-voice-status')).toBeHidden();
+	} finally {
+		try { expect(await remote.evaluate(remote => remote.dispose())).toBe(true); }
+		finally { await remote.dispose(); await peer.close(); }
+	}
 });
 
 test('ChatGPT rich diagrams retain their nested content without enabling HTML or scripts', async ({ page }, testInfo) => {

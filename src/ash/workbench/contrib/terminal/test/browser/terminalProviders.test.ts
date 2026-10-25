@@ -184,14 +184,17 @@ suite('terminalProviders browser component', () => {
 			await window.ashTerminalSuggestIntegration.configure('terminal.integrated.suggest.suggestOnTriggerCharacters', true);
 			window.ashTerminalSuggestIntegration.provider([{ label: '--help', replacementRange: [7, 8] }], ['-']);
 		});
+		await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+		await page.clock.pauseAt(new Date('2026-01-01T00:00:01Z'));
 		await page.locator('.xterm-helper-textarea').pressSequentially('a-a-');
 		await page.evaluate(() => window.ashTerminalInputIntegration.feed('a-'));
+		// Let the confirmed shell fragment and the 120ms query debounce settle.
+		await page.clock.runFor(180);
 		await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.model())).toBe('git a-|');
-		// Wait beyond the real query debounce to prove no early request was queued.
-		await page.waitForTimeout(180);
 		expect(await page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests())).toEqual([]);
 		await expect(page.locator('.ash-terminal-suggest')).toBeHidden();
 		await page.evaluate(() => window.ashTerminalInputIntegration.feed('a-'));
+		await page.clock.runFor(180);
 		await expect(page.locator('.ash-terminal-suggest')).toBeVisible();
 		await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests())).toEqual([{ value: 'git a-a-', cursorIndex: 8, cancelled: false }]);
 		await page.locator('.xterm-helper-textarea').press('Escape');

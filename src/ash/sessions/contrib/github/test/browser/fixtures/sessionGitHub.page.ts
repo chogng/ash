@@ -197,7 +197,7 @@ const git = {
 	status: async (id: string) => gitStatus(id),
 	graph: async (_query: unknown, id: string) => ({ commits: [], references: [], remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: id } }], hasMore: false, nextCursor: undefined }),
 };
-const management = { sessions: [session], state: 'ready', onDidChange: Event.None } as unknown as ISessionsManagementService;
+const management = { sessions: [session], untitledSessions: [], state: 'ready', onDidChange: Event.None } satisfies Pick<ISessionsManagementService, 'sessions' | 'untitledSessions' | 'state' | 'onDidChange'> as unknown as ISessionsManagementService;
 const sessions = { get activeSelection() { return selection; }, get visibleSelections() { return selection ? [selection] : []; }, onDidChange: selected.event, openSession: () => { }, openNewSession: () => { } } as unknown as ISessionsService;
 resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => undefined));
 const repositoryCommands = { executeCommand: async () => Promise.all(git.repositories.map(async repository => ({ ...repository, root: repository.root.toString(), head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes }))) } as unknown as ICommandService;

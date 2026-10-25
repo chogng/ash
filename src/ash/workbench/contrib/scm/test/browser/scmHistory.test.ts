@@ -1112,9 +1112,12 @@ suite('scmHistory browser component', () => {
 	test('slow pointer movement and action tooltip delays retain the details card', async function () {
 		const { page } = browserTests;
 
+		await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+		await page.clock.pauseAt(new Date('2026-01-01T00:00:01Z'));
 		const commit = page.getByRole('treeitem', { name: /History metadata:/u });
 		const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
 		await commit.locator('.ash-scm-graph-subject').hover({ position: { x: 3, y: 8 } });
+		await page.clock.runFor(1000);
 		await expect(hover).toBeVisible();
 		const pointerCopy = hover.getByRole('button', { name: 'Copy Commit Hash', exact: true });
 		const hoverId = await hover.getAttribute('id');
@@ -1122,21 +1125,22 @@ suite('scmHistory browser component', () => {
 		const hoverBounds = (await hover.boundingBox())!;
 		expect(hoverBounds.x).toBeGreaterThan(commitBounds.x + commitBounds.width);
 		await page.mouse.move((commitBounds.x + commitBounds.width + hoverBounds.x) / 2, commitBounds.y + commitBounds.height / 2);
-		// A deliberate pause in the gap reproduces a slow move from the row to its actions.
-		await page.waitForTimeout(150);
+		// Advance through the gap before entering the card, without a wall-clock pause.
+		await page.clock.runFor(150);
 		await expect(hover).toHaveAttribute('id', hoverId!);
 		await pointerCopy.hover();
 		// Hold past the action-tooltip delay to detect replacement of the details card.
-		await page.waitForTimeout(700);
+		await page.clock.runFor(700);
 		await expect(hover).toHaveAttribute('id', hoverId!);
 		await hover.getByRole('button', { name: 'Open on GitHub', exact: true }).hover();
-		await page.waitForTimeout(700);
+		await page.clock.runFor(700);
 		await expect(hover).toHaveAttribute('id', hoverId!);
 		await page.locator('#outside').click();
 		await expect(hover).toHaveCount(0);
 		await page.locator('.ash-scm-graph-tree').focus();
 		await page.locator('.ash-scm-graph-tree').press('Home');
 		await page.locator('.ash-scm-graph-tree').press('Alt+ArrowDown');
+		await page.clock.runFor(1000);
 		await expect(hover).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(hover).toHaveCount(0);

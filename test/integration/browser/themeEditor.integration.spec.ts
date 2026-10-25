@@ -949,7 +949,8 @@ for (const theme of ['ash-light', 'ash-dark']) {
 		await expect(frame.locator('.ash-workbench-titlebar')).toHaveCSS('height', '35px');
 		expect(await frame.locator('#app').evaluate(element => {
 			const bounds = element.getBoundingClientRect();
-			return [...element.querySelectorAll('.ash-workbench-titlebar, .ash-workbench-statusbar, .ash-workbench-editor')].every(part => {
+			const parts = [...element.querySelectorAll('.ash-workbench-titlebar, .ash-workbench-statusbar, .ash-workbench-editor')];
+			return parts.length === 3 && parts.every(part => {
 				const box = part.getBoundingClientRect();
 				return box.width > 0 && box.height > 0 && box.left >= bounds.left && box.top >= bounds.top && box.right <= bounds.right + 1 && box.bottom <= bounds.bottom + 1;
 			});
