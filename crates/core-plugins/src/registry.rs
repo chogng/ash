@@ -28,6 +28,7 @@ pub use model::ConnectorActivationSpec;
 pub use model::DownloadPackageRequest;
 pub use model::ExecutableActivationSpec;
 pub use model::ExecutableRuntime;
+pub use model::ExtensionUiTarget;
 pub use model::ExtensionsErrorCode;
 pub use model::GetPackageRequest;
 pub use model::InstallPackageRequest;

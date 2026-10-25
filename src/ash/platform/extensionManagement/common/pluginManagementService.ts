@@ -1,4 +1,5 @@
 import type { Event } from "../../../base/common/event.js";
+import type { ExtensionUiTarget } from './extensionManagementService.js';
 import type { IWorkspaceFolder } from '../../workspace/common/workspace.js';
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
@@ -7,6 +8,7 @@ export interface PluginPackageView {
 	readonly version: string;
 	readonly digest: string;
 	readonly displayName: string;
+	readonly uiTargets?: readonly ExtensionUiTarget[];
 	readonly permissions: readonly PluginPermission[];
 	readonly hasEditorExtensions: boolean;
 	readonly enabled: boolean;

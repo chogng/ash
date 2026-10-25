@@ -8,6 +8,7 @@ import { ASH_LOCALIZATION_CATALOG_VERSION } from '../../src/ash/platform/languag
 import { watchRebuild } from '../lib/watchRebuild.ts';
 import { fingerprintPaths, PreparedInputs } from '../lib/preparedInputs.ts';
 import { readPreinstalledLanguagePackIds } from './languagePacks.ts';
+import { readExtensionUiTargets } from '../builtin/extensionManifest.ts';
 
 const repository = resolve(import.meta.dirname, '../..');
 const localizationInputs = new PreparedInputs(resolve(repository, '.build/localization-inputs.json'));
@@ -37,7 +38,7 @@ async function localizationFingerprint(): Promise<string> {
 		resolve(repository, 'localization'), resolve(repository, 'extensions'),
 		resolve(repository, '.build/protocol/typescript/ApprovalModes.ts'),
 		resolve(repository, '.build/protocol/typescript/ProductSlashCommands.ts'),
-		fileURLToPath(import.meta.url), resolve(repository, 'build/resources/languagePacks.ts'), resolve(repository, 'build/lib/preparedInputs.ts'), resolve(repository, 'pnpm-lock.yaml'),
+		fileURLToPath(import.meta.url), resolve(repository, 'build/resources/languagePacks.ts'), resolve(repository, 'build/builtin/extensionManifest.ts'), resolve(repository, 'build/lib/preparedInputs.ts'), resolve(repository, 'pnpm-lock.yaml'),
 	], (path, directory) => directory ? !['node_modules', 'test', 'generated', '.git', 'target'].includes(path.split(sep).at(-1)!) : path.startsWith(`${resolve(repository, 'extensions')}${sep}`) ? path.endsWith('.json') || clientEditorSource(path) : /\.(json|ts|yaml)$/.test(path));
 }
 
@@ -394,6 +395,7 @@ async function generate(check: boolean): Promise<boolean> {
 		const distribution = {
 			schemaVersion: 2, packageType: 'localization', source: 'thirdParty', id: `${manifest.publisher}/${manifest.name}`,
 			version: manifest.version, displayName: manifest.displayName, description: manifest.description, license: manifest.license,
+			uiTargets: readExtensionUiTargets(manifest.ashUiTargets),
 			capabilities: [{ kind: 'asset', id: language.locale, path: 'localization' }], localizations: [language],
 		};
 		for (const target of manifest.contributes.localizations[0].translations) {
@@ -428,6 +430,7 @@ async function generate(check: boolean): Promise<boolean> {
 interface LanguageMetadata { readonly locale: string; readonly languageName: string; readonly localizedLanguageName: string; }
 interface LanguagePackManifest {
 	readonly name: string; readonly publisher: string; readonly version: string;
+	readonly ashUiTargets?: readonly ('ide' | 'agents')[];
 	readonly displayName: string; readonly description: string; readonly license: string;
 	readonly contributes: { readonly localizations: readonly { readonly translations: readonly { readonly id: string; readonly path: string; }[]; }[]; };
 }
@@ -439,6 +442,7 @@ function validateLanguagePackManifest(manifest: unknown, directory: string): Lan
 	const invalid = (): never => { throw new Error(`Invalid Ash language pack: ${directory}`); };
 	if (!isRecord(manifest) || !isRecord(manifest.contributes) || !Array.isArray(manifest.contributes.localizations)
 		|| manifest.contributes.localizations.length !== 1) return invalid();
+	readExtensionUiTargets(manifest.ashUiTargets);
 	const language = manifest.contributes.localizations[0];
 	if (!['publisher', 'name'].every(key => typeof manifest[key] === 'string' && /^[a-z0-9][a-z0-9-]*$/u.test(manifest[key] as string))
 		|| !['version', 'displayName', 'description', 'license'].every(key => typeof manifest[key] === 'string' && manifest[key])

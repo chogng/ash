@@ -6,6 +6,7 @@ import type { ILocalGitService } from '../../../../../platform/git/common/localG
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import type { IPluginManagementApi } from '../../../../../platform/extensionManagement/common/pluginManagementApi.js';
 import { AppServerPluginManagementService } from '../../browser/appServerPluginManagementService.js';
+import { ExtensionUiTarget } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 
 function fixture() {
 	const copies: string[] = [];
@@ -45,8 +46,19 @@ function fixture() {
 		uninstall: unused,
 	};
 	const service = new AppServerPluginManagementService(api, { subscribe: () => ({ dispose() { } }) }, git, files, new NullLoggerService());
-	return { service, git, files, copies, removed, cancellations, get installation() { return installation; }, get cloned() { return cloned; }, get checkout() { return checkout; } };
+	return { service, api, git, files, copies, removed, cancellations, get installation() { return installation; }, get cloned() { return cloned; }, get checkout() { return checkout; } };
 }
+
+test('Local plugin lists preserve declared and missing manifest UI targets', async () => {
+	const f = fixture();
+	using service = f.service;
+	const legacy = { id: 'example/legacy', version: '1.0.0', digest: 'digest', displayName: 'Legacy', permissions: [], hasEditorExtensions: true, enabled: false, granted: false, effective: false, revoked: false };
+	f.api.list = async () => ({ revision: 7, activationGeneration: 1, packages: [legacy, { ...legacy, id: 'example/agents', uiTargets: ['agents'] }, { ...legacy, id: 'example/shared', uiTargets: ['ide', 'agents'] }] });
+	const catalog = await service.list();
+	assert.deepEqual(catalog.packages[0], legacy);
+	assert.deepEqual(catalog.packages[1]?.uiTargets, [ExtensionUiTarget.Agents]);
+	assert.deepEqual(catalog.packages[2]?.uiTargets, [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents]);
+});
 
 test('Git plugin installation excludes metadata and installs into the captured directory without enabling it', async () => {
 	const f = fixture();

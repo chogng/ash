@@ -1,6 +1,7 @@
 import { cp, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { readExtensionUiTargets } from './extensionManifest.ts';
 
 /** Stages code-free editor and language packages for the existing signed Extensions registry. */
 export async function buildDeclarativePackage(source: string, output: string): Promise<void> {
@@ -34,7 +35,7 @@ export async function buildDeclarativePackage(source: string, output: string): P
 			schemaVersion: 2, packageType: kind, source: 'official', id: `${manifest.publisher}/${manifest.name}`, version: manifest.version,
 			displayName: messages[manifest.displayName?.slice(1, -1)] ?? manifest.displayName,
 			description: messages[manifest.description?.slice(1, -1)] ?? manifest.description,
-			license: 'LicenseRef-Ash', capabilities: [{ kind: 'asset', id: `${kind}-resources`, path: kind }],
+			license: 'LicenseRef-Ash', uiTargets: readExtensionUiTargets(manifest.ashUiTargets), capabilities: [{ kind: 'asset', id: `${kind}-resources`, path: kind }],
 			...(languages.length ? { languages: languages.map((language: { id: string; aliases?: string[]; extensions?: string[]; }) => ({ id: language.id, displayName: language.aliases?.[0] ?? language.id, aliases: language.aliases ?? [], fileExtensions: language.extensions ?? [] })) } : {}),
 		};
 		await writeFile(resolve(staging, 'catalog.json'), JSON.stringify(catalog, null, 2) + '\n');

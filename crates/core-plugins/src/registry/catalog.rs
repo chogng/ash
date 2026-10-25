@@ -13,6 +13,7 @@ use crate::AvailableCapability;
 use crate::CapabilityKind;
 use crate::ExtensionPackageCapability;
 use crate::ExtensionPackagePayload;
+use crate::ExtensionUiTarget;
 use crate::ExtensionsClientError;
 use crate::PackageDetails;
 use crate::PackageRef;
@@ -48,6 +49,8 @@ pub(crate) struct CatalogManifest {
     pub display_name: String,
     pub description: String,
     pub license: String,
+    #[serde(default)]
+    pub ui_targets: Option<Vec<ExtensionUiTarget>>,
     #[serde(default)]
     pub upstream: Option<CatalogUpstreamReference>,
     pub capabilities: Vec<CatalogCapability>,
@@ -414,6 +417,7 @@ impl Release {
             package_type: self.manifest.package_type.as_str().to_owned(),
             display_name: self.manifest.display_name.clone(),
             description: self.manifest.description.clone(),
+            ui_targets: self.manifest.ui_targets.clone(),
         }
     }
 
@@ -431,6 +435,7 @@ impl Release {
                 .as_ref()
                 .map(CatalogUpstreamReference::public_reference),
             capabilities: self.available_capabilities(),
+            ui_targets: self.manifest.ui_targets.clone(),
         }
     }
 
@@ -480,6 +485,11 @@ fn language_ids_for(manifest: &CatalogManifest, capability: &CatalogCapability) 
 }
 
 pub(crate) fn validate_manifest(manifest: &CatalogManifest) -> Result<(), ExtensionsClientError> {
+    if manifest.ui_targets.as_ref().is_some_and(|targets| {
+        targets.is_empty() || targets.len() > 2 || (targets.len() == 2 && targets[0] == targets[1])
+    }) {
+        return Err(ExtensionsClientError::package_untrusted());
+    }
     if !matches!(manifest.schema_version, 1 | 2)
         || !valid_package_id(&manifest.id)
         || manifest.display_name.trim().is_empty()

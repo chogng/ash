@@ -1,5 +1,8 @@
 {
   "name": "toml",
+  "ashUiTargets": [
+    "ide"
+  ],
   "publisher": "ash",
   "version": "1.0.0",
   "displayName": "TOML Language Support",

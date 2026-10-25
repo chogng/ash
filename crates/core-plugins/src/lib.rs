@@ -66,6 +66,7 @@ pub use registry::DownloadPackageRequest;
 pub use registry::ExecutableActivationSpec;
 pub use registry::ExecutableRuntime;
 pub use registry::ExtensionPackageService;
+pub use registry::ExtensionUiTarget;
 pub use registry::ExtensionsClientError;
 pub use registry::ExtensionsClientErrorKind;
 pub use registry::ExtensionsErrorCode;

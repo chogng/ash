@@ -1693,6 +1693,8 @@ use crate::protocol::extension_packages::ExtensionsSkillActivationSpecDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsThemeActivationSpecDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsUiTargetDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsUninstallModeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsUninstallParams;
@@ -6398,6 +6400,7 @@ typescript_bindings! {
     ExtensionsGetParams,
     ExtensionsPackageDetailsDto,
     ExtensionsPackageSourceDto,
+    ExtensionsUiTargetDto,
     ExtensionsUpstreamRegistryDto,
     ExtensionsUpstreamReferenceDto,
     ExtensionsDownloadParams,

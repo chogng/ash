@@ -180,7 +180,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		'localization/languages.json': JSON.stringify(['en'].map(locale => ({ locale, languageName: locale, localizedLanguageName: locale }))),
 		'localization/en/messages.json': '{}',
 		'localization/preinstalled.json': JSON.stringify(['ash/language-pack-zh-cn']),
-		'extensions/language-pack-zh-cn/package.json': JSON.stringify({ name: 'language-pack-zh-cn', publisher: 'ash', version: '1.0.0', displayName: '简体中文', description: 'Chinese', license: 'MIT', engines: { ash: '*' }, contributes: { localizations: [{ languageId: 'zh-CN', languageName: 'Chinese', localizedLanguageName: '简体中文', translations: [{ id: 'ash', path: 'localization/package.json' }] }] } }),
+		'extensions/language-pack-zh-cn/package.json': JSON.stringify({ name: 'language-pack-zh-cn', publisher: 'ash', version: '1.0.0', displayName: '简体中文', description: 'Chinese', license: 'MIT', ashUiTargets: ['ide', 'agents'], engines: { ash: '*' }, contributes: { localizations: [{ languageId: 'zh-CN', languageName: 'Chinese', localizedLanguageName: '简体中文', translations: [{ id: 'ash', path: 'localization/package.json' }] }] } }),
 		'extensions/language-pack-zh-cn/translations/messages.json': JSON.stringify({ ash: { hello: '你好', packageClient: '包内文档' } }),
 		'extensions/document-client/package.json': JSON.stringify({ name: 'document-client', publisher: 'ash', version: '1.0.0' }),
 		'extensions/document-client/browser/editor.ts': 'export {};',
@@ -193,7 +193,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		await mkdir(dirname(join(root, name)), { recursive: true });
 		await writeFile(join(root, name), text);
 	}
-	for (const file of ['build/resources/localization.ts', 'build/resources/languagePacks.ts', 'build/lib/watchRebuild.ts', 'build/lib/preparedInputs.ts', entry]) {
+	for (const file of ['build/resources/localization.ts', 'build/resources/languagePacks.ts', 'build/builtin/extensionManifest.ts', 'build/lib/watchRebuild.ts', 'build/lib/preparedInputs.ts', entry]) {
 		await mkdir(dirname(join(root, file)), { recursive: true });
 		await copyFile(join(repository, file), join(root, file));
 	}
@@ -219,6 +219,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	const outputs = (await readdir(generated)).sort();
 	assert.deepEqual(outputs, ['extensions', 'localizationCatalog.en.ts', 'localizationCatalog.zh-CN.ts', 'localizationCatalogs.ts']);
 	const extensionRoot = join(generated, 'extensions/ash.language-pack-zh-cn');
+	assert.deepEqual(JSON.parse(await readFile(join(extensionRoot, 'manifest.json'), 'utf8')).uiTargets, ['ide', 'agents']);
 	const packedCatalog = JSON.parse(await readFile(join(extensionRoot, 'localization/package.json'), 'utf8'));
 	assert.equal(packedCatalog.locale, 'zh-CN');
 	assert.equal(packedCatalog.bundles.ash.packageClient, '包内文档');

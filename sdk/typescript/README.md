@@ -196,3 +196,7 @@ selection, theme and accessibility owners; it keeps only a projection of provide
 Disposing the registration or retiring the extension removes the view and cancels
 in-flight requests. Nodes are bounded to 10,000 per provider, item text to 4,096
 characters, IDs to 1,024 characters and rename input to 32,768 characters.
+
+### Product window metadata
+
+Declare `ashUiTargets` in an editor extension's `package.json` as `["ide"]`, `["agents"]`, or `["ide", "agents"]`. Package builders preserve it as `uiTargets` in the signed market `catalog.json`; local Plugin manifests use `uiTargets` directly. Marketplace, details and recommendations consume this declaration. Omission preserves an unknown audience for legacy packages and does not imply shared support. Recommendation rules and capability types cannot override it. This metadata is separate from OS/runtime compatibility and execution authorization.

@@ -101,6 +101,7 @@ impl ExtensionSource for WebRegistry {
     }
     fn get(&self, _: GetPackageRequest) -> Result<PackageDetails, ExtensionsClientError> {
         Ok(PackageDetails {
+            ui_targets: None,
             package: WebPackage::new(self.0).package,
             package_type: "editorExtension".into(),
             display_name: "Web".into(),

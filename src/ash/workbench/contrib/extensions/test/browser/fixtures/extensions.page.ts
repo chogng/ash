@@ -111,6 +111,7 @@ import { IWorkspaceExtensionsConfigService, WorkspaceExtensionsConfigService } f
 import { IExtensionRecommendationsService, IExtensionIgnoredRecommendationsService } from '../../../../../services/extensionRecommendations/common/extensionRecommendations.js';
 import { ExtensionIgnoredRecommendationsService } from '../../../../../services/extensionRecommendations/common/extensionIgnoredRecommendationsService.js';
 import { ExtensionRecommendationsService } from '../../../browser/extensionRecommendationsService.js';
+import { ExtensionUiTarget } from '../../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { ILanguageModelToolsService } from '../../../../chat/common/tools/languageModelToolsService.js';
 import { IMcpServerStatusService, type McpServerStatus } from '../../../../../../platform/mcp/common/mcpServerStatusService.js';
 import { createAppServerMcpServerStatusApi } from '../../../../../../platform/mcp/browser/mcpServerStatusApi.js';
@@ -158,27 +159,29 @@ const configurationChanged = disposables.add(new Emitter<IConfigurationChangeEve
 let discoveryEnabled = true;
 let installed: ExtensionsInstalledPackage[] = [];
 let generation = 1;
-const summary = { id: 'example/web', version: '1.0.0', packageType: 'plugin', displayName: 'Web tools', description: 'TypeScript server and review skill' };
+const legacyUiTargets = new URLSearchParams(location.search).has('legacyUiTargets');
+const summary = { uiTargets: legacyUiTargets ? undefined : [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents], id: 'example/web', version: '1.0.0', packageType: 'plugin', displayName: 'Web tools', description: 'TypeScript server and review skill' };
 const reference = { id: summary.id, version: summary.version, digest: 'sha256:' + 'a'.repeat(64) };
 const capabilities = [
 	{ kind: 'executable' as const, id: 'typescript-language-server', contractVersion: '1', permissions: ['process'], authenticationProvider: null },
+	{ kind: 'language' as const, id: 'typescript', contractVersion: '1', permissions: [], authenticationProvider: null },
 	{ kind: 'skill' as const, id: 'review', contractVersion: '1', permissions: [], authenticationProvider: null },
 	...(new URLSearchParams(location.search).has('connectorBundle') ? [{ kind: 'connector' as const, id: 'github', contractVersion: '1', permissions: [], authenticationProvider: null }] : []),
 ];
-const packageDetails = { package: reference, packageType: summary.packageType, displayName: summary.displayName, description: summary.description, license: 'MIT', source: 'thirdParty' as const, upstream: null, capabilities };
-const mcpSummary = { id: 'catalog/docs@ash', version: '1.0.0', packageType: 'mcp', displayName: 'Docs MCP', description: 'Documentation tools' };
+const packageDetails = { uiTargets: summary.uiTargets, package: reference, packageType: summary.packageType, displayName: summary.displayName, description: summary.description, license: 'MIT', source: 'thirdParty' as const, upstream: null, capabilities };
+const mcpSummary = { uiTargets: legacyUiTargets ? undefined : [ExtensionUiTarget.Agents], id: 'catalog/docs@ash', version: '1.0.0', packageType: 'mcp', displayName: 'Docs MCP', description: 'Documentation tools' };
 const mcpDetails = { ...packageDetails, ...mcpSummary, package: { ...reference, id: mcpSummary.id }, capabilities: [{ kind: 'mcp' as const, id: 'docs-server', contractVersion: '1', permissions: ['network'], authenticationProvider: null }] };
 const discoveryFixture = new URLSearchParams(location.search).has('marketplace');
 const partialDiscoveryFailure = new URLSearchParams(location.search).has('partialDiscoveryFailure');
 const nativeEditor = new URLSearchParams(location.search).has('nativeEditor');
 const extensionId = nativeEditor ? 'ash.academy' : 'publisher.sample';
-const extensionSummary = { ...summary, id: nativeEditor ? 'ash.academy@ash' : 'publisher.sample@ash', packageType: 'editor', displayName: nativeEditor ? 'Academy' : 'Sample editor extension' };
+const extensionSummary = { ...summary, uiTargets: legacyUiTargets ? undefined : [ExtensionUiTarget.IDE], id: nativeEditor ? 'ash.academy@ash' : 'publisher.sample@ash', packageType: 'editor', displayName: nativeEditor ? 'Academy' : 'Sample editor extension' };
 const extensionReference = { ...reference, id: extensionSummary.id };
 const extensionCapabilities = [{ kind: 'editorExtension' as const, id: 'publisher.sample', contractVersion: '1', permissions: [], authenticationProvider: null }];
 const extensionDetails = { ...packageDetails, package: extensionReference, ...extensionSummary, capabilities: extensionCapabilities };
 const uninstalled = new URLSearchParams(location.search).has('uninstalled');
 const rustBuiltIn = new URLSearchParams(location.search).has('rustBuiltIn');
-const rustLanguagePackManifest = { publisher: 'ash', name: 'language-pack-zh-cn', version: '1.0.0', displayName: '中文语言包（Rust 目录）', description: 'Rust package snapshot', contributes: { localizations: [{ languageId: 'zh-CN' }] } };
+const rustLanguagePackManifest = { publisher: 'ash', name: 'language-pack-zh-cn', version: '1.0.0', displayName: '中文语言包（Rust 目录）', description: 'Rust package snapshot', ashUiTargets: ['ide', 'agents'], contributes: { localizations: [{ languageId: 'zh-CN' }] } };
 const extensionManifest = { publisher: 'Fixture publisher', author: { name: 'Fixture author' }, name: 'sample', icon: 'icon.svg', categories: ['Programming Languages'], homepage: 'https://example.invalid/tools' };
 let heldReadme: ((text: string) => void) | undefined;
 let holdReadme = false;
@@ -308,11 +311,12 @@ const api: IExtensionManagementApi = {
 		requests.push(['get', params]);
 		if (offline) { throw new Error('Catalog unavailable'); }
 		if (new URLSearchParams(location.search).has('productTips') && ['marketplace.keymap-sublime@ash', 'marketplace.markdown@ash', 'marketplace.aurora-theme@ash', 'marketplace.python@ash'].includes(params.packageId)) {
-			return { ...packageDetails, packageType: 'editor', package: { ...packageDetails.package, id: params.packageId }, displayName: params.packageId };
+			return { ...packageDetails, uiTargets: params.packageId === 'marketplace.aurora-theme@ash' ? [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents] : [ExtensionUiTarget.IDE], packageType: 'editor', package: { ...packageDetails.package, id: params.packageId }, displayName: params.packageId };
 		}
 		const catalog = sources.filter(source => source.enabled).flatMap(source => [
 			...discoveryPackages(source.id, 'skill'), ...discoveryPackages(source.id, 'mcp'),
 		]);
+		if (params.packageId === 'ash.academy@ash') { return { ...extensionDetails, uiTargets: [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents], package: { ...extensionReference, id: params.packageId } }; }
 		const details = [extensionDetails, packageDetails, mcpDetails, ...catalog].find(entry => entry.package.id === params.packageId);
 		if (!details) { throw new Error('Unknown package'); }
 		return { ...details, package: { ...details.package, version: params.version ?? '2.0.0' } };
@@ -498,7 +502,7 @@ services.registerInstance(ILanguageService, recommendationLanguages);
 services.registerInstance(IModelService, disposables.add(new ModelService(services.get(IConfigurationService), { _serviceBrand: undefined, getEOL: () => '\n' }, recommendationLanguages)));
 services.registerInstance(IExtensionService, { onDidChange: Event.None, currentCatalog: { extensions: [], generation: 1, diagnostics: [] } } as unknown as IExtensionService);
 services.registerInstance(IFileTextModelService, disposables.add(services.createInstance(BrowserTextModelService, disposables.add(new MemoryResourceStore([])), { languageService: recommendationLanguages })));
-services.registerInstance(IExtensionRecommendationsService, disposables.add(services.createInstance(ExtensionRecommendationsService)));
+services.registerInstance(IExtensionRecommendationsService, disposables.add(services.createInstance(ExtensionRecommendationsService, new URLSearchParams(location.search).has('agentsRecommendations') ? ExtensionUiTarget.Agents : ExtensionUiTarget.IDE)));
 let mcpServers: readonly McpServerStatus[] = [{ id: 'marketplace:example/web:mcp:fixture-server', displayName: 'fixture-server', httpOrigin: 'https://example.com', state: { status: 'connected' }, catalogGeneration: 1, connectionGeneration: 1, toolCount: 1 }];
 let mcpStatusFailure = false;
 let mcpToolsFailure = false;

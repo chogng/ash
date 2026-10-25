@@ -15,6 +15,7 @@ export interface ExtensionTips {
 export function readExtensionTips(value: unknown): ExtensionTips {
 	const record = (value: unknown): Record<string, unknown> => {
 		if (!value || typeof value !== 'object' || Array.isArray(value)) { throw new TypeError('Invalid extension recommendation catalog'); }
+		if ('targets' in value || 'uiTargets' in value) { throw new TypeError('UI targets belong to package manifests, not recommendation rules'); }
 		return value as Record<string, unknown>;
 	};
 	const entries = (value: unknown): Record<string, unknown>[] => {

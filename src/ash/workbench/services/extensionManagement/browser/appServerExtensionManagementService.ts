@@ -1,5 +1,7 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { localize } from '../../../../nls.js';
+import { ExtensionUiTarget } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import type { ExtensionsPackageSummaryDto } from '../../../../../../.build/protocol/typescript/index.js';
 import type { ExtensionsBuiltInProviders, ExtensionsEditorExtensionPolicy, ExtensionsEditorExtensionPolicyAction, ExtensionsEditorExtensions, ExtensionsRecommendationEnvironment } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
@@ -31,7 +33,7 @@ export class AppServerExtensionManagementService extends Disposable implements I
 		if (!Number.isSafeInteger(total) || total < 0) {
 			throw new TypeError(localize({ bundle: 'ash.extensions', key: 'marketplaceInvalidCount' }, 'The registry returned an invalid result count.'));
 		}
-		return { packages: page.packages, total, nextCursor: page.nextCursor ?? undefined };
+		return { packages: page.packages.map(packageSummary), total, nextCursor: page.nextCursor ?? undefined };
 	}
 
 	async addSource(source: AshExtensionSource, expectedRevision: number): Promise<ExtensionRegistrySources> {
@@ -85,11 +87,17 @@ export class AppServerExtensionManagementService extends Disposable implements I
 	}
 
 	async search(query: string, options: ExtensionsSearchOptions = {}): Promise<readonly ExtensionsPackageSummary[]> {
-		return (await this.api.search({ query, packageType: options.packageType ?? null, limit: options.limit ?? null, capabilityKind: options.capabilityKind ?? null, languageId: options.languageId ?? null })).packages;
+		return (await this.api.search({ query, packageType: options.packageType ?? null, limit: options.limit ?? null, capabilityKind: options.capabilityKind ?? null, languageId: options.languageId ?? null })).packages.map(packageSummary);
 	}
 
-	get(packageId: string, version?: string): Promise<ExtensionsPackageDetails> {
-		return this.api.get({ packageId, version: version ?? null });
+	async get(packageId: string, version?: string): Promise<ExtensionsPackageDetails> {
+		const details = await this.api.get({ packageId, version: version ?? null });
+		return {
+			package: details.package, packageType: details.packageType, displayName: details.displayName,
+			description: details.description, license: details.license, source: details.source, upstream: details.upstream,
+			capabilities: details.capabilities,
+			...(details.uiTargets ? { uiTargets: uiTargets(details.uiTargets) } : {}),
+		};
 	}
 
 	download(packageId: string, version?: string) {
@@ -141,7 +149,7 @@ export class AppServerExtensionManagementService extends Disposable implements I
 			this.api.search({ query, packageType: options.packageType ?? null, limit: options.limit ?? null, capabilityKind: options.capabilityKind ?? null, languageId: options.languageId ?? null }),
 			this.listInstalled(),
 		]).then(async ([searchResult, installed]) => {
-			const packages = searchResult.packages;
+			const packages = searchResult.packages.map(packageSummary);
 			const browsePackages = await Promise.all(packages.map(async summary => ({
 				summary,
 				details: await this.packageDetails(summary.id, summary.version).catch(() => undefined),
@@ -177,4 +185,12 @@ export class AppServerExtensionManagementService extends Disposable implements I
 
 function browseKey(query: string, options: ExtensionsSearchOptions = {}): string {
 	return JSON.stringify([query, options.packageType ?? null, options.limit ?? null, options.capabilityKind ?? null, options.languageId ?? null]);
+}
+
+function uiTargets(value: readonly ('ide' | 'agents')[]): readonly ExtensionUiTarget[] {
+	return value.map(target => target === 'ide' ? ExtensionUiTarget.IDE : ExtensionUiTarget.Agents);
+}
+
+function packageSummary(value: ExtensionsPackageSummaryDto): ExtensionsPackageSummary {
+	return { id: value.id, version: value.version, packageType: value.packageType, displayName: value.displayName, description: value.description, ...(value.uiTargets ? { uiTargets: uiTargets(value.uiTargets) } : {}) };
 }

@@ -1,5 +1,8 @@
 {
   "name": "markdown",
+  "ashUiTargets": [
+    "ide"
+  ],
   "displayName": "%displayName%",
   "description": "%description%",
   "version": "30.0.0",

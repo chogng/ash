@@ -1,5 +1,9 @@
 {
   "name": "github",
+  "ashUiTargets": [
+    "ide",
+    "agents"
+  ],
   "publisher": "ash",
   "version": "1.0.0",
   "displayName": "%displayName%",

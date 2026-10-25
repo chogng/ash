@@ -1,5 +1,9 @@
 {
   "name": "theme-defaults",
+  "ashUiTargets": [
+    "ide",
+    "agents"
+  ],
   "displayName": "%displayName%",
   "description": "%description%",
   "categories": [

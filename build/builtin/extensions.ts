@@ -9,6 +9,7 @@ import { gzipSync } from 'node:zlib';
 import { fingerprintPaths, PreparedInputs, readJsonCache, writeJsonCache } from '../lib/preparedInputs.ts';
 import { readPreinstalledLanguagePackIds } from '../resources/languagePacks.ts';
 import { compileExtensionWebviews } from './extensionWebviews.ts';
+import { readExtensionUiTargets } from './extensionManifest.ts';
 
 const root = resolve(import.meta.dirname, '../..');
 export const browserExtensionRoots = [resolve(root, 'extensions'), ...String(process.env.ASH_WEB_EXTENSION_PATHS ?? '').split(delimiter).filter(Boolean).map(path => resolve(path))];
@@ -17,7 +18,7 @@ const prepared = new PreparedInputs(resolve(root, '.build/browser-extension-inpu
 // Vite sets NODE_ENV during its first build; cache hits must use that same default.
 const buildEnvironment = process.env.NODE_ENV ?? 'production';
 const toolchainFiles = [
-	'build/builtin/extensions.ts', 'build/builtin/extensionWebviews.ts', 'build/lib/preparedInputs.ts', 'pnpm-lock.yaml', 'package.json', 'build/package.json',
+	'build/builtin/extensions.ts', 'build/builtin/extensionWebviews.ts', 'build/builtin/extensionManifest.ts', 'build/lib/preparedInputs.ts', 'pnpm-lock.yaml', 'package.json', 'build/package.json',
 	'build/resources/languagePacks.ts', 'localization/preinstalled.json', 'sdk/typescript/index.js',
 	'tsconfig.json', 'tsconfig.base.json', 'extensions/tsconfig.json', 'extensions/tsconfig.base.json',
 	'.env', '.env.local', '.env.production', '.env.production.local',
@@ -96,6 +97,7 @@ async function preparePackages(): Promise<boolean> {
 		if ((await stat(resolve(packageRoot, 'package.json'))).size > 4 * 1024 * 1024) { throw new RangeError('Browser extension manifest exceeds its byte limit'); }
 		const manifestJson = await readFile(resolve(packageRoot, 'package.json'), 'utf8');
 		const manifest = JSON.parse(manifestJson);
+		readExtensionUiTargets(manifest.ashUiTargets);
 		const id = `${manifest.publisher}.${manifest.name}`;
 		if (index < builtInCount && manifest.engines?.ash && manifest.contributes?.localizations
 			&& !preinstalledLanguagePacks.has(`${manifest.publisher}/${manifest.name}`)) { continue; }

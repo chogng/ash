@@ -24,6 +24,7 @@ use ash_app_server_protocol::protocol::extension_packages::ExtensionsResourceRef
 use ash_app_server_protocol::protocol::extension_packages::ExtensionsSearchResult;
 use ash_app_server_protocol::protocol::extension_packages::ExtensionsSkillActivationSpecDto;
 use ash_app_server_protocol::protocol::extension_packages::ExtensionsThemeActivationSpecDto;
+use ash_app_server_protocol::protocol::extension_packages::ExtensionsUiTargetDto;
 use ash_app_server_protocol::protocol::extension_packages::ExtensionsUpstreamReferenceDto;
 use ash_app_server_protocol::protocol::extension_packages::ExtensionsUpstreamRegistryDto;
 use ash_core_plugins::AcquiredCapability;
@@ -37,6 +38,7 @@ use ash_core_plugins::CapabilityRef;
 use ash_core_plugins::ConnectorActivationSpec;
 use ash_core_plugins::ExecutableActivationSpec;
 use ash_core_plugins::ExecutableRuntime;
+use ash_core_plugins::ExtensionUiTarget;
 use ash_core_plugins::InstallationState;
 use ash_core_plugins::InstalledPackage;
 use ash_core_plugins::LanguageActivationSpec;
@@ -68,6 +70,9 @@ pub(super) fn package_details(value: PackageDetails) -> ExtensionsPackageDetails
         package_type: value.package_type,
         display_name: value.display_name,
         description: value.description,
+        ui_targets: value
+            .ui_targets
+            .map(|targets| targets.into_iter().map(ui_target).collect()),
         license: value.license,
         source: package_source(value.source),
         upstream: value.upstream.map(upstream_reference),
@@ -142,6 +147,9 @@ pub(super) fn package_summary(value: PackageSummary) -> ExtensionsPackageSummary
         package_type: value.package_type,
         display_name: value.display_name,
         description: value.description,
+        ui_targets: value
+            .ui_targets
+            .map(|targets| targets.into_iter().map(ui_target).collect()),
     }
 }
 
@@ -150,6 +158,13 @@ pub(super) fn package_ref(value: PackageRef) -> ExtensionsPackageRefDto {
         id: value.id,
         version: value.version,
         digest: value.digest,
+    }
+}
+
+pub(super) fn ui_target(value: ExtensionUiTarget) -> ExtensionsUiTargetDto {
+    match value {
+        ExtensionUiTarget::Ide => ExtensionsUiTargetDto::Ide,
+        ExtensionUiTarget::Agents => ExtensionsUiTargetDto::Agents,
     }
 }
 

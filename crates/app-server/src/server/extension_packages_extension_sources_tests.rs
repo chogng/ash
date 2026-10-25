@@ -481,6 +481,7 @@ impl ExtensionSource for Registry {
         let mut package = payload.package_ref();
         package.id = request.package_id;
         Ok(PackageDetails {
+            ui_targets: None,
             package,
             package_type: "editor".into(),
             display_name: "Academy".into(),

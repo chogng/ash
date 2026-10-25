@@ -1,5 +1,9 @@
 {
   "name": "language-pack-zh-cn",
+  "ashUiTargets": [
+    "ide",
+    "agents"
+  ],
   "publisher": "ash",
   "version": "1.0.0",
   "displayName": "简体中文语言包",

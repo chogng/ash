@@ -2,12 +2,15 @@ import type { Event } from '../../../../base/common/event.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IExtensionRecommendations } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
+import type { ExtensionUiTarget } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 
 export enum ExtensionRecommendationReason { Workspace = 'workspace', Executable = 'executable', File = 'file', Application = 'application', WorkspaceConfig = 'workspaceConfig' }
 
 export interface ExtensionRecommendation {
 	readonly extensionId: string;
 	readonly reason: { readonly reasonId: ExtensionRecommendationReason; readonly reasonText: string; };
+	/** The package manifest's declared product windows; never inferred from its capabilities. */
+	readonly uiTargets?: readonly ExtensionUiTarget[];
 	/** Discovery context shared by the Recommended view and optional install notification. */
 	readonly context?: Omit<IExtensionRecommendations, 'extensions'>;
 }
@@ -19,6 +22,7 @@ export interface ExtensionRecommendationsSnapshot {
 }
 
 export interface IExtensionRecommendationsService {
+	readonly target: ExtensionUiTarget;
 	readonly onDidChangeRecommendations: Event<void>;
 	getWorkspaceRecommendations(): Promise<ExtensionRecommendationsSnapshot>;
 	getRecommendations(): Promise<ExtensionRecommendationsSnapshot>;

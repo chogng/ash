@@ -1,5 +1,8 @@
 {
   "name": "json",
+  "ashUiTargets": [
+    "ide"
+  ],
   "publisher": "ash",
   "version": "0.1.0",
   "displayName": "JSON",

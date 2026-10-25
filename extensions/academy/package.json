@@ -1,5 +1,9 @@
 {
   "name": "academy",
+  "ashUiTargets": [
+    "ide",
+    "agents"
+  ],
   "publisher": "ash",
   "version": "1.0.0",
   "displayName": "%academy.displayName%",

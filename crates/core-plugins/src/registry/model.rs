@@ -67,6 +67,8 @@ pub struct AvailableCapability {
     pub authentication_provider: Option<String>,
 }
 
+pub use ash_plugin::ExtensionUiTarget;
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PackageSummary {
@@ -75,6 +77,8 @@ pub struct PackageSummary {
     pub package_type: String,
     pub display_name: String,
     pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui_targets: Option<Vec<ExtensionUiTarget>>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -113,6 +117,8 @@ pub struct PackageDetails {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub upstream: Option<UpstreamReference>,
     pub capabilities: Vec<AvailableCapability>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui_targets: Option<Vec<ExtensionUiTarget>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

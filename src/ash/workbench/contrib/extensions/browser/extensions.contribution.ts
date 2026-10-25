@@ -4,6 +4,7 @@ import { ExtensionIgnoredRecommendationsService } from '../../../services/extens
 import '../../../services/extensionRecommendations/common/workspaceExtensionsConfig.js';
 import { ExtensionRecommendationsService } from './extensionRecommendationsService.js';
 import { IExtensionRecommendationNotificationService, RecommendationSource } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ExtensionRecommendationNotificationService } from './extensionRecommendationNotificationService.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -13,14 +14,14 @@ import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, type ExtensionsOpenOptions } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { ExtensionUiTarget, OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, type ExtensionsOpenOptions } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ViewsRegistry } from '../../../common/views.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { registerExtensionManagementActions } from './extensionsActions.js';
 import { openExtensionsView, registerExtensionsViewContainer } from './extensionsViewlet.js';
 
-registerSingleton(IExtensionRecommendationsService, ExtensionRecommendationsService, InstantiationType.Delayed);
+registerSingleton(IExtensionRecommendationsService, new SyncDescriptor(ExtensionRecommendationsService, [ExtensionUiTarget.IDE], true));
 registerSingleton(IExtensionIgnoredRecommendationsService, ExtensionIgnoredRecommendationsService, InstantiationType.Delayed);
 registerSingleton(IExtensionRecommendationNotificationService, ExtensionRecommendationNotificationService, InstantiationType.Delayed);
 

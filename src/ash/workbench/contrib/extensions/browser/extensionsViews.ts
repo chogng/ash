@@ -45,6 +45,8 @@ import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsS
 import { ExtensionsInput, ExtensionsCapabilityInput, type ExtensionsCapabilityTarget, ExtensionsInputSource } from '../common/extensionsInput.js';
 import { getExtensionAttribution } from '../common/extensionAttribution.js';
 import { IExtensionRecommendationsService } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
+import { ExtensionUiTarget } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { extensionUiTargetsLabel } from '../../../../platform/extensionManagement/common/extensionNls.js';
 import { appendLabelIcon } from '../../../../base/browser/ui/iconlabel/iconLabels.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -118,6 +120,7 @@ class ExtensionsContent extends Disposable {
 			accessibilityProvider: {
 				getAriaLabel: item => [
 					item.summary.displayName,
+					extensionUiTargetsLabel(item.summary.uiTargets),
 					...this.isPluginsPane ? [item.attribution, item.summary.description] : [item.summary.version, item.summary.description],
 					item.enabled === undefined ? '' : item.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled'),
 				].filter(Boolean).join(', ')
@@ -177,8 +180,8 @@ class ExtensionsContent extends Disposable {
 		}
 		const body = h(mainWindow.document, 'div'); body.className = 'extension-body';
 		const labels: readonly [string, string | undefined][] = this.isPluginsPane
-			? [['extension-name', item.summary.displayName], ['extension-metadata', item.attribution], ['extension-description', item.summary.description]]
-			: [['extension-name', item.summary.displayName], ['extension-description', item.summary.description], ['extension-metadata', `${item.summary.id} · ${item.summary.version}`]];
+			? [['extension-name', item.summary.displayName], ['extension-metadata', [extensionUiTargetsLabel(item.summary.uiTargets), item.attribution].filter(Boolean).join(' · ')], ['extension-description', item.summary.description]]
+			: [['extension-name', item.summary.displayName], ['extension-description', item.summary.description], ['extension-metadata', `${extensionUiTargetsLabel(item.summary.uiTargets)} · ${item.summary.id} · ${item.summary.version}`]];
 		for (const [className, value] of labels) {
 			if (!value) { continue; }
 			const label = resources.add(new IconLabel(body, { label: value, title: value, hideIcon: true }));
@@ -264,7 +267,7 @@ class ExtensionsContent extends Disposable {
 						attribution: getExtensionAttribution(manifest),
 						source: ExtensionsInputSource.BuiltIn, enabled: isProvider ? provider?.enabled : !disabled.has(extension.id.toLowerCase()), canChangeEnablement: isProvider ? !!provider && providers?.canChangeEnablement === true : !manifest.contributes?.localizations?.length,
 						searchTerms: manifest.ashLanguageServers?.servers?.map((server: { id: string; }) => server.id),
-						summary: { id: extension.id, version: extension.version, packageType: 'editorExtension', displayName: manifest.displayName?.startsWith('%') ? extension.name : manifest.displayName ?? extension.displayName, description: typeof manifest.description === 'string' && !manifest.description.startsWith('%') ? manifest.description : '' }
+						summary: { id: extension.id, version: extension.version, packageType: 'editorExtension', displayName: manifest.displayName?.startsWith('%') ? extension.name : manifest.displayName ?? extension.displayName, uiTargets: manifest.ashUiTargets, description: typeof manifest.description === 'string' && !manifest.description.startsWith('%') ? manifest.description : '' }
 					};
 				})));
 			}
@@ -275,12 +278,13 @@ class ExtensionsContent extends Disposable {
 					const policy = policies.extensions.find(value => value.installationId === installation.installationId);
 					const editor = editorCatalog?.extensions.find(value => value.id === installation.package.id.split('@')[0] && value.version === installation.package.version);
 					const manifest = editor && editorCatalog ? JSON.parse(await this.localization.localizeManifest(editor.id, editor.manifestJson, editorCatalog.generation)) : undefined;
-					return { installation, attribution: getExtensionAttribution(manifest), enabled: policy?.enabled, canChangeEnablement: !!policy, summary: { id: installation.package.id, version: installation.package.version, displayName: typeof manifest?.displayName === 'string' && !manifest.displayName.startsWith('%') ? manifest.displayName : editor?.displayName ?? installation.package.id.split('@')[0], packageType: 'installed', description: typeof manifest?.description === 'string' && !manifest.description.startsWith('%') ? manifest.description : installation.capabilities.map(capability => capability.kind === 'editorExtension' ? localize({ bundle: 'ash.extensions', key: 'pluginEditorTag' }, 'Editor') : capability.kind).join(' · ') } };
+					const details = await this.extensionManagement.get(installation.package.id, installation.package.version).catch(() => undefined);
+					return { installation, attribution: getExtensionAttribution(manifest), enabled: policy?.enabled, canChangeEnablement: !!policy, summary: { id: installation.package.id, version: installation.package.version, displayName: typeof manifest?.displayName === 'string' && !manifest.displayName.startsWith('%') ? manifest.displayName : editor?.displayName ?? installation.package.id.split('@')[0], packageType: 'installed', uiTargets: details?.uiTargets, description: typeof manifest?.description === 'string' && !manifest.description.startsWith('%') ? manifest.description : installation.capabilities.map(capability => capability.kind === 'editorExtension' ? localize({ bundle: 'ash.extensions', key: 'pluginEditorTag' }, 'Editor') : capability.kind).join(' · ') } };
 				}));
 				items.push(...builtInItems);
 				if (this.isPluginsPane || !this.options.capabilityKind || this.options.capabilityKind === 'editorExtension') {
 					const catalog = await this.plugins.list();
-					items.push(...catalog.packages.filter(plugin => this.isPluginsPane || !this.options.capabilityKind || plugin.hasEditorExtensions).map(plugin => ({ source: ExtensionsInputSource.Local, enabled: plugin.enabled, canChangeEnablement: plugin.enabled || !plugin.revoked, summary: { id: plugin.id, version: plugin.version, packageType: 'editorExtension', displayName: plugin.displayName, description: localize({ bundle: 'ash.extensions', key: 'localExtension' }, 'Local extension') } })));
+					items.push(...catalog.packages.filter(plugin => this.isPluginsPane || !this.options.capabilityKind || plugin.hasEditorExtensions).map(plugin => ({ source: ExtensionsInputSource.Local, enabled: plugin.enabled, canChangeEnablement: plugin.enabled || !plugin.revoked, summary: { id: plugin.id, version: plugin.version, packageType: 'editorExtension', displayName: plugin.displayName, uiTargets: plugin.uiTargets, description: localize({ bundle: 'ash.extensions', key: 'localExtension' }, 'Local extension') } })));
 				}
 			} else {
 				const options = { limit: 200, packageType: this.isPluginsPane ? 'plugin' : undefined, capabilityKind: this.options.capabilityKind, languageId: this.options.languageId };
@@ -636,15 +640,19 @@ export class RecommendedExtensionsView extends ExtensionsListViewPane {
 				let summary: ExtensionsPackageSummary | undefined;
 				try {
 					const details = await this.extensions.get(recommendation.extensionId);
-					summary = { id: details.package.id, version: details.package.version, packageType: details.packageType, displayName: details.displayName, description: details.description };
+					summary = { id: details.package.id, version: details.package.version, packageType: details.packageType, displayName: details.displayName, description: details.description, uiTargets: details.uiTargets };
 				} catch { /* Keep declared IDs visible while their catalog source is unavailable. */ }
+				const audience = extensionUiTargetsLabel(summary ? summary.uiTargets : recommendation.uiTargets);
 				return {
 					target: { kind: 'recommendation' as const, id: recommendation.extensionId, summary }, name: summary?.displayName ?? recommendation.extensionId,
-					description: recommendation.reason.reasonText, metadata: summary?.id ?? localize({ bundle: 'ash.extensions', key: 'recommendationNotFound' }, 'Unavailable from enabled sources'),
+					description: recommendation.reason.reasonText, metadata: [audience, summary?.id ?? localize({ bundle: 'ash.extensions', key: 'recommendationNotFound' }, 'Unavailable from enabled sources')].filter(Boolean).join(' · '),
 				};
 			})));
 		}
-		return { items, note: [...snapshot.diagnostics, ...(!items.length ? [localize({ bundle: 'ash.extensions', key: 'contextRecommendationsEmpty' }, 'Open a file or workspace to discover extensions. Workspaces can also declare recommendations in .ash/extensions.json.')] : [])].join('\n') };
+		const emptyMessage = this.recommendations.target === ExtensionUiTarget.Agents
+			? localize({ bundle: 'ash.extensions', key: 'agentRecommendationsEmpty' }, 'No recommendations for this window. Browse the marketplace to discover skills, connectors and other extensions.')
+			: localize({ bundle: 'ash.extensions', key: 'contextRecommendationsEmpty' }, 'Open a file or workspace to discover extensions. Workspaces can also declare recommendations in .ash/extensions.json.');
+		return { items, note: [...snapshot.diagnostics, ...(!items.length ? [emptyMessage] : [])].join('\n') };
 	}
 }
 

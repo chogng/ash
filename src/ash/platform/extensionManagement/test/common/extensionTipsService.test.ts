@@ -13,6 +13,12 @@ test('The product catalog includes resolvable package identities for every recom
 	assert.deepEqual(readExtensionTips(catalog()), extensionTips);
 });
 
+test('Recommendation rules cannot redefine package UI targets', () => {
+	for (const field of ['targets', 'uiTargets']) {
+		assert.throws(() => readExtensionTips({ ...catalog(), keymaps: [{ id: 'example.tool@ash', name: 'Tool', [field]: ['ide'] }] }), /package manifests/u);
+	}
+});
+
 test('Release data rejects unknown versions, paths, executable commands and malformed identities', () => {
 	for (const value of [
 		{ ...catalog(), schemaVersion: 2 },

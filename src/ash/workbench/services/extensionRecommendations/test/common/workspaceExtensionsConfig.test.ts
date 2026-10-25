@@ -30,8 +30,9 @@ import { IEditorService } from '../../../editor/common/editorService.js';
 import { IFileTextModelService } from '../../../textmodelResolver/common/textModelResourceService.js';
 import { BrowserTextModelService } from '../../../textmodelResolver/browser/browserTextModelService.js';
 import { IExtensionService } from '../../../extensions/common/extensionService.js';
-import { IExtensionManagementService, type ExtensionsPackageSummary, type ExtensionsSearchOptions } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { IExtensionManagementService, type ExtensionsCapabilityKind, type ExtensionsPackageDetails, type ExtensionsPackageSummary, type ExtensionsSearchOptions } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { RecommendationSource } from '../../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
+import { ExtensionUiTarget } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 
 import { IAppServerRemoteAgentService } from '../../../remote/common/appServerRemoteAgentService.js';
 
@@ -53,7 +54,7 @@ class RecommendationsFileProvider extends MemoryFileService {
 	public invalidate(resource: URI): void { this.changes.fire({ resources: [resource] }); }
 }
 
-function fixture(resources: readonly (readonly [URI, string])[] = []) {
+function fixture(resources: readonly (readonly [URI, string])[] = [], target = ExtensionUiTarget.IDE) {
 	const lifetime = new DisposableStore();
 	const workspace = lifetime.add(new TestWorkspaceService({ id: 'project', uri: URI.file('/project') }));
 	const files = lifetime.add(new FileService());
@@ -78,45 +79,171 @@ function fixture(resources: readonly (readonly [URI, string])[] = []) {
 	let installed: string[] = [];
 	let environment: Awaited<ReturnType<IExtensionManagementService['recommendationEnvironment']>> = { platform: 'other', executables: [] };
 	let productIds: readonly string[] = [];
+	const packageDetails = new Map<string, ExtensionsPackageDetails>([['ash.academy@ash', { package: { id: 'ash.academy@ash', version: '1', digest: '' }, packageType: 'editor', displayName: 'Docs', description: '', license: '', source: 'official', upstream: null, capabilities: [], uiTargets: [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents] }]]);
+	let environmentReads = 0;
 	let connection: IAppServerRemoteAgentService['connection'];
 	const connectionChanged = lifetime.add(new Emitter<void>());
 	services.registerInstance(IAppServerRemoteAgentService, { onDidChangeConnection: connectionChanged.event, onDidChangeConnectionState: Event.None, get connection() { return connection; } } as unknown as IAppServerRemoteAgentService);
-	let search: (query: string, options?: ExtensionsSearchOptions) => Promise<readonly ExtensionsPackageSummary[]> = async (_query, options) => options?.languageId || _query === '.yaml' ? [{ id: `support.${options?.languageId ?? 'yaml'}@ash`, version: '1', packageType: 'language', displayName: options?.languageId ?? 'YAML', description: '' }] : [];
+	let search: (query: string, options?: ExtensionsSearchOptions) => Promise<readonly ExtensionsPackageSummary[]> = async (_query, options) => options?.languageId || _query === '.yaml' ? [{ id: `support.${options?.languageId ?? 'yaml'}@ash`, version: '1', packageType: 'language', displayName: options?.languageId ?? 'YAML', description: '', uiTargets: [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents] }] : [];
 	const queries: { query: string; options?: ExtensionsSearchOptions; }[] = [];
 	services.registerInstance(IWorkspaceExtensionsConfigService, configs);
 	const ignored = lifetime.add(services.createInstance(ExtensionIgnoredRecommendationsService));
 	services.registerInstance(IExtensionIgnoredRecommendationsService, ignored);
 	services.registerInstance(IFileTextModelService, models);
 	services.registerInstance(IModelService, editorModels);
-	services.registerInstance(IEditorService, new TestEditorService());
+	let visibleResources: readonly URI[] = [];
+	const visibleEditorsChanged = lifetime.add(new Emitter<void>());
+	const editors = new TestEditorService();
+	Object.defineProperty(editors, 'visibleEditors', { get: () => visibleResources.map(resource => ({ resource })) });
+	Object.defineProperty(editors, 'onDidVisibleEditorsChange', { value: visibleEditorsChanged.event });
+	services.registerInstance(IEditorService, editors);
 	services.registerInstance(ILanguageService, languages);
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IFileService, files);
 	services.registerInstance(IExtensionManagementService, {
 		onDidChangeInstalled: installedChanged.event,
-		recommendationEnvironment: async () => environment,
-		get: async (id: string) => { if (!productIds.includes(id)) { throw new Error('Product package is unavailable'); } return { package: { id }, displayName: id }; },
+		recommendationEnvironment: async () => { ++environmentReads; return environment; },
+		get: async (id: string) => { if (packageDetails.has(id)) { return packageDetails.get(id)!; } if (!productIds.includes(id)) { throw new Error('Product package is unavailable'); } return { package: { id }, displayName: id, uiTargets: [ExtensionUiTarget.IDE] }; },
 		listInstalled: async () => installed.map(id => ({ package: { id } })),
 		search: async (query: string, options?: ExtensionsSearchOptions) => { queries.push({ query, options }); return search(query, options); },
 	} as unknown as IExtensionManagementService);
 	services.registerInstance(IExtensionService, { onDidChange: Event.None, currentCatalog: { extensions: [], generation: 1, diagnostics: [] } } as unknown as IExtensionService);
-	const recommendations = lifetime.add(services.createInstance(ExtensionRecommendationsService));
-	return { lifetime, workspace, files, provider, configs, recommendations, models, editorModels, languages, queries, installedChanged, services, storage, ignored, setProductIds: (ids: readonly string[]) => { productIds = ids; recommendations.refresh(); }, setEnvironment: (value: typeof environment) => { environment = value; recommendations.refresh(); }, setConnection: (value: typeof connection) => { connection = value; connectionChanged.fire(); }, setInstalled: (ids: string[]) => { installed = ids; installedChanged.fire(); }, setSearch: (value: typeof search) => { search = value; } };
+	const recommendations = lifetime.add(services.createInstance(ExtensionRecommendationsService, target));
+	return {
+		lifetime, workspace, files, provider, configs, recommendations, models, editorModels, languages, queries, installedChanged, services, storage, ignored,
+		get environmentReads() { return environmentReads; },
+		setVisibleResources: (resources: readonly URI[]) => { visibleResources = resources; visibleEditorsChanged.fire(); },
+		setPackage: (id: string, kinds: readonly ExtensionsCapabilityKind[], uiTargets?: readonly ExtensionUiTarget[]) => {
+			packageDetails.set(id, { package: { id, version: '1', digest: '' }, packageType: 'plugin', displayName: id, description: '', license: '', source: 'official', upstream: null, uiTargets, capabilities: kinds.map(kind => ({ kind, id: kind, contractVersion: '1', permissions: [], authenticationProvider: null })) });
+			recommendations.refresh();
+		},
+		setProductIds: (ids: readonly string[]) => { productIds = ids; recommendations.refresh(); },
+		setEnvironment: (value: typeof environment) => { environment = value; recommendations.refresh(); },
+		setConnection: (value: typeof connection) => { connection = value; connectionChanged.fire(); },
+		setInstalled: (ids: string[]) => { installed = ids; installedChanged.fire(); },
+		setSearch: (value: typeof search) => { search = value; },
+	};
 }
 
 suite('Workspace extension recommendations', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
-	test('product tips resolve available packages and share installed and ignored filtering', async () => {
+	test('manifest audiences filter declarations while mixed packages share installation and ignore state', async () => {
+		const f = fixture([[URI.file('/project/.ash/extensions.json'), JSON.stringify({ recommendations: ['editor/tool', 'agent/tool', 'mixed/tool', 'theme/tool', 'unknown/tool'] })]]);
+		using lifetime = f.lifetime;
+		f.setPackage('editor/tool', ['editorExtension'], [ExtensionUiTarget.IDE]);
+		f.setPackage('agent/tool', ['skill', 'connector'], [ExtensionUiTarget.Agents]);
+		f.setPackage('mixed/tool', ['language', 'mcp'], [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents]);
+		f.setPackage('theme/tool', ['theme'], [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents]);
+		f.setPackage('unknown/tool', ['theme', 'skill']);
+		const agents = lifetime.add(f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.Agents));
+		const ids = async (service: ExtensionRecommendationsService) => (await service.getRecommendations()).recommendations.map(item => item.extensionId);
+		assert.deepEqual(await ids(f.recommendations), ['editor/tool', 'mixed/tool', 'theme/tool', 'unknown/tool']);
+		assert.deepEqual(await ids(agents), ['agent/tool', 'mixed/tool', 'theme/tool', 'unknown/tool']);
+		const snapshot = await agents.getRecommendations();
+		assert.deepEqual(snapshot.recommendations.find(item => item.extensionId === 'mixed/tool')!.uiTargets, [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents]);
+		assert.equal(snapshot.recommendations.find(item => item.extensionId === 'unknown/tool')!.context, undefined);
+		assert.equal(snapshot.recommendations.find(item => item.extensionId === 'unknown/tool')!.uiTargets, undefined);
+		f.ignored.toggleGlobalIgnoredRecommendation('mixed/tool', true);
+		f.setInstalled(['theme/tool']);
+		assert.deepEqual(await ids(f.recommendations), ['editor/tool', 'unknown/tool']);
+		assert.deepEqual(await ids(agents), ['agent/tool', 'unknown/tool']);
+	});
+
+	test('Agents do not infer editor recommendations from host tools, project files, background models or IDE history', async () => {
+		const f = fixture([[URI.file('/project/pyproject.toml'), '[project]']], ExtensionUiTarget.Agents);
+		using lifetime = f.lifetime;
+		f.setProductIds(['marketplace.python@ash', 'marketplace.keymap-sublime@ash']);
+		f.setEnvironment({ platform: 'linux', executables: ['python3'] });
+		f.storage.store('extensionsAssistant/recentRecommendations', JSON.stringify({ 'marketplace.python@ash': Date.now() }), StorageScope.PROFILE, StorageTarget.MACHINE);
+		lifetime.add(f.editorModels.createModel('', f.languages.createById('python'), URI.file('/project/background.py')));
+		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);
+		assert.deepEqual(f.queries, []);
+		assert.equal(f.environmentReads, 0);
+	});
+
+	test('manifest audiences take precedence over technical capabilities and recommendation identities', async () => {
+		const f = fixture([[URI.file('/project/.ash/extensions.json'), '{"recommendations":["marketplace.python@ash"]}']], ExtensionUiTarget.Agents);
+		using lifetime = f.lifetime;
+		f.setPackage('marketplace.python@ash', ['language', 'skill'], [ExtensionUiTarget.IDE]);
+		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);
+		f.setPackage('marketplace.python@ash', ['language'], [ExtensionUiTarget.Agents]);
+		const recommendation = (await f.recommendations.getRecommendations()).recommendations[0]!;
+		assert.deepEqual(recommendation.uiTargets, [ExtensionUiTarget.Agents]);
+		assert.equal(recommendation.context?.source, RecommendationSource.WORKSPACE);
+	});
+
+	test('an actual Python editor in Agents establishes a shared editing context and closing it retires the prompt', async () => {
+		const f = fixture([], ExtensionUiTarget.Agents); using lifetime = f.lifetime;
+		const resource = URI.file('/project/main.py');
+		f.setProductIds(['marketplace.python@ash']);
+		f.setPackage('marketplace.python@ash', ['language'], [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents]);
+		f.setSearch(async () => [{ id: 'marketplace.python@ash', version: '1', packageType: 'language', displayName: 'Python', description: '', uiTargets: [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents] }]);
+		lifetime.add(f.editorModels.createModel('', f.languages.createById('python'), resource));
+		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);
+		f.setVisibleResources([resource]);
+		const python = (await f.recommendations.getRecommendations()).recommendations[0]!;
+		assert.equal(python.extensionId, 'marketplace.python@ash');
+		assert.deepEqual(python.uiTargets, [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents]);
+		assert.equal(python.context?.source, RecommendationSource.FILE);
+		f.setVisibleResources([]);
+		assert.ok((await f.recommendations.getRecommendations()).recommendations.every(item => !item.context));
+	});
+
+	test('shared editor intents keep their audience and recent history within the initiating window', async () => {
+		const f = fixture([], ExtensionUiTarget.Agents); using lifetime = f.lifetime;
+		f.recommendations.recommendForResource(URI.parse('untitled:/document.ash-doc'));
+		const recommendation = (await f.recommendations.getRecommendations()).recommendations[0]!;
+		assert.equal(recommendation.extensionId, 'ash.academy@ash');
+		assert.deepEqual(recommendation.uiTargets, [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents]);
+		const reopened = lifetime.add(f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.Agents));
+		assert.equal((await reopened.getRecommendations()).recommendations[0]!.extensionId, 'ash.academy@ash');
+		const ide = lifetime.add(f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.IDE));
+		assert.deepEqual((await ide.getRecommendations()).recommendations, []);
+	});
+
+	test('project evidence takes precedence over a host-tool recommendation for the same package', async () => {
+		const f = fixture([[URI.file('/project/pyproject.toml'), '[project]']]); using lifetime = f.lifetime;
+		f.setProductIds(['marketplace.python@ash']);
+		f.setEnvironment({ platform: 'linux', executables: ['python3'] });
+		f.setSearch(async () => [{ id: 'marketplace.python@ash', version: '1', packageType: 'language', displayName: 'Python', description: '', uiTargets: [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents] }]);
+		const python = (await f.recommendations.getRecommendations()).recommendations[0]!;
+		assert.equal(python.reason.reasonId, ExtensionRecommendationReason.WorkspaceConfig);
+		assert.equal(python.context?.source, RecommendationSource.WORKSPACE);
+	});
+	test('product tips stay on demand and share installed and ignored filtering', async () => {
 		const f = fixture(); using lifetime = f.lifetime;
 		f.setProductIds(['marketplace.keymap-sublime@ash', 'marketplace.python@ash']);
 		f.setEnvironment({ platform: 'linux', executables: ['python3'] });
 		let snapshot = await f.recommendations.getRecommendations();
 		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId).sort(), ['marketplace.keymap-sublime@ash', 'marketplace.python@ash']);
-		assert.equal(snapshot.recommendations.find(item => item.extensionId.includes('python'))?.context?.source, RecommendationSource.EXE);
+		assert.equal(snapshot.recommendations.find(item => item.extensionId.includes('python'))?.context, undefined, 'host tools alone do not establish an editing context');
 		assert.equal(snapshot.recommendations.find(item => item.extensionId.includes('keymap'))?.context, undefined, 'keymaps are offered on demand');
 		f.ignored.toggleGlobalIgnoredRecommendation('MARKETPLACE.PYTHON', true);
 		f.setInstalled(['marketplace.keymap-sublime@ash']);
 		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);
+	});
+
+	test('host tools stay quiet across workspace changes and service recreation while Python files still prompt', async () => {
+		const f = fixture(); using lifetime = f.lifetime;
+		f.setProductIds(['marketplace.python@ash', 'marketplace.typescript@ash', 'marketplace.go@ash']);
+		f.setEnvironment({ platform: 'linux', executables: ['python3', 'node', 'go'] });
+		const assertOnDemand = async (service: ExtensionRecommendationsService): Promise<void> => {
+			const snapshot = await service.getRecommendations();
+			assert.deepEqual(snapshot.recommendations.map(item => item.extensionId).sort(), ['marketplace.go@ash', 'marketplace.python@ash', 'marketplace.typescript@ash']);
+			assert.ok(snapshot.recommendations.every(item => !item.context));
+			assert.ok(snapshot.recommendations.every(item => item.reason.reasonId === ExtensionRecommendationReason.Executable));
+		};
+		await assertOnDemand(f.recommendations);
+		f.workspace.updateWorkspace({ id: 'other', folders: [{ id: 'other', name: 'Other', uri: URI.file('/other'), index: 0 }] });
+		await assertOnDemand(f.recommendations);
+		await assertOnDemand(lifetime.add(f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.IDE)));
+		f.setSearch(async () => [{ id: 'marketplace.python@ash', version: '1', packageType: 'language', displayName: 'Python', description: '', uiTargets: [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents] }]);
+		const model = lifetime.add(f.editorModels.createModel('', f.languages.createById('python'), URI.file('/other/main.py')));
+		const python = (await f.recommendations.getRecommendations()).recommendations.find(item => item.extensionId === 'marketplace.python@ash')!;
+		assert.equal(python.context?.source, RecommendationSource.FILE);
+		assert.equal(python.context?.name, 'Python');
+		model.dispose();
+		await assertOnDemand(f.recommendations);
 	});
 
 	test('remote authority changes refresh remote tips and keep executable suggestions quiet', async () => {
@@ -252,8 +379,7 @@ suite('Workspace extension recommendations', () => {
 		lifetime.add(await f.models.acquire({ resource: URI.parse('untitled:/Untitled-1'), initialText: '', languageId: 'python' }, new AbortController().signal));
 		const snapshot = await f.recommendations.getRecommendations();
 		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId), ['syntax.python@ash']);
-		assert.equal(snapshot.recommendations[0]!.context!.searchValue, 'python');
-		assert.equal(snapshot.recommendations[0]!.context!.languageId, undefined);
+		assert.equal(snapshot.recommendations[0]!.context, undefined, 'legacy metadata is discoverable without creating an automatic prompt');
 	});
 
 	test('merges all sources by package identity, honors workspace exclusions and refreshes installed state', async () => {
@@ -287,14 +413,14 @@ suite('Workspace extension recommendations', () => {
 
 	test('requires production dependencies instead of constructing fallback services', () => {
 		using services = new InstantiationService();
-		assert.throws(() => services.createInstance(ExtensionRecommendationsService), /workspaceExtensionsConfigService/u);
+		assert.throws(() => services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.IDE), /workspaceExtensionsConfigService/u);
 	});
 
 	test('remembers recent file recommendations across service instances without replaying automatic contexts', async () => {
 		const f = fixture(); using lifetime = f.lifetime;
 		f.recommendations.recommendForResource(URI.parse('untitled:/document.ash-doc'));
 		await f.recommendations.getRecommendations();
-		const reopened = lifetime.add(f.services.createInstance(ExtensionRecommendationsService));
+		const reopened = lifetime.add(f.services.createInstance(ExtensionRecommendationsService, ExtensionUiTarget.IDE));
 		const snapshot = await reopened.getRecommendations();
 		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId), ['ash.academy@ash']);
 		assert.equal(snapshot.recommendations[0]!.context, undefined);

@@ -10,6 +10,14 @@ use super::editor_extension::EditorExtensionContribution;
 
 const MAX_LOCAL_ID_BYTES: usize = 64;
 
+/// Product windows declared by an extension, independent of runtime and operating system.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExtensionUiTarget {
+    Ide,
+    Agents,
+}
+
 /// Strictly parsed v1 Plugin manifest.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -22,6 +30,8 @@ pub struct PluginManifest {
     pub description: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub license: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui_targets: Option<Vec<ExtensionUiTarget>>,
     pub compatibility: PluginCompatibility,
     #[serde(default)]
     pub contributions: PluginContributions,
@@ -46,6 +56,7 @@ impl<'de> Deserialize<'de> for PluginManifest {
             display_name: unchecked.display_name,
             description: unchecked.description,
             license: unchecked.license,
+            ui_targets: unchecked.ui_targets,
             compatibility: unchecked.compatibility,
             contributions: unchecked.contributions,
             permissions: unchecked.permissions,
@@ -86,6 +97,8 @@ struct UncheckedPluginManifest {
     description: Option<String>,
     #[serde(default)]
     license: Option<String>,
+    #[serde(default)]
+    ui_targets: Option<Vec<ExtensionUiTarget>>,
     compatibility: PluginCompatibility,
     #[serde(default)]
     contributions: PluginContributions,

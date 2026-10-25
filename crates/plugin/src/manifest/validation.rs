@@ -22,6 +22,13 @@ const MAX_LICENSE_BYTES: usize = 256;
 impl PluginManifest {
     /// Revalidates semantic invariants after programmatic construction or modification.
     pub fn validate(&self) -> Result<(), PluginError> {
+        if self.ui_targets.as_ref().is_some_and(|targets| {
+            targets.is_empty()
+                || targets.len() > 2
+                || (targets.len() == 2 && targets[0] == targets[1])
+        }) {
+            return invalid("uiTargets must contain ide, agents, or both without duplicates");
+        }
         if self.schema_version != SUPPORTED_SCHEMA_VERSION {
             return invalid(format!(
                 "unsupported plugin manifest schemaVersion {}; expected {}",

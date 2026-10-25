@@ -1,5 +1,8 @@
 {
   "name": "typescript",
+  "ashUiTargets": [
+    "ide"
+  ],
   "description": "%description%",
   "displayName": "%displayName%",
   "version": "10.0.0",

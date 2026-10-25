@@ -1,5 +1,6 @@
 {
   "ash.extensions": {
+    "agentRecommendationsEmpty": "此窗口暂无推荐。可浏览扩展市场，发现技能、连接器和其他扩展。",
     "keymapRecommendationReason": "推荐 {0} 键位方案",
     "remoteRecommendationReason": "为远程工作区推荐",
     "webRecommendationReason": "为浏览器中的 Ash 推荐",
@@ -284,7 +285,12 @@
     "recommendationDocs": "文档",
     "projectRecommendationsReadError": "无法检查 {0}：{1}",
     "contextRecommendationsEmpty": "打开文件或工作区以发现扩展。工作区也可以在 .ash/extensions.json 中声明推荐。",
-    "invalidKeybindingContribution": "{0} 中的键位声明无效。"
+    "invalidKeybindingContribution": "{0} 中的键位声明无效。",
+    "uiTargetsIde": "IDE",
+    "uiTargetsAgents": "Agent Window",
+    "uiTargetsShared": "IDE 和 Agent Window",
+    "uiTargetsUnknown": "未声明",
+    "uiTargetsHeading": "适用窗口"
   },
   "ash.workbench": {
     "command.OpenExtensions": "打开扩展",

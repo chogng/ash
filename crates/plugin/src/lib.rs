@@ -30,3 +30,4 @@ use ash_utils_plugins::PluginPackageId;
 
 pub use manifest::EditorExtensionApi;
 pub use manifest::EditorExtensionRuntime;
+pub use manifest::ExtensionUiTarget;

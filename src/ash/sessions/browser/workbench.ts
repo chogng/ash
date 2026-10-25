@@ -92,6 +92,10 @@ import { ITextModelService } from '../../editor/common/services/resolverService.
 import { TextModelResolverService } from '../../workbench/services/textmodelResolver/common/textModelResolverService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { getSingletonServiceDescriptors, InstantiationType } from '../../platform/instantiation/common/extensions.js';
+import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
+import { ExtensionUiTarget } from '../../platform/extensionManagement/common/extensionManagementService.js';
+import { IExtensionRecommendationsService } from '../../workbench/services/extensionRecommendations/common/extensionRecommendations.js';
+import { ExtensionRecommendationsService } from '../../workbench/contrib/extensions/browser/extensionRecommendationsService.js';
 import { IAssetService } from '../../platform/assets/common/assetService.js';
 import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../platform/agentHost/common/agentService.js';
@@ -381,6 +385,9 @@ export abstract class Workbench extends Disposable {
 		if (!ownerWindow) throw new Error("Sessions renderer requires an owner window");
 
 		const serviceCollection = options.serviceCollection ?? new ServiceCollection();
+		if (!serviceCollection.has(IExtensionRecommendationsService)) {
+			serviceCollection.set(IExtensionRecommendationsService, new SyncDescriptor(ExtensionRecommendationsService, [ExtensionUiTarget.Agents], true));
+		}
 		// Load service descriptions before consumers so shared dependencies resolve in this window's scope.
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
 			if (!serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }

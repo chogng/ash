@@ -62,6 +62,12 @@ impl<'a> PluginRequestProcessor<'a> {
                     version: package.version.to_string(),
                     digest: package.digest.as_str().to_owned(),
                     display_name: manifest.display_name,
+                    ui_targets: manifest.ui_targets.map(|targets| {
+                        targets
+                            .into_iter()
+                            .map(crate::server::extension_packages_projection::ui_target)
+                            .collect()
+                    }),
                     permissions: manifest.permissions.into_iter().map(permission).collect(),
                     has_editor_extensions: !manifest.contributions.editor_extensions.is_empty()
                         || !manifest.contributions.declarative_extensions.is_empty(),

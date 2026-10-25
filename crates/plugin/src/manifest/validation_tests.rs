@@ -2,6 +2,32 @@ use super::*;
 use crate::PluginManifest;
 use serde_json::{Value, json};
 
+#[test]
+fn local_manifest_ui_targets_are_optional_and_reject_ambiguous_values() {
+    let legacy: PluginManifest = serde_json::from_value(valid_manifest()).unwrap();
+    assert_eq!(legacy.ui_targets, None);
+    for targets in [json!(["ide"]), json!(["agents"]), json!(["ide", "agents"])] {
+        let mut value = valid_manifest();
+        value["uiTargets"] = targets.clone();
+        let manifest: PluginManifest = serde_json::from_value(value).unwrap();
+        assert_eq!(
+            serde_json::to_value(manifest).unwrap()["uiTargets"],
+            targets
+        );
+    }
+    for targets in [
+        json!([]),
+        json!(["ide", "ide"]),
+        json!(["agents", "ide", "agents"]),
+        json!(["unknown"]),
+        json!("ide"),
+    ] {
+        let mut value = valid_manifest();
+        value["uiTargets"] = targets;
+        assert!(serde_json::from_value::<PluginManifest>(value).is_err());
+    }
+}
+
 fn valid_manifest() -> Value {
     json!({
         "schemaVersion": 1,

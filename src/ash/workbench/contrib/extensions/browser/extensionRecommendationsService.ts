@@ -10,7 +10,7 @@ import { extname } from '../../../../base/common/path.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ILanguageService } from '../../../../editor/common/languages/language.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
-import { IExtensionManagementService } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { ExtensionUiTarget, IExtensionManagementService } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { RecommendationSource } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
 import { IFileService, FileKind, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -37,6 +37,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 	private pending: Promise<ExtensionRecommendationsSnapshot> | undefined;
 
 	constructor(
+		public readonly target: ExtensionUiTarget,
 		@IWorkspaceExtensionsConfigService private readonly configs: IWorkspaceExtensionsConfigService,
 		@IFileTextModelService private readonly models: IFileTextModelService,
 		@IModelService private readonly editorModels: IModelService,
@@ -62,7 +63,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 		this._register(editorModels.onModelRemoved(() => this.invalidate()));
 		this._register(editorModels.onModelLanguageChanged(() => this.invalidate()));
 		this._register(ignored.onDidChangeIgnoredRecommendations(() => this.invalidate()));
-		this._register(storage.onDidChangeValue(event => { if (event.external && event.scope === StorageScope.PROFILE && event.key === recentKey) { this.invalidate(); } }));
+		this._register(storage.onDidChangeValue(event => { if (event.external && event.scope === StorageScope.PROFILE && event.key === this.recentStorageKey) { this.invalidate(); } }));
 		this._register(workspace.onDidChangeWorkspace(() => { this.requestedResources.clear(); this.watchProjects(); this.invalidate(); }));
 		this._register(files.onDidChangeFileSystemProviderRegistrations(() => { this.watchProjects(); this.invalidate(); }));
 		this._register(files.onDidChangeFiles(event => {
@@ -97,11 +98,22 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 		]);
 		const recommendations = new Map<string, ExtensionRecommendation>();
 		const add = (recommendation: ExtensionRecommendation): void => {
+			if (recommendation.uiTargets && !recommendation.uiTargets.includes(this.target)) { return; }
 			const key = identity(recommendation.extensionId);
 			if (!excluded.has(key) && !recommendations.has(key)) { recommendations.set(key, recommendation); }
 		};
+		const targetQueries = new Map<string, Promise<readonly ExtensionUiTarget[] | undefined>>();
+		const targetsFor = (extensionId: string): Promise<readonly ExtensionUiTarget[] | undefined> => {
+			const key = identity(extensionId);
+			let query = targetQueries.get(key);
+			if (!query) { query = this.getRecommendationTargets(extensionId); targetQueries.set(key, query); }
+			return query;
+		};
 		for (const recommendation of declared.recommendations) {
-			add({ ...recommendation, context: { source: RecommendationSource.WORKSPACE, name: localize({ bundle: 'ash.extensions', key: 'recommendationWorkspace' }, 'this workspace') } });
+			if (excluded.has(identity(recommendation.extensionId))) { continue; }
+			const uiTargets = await targetsFor(recommendation.extensionId);
+			// Unresolved declarations remain inspectable, without assuming they suit both windows.
+			add({ ...recommendation, uiTargets, ...(uiTargets?.includes(this.target) ? { context: { source: RecommendationSource.WORKSPACE, name: localize({ bundle: 'ash.extensions', key: 'recommendationWorkspace' }, 'this workspace') } } : {}) });
 		}
 		const languageQueries = new Map<string, ReturnType<IExtensionManagementService['search']>>();
 		const forLanguage = async (languageId: string, name: string, reasonId: ExtensionRecommendationReason): Promise<void> => {
@@ -118,15 +130,21 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 			}
 			try {
 				for (const candidate of await query) {
-					add({ extensionId: candidate.id, reason: { reasonId, reasonText: localize({ bundle: 'ash.extensions', key: 'contextRecommendationReason' }, 'Recommended for {0}', name) }, context: { source: reasonId === ExtensionRecommendationReason.WorkspaceConfig ? RecommendationSource.WORKSPACE : RecommendationSource.FILE, name, ...(candidate.packageType === 'language' ? { searchValue: languageId } : { languageId, searchValue: '' }) } });
+					add({ extensionId: candidate.id, uiTargets: candidate.uiTargets, reason: { reasonId, reasonText: localize({ bundle: 'ash.extensions', key: 'contextRecommendationReason' }, 'Recommended for {0}', name) }, ...(candidate.uiTargets?.includes(this.target) ? { context: { source: reasonId === ExtensionRecommendationReason.WorkspaceConfig ? RecommendationSource.WORKSPACE : RecommendationSource.FILE, name, ...(candidate.packageType === 'language' ? { searchValue: languageId } : { languageId, searchValue: '' }) } } : {}) });
 				}
 			} catch { /* Offline language discovery must not prevent declared or editor recommendations. */ }
 		};
 		const resources = new Map<string, { resource: URI; languageId?: string; }>();
 		for (const resource of this.requestedResources.values()) { resources.set(this.uriIdentity.extUri.getComparisonKey(resource), { resource }); }
 		for (const input of this.editors.visibleEditors) { resources.set(this.uriIdentity.extUri.getComparisonKey(input.resource), { resource: input.resource, languageId: input.languageId }); }
+		const directResources = new Set(resources.keys());
 		for (const model of [...this.editorModels.getModels(), ...this.models.getModels()]) {
-			if (!model.isForSimpleWidget) { resources.set(this.uriIdentity.extUri.getComparisonKey(model.uri), { resource: model.uri, languageId: model.getLanguageId() }); }
+			const key = this.uriIdentity.extUri.getComparisonKey(model.uri);
+			// Agents can load documents for execution and previews. Only an actual editor or
+			// explicit editor request establishes a recommendation context in that window.
+			if (!model.isForSimpleWidget && (this.target === ExtensionUiTarget.IDE || directResources.has(key))) {
+				resources.set(key, { resource: model.uri, languageId: model.getLanguageId() });
+			}
 		}
 		const work: Promise<void>[] = [];
 		for (const { resource, languageId } of resources.values()) {
@@ -134,8 +152,9 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 			const extension = extname(resource.path).toLowerCase();
 			const tip = editorTips.find(tip => (tip.extensions as readonly string[]).includes(extension));
 			if (tip) {
+				const uiTargets = await targetsFor(tip.id);
 				const name = tip.kind === 'docs' ? localize({ bundle: 'ash.extensions', key: 'recommendationDocs' }, 'Docs') : localize({ bundle: 'ash.extensions', key: 'recommendationPdf' }, 'PDF');
-				add({ extensionId: tip.id, reason: { reasonId: ExtensionRecommendationReason.File, reasonText: localize({ bundle: 'ash.extensions', key: 'fileRecommendationReason' }, 'Recommended for {0} files', extension) }, context: { source: RecommendationSource.FILE, name, searchValue: tip.query } });
+				add({ extensionId: tip.id, uiTargets, reason: { reasonId: ExtensionRecommendationReason.File, reasonText: localize({ bundle: 'ash.extensions', key: 'fileRecommendationReason' }, 'Recommended for {0} files', extension) }, ...(uiTargets?.includes(this.target) ? { context: { source: RecommendationSource.FILE, name, searchValue: tip.query } } : {}) });
 			}
 			const language = languageId && languageId !== 'plaintext' ? languageId : this.languages.guessLanguageIdByFilepathOrFirstLine(resource);
 			if (language) { work.push(forLanguage(language, this.languages.getLanguageName(language) ?? language, ExtensionRecommendationReason.Application)); }
@@ -146,13 +165,12 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 				if (!query) { query = this.packages.search(extension, { packageType: 'language', limit: 5 }); languageQueries.set(key, query); }
 				work.push(query.then(candidates => {
 					for (const candidate of candidates) {
-						add({ extensionId: candidate.id, reason: { reasonId: ExtensionRecommendationReason.File, reasonText: localize({ bundle: 'ash.extensions', key: 'fileRecommendationReason' }, 'Recommended for {0} files', extension) }, context: { source: RecommendationSource.FILE, name: extension, searchValue: extension } });
+						add({ extensionId: candidate.id, uiTargets: candidate.uiTargets, reason: { reasonId: ExtensionRecommendationReason.File, reasonText: localize({ bundle: 'ash.extensions', key: 'fileRecommendationReason' }, 'Recommended for {0} files', extension) }, ...(candidate.uiTargets?.includes(this.target) ? { context: { source: RecommendationSource.FILE, name: extension, searchValue: extension } } : {}) });
 					}
 				}, () => { /* Missing catalogs leave the built-in editor available. */ }));
 			}
 		}
 		await Promise.all(work);
-		await this.collectProductRecommendations(add);
 		const diagnostics = [...declared.diagnostics];
 		await Promise.all(this.projectResources().map(async ({ resource, language }) => {
 			try {
@@ -163,6 +181,8 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 				}
 			}
 		}));
+		// Stronger file and project evidence must win over host-tool discovery for the same package.
+		await this.collectProductRecommendations(add);
 		if (this.isDisposed || generation !== this.generation) { throw new CancellationError(); }
 		const recent = this.readRecent();
 		for (const recommendation of recommendations.values()) {
@@ -170,37 +190,54 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 		}
 		const remembered = Object.entries(recent).sort((a, b) => b[1] - a[1]).slice(0, 200);
 		const serialized = JSON.stringify(Object.fromEntries(remembered));
-		if (serialized !== this.storage.get(recentKey, StorageScope.PROFILE, '{}')) { this.storage.store(recentKey, serialized, StorageScope.PROFILE, StorageTarget.MACHINE); }
-		for (const [extensionId] of remembered) {
-			add({ extensionId, reason: { reasonId: ExtensionRecommendationReason.File, reasonText: localize({ bundle: 'ash.extensions', key: 'recentRecommendationReason' }, 'Recommended because of recently opened files') } });
+		if (serialized !== this.storage.get(this.recentStorageKey, StorageScope.PROFILE, '{}')) { this.storage.store(this.recentStorageKey, serialized, StorageScope.PROFILE, StorageTarget.MACHINE); }
+		for (let index = 0; index < remembered.length; index += 6) {
+			const group = remembered.slice(index, index + 6).filter(([id]) => !excluded.has(identity(id)) && !recommendations.has(identity(id)));
+			const targets = await Promise.all(group.map(([id]) => targetsFor(id)));
+			if (this.isDisposed || generation !== this.generation) { throw new CancellationError(); }
+			for (const [offset, [extensionId]] of group.entries()) {
+				add({ extensionId, uiTargets: targets[offset], reason: { reasonId: ExtensionRecommendationReason.File, reasonText: localize({ bundle: 'ash.extensions', key: 'recentRecommendationReason' }, 'Recommended because of recently opened files') } });
+			}
 		}
+		if (this.isDisposed || generation !== this.generation) { throw new CancellationError(); }
 		return { recommendations: [...recommendations.values()], resources: declared.resources, diagnostics };
+	}
+
+	private async getRecommendationTargets(extensionId: string): Promise<readonly ExtensionUiTarget[] | undefined> {
+		try { return (await this.packages.get(extensionId)).uiTargets; }
+		catch { return undefined; }
 	}
 
 	private async collectProductRecommendations(add: (recommendation: ExtensionRecommendation) => void): Promise<void> {
 		const remoteWorkspace = !!this.workspace.getWorkspace().remoteAuthority || !!this.remote.connection && this.remote.connection.kind !== 'local';
-		const candidates: { tip: ProductExtensionTip; reason: string; executable?: boolean; }[] = extensionTips.keymaps.map(tip => ({ tip, reason: localize({ bundle: 'ash.extensions', key: 'keymapRecommendationReason' }, 'Keymap recommended for {0}', tip.name) }));
-		if (remoteWorkspace) { candidates.push(...extensionTips.remote.map(tip => ({ tip, reason: localize({ bundle: 'ash.extensions', key: 'remoteRecommendationReason' }, 'Recommended for remote workspaces') }))); }
+		const candidates: { tip: ProductExtensionTip; reason: string; executable?: boolean; }[] = (this.target === ExtensionUiTarget.IDE ? extensionTips.keymaps : []).map(tip => ({ tip, reason: localize({ bundle: 'ash.extensions', key: 'keymapRecommendationReason' }, 'Keymap recommended for {0}', tip.name) }));
+		if (remoteWorkspace && this.target === ExtensionUiTarget.IDE) { candidates.push(...extensionTips.remote.map(tip => ({ tip, reason: localize({ bundle: 'ash.extensions', key: 'remoteRecommendationReason' }, 'Recommended for remote workspaces') }))); }
 		if (isWeb) { candidates.push(...extensionTips.web.map(tip => ({ tip, reason: localize({ bundle: 'ash.extensions', key: 'webRecommendationReason' }, 'Recommended for Ash in a browser') }))); }
 		try {
-			const environment = await this.packages.recommendationEnvironment();
-			for (const tip of extensionTips.executables) {
-				if (tip.executables.some(name => environment.executables.includes(name))) {
-					candidates.push({ tip, reason: localize({ bundle: 'ash.extensions', key: 'executableRecommendationReason' }, 'Recommended because {0} is available on this host', tip.name), executable: tip.important && !remoteWorkspace && !isWeb });
+			const tips = (this.target === ExtensionUiTarget.IDE ? extensionTips.executables : []);
+			const environment = tips.length ? await this.packages.recommendationEnvironment() : undefined;
+			for (const tip of tips) {
+				if (tip.executables.some(name => environment?.executables.includes(name))) {
+					candidates.push({ tip, reason: localize({ bundle: 'ash.extensions', key: 'executableRecommendationReason' }, 'Recommended because {0} is available on this host', tip.name), executable: true });
 				}
 			}
 		} catch { /* Older or disconnected hosts still support file and workspace recommendations. */ }
 		await Promise.all(candidates.map(async ({ tip, reason, executable }) => {
 			try {
 				const details = await this.packages.get(tip.id);
-				add({ extensionId: details.package.id, reason: { reasonId: executable !== undefined ? ExtensionRecommendationReason.Executable : ExtensionRecommendationReason.Application, reasonText: reason }, ...(executable ? { context: { source: RecommendationSource.EXE, name: tip.name, searchValue: details.displayName } } : {}) });
+				if (this.target === ExtensionUiTarget.Agents && !details.uiTargets?.includes(this.target)) { return; }
+				// Host tools may be installed for unrelated work. Keep these tips on demand;
+				// file and project discovery supply automatic contexts when support is relevant.
+				add({ extensionId: details.package.id, uiTargets: details.uiTargets, reason: { reasonId: executable ? ExtensionRecommendationReason.Executable : ExtensionRecommendationReason.Application, reasonText: reason } });
 			} catch { /* A product catalog entry is only offered when an enabled source can resolve it. */ }
 		}));
 	}
 
+	private get recentStorageKey(): string { return this.target === ExtensionUiTarget.IDE ? recentKey : `${recentKey}/agents`; }
+
 	private readRecent(): Record<string, number> {
 		try {
-			const value: unknown = JSON.parse(this.storage.get(recentKey, StorageScope.PROFILE, '{}'));
+			const value: unknown = JSON.parse(this.storage.get(this.recentStorageKey, StorageScope.PROFILE, '{}'));
 			if (!value || typeof value !== 'object' || Array.isArray(value)) { return {}; }
 			const now = Date.now();
 			return Object.fromEntries(Object.entries(value).slice(0, 2000).filter(([id, time]) => /^[a-z0-9][a-z0-9_.@/-]{0,255}$/iu.test(id) && typeof time === 'number' && Number.isFinite(time) && time <= now && now - time < recentDuration));
@@ -208,10 +245,11 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 	}
 
 	private projectResources(): { resource: URI; language: string; }[] {
-		return this.workspace.getWorkspace().folders.flatMap(folder => projectLanguages.map(tip => ({ resource: URI.joinPath(folder.uri, tip.filename), language: tip.language })));
+		return this.target !== ExtensionUiTarget.IDE ? [] : this.workspace.getWorkspace().folders.flatMap(folder => projectLanguages.map(tip => ({ resource: URI.joinPath(folder.uri, tip.filename), language: tip.language })));
 	}
 	private watchProjects(): void {
 		this.watches.clear();
+		if (this.target !== ExtensionUiTarget.IDE) { return; }
 		for (const folder of this.workspace.getWorkspace().folders) {
 			try {
 				if (this.files.hasProvider(folder.uri)) { this.watches.add(this.files.watch(folder.uri, { recursive: false, excludes: [] })); }
