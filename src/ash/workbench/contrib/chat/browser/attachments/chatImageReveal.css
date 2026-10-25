@@ -1,0 +1,29 @@
+.ash-chat-image-frame {
+	position: relative;
+	width: fit-content;
+	max-width: 100%;
+	overflow: hidden;
+	border-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-chat-image-frame > img {
+	display: block;
+	max-width: 100%;
+	max-height: calc(var(--ash-spacing-size400) * 12);
+	object-fit: contain;
+}
+
+.ash-chat-image-reveal.pending {
+	max-height: 0;
+	visibility: hidden;
+}
+
+.ash-chat-image-reveal.revealing > img {
+	max-width: none;
+}
+
+.ash-chat-image-reveal > .ash-chat-image-glyphs {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}

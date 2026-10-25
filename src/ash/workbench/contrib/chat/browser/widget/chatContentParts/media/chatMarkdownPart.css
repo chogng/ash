@@ -76,7 +76,7 @@
 	border-radius: var(--ash-cornerRadius-medium);
 	overflow: hidden;
 }
-.ash-chat-media > div:not(.ash-chat-html-preview) {
+.ash-chat-media > div:not(.ash-chat-html-preview):not(.ash-chat-image-frame) {
 	max-height: calc(var(--ash-spacing-size40) * 160);
 	overflow: auto;
 }

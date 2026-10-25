@@ -1,5 +1,11 @@
 {
   "ash": {
+    "chat.imageGeneration.placeholder": "正在生成图片",
+    "chat.imageGeneration.completed": "已生成图片",
+    "chat.imageGeneration.failed": "图片生成失败",
+    "chat.imageGeneration.stopped": "图片生成已停止",
+    "chat.imageGeneration.results": "生成的图片（{0}）",
+    "chat.imageGeneration.help": "生成的图片会显示在工具详情之外。可以用“打开图片”只读预览原始图片，用“下载”保存图片。生成中显示进度，图片解码完成后展开；减少动态效果或高对比度模式下直接显示结果。失败或停止时结束进度，恢复历史不会重播生成动画。",
     "chat.sessions.description.needsInput": "等待回应…",
     "chat.sessions.description.working": "进行中…",
     "chat.slashCommandBackground": "行内聊天引用和斜杠命令的背景色。",

@@ -70,6 +70,10 @@ Markdown 沿 `ChatListWidget` → `ChatMarkdownContentPart` → `MarkdownElement
 
 持久图片／音频经已有来源授权取得 bytes。独立只读预览沿 `ChatAttachmentsContentPart` → response resource provider 的 exact bytes association → `IEditorService`／MediaPreview。来源更换即撤回旧 action；音频移交前暂停原行播放，不从任意 URL 抓取宿主文件。隐藏 retained Chat／Cowork 停止自身 Voice、暂停自身 HTMLAudioElement，保留草稿／快照／媒体字节，重显不自动播放；其他 Widget 的媒体不受影响。详见[媒体交付](media-delivery.md)。
 
+图片生成沿同一工具条目接入：`ChatToolInvocationPart` 识别原生 `imagegen`，或 MCP 来源明确声明的同名远程工具。`ChatImageGenerationProgressPart` 只展示等待状态；成功结果中的图片交给 `ChatGeneratedImageResultSubPart`，在可折叠工具详情之外显示。失败或轮次停止结束进度，不从轮次结束推断生成成功。恢复已完成历史直接显示图片，不重播生成动画。
+
+`ChatAttachmentsContentPart` 仍是图片读取、原始字节关联、只读预览、下载和地址释放的唯一 owner。生成图片自动读取，保留工具结果中的原始内容索引；只有解码成功才提供预览和下载，移除后迟到的读取不能恢复组件。`ChatImageReveal` 在图片就绪后接管原等待画布，`GlyphSurface` 拥有帧调度，`chatImageTextures.ts` 只提供临时采样与帧契约。动画结束、隐藏、释放、启用减少动态效果或切换高对比度都会移除临时效果并显示原图；图片像素和后端结果不受动画影响。
+
 accepted userContext 的 exact body 默认折叠，作为 literal 只读文本供列表和 Accessible View 读取，不触发文件／网络访问或再次发送模型。条目复用 DOM，保留展开和正文焦点，移除时释放。
 
 ### MCP 资源与 App

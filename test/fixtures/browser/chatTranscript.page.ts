@@ -92,7 +92,7 @@ import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
-import type { ThreadTranscriptEntry } from '../../../src/ash/platform/agentHost/common/agent.js';
+import type { ChatContentPart, ThreadTranscriptEntry } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
 import { ChatContentMarkdownRenderer } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
@@ -511,16 +511,17 @@ function receiveToolUpdate(params: TranscriptDto): ThreadTranscriptUpdateEnvelop
 const imageBytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwHwQBEPgD/U6VwW8AAAAASUVORK5CYII='), character => character.charCodeAt(0));
 let mediaRequests: unknown[] = [];
 let delayMedia = false;
-let completeMedia: (() => void) | undefined;
+const pendingMedia = new Set<() => void>();
 let mediaAborted = false;
+let generatedImageBytes: Uint8Array | undefined;
 services.registerInstance(IAgentThreadService, {
 	...toolService,
 	readAttachment: async (source, signal) => {
 		mediaRequests.push(source);
 		signal?.addEventListener('abort', () => { mediaAborted = true; }, { once: true });
-		if (delayMedia) await new Promise<void>(resolve => { completeMedia = resolve; });
+		if (delayMedia) await new Promise<void>(resolve => { pendingMedia.add(resolve); });
 		if (source.itemId === 'audio' || source.itemId === 'app-result' && source.contentIndex === 5) return { bytes: new Uint8Array(await (await fetch(toneWav)).arrayBuffer()), mimeType: 'audio/wav' };
-		return { bytes: imageBytes, mimeType: 'image/png' };
+		return { bytes: source.itemId === 'image-result' && generatedImageBytes ? generatedImageBytes : imageBytes, mimeType: 'image/png' };
 	},
 });
 let mediaEntries: ThreadTranscriptEntry[] = [];
@@ -621,6 +622,8 @@ declare global {
 			compareStreamingMarkdown(value: string, complete: boolean, measureLayout?: boolean): Promise<{ actual: string; expected: string; layoutError: number; layout: unknown[]; }>;
 			showLongCode(): string;
 			showTool(): void;
+			showImageGeneration(state: 'pending' | 'success' | 'failure' | 'stopped', count?: number, stored?: boolean): void;
+			setReducedMotion(reduced: boolean): Promise<void>;
 			openAccessibleView(help: boolean): boolean;
 			updateTool(finish: boolean): void;
 			showMedia(delay: boolean): void;
@@ -1008,6 +1011,26 @@ window.ashChatTranscriptIntegration = {
 		toolEntries = update.changes.flatMap(change => change.type === 'upsert' ? [change.entry] : []);
 		list.render(chatTranscriptListItems(toolEntries));
 	},
+	showImageGeneration: (state, count = 1, stored = false) => {
+		const canvas = document.createElement('canvas');
+		canvas.width = 360; canvas.height = 220;
+		const context = canvas.getContext('2d')!;
+		context.fillStyle = '#e5a738'; context.fillRect(0, 0, 180, 220);
+		context.fillStyle = '#537ac9'; context.fillRect(180, 0, 180, 220);
+		const url = canvas.toDataURL('image/png');
+		generatedImageBytes = Uint8Array.from(atob(url.split(',')[1]!), character => character.charCodeAt(0));
+		const entries: ThreadTranscriptEntry[] = [{ type: 'item', entryId: 'image-call', turnId: 'image-turn', transient: false, item: { type: 'toolCall', itemId: 'image-call', turnId: 'image-turn', toolCallId: 'image-tool', name: 'imagegen', argumentsJson: '{"prompt":"two color fields","reference_images":[]}', binding: { registryGeneration: 1, definitionDigest: 'image-definition', sourceChain: [{ type: 'extension', id: 'imagegen' }], caller: { type: 'direct' } } } }];
+		if (state === 'success' || state === 'failure') entries.push({ type: 'item', entryId: 'image-result', turnId: 'image-turn', transient: false, item: {
+			type: 'toolResult', itemId: 'image-result', turnId: 'image-turn', toolCallId: 'image-tool', text: state === 'failure' ? 'Synthetic image generation failure' : 'Saved image', isError: state === 'failure',
+			content: state === 'failure' ? [{ type: 'text', text: 'Synthetic image generation failure' }] : [{ type: 'text', text: 'Saved image' }, ...Array.from({ length: count }, (_, index): ChatContentPart => stored ? { type: 'imageAttachment', detail: 'auto', attachment: { contentDigest: `sha256:${String(index + 1).repeat(64)}`, width: 360, height: 220, mediaType: 'png', encodedBytes: generatedImageBytes!.length } } : { type: 'imageUrl', detail: 'auto', url })],
+		} });
+		if (state === 'stopped') entries.push({ type: 'turnError', entryId: 'image-stop', turnId: 'image-turn', error: { code: 'connectionFailed', message: 'Synthetic cancellation', retryable: false } });
+		// Desktop supplies a Thread snapshot through this structurally typed source contract.
+		const thread = { sessionId: 'session', threadId: 'thread', sequence: 3, turns: [] };
+		rendererItems = chatTranscriptListItems(entries, undefined, [], thread);
+		list.render(rendererItems);
+	},
+	setReducedMotion: reduced => services.get(IConfigurationService).updateValue('workbench.reduceMotion', reduced ? 'on' : 'off'),
 	updateTool: finish => {
 		const update = receiveToolUpdate({
 			sessionId: 'session', threadId: 'thread', revision: finish ? 4 : 3, durableSequence: finish ? 2 : 1, changes: finish
@@ -1328,7 +1351,7 @@ window.ashChatTranscriptIntegration = {
 		list.render(chatTranscriptListItems(mediaEntries, undefined, [], source));
 	},
 	refreshMedia: () => list.render(chatTranscriptListItems(mediaEntries, undefined, [], { sessionId: 'media-session', threadId: 'media-thread' })),
-	finishMedia: () => completeMedia?.(),
+	finishMedia: () => { for (const resolve of pendingMedia) resolve(); pendingMedia.clear(); },
 	openedAppLinks: () => openedAppLinks,
 	mediaState: () => ({ requests: mediaRequests, aborted: mediaAborted }),
 	remove: () => list.render([]),
