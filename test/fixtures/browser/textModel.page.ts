@@ -63,7 +63,7 @@ import { type IEditorDecorationsCollection } from "../../../src/ash/editor/commo
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { BrowserTextResourceStore } from "../../../src/ash/workbench/contrib/codeEditor/browser/browserTextResourceStore.js";
 import { AppServerSyntaxProviders } from "../../../src/ash/workbench/services/language/browser/appServerSyntaxProviders.js";
-import { WorkbenchLanguageFeatures } from "../../../src/ash/workbench/services/language/browser/workbenchLanguageFeatures.js";
+import { createJsonCompletionProvider, createJsonHoverProvider, createJsonFormattingProvider } from '../jsonLanguageFeatures.js';
 import { BrowserTextModelService } from "../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js";
 import { TextModel } from "../../../src/ash/editor/editor.api.js";
 import "../../../src/ash/editor/editor.code.all.js";
@@ -213,7 +213,9 @@ const themeService = disposables.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, themeService);
 disposables.add(bindTestColorTheme(themeService, root));
 services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
-disposables.add(services.createInstance(WorkbenchLanguageFeatures));
+disposables.add(languageFeaturesService.completionProvider.register(createJsonCompletionProvider()));
+disposables.add(languageFeaturesService.hoverProvider.register(['json', 'jsonc'], createJsonHoverProvider()));
+disposables.add(languageFeaturesService.documentFormattingEditProvider.register(['json', 'jsonc'], createJsonFormattingProvider()));
 services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
 services.registerInstance(ILogService, new NullLoggerService());
 services.registerInstance(IQuickInputService, disposables.add(new TestQuickInputService({

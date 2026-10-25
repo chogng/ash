@@ -2,7 +2,7 @@ import '../activitybar/media/activityaction.css';
 import { IActivityService } from '../../../services/activity/common/activity.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IActivityHoverOptions } from "../compositeBarActions.js";
-import "./sidebarpart.css";
+import "./media/sidebarpart.css";
 import { Dimension, h } from "../../../../base/browser/dom.js";
 import { MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IBoundarySashes } from '../../../../base/browser/ui/sash/sash.js';
@@ -51,8 +51,8 @@ export class SidebarPart extends PaneCompositePart {
 	private readonly boundarySashPresentation = this._register(new MutableDisposable());
 	private readonly visibleViewContainersTracker: VisibleViewContainersTracker | undefined;
 	private activityBarLocation = ActivityBarPosition.DEFAULT;
-	override get minimumWidth(): number { return 180; }
-	override get maximumWidth(): number { return 600; }
+	override get minimumWidth(): number { return 170; }
+	override get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
 	override get preferredWidth(): number | undefined {
 		const active = this.activeCompositeId;
 		const width = active ? this.getComposite(active)?.getOptimalWidth() : undefined;

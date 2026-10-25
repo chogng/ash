@@ -1,4 +1,5 @@
 import { raceCancellationError } from '../../base/common/async.js';
+import { commitChatSession } from '../../workbench/contrib/chat/browser/chatSessions/chatSessionCommit.js';
 import type { ChatContextUsage } from '../../workbench/services/chat/common/chatService.js';
 import { IAgentExecutionSettingsService } from '../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { CancellationToken } from '../../base/common/cancellation.js';
@@ -1325,25 +1326,24 @@ export class ChatWidgetModel extends Disposable {
 	private async ensureActiveSession(): Promise<IActiveSessionThread> {
 		if (this.selection.kind === "session") return this.selection.active;
 		const untitledSession = this.selection.session;
-		const created = await this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId);
-		if (this.isDisposed || this.selection.kind !== 'untitled' || this.selection.session.untitledSessionId !== untitledSession.untitledSessionId) {
-			// Keep the completed durable session, but never replace a newer conversation selection.
-			this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
-			throw canceled();
-		}
-		// A catalog notification can create a durable pane before the create response arrives.
-		// Capture the authoritative draft selection before promotion removes its untitled key.
-		this.materializingComposer = this.sessionService.activeUntitledSession?.untitledSessionId === untitledSession.untitledSessionId
-			? { untitledSessionId: untitledSession.untitledSessionId, generation: this.composerGeneration, threadId: created.threadId }
-			: undefined;
-		this.adoptUntitledSession(untitledSession, created);
-		try {
-			this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
-			await this.subscribe(created);
-			return created;
-		} finally {
-			this.materializingComposer = undefined;
-		}
+		const generation = this.composerGeneration;
+		return commitChatSession({
+			resolve: () => this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId),
+			isCurrent: () => !this.isDisposed && this.composerGeneration === generation,
+			adopt: created => {
+				// Catalog notifications may create a durable pane before the create response.
+				const composer = this.sessionService.activeUntitledSession?.untitledSessionId === untitledSession.untitledSessionId
+					? { untitledSessionId: untitledSession.untitledSessionId, generation, threadId: created.threadId }
+					: undefined;
+				this.materializingComposer = composer;
+				this.adoptUntitledSession(untitledSession, created);
+				return toDisposable(() => {
+					if (this.materializingComposer === composer) this.materializingComposer = undefined;
+				});
+			},
+			promote: created => this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created),
+			subscribe: created => this.subscribe(created),
+		});
 	}
 
 	/** Keep this composer's choices when organization gives its draft a durable identity. */

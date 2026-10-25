@@ -159,7 +159,7 @@ test('A language paste provider can replace text and the selector switches to pl
 	const selector = dom.window.document.querySelector<HTMLElement>('.stanza-editor-post-edit-selector');
 	assert.ok(selector);
 	assert.equal(paste.defaultPrevented, true);
-	assert.equal(disposedSessions, 1);
+	assert.equal(disposedSessions, 0);
 	selector.querySelector<HTMLButtonElement>('button')!.click();
 	assert.equal(dom.window.document.querySelectorAll('[role=menuitem]').length, 2);
 	assert.equal(selector.querySelector('button')!.getAttribute('aria-label'), 'Paste options');
@@ -168,6 +168,8 @@ test('A language paste provider can replace text and the selector switches to pl
 	plainOption.click();
 	await waitFor(() => model.getText() === 'raw');
 	assert.equal(model.getText(), 'raw');
+	CopyPasteController.get(editor)!.clearWidgets();
+	assert.equal(disposedSessions, 1);
 });
 
 test('A provider paste switches its insertion and additional text edit together', async () => {
@@ -621,7 +623,9 @@ test('Paste command resolves after delayed provider edits', async () => {
 	assert.deepEqual({ text: model.getText(), complete }, { text: '', complete: false });
 	await release.complete();
 	await paste;
-	assert.deepEqual({ text: model.getText(), complete, disposed }, { text: 'provided', complete: true, disposed: 1 });
+	assert.deepEqual({ text: model.getText(), complete, disposed }, { text: 'provided', complete: true, disposed: 0 });
+	CopyPasteController.get(editor)!.clearWidgets();
+	assert.equal(disposed, 1);
 });
 
 test('Cancelling a paste ends the command before an uncooperative provider returns and releases its late session', async () => {

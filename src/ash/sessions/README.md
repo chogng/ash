@@ -7,20 +7,20 @@ is canonical for the renderer implementation and extension points.
 
 UI design and style boundaries are defined in [Sessions style](STYLE.md).
 
-The ChatGPT contribution uses `chatgpt.com/backend-api` conversation requests,
-streaming replies and the web verification runtime. It does not use the OpenAI
-API. The host attaches the current externally managed login credentials per
-request; the contribution does not query account identity, retain account
-bindings, detect account changes or reset chats and drafts when login changes.
-Credentials and cookies remain in the host, outside renderer state.
+The Desktop `contrib/chatgptweb` contribution owns the ChatGPT entry and the
+Chat workspace's New action. Ash renders the conversation, composer, model
+selection, attachments and history sidebar. `ChatGPTService` remains the window's
+single owner for drafts, selected conversation, history and streamed replies.
+The `ash-chatgpt` editor resource and conversation storage keys stay stable
+across entry restoration. Previous native-experiment restore commands resolve
+to this same entry without creating or sending a new conversation.
 
-ChatGPTService owns file upload status and file references alongside each draft.
-The host accepts bounded file bytes only for signed storage uploads and never
-forwards login headers to storage. Voice uses the ChatGPT voice-session endpoint
-and an encrypted LiveKit media connection; its short-lived room ticket and key
-stay in memory for that call. Leaving ChatGPT or switching conversations releases
-the microphone, playback, worker and room. Voice does not create an Agent Thread.
-The chat history returned by ChatGPT remains the canonical conversation record.
+The window-owned Main transport reads the existing Codex credentials and makes
+ChatGPT requests; credentials never enter the renderer. Its hidden Chromium
+runtime only performs the website's request verification. It does not host an
+additional chat UI or own conversation state. Voice capture and playback use
+the renderer's existing media lifecycle. ChatGPT remains separate from the
+Agent/Codex model service, local Threads and execution lifecycle.
 
 Shared Agent execution, Thread records, model catalogs, approval metadata and
 profile execution defaults belong to `platform/agentHost/common/`. Its browser
@@ -177,7 +177,7 @@ See [Automation ownership and lifecycle](../../../crates/docs/automation.md).
 | Composer persistence                  | `contrib/chat/common/newChatDraftState.ts`                                                                                                                                                     | owns workspace-scoped drafts keyed by untitled identity or Thread; migrates older Chat/Code keys without discarding conflicting drafts                                                                                                                                                                                                                                                                                                                   |
 | Welcome tips                          | `contrib/cowork/browser/chatTipService.ts` and `widget/input/chatInputTipPresenter.ts`; Code keeps its Chat implementations                                                                    | each contribution owns its presenter and service while preserving the existing profile dismissal preference                                                                                                                                                                                                                                                                                                                                              |
 | Turn review                           | `browser/turnMultiDiffSource.ts`, `browser/turnMultiDiffSource.contribution.ts`, and `contrib/changes/browser/changesMultiDiffSourceResolver.ts`                                               | compose Turn changes and register their source resolver and commit action with `workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.ts`                                                                                                                                                                                                                                                                                             |
-| Parts                                 | `browser/parts/`                                                                                                                                                                               | groups each Part with its owned components and media: `sessions/`, `editor/`, `panel/`, `sidebar/`, `auxiliarybar/`, `activitybar/`, and `titlebar/`                                                                                                                                                                                                                                                                                                     |
+| Parts                                 | `browser/parts/`                                                                                                                                                                               | hosts the shared Part modules and their owned media; navigation components remain in `sidebar/`, and product-specific Activity Bar components remain in `activitybar/`                                                                                                                                                                                                                                                                                   |
 | Activity Bar                          | `browser/parts/activitybar/`                                                                                                                                                                   | renders menu commands, persists their order, and owns account entry, DOM, and presentation; uses shared controls, configuration, and menu services as a disposable navigation component, without registering a window Part or importing Workbench Activity Bar styles                                                                                                                                                                                    |
 | View containers                       | `workbench/services/panecomposite/browser/panecomposite.ts` and `workbench/browser/parts/paneCompositePartService.ts`                                                                          | both windows use the same service to open, hide and focus containers; Parts retain their instances                                                                                                                                                                                                                                                                                                                                                       |
 | Projects and Creator                  | `contrib/projects/browser/projects.contribution.ts` and `contrib/creator/browser/creator.contribution.ts`                                                                                      | contribute Activity Bar commands and retained EditorPanes; Projects keeps navigation and details inside its EditorPane, with window-local state in `projectsService.ts`; the Project domain owns durable project metadata and material references                                                                                                                                                                                                        |

@@ -4,12 +4,28 @@ import { copyFile, mkdir, mkdtemp, open, readFile, readdir, rm, stat, symlink, w
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
+import { readExtensionUiTargets } from './extensionManifest.ts';
+
+test('every shipped extension explicitly declares its product windows', async () => {
+	const root = resolve(import.meta.dirname, '../../extensions');
+	for (const entry of await readdir(root, { withFileTypes: true })) {
+		if (!entry.isDirectory() || entry.name === 'node_modules') { continue; }
+		const text = await readFile(join(root, entry.name, 'package.json'), 'utf8').catch(error => {
+			if (error.code === 'ENOENT') { return undefined; }
+			throw error;
+		});
+		if (text === undefined) { continue; }
+		const manifest = JSON.parse(text);
+		assert.ok(readExtensionUiTargets(manifest.ashUiTargets), `${entry.name} must declare ashUiTargets`);
+	}
+});
 
 test('browser packaging excludes independent capabilities and rejects missing JS manifests', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-browser-extensions-'));
 	try {
 		await mkdir(join(directory, 'build/builtin'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
+		await copyFile(resolve(import.meta.dirname, 'extensionManifest.ts'), join(directory, 'build/builtin/extensionManifest.ts'));
 		await copyFile(resolve(import.meta.dirname, 'extensionWebviews.ts'), join(directory, 'build/builtin/extensionWebviews.ts'));
 		await mkdir(join(directory, 'build/resources'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, '../resources/languagePacks.ts'), join(directory, 'build/resources/languagePacks.ts'));
@@ -53,6 +69,8 @@ test('browser packaging excludes independent capabilities and rejects missing JS
 		await mkdir(join(directory, 'extensions/optional-language'), { recursive: true });
 		await writeFile(join(directory, 'extensions/optional-language/package.json'), JSON.stringify({ publisher: 'test', name: 'optional-language', engines: { ash: '*' }, contributes: { localizations: [{ languageId: 'fr' }] } }));
 		await writeFile(join(directory, 'extensions/optional-language/optional.json'), 'French must be downloaded');
+		await mkdir(join(directory, 'extensions/optional-keymap'));
+		await writeFile(join(directory, 'extensions/optional-keymap/package.json'), JSON.stringify({ publisher: 'test', name: 'optional-keymap', ashDistribution: 'marketplace', contributes: { keybindings: [{ key: 'ctrl+d', command: 'editor.action.addSelectionToNextFindMatch' }] } }));
 		const run = () => spawnSync(process.execPath, ['build/builtin/extensions.ts'], {
 			cwd: directory, encoding: 'utf8', timeout: 15_000,
 			// This fixture owns its catalog, including any externally configured roots.
@@ -83,6 +101,7 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 	try {
 		await mkdir(join(directory, 'build/builtin'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
+		await copyFile(resolve(import.meta.dirname, 'extensionManifest.ts'), join(directory, 'build/builtin/extensionManifest.ts'));
 		await copyFile(resolve(import.meta.dirname, 'extensionWebviews.ts'), join(directory, 'build/builtin/extensionWebviews.ts'));
 		await mkdir(join(directory, 'build/resources'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, '../resources/languagePacks.ts'), join(directory, 'build/resources/languagePacks.ts'));
@@ -97,6 +116,9 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 		await mkdir(join(directory, 'extensions/theme-defaults/themes'), { recursive: true });
 		await writeFile(join(directory, 'extensions/theme-defaults/package.json'), JSON.stringify({ publisher: 'test', name: 'theme-defaults', version: '1.0.0' }));
 		await mkdir(join(directory, 'extensions/git/browser'), { recursive: true });
+		// Real author packages install the SDK for its types; the Worker must still use its host facade.
+		await mkdir(join(directory, 'extensions/git/node_modules/@ash'), { recursive: true });
+		await symlink(resolve(import.meta.dirname, '../../sdk/typescript'), join(directory, 'extensions/git/node_modules/@ash/sdk'), process.platform === 'win32' ? 'junction' : 'dir');
 		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', browser: 'browser/main.ts', contributes: { commands: [{ command: 'test.browser.command', title: 'Ash browser command' }, { command: 'test.browser.disposeImage', title: 'Dispose image editor' }], imageEditors: [{ id: 'test.image', displayName: 'Image' }] } }));
 		await writeFile(join(directory, 'extensions/git/browser/main.ts'), `import { marker } from './helper.js'; import { commands, window, workspace } from '@ash/sdk';
 export function activate(context) {
@@ -234,6 +256,7 @@ for (const resource of ['manifest', 'file'] as const) {
 			// language packs or other resources in the developer's checkout.
 			await mkdir(join(directory, 'build/builtin'), { recursive: true });
 			await copyFile(resolve(import.meta.dirname, 'extensions.ts'), join(directory, 'build/builtin/extensions.ts'));
+			await copyFile(resolve(import.meta.dirname, 'extensionManifest.ts'), join(directory, 'build/builtin/extensionManifest.ts'));
 			await copyFile(resolve(import.meta.dirname, 'extensionWebviews.ts'), join(directory, 'build/builtin/extensionWebviews.ts'));
 			await mkdir(join(directory, 'build/resources'), { recursive: true });
 			await copyFile(resolve(import.meta.dirname, '../resources/languagePacks.ts'), join(directory, 'build/resources/languagePacks.ts'));

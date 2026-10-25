@@ -280,7 +280,7 @@ export class ChangesViewPane extends ViewPane {
 			this.contentElement.querySelector('.ash-sessions-changes-summary')?.textContent,
 			this.contentElement.querySelector('.ash-sessions-changes-repository-status')?.textContent,
 			...files,
-			this.checks.value?.element.textContent,
+			this.checks.value?.getAccessibleContent(),
 		].join('\n');
 	}
 

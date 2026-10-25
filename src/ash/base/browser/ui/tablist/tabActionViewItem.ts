@@ -51,6 +51,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
 	private label: IconLabel | undefined;
 	private rendered: TabListItem<T> | undefined;
 	private hover: IManagedHover | undefined;
+	private closeAction: IAction | undefined;
 	private readonly toolbar = this._register(new MutableDisposable<ActionBar>());
 
 	constructor(action: TabAction<T>, onClose: ((value: T) => void) | undefined, closeActionIcon: Icon | undefined, draggable: boolean) {
@@ -58,6 +59,11 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		this.tabAction = action;
 		this.onClose = onClose;
 		this.closeActionIcon = closeActionIcon;
+	}
+
+	get domNode(): HTMLElement {
+		assertDefined(this.container, `TabList item is not rendered: ${this.action.id}`);
+		return this.container;
 	}
 
 	override render(container: HTMLElement): void {
@@ -70,18 +76,9 @@ export class TabActionViewItem<T> extends ActionViewItem {
 
 		const tab = h(container.ownerDocument, "button");
 		this.tabElement = tab;
-		tab.id = item.tabId;
 		tab.className = "ash-tab-label";
 		tab.type = "button";
 		tab.setAttribute("role", "tab");
-		tab.setAttribute("aria-selected", String(this.tabAction.selected));
-		tab.setAttribute("aria-label", item.ariaLabel ?? item.label);
-		if (item.ariaDescription) {
-			tab.setAttribute("aria-description", item.ariaDescription);
-		}
-		if (item.panelId) {
-			tab.setAttribute("aria-controls", item.panelId);
-		}
 		this.hover = this.setupHover(tab, this.tabAction.tooltip);
 		if (item.renderLabel) {
 			this._register(item.renderLabel(tab));
@@ -120,65 +117,89 @@ export class TabActionViewItem<T> extends ActionViewItem {
 
 	update(): void {
 		const item = this.tabAction.tab;
+		const previous = this.rendered;
 		const container = this.container!;
 		const tab = this.tab;
 		container.classList.toggle("checked", this.tabAction.checked);
 		container.classList.toggle("selected", this.tabAction.selected);
 		container.classList.toggle("icon", item.icon !== undefined);
 		container.classList.toggle("preview", item.preview === true);
-		if (item.state === undefined) {
-			delete container.dataset.state;
-		} else {
-			container.dataset.state = item.state;
+		if (previous?.state !== item.state) {
+			if (item.state === undefined) {
+				delete container.dataset.state;
+			} else {
+				container.dataset.state = item.state;
+			}
 		}
-		tab.id = item.tabId;
-		tab.setAttribute("aria-selected", String(this.tabAction.selected));
-		tab.setAttribute("aria-label", item.ariaLabel ?? item.label);
-		if (item.ariaDescription) {
-			tab.setAttribute("aria-description", item.ariaDescription);
-		} else {
-			tab.removeAttribute("aria-description");
+		if (previous?.tabId !== item.tabId) {
+			tab.id = item.tabId;
 		}
-		if (item.panelId) {
-			tab.setAttribute("aria-controls", item.panelId);
-		} else {
-			tab.removeAttribute("aria-controls");
+		const selected = String(this.tabAction.selected);
+		if (tab.getAttribute("aria-selected") !== selected) {
+			tab.setAttribute("aria-selected", selected);
 		}
-		this.hover?.update(this.tabAction.tooltip);
-		const previous = this.rendered;
+		const ariaLabel = item.ariaLabel ?? item.label;
+		if ((previous?.ariaLabel ?? previous?.label) !== ariaLabel) {
+			tab.setAttribute("aria-label", ariaLabel);
+		}
+		if (previous?.ariaDescription !== item.ariaDescription) {
+			if (item.ariaDescription) {
+				tab.setAttribute("aria-description", item.ariaDescription);
+			} else {
+				tab.removeAttribute("aria-description");
+			}
+		}
+		if (previous?.panelId !== item.panelId) {
+			if (item.panelId) {
+				tab.setAttribute("aria-controls", item.panelId);
+			} else {
+				tab.removeAttribute("aria-controls");
+			}
+		}
+		// Managed hover and IconLabel were initialized by render; unchanged content needs no DOM work.
+		if (previous && (previous.tooltip ?? previous.label) !== this.tabAction.tooltip) {
+			this.hover?.update(this.tabAction.tooltip);
+		}
 		this.rendered = item;
-		if (this.label && (previous?.label !== item.label || previous.description !== item.description || previous.icon !== item.icon)) {
+		if (this.label && previous && (previous.label !== item.label || previous.description !== item.description || previous.icon !== item.icon)) {
 			this.label.setLabel(item.label, item.description, { icon: item.icon });
 		}
-		if (previous && previous.label === item.label && previous.actions === item.actions && previous.primaryAction === item.primaryAction) {
-			if (previous.closeActionTooltip !== item.closeActionTooltip && !item.primaryAction && this.onClose) {
-				this.toolbar.value?.updateActions([
-					...(item.actions?.items ?? []),
-					closeTabAction(this.tabAction, this.onClose, this.closeActionIcon),
-				]);
-			}
+		if (previous && previous.label === item.label && previous.actions === item.actions && previous.primaryAction === item.primaryAction && previous.closeActionTooltip === item.closeActionTooltip) {
 			return;
 		}
-		this.toolbar.clear();
-		const primaryAction = item.primaryAction ?? (this.onClose ? closeTabAction(this.tabAction, this.onClose, this.closeActionIcon) : undefined);
+		if (this.onClose && !item.primaryAction && (!this.closeAction || previous?.primaryAction || previous?.label !== item.label || previous.closeActionTooltip !== item.closeActionTooltip)) {
+			this.closeAction = closeTabAction(this.tabAction, this.onClose, this.closeActionIcon);
+		}
+		const primaryAction = item.primaryAction ?? this.closeAction;
 		const actions = [
 			...(item.actions?.items ?? []),
 			...(primaryAction ? [primaryAction] : []),
 		];
-		if (actions.length > 0) {
-			const actionBar = new ActionBar(container, {
-				actions,
-				ariaLabel: item.actions?.ariaLabel ?? `${item.label} actions`,
-			});
-			this.toolbar.value = actionBar;
-			actionBar.element.classList.add("ash-tab-actions");
-			if (primaryAction) {
-				const actionContainer = [...actionBar.element.children].find(element => (element as HTMLElement).dataset.actionId === primaryAction.id);
-				assertDefined(actionContainer, "TabList primary action was not rendered");
-				actionContainer.classList.add("ash-tab-primary-action");
-				actionContainer.classList.toggle("ash-tab-close-action", item.primaryAction === undefined);
-				actionContainer.classList.toggle("custom-action", item.primaryAction !== undefined);
+		const hadActionFocus = this.toolbar.value?.element.contains(container.ownerDocument.activeElement);
+		if (actions.length === 0) {
+			this.toolbar.clear();
+		} else {
+			const ariaLabel = item.actions?.ariaLabel ?? localize('tabList.actions', '{0} actions', item.label);
+			let actionBar = this.toolbar.value;
+			if (actionBar) {
+				actionBar.updateActions(actions);
+				if (actionBar.element.getAttribute('aria-label') !== ariaLabel) {
+					actionBar.element.setAttribute('aria-label', ariaLabel);
+				}
+			} else {
+				actionBar = new ActionBar(container, { actions, ariaLabel });
+				this.toolbar.value = actionBar;
+				actionBar.element.classList.add("ash-tab-actions");
 			}
+			for (const actionContainer of actionBar.element.children) {
+				const isPrimary = (actionContainer as HTMLElement).dataset.actionId === primaryAction?.id;
+				actionContainer.classList.toggle("ash-tab-primary-action", isPrimary);
+				actionContainer.classList.toggle("ash-tab-close-action", isPrimary && item.primaryAction === undefined);
+				actionContainer.classList.toggle("custom-action", isPrimary && item.primaryAction !== undefined);
+			}
+		}
+		if (hadActionFocus && container.ownerDocument.activeElement === container.ownerDocument.body) {
+			this.focus();
 		}
 	}
 
@@ -187,7 +208,10 @@ export class TabActionViewItem<T> extends ActionViewItem {
 	}
 
 	override setTabbable(tabbable: boolean): void {
-		this.tab.tabIndex = tabbable ? 0 : -1;
+		const tabIndex = tabbable ? 0 : -1;
+		if (this.tab.tabIndex !== tabIndex) {
+			this.tab.tabIndex = tabIndex;
+		}
 	}
 
 	private get tab(): HTMLButtonElement {

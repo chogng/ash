@@ -505,7 +505,7 @@ suite('sessionGitHub browser component', () => {
 		await expect(pills).toHaveCount(2);
 		await expect(first).toHaveAccessibleName(/Changes in one · Open/);
 		await expect(sidebar.locator('[data-ash-icon-id="git-pull-request"]')).toHaveCount(1);
-		expect(await pills.locator('.ash-icon').evaluateAll(elements => elements.every(element => element.getAttribute('aria-hidden') === 'true'))).toBe(true);
+		await expect.poll(() => pills.locator('.ash-icon').evaluateAll(elements => elements.map(element => element.getAttribute('aria-hidden')))).toEqual(['true', 'true']);
 		await first.focus();
 		await page.keyboard.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.opened)).toEqual(['https://github.com/team/one/pull/7']);
@@ -720,6 +720,40 @@ suite('sessionGitHub browser component', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`PR follow-up persists its source, stops from the keyboard and opens history in ${locale}`, async function () {
+			const { page } = browserTests;
+			const zh = locale === 'zh-CN';
+			await page.goto(`/sessionGitHub.html?checks&locale=${locale}`);
+			const group = page.locator('.ash-sessions-follow-up').getByRole('group', { name: 'team/one #7', exact: true });
+			const start = group.getByRole('button', { name: zh ? '跟进 PR 检查' : 'Follow PR checks', exact: true });
+			await expect(start).toBeVisible();
+			await start.focus(); await start.press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'automation/write').length)).toBe(1);
+			const stopName = zh ? '停止 PR 跟进' : 'Stop PR follow-up';
+			await expect(group.getByRole('button', { name: stopName, exact: true })).toHaveAttribute('aria-pressed', 'true');
+			const writes = await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'automation/write'));
+			expect(writes).toHaveLength(1);
+			const definition = writes[0]!.params.definition as Record<string, unknown>;
+			expect(definition.session).toEqual({ type: 'continue', sessionId: 'session', threadId: 'thread' });
+			expect(definition.directory).toBe('/workspace');
+			expect(definition.condition).toEqual({ type: 'gitHubChecks', host: 'github.com', owner: 'team', repository: 'one', number: 7, accountId: 'account', credentialRevision: '1' });
+			expect(await page.evaluate(() => window.ashSessionGitHub.submissions)).toEqual([]);
+			await page.reload();
+			const restored = group.getByRole('button', { name: stopName, exact: true });
+			await expect(restored).toBeVisible();
+			await restored.focus(); await restored.press('Enter');
+			await expect(group.getByRole('button', { name: zh ? '跟进 PR 检查' : 'Follow PR checks', exact: true })).toHaveAttribute('aria-pressed', 'false');
+			const stopped = await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'automation/write'));
+			expect(stopped).toHaveLength(1);
+			expect(stopped[0]!.params.status).toBe('paused');
+			expect(stopped[0]!.params.expectedRevision).toBe(1);
+			const history = group.getByRole('button', { name: zh ? '跟进历史' : 'Follow-up history', exact: true });
+			await history.focus(); await history.press('Enter');
+			await expect(page.locator('body')).toHaveAttribute('data-opened-view', 'sessions.customView.automations');
+			await page.evaluate(() => window.ashSessionGitHub.dispose());
+			await expect(page.locator('.ash-sessions-follow-up')).toHaveCount(0);
+		});
+
 		test(`CI actions read annotations and dispatch only explicit scoped requests in ${locale}`, async function () {
 			const { page } = browserTests;
 

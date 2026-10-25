@@ -1,8 +1,5 @@
 import type { URI } from '../../../../base/common/uri.js';
 import type { VSBuffer } from '../../../../base/common/buffer.js';
-import type { IDisposable } from '../../../../base/common/lifecycle.js';
-import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import type { ITerminalOutputSnapshot } from '../../../../platform/terminal/common/terminal.js';
 
 export interface ResolvedChatContext {
@@ -46,26 +43,3 @@ export interface IChatContextTarget {
 	captureScreenshot(capture?: ChatImageCapture): Promise<void>;
 	acceptInput(value?: string): Promise<void>;
 }
-
-export interface ChatContextPick {
-	readonly label: string;
-	readonly description?: string;
-	readonly detail?: string;
-	readonly attachment: ChatContextAttachment;
-}
-
-export interface ChatContextPicker {
-	readonly id: string;
-	readonly label: string;
-	isEnabled(): boolean | Promise<boolean>;
-	providePicks(query: string): Promise<readonly ChatContextPick[]>;
-}
-
-/** Registry and searchable selector for Chat context providers. */
-export interface IChatContextPickService {
-	readonly items: readonly ChatContextPicker[];
-	registerPicker(picker: ChatContextPicker): IDisposable;
-	pickContext(quickInputService: IQuickInputService, signal?: AbortSignal): Promise<ChatContextAttachment | undefined>;
-}
-
-export const IChatContextPickService = createServiceIdentifier<IChatContextPickService>('chatContextPickService');

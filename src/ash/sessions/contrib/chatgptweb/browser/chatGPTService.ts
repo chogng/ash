@@ -4,7 +4,7 @@ import { getNLSLanguage, localize } from '../../../../nls.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IChatGPTTransport } from '../common/chatGPTTransport.js';
-import { ChatGPTClient, ChatGPTRequestError, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTModel, type ChatGPTFile, type ChatGPTProject } from './chatGPTClient.js';
+import { ChatGPTClient, ChatGPTRequestError, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTModel, type ChatGPTFile, type ChatGPTProject, type ChatGPTHistory } from './chatGPTClient.js';
 import { createChatGPTFetch } from './chatGPTFetch.js';
 import { getChatGPTRichContentText } from './chatGPTRichContent.js';
 import type { ChatGPTVoiceSession } from './chatGPTVoiceSession.js';
@@ -24,7 +24,7 @@ interface ChatGPTDraft { readonly text: string; readonly attachments: readonly C
 export interface ChatGPTState {
 	readonly draft: string;
 	readonly attachments: readonly ChatGPTAttachment[];
-	readonly voice: 'idle' | 'connecting' | 'connected';
+	readonly voice: 'idle' | 'connecting' | 'connected' | 'stopping';
 	readonly voiceTranscript: readonly { readonly id: string; readonly text: string; readonly role: 'user' | 'assistant'; }[];
 	readonly connected: boolean;
 	readonly busy: boolean;
@@ -85,6 +85,9 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private readonly uploads = new Map<string, AbortController>();
 	private voiceController: AbortController | undefined;
 	private voiceMedia: ChatGPTVoiceSession | undefined;
+	private voiceMessageId: string | undefined;
+	private voiceCreatedConversation = false;
+	private voiceStopping: Promise<void> | undefined;
 	private operation: AbortController | undefined;
 	private stream: AbortController | undefined;
 	private stopping: Promise<void> | undefined;
@@ -178,6 +181,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 
 	public async reload(): Promise<void> {
 		if (this.model.get().busy || this.model.get().sending || this.model.get().managing) { return; }
+		if (this.voiceController) { await this.endVoice(true); return; }
 		const id = this.model.get().conversationId;
 		if (this.model.get().connected && id) { await this.select(id); } else { await this.loadCatalog(); }
 	}
@@ -205,15 +209,25 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (!window.navigator.userActivation?.isActive) { return; }
 		const controller = new AbortController();
 		this.voiceController = controller;
+		this.voiceMessageId = undefined;
+		this.voiceCreatedConversation = !state.conversationId;
 		this.update({ voice: 'connecting', voiceTranscript: [], error: '' });
 		try {
 			const { ChatGPTVoiceSession } = await import('./chatGPTVoiceSession.js');
 			if (controller.signal.aborted || this.voiceController !== controller) { return; }
-			const media = this.voiceMedia = new ChatGPTVoiceSession(window, (id, text, role) => {
+			const media = this.voiceMedia = new ChatGPTVoiceSession(window, update => {
 				if (this.voiceController !== controller || controller.signal.aborted) { return; }
-				const transcript = this.model.get().voiceTranscript;
-				const item = { id, text: text.slice(0, 65536), role };
-				this.update({ voiceTranscript: (transcript.some(previous => previous.id === id) ? transcript.map(previous => previous.id === id ? item : previous) : [...transcript, item]).slice(-64) });
+				if (update.conversationId && update.conversationId !== this.model.get().conversationId) {
+					this.update({ conversationId: update.conversationId }); this.rememberConversation(update.conversationId);
+				}
+				if (update.parentId) { this.voiceMessageId = update.parentId; }
+				const message = update.message;
+				if (message?.text.trim() && !message.activity) {
+					this.voiceMessageId = message.id;
+					const transcript = this.model.get().voiceTranscript;
+					const item = { id: message.id, text: message.text.slice(0, 65536), role: message.role };
+					this.update({ voiceTranscript: (transcript.some(previous => previous.id === item.id) ? transcript.map(previous => previous.id === item.id ? item : previous) : [...transcript, item]).slice(-64) });
+				}
 			}, error => {
 				if (this.voiceController !== controller) { return; }
 				// Even a failed room may have committed turns; reload its continuation node.
@@ -221,19 +235,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				if (error !== undefined) { this.update({ error: this.errorText(error) }); }
 			});
 			media.unlockAudio();
-			const connection = await this.client.voice({ conversationId: state.conversationId, parentId: state.parentId, language: getNLSLanguage().split('-')[0]! }, AbortSignal.any([controller.signal, AbortSignal.timeout(35_000)]));
-			if (this.voiceController !== controller || controller.signal.aborted) { return; }
-			if (connection.conversationId && connection.conversationId !== state.conversationId) {
-				this.drafts.set(connection.conversationId, { text: state.draft, attachments: state.attachments });
-				if (!state.conversationId) { this.drafts.delete('new'); }
-				this.update({ conversationId: connection.conversationId });
-				this.rememberConversation(connection.conversationId);
-			}
-			await media.connect(connection, controller.signal);
+			await media.connect((sdp, signal) => this.client.voice({ sdp, conversationId: state.conversationId, parentId: state.parentId, language: getNLSLanguage() }, signal), controller.signal);
 			if (this.voiceController === controller && !controller.signal.aborted) { this.update({ voice: 'connected' }); }
 		} catch (error) {
 			if (this.voiceController === controller && !controller.signal.aborted) {
-				await this.endVoice(false);
+				await this.endVoice(!!this.voiceMessageId);
 				this.update({ error: this.errorText(error) });
 			}
 		}
@@ -242,17 +248,33 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	public stopVoice(): Promise<void> { return this.endVoice(true); }
 
 	private async endVoice(refresh: boolean): Promise<void> {
+		if (this.voiceStopping) { return this.voiceStopping; }
 		const controller = this.voiceController;
 		if (!controller) { return; }
 		this.voiceController = undefined;
 		controller.abort();
 		this.voiceMedia?.dispose(); this.voiceMedia = undefined;
 		const id = this.model.get().conversationId;
-		this.update({ voice: 'idle', voiceTranscript: [] });
-		if (refresh && !this.isDisposed) {
-			if (id) { await this.select(id); }
-			else { await this.loadCatalog(); }
+		const messageId = this.voiceMessageId;
+		if (!refresh || this.isDisposed) { this.update({ voice: 'idle', voiceTranscript: [] }); return; }
+		if (!messageId && this.voiceCreatedConversation) {
+			this.update({ voice: 'idle', voiceTranscript: [], conversationId: undefined }); this.rememberConversation(undefined); return;
 		}
+		const { signal, generation } = this.beginOperation();
+		this.update({ voice: 'stopping', busy: true });
+		this.voiceStopping = (async () => {
+			try {
+				if (id) {
+					const history = await this.client.voiceHistory(id, messageId, signal);
+					if (generation === this.generation) { this.restoreHistory(history); this.rememberHistory(history); }
+				}
+			} catch (error) {
+				if (generation === this.generation) { this.update({ error: this.errorText(error), uncertain: !!messageId }); }
+			} finally {
+				if (generation === this.generation) { this.update({ voice: 'idle', busy: false, voiceTranscript: [] }); }
+			}
+		})();
+		try { await this.voiceStopping; } finally { this.voiceStopping = undefined; }
 	}
 
 	public async attachFiles(files: readonly File[]): Promise<void> {
@@ -339,28 +361,38 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const { signal, generation } = this.beginOperation();
 		this.update({ busy: true, error: '' });
 		try {
-			const [catalog, conversations, groups] = await Promise.all([
-				this.client.models(signal), this.client.conversations(0, signal),
-				Promise.allSettled([this.client.projects(signal), this.client.pinnedConversations(signal)]),
+			const [catalog, groups] = await Promise.all([
+				this.client.models(signal),
+				Promise.allSettled([this.client.projects(signal), this.client.pinnedConversations(signal), this.client.conversations(0, signal)]),
 			]);
 			if (generation !== this.generation) { return; }
-			const [projects, pins] = groups;
-			this.resetRecentPage(conversations);
-			const items = new Map(conversations.items.map(item => [item.id, item]));
+			const [projects, pins, conversations] = groups;
+			const state = this.model.get();
+			if (conversations.status === 'fulfilled') { this.resetRecentPage(conversations.value); }
+			// Recent history is auxiliary to restoring a known conversation and its
+			// continuation. Its rate limit must not disable an otherwise usable chat.
+			const items = new Map((conversations.status === 'fulfilled' ? conversations.value.items : state.conversations).map(item => [item.id, item]));
 			if (pins.status === 'fulfilled') {
 				for (const item of pins.value) { items.set(item.id, { ...item, projectId: item.projectId ?? items.get(item.id)?.projectId }); }
 			}
-			const state = this.model.get();
+			const listError = conversations.status === 'rejected' ? localize('sessions.chatgpt.historyListFailed', 'Could not refresh the conversation list. You can continue the current chat. {0}', this.errorText(conversations.reason)) : '';
 			const selected = catalog.models.find(model => model.id === state.model) ?? catalog.models.find(model => model.id === catalog.defaultModel)!;
 			this.update({
 				connected: true, busy: false, models: catalog.models,
 				model: selected.id, modelPreset: this.resolveModelPreset(selected, state.modelPreset),
-				uncertain: false, stopped: false, conversations: [...items.values()], hasMore: conversations.hasMore,
+				uncertain: false, stopped: false, conversations: [...items.values()], hasMore: conversations.status === 'fulfilled' ? conversations.value.hasMore : state.hasMore,
 				projects: projects.status === 'fulfilled' ? projects.value : state.projects,
-				error: groups.filter(result => result.status === 'rejected').map(result => this.errorText(result.reason)).join('\n'),
+				error: [...[projects, pins].filter(result => result.status === 'rejected').map(result => this.errorText(result.reason)), listError].filter(Boolean).join('\n'),
 			});
 			const retained = state.conversationId ?? this.storage.get('sessions.chatgpt.conversation', StorageScope.PROFILE);
-			if (retained && retained.length < 1024) { await this.select(retained); }
+			if (retained && retained.length < 1024) {
+				await this.select(retained);
+				const restored = this.model.get();
+				if (listError && restored.conversationId === retained) {
+					if (!restored.conversations.some(item => item.id === retained)) { this.rememberHistory({ id: retained, title: restored.title }); }
+					if (!restored.error) { this.update({ error: listError }); }
+				}
+			}
 		} catch (error) {
 			if (generation === this.generation) { this.update({ busy: false, error: this.errorText(error) }); }
 		}
@@ -373,8 +405,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	}
 
 	public newChat(): void {
-		if (this.isDisposed || this.model.get().sending || this.model.get().managing) { return; }
-		void this.endVoice(false);
+		if (this.isDisposed || this.model.get().sending || this.model.get().managing || this.voiceStopping) { return; }
+		if (this.voiceController) { void this.endVoice(true).then(() => this.newChat()); return; }
 		this.operation?.abort();
 		this.generation++;
 		this.update({ draft: this.drafts.get('new')?.text ?? '', attachments: this.drafts.get('new')?.attachments ?? [], conversationId: undefined, title: 'ChatGPT', messages: [], parentId: crypto.randomUUID(), error: '', busy: false, uncertain: false, stopped: false });
@@ -383,24 +415,36 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 
 	public async select(id: string): Promise<void> {
 		if (this.isDisposed || this.model.get().sending || this.model.get().managing) { return; }
-		void this.endVoice(false);
+		await this.endVoice(true);
 		const { signal, generation } = this.beginOperation();
 		this.update({ busy: true, error: '' });
 		try {
 			const history = await this.client.history(id, signal);
 			if (generation !== this.generation) { return; }
-			const state = this.model.get();
-			const selected = state.models.find(model => history.model !== undefined && model.modelIds.includes(history.model)) ?? state.models.find(model => model.id === state.model);
-			const preset = selected?.presets.find(preset => preset.model === history.model && preset.thinkingEffort === history.thinkingEffort)
-				?? selected?.presets.find(preset => preset.model === history.model && preset.thinkingEffort === undefined)
-				?? selected?.presets.find(preset => preset.model === history.model);
-			this.update({
-				draft: this.drafts.get(id)?.text ?? '', attachments: this.drafts.get(id)?.attachments ?? [], conversationId: id, title: history.title, messages: history.messages, parentId: history.parentId,
-				model: selected?.id ?? state.model, modelPreset: preset?.id ?? this.resolveModelPreset(selected, state.modelPreset),
-				busy: false, uncertain: false, stopped: false
-			});
+			this.restoreHistory(history);
 			this.rememberConversation(id);
 		} catch (error) { if (generation === this.generation) { this.update({ busy: false, error: this.errorText(error) }); } }
+	}
+
+	private restoreHistory(history: ChatGPTHistory): void {
+		const state = this.model.get();
+		const selected = state.models.find(model => history.model !== undefined && model.modelIds.includes(history.model)) ?? state.models.find(model => model.id === state.model);
+		const preset = selected?.presets.find(preset => preset.model === history.model && preset.thinkingEffort === history.thinkingEffort)
+			?? selected?.presets.find(preset => preset.model === history.model && preset.thinkingEffort === undefined)
+			?? selected?.presets.find(preset => preset.model === history.model);
+		this.update({
+			draft: this.drafts.get(history.id)?.text ?? '', attachments: this.drafts.get(history.id)?.attachments ?? [], conversationId: history.id, title: history.title, messages: history.messages, parentId: history.parentId,
+			model: selected?.id ?? state.model, modelPreset: preset?.id ?? this.resolveModelPreset(selected, state.modelPreset),
+			busy: false, uncertain: false, stopped: false,
+		});
+	}
+
+	/** An accepted turn already supplies its canonical title and ID; do not refetch every recent chat. */
+	private rememberHistory(history: Pick<ChatGPTHistory, 'id' | 'title'>): void {
+		const state = this.model.get();
+		const previous = state.conversations.find(item => item.id === history.id);
+		if (!this.recentIds.has(history.id)) { this.recentIds.add(history.id); this.recentOffset++; }
+		this.update({ conversations: [{ ...previous, id: history.id, title: history.title }, ...state.conversations.filter(item => item.id !== history.id)] });
 	}
 
 	public async loadMore(): Promise<void> {
@@ -453,11 +497,9 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			if (currentId) {
 				try {
 					const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]);
-					const [history, catalog] = await Promise.all([this.client.history(currentId, signal), this.client.conversations(0, signal)]);
-					this.resetRecentPage(catalog);
-					const items = new Map(this.model.get().conversations.filter(item => item.pinned).map(item => [item.id, item]));
-					for (const item of catalog.items) { items.set(item.id, item); }
-					this.update({ title: history.title, parentId: history.parentId, messages: history.messages, conversations: [...items.values()], hasMore: catalog.hasMore });
+					const history = await this.client.history(currentId, signal);
+					this.update({ title: history.title, parentId: history.parentId, messages: history.messages });
+					this.rememberHistory(history);
 				} catch (error) { if (!controller.signal.aborted) { this.update({ error: this.errorText(error) }); } }
 			}
 		} catch (error) {

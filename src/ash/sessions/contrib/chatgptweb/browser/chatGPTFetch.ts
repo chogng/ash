@@ -6,8 +6,14 @@ export function createChatGPTFetch(transport: IChatGPTTransport): typeof fetch {
 	return async (input, init) => {
 		if (typeof input !== 'string') { throw new TypeError('Invalid ChatGPT request'); }
 		let requestBody: string | VSBuffer | undefined;
+		const headers = new Headers(init?.headers);
 		if (typeof init?.body === 'string') { requestBody = init.body; }
 		else if (init?.body instanceof Blob) { requestBody = VSBuffer.wrap(new Uint8Array(await init.body.arrayBuffer())); }
+		else if (init?.body instanceof FormData) {
+			const form = new Request('https://chatgpt.com/', { method: 'POST', body: init.body });
+			headers.set('Content-Type', form.headers.get('Content-Type')!);
+			requestBody = VSBuffer.wrap(new Uint8Array(await form.arrayBuffer()));
+		}
 		else if (init?.body != null) { throw new TypeError('Invalid ChatGPT request body'); }
 		const id = crypto.randomUUID();
 		const signal = init?.signal;
@@ -24,7 +30,7 @@ export function createChatGPTFetch(transport: IChatGPTTransport): typeof fetch {
 		try {
 			const response = await transport.request(id, {
 				path: input, method: (init?.method ?? 'GET') as ChatGPTRequest['method'],
-				headers: Object.fromEntries(new Headers(init?.headers)), body: requestBody,
+				headers: Object.fromEntries(headers), body: requestBody,
 			});
 			signal?.throwIfAborted();
 			if ([204, 205, 304].includes(response.status)) { release(); return new Response(null, response); }

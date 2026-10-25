@@ -242,7 +242,6 @@ import { LanguageFeaturesService } from '../../editor/common/services/languageFe
 import { ILanguageService } from '../../editor/common/languages/language.js';
 import { LanguageService } from '../../editor/common/services/languageService.js';
 import { ILanguageConfigurationService } from '../../editor/common/languages/languageConfigurationRegistry.js';
-import { WorkbenchLanguageFeatures } from '../services/language/browser/workbenchLanguageFeatures.js';
 import { ChatService } from "../services/chat/browser/chatService.js";
 import { IChatService } from "../services/chat/common/chatService.js";
 import { ICodebaseService } from "../../platform/codebase/common/codebaseService.js";
@@ -331,8 +330,6 @@ import { IKeyboardShortcutTroubleshootingService } from "../services/keybinding/
 import { IPreferencesService } from "../services/preferences/common/preferences.js";
 import { PreferencesService } from "../services/preferences/browser/preferencesService.js";
 import "../services/quickinput/browser/quickInputService.js";
-import { ChatContextPickService } from "../services/chat/browser/chatContextPickService.js";
-import { IChatContextPickService } from "../services/chat/common/chatContextService.js";
 import type { IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { BrowserClipboardService } from "../services/clipboard/browser/clipboardService.js";
 import { IClipboardService } from "../../platform/clipboard/common/clipboardService.js";
@@ -608,7 +605,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
 		services.registerInstance(IGlobalExtensionEnablementService, enablement);
-		const enabledExtensions = withEnabledBuiltInExtensions(api.extensions, enablement, extensionManagementService);
+		// PDF reading belongs to the Agents Window, including installed packages and Chat previews.
+		const enabledExtensions = withEnabledBuiltInExtensions(api.extensions, enablement, extensionManagementService, extension => extension.id !== 'ash.pdf-viewer');
 		services.registerInstance(IWorkbenchEnvironmentService, environmentService);
 		const embedderTerminals = services.get(IEmbedderTerminalService);
 		this.window = {
@@ -787,7 +785,6 @@ export class Workbench extends Disposable {
 		services.registerSingleton(IKeybindingEditingService, () => services.createInstance(KeybindingsEditingService));
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 		const bulkEditService = services.get(IBulkEditService);
-		this._register(services.createInstance(WorkbenchLanguageFeatures));
 		// Only the desktop host may inspect directory grants. Web language requests
 		// are authorized by the server for the authenticated workspace.
 		const checkWorkspaceTrust = !!nativeHostApi;
@@ -991,7 +988,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IMenuService, menus);
 		const contextViews = this._register(new BrowserContextViewService(layoutService.activeContainer, layoutService));
 		services.registerInstance(IContextViewService, contextViews);
-		services.registerInstance(IChatContextPickService, new ChatContextPickService());
 		services.registerSingleton(IPreferencesService, () => services.createInstance(PreferencesService));
 		const contextMenus = this._register(createContextMenuService(services));
 		services.registerInstance(IContextMenuService, contextMenus);
@@ -1268,6 +1264,11 @@ export class Workbench extends Disposable {
 			[ViewContainerLocation.AuxiliaryBar, auxiliarybar],
 			[ViewContainerLocation.AgentSidebar, agentSidebar],
 		]);
+		this._register(storage.onWillSaveState(() => {
+			const empty = viewDescriptors.getViewContainers(ViewContainerLocation.AuxiliaryBar).every(container =>
+				viewDescriptors.getViewContainerModel(container.id).activeViewDescriptors.length === 0);
+			storage.store('workbench.layout.auxiliarybar.empty', empty, StorageScope.PROFILE, StorageTarget.MACHINE);
+		}));
 		const panes = this._register(instantiationService.createInstance(PaneCompositePartService, paneParts));
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(instantiationService.createInstance(ViewsService));
@@ -1282,6 +1283,10 @@ export class Workbench extends Disposable {
 		this.restoreActiveViewContainers = async () => {
 			const isStartup = isStartupRestoration;
 			isStartupRestoration = false;
+			// Restore retained containers against ordinary visibility. Revealing a
+			// hidden container during restoration must not discard a maximized startup.
+			const auxiliaryBarMaximized = layout.isAuxiliaryBarMaximized();
+			if (auxiliaryBarMaximized) layout.setAuxiliaryBarMaximized(false);
 			const openings: Promise<unknown>[] = [];
 			for (const [location, part] of paneParts) {
 				if (location === ViewContainerLocation.AgentSidebar && !layout.isPartVisible('agentSidebar')) { continue; }
@@ -1300,7 +1305,8 @@ export class Workbench extends Disposable {
 				openings.push(views.openViewContainer(container.id));
 				if (!visible) { views.closeViewContainer(container.id); }
 			}
-			await Promise.all(openings);
+			try { await Promise.all(openings); }
+			finally { if (auxiliaryBarMaximized) layout.setAuxiliaryBarMaximized(true); }
 			if (isStartup) { performance.mark('ash.workbench.views-restored'); }
 		};
 		// Construct services and Parts while theme resources are in flight. Keep

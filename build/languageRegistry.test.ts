@@ -13,10 +13,13 @@ test('language associations come from package contributions and stale output is 
 	const manifest = resolve(root, 'extensions/demo/package.json');
 	await writeFile(manifest, JSON.stringify({ contributes: { languages: [{ id: 'demo', extensions: ['.demo'], filenames: ['DemoFile'] }] } }));
 	await writeFile(resolve(root, 'extensions/demo/tree-sitter/grammars.json'), JSON.stringify([{ languages: [{ id: 'legacy-demo', editorLanguage: 'demo', editorIds: ['demo'] }] }]));
+	await mkdir(resolve(root, 'extensions/optional'), { recursive: true });
+	await writeFile(resolve(root, 'extensions/optional/package.json'), JSON.stringify({ ashDistribution: 'marketplace', contributes: { languages: [{ id: 'optional-language', extensions: ['.optional'] }] } }));
 	await generateLanguageRegistry({ root });
 	await generateLanguageRegistry({ root, check: true });
 	const generated = await readFile(resolve(root, 'crates/language/src/languages.generated.rs'), 'utf8');
 	assert.match(generated, /"legacy-demo" => "demo"/);
+	assert.doesNotMatch(generated, /optional-language/);
 	assert.match(generated, /filenames: &\["demofile"\]/);
 	await writeFile(manifest, JSON.stringify({ contributes: { languages: [{ id: 'demo', extensions: ['.changed'] }] } }));
 	await assert.rejects(generateLanguageRegistry({ root, check: true }), /Stale language registration/);

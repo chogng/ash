@@ -18,7 +18,7 @@ fn sqlite_projects_persist_records_and_original_command_results() {
     let create = create_request();
     let created = coordinator.apply(create.clone()).unwrap();
     assert_eq!(created.project.revision, 1);
-    coordinator
+    let updated = coordinator
         .apply(ProjectCommandRequest {
             command_id: CommandId::new("rename-project").unwrap(),
             project_id: create.project_id.clone(),
@@ -33,10 +33,51 @@ fn sqlite_projects_persist_records_and_original_command_results() {
     drop(coordinator);
 
     let reopened = ProjectCoordinator::new(Arc::new(SqliteProjectStore::open(&path).unwrap()));
-    assert_eq!(reopened.read(&create.project_id).unwrap().revision, 2);
+    assert_eq!(reopened.read(&create.project_id).unwrap(), updated.project);
     let replay = reopened.apply(create).unwrap();
     assert_eq!(replay.disposition, ProjectCommandDisposition::Replayed);
     assert_eq!(replay.project.revision, 1);
+    assert_eq!(replay.project, created.project);
+}
+
+#[test]
+fn legacy_project_times_remain_unknown_until_a_real_update() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.sqlite3");
+    let coordinator = ProjectCoordinator::new(Arc::new(SqliteProjectStore::open(&path).unwrap()));
+    let created = coordinator.apply(create_request()).unwrap().project;
+    let mut value = serde_json::to_value(created).unwrap();
+    value.as_object_mut().unwrap().remove("createdAtMs");
+    value.as_object_mut().unwrap().remove("updatedAtMs");
+    drop(coordinator);
+    Connection::open(&path)
+        .unwrap()
+        .execute(
+            "UPDATE projects SET record_json = ?1 WHERE project_id = ?2",
+            rusqlite::params![value.to_string(), "project-a"],
+        )
+        .unwrap();
+    let reopened = ProjectCoordinator::new(Arc::new(SqliteProjectStore::open(&path).unwrap()));
+    let legacy = reopened
+        .read(&ProjectId::new("project-a").unwrap())
+        .unwrap();
+    assert_eq!(legacy.created_at_ms, None);
+    assert_eq!(legacy.updated_at_ms, None);
+    let updated = reopened
+        .apply(ProjectCommandRequest {
+            command_id: CommandId::new("update-legacy-project").unwrap(),
+            project_id: legacy.project_id,
+            expected_revision: legacy.revision,
+            command: ProjectCommand::UpdateDetails {
+                name: "Legacy renamed".into(),
+                description: String::new(),
+                materials: None,
+            },
+        })
+        .unwrap()
+        .project;
+    assert_eq!(updated.created_at_ms, None);
+    assert!(updated.updated_at_ms.is_some());
 }
 
 #[test]

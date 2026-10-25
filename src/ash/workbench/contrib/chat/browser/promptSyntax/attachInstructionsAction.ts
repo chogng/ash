@@ -1,3 +1,6 @@
+import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
+import type { IChatContextValueItem } from '../attachments/chatContextPickService.js';
+import type { IChatWidget } from '../chat.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
@@ -7,9 +10,10 @@ import { IQuickInputService } from '../../../../../platform/quickinput/common/qu
 import { filterQuickPickItems } from '../../../../../platform/quickinput/browser/quickInputList.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
-import { pickChatContextItem, type ChatContextSelection, type ChatContextSource } from '../actions/chatContext.js';
+import { pickChatContextItem } from '../actions/chatContext.js';
 
-export class ChatInstructionsPickerPick implements ChatContextSource {
+export class ChatInstructionsPickerPick implements IChatContextValueItem {
+	public readonly type = 'valuePick' as const;
 	public readonly icon = Lxicon.file;
 	public get label(): string { return localize('chat.context.instructions', 'Instructions…'); }
 
@@ -24,7 +28,7 @@ export class ChatInstructionsPickerPick implements ChatContextSource {
 		return this.instructions.isAvailable;
 	}
 
-	public async asAttachment(signal: AbortSignal): Promise<ChatContextSelection | undefined> {
+	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal): Promise<ChatContextAttachment | undefined> {
 		const sessionId = this.sessionId;
 		if (!this.isEnabled() || signal.aborted) { return undefined; }
 		const connection = this.remote.connection;
@@ -46,15 +50,12 @@ export class ChatInstructionsPickerPick implements ChatContextSource {
 			: connection?.kind === 'remote' ? URI.from({ scheme: Schemas.ashRemote, authority: connection.authority, path })
 				: URI.file(path));
 		return {
-			acceptInBackground: selected.background,
-			attachment: {
-				id: `instruction:${path}`,
-				kind: 'instruction',
-				name,
-				resource,
-				// Keep the authorized reference; backend catalog changes and permissions apply at submission.
-				resolve: async () => ({ name, content: path, kind: 'instruction' }),
-			},
+			id: `instruction:${path}`,
+			kind: 'instruction',
+			name,
+			resource,
+			// Keep the authorized reference; backend catalog changes and permissions apply at submission.
+			resolve: async () => ({ name, content: path, kind: 'instruction' }),
 		};
 	}
 }

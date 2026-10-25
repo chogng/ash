@@ -1,11 +1,9 @@
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { IChatContextPickService, picksWithPromiseFn, type IChatContextPickerPickItem } from '../../chat/browser/attachments/chatContextPickService.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { localize } from '../../../../nls.js';
-import {
-	IChatContextPickService,
-	type ChatContextAttachment,
-	type ChatContextPick,
-} from '../../../services/chat/common/chatContextService.js';
+import { type ChatContextAttachment } from '../../../services/chat/common/chatContextService.js';
 import { IDebugService, type IDebugSession, type IDebugVariable } from '../common/debug.js';
 
 /** Offers immutable, explicitly selected Debug snapshots to Chat's existing composer. */
@@ -15,17 +13,17 @@ export class DebugChatContextContribution extends Disposable {
 		@IChatContextPickService contexts: IChatContextPickService,
 	) {
 		super();
+		const label = localize('debug.chatContext', 'Debug context');
 		this._register(
-			contexts.registerPicker({
-				id: 'debug',
-				label: localize('debug.chatContext', 'Debug context'),
+			contexts.registerChatContextItem({
+				type: 'pickerPick', label, icon: Lxicon.bug,
 				isEnabled: () => debug.sessions.some((session) => session.state === 'stopped'),
-				providePicks: (query) => this.picks(query),
+				asPicker: () => ({ placeholder: localize('chat.context.select', 'Select {0}', label), picks: picksWithPromiseFn(query => this.picks(query)) }),
 			}),
 		);
 	}
 
-	private async picks(query: string): Promise<readonly ChatContextPick[]> {
+	private async picks(query: string): Promise<IChatContextPickerPickItem[]> {
 		const session = this.debug.session;
 		const frame = this.debug.getViewModel().focusedStackFrame;
 		if (!session || session.state !== 'stopped' || !frame) return [];
@@ -45,26 +43,24 @@ export class DebugChatContextContribution extends Disposable {
 			scope.variables.map((variable) => `${scope.scope.name}.${variable.name} = ${variable.value}`),
 		);
 		const content = [location, ...variables].join('\n').slice(0, 65536);
-		const picks: ChatContextPick[] = [
+		const frameAttachment = snapshot(session, `${revision}:frame:${frame.id}`, name, content);
+		const picks: IChatContextPickerPickItem[] = [
 			{
 				label: name,
 				detail: location,
-				attachment: snapshot(session, `${revision}:frame:${frame.id}`, name, content),
+				asAttachment: () => frameAttachment,
 			},
 		];
 		for (const scope of scopes)
-			for (const variable of scope.variables)
+			for (const variable of scope.variables) {
+				const attachment = debugVariableContext(session, revision, variable, `${frame.id}:${scope.scope.variablesReference}`);
 				picks.push({
 					label: variable.name,
 					description: scope.scope.name,
 					detail: variable.value.slice(0, 256),
-					attachment: debugVariableContext(
-						session,
-						revision,
-						variable,
-						`${frame.id}:${scope.scope.variablesReference}`,
-					),
+					asAttachment: () => attachment,
 				});
+			}
 		const filter = query.toLocaleLowerCase();
 		return picks
 			.filter((pick) => `${pick.label} ${pick.description ?? ''}`.toLocaleLowerCase().includes(filter))

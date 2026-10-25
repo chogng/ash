@@ -33,7 +33,7 @@ interface RegistrationScope extends DisposableStore {
 	readonly pending: Promise<void>;
 }
 
-/** Projects a live Rust capability into the shared editor registry. Sessions is only a consumer. */
+/** Projects live Rust capabilities admitted by this window's package catalog into its editor registry. */
 export class MainThreadClientEditors extends Disposable {
 	private readonly dormantEditors = this._register(new DisposableMap<string, IDisposable & { readonly identity: string; }>());
 	private readonly registrations = this._register(new DisposableMap<string, RegistrationScope>());
@@ -104,6 +104,9 @@ export class MainThreadClientEditors extends Disposable {
 		const pending: Promise<void>[] = [];
 		for (const runtime of snapshot.extensions) {
 			if (runtime.lifecycle !== 'ready' || runtime.incarnation === undefined) continue;
+			// The backend fleet can serve sibling windows. An absent local package must not
+			// activate a renderer or make an otherwise healthy window report a provider failure.
+			if (!catalog.extensions.some(owner => owner.id === runtime.id || owner.rendererClient?.runtimeId === runtime.id)) continue;
 			for (const registration of runtime.registrations) {
 				if (registration.kind !== 'dataChannel' || !['editor.client.v1', 'editor.resource.v1'].includes(registration.channelId)) continue;
 				const key = `${runtime.id}\0${registration.registrationId}`;

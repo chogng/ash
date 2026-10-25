@@ -4,6 +4,7 @@ import { SerializableGrid, type SerializedGridDescriptor } from '../../base/brow
 import { Emitter, Event } from '../../base/common/event.js';
 import { MutableDisposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { BrowserLayoutService, type ILayoutOffsetInfo } from '../../platform/layout/browser/layoutService.js';
+import { DEFAULT_EMPTY_WINDOW_SIZE } from '../../platform/window/common/window.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import type { LogService } from '../../platform/log/common/logServiceImpl.js';
@@ -17,7 +18,7 @@ import { sessionsPartIds, type SessionsPartId } from '../common/layoutConstants.
 import { Workbench, type IWorkbenchOptions, type IAgentWorkbenchLayoutService, type SessionsPartVisibilityChangeEvent } from './workbench.js';
 import { SessionsLayoutPolicy } from './layoutPolicy.js';
 import { DockedAuxiliaryBarController } from './dockedAuxiliaryBarController.js';
-import { EDITOR_PART_MINIMUM_WIDTH } from './parts/editor/editorPartSizing.js';
+import { EDITOR_PART_DEFAULT_WIDTH, EDITOR_PART_MINIMUM_WIDTH } from './parts/editorPartSizing.js';
 import { Position, isHorizontal, positionToString } from '../../workbench/services/layout/browser/layoutService.js';
 
 /** Selects the desktop layout while the shared Workbench owns window services and Parts. */
@@ -50,14 +51,15 @@ export interface SessionsWorkbenchLayoutState {
 	};
 }
 
-function createDefaultSessionsWorkbenchLayoutState(policy: SessionsLayoutPolicy): SessionsWorkbenchLayoutState {
-	const sizes = policy.getPartSizes();
+function createDefaultSessionsWorkbenchLayoutState(policy: SessionsLayoutPolicy, dimension: IDimension): SessionsWorkbenchLayoutState {
+	const sizes = policy.getPartSizes(dimension.width, dimension.height);
+	const visibility = policy.getPartVisibilityDefaults();
 	return {
 		version: 1,
-		sidebar: { width: sizes.sideBarSize, visible: true },
-		auxiliarybar: { width: sizes.auxiliaryBarSize, visible: false },
-		editor: { width: sizes.editorSize, visible: false },
-		panel: { position: Position.BOTTOM, width: sizes.panelSize, height: sizes.panelSize, visible: false },
+		sidebar: { width: sizes.sideBarSize, visible: visibility.sidebar },
+		auxiliarybar: { width: sizes.auxiliaryBarSize, visible: visibility.auxiliaryBar },
+		editor: { width: EDITOR_PART_DEFAULT_WIDTH, visible: visibility.editor },
+		panel: { position: Position.BOTTOM, width: sizes.panelSize, height: sizes.panelSize, visible: visibility.panel },
 	};
 }
 
@@ -81,7 +83,7 @@ class SessionsWorkbenchLayoutStateModel {
 				visible: storage.getBoolean(SessionsWorkbenchLayoutStorageKeys.AUXILIARYBAR_VISIBLE.key, SessionsWorkbenchLayoutStorageKeys.AUXILIARYBAR_VISIBLE.scope, this.defaults.auxiliarybar.visible),
 			},
 			editor: {
-				width: storedDimension(storage.getNumber(SessionsWorkbenchLayoutStorageKeys.EDITOR_WIDTH.key, SessionsWorkbenchLayoutStorageKeys.EDITOR_WIDTH.scope), this.defaults.editor.width),
+				width: storedEditorWidth(storage.getNumber(SessionsWorkbenchLayoutStorageKeys.EDITOR_WIDTH.key, SessionsWorkbenchLayoutStorageKeys.EDITOR_WIDTH.scope), this.defaults.editor.width),
 				visible: storage.getBoolean(SessionsWorkbenchLayoutStorageKeys.EDITOR_VISIBLE.key, SessionsWorkbenchLayoutStorageKeys.EDITOR_VISIBLE.scope, this.defaults.editor.visible),
 			},
 			panel: {
@@ -175,6 +177,11 @@ function storedDimension(value: number | undefined, fallback: number): number {
 	return value !== undefined && Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
+function storedEditorWidth(value: number | undefined, fallback: number): number {
+	// Widths captured while the editor was hidden are not a usable restore size.
+	return value !== undefined && Number.isFinite(value) && value >= EDITOR_PART_MINIMUM_WIDTH ? value : fallback;
+}
+
 function storedPanelPosition(value: string | undefined, fallback: Position): Position {
 	switch (value) {
 		case 'left': return Position.LEFT;
@@ -186,8 +193,6 @@ function storedPanelPosition(value: string | undefined, fallback: Position): Pos
 }
 
 const SESSIONS_LAYOUT_PRIORITY = 'high' as const;
-const DEFAULT_LAYOUT_WIDTH = 1_024;
-const DEFAULT_LAYOUT_HEIGHT = 768;
 
 function createSessionsWorkbenchGridDescriptor(
 	views: ReadonlyMap<SessionsPartId, WorkbenchPartView<SessionsPartId>>,
@@ -262,7 +267,7 @@ function resolveSessionsInitialDimension(container: HTMLElement, dimension: IDim
 		assertDimension(dimension);
 		if (dimension.width > 0 && dimension.height > 0) return new Dimension(dimension.width, dimension.height);
 	}
-	return new Dimension(container.clientWidth > 0 ? container.clientWidth : DEFAULT_LAYOUT_WIDTH, container.clientHeight > 0 ? container.clientHeight : DEFAULT_LAYOUT_HEIGHT);
+	return new Dimension(container.clientWidth > 0 ? container.clientWidth : DEFAULT_EMPTY_WINDOW_SIZE.width, container.clientHeight > 0 ? container.clientHeight : DEFAULT_EMPTY_WINDOW_SIZE.height);
 }
 
 function parseSessionsPartId(value: unknown): SessionsPartId {
@@ -381,7 +386,10 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		this.cardDomNode.className = 'ash-sessions-content-card';
 		this.cardDomNode.setAttribute('aria-hidden', 'true');
 		this.domNode.append(this.cardDomNode);
-		this.stateModel = new SessionsWorkbenchLayoutStateModel(storageService, options.initialState ?? createDefaultSessionsWorkbenchLayoutState(this.layoutPolicy));
+		this.stateModel = new SessionsWorkbenchLayoutStateModel(
+			storageService,
+			options.initialState ?? createDefaultSessionsWorkbenchLayoutState(this.layoutPolicy, this.initialDimension),
+		);
 		const state = this.stateModel.state;
 		this.panelPosition = state.panel.position;
 		this.panelWidth = state.panel.width;
@@ -493,7 +501,11 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 			this.view('editor').part as EditorPart,
 			this.view('auxiliarybar'),
 			() => this.detailsWidth,
-			width => this.resizePart('auxiliarybar', new Dimension(Math.min(460, Math.max(180, width)), this.getPartSize('auxiliarybar').height)),
+			width => {
+				const details = this.view('auxiliarybar');
+				const constrainedWidth = Math.min(details.maximumWidth, Math.max(details.minimumWidth, width));
+				this.resizePart('auxiliarybar', new Dimension(constrainedWidth, this.getPartSize('auxiliarybar').height));
+			},
 		);
 		this.dockedHandle.value = this.dockedAuxiliaryBar;
 		this.restorePartVisibility();

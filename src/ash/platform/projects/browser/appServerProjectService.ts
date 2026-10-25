@@ -22,7 +22,10 @@ export class AppServerProjectService implements IProjectService {
 	public async list(): Promise<readonly ProjectSummary[]> {
 		try {
 			const result = await appServerRequest(this.connection, 'project/list', {});
-			return result.projects.map(project => ({ id: project.projectId, revision: project.revision, name: project.name, archived: project.status === 'archived', sessionCount: project.sessionCount }));
+			return result.projects.map(project => ({
+				id: project.projectId, revision: project.revision, name: project.name, archived: project.status === 'archived', sessionCount: project.sessionCount,
+				createdAtMs: project.createdAtMs ?? undefined, updatedAtMs: project.updatedAtMs ?? undefined,
+			}));
 		} catch (error) { throw projectError(error); }
 	}
 
@@ -68,6 +71,7 @@ export class AppServerProjectService implements IProjectService {
 function fromDto(project: ProjectDto): Project {
 	return {
 		id: project.projectId, revision: project.revision, name: project.name, archived: project.status === 'archived',
+		createdAtMs: project.createdAtMs ?? undefined, updatedAtMs: project.updatedAtMs ?? undefined,
 		description: project.description, sessionIds: project.sessionIds, sessionCount: project.sessionIds.length,
 		materials: project.materials.map(material => ({ name: material.name, kind: material.kind, resource: URI.parse(material.path) })),
 	};

@@ -5,10 +5,12 @@ import { isAncestorOfActiveElement } from '../../base/browser/focus.js';
 import { Emitter } from "../../base/common/event.js";
 import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { isRecord } from "../../base/common/types.js";
-import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
+import { IConfigurationService, isConfigured } from "../../platform/configuration/common/configuration.js";
+import { ChatAIDisabledSettingId } from '../../platform/chat/common/chatSettings.js';
 import { BrowserLayoutService, type ILayoutOffsetInfo } from "../../platform/layout/browser/layoutService.js";
 import { IStorageService, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
 import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
+import { DEFAULT_WORKSPACE_WINDOW_SIZE } from '../../platform/window/common/window.js';
 import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from "../common/configuration.js";
 import { Position, isHorizontal, positionFromString, positionToString, type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/browser/layoutService.js";
 import type { Part } from "./part.js";
@@ -20,12 +22,10 @@ const WINDOW_RIGHT_EDGE_INSET = 4;
 // Adjacent frames share the gutter; the resize sash uses its full width.
 const PART_GUTTER_HALF = 2;
 const PART_GUTTER_SIZE = PART_GUTTER_HALF * 2;
-const DEFAULT_LAYOUT_WIDTH = 1_024;
-const DEFAULT_LAYOUT_HEIGHT = 768;
-const DEFAULT_SIDEBAR_WIDTH = 220;
-const DEFAULT_AUXILIARYBAR_WIDTH = 380;
+const DEFAULT_SIDEBAR_WIDTH = 300;
+const DEFAULT_AUXILIARYBAR_WIDTH = 300;
 const DEFAULT_AGENT_SIDEBAR_WIDTH = 280;
-const DEFAULT_PANEL_HEIGHT = 200;
+const DEFAULT_PANEL_HEIGHT = 300;
 const DEFAULT_PANEL_WIDTH = 300;
 const EDITOR_LAYOUT_PRIORITY = "high" as const;
 
@@ -161,7 +161,14 @@ export class WorkbenchLayout
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.initialDimension = resolveInitialDimension(container, options.initialDimension);
 		validateWorkbenchDefaultLayout(options.defaultLayout);
-		this.stateModel = new WorkbenchLayoutStateModel(storageService, options.workbenchState, options.defaultLayout, positionFromString(configurationService.getValue(WorkbenchConfiguration.panelDefaultLocation)));
+		this.stateModel = new WorkbenchLayoutStateModel(
+			storageService,
+			options.workbenchState,
+			options.defaultLayout,
+			positionFromString(configurationService.getValue(WorkbenchConfiguration.panelDefaultLocation)),
+			this.initialDimension,
+			configurationService,
+		);
 		const panel = this.stateModel.state.panel;
 		this.panelPosition = panel.position;
 		this.panelRestoredWidth = panel.width;
@@ -258,8 +265,14 @@ export class WorkbenchLayout
 			this.projectPartFrameInsets();
 			this.publishPartVisibility();
 		});
+		if (this.stateModel.shouldMaximizeAuxiliaryBar) {
+			this.setAuxiliaryBarMaximized(true);
+		}
 		this._register(this.storageService.onWillSaveState(() => this.saveState()));
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(WorkbenchConfiguration.secondarySideBarForceMaximized)) {
+				this.setAuxiliaryBarMaximized(this.configurationService.getValue(WorkbenchConfiguration.secondarySideBarForceMaximized));
+			}
 			if (event.affectsConfiguration(WorkbenchConfiguration.panelDefaultLocation)) {
 				this.stateModel.defaultPanelPosition = positionFromString(this.configurationService.getValue(WorkbenchConfiguration.panelDefaultLocation));
 			}
@@ -408,7 +421,9 @@ export class WorkbenchLayout
 	/** Re-applies the layout state from the currently selected storage workspace. */
 	restoreWorkspaceState(workbenchState: WorkbenchState = this.stateModel.workbenchState): void {
 		this.stateModel.workbenchState = workbenchState;
+		const maximizeAuxiliaryBar = this.stateModel.shouldMaximizeAuxiliaryBar;
 		this.applyState(this.stateModel.state);
+		this.setAuxiliaryBarMaximized(maximizeAuxiliaryBar);
 		this.saveState();
 	}
 
@@ -450,6 +465,7 @@ export class WorkbenchLayout
 				this.resizePart('panel', this.panelDimension(isHorizontal(this.panelPosition) ? restore.layout.panel.height : restore.layout.panel.width));
 			}
 		}
+		this.stateModel.auxiliaryBarWasLastMaximized = maximized;
 		this.auxiliaryBarMaximizedEmitter.fire();
 		return true;
 	}
@@ -471,8 +487,9 @@ export class WorkbenchLayout
 		if (partIds.some(partId => partId === 'editor' || partId === 'panel' || partId === 'sidebar' || partId === 'agentSidebar')) {
 			this.setAuxiliaryBarMaximized(false);
 		}
-		const reopenMaximizedPanel = partIds.includes('panel') && !partIds.includes('editor') &&
-			!this.isPartVisible('panel') && this.stateModel.panelWasLastMaximized;
+		const panelOpensMaximized = this.configurationService.getValue(WorkbenchConfiguration.panelOpensMaximized);
+		const reopenMaximizedPanel = partIds.includes('panel') && !partIds.includes('editor') && !this.isPartVisible('panel') &&
+			(panelOpensMaximized === 'always' || panelOpensMaximized === 'preserve' && this.stateModel.panelWasLastMaximized);
 		const panelSize = partIds.includes('editor') ? this.panelSizeBeforeMaximize : undefined;
 		this.updatePartsVisibility(partIds, true);
 		if (panelSize !== undefined) {
@@ -753,8 +770,8 @@ function resolveInitialDimension(
 	}
 	const measured = measureWorkbenchContainer(container);
 	return new Dimension(
-		measured.width > 0 ? measured.width : DEFAULT_LAYOUT_WIDTH,
-		measured.height > 0 ? measured.height : DEFAULT_LAYOUT_HEIGHT,
+		measured.width > 0 ? measured.width : DEFAULT_WORKSPACE_WINDOW_SIZE.width,
+		measured.height > 0 ? measured.height : DEFAULT_WORKSPACE_WINDOW_SIZE.height,
 	);
 }
 
@@ -799,6 +816,8 @@ function assertDimension(dimension: IDimension): void {
 
 function createDefaultWorkbenchLayoutState(
 	parts: WorkbenchDefaultLayout["parts"] | undefined,
+	dimension: IDimension,
+	forceMaximized: boolean,
 ): WorkbenchLayoutState {
 	if (parts !== undefined && !isRecord(parts)) {
 		throw new TypeError("Workbench default layout Parts must be an object");
@@ -806,11 +825,11 @@ function createDefaultWorkbenchLayoutState(
 	return {
 		version: 3,
 		sidebar: {
-			width: DEFAULT_SIDEBAR_WIDTH,
+			width: Math.min(DEFAULT_SIDEBAR_WIDTH, dimension.width / 4),
 			visible: defaultPartVisibility(parts, "sidebar", true),
 		},
 		auxiliarybar: {
-			width: DEFAULT_AUXILIARYBAR_WIDTH,
+			width: forceMaximized ? Math.max(DEFAULT_AUXILIARYBAR_WIDTH, dimension.width / 2) : Math.min(DEFAULT_AUXILIARYBAR_WIDTH, dimension.width / 4),
 			visible: defaultPartVisibility(parts, "auxiliarybar", true),
 		},
 		agentSidebar: {
@@ -819,8 +838,8 @@ function createDefaultWorkbenchLayoutState(
 		},
 		panel: {
 			position: Position.BOTTOM,
-			width: DEFAULT_PANEL_WIDTH,
-			height: DEFAULT_PANEL_HEIGHT,
+			width: dimension.width / 4,
+			height: dimension.height / 3,
 			visible: defaultPartVisibility(parts, "panel", true),
 		},
 	};
@@ -913,7 +932,41 @@ class WorkbenchLayoutStateModel {
 		public workbenchState: WorkbenchState,
 		private readonly defaultLayout: WorkbenchDefaultLayout | undefined,
 		public defaultPanelPosition: Position,
+		private readonly initialDimension: IDimension,
+		private readonly configurationService: IConfigurationService,
 	) { }
+
+	get auxiliaryBarWasLastMaximized(): boolean | undefined {
+		const key = WorkbenchLayoutStorageKeys.AUXILIARYBAR_WAS_LAST_MAXIMIZED;
+		return this.storageService.getBoolean(key.key, key.scope);
+	}
+
+	set auxiliaryBarWasLastMaximized(maximized: boolean) {
+		storeLayoutValue(this.storageService, WorkbenchLayoutStorageKeys.AUXILIARYBAR_WAS_LAST_MAXIMIZED, maximized);
+	}
+
+	get shouldMaximizeAuxiliaryBar(): boolean {
+		if (this.configurationService.getValue(WorkbenchConfiguration.secondarySideBarForceMaximized)) return true;
+		const saved = this.auxiliaryBarWasLastMaximized;
+		if (saved !== undefined) return saved;
+		if (!this.storageService.isNew(StorageScope.WORKSPACE)) return false;
+		const visibility = this.configurationService.getValue(WorkbenchConfiguration.secondarySideBarDefaultVisibility);
+		return visibility === 'maximized' || visibility === 'maximizedInWorkspace' && this.workbenchState !== WorkbenchState.EMPTY;
+	}
+
+	private get defaultAuxiliaryBarVisible(): boolean {
+		if (this.configurationService.getValue(WorkbenchConfiguration.secondarySideBarForceMaximized)) return true;
+		const visibility = this.configurationService.getValue(WorkbenchConfiguration.secondarySideBarDefaultVisibility);
+		if (visibility === 'hidden') return false;
+		const configured = this.configurationService.inspect(WorkbenchConfiguration.secondarySideBarDefaultVisibility);
+		if (!isConfigured(configured) && configured.memoryValue === undefined &&
+			this.storageService.getBoolean('workbench.layout.auxiliarybar.empty', StorageScope.PROFILE, false)) {
+			return false;
+		}
+		// New profiles expose Chat even in an empty window, unless AI is disabled.
+		if (this.storageService.isNew(StorageScope.APPLICATION) && !this.configurationService.getValue<boolean>(ChatAIDisabledSettingId)) return true;
+		return visibility === 'visible' || visibility === 'maximized' || this.workbenchState !== WorkbenchState.EMPTY;
+	}
 
 	get panelWasLastMaximized(): boolean {
 		const key = WorkbenchLayoutStorageKeys.PANEL_WAS_LAST_MAXIMIZED;
@@ -926,15 +979,15 @@ class WorkbenchLayoutStateModel {
 
 	get state(): WorkbenchLayoutState {
 		const storage = this.storageService;
+		const forceMaximized = this.configurationService.getValue<boolean>(WorkbenchConfiguration.secondarySideBarForceMaximized);
 		const fallbackParts = {
-			sidebar: this.workbenchState !== WorkbenchState.EMPTY,
-			auxiliarybar: this.workbenchState !== WorkbenchState.EMPTY,
+			sidebar: this.workbenchState !== WorkbenchState.EMPTY && !forceMaximized,
+			auxiliarybar: this.defaultAuxiliaryBarVisible,
 			agentSidebar: false,
 			panel: false,
 		} as const satisfies NonNullable<WorkbenchDefaultLayout["parts"]>;
-		const defaults = this.shouldApplyDefaultLayout(storage)
-			? createDefaultWorkbenchLayoutState({ ...fallbackParts, ...this.defaultLayout?.parts })
-			: createDefaultWorkbenchLayoutState(fallbackParts);
+		const parts = this.shouldApplyDefaultLayout(storage) ? { ...fallbackParts, ...this.defaultLayout?.parts } : fallbackParts;
+		const defaults = createDefaultWorkbenchLayoutState(parts, this.initialDimension, forceMaximized);
 		return {
 			version: 3,
 			sidebar: {
@@ -1079,6 +1132,11 @@ interface WorkbenchLayoutStorageKey {
 }
 
 const WorkbenchLayoutStorageKeys = {
+	AUXILIARYBAR_WAS_LAST_MAXIMIZED: {
+		key: 'workbench.layout.auxiliarybar.wasLastMaximized',
+		scope: StorageScope.WORKSPACE,
+		target: StorageTarget.MACHINE,
+	},
 	SIDEBAR_WIDTH: {
 		key: "workbench.layout.sidebar.width",
 		scope: StorageScope.PROFILE,

@@ -26,6 +26,8 @@ import { IThemeService } from '../../../src/ash/platform/theme/common/themeServi
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/toolbar/toolbar.css';
 import { bindTestColorTheme } from '../../fixtures/browser/themeFixture.js';
+import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
+import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 
 const locale = new URLSearchParams(location.search).get('locale') ?? 'en';
 setNlsMessages(locale, locale === 'zh-CN' ? { ash: { ...editorMessages.ash, ...workbenchMessages.ash } } : {});
@@ -86,6 +88,7 @@ window.pdfExtensionTest = {
 		await pane.setInput(input, new AbortController().signal);
 	},
 	async verbosity(enabled: boolean) { await services.get(IConfigurationService).updateValue('accessibility.verbosity.resourceEditor', enabled); },
+	setTheme(theme: 'dark' | 'hcDark' | 'hcLight') { (services.get(IThemeService) as TestThemeService).setColorTheme(theme === 'hcDark' ? highContrastDarkColorTheme : theme === 'hcLight' ? highContrastLightColorTheme : darkColorTheme); },
 	previewChat() {
 		chat?.dispose(); pane?.dispose(); pane = undefined;
 		chat = services.createInstance(ChatAttachmentsContentPart, { ownerDocument: document, variables: [{ type: 'resource', resource: uri, name: 'paper.pdf', presentation: 'document', mimeType: 'application/pdf' }], readResource: async () => new Blob([bytes], { type: 'application/pdf' }) });
@@ -102,5 +105,5 @@ window.pdfExtensionTest = {
 };
 
 declare global {
-	interface Window { pdfExtensionTest: { accessible(help?: boolean): string; verbosity(enabled: boolean): Promise<void>; previewChat(): void; available(): boolean; enable(value: boolean): Promise<void>; open(readOnly?: boolean): Promise<void>; saved(): Promise<{ annotations: unknown[]; } | undefined>; unchanged(): Promise<boolean>; close(): void; dispose(): void; }; }
+	interface Window { pdfExtensionTest: { setTheme(theme: 'dark' | 'hcDark' | 'hcLight'): void; accessible(help?: boolean): string; verbosity(enabled: boolean): Promise<void>; previewChat(): void; available(): boolean; enable(value: boolean): Promise<void>; open(readOnly?: boolean): Promise<void>; saved(): Promise<{ annotations: unknown[]; } | undefined>; unchanged(): Promise<boolean>; close(): void; dispose(): void; }; }
 }

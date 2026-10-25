@@ -67,7 +67,8 @@ export class ChatContextUsageWidget extends Disposable {
 		this.update(undefined);
 	}
 
-	update(usage: ChatContextUsage | undefined): void {
+	/** Hosts can reserve the meter's position before the first usage snapshot arrives. */
+	update(usage: ChatContextUsage | undefined, showWhenEmpty = false): void {
 		if (this.isDisposed) return;
 		this.usage = usage;
 		const capacity = usage && getContextInputBudget(usage);
@@ -76,7 +77,7 @@ export class ChatContextUsageWidget extends Disposable {
 		this.value.classList.toggle('empty', filled === 0);
 		this.value.setAttribute('stroke-dasharray', `${filled} ${100 - filled}`);
 		this.button.enabled = usage !== undefined;
-		this.button.hidden = usage === undefined;
+		this.button.hidden = usage === undefined && !showWhenEmpty;
 		this.domNode.setAttribute('aria-label', this.label);
 		this.hoverContent.textContent = this.tooltip;
 		this.hover.update(this.details.value ? undefined : this.hoverContent);
@@ -133,7 +134,7 @@ export class ChatContextUsageWidget extends Disposable {
 
 	private get label(): string {
 		const usage = this.usage;
-		if (!usage) return localize('chat.input.contextUsage', 'Context usage');
+		if (!usage) return localize('chat.input.contextUsageUnavailable', 'Context usage is not available yet');
 		const budget = getContextInputBudget(usage);
 		return budget !== undefined
 			? localize('chat.input.contextRingLabel', 'Context budget: {0}%, estimated input {1} of {2} tokens', Math.round(usage.estimatedTokens / budget * 100), usage.estimatedTokens.toLocaleString(), budget.toLocaleString())

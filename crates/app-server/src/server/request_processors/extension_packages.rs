@@ -443,6 +443,14 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
         result(&extension_packages_projection::search_result(found))
     }
 
+    pub(super) fn extension_recommendations_environment(
+        &self,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let _: EmptyParams = decode(params)?;
+        result(&super::extension_recommendations::environment())
+    }
+
     pub(super) fn extension_packages_get(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ExtensionsGetParams = decode(params)?;
         let details = self

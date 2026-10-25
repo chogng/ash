@@ -1,6 +1,6 @@
 import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
-import { createJsonCompletionProvider } from '../../../language/common/jsonLanguageFeatures.js';
+import { createJsonCompletionProvider } from '../../../../../../../test/fixtures/jsonLanguageFeatures.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { LanguageCompletionTriggerKind } from '../../../../../editor/common/languages.js';

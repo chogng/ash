@@ -41,7 +41,7 @@ for (const [name, value] of Object.entries({
 
 const { Dimension } = await import("../../../base/browser/dom.js");
 const { Lxicon } = await import("../../../base/common/lxicons.js");
-const { IStorageService, StorageScope, WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
+const { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
 const { WorkbenchState } = await import("../../../platform/workspace/common/workspace.js");
 const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
 const { MenuId, IMenuService } = await import(
@@ -132,6 +132,7 @@ type WorkbenchLayoutOptions =
 		readonly activityBarLocation?: import('../../../workbench/common/configuration.js').ActivityBarPosition;
 		readonly panelDefaultLocation?: import('../../../workbench/common/configuration.js').PanelLocation;
 		readonly sideBarLocation?: import('../../../workbench/common/configuration.js').SideBarLocation;
+		readonly configurationValues?: Record<string, unknown>;
 	};
 type WorkbenchPartInstance =
 	import("../../../workbench/browser/part.js").Part;
@@ -150,7 +151,7 @@ class TestPart extends Part {
 	override get minimumWidth(): number {
 		if (this.id === "activitybar") return 48;
 		return this.id === "sidebar" || this.id === "auxiliarybar" || this.id === "agentSidebar"
-			? 180
+			? 170
 			: this.id === "editor"
 				? 120
 				: 0;
@@ -158,9 +159,7 @@ class TestPart extends Part {
 
 	override get maximumWidth(): number {
 		if (this.id === "activitybar") return 48;
-		return this.id === "sidebar" || this.id === "auxiliarybar" || this.id === "agentSidebar"
-			? 600
-			: Number.POSITIVE_INFINITY;
+		return Number.POSITIVE_INFINITY;
 	}
 
 	override get minimumHeight(): number {
@@ -198,8 +197,9 @@ function createLayoutHarness(
 	ownerDocument.body.append(container);
 	disposables.add(toDisposable(() => container.remove()));
 
-	const { storageService, layoutStyle, activityBarLocation, sideBarLocation, panelDefaultLocation, ...layoutOptions } = options;
+	const { storageService, layoutStyle, activityBarLocation, sideBarLocation, panelDefaultLocation, configurationValues, ...layoutOptions } = options;
 	const configuration = disposables.add(new InMemoryConfigurationService());
+	for (const [key, value] of Object.entries(configurationValues ?? {})) void configuration.updateValue(key, value);
 	if (layoutStyle !== undefined) {
 		void configuration.updateValue(WorkbenchConfiguration.layoutStyle, layoutStyle);
 	}
@@ -222,6 +222,8 @@ function createLayoutHarness(
 	const services = disposables.add(createTestEditorServices(configuration, undefined, ownerDocument, storage));
 	const layout = disposables.add(services.createInstance(WorkbenchLayout, container, {
 		workbenchState: WorkbenchState.FOLDER,
+		// Topology tests use a fixed viewport; the startup fallback test opts out.
+		initialDimension: new Dimension(1_024, 768),
 		...layoutOptions,
 	}));
 	services.registerInstance(IWorkbenchLayoutService, layout);
@@ -516,7 +518,7 @@ test("Workbench pane sashes snap closed while Auxiliary Bar stops at its minimum
 	harness.disposables.add(createTestWorkbenchContextKeysHandler(contextKeys, { layoutService: harness.layout }));
 	harness.layout.layout(new Dimension(1_200, 800));
 
-	dragWorkbenchSash(dom.window, harness.container, "sidebar", 0, -140);
+	dragWorkbenchSash(dom.window, harness.container, "sidebar", 0, -harness.layout.getPartSize('sidebar').width);
 	assert.equal(harness.layout.isPartVisible("sidebar"), false);
 	assert.equal(contextKeys.getValue("sideBarVisible"), false);
 	dragWorkbenchSash(dom.window, harness.container, "sidebar", 0, 110);
@@ -527,11 +529,11 @@ test("Workbench pane sashes snap closed while Auxiliary Bar stops at its minimum
 	assert.equal(contextKeys.getValue("auxiliaryBarVisible"), true);
 	const auxiliaryFrame = harness.container.querySelector<HTMLElement>("[data-part='auxiliarybar']")!.parentElement!;
 	const frameInsets = (Number.parseFloat(auxiliaryFrame.style.paddingLeft) || 0) + (Number.parseFloat(auxiliaryFrame.style.paddingRight) || 0);
-	assert.equal(harness.layout.getPartSize("auxiliarybar").width, 180 + frameInsets);
+	assert.equal(harness.layout.getPartSize("auxiliarybar").width, 170 + frameInsets);
 	dragWorkbenchSash(dom.window, harness.container, "auxiliarybar", 1, -110);
 	assert.equal(harness.layout.isPartVisible("auxiliarybar"), true);
 
-	dragWorkbenchSash(dom.window, harness.container, "panel", 0, 170);
+	dragWorkbenchSash(dom.window, harness.container, "panel", 0, harness.layout.getPartSize('panel').height);
 	assert.equal(harness.layout.isPartVisible("panel"), false);
 	assert.equal(contextKeys.getValue("panelVisible"), false);
 	dragWorkbenchSash(dom.window, harness.container, "panel", 0, -50);
@@ -639,8 +641,8 @@ test('Panel position commands preserve visibility, both axis sizes, focus and sc
 		assert.equal(dom.window.document.activeElement, input);
 		assert.equal(harness.layout.isPartVisible('panel'), true);
 		if (position === Position.LEFT || position === Position.RIGHT) {
-			assert.equal(harness.layout.getPartSize('panel').width, 300);
-			harness.layout.resizePart('panel', new Dimension(300, 800));
+			assert.equal(harness.layout.getPartSize('panel').width, 256);
+			harness.layout.resizePart('panel', new Dimension(256, 800));
 		} else {
 			assert.equal(harness.layout.getPartSize('panel').height, 180);
 		}
@@ -691,7 +693,7 @@ test('maximized Panel survives configuration changes and restores its saved heig
 		editorVisible: harness.layout.isPartVisible('editor'),
 		contextMaximized: contextKeys.getValue('panelMaximized'),
 		savedPanel: harness.layout.state.panel,
-	}, { maximized: true, editorVisible: false, contextMaximized: true, savedPanel: { position: Position.BOTTOM, width: 300, height: 180, visible: true } });
+	}, { maximized: true, editorVisible: false, contextMaximized: true, savedPanel: { position: Position.BOTTOM, width: 256, height: 180, visible: true } });
 
 	await commands.executeCommand('workbench.action.toggleMaximizedPanel');
 	assert.equal(harness.layout.getPartSize('panel').height, 180);
@@ -770,8 +772,8 @@ test('Auxiliary Bar commands restore dimensions, hidden Parts and Panel maximiza
 		assert.equal(harness.layout.isPartVisible('editor'), true);
 		harness.layout.toggleMaximizedAuxiliaryBar();
 		harness.layout.restoreWorkspaceState();
-		assert.equal(harness.layout.isAuxiliaryBarMaximized(), false);
-		assert.equal(harness.layout.isPartVisible('editor'), true);
+		assert.equal(harness.layout.isAuxiliaryBarMaximized(), true);
+		assert.equal(harness.layout.isPartVisible('editor'), false);
 	} finally {
 		dom.window.close();
 	}
@@ -839,9 +841,9 @@ test("Workbench layout state is versioned and excludes topology", () => {
 	assert.deepEqual(state, {
 		version: 3,
 		sidebar: { width: 250, visible: true },
-		auxiliarybar: { width: 380, visible: false },
+		auxiliarybar: { width: 256, visible: false },
 		agentSidebar: { width: 300, visible: true },
-		panel: { position: Position.BOTTOM, width: 300, height: 180, visible: true },
+		panel: { position: Position.BOTTOM, width: 256, height: 180, visible: true },
 	});
 	assert.equal("children" in state, false);
 
@@ -859,21 +861,21 @@ test("Workbench layout derives flexible editor size from the container", () => {
 
 	assert.deepEqual(
 		harness.layout.getPartSize("sidebar"),
-		new Dimension(220, 730),
+		new Dimension(300, 730),
 	);
 	assert.deepEqual(
 		harness.layout.getPartSize("auxiliarybar"),
-		new Dimension(380, 730),
+		new Dimension(300, 730),
 	);
 	assert.deepEqual(
 		harness.layout.getPartSize("editor"),
-		new Dimension(548, 530),
+		new Dimension(548, 730 - 800 / 3),
 	);
-	assert.equal(harness.layout.getPartSize("panel").height, 200);
+	assert.equal(harness.layout.getPartSize("panel").height, 800 / 3);
 
 	harness.layout.layout(new Dimension(1_300, 800));
-	assert.equal(harness.layout.getPartSize("sidebar").width, 220);
-	assert.equal(harness.layout.getPartSize("auxiliarybar").width, 380);
+	assert.equal(harness.layout.getPartSize("sidebar").width, 300);
+	assert.equal(harness.layout.getPartSize("auxiliarybar").width, 300);
 	assert.equal(harness.layout.getPartSize("editor").width, 648);
 
 	harness.disposables.dispose();
@@ -990,6 +992,125 @@ test("Git sidebar uses its preferred reset width and merges a lone view into the
 	dom.window.close();
 });
 
+test('Workbench uses the product window size when the startup container has no geometry', () => {
+	const dom = new JSDOM('');
+	const harness = createLayoutHarness(dom.window.document, { initialDimension: undefined });
+	harness.layout.layout(new Dimension(1200, 800));
+	assert.equal(harness.layout.getPartSize('sidebar').width, 300);
+	assert.equal(harness.layout.getPartSize('panel').height, 800 / 3);
+	harness.disposables.dispose();
+	dom.window.close();
+});
+
+test('Workbench initializes widths from the viewport without rescaling restored dimensions', async () => {
+	const dom = new JSDOM('', { url: 'https://layout-sizing.test' });
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'sizing', backend: dom.window.localStorage, flushInterval: 0 });
+	for (const width of [800, 1600]) {
+		const harness = createLayoutHarness(dom.window.document, { initialDimension: new Dimension(width, 900) });
+		harness.layout.layout(new Dimension(width, 900));
+		assert.equal(harness.layout.getPartSize('sidebar').width, Math.min(300, width / 4));
+		assert.equal(harness.layout.getPartSize('auxiliarybar').width, Math.min(300, width / 4));
+		harness.disposables.dispose();
+	}
+	const first = createLayoutHarness(dom.window.document, { storageService: storage, initialDimension: new Dimension(1600, 900) });
+	first.layout.layout(new Dimension(1600, 900));
+	first.layout.resizePart('sidebar', new Dimension(420, 800));
+	first.layout.hidePart('auxiliarybar');
+	await storage.flush(WillSaveStateReason.SHUTDOWN);
+	first.disposables.dispose();
+	const restored = createLayoutHarness(dom.window.document, { storageService: storage, initialDimension: new Dimension(1000, 700) });
+	restored.layout.layout(new Dimension(1000, 700));
+	assert.equal(restored.layout.getPartSize('sidebar').width, 420);
+	assert.equal(restored.layout.isPartVisible('auxiliarybar'), false);
+	restored.disposables.dispose();
+	dom.window.close();
+});
+
+test('secondary side bar startup policies distinguish empty windows, workspaces, and disabled AI', () => {
+	for (const [visibility, emptyVisible, folderVisible] of [
+		['hidden', false, false], ['visibleInWorkspace', false, true], ['visible', true, true],
+		['maximizedInWorkspace', false, true], ['maximized', true, true],
+	] as const) {
+		for (const workbenchState of [WorkbenchState.EMPTY, WorkbenchState.FOLDER]) {
+			const dom = new JSDOM('');
+			const harness = createLayoutHarness(dom.window.document, {
+				workbenchState, initialDimension: new Dimension(1200, 800),
+				configurationValues: { 'chat.disableAIFeatures': true, 'workbench.secondarySideBar.defaultVisibility': visibility },
+			});
+			const visible = workbenchState === WorkbenchState.EMPTY ? emptyVisible : folderVisible;
+			assert.equal(harness.layout.isPartVisible('auxiliarybar'), visible, `${visibility}, ${workbenchState}`);
+			assert.equal(harness.layout.isAuxiliaryBarMaximized(), visible && visibility.startsWith('maximized'));
+			if (harness.layout.isAuxiliaryBarMaximized()) {
+				assert.equal(harness.layout.isPartVisible('editor'), false);
+				harness.layout.toggleMaximizedAuxiliaryBar();
+				assert.equal(harness.layout.isPartVisible('editor'), true);
+			}
+			harness.disposables.dispose();
+			dom.window.close();
+		}
+	}
+});
+
+test('forced secondary side bar maximization overrides saved visibility and responds to configuration', async () => {
+	const dom = new JSDOM('', { url: 'https://layout-force.test' });
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'force', backend: dom.window.localStorage, flushInterval: 0 });
+	storage.store('workbench.layout.auxiliarybar.visible', false, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	const harness = createLayoutHarness(dom.window.document, {
+		storageService: storage, initialDimension: new Dimension(1200, 800),
+		configurationValues: { 'workbench.secondarySideBar.forceMaximized': true },
+	});
+	assert.equal(harness.layout.isAuxiliaryBarMaximized(), true);
+	await harness.configuration.updateValue(WorkbenchConfiguration.secondarySideBarForceMaximized, false);
+	assert.equal(harness.layout.isAuxiliaryBarMaximized(), false);
+	assert.equal(harness.layout.isPartVisible('editor'), true);
+	harness.disposables.dispose();
+	dom.window.close();
+});
+
+test('Panel reveal honors always, never, and preserve instead of overriding the preference with saved state', () => {
+	for (const mode of ['always', 'never', 'preserve'] as const) {
+		for (const saved of [true, false]) {
+			const dom = new JSDOM('', { url: 'https://panel-policy.test' });
+			using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'panel', backend: dom.window.localStorage, flushInterval: 0 });
+			storage.store('workbench.layout.panel.wasLastMaximized', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			const harness = createLayoutHarness(dom.window.document, { storageService: storage, configurationValues: { 'workbench.panel.opensMaximized': mode } });
+			harness.layout.showPart('panel');
+			assert.equal(harness.layout.isPanelMaximized(), mode === 'always' || mode === 'preserve' && saved);
+			harness.disposables.dispose();
+			dom.window.close();
+		}
+	}
+});
+
+test('empty auxiliary bars stay closed unless visibility is explicitly configured', () => {
+	const dom = new JSDOM('', { url: 'https://layout-empty.test' });
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'empty-views', backend: dom.window.localStorage, flushInterval: 0 });
+	storage.store('workbench.layout.auxiliarybar.empty', true, StorageScope.PROFILE, StorageTarget.MACHINE);
+	const first = createLayoutHarness(dom.window.document, { storageService: storage });
+	assert.equal(first.layout.isPartVisible('auxiliarybar'), false);
+	first.disposables.dispose();
+	const configured = createLayoutHarness(dom.window.document, { storageService: storage, configurationValues: { 'workbench.secondarySideBar.defaultVisibility': 'visible' } });
+	assert.equal(configured.layout.isPartVisible('auxiliarybar'), true);
+	configured.disposables.dispose();
+	dom.window.close();
+});
+
+test('saved auxiliary maximization wins over default policy when the layout is recreated', async () => {
+	const dom = new JSDOM('', { url: 'https://layout-maximize.test' });
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'maximized', backend: dom.window.localStorage, flushInterval: 0 });
+	const options = { storageService: storage, initialDimension: new Dimension(1200, 800), configurationValues: { 'workbench.secondarySideBar.defaultVisibility': 'maximized' } };
+	const first = createLayoutHarness(dom.window.document, options);
+	first.layout.layout(new Dimension(1200, 800));
+	assert.equal(first.layout.isAuxiliaryBarMaximized(), true);
+	first.layout.setAuxiliaryBarMaximized(false);
+	await storage.flush(WillSaveStateReason.SHUTDOWN);
+	first.disposables.dispose();
+	const restored = createLayoutHarness(dom.window.document, options);
+	assert.equal(restored.layout.isAuxiliaryBarMaximized(), false);
+	restored.disposables.dispose();
+	dom.window.close();
+});
+
 test("Workbench layout applies host defaults without exposing persisted state", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const harness = createLayoutHarness(dom.window.document, {
@@ -1005,9 +1126,9 @@ test("Workbench layout applies host defaults without exposing persisted state", 
 	});
 	harness.layout.layout(new Dimension(1_200, 800));
 
-	assert.equal(harness.layout.getPartSize("sidebar").width, 220);
-	assert.equal(harness.layout.getPartSize("auxiliarybar").width, 380);
-	assert.equal(harness.layout.getPartSize("panel").height, 200);
+	assert.equal(harness.layout.getPartSize("sidebar").width, 300);
+	assert.equal(harness.layout.getPartSize("auxiliarybar").width, 300);
+	assert.equal(harness.layout.getPartSize("panel").height, 800 / 3);
 	assert.equal(harness.layout.isPartVisible("auxiliarybar"), false);
 	assert.equal(harness.layout.isPartVisible("sidebar"), false);
 	assert.equal(harness.layout.isPartVisible("panel"), false);
@@ -1016,7 +1137,7 @@ test("Workbench layout applies host defaults without exposing persisted state", 
 	dom.window.close();
 });
 
-test("empty workbench starts with sidebars hidden and restores saved visibility", async () => {
+test("new profiles show the auxiliary bar in empty windows and restore saved visibility", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
 	const createStorage = (workspaceId: string) => new BrowserStorageService({
 		ownerWindow: dom.window as unknown as Window,
@@ -1033,7 +1154,7 @@ test("empty workbench starts with sidebars hidden and restores saved visibility"
 		first.layout.isPartVisible("sidebar"),
 		first.layout.isPartVisible("auxiliarybar"),
 		first.layout.isPartVisible("panel"),
-	], [false, false, false]);
+	], [false, true, false]);
 	await firstStorage.flush(WillSaveStateReason.SHUTDOWN);
 	first.disposables.dispose();
 	firstStorage.dispose();
@@ -1047,7 +1168,7 @@ test("empty workbench starts with sidebars hidden and restores saved visibility"
 	assert.deepEqual([
 		restored.layout.isPartVisible("sidebar"),
 		restored.layout.isPartVisible("auxiliarybar"),
-	], [false, false]);
+	], [false, true]);
 	restored.layout.showPart("sidebar");
 	restored.layout.showPart("auxiliarybar");
 	await storage.flush(WillSaveStateReason.SHUTDOWN);
@@ -1068,7 +1189,7 @@ test("empty workbench starts with sidebars hidden and restores saved visibility"
 	assert.deepEqual([
 		savedEmpty.layout.isPartVisible("sidebar"),
 		savedEmpty.layout.isPartVisible("auxiliarybar"),
-	], [false, false]);
+	], [false, true]);
 	savedEmptyStorage.switchWorkspace("folder-a");
 	savedEmpty.layout.restoreWorkspaceState(WorkbenchState.FOLDER);
 	assert.deepEqual([
@@ -1164,7 +1285,7 @@ test("Workbench layout validates and restores mutable state only", () => {
 		sidebar: { width: 250, visible: true },
 		auxiliarybar: { width: 230, visible: true },
 	});
-	assert.equal(harness.layout.getPartSize("panel").height, 200);
+	assert.equal(harness.layout.getPartSize("panel").height, 300);
 	assert.equal(harness.layout.isPartVisible("panel"), true);
 	assert.throws(
 		() => harness.layout.restoreState({
@@ -1490,6 +1611,101 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 	dom.window.close();
 });
 
+test('CompositeBar retains selectors and keyboard focus through selection and unrelated badge updates', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using resources = new DisposableStore();
+		const registry = resources.add(new WorkbenchViewRegistry());
+		for (const id of ['first', 'second', 'third']) {
+			resources.add(registry.registerViewContainer({ id, title: id, location: ViewContainerLocation.Sidebar }));
+		}
+		const contexts = resources.add(new ContextKeyService());
+		const views = resources.add(new TestViewDescriptorService({ registry }, contexts));
+		const activity = resources.add(new ActivityService(views));
+		const opened: string[] = [];
+		const bar = resources.add(new CompositeBar(dom.window.document.body, {
+			overflowActionSize: 22, orientation: 'vertical', location: ViewContainerLocation.Sidebar,
+			ariaLabel: 'Views', viewDescriptorService: views, activityHoverOptions: { position: () => HoverPosition.RIGHT },
+			contextMenuProvider: { showContextMenu() { } },
+			openComposite: async id => { opened.push(id); bar.setActiveComposite(id); return null; },
+		}, activity));
+		const tabs = [...bar.domNode.querySelectorAll<HTMLElement>('[role="tab"]')];
+		bar.setActiveComposite('first');
+		tabs[1]!.focus();
+		tabs[1]!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+		assert.deepEqual(opened, ['second']);
+		assert.deepEqual([...bar.domNode.querySelectorAll('[role="tab"]')], tabs);
+		assert.deepEqual(tabs.map(tab => [tab.getAttribute('aria-selected'), tab.tabIndex]), [['false', -1], ['true', 0], ['false', -1]]);
+		assert.equal(dom.window.document.activeElement, tabs[1]);
+		using badge = activity.showViewContainerActivity('third', { badge: new NumberBadge(3, () => '3 changes') });
+		assert.equal(bar.domNode.querySelector('[data-action-id="second"]'), tabs[1]);
+		assert.equal(dom.window.document.activeElement, tabs[1]);
+		assert.equal(bar.domNode.querySelector('[data-action-id="third"] .ash-count-badge')?.textContent, '3');
+		bar.setActiveComposite(undefined);
+		bar.setActiveComposite('first');
+		assert.equal(bar.domNode.querySelector('[data-action-id="first"]'), tabs[0]);
+		tabs[1]!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+		assert.equal(dom.window.document.activeElement?.getAttribute('data-action-id'), 'third');
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('CompositePart only redistributes changed constraints and publishes each active allocation once', async () => {
+	const { CompositePart } = await import('../../browser/parts/compositePart.js');
+	const { Composite } = await import('../../browser/composite.js');
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using resources = new DisposableStore();
+		const services = resources.add(createTestComponentServices(undefined, undefined, dom.window.document));
+		class MeasuredComposite extends Composite {
+			readonly allocations: { width: number; height: number; }[] = [];
+			constructor(readonly id: string, private readonly width: number) {
+				super(id, services.get(IThemeService), services.get(IStorageService));
+				const root = dom.window.document.createElement('div');
+				this.create(root);
+				this._register(toDisposable(() => root.remove()));
+			}
+			override get minimumWidth(): number { return this.width; }
+			focus(): void { }
+			layout(dimension: { width: number; height: number; }): void { this.allocations.push({ ...dimension }); }
+		}
+		class MeasuredPart extends CompositePart<MeasuredComposite> {
+			constructor() { super(dom.window.document.body, 'measured', services.get(IThemeService), services.get(IStorageService)); }
+			get content(): HTMLElement { return this.contentDomNode; }
+		}
+		const part = resources.add(new MeasuredPart());
+		let width = 640;
+		Object.defineProperties(part.content, { clientWidth: { get: () => width }, clientHeight: { get: () => 400 } });
+		const first = new MeasuredComposite('first', 0);
+		const second = new MeasuredComposite('second', 0);
+		const wide = new MeasuredComposite('wide', 420);
+		for (const composite of [first, second, wide]) part.addComposite(composite);
+		const constraints: number[] = [];
+		resources.add(part.onDidChangeConstraints(() => { constraints.push(part.minimumWidth); part.layout(new Dimension(width, 400)); }));
+		part.showComposite('first');
+		part.showComposite('second');
+		assert.deepEqual(constraints, []);
+		part.showComposite('wide');
+		assert.deepEqual(constraints, [420]);
+		assert.deepEqual(wide.allocations, [{ width: 640, height: 400 }]);
+		part.layout(new Dimension(width, 400));
+		part.showComposite('wide');
+		assert.equal(wide.allocations.length, 1);
+		width = 720;
+		part.layout(new Dimension(width, 400));
+		assert.deepEqual(wide.allocations.at(-1), { width: 720, height: 400 });
+		part.setVisible(false);
+		part.setVisible(true);
+		assert.equal(wide.allocations.length, 3, 'A reopened body receives its current allocation');
+		part.showComposite('first');
+		assert.deepEqual(constraints, [420, 0]);
+		assert.deepEqual(first.allocations.at(-1), { width: 720, height: 400 });
+	} finally {
+		dom.window.close();
+	}
+});
+
 test("Pane Composite Parts restore workspace selections with Registry fallback", () => {
 	const dom = new JSDOM("<!doctype html><body></body>", {
 		url: "https://ash.test",
@@ -1777,7 +1993,7 @@ test('Transient view navigation follows its active session and ignores stale res
 for (const [overflowActionSize, availableWidth] of [[22, 110], [60, 134]] as const) {
 	test(`CompositeBar moves non-fitting label tabs into its overflow menu (${overflowActionSize}px action)`, () => {
 		const dom = new JSDOM("<!doctype html><body></body>");
-		const disposables = new DisposableStore();
+		using disposables = new DisposableStore();
 		const registry = new WorkbenchViewRegistry();
 		const panels = [
 			["ash.panel.problems", "Problems"],
@@ -1822,8 +2038,11 @@ for (const [overflowActionSize, availableWidth] of [[22, 110], [60, 134]] as con
 		});
 		compositeBar.setActiveComposite("ash.panel.terminal");
 		const tabs = [...compositeBar.domNode.querySelectorAll<HTMLElement>(".ash-composite-bar-destination")];
-		for (const [index, tab] of tabs.entries()) {
-			tab.getBoundingClientRect = () => ({ left: index * 50, right: (index + 1) * 50, width: 50 } as DOMRect);
+		for (const tab of tabs) {
+			tab.getBoundingClientRect = () => {
+				const index = [...compositeBar.domNode.querySelectorAll('.ash-composite-bar-destination')].indexOf(tab);
+				return { left: index * 50, right: (index + 1) * 50, width: 50 } as DOMRect;
+			};
 		}
 		compositeBar.layout();
 
@@ -1855,6 +2074,16 @@ for (const [overflowActionSize, availableWidth] of [[22, 110], [60, 134]] as con
 		hideOverflowMenu();
 		assert.equal(overflowItem.getAttribute("aria-expanded"), "false");
 		assert.equal(overflowItem.isConnected, true);
+		const retainedTerminal = tabs.find(tab => tab.dataset.actionId === 'ash.panel.terminal')!;
+		compositeBar.setActiveComposite('ash.panel.terminal');
+		compositeBar.layout();
+		assert.equal(compositeBar.domNode.querySelector('[data-action-id="ash.panel.terminal"]'), retainedTerminal);
+		assert.equal(compositeBar.domNode.querySelector('.ash-composite-bar-overflow'), overflowItem);
+		assert.equal(retainedTerminal.getAttribute('aria-selected'), 'true');
+		compositeBar.setActiveComposite('ash.panel.problems');
+		assert.equal(compositeBar.domNode.querySelector('[data-action-id="ash.panel.problems"]')?.getAttribute('aria-selected'), 'true');
+		compositeBar.domNode.querySelector<HTMLElement>('.ash-composite-bar-overflow')!.click();
+		assert.deepEqual(overflowActions.map(action => action.label), ['Output', 'Terminal']);
 
 		disposables.dispose();
 		dom.window.close();
@@ -2186,6 +2415,8 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
 	problems.dispatchEvent(compositeBarDragEvent(dom.window, "dragstart"));
 	output.dispatchEvent(compositeBarDragEvent(dom.window, "dragover", 175));
 	output.dispatchEvent(compositeBarDragEvent(dom.window, "drop", 175));
+	assert.equal(compositeBar.domNode.querySelector('[data-action-id="ash.panel.problems"]'), problems);
+	assert.equal(compositeBar.domNode.querySelector('[data-action-id="ash.panel.output"]'), output);
 
 	assert.deepEqual(
 		[...compositeBar.domNode.querySelectorAll<HTMLElement>("[role='tab']")].map((tab) => tab.textContent),
@@ -2634,8 +2865,8 @@ test('Panel position commands rotate the actual Grid, retain focus and restore b
 			assert.equal(Number.parseFloat(leading!.style[axis]) + Number.parseFloat(leading!.style[extent]), Number.parseFloat(trailing!.style[axis]));
 			assert.equal(dom.window.document.activeElement, input);
 			const size = harness.layout.getPartSize('panel');
-			if (position === Position.LEFT || position === Position.RIGHT) assert.equal(size.width, 300);
-			else assert.equal(size.height, 200);
+			if (position === Position.LEFT || position === Position.RIGHT) assert.equal(size.width, 256);
+			else assert.equal(size.height, 256);
 			harness.layout.toggleMaximizedPanel();
 			harness.layout.toggleMaximizedPanel();
 			assert.deepEqual(harness.layout.getPartSize('panel'), size);

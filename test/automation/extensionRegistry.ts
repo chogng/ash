@@ -22,7 +22,7 @@ export class SignedExtensionRegistry implements BackendFixture {
 	private server: Server | undefined;
 	public readonly requests: { path: string; release: number; status: number; bytes: number; }[] = [];
 
-	private constructor(private readonly root: string, releases: readonly Release[], public readonly packageId = 'ash.language-pack-zh-cn@ash', private readonly productRuntimePublishers: readonly string[] = []) {
+	private constructor(private readonly root: string, releases: readonly Release[], public readonly packageId = 'ash.language-pack-zh-cn@ash', private readonly productRuntimePublishers: readonly string[] = [], private readonly allowedPublishers: readonly string[] = ['ash']) {
 		this.productServicesPath = join(root, 'product-services.json');
 		this.releases = releases;
 	}
@@ -100,11 +100,11 @@ export class SignedExtensionRegistry implements BackendFixture {
 	}
 
 	/** Serves a separately built signed editor submission; installation and exact consent stay product actions. */
-	public static async createEditor(root: string, distribution: string, trustedRoot: string, packageId: string): Promise<SignedExtensionRegistry> {
+	public static async createEditor(root: string, distribution: string, trustedRoot: string, packageId: string, allowedPublishers: readonly string[] = ['ash']): Promise<SignedExtensionRegistry> {
 		await mkdir(root, { recursive: true });
 		await cp(distribution, join(root, 'release-1'), { recursive: true, errorOnExist: true, force: false });
 		await writeFile(join(root, 'root.json'), await readFile(trustedRoot));
-		const registry = new SignedExtensionRegistry(root, [], packageId, ['ash']);
+		const registry = new SignedExtensionRegistry(root, [], packageId, ['ash'], allowedPublishers);
 		try { await registry.start(); } catch (error) { await registry.close(); throw error; }
 		return registry;
 	}
@@ -156,7 +156,7 @@ export class SignedExtensionRegistry implements BackendFixture {
 		const origin = `https://127.0.0.1:${address.port}`;
 		await writeFile(this.productServicesPath, JSON.stringify({
 			schemaVersion: 3,
-			extensionSources: [{ name: 'ash', metadataBaseUrl: origin + '/metadata/', targetsBaseUrl: origin + '/targets/', trustedRoot: 'root.json', tlsRootCertificates: ['tls-ca.der'], allowedPublishers: ['ash'], ...(this.productRuntimePublishers.length ? { productRuntimePublishers: this.productRuntimePublishers } : {}) }],
+			extensionSources: [{ name: 'ash', metadataBaseUrl: origin + '/metadata/', targetsBaseUrl: origin + '/targets/', trustedRoot: 'root.json', tlsRootCertificates: ['tls-ca.der'], allowedPublishers: this.allowedPublishers, ...(this.productRuntimePublishers.length ? { productRuntimePublishers: this.productRuntimePublishers } : {}) }],
 		}));
 	}
 

@@ -1,5 +1,8 @@
 {
   "name": "javascript",
+  "ashUiTargets": [
+    "ide"
+  ],
   "displayName": "%displayName%",
   "description": "%description%",
   "version": "10.0.0",

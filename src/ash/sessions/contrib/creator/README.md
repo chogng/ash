@@ -1,8 +1,10 @@
-# Creator 工作空间
+# Artifacts 工作空间
 
-Creator 是 Sessions 的创作功能聚合入口，首页提供 Design、Whiteboard、Slides、Brand、Sites、Make、Prototype 七个工作空间。各功能在 `contrib/<mode>/browser` 注册自己的 View、操作和工作空间；共享 Creator ViewContainer 聚合这些 Views，由 Workbench 的 ViewPaneContainer 管理排列、折叠、尺寸和焦点。`CreatorPage` 保留工作空间，窗口布局只接收 Creator 提供的容器与中央内容。Library 是独立的分类资源库，不参与这套创作入口注册。配置、主题、快捷键、文件访问、对话框和窗口生命周期复用已有服务。
+Artifacts 是 Sessions 的创作主页，提供 Docs、Slides、Design 三个创建入口和已有作品卡片。主页保留窗口原有的对话侧栏，不注册单独的分类导航，也不显示编辑器标签栏。`CreatorPage` 保留画布工作空间；Docs 优先使用已安装的富文档扩展，未安装时创建 Markdown 文档；两者复用 Workbench 编辑器的保存、备份和关闭生命周期。主页从已有文档编辑器和画布文档派生作品列表，不持久化第二份作品目录。
 
-当前画布工作空间各自拥有文档、保存基准和撤销历史，选区、视口及编辑工具由各自的编辑器实例持有。首页和 Make 使用 Creator 导航侧栏并隐藏画布属性面板；其他画布模式通过现有 Sessions 视图使用当前编辑器的图层和属性。
+Docs 旁的下拉按钮选择自动、富文档或 Markdown；偏好由 UI profile 的 `sessions.docs.editor` 设置持有。缺少可用富文档 Provider 时仍创建 Markdown，并通过共享扩展推荐通知发现可安装的编辑器。当前文档的“切换 Docs 编辑器”复用 Workbench 的 Markdown 导入／导出，创建未保存副本并保留原稿；转换失败由原编辑器报告，不覆盖源文档。
+
+各画布功能在 `contrib/<mode>/browser` 注册工作空间和命令面板操作。Whiteboard、Brand、Sites、Make、Prototype 通过命令面板打开。画布工作空间各自拥有文档、保存基准和撤销历史，选区、视口及编辑工具由各自的编辑器实例持有。画布模式仍借用现有的图层和属性面板；主页及 Make 保留对话侧栏。配置、主题、快捷键、文件访问、对话框和窗口生命周期复用已有服务。
 
 | 模式       | 当前操作                                                           |
 | ---------- | ------------------------------------------------------------------ |
@@ -20,7 +22,7 @@ Sites 尚未提供网站布局重排、路由文档和发布，完整领域约�
 
 ### Design 画布布局
 
-Design 隐藏编辑器标签栏和 Creator 标题行，不创建工作空间顶部操作栏，画布直接占用中央内容区。底部绘图工具、图层和属性面板保留。添加画板、导入图片、打开设计、保存副本与导出 SVG 使用画布快捷键或右键菜单；自动保存失败时，右键菜单提供重试保存。点击左侧 Creator 活动图标返回工作空间列表。其他工作空间保留各自的标题和操作栏。
+Design 隐藏编辑器标签栏和 Creator 标题行，不创建工作空间顶部操作栏，画布直接占用中央内容区。底部绘图工具、图层和属性面板保留。添加画板、导入图片、打开设计、保存副本与导出 SVG 使用画布快捷键或右键菜单；自动保存失败时，右键菜单提供重试保存。点击左侧 Artifacts 导航返回创作主页。其他工作空间保留各自的标题和操作栏。
 
 ## 目录与命名
 
@@ -54,7 +56,7 @@ Design 隐藏编辑器标签栏和 Creator 标题行，不创建工作空间顶�
 | [browser/designEditorPage.ts](browser/designEditorPage.ts)                                                                                                  | `DesignEditorPage`，借用窗口文档，拥有编辑器装配、布局、焦点和浏览器关闭检查                                                     |
 | [browser/designEditorService.ts](browser/designEditorService.ts)、[designViews.ts](browser/designViews.ts)                                                  | 按模式持有的窗口文档、工作副本注册与当前编辑器的可观察引用，以及借用该实例文档、选区和属性组件的 Layers 与 Shape properties 视图 |
 | [browser/creatorPage.ts](browser/creatorPage.ts)、[creatorWorkspace.ts](browser/creatorWorkspace.ts)                                                        | CreatorEditorPane、模式导航、工作空间保留与模式注册契约                                                                          |
-| [browser/creator.contribution.ts](browser/creator.contribution.ts)、[creatorEditor.contribution.ts](browser/creatorEditor.contribution.ts)                  | 前者注册 Creator 导航及帮助，后者注册共享画布面板、快捷键和帮助                                                                  |
+| [browser/creator.contribution.ts](browser/creator.contribution.ts)、[creatorEditor.contribution.ts](browser/creatorEditor.contribution.ts)                  | 前者注册 Artifacts 导航及帮助，后者注册共享画布面板、快捷键和帮助                                                                |
 
 一个文件可以承接紧密相关的完整职责。几何和文档序列化目前各自保持在小模块中；新增能力时按实际职责拆分。
 

@@ -1,4 +1,4 @@
-import { findNodeAtLocation, parseTree, type JSONPath, type Node, type ParseError, type Segment } from './json.js';
+import { SyntaxKind, createScanner, findNodeAtLocation, parseTree, type JSONPath, type Node, type ParseError, type Segment } from './json.js';
 import { format, isEOL, type Edit, type FormattingOptions } from './jsonFormatter.js';
 
 export function removeProperty(text: string, path: JSONPath, formattingOptions: FormattingOptions = {}): readonly Edit[] {
@@ -37,17 +37,7 @@ export function setProperty(
 		if (existing) {
 			if (value === undefined) {
 				if (!existing.parent) throw new Error('Malformed JSON AST');
-				const propertyIndex = parent.children.indexOf(existing.parent);
-				let removeBegin: number;
-				let removeEnd = existing.parent.offset + existing.parent.length;
-				if (propertyIndex > 0) {
-					const previous = parent.children[propertyIndex - 1]!;
-					removeBegin = previous.offset + previous.length;
-				} else {
-					removeBegin = existing.parent.offset;
-					if (parent.children.length > 1) removeEnd = parent.children[1]!.offset;
-				}
-				return withFormatting(text, { offset: removeBegin, length: removeEnd - removeBegin, content: '' }, formattingOptions);
+				return removeNode(text, parent, parent.children.indexOf(existing.parent), formattingOptions);
 			}
 			return withFormatting(text, { offset: existing.offset, length: existing.length, content: JSON.stringify(value) }, formattingOptions);
 		}
@@ -80,22 +70,31 @@ export function setProperty(
 			return withFormatting(text, { offset: previous.offset + previous.length, length: 0, content: `,${serialized}` }, formattingOptions);
 		}
 		if (lastSegment < 0 || lastSegment >= parent.children.length) return Object.freeze([]);
-		const toRemove = parent.children[lastSegment]!;
-		if (parent.children.length === 1) {
-			return withFormatting(text, { offset: parent.offset + 1, length: parent.length - 2, content: '' }, formattingOptions);
-		}
-		if (lastSegment === parent.children.length - 1) {
-			const previous = parent.children[lastSegment - 1]!;
-			const offset = previous.offset + previous.length;
-			return withFormatting(text, { offset, length: parent.offset + parent.length - 1 - offset, content: '' }, formattingOptions);
-		}
-		return withFormatting(text, {
-			offset: toRemove.offset,
-			length: parent.children[lastSegment + 1]!.offset - toRemove.offset,
-			content: '',
-		}, formattingOptions);
+		return removeNode(text, parent, lastSegment, formattingOptions);
 	}
 	throw new Error(`Cannot add ${typeof lastSegment === 'number' ? 'index' : 'property'} to parent of type ${parent.type}`);
+}
+
+/** Remove the node and one separator, retaining comments outside the removed value. */
+function removeNode(text: string, parent: Node, index: number, formattingOptions: FormattingOptions): readonly Edit[] {
+	const node = parent.children![index]!;
+	let begin = node.offset;
+	let end = node.offset + node.length;
+	let content = '';
+	const scanner = createScanner(text, true);
+	scanner.setPosition(end);
+	if (scanner.scan() === SyntaxKind.CommaToken) {
+		content = text.slice(end, scanner.getTokenOffset());
+		end = scanner.getTokenOffset() + scanner.getTokenLength();
+	} else if (index > 0) {
+		const previous = parent.children![index - 1]!;
+		scanner.setPosition(previous.offset + previous.length);
+		if (scanner.scan() === SyntaxKind.CommaToken) {
+			begin = scanner.getTokenOffset();
+			content = text.slice(begin + scanner.getTokenLength(), node.offset);
+		}
+	}
+	return withFormatting(text, { offset: begin, length: end - begin, content }, formattingOptions);
 }
 
 export function withFormatting(text: string, edit: Edit, formattingOptions: FormattingOptions = {}): readonly Edit[] {

@@ -143,13 +143,13 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		await page.keyboard.press('Home');
 		await page.keyboard.press('Enter');
 		await voice.locator('.ash-modal-editor-close').click();
-		await expect(page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-status')).not.toContainText('Could not read dictation model package');
+		await expect(chat.locator('.ash-chat-input-part [role="status"]')).not.toContainText('Could not read dictation model package');
 		await expect(button).not.toHaveAttribute('aria-pressed', 'true');
 		await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
 		await expect(composer).toHaveCSS('height', '84px');
 		await expect(chat.locator('.stanza-editor-line-text')).toHaveText('Keep this draft');
 		await button.focus();
-		await workbench.quickaccess.runCommand('workbench.action.chat.dictation.showIntroduction');
+		await workbench.quickaccess.runCommand('workbench.action.chat.showSpeechToTextIntroduction');
 		const introduction = page.getByRole('region', { name: 'Dictation introduction', exact: true });
 		await expect(introduction).toBeVisible();
 		await expect(introduction.getByRole('combobox', { name: 'Microphone', exact: true })).toBeEnabled();

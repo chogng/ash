@@ -1671,6 +1671,10 @@ use crate::protocol::extension_packages::ExtensionsPackageSourceDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsPackageSummaryDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsRecommendationEnvironmentResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsRecommendationPlatformDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsReleaseCapabilityParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsResourceContentDto;
@@ -1688,6 +1692,8 @@ use crate::protocol::extension_packages::ExtensionsSearchResult;
 use crate::protocol::extension_packages::ExtensionsSkillActivationSpecDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsThemeActivationSpecDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsUiTargetDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsUninstallModeDto;
 #[cfg(any(test, feature = "export"))]
@@ -2679,7 +2685,11 @@ use ash_protocol::AudioMediaType;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::Automation;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::AutomationCondition;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::AutomationDefinition;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::AutomationEvent;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::AutomationRun;
 #[cfg(any(test, feature = "export"))]
@@ -4341,6 +4351,11 @@ client_methods! {
     ExtensionsSearchPage => "extensions/searchPage" {
         params: ExtensionsSearchPageParams,
         response: ExtensionsSearchPageResult,
+        serialization: None,
+    },
+    ExtensionsRecommendationEnvironment => "extensions/recommendations/environment" {
+        params: EmptyParams,
+        response: ExtensionsRecommendationEnvironmentResult,
         serialization: None,
     },
     ExtensionsSearch => "extensions/search" {
@@ -6373,6 +6388,8 @@ typescript_bindings! {
     ExtensionsPackageSummaryDto,
     ExtensionsSearchParams,
     ExtensionsSearchResult,
+    ExtensionsRecommendationEnvironmentResult,
+    ExtensionsRecommendationPlatformDto,
     ExtensionsSearchPageParams,
     ExtensionsSearchPageResult,
     ExtensionsSourcesResult,
@@ -6383,6 +6400,7 @@ typescript_bindings! {
     ExtensionsGetParams,
     ExtensionsPackageDetailsDto,
     ExtensionsPackageSourceDto,
+    ExtensionsUiTargetDto,
     ExtensionsUpstreamRegistryDto,
     ExtensionsUpstreamReferenceDto,
     ExtensionsDownloadParams,
@@ -7143,6 +7161,8 @@ typescript_bindings! {
     SymphonyMessages,
     Automation,
     AutomationDefinition,
+    AutomationCondition,
+    AutomationEvent,
     AutomationSchedule,
     AutomationSession,
     AutomationStatus,

@@ -9,6 +9,8 @@ import { canceled, isCancellationError } from '../../../base/common/errors.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { ChatWidgetModel } from '../../browser/chatWidgetModel.js';
 import { CoworkWidgetModel } from '../../contrib/cowork/browser/coworkWidgetModel.js';
+import { SessionsChatService } from '../../browser/agentHost/sessionsChatService.js';
+import type { ISessionProviderScope, ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
@@ -39,7 +41,7 @@ function messageHistory(threadId: string, sequence: number, text: string): Threa
 	};
 }
 
-function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Promise<ThreadSubscription>, waiting = false) {
+function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Promise<ThreadSubscription>, waiting = false, routed = false) {
 	const resources = new DisposableStore();
 	const updates = resources.add(new Emitter<ThreadUpdateEnvelope>());
 	const transcripts = resources.add(new Emitter<ThreadTranscriptUpdateEnvelope>());
@@ -63,14 +65,16 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	const changeApi = { list: async () => ({ changeSets: [] }), summary: async () => ({ sequence: 1, revision: 'initial', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] }) } as unknown as ITurnChangesApi;
 	const events = { subscribe: () => ({ dispose() { } }) } as IServerEventApi;
 	const chat = resources.add(new ChatService(modelApi, threadApi, turnApi, changeApi, appServer, events, execution, resources.add(new TestConfigurationService())));
+	const scope = { services: { chat }, identity: (value: string) => value, backendIdentity: (value: string) => value, assertCurrent() { } } as unknown as ISessionProviderScope;
+	const routedChat = routed ? resources.add(new SessionsChatService({ onDidChangeScopes: Event.None, getScopes: () => [scope], getScope: () => scope } as unknown as ISessionProviderScopeService)) : chat;
 	const prompts = { onDidChangeSkills: Event.None, findAgentSkills: async () => [] } as unknown as IPromptsService;
 	const models = { onDidChangeModels: Event.None, listModels: async () => [], readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }) } as unknown as ILanguageModelsService;
 	const preferences = { onDidChangeModels: Event.None } as ILanguageModelsConfigurationService;
 	const session: ISession = { sessionId: 'session', title: 'Session', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'A', origin: { type: 'root' }, status: 'active' }, { threadId: 'B', origin: { type: 'fork', parentThreadId: 'A', parentSequence: 1 }, status: 'active' }] };
 	const sessions = {} as ISessionsManagementService;
 	const selection = { kind: 'session' as const, active: { session, threadId: 'A' } };
-	const model = resources.add(kind === 'Code' ? new ChatWidgetModel(chat, selection, sessions, prompts, models, execution, resources.add(new TestConfigurationService())) : new CoworkWidgetModel(chat, selection, sessions, prompts, models, preferences, execution, resources.add(new TestConfigurationService())));
-	return { resources, model, chat, models, prompts, executionSettings: execution, threadApi, turnApi, modelApi, execution, starts, queues, steers, consults, compacts, updates, transcripts, offers, session, reconnect: () => { generation++; connection.fire('ready'); } };
+	const model = resources.add(kind === 'Code' ? new ChatWidgetModel(routedChat, selection, sessions, prompts, models, execution, resources.add(new TestConfigurationService())) : new CoworkWidgetModel(routedChat, selection, sessions, prompts, models, preferences, execution, resources.add(new TestConfigurationService())));
+	return { resources, model, chat, routedChat, models, prompts, executionSettings: execution, threadApi, turnApi, modelApi, execution, starts, queues, steers, consults, compacts, updates, transcripts, offers, session, reconnect: () => { generation++; connection.fire('ready'); } };
 }
 
 async function turnTask(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
@@ -776,5 +780,28 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		await model.send('Send after organizing');
 		assert.equal(f.starts.length, 1);
 		assert.equal(f.starts[0]!.threadId, 'A', 'The first send must reuse the organized chat');
+	});
+}
+
+for (const kind of ['Code', 'Cowork'] as const) {
+	test(`${kind} submits approval through the scoped Chat facade and retires replaced offers`, async () => {
+		const f = fixture(kind, undefined, true, true); using resources = f.resources;
+		await f.model.initialize();
+		const resolved: unknown[] = [];
+		f.turnApi.resolveInteraction = async params => { resolved.push(params); return { sequence: 2 }; };
+		let emitted: AgentInteractionOffer | undefined;
+		resources.add(f.routedChat.onDidChangeInteractionOffer(event => { emitted = event.offer; }));
+		f.offers.fire(approval('pdf-read'));
+		const offered = f.routedChat.getInteractionOffer('session', 'A');
+		assert.equal(offered, emitted);
+		assert.equal(offered, f.routedChat.getInteractionOffer('session', 'A'));
+		await f.model.resolveInteraction({ type: 'approval', response: { decision: 'approveOnce' } });
+		assert.equal(resolved.length, 1, 'The real model must submit the approval through the facade');
+		assert.equal((resolved[0] as { requestId: string; }).requestId, 'pdf-read');
+		f.offers.fire(approval('replacement'));
+		assert.notEqual(f.routedChat.getInteractionOffer('session', 'A'), offered);
+		assert.equal(f.routedChat.getInteractionOffer('session', 'A'), emitted);
+		f.reconnect();
+		assert.equal(f.routedChat.getInteractionOffer('session', 'A'), undefined);
 	});
 }

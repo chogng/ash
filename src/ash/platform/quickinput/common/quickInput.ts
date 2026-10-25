@@ -131,6 +131,8 @@ export interface IQuickInputService {
 	readonly currentQuickInput: IQuickInput | undefined;
 	focus(): void;
 	toggle(): void;
+	/** Presets or host-relative fractions (top edge and horizontal center). */
+	setAlignment(alignment: 'top' | 'center' | { top: number; left: number; }): void;
 	navigate(next: boolean): void;
 	accept(keyMods?: IKeyMods): Promise<void>;
 	cancel(): Promise<void>;

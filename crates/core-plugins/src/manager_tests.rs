@@ -400,6 +400,7 @@ impl ExtensionSource for FakeRegistry {
         Ok(SearchPackagesResult {
             unavailable_sources: Vec::new(),
             packages: vec![PackageSummary {
+                ui_targets: None,
                 id: "demo".into(),
                 version: "2.0.0".into(),
                 package_type: "skill".into(),
@@ -412,6 +413,7 @@ impl ExtensionSource for FakeRegistry {
     fn get(&self, request: GetPackageRequest) -> Result<PackageDetails, ExtensionsClientError> {
         let payload = FakePayload::new(request.version.as_deref().unwrap_or("2.0.0"));
         Ok(PackageDetails {
+            ui_targets: None,
             package: payload.package.clone(),
             package_type: "skill".into(),
             display_name: "Demo".into(),

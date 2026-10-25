@@ -50,6 +50,11 @@ pub struct ProjectDto {
     pub project_id: ProjectId,
     #[ts(type = "number")]
     pub revision: u64,
+    /// Unix epoch milliseconds; absent for legacy projects with unknown creation time.
+    #[ts(type = "number | null")]
+    pub created_at_ms: Option<u64>,
+    #[ts(type = "number | null")]
+    pub updated_at_ms: Option<u64>,
     pub status: ProjectStatusDto,
     pub name: String,
     pub description: String,
@@ -64,6 +69,10 @@ pub struct ProjectSummaryDto {
     pub project_id: ProjectId,
     #[ts(type = "number")]
     pub revision: u64,
+    #[ts(type = "number | null")]
+    pub created_at_ms: Option<u64>,
+    #[ts(type = "number | null")]
+    pub updated_at_ms: Option<u64>,
     pub status: ProjectStatusDto,
     pub name: String,
     #[ts(type = "number")]

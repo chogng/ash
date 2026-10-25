@@ -11,6 +11,7 @@ use std::collections::BTreeSet;
 pub(crate) fn apply(
     current: Option<Project>,
     request: &ProjectCommandRequest,
+    now_ms: u64,
 ) -> Result<Project, ProjectError> {
     let project = match (&current, &request.command) {
         (
@@ -32,6 +33,8 @@ pub(crate) fn apply(
                 schema_version: PROJECT_SCHEMA_VERSION,
                 project_id: request.project_id.clone(),
                 revision: 1,
+                created_at_ms: Some(now_ms),
+                updated_at_ms: Some(now_ms),
                 status: ProjectStatus::Active,
                 name: name.clone(),
                 description: description.clone(),
@@ -57,6 +60,8 @@ pub(crate) fn apply(
                 .revision
                 .checked_add(1)
                 .ok_or_else(|| ProjectError::InvalidTransition("revision overflow".into()))?;
+            // A clock adjustment cannot make a saved update precede an earlier revision.
+            project.updated_at_ms = Some(now_ms.max(project.updated_at_ms.unwrap_or(0)));
             project
         }
     };

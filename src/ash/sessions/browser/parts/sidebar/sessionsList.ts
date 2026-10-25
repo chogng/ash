@@ -32,6 +32,7 @@ import { Menus } from '../../menus.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { createSessionItemActions } from '../../agentSessionsModel.js';
 import type { SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
+import { readNewChatDraftState } from '../../../contrib/chat/common/newChatDraftState.js';
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends DomWidget {
@@ -95,7 +96,8 @@ export class SessionsList extends DomWidget {
 		}));
 		this._register(sessionService.onDidChange(() => this.render()));
 		this._register(storage.onDidChangeValue(event => {
-			if (event.scope === StorageScope.PROFILE && event.key.startsWith('sessions.list.')) this.render();
+			if (event.scope === StorageScope.PROFILE && event.key.startsWith('sessions.list.')
+				|| event.scope === StorageScope.WORKSPACE && event.key.startsWith('sessions.inputDraft:untitled:')) this.render();
 		}));
 		this._register(projectService.onDidChange(() => { void this.loadProjects(); }));
 		this._register(viewService.onDidChange(() => this.render()));
@@ -210,13 +212,17 @@ export class SessionsList extends DomWidget {
 			section.update(title, children, this.storage.getBoolean(storageKey, StorageScope.PROFILE, false));
 			return section.domNode;
 		};
-		for (const selection of this.viewService.visibleSelections) {
-			if (selection.kind !== 'untitled') continue;
-			const session = selection.session;
+		// Content belongs to the composer store; an open blank welcome page is not a recent conversation.
+		// Include parked drafts too, so switching conversations does not hide their only sidebar entry.
+		for (const session of this.sessionService.untitledSessions) {
+			let draft: ReturnType<typeof readNewChatDraftState>;
+			try { draft = readNewChatDraftState(this.storage, `untitled:${session.untitledSessionId}`); }
+			catch { continue; } // The composer reports unreadable drafts; one must not break the whole list.
+			if (!draft || (!draft.text.trim() && draft.contexts.length === 0)) continue;
 			const selected = activeSelection?.kind === 'untitled' && activeSelection.session.untitledSessionId === session.untitledSessionId;
 			const item = itemFor(`untitled:${session.untitledSessionId}`);
-			item.update(session.title || localize('chat.sessions.new', 'New Session'), selected, () => this.viewService.openUntitledSession(session.untitledSessionId));
-			item.setContextMenu(anchor => this.showItemMenu(selection, item, anchor));
+			item.update(localize('sessions.list.draft', '{0} (draft)', session.title || localize('chat.sessions.new', 'New Session')), selected, () => this.viewService.openUntitledSession(session.untitledSessionId));
+			item.setContextMenu(anchor => this.showItemMenu({ kind: 'untitled', session }, item, anchor));
 			recent.push(item.domNode);
 		}
 		for (const session of this.sessionService.sessions) {
@@ -338,7 +344,7 @@ class SessionListSection extends AbstractDisposable {
 		this.button.title = title;
 		this.collapsed = collapsed;
 		this.button.setAttribute('aria-expanded', String(!collapsed));
-		const icon = this.subgroup ? collapsed ? Lxicon.folder : Lxicon.folderOpen : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
+		const icon = this.subgroup ? collapsed ? Lxicon.folder : Lxicon.folderOpened : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
 		if (this.icon.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
 			this.icon.replaceChildren(); appendIcon(icon, this.icon);
 		}

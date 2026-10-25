@@ -5,7 +5,7 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { JSDOM } from 'jsdom';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
-import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IProjectService, type Project, type ProjectMaterial } from '../../../../../platform/projects/common/projectService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -15,6 +15,7 @@ class ProjectsFixture extends Disposable {
 	public readonly services = this._register(new InstantiationService());
 	public readonly changed = this._register(new Emitter<void>());
 	public readonly projectsView: IProjectsService;
+	public readonly storage: IStorageService;
 	public projects: Project[] = [];
 	public pending: DeferredPromise<readonly Project[]> | undefined;
 	public failure: Error | undefined;
@@ -23,6 +24,7 @@ class ProjectsFixture extends Disposable {
 		super();
 		const browser = new JSDOM('', { url: 'https://projects.test' });
 		const storage = this._register(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'projects-test', flushInterval: 0, onError: error => { throw error; } }));
+		this.storage = storage;
 		this._register(toDisposable(() => browser.window.close()));
 		this.services.registerInstance(IStorageService, storage);
 		this.services.registerInstance(IProjectService, {
@@ -58,6 +60,35 @@ class ProjectsFixture extends Disposable {
 }
 
 suite('Projects browsing', () => {
+	test('remembers every sort order for this profile and shares the latest selection with retained views', () => {
+		using fixture = new ProjectsFixture();
+		using otherProfile = new ProjectsFixture();
+		for (const order of ['created', 'name', 'updated'] as const) {
+			fixture.projectsView.setSortOrder(order);
+			assert.equal(fixture.storage.get('sessions.projects.sortOrder', StorageScope.PROFILE), order);
+			using restored = fixture.services.createInstance(ProjectsService);
+			assert.equal(restored.state.get().sortOrder, order);
+			restored.setSortOrder('name');
+			assert.equal(fixture.projectsView.state.get().sortOrder, 'name');
+		}
+		assert.equal(otherProfile.projectsView.state.get().sortOrder, 'updated');
+		fixture.storage.remove('sessions.projects.sortOrder', StorageScope.PROFILE);
+		assert.equal(fixture.projectsView.state.get().sortOrder, 'updated');
+	});
+
+	test('ignores workspace sorting and restores the default for invalid saved choices', () => {
+		using fixture = new ProjectsFixture();
+		fixture.projectsView.setSortOrder('created');
+		fixture.storage.store('sessions.projects.sortOrder', 'name', StorageScope.WORKSPACE, StorageTarget.USER);
+		assert.equal(fixture.projectsView.state.get().sortOrder, 'created');
+		for (const invalid of ['reverse', '', 'null']) {
+			fixture.storage.store('sessions.projects.sortOrder', invalid, StorageScope.PROFILE, StorageTarget.USER);
+			using restored = fixture.services.createInstance(ProjectsService);
+			assert.equal(restored.state.get().sortOrder, 'updated');
+			assert.equal(fixture.projectsView.state.get().sortOrder, 'updated');
+		}
+	});
+
 	test('pinning is profile state shared by retained views and sorts pinned projects first', async () => {
 		using fixture = new ProjectsFixture();
 		await fixture.projectsView.create('a', 'Alpha', '', []);
@@ -107,13 +138,25 @@ suite('Projects browsing', () => {
 		assert.deepEqual({ names: fixture.projectsView.getProjects().map(project => project.name), selected: fixture.projectsView.state.get().selectedId, loading: fixture.projectsView.state.get().loading }, { names: ['New work'], selected: 'new', loading: false });
 	});
 
-	test('search and sort affect project cards without exposing material categories', async () => {
+	test('sorts by backend update time, creation time or name while preserving pins and search', async () => {
 		using fixture = new ProjectsFixture();
 		await fixture.projectsView.create('z', 'Zebra', '', []);
 		await fixture.projectsView.create('a', 'Alpha', '', []);
-		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.name), ['Alpha', 'Zebra']);
-		fixture.projectsView.toggleSort();
-		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.name), ['Zebra', 'Alpha']);
+		await fixture.projectsView.create('m', 'Middle', '', []);
+		await fixture.projectsView.create('legacy', 'Legacy', '', []);
+		const times = { z: { createdAtMs: 100, updatedAtMs: 500 }, a: { createdAtMs: 200, updatedAtMs: 400 }, m: { createdAtMs: 300, updatedAtMs: 300 } };
+		fixture.projects = fixture.projects.map(project => ({ ...project, ...times[project.id as keyof typeof times] }));
+		await fixture.projectsView.reload();
+		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.name), ['Zebra', 'Alpha', 'Middle', 'Legacy']);
+		fixture.projectsView.setSortOrder('created');
+		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.name), ['Middle', 'Alpha', 'Zebra', 'Legacy']);
+		fixture.projectsView.setSortOrder('name');
+		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.name), ['Alpha', 'Legacy', 'Middle', 'Zebra']);
+		fixture.projectsView.togglePinned('legacy');
+		for (const order of ['updated', 'created', 'name'] as const) {
+			fixture.projectsView.setSortOrder(order);
+			assert.equal(fixture.projectsView.getProjects()[0].id, 'legacy');
+		}
 		fixture.projectsView.setQuery(' ALP ');
 		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.name), ['Alpha']);
 	});

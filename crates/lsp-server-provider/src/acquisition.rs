@@ -44,7 +44,10 @@ pub struct LanguageServerAcquisition {
     probe_args: Vec<String>,
     #[serde(default)]
     environment: BTreeMap<String, String>,
-    pub workspace_files: Vec<String>,
+    // Accept legacy v1 declarations without letting project markers affect activation or
+    // launch identity. Current declarations omit this metadata.
+    #[serde(default, skip_serializing)]
+    workspace_files: Vec<String>,
     releases: Vec<ExecutableRelease>,
 }
 

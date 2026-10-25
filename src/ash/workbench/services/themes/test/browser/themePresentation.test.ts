@@ -68,7 +68,9 @@ suite('themes browser component', () => {
 			await expect(select).toHaveCSS('background-color', colors['selection-background']!);
 			await select.click();
 			await expect(page.locator('.ash-select-box-list')).toHaveCSS('background-color', colors['error-foreground']!);
-			for (const option of await page.locator('.ash-select-box-option').all()) {
+			const options = page.locator('.ash-select-box-option');
+			await expect(options).toHaveText(['One', 'Two']);
+			for (const option of await options.all()) {
 				expect((await option.boundingBox())!.height).toBe(22);
 				await expect(option.locator('.ash-icon')).toHaveCSS('height', '16px');
 			}

@@ -1,3 +1,4 @@
+import { extensionUiTargetsLabel } from '../../../../platform/extensionManagement/common/extensionNls.js';
 import { defaultButtonStyles, defaultToggleStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { observeElementSize } from '../../../../base/browser/observer.js';
@@ -254,6 +255,7 @@ export class ExtensionEditor extends EditorPane {
 			label: localize({ bundle: 'ash.extensions', key: 'detailInstallation' }, 'Installation'), rows: input instanceof ExtensionsInput ? [
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: input.summary.id },
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailVersion' }, 'Version'), value: input.summary.version },
+				{ label: localize({ bundle: 'ash.extensions', key: 'uiTargetsHeading' }, 'Applicable windows'), value: extensionUiTargetsLabel(input.summary.uiTargets) },
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailSource' }, 'Source'), value: input.source === ExtensionsInputSource.BuiltIn ? localize({ bundle: 'ash.extensions', key: 'builtInFilter' }, 'Built-in') : input.source === ExtensionsInputSource.Local ? localize({ bundle: 'ash.extensions', key: 'localPlugin' }, 'Local plugin') : localize({ bundle: 'ash.extensions', key: 'detailRegistry' }, 'Extensions registry') },
 			] : [{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: input.getName() }]
 		}]);
@@ -447,11 +449,9 @@ export class ExtensionEditor extends EditorPane {
 				label: localize({ bundle: 'ash.extensions', key: 'detailServer' }, 'Server'), rows: [
 					{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: target.serverId },
 					{ label: localize({ bundle: 'ash.extensions', key: 'mcpState' }, 'Status'), value: statusLabel },
-					...(configuredServer ? [{
+					...(configuredServer?.enablement === 'disabled' ? [{
 						label: localize({ bundle: 'ash.extensions', key: 'mcpSavedEnablement' }, 'Saved enablement'),
-						value: configuredServer.enablement === 'enabled'
-							? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled')
-							: localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled'),
+						value: localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled'),
 					}] : []),
 					{ label: localize({ bundle: 'ash.extensions', key: 'mcpDiagnostic' }, 'Diagnostic'), value: diagnostic },
 					{ label: localize({ bundle: 'ash.extensions', key: 'mcpOrigin' }, 'HTTP origin'), value: server?.httpOrigin ?? '' },
@@ -562,6 +562,14 @@ export class ExtensionEditor extends EditorPane {
 			const extension = catalog.extensions.find(value => value.sourceKind === 'builtIn' && value.id === input.summary.id);
 			if (!extension) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
 			const manifest = JSON.parse(extension.manifestJson);
+			this.renderInfo([{
+				label: localize({ bundle: 'ash.extensions', key: 'detailInstallation' }, 'Installation'), rows: [
+					{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: extension.id },
+					{ label: localize({ bundle: 'ash.extensions', key: 'detailVersion' }, 'Version'), value: extension.version },
+					{ label: localize({ bundle: 'ash.extensions', key: 'uiTargetsHeading' }, 'Applicable windows'), value: extensionUiTargetsLabel(manifest.ashUiTargets) },
+					{ label: localize({ bundle: 'ash.extensions', key: 'detailSource' }, 'Source'), value: localize({ bundle: 'ash.extensions', key: 'builtInFilter' }, 'Built-in') },
+				]
+			}]);
 			this.header.status.textContent = '';
 			void this.loadPackageDocument(input, signal, version);
 			if ((manifest.ashRuntime?.kind === 'rust' && !manifest.browser) || !!manifest.ashLanguageServers) {
@@ -595,6 +603,7 @@ export class ExtensionEditor extends EditorPane {
 				label: localize({ bundle: 'ash.extensions', key: 'detailInstallation' }, 'Installation'), rows: [
 					{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: plugin.id },
 					{ label: localize({ bundle: 'ash.extensions', key: 'detailVersion' }, 'Version'), value: plugin.version },
+					{ label: localize({ bundle: 'ash.extensions', key: 'uiTargetsHeading' }, 'Applicable windows'), value: extensionUiTargetsLabel(plugin.uiTargets) },
 					{ label: localize({ bundle: 'ash.extensions', key: 'detailSource' }, 'Source'), value: localize({ bundle: 'ash.extensions', key: 'localPlugin' }, 'Local plugin') },
 					{ label: localize({ bundle: 'ash.extensions', key: 'detailDigest' }, 'Package digest'), value: plugin.digest },
 				]
@@ -632,6 +641,7 @@ export class ExtensionEditor extends EditorPane {
 			label: localize({ bundle: 'ash.extensions', key: 'detailInstallation' }, 'Installation'), rows: [
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: input.summary.id },
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailVersion' }, 'Version'), value: input.summary.version },
+				{ label: localize({ bundle: 'ash.extensions', key: 'uiTargetsHeading' }, 'Applicable windows'), value: extensionUiTargetsLabel(details ? details.uiTargets : input.summary.uiTargets) },
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailLicense' }, 'License'), value: details?.license ?? '' },
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailSource' }, 'Source'), value: details ? details.source === 'official' ? localize({ bundle: 'ash.extensions', key: 'official' }, 'Official package') : localize({ bundle: 'ash.extensions', key: 'thirdParty' }, 'Third-party package') : '' },
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailDigest' }, 'Package digest'), value: installation?.package.digest ?? '' },

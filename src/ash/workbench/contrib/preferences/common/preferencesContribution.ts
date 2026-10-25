@@ -31,6 +31,7 @@ export class PreferencesContribution extends Disposable {
 		jsonRegistry.registerSchema(ConfigurationSchemaId, createConfigurationSchema(), this._store);
 		this._register(jsonRegistry.registerSchemaAssociation(ConfigurationSchemaId, UserSettingsResource.toString()));
 		const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+		this._register(registry.onDidUpdateConfiguration(() => jsonRegistry.notifySchemaChanged(ConfigurationSchemaId)));
 		this._register(models.addSaveParticipant({
 			participate: async model => {
 				if (model.uri.toString() !== profiles.currentProfile.settingsResource.toString()) return;

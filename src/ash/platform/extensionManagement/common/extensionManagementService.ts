@@ -3,6 +3,14 @@ import { createServiceIdentifier } from "../../instantiation/common/instantiatio
 
 export type ExtensionsCapabilityKind = "skill" | "mcp" | "connector" | "theme" | "language" | "localization" | "executable" | "editorExtension" | "asset";
 
+/** Product windows declared by a package manifest, separate from execution platforms. */
+export enum ExtensionUiTarget { IDE = 'ide', Agents = 'agents' }
+
+export interface ExtensionsRecommendationEnvironment {
+	readonly platform: 'macos' | 'linux' | 'windows' | 'other';
+	readonly executables: readonly string[];
+}
+
 export interface ExtensionsSearchOptions {
 	readonly packageType?: string;
 	readonly limit?: number;
@@ -37,6 +45,7 @@ export interface ExtensionsPackageSummary {
 	readonly packageType: string;
 	readonly displayName: string;
 	readonly description: string;
+	readonly uiTargets?: readonly ExtensionUiTarget[];
 }
 
 export interface ExtensionsCapabilityDescriptor {
@@ -71,6 +80,7 @@ export interface ExtensionsPackageDetails {
 		readonly repositoryUrl: string | null;
 	} | null;
 	readonly capabilities: readonly ExtensionsAvailableCapability[];
+	readonly uiTargets?: readonly ExtensionUiTarget[];
 }
 
 export interface ExtensionsInstalledPackage {
@@ -156,6 +166,7 @@ export interface AshExtensionSource {
 
 /** Frontend Extensions business capability, independent of distribution and package internals. */
 export interface IExtensionManagementService {
+	recommendationEnvironment(): Promise<ExtensionsRecommendationEnvironment>;
 	searchPage(query: string, options: ExtensionsSearchOptions & { readonly sourceId: string; readonly pageSize: number; readonly cursor?: string; }): Promise<ExtensionsSearchPage>;
 	readonly onDidChangeInstalled: Event<void>;
 	sources(): Promise<ExtensionRegistrySources>;

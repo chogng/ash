@@ -8,6 +8,7 @@ import type { SessionsViewSelection } from '../services/sessions/browser/session
 import { localize } from '../../nls.js';
 import type { IAgentSessionListItem, IAgentSessionsModel } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsModel.js';
 import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
+import { getInProgressSessionDescription } from '../../workbench/contrib/chat/browser/chatSessions/chatSessionDescription.js';
 
 /** Exposes the Sessions catalog to the Chat view without moving session ownership into Workbench. */
 export function createAgentSessionsModel(sessions: ISessionsManagementService, storage: IStorageService, groups: ISessionGroupsService, actions: (selection: SessionsViewSelection) => readonly IAction[], onDidOpen?: () => void): IAgentSessionsModel {
@@ -42,7 +43,7 @@ function sessionItems(sessions: ISessionsManagementService, storage: IStorageSer
 		items.push({
 			id: `session:${session.sessionId}`,
 			title: session.title.trim() || localize('chat.sessions.untitled', 'Untitled session'),
-			description: session.workspace?.root ?? '',
+			description: getInProgressSessionDescription(thread.management ?? session.management) ?? session.workspace?.root ?? '',
 			kind: 'session',
 			pinned: storage.getBoolean(`sessions.list.pinned.${session.sessionId}`, StorageScope.PROFILE, false),
 			group: groups.groups.find(group => group.sessionIds.includes(session.sessionId)),

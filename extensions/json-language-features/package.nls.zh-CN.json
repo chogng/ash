@@ -1,0 +1,4 @@
+{
+  "displayName": "JSON 语言功能",
+  "description": "为 JSON 和 JSON with Comments 提供补全、悬停、格式化与校验。"
+}

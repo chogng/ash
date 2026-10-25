@@ -198,7 +198,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IContextViewService, windowContextView);
 	services.registerSingleton(ContextMenus, () => services.createInstance(BrowserContextMenuService));
 	services.registerInstance(AccessibleView, accessibleView);
-	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readTextResource: async () => { throw new Error("No Skill body in this test fixture"); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), setEnabled: async () => { } });
+	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readTextResource: async () => { throw new Error("No Skill body in this test fixture"); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async () => { } });
 	services.registerInstance(IExtensionManagementService, { onDidChangeInstalled: Event.None, listInstalled: async () => [], listEditorExtensions: async () => ({ extensions: [] }) } as unknown as IExtensionManagementService);
 	// Search renders Customize as well as Models; its required services belong to this dialog fixture.
 	const unsupportedExtensionAction = async (): Promise<never> => { throw new Error('Extension mutation is outside this Preferences test'); };
@@ -286,6 +286,19 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await preferences.open({ query: 'Preferences: Open User Settings (JSON)' });
 	assert.ok(window.document.querySelector('.ash-sessions-customize'), 'global search discovers lazily created Settings actions');
 	await preferences.open({ section: 'general' });
+	const resourceEditorToggle = window.document.querySelector<HTMLInputElement>('input[data-configuration-key="accessibility.verbosity.resourceEditor"]');
+	assert.ok(resourceEditorToggle, 'Agents Window General exposes the resource reader preference');
+	assert.equal(resourceEditorToggle.checked, true);
+	const resourceEditorChanged = new Promise<void>(resolve => {
+		const listener = configuration.onDidChangeConfiguration(event => {
+			if (!event.affectsConfiguration('accessibility.verbosity.resourceEditor')) return;
+			listener.dispose();
+			resolve();
+		});
+	});
+	resourceEditorToggle.click();
+	await resourceEditorChanged;
+	assert.equal(configuration.getValue('accessibility.verbosity.resourceEditor'), false);
 	const aiToggle = window.document.querySelector<HTMLInputElement>('input[data-configuration-key="chat.disableAIFeatures"]');
 	assert.ok(aiToggle, 'General exposes the registered AI preference so disabled Chat can be restored');
 	assert.equal(aiToggle.getAttribute('aria-label'), 'Disable AI features');

@@ -12,6 +12,46 @@
     "language": "json"
   },
   {
+    "path": "settings.json",
+    "language": "jsonc"
+  },
+  {
+    "path": ".vscode/settings.json",
+    "language": "jsonc"
+  },
+  {
+    "path": "C:\\project\\.vscode\\tasks.json",
+    "language": "jsonc"
+  },
+  {
+    "path": ".vscode/launch.json",
+    "language": "jsonc"
+  },
+  {
+    "path": ".vscode/extensions.json",
+    "language": "jsonc"
+  },
+  {
+    "path": "User/keybindings.json",
+    "language": "jsonc"
+  },
+  {
+    "path": "profile/argv.json",
+    "language": "jsonc"
+  },
+  {
+    "path": "project.ash-workspace",
+    "language": "jsonc"
+  },
+  {
+    "path": "project.code-workspace",
+    "language": "jsonc"
+  },
+  {
+    "path": "config.jsonc",
+    "language": "jsonc"
+  },
+  {
     "path": "tsconfig.json",
     "language": "jsonc"
   },

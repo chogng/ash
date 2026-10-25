@@ -98,7 +98,6 @@ import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibi
 import { ChatService } from "../../../workbench/services/chat/browser/chatService.js";
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
-import { BrowserImageEditorService } from '../../../workbench/services/imageEditor/browser/browserImageEditorService.js';
 import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from "../../../workbench/services/chat/common/chatService.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
@@ -114,7 +113,8 @@ import { ContextKeyService, IContextKeyService } from "../../../platform/context
 import { DialogResult, IDialogService, type IMessageDialogOptions } from '../../../platform/dialogs/common/dialogs.js';
 import { TestQuickInputService } from "../../../platform/quickinput/test/browser/testQuickInputService.js";
 import { Dimension, h } from "../../../base/browser/dom.js";
-import type { IFileService } from '../../../platform/files/common/files.js';
+import { FileKind, IFileService } from '../../../platform/files/common/files.js';
+import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import { URI } from "../../../base/common/uri.js";
 import { ICommandService } from "../../../platform/commands/common/commands.js";
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -143,7 +143,6 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 	services.registerInstance(IHostService, new TestHostService());
-	services.registerSingleton(IImageEditorService, () => services.createInstance(BrowserImageEditorService));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(IContextViewService, contextView);
@@ -904,7 +903,7 @@ class SessionsInputForTest extends NewChatInputWidget {
 	}
 }
 
-async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () => { }, stored?: string) {
+async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () => { }, stored?: string, interrupt: ChatInputDelegate['interrupt'] = async () => { }) {
 	const resources = new DisposableStore();
 	try {
 		const fake = fakeApi({ sessions: [] });
@@ -917,6 +916,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		const contextView = resources.add(new BrowserContextViewService(document.body));
 		const parentServices = resources.add(createInputServices(contextView, chat));
 		const services = resources.add(parentServices.createChild());
+		services.registerInstance(ISessionsManagementService, sessions);
 		const storage = resources.add(createTestStorage());
 		const notices = resources.add(new TestNotificationService());
 		services.registerInstance(IStorageService, storage);
@@ -930,7 +930,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		const identity = `untitled:${draft.untitledSessionId}`;
 		if (stored !== undefined) storage.store(`sessions.inputDraft:${identity}`, stored, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const delegate: ChatInputDelegate = {
-			send, executeCommand: async () => { }, executeServerCommand: async () => { }, interrupt: async () => { },
+			send, executeCommand: async () => { }, executeServerCommand: async () => { }, interrupt,
 			selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
 			listAgents: async () => [], selectAgent: () => { }, selectMode: mode => model.selectMode(mode),
 			openModelSettings: async () => { }, resolveInteraction: async () => { },
@@ -940,6 +940,40 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		return { input, model, storage, notices, identity, services, delegate, [Symbol.dispose]() { resources.dispose(); } };
 	} catch (error) { resources.dispose(); throw error; }
 }
+
+for (const surface of ['chat', 'cowork'] as const) test(`Sessions ${surface} receives source drops through shared snapshot and undo owners`, async () => {
+	using fixture = await sessionsInputFixture();
+	fixture.input.dispose();
+	let sourceText = 'Original dropped source';
+	fixture.services.registerInstance(IFileService, {
+		hasProvider: () => true,
+		stat: async () => ({ kind: FileKind.File }),
+		readFile: async () => ({ content: sourceText }),
+	} as unknown as IFileService);
+	fixture.services.registerSingleton(IChatAttachmentResolveService, () => fixture.services.createInstance(ChatAttachmentResolveService));
+	fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
+	using input = surface === 'chat'
+		? fixture.services.createInstance(SessionsInputForTest, document.body, fixture.delegate, fixture.model)
+		: fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model);
+	input.render(fixture.model.inputState);
+	input.appendToDraft('Review ');
+	const values = ['file:///workspace/first.ts', 'file:///workspace/second.ts'];
+	const event = new browserEnvironment.window.MouseEvent('drop', { bubbles: true, cancelable: true });
+	Object.defineProperty(event, 'dataTransfer', { value: { types: ['ResourceURLs'], files: [], getData: (type: string) => type === 'ResourceURLs' ? JSON.stringify(values) : '' } });
+	input.element.querySelector('.ash-chat-input-container')!.dispatchEvent(event);
+	assert.equal(event.defaultPrevented, true);
+	const captured = (await input.captureDraft())!.draft;
+	assert.equal(captured.text, 'Review first.ts second.ts ');
+	assert.deepEqual(captured.contexts.map(context => [context.resource, context.content]), values.map(resource => [resource, 'Original dropped source']));
+	sourceText = 'Changed after the drop';
+	const model = input.inputEditor!.getModel()!;
+	model.undo();
+	assert.equal(model.getValue(), 'Review ');
+	model.redo();
+	const restored = (await input.captureDraft())!.draft;
+	assert.equal(restored.text, captured.text);
+	assert.deepEqual(restored.contexts, captured.contexts);
+});
 
 test('Cowork composer submits the exact Skill reference through the shared input', async () => {
 	const canvas = browserEnvironment.window.HTMLCanvasElement.prototype;
@@ -960,8 +994,62 @@ test('Cowork composer submits the exact Skill reference through the shared input
 	assert.deepEqual(submissions, [{ text: '$commit staged changes', skills: [skill] }]);
 });
 
-test('Sessions custom composer footer displays and clears the shared context budget', async () => {
-	using fixture = await sessionsInputFixture();
+for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with Enter and replaces dictation with Stop task in ${locale}`, async () => {
+	initializeTestLocalization(locale);
+	try {
+		const sent: string[] = [];
+		let interrupted = 0;
+		using fixture = await sessionsInputFixture(async text => { sent.push(text); }, undefined, async () => { interrupted++; });
+		const form = fixture.input.element.querySelector('.ash-chat-input-container')!;
+		const footer = fixture.input.element.querySelector('.ash-sessions-chat-input-footer')!;
+		assert.ok(form.querySelector('[data-action-id="ash.chat.input.attach"]'));
+		const microphone = form.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!;
+		assert.ok(microphone);
+		assert.equal(microphone.getAttribute('aria-label'), locale === 'en' ? 'Dictate message' : '听写');
+		assert.equal(form.querySelector('[data-action-id="ash.chat.input.model"]'), null);
+		assert.ok(footer.querySelector('[data-action-id="ash.chat.input.model"]'));
+		assert.equal(footer.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		assert.equal(form.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		fixture.input.appendToDraft('Keep this text');
+		assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep this text');
+		assert.deepEqual(sent, []);
+		assert.equal(form.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		const ring = footer.querySelector<HTMLButtonElement>('.ash-chat-context-usage-button')!;
+		assert.equal(ring.hidden, false);
+		assert.equal(ring.disabled, true);
+		assert.ok(footer.lastElementChild!.contains(ring));
+		assert.equal(ring.getAttribute('aria-label'), locale === 'en' ? 'Context usage is not available yet' : '暂无上下文用量数据');
+		fixture.input.focus();
+		const help = new SessionsChatAccessibilityHelp(fixture.input.element, () => fixture.input.focus()).getProvider()!;
+		assert.match(help.provideContent(), locale === 'en' ? /Dictation inserts editable text without sending it/u : /不会自动发送/u);
+		const editor = form.querySelector('.stanza-editor-input')!;
+		editor.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true }));
+		assert.deepEqual(sent, []);
+		editor.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		await waitFor(() => sent.length === 1);
+		assert.deepEqual(sent, ['Keep this text']);
+
+		fixture.input.appendToDraft('Keep the next draft');
+		fixture.input.render({ ...fixture.model.inputState, canInterrupt: true });
+		const stop = form.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.interrupt"] button')!;
+		assert.equal(stop.getAttribute('aria-label'), locale === 'en' ? 'Stop task' : '停止任务');
+		assert.ok(stop.querySelector('.ash-icon-stop-circle'));
+		assert.equal(form.querySelector('[data-action-id="workbench.action.chat.toggleSpeechToText"]'), null);
+		assert.equal(form.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		stop.click();
+		assert.equal(interrupted, 1);
+		assert.deepEqual(sent, ['Keep this text']);
+		assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep the next draft');
+		fixture.input.render({ ...fixture.model.inputState, canInterrupt: false });
+		assert.equal(form.querySelector('[data-action-id="ash.chat.input.interrupt"]'), null);
+		assert.ok(form.querySelector('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-icon-mic'));
+	} finally { initializeTestLocalization('en'); }
+});
+
+test('Sessions custom composer context ring opens details without sending and stays visible when usage clears', async () => {
+	const sent: string[] = [];
+	using fixture = await sessionsInputFixture(async text => { sent.push(text); });
+	fixture.input.appendToDraft('Keep the draft while inspecting context');
 	const state = fixture.model.inputState;
 	fixture.input.render({
 		...state, contextUsage: {
@@ -975,8 +1063,19 @@ test('Sessions custom composer footer displays and clears the shared context bud
 	assert.equal(ring.disabled, false);
 	assert.equal(ring.getAttribute('aria-label'), 'Context budget: 100%, estimated input 800 of 800 tokens');
 	assert.equal(fixture.input.element.querySelectorAll('.ash-chat-context-usage-button').length, 1);
+	ring.click();
+	assert.equal(ring.getAttribute('aria-expanded'), 'true');
+	const details = document.querySelector('.ash-chat-context-details')!;
+	assert.match(details.textContent!, /Model context capacity: 1,000 tokens/u);
+	assert.deepEqual(sent, []);
+	assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep the draft while inspecting context');
 	fixture.input.render(state);
-	assert.equal(fixture.input.element.querySelector('.ash-chat-context-usage-button'), null);
+	assert.equal(fixture.input.element.querySelector('.ash-chat-context-usage-button'), ring);
+	assert.equal(ring.hidden, false);
+	assert.equal(ring.disabled, true);
+	assert.equal(ring.getAttribute('aria-expanded'), 'false');
+	assert.equal(details.isConnected, false);
+	assert.equal(ring.querySelector('.ash-chat-context-usage-value')!.getAttribute('stroke-dasharray'), '0 100');
 });
 
 test('Sessions composer forwards its original submission lifetime to the owning widget', async () => {
@@ -996,7 +1095,7 @@ test('Sessions composer does not submit when clearing the old input synchronousl
 	using transition = fixture.input.retireWhenInputChanges();
 	await fixture.input.acceptInput();
 	assert.equal(sends, 0);
-	assert.equal(fixture.input.element.querySelector<HTMLHeadingElement>('.ash-sessions-chat-welcome-heading')!.hidden, false);
+	assert.equal(fixture.input.element.classList.contains('has-conversation'), false);
 });
 
 test('an old Sessions submission failure cannot hide the new submission or replace its unsent text', async () => {
@@ -1010,12 +1109,11 @@ test('an old Sessions submission failure cannot hide the new submission or repla
 	const newSending = fixture.input.acceptInput('New request');
 	await waitFor(() => sends === 2);
 	fixture.input.appendToDraft('Keep the new unsent text');
-	const heading = fixture.input.element.querySelector<HTMLHeadingElement>('.ash-sessions-chat-welcome-heading')!;
-	assert.equal(heading.hidden, true);
+	assert.equal(fixture.input.element.classList.contains('has-conversation'), true);
 	const oldFailure = assert.rejects(oldSending, /Old request failed/u);
 	await oldResult.error(new Error('Old request failed'));
 	await oldFailure;
-	assert.equal(heading.hidden, true);
+	assert.equal(fixture.input.element.classList.contains('has-conversation'), true);
 	assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep the new unsent text');
 	await newResult.complete();
 	await newSending;
@@ -1174,8 +1272,7 @@ test('sending from one session preserves a later draft during first-session crea
 	);
 	widget.setVisible(true);
 	const input = widget.element.querySelector<HTMLElement>('.ash-chat-input-part');
-	const heading = widget.element.querySelector<HTMLHeadingElement>('.ash-sessions-chat-welcome-heading');
-	assert.equal(heading?.hidden, false);
+	assert.equal(input?.classList.contains('has-conversation'), false);
 	assert.equal(input?.classList.contains('chat-composer'), true);
 	const welcomeTip = input?.querySelector('.ash-chat-input-tip');
 	assert.ok(welcomeTip);
@@ -1199,7 +1296,6 @@ test('sending from one session preserves a later draft during first-session crea
 	const restoredChatDraft = { ...chatDraft, text: 'Keep my Chat draft chat.txt ', contexts: chatDraft.contexts.map(context => ({ ...context, reference: { start: 19, end: 27 } })) };
 	await attachment.complete({ name: 'code.ts', content: 'Code context' });
 	await sending;
-	assert.equal(heading?.hidden, true);
 	assert.equal(input?.classList.contains('has-conversation'), true);
 	assert.equal(widget.element.querySelector('.ash-chat-input-part'), input);
 	assert.equal(widget.sessionId, 'session-1');
@@ -1328,7 +1424,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.equal(contextResolutions, 1);
 	assert.deepEqual(fake.turnStartRequests[0]?.input, [
 		{ type: "context", name: "Git commit abc1234", content: "diff --git a/file b/file" },
-		{ type: "text", text: "abc1234 · Explain context transport Hello from an untitled session" },
+		{ type: "text", text: " Hello from an untitled session" },
 	]);
 	assert.equal(untitledPane.querySelector(".ash-chat-input-attachment-item"), null);
 	assert.equal(sessions.untitledSessions.length, 0);
@@ -4830,7 +4926,7 @@ for (const locale of ['en', 'zh-CN']) {
 			assert.deepEqual((await pane.captureActiveDraft())?.draft.contexts?.map(context => context.name), ['fixture.txt']);
 			assert.equal(fake.turnStartRequests.length, 0);
 			await pane.acceptInput();
-			assert.deepEqual(fake.turnStartRequests.map(request => request.input), [[{ type: 'context', name: 'fixture.txt', content: 'Synthetic context' }, { type: 'text', text: originalDraft.trim() }]]);
+			assert.deepEqual(fake.turnStartRequests.map(request => request.input), [[{ type: 'text', text: 'Keep this draft ' }, { type: 'context', name: 'fixture.txt', content: 'Synthetic context' }]]);
 		} finally { resetNlsResolver(); }
 	});
 }
@@ -5014,7 +5110,10 @@ test('composer navigation stable A sends held file context exactly once', async 
 	await sending;
 	assert.equal(fake.turnStartRequests.length, 1);
 	assert.equal(fake.turnStartRequests[0]!.threadId, 'thread-1');
-	assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'context', name: 'stable-A.txt', content: 'Stable A contents' }, { type: 'text', text: 'Stable A request stable-A.txt' }]);
+	assert.deepEqual(fake.turnStartRequests[0]!.input, [
+		{ type: 'text', text: 'Stable A request ' },
+		{ type: 'context', name: 'stable-A.txt', content: 'Stable A contents' },
+	]);
 	assert.equal(input.value, '');
 	assert.equal(chatPane.querySelectorAll('.ash-chat-input-attachment-item').length, 0);
 });
@@ -5223,8 +5322,8 @@ for (const navigate of [false, true]) {
 			assert.equal(fake.turnStartRequests[0]!.threadId, 'thread-1');
 			assert.equal(contextResolutions, 1);
 			assert.deepEqual(fake.turnStartRequests[0]!.input, [
+				{ type: 'text', text: 'Original first request ' },
 				{ type: 'context', name: 'original.txt', content: 'Original request context' },
-				{ type: 'text', text: 'Original first request original.txt' },
 			]);
 			assert.equal(original.querySelectorAll('.ash-chat-input-attachment-item').length, 0);
 		}
@@ -5306,7 +5405,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await configuration.updateValue(ChatAIDisabledSettingId, false);
 			await pane.acceptInput();
 			assert.equal(fake.turnStartRequests.length, 1);
-			assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'context', name: 'fixture.txt', content: 'Synthetic context' }, { type: 'text', text: originalDraft.trim() }]);
+			assert.deepEqual(fake.turnStartRequests[0]!.input, [{ type: 'text', text: 'Keep this AI-disabled draft ' }, { type: 'context', name: 'fixture.txt', content: 'Synthetic context' }]);
 		} finally { resetNlsResolver(); }
 	});
 }

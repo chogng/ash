@@ -29,6 +29,33 @@ function runtime(fetcher: typeof fetch, prepareHeaders: IChatGPTVerificationRunt
 
 suite('ChatGPT transport', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('transports multipart voice SDP through JSON IPC and the existing credential owner', async () => fixture(async file => {
+		using resources = new DisposableStore();
+		const fromRenderer = resources.add(new Emitter<VSBuffer>()), fromMain = resources.add(new Emitter<VSBuffer>());
+		const renderer = resources.add(new IPCClient({ onMessage: fromMain.event, send: buffer => queueMicrotask(() => fromRenderer.fire(buffer)) }, 'renderer'));
+		const main = resources.add(new IPCClient({ onMessage: fromRenderer.event, send: buffer => queueMicrotask(() => fromMain.fire(buffer)) }, 'main'));
+		let requests = 0;
+		const transport = resources.add(new ChatGPTTransport({
+			credentialFile: file, readVerificationScript: async () => '',
+			createRuntime: () => runtime((async (url, init) => {
+				requests++;
+				assert.equal(url, 'https://chatgpt.com/realtime/vp?dcid=0');
+				assert.ok(new Headers(init?.headers).get('Authorization')?.startsWith('Bearer '));
+				const form = await new Response(init?.body, { headers: { 'Content-Type': new Headers(init?.headers).get('Content-Type')! } }).formData();
+				assert.equal(form.get('sdp'), 'v=0\r\ns=Fixture\r\n');
+				return new Response('v=0\r\ns=Answer\r\n', { status: 201, headers: { 'Content-Type': 'text/plain' } });
+			}) as typeof fetch),
+		}));
+		main.registerChannel('sessions.chatgpt.transport', transport.getChannel());
+		const adapter = new ElectronChatGPTTransport({ getChannel: name => renderer.getChannel(name) } as IMainProcessService);
+		const form = new FormData(); form.set('sdp', 'v=0\r\ns=Fixture\r\n'); form.set('session', '{}');
+		const response = await createChatGPTFetch(adapter)('/service/realtime/vp?dcid=0', { method: 'POST', body: form });
+		assert.equal(response.status, 201); assert.match(await response.text(), /^v=0/u);
+		for (const path of ['/service/voice/get_token', '/service/realtime/vp?dcid=1', '/service/realtime/vp?dcid=0&other=1']) {
+			await assert.rejects(createChatGPTFetch(adapter)(path, { method: 'POST', body: form }), /Invalid ChatGPT/u);
+		}
+		assert.equal(requests, 1);
+	}));
 
 	test('preserves upload bytes across the actual JSON IPC channel and rejects malformed binary envelopes', async () => fixture(async file => {
 		using resources = new DisposableStore();
@@ -163,21 +190,23 @@ suite('ChatGPT transport', () => {
 			['PATCH', '/conversation/chat', { gizmo_id: 'g-p-project' }],
 			['DELETE', '/conversation/id/chat', undefined],
 			['POST', '/share/v2/create', { conversation_id: 'chat', current_node_id: 'reply', is_anonymous: true }],
+			['POST', '/f/conversation/resume', { conversation_id: 'chat', offset: 0 }],
 		] as const) {
 			const id = randomUUID();
 			await channel.call('', 'request', [id, { path: '/service/backend-api' + path, method, headers: {}, ...(body ? { body: JSON.stringify(body) } : {}) }]);
 			await channel.call('', 'cancel', [id]);
 		}
-		assert.deepEqual(calls.map(call => call.method), ['GET', 'POST', 'PATCH', 'PATCH', 'PATCH', 'DELETE', 'POST']);
+		assert.deepEqual(calls.map(call => call.method), ['GET', 'POST', 'PATCH', 'PATCH', 'PATCH', 'DELETE', 'POST', 'POST']);
 		for (const [method, path, body] of [
 			['POST', '/pins', '{}'],
 			['DELETE', '/models', undefined], ['POST', '/conversation/chat', '{}'], ['PATCH', '/conversation/chat', '{"is_visible":false}'],
 			['PATCH', '/conversation/chat', '{"is_starred":true,"gizmo_id":"g-p-project"}'],
 			['PATCH', '/conversation/chat', '{"gizmo_id":"../../other"}'], ['DELETE', '/conversation/id/chat', '{}'],
+			['GET', '/f/conversation/resume', undefined], ['POST', '/f/conversation/resume/other', '{}'],
 		] as const) {
 			await assert.rejects(channel.call('', 'request', [randomUUID(), { path: '/service/backend-api' + path, method, headers: {}, body }]), TypeError);
 		}
-		assert.equal(calls.length, 7);
+		assert.equal(calls.length, 8);
 	}));
 
 	test('validates IPC routes, methods, headers, sizes and operation shapes', async () => fixture(async file => {

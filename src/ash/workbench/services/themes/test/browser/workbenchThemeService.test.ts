@@ -24,6 +24,7 @@ import { loadUserThemes, WorkbenchThemeService } from '../../browser/workbenchTh
 import { createExtensionWorkbenchColorTheme, parseExtensionTheme } from '../../../extensions/common/extensionTheme.js';
 import { loadColorThemeDocument, loadUserColorTheme, parseUserColorTheme, resolveColorThemeDocument, serializeUserColorThemeDraft } from '../../common/colorThemeData.js';
 import { Colors } from '../../../../../platform/theme/common/colorRegistry.js';
+import { editorInactiveSelection } from '../../../../../editor/common/core/editorColorRegistry.js';
 import { migrateUserTheme } from '../../common/themeMigration.js';
 import { colorThemeSchemaId, registerColorThemeSchemas } from '../../common/colorThemeSchema.js';
 import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
@@ -169,8 +170,8 @@ test('persisted color customizations override themes, update live, and restore t
 			active.getColorTheme().getColorCss('editor.selectionForeground'),
 			active.getColorTheme().getColor('editor.inactiveSelectionBackground')?.rgba.a,
 			active.getColorTheme().semanticTokenRules,
-		], ['#456789', '#112233', 0.65, theme.semanticTokenRules]);
-		assert.equal(active.getColorTheme().getColor('editor.inactiveSelectionBackground')?.rgba.r, 69);
+		], ['#456789', '#112233', 1, theme.semanticTokenRules]);
+		assert.equal(active.getColorTheme().getColor(editorInactiveSelection)?.toString(), theme.getColor(editorInactiveSelection)?.toString());
 		await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, { 'editor.inactiveSelectionBackground': '#765432' });
 		assert.equal(browser.window.getComputedStyle(browser.window.document.documentElement).getPropertyValue('--ash-editor-inactiveSelectionBackground'), '#765432');
 		assert.equal(active.getColorTheme().getColorCss('editor.selectionForeground'), '#abcdef');

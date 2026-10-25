@@ -256,6 +256,10 @@ impl ServerCapabilities {
                 .insert("github".into(), CapabilityContract { version: 1 });
         }
         if self.extension_management {
+            self.contracts.insert(
+                "extensionRecommendations".into(),
+                CapabilityContract { version: 1 },
+            );
             self.contracts
                 .insert("extensionsPaging".into(), CapabilityContract { version: 1 });
             self.contracts

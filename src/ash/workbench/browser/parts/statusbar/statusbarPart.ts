@@ -3,7 +3,7 @@ import { Disposable, type IDisposable, toDisposable } from "../../../../base/com
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
-import "./statusbarpart.css";
+import "./media/statusbarpart.css";
 import { addDisposableListener, isHTMLElement, isNode, h } from "../../../../base/browser/dom.js";
 import { Part } from "../../part.js";
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';

@@ -18,6 +18,7 @@ import { IViewsService } from '../../workbench/services/views/common/viewsServic
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { ChatViewPane } from './chatViewPane.js';
 import './actions/chatActions.js';
+import { registerChatSessionsActions } from '../../workbench/contrib/chat/browser/chatSessions/chatSessions.contribution.js';
 import { ChatContextKeys } from '../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { registerAction2 } from '../../platform/actions/common/actions.js';
 import { ForkConversationAction } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
@@ -102,6 +103,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 registerSingleton(ISessionGroupsService, SessionGroupsService, InstantiationType.Delayed);
 registerSingleton(IChatSessionNavigationService, ChatSessionNavigationService, InstantiationType.Delayed);
 registerAction2(ForkConversationAction);
+registerChatSessionsActions();
 registerChatViews();
 
 EditorInputSerializers.registerStatic(new ChatEditorInputSerializer());

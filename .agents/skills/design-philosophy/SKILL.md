@@ -1,11 +1,11 @@
 ---
 name: design-philosophy
-description: The Ash design philosophy — a shared Values→Principles→Moves vocabulary for reasoning about UI in design terms instead of raw pixels. Use when designing, building, reviewing, or giving feedback on any visual surface; when deciding a radius, spacing, type role, icon size, border, color, or motion; or when translating a "this feels off" observation into a concrete, principled fix.
+description: The Ash design philosophy — a shared Values→Principles→Moves vocabulary for reasoning about UI in design terms instead of raw pixels. Use when designing, building, reviewing, or giving feedback on IDE or Agent Window surfaces; when deciding a radius, spacing, type role, icon size, border, color, or motion; or when translating a "this feels off" observation into a concrete, principled fix.
 ---
 
 # Ash Design Philosophy
 
-This skill defines the **IDE Workbench visual rules**. For Agent Window surfaces, including shared widgets hosted there, use [Sessions style](../../../src/ash/sessions/STYLE.md). Shared controls and theme infrastructure do not require the two windows to share visual values; choose the owning surface before applying the rules below.
+IDE and Agent Window share the design principles, interaction rules, and token system below. Unmarked rules apply to both. **IDE default** assignments apply unless an Agent Window override is defined in [Sessions style](../../../src/ash/sessions/STYLE.md); those overrides affect only the specified window or component.
 
 As more and more of the UI is implemented via agents and tooling, the pixels increasingly take care of themselves, and the scarce, human part becomes the design judgment behind them.
 
@@ -120,9 +120,9 @@ Every view should have a clear **center of attention** - the one thing the eye s
 
 #### 5. Elevation is encoded, not eyeballed
 
-> **Ask:** *does this surface's roundness match how far it floats above what's beneath it?*
+> **Ask:** *does this surface's roundness express its role?*
 
-How rounded - and how raised - a surface is *means something*: it tells you where the surface sits in the stack. A floating overlay reads as more rounded than a control sitting flat inside a pane. Radius is chosen by the surface's role in the hierarchy, never by taste. (This serves both **Focused** and **Consistent**.)
+How rounded - and how raised - a surface is *means something*: it expresses the surface's role. In the IDE, a floating overlay reads as more rounded than a control sitting flat inside a pane. Use the owning surface's radius assignments, never taste. (This serves both **Focused** and **Consistent**.)
 
 *Carried out by:* [elevation tiers](#elevation-tiers), [reveal-on-intent](#reveal-on-intent) (scroll shadows).
 
@@ -143,7 +143,7 @@ Equivalent elements must look equivalent, because they pull from the same named 
 *Carried out by:* every move below - they *are* the shared scales. See especially [design tokens](#design-tokens), [the spacing ramp](#spacing-ramp), [the type ramp](#type-ramp), [icon sizes](#icon-sizes), [one stroke](#one-stroke).
 
 > **Worked example - two mismatched dialogs**
-> - **See:** two dialogs open side by side; one has 8px corners, the other 6px -
+> - **See:** two IDE dialogs open side by side; one has 8px corners, the other 6px -
 >   both are floating overlays.
 > - **Feeling:** not *Consistent* - the UI feels like it's drifting.
 > - **Principle:** breaks *Sameness signals sameness* (two equivalent surfaces look
@@ -179,7 +179,7 @@ Moves are the **concrete mechanics** - the tokens, ramps, and tiers. On their ow
 
 This is the one section that touches implementation - and even here, the goal is to keep the *conversation* about design. Treat the Moves as the **shared vocabulary that lets an agreed design be built consistently**, not as the opening move in a review. Reach for them *after* you've named the feeling and the principle, never instead of it.
 
-The size and font tokens live in [`baseSizes.ts`](../../../src/ash/platform/theme/common/sizes/baseSizes.ts); the full reference is in [design-tokens.instructions.md](../../instructions/design-tokens.instructions.md).
+The shared size and font tokens live in [`baseSizes.ts`](../../../src/ash/platform/theme/common/sizes/baseSizes.ts); the full reference is in [design-tokens.instructions.md](../../../.github/instructions/design-tokens.instructions.md).
 
 <a id="design-tokens"></a>
 ### Tokens are the source of truth, not the pixel
@@ -189,12 +189,12 @@ Design-system spacing, radii, type roles, and colors should use a named token or
 - **Decision rule:** when something looks wrong, find the token it should be expressing and reason about *that* - not the literal.
 - **Serves:** *Sameness signals sameness* (6).
 
-> An `8px` corner isn't "8px." It's an **Outer surface radius** that someone typed as a literal. Name the role and the fix follows.
+> In the IDE, an `8px` corner isn't "8px." It's an **Outer surface radius** that someone typed as a literal. Name the role and the fix follows.
 
 <a id="elevation-tiers"></a>
-### Elevation tiers - round by role, not by literal
+### Elevation tiers - IDE default radii
 
-Corner radius encodes **how far a surface floats above the one beneath it**. Every rounded thing belongs to exactly one tier:
+In the IDE, corner radius encodes **how far a surface floats above the one beneath it**. Agent Window uses the component assignments in [Sessions style](../../../src/ash/sessions/STYLE.md#圆角与边界). The IDE default tiers are:
 
 | Tier | Radius | Token | What it is |
 |------|--------|-------|------------|
@@ -222,9 +222,9 @@ Text styles are **roles**, not arbitrary sizes: `heading1–3`, `body1–2`, `la
 - **Serves:** *One thing leads* (4), *Sameness signals sameness* (6).
 
 <a id="icon-sizes"></a>
-### Icon sizes - two sizes, chosen by context
+### Icon sizes - defaults chosen by context
 
-Lxicons are **16px (base)** or **12px (compact)** - nothing in between; `14px` is always a bug. At the compact size, also swap to the `*Compact` glyph (`Lxicon.close` → `Lxicon.closeCompact`) so the icon is *optically* tuned, not just scaled.
+Lxicons default to **16px (base)** or **12px (compact)**. Other sizes require an explicit component assignment, such as the Agent Window-only exceptions in [Sessions style](../../../src/ash/sessions/STYLE.md#图标与点击区域); an unassigned `14px` is a bug. At the compact size, also swap to the `*Compact` glyph (`Lxicon.close` → `Lxicon.closeCompact`) so the icon is *optically* tuned, not just scaled.
 - **Decision rule:** size tracks the **density and rank of the context**. Use **base (16px)** for standalone or primary actions and comfortable click targets; use **compact (12px)** for dense rows, inline glyphs, and secondary chrome where the icon rides alongside text. So the answer to "16 or 12?" is *"what is this icon's role here?"* - not a taste call. Say *"this icon should be compact,"* not *"shrink it a bit."*
 - **Serves:** *One thing leads* (4), *Sameness signals sameness* (6).
 
@@ -295,14 +295,14 @@ Lead with the **role / tier / ramp**, not the number - then name the principle s
 
 | ❌ Don't say | ✅ Do say | Principle |
 |----------------------|--------------------------|-----------|
-| "border-radius should be 6, not 8" | "this is an **Inner** surface rounded at the **Outer** tier" | 5 · Elevation |
-| "this menu corner is too sharp" | "this **overlay** should be on the **Outer** radius tier" | 5 · Elevation |
+| "IDE border-radius should be 6, not 8" | "this is an **Inner** surface rounded at the **Outer** tier" | 5 · Elevation |
+| "this IDE menu corner is too sharp" | "this **overlay** should be on the **Outer** radius tier" | 5 · Elevation |
 | "add 2px of padding" | "this content is **off the spacing ramp** / needs ramp breathing room" | 2 · Room to breathe |
 | "make this 14px" | "this should use the **`label1` / `body1` type role**" | 4 · One thing leads |
 | "the title looks thin" | "the heading is **missing the `semiBold` weight**" | 4 · One thing leads |
 | "font-weight 500 here" | "**500 is off the ramp** - snap to `semiBold` (600)" | 6 · Sameness |
 | "shrink this icon a touch" | "this icon should be the **compact (12px) size + `*Compact` glyph**" | 4 · One thing leads |
-| "this icon is 14px" | "lxicons are **16 or 12 only** - pick base or compact" | 6 · Sameness |
+| "this icon is 14px" | "this icon has no scoped size exception - use **base (16px)** or **compact (12px)**" | 6 · Sameness |
 | "this ordinary border is too thick" | "standard borders are **one stroke (1px)** - this should/shouldn't have one; preserve thicker focus/semantic strokes" | 1 · Quiet at rest |
 | "change this grey hex" | "this is the **wrong theme token** / it **vanishes in light/HC**" | 6 · Sameness |
 | "the command center has a box around it" | "chrome should be **quiet at rest, reveal on hover**" | 1 · Quiet at rest |

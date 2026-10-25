@@ -51,19 +51,19 @@ for (const [connection, expected] of [
 ] as const) test(`Instruction selection uses the owning ${connection.kind} connection outside all workspace folders`, async () => {
 	using resources = new DisposableStore();
 	const { quick, pick } = setup(resources, connection);
-	const selecting = pick.asAttachment(new AbortController().signal);
+	const selecting = pick.asAttachment(undefined, new AbortController().signal);
 	await ready(quick);
 	accept();
 	const selected = await selecting;
-	assert.equal(selected?.attachment.resource?.toString(), expected);
-	assert.deepEqual(await selected?.attachment.resolve(), { name: 'A synthetic instruction', content: path, kind: 'instruction' });
+	assert.equal(selected?.resource?.toString(), expected);
+	assert.deepEqual(await selected?.resolve(), { name: 'A synthetic instruction', content: path, kind: 'instruction' });
 	assert.equal(quick.currentQuickInput, undefined);
 });
 
 test('Instruction selection cannot attach a catalog from a replaced connection', async () => {
 	using resources = new DisposableStore();
 	const { quick, pick, changeConnection } = setup(resources, { kind: 'ssh', generation: 1, authority: 'ssh+fixture', host: 'fixture' });
-	const selecting = pick.asAttachment(new AbortController().signal);
+	const selecting = pick.asAttachment(undefined, new AbortController().signal);
 	await ready(quick);
 	changeConnection({ kind: 'local', generation: 2 });
 	accept();
@@ -75,11 +75,11 @@ test('a provider-owned Instruction URI remains attached to its host when the amb
 	using resources = new DisposableStore();
 	const resource = URI.parse(`ash-remote://ssh+additional${path}`);
 	const { quick, pick, changeConnection } = setup(resources, { kind: 'local', generation: 1 }, resource);
-	const selecting = pick.asAttachment(new AbortController().signal);
+	const selecting = pick.asAttachment(undefined, new AbortController().signal);
 	await ready(quick);
 	changeConnection({ kind: 'local', generation: 2 });
 	accept();
-	assert.equal((await selecting)?.attachment.resource?.toString(), resource.toString());
+	assert.equal((await selecting)?.resource?.toString(), resource.toString());
 	assert.equal(quick.currentQuickInput, undefined);
 });
 
@@ -87,7 +87,7 @@ test('Instruction picker cancellation releases the actual Quick Pick without acc
 	using resources = new DisposableStore();
 	const { quick, pick } = setup(resources, { kind: 'local', generation: 1 });
 	const controller = new AbortController();
-	const selecting = pick.asAttachment(controller.signal);
+	const selecting = pick.asAttachment(undefined, controller.signal);
 	await ready(quick);
 	controller.abort();
 	assert.equal(await selecting, undefined);

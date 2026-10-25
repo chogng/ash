@@ -1,0 +1,146 @@
+import { expect } from '@playwright/test';
+import { suite, test, setup, teardown } from 'mocha';
+import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
+
+suite('Customize page', () => {
+	const browser = useBrowserTests();
+	setup(async () => {
+		await browser.page.goto('/sessions.html?customize');
+		await expect(browser.page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await browser.page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Customize', exact: true }).click();
+		await expect(browser.page.locator('.ash-customize-card')).toHaveCount(3);
+	});
+	teardown(async () => {
+		expect(await browser.page.evaluate(() => window.ashSessionsIntegration.errors)).toEqual([]);
+	});
+
+	test('opens the retained catalog, filters and sorts real skill projections, and keeps navigation available', async () => {
+		const { page } = browser;
+		const entry = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Customize', exact: true });
+		await expect(entry).toHaveAttribute('aria-current', 'page');
+		await expect(entry.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'briefcase');
+		const root = page.locator('.ash-customize');
+		await expect(root.getByRole('tab')).toHaveText(['Skills', 'Connectors', 'Plugins']);
+		await expect(root.locator('.ash-customize-card-name')).toHaveText(['code-review', 'research-notes', 'writing-guide']);
+		await root.getByRole('searchbox', { name: 'Search', exact: true }).fill('writing');
+		await expect(root.locator('.ash-customize-card-name')).toHaveText(['writing-guide']);
+		await root.getByRole('searchbox').press('Escape');
+		await expect(root.locator('.ash-customize-card')).toHaveCount(3);
+		await root.getByRole('button', { name: 'Sort resources' }).click();
+		await page.getByRole('menuitemcheckbox', { name: 'Name: Z to A' }).click();
+		await expect(root.locator('.ash-customize-card-name')).toHaveText(['writing-guide', 'research-notes', 'code-review']);
+		await expect(root.getByRole('button', { name: 'Sort resources' })).toBeFocused();
+		await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+		await expect(root).toBeVisible();
+		await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
+		await expect(entry).toBeVisible();
+	});
+
+	test('switches categories and discovery, handles source failures, and opens package details', async () => {
+		const { page } = browser;
+		const root = page.locator('.ash-customize');
+		await root.getByRole('tab', { name: 'Connectors', exact: true }).click();
+		await expect(root.locator('.ash-customize-card-name')).toHaveText(['Team library']);
+		await root.getByRole('tab', { name: 'Plugins', exact: true }).click();
+		await expect(root.locator('.ash-customize-card-name')).toHaveText(['Local productivity']);
+		await root.getByRole('tab', { name: 'Skills', exact: true }).click();
+		await root.getByRole('button', { name: 'Discover', exact: true }).click();
+		await expect(root.locator('.ash-customize-card')).toHaveCount(4);
+		await expect(root.locator('.ash-customize-hero')).toBeVisible();
+		await expect(root.locator('.ash-customize-search > .ash-icon')).toHaveAttribute('data-ash-icon-id', 'search');
+		await expect(root.locator('.ash-customize-search > .ash-icon')).toHaveAttribute('aria-hidden', 'true');
+		await expect(root.getByRole('searchbox')).toHaveCSS('padding-inline-start', '32px');
+		await expect(root.getByRole('button', { name: 'Filter sources' }).locator('.ash-icon-label-icon > .ash-icon')).toHaveAttribute('data-ash-icon-id', 'list-filter');
+		for (const control of [root.locator('.ash-customize-search'), root.getByRole('tab', { name: 'Skills', exact: true }), root.getByRole('button', { name: 'Discover', exact: true }), root.getByRole('button', { name: 'Add', exact: true })]) {
+			await expect(control).toHaveCSS('border-radius', '8px');
+		}
+		for (const name of ['Filter sources', 'Sort resources', 'Add', 'Refresh', 'View Data explorer']) {
+			await root.getByRole('button', { name, exact: true }).hover();
+			await expect(page.getByRole('tooltip')).toHaveText(name);
+			await page.keyboard.press('Escape');
+		}
+		await page.screenshot({ path: browser.info.outputPath('customize-light.png') });
+		await root.getByRole('button', { name: 'Filter sources' }).click();
+		await expect(page.getByRole('menuitemcheckbox', { name: 'Ash fixtures' })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await root.getByRole('searchbox').fill('error');
+		await expect(root.getByRole('status')).toContainText('Synthetic catalog failure');
+		await root.getByRole('searchbox').fill('data');
+		await expect(root.locator('.ash-customize-card-name')).toHaveText(['Data explorer']);
+		await root.getByRole('button', { name: 'Data explorer', exact: true }).click();
+		await expect(page.locator('.ash-extension-editor')).toBeVisible();
+		await expect(page.locator('.ash-extension-editor')).toContainText('Data explorer');
+	});
+
+	test('supports keyboard categories, card navigation, narrow layouts and high contrast', async () => {
+		const { page } = browser;
+		const root = page.locator('.ash-customize');
+		await root.getByRole('tab', { name: 'Skills', exact: true }).focus();
+		await page.keyboard.press('ArrowRight');
+		await expect(root.getByRole('tab', { name: 'Connectors', exact: true })).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(root.getByRole('tab', { name: 'Connectors', exact: true })).toHaveAttribute('aria-selected', 'true');
+		const actions = root.getByRole('toolbar', { name: 'Customization actions' });
+		await actions.getByRole('button', { name: 'Sort resources' }).focus();
+		await page.keyboard.press('ArrowRight');
+		await expect(actions.getByRole('button', { name: 'Add', exact: true })).toBeFocused();
+		await page.keyboard.press('ArrowLeft');
+		await expect(actions.getByRole('button', { name: 'Sort resources' })).toBeFocused();
+		await page.keyboard.press('ArrowDown');
+		await expect(page.getByRole('menuitemcheckbox', { name: 'Name: A to Z' })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(actions.getByRole('button', { name: 'Sort resources' })).toBeFocused();
+		await root.getByRole('tab', { name: 'Skills', exact: true }).click();
+		await expect(root.locator('.ash-customize-card')).toHaveCount(3);
+		await root.getByRole('searchbox').focus();
+		await page.keyboard.press('ArrowDown');
+		await expect(root.getByRole('button', { name: 'code-review', exact: true })).toBeFocused();
+		await page.keyboard.press('End');
+		await expect(root.getByRole('button', { name: 'writing-guide', exact: true })).toBeFocused();
+		await page.setViewportSize({ width: 760, height: 900 });
+		await expect(root).toHaveClass(/narrow/);
+		expect(await root.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		const cards = root.locator('.ash-customize-card');
+		expect((await cards.nth(0).boundingBox())!.x).toBe((await cards.nth(1).boundingBox())!.x);
+		await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
+		await expect(cards.first()).toHaveCSS('box-shadow', 'none');
+		await expect(cards.first()).not.toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+	});
+
+	test('renders the Chinese navigation and catalog controls', async () => {
+		const { page } = browser;
+		await page.goto('/sessions.html?customize&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '自定义', exact: true }).click();
+		const root = page.locator('.ash-customize');
+		await expect(root.getByRole('heading', { name: '自定义', exact: true })).toBeVisible();
+		await expect(root.getByRole('tab')).toHaveText(['技能', '连接器', '插件']);
+		await expect(root.getByRole('button', { name: '你的', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await root.getByRole('button', { name: '发现', exact: true }).click();
+		await expect(root.locator('.ash-customize-hero')).toContainText('让 Ash 学会新的工作方法');
+		await expect(root.getByRole('status')).toContainText('4 个资源');
+		for (const name of ['筛选来源', '资源排序', '添加', '刷新']) {
+			await root.getByRole('button', { name, exact: true }).hover();
+			await expect(page.getByRole('tooltip')).toHaveText(name);
+			await page.keyboard.press('Escape');
+		}
+		await page.screenshot({ path: browser.info.outputPath('customize-zh-cn.png') });
+		const add = root.getByRole('button', { name: '添加', exact: true });
+		await add.click();
+		const menu = page.locator('.ash-customize-add-menu');
+		await expect(menu.getByRole('menuitem')).toHaveText(['上传技能', '创建技能', '用 Ash 创建']);
+		await expect(menu).toHaveCSS('padding', '8px');
+		for (const item of await menu.getByRole('menuitem').all()) {
+			await expect(item).toHaveCSS('height', '36px');
+			await expect(item.locator('.ash-menu-leading-slot .ash-icon')).toBeVisible();
+		}
+		const buttonBounds = (await add.boundingBox())!;
+		const surface = menu.locator('..');
+		const menuBounds = (await surface.boundingBox())!;
+		expect(menuBounds.y - buttonBounds.y - buttonBounds.height).toBeCloseTo(8, 0);
+		expect(menuBounds.x + menuBounds.width).toBeCloseTo(buttonBounds.x + buttonBounds.width, 0);
+		await page.screenshot({ path: browser.info.outputPath('customize-add-menu-zh-cn.png') });
+		await page.keyboard.press('Escape');
+		await expect(add).toBeFocused();
+	});
+});

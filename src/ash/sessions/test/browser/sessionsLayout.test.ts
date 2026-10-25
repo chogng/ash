@@ -24,7 +24,7 @@ suite('sessions browser component', () => {
 			else { await expect(item).toHaveCSS('width', `${itemSize}px`); }
 			await expect(item).toHaveCSS('height', `${itemSize}px`);
 		}
-		await expect(icons).toHaveCount(horizontal || labeled ? 4 : 5);
+		await expect(icons).toHaveCount(horizontal || labeled ? 5 : 6);
 		const accounts = navigation.page().getByRole('button', { name: 'Accounts', exact: true });
 		await expect(accounts).toHaveCount(1);
 		const titlebarAccounts = navigation.page().locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });
@@ -115,6 +115,9 @@ suite('sessions browser component', () => {
 		await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await expect(chat).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+		await expect(page.locator('.ash-sessions-list [data-item^="untitled:"]')).toHaveCount(0);
+		await page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor .stanza-editor').getByRole('textbox').focus();
+		await page.keyboard.insertText('Navigation draft');
 		await expect(page.locator('.ash-sessions-list-item[aria-current="page"]').first()).toHaveCSS('background-color', 'rgb(240, 240, 240)');
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
@@ -384,7 +387,9 @@ suite('sessions browser component', () => {
 		const sidebar = page.locator('[data-part="sidebar"]');
 		const mode = titlebar.locator('.ash-window-mode-control');
 		const newSession = activityNavigation.getByRole('button', { name: 'New', exact: true });
-		for (const delta of [0, -110, 120]) {
+		let sidebarWidth = (await sidebar.boundingBox())!.width;
+		expect(sidebarWidth).toBeGreaterThan(270);
+		for (const delta of [0, -110, -50, 120]) {
 			if (delta) {
 				const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();
 				const bounds = (await sash.boundingBox())!;
@@ -395,12 +400,16 @@ suite('sessions browser component', () => {
 				await page.mouse.move(x + delta, y, { steps: 5 });
 				await page.mouse.up();
 			}
+			// The browser sidebar's 270px minimum can leave more than the titlebar's 8px gap.
+			sidebarWidth = Math.max(270, sidebarWidth + delta);
+			await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeCloseTo(sidebarWidth, 1);
 			const modeBounds = (await mode.boundingBox())!;
 			const navigationBounds = (await newSession.boundingBox())!;
 			expect(modeBounds.x + modeBounds.width).toBeCloseTo(navigationBounds.x + navigationBounds.width, 1);
 			if (delta < 0) {
+				expect(sidebarWidth).toBe(270);
 				const forwardBounds = (await titlebarButtons.last().boundingBox())!;
-				expect(modeBounds.x - forwardBounds.x - forwardBounds.width).toBeCloseTo(8, 1);
+				expect(modeBounds.x - forwardBounds.x - forwardBounds.width).toBeGreaterThanOrEqual(8);
 			}
 		}
 	});
@@ -546,7 +555,7 @@ suite('sessions browser component', () => {
 				await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 				await page.mouse.move(0, 0);
 				for (const button of [primary, secondary]) {
-					await expect(button).toHaveCSS('padding', '4px 8px');
+					await expect(button).toHaveCSS('padding', button === primary ? '0px 8px' : '4px 8px');
 					expect((await button.boundingBox())!.height).toBeLessThan(36);
 					await expect(button).toHaveCSS('border-radius', '8px');
 					await expect(button).toHaveCSS('font-size', '14px');
@@ -559,7 +568,7 @@ suite('sessions browser component', () => {
 				expect(colors.background).not.toBe(colors.foreground);
 				await expect(primary).toHaveCSS('background-color', colors.expected);
 				if (!theme.includes('high-contrast')) await expect(primary).not.toHaveCSS('background-color', await outside.evaluate(element => getComputedStyle(element).backgroundColor));
-				const search = projects.getByRole('button', { name: chinese ? '搜索项目' : 'Search projects', exact: true });
+				const search = projects.getByRole('button', { name: chinese ? '关闭项目搜索' : 'Close project search', exact: true });
 				await search.hover();
 				await expect(search).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 				await expect(search).toHaveCSS('height', '28px');
@@ -646,12 +655,13 @@ suite('sessions browser component', () => {
 		const sessionsWindow = page.locator('.ash-sessions-window');
 		const input = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor .stanza-editor');
 		await expect(sessionsWindow).toHaveCSS('font-size', '14px');
+		await expect(page.locator('.ash-sessions-list-label')).toHaveCount(0);
+		await input.getByRole('textbox').focus();
+		await page.keyboard.insertText('Typography draft');
 		await expect(page.locator('.ash-sessions-list-label').first()).toHaveCSS('font-size', '14px');
 		await expect(page.getByRole('note')).toHaveCSS('font-size', '14px');
 		await expect(page.getByRole('note').locator('p').first()).toHaveCSS('font-size', '14px');
 		await expect(input).toHaveCSS('font-size', '14px');
-		await input.getByRole('textbox').focus();
-		await page.keyboard.insertText('Typography draft');
 		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('chat.input.fontSize', 18));
 		await expect(input).toHaveCSS('font-size', '18px');
 		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('chat.input.fontSize', undefined));

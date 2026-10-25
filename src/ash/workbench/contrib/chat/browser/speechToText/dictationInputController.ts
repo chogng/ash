@@ -45,10 +45,10 @@ export class DictationInput extends Disposable {
 	private get isAvailable(): boolean { return this.service.isConfigured; }
 	public get action(): MenuItemAction {
 		const active = this.isActive;
-		const label = localize('chat.input.dictate', 'Dictate message');
+		const label = active ? localize('chat.input.dictationStop', 'Stop dictation') : localize('chat.input.dictate', 'Dictate message');
 		return new DictationInputAction({
-			id: 'workbench.action.chat.toggleSpeechToText', title: label, icon: Lxicon.mic,
-			tooltip: active ? localize('chat.input.dictationStop', 'Stop dictation') : this.isAvailable ? label : localize('chat.input.dictationUnavailable', 'Dictation is unavailable'),
+			id: 'workbench.action.chat.toggleSpeechToText', title: label, icon: active ? Lxicon.stopCircle : Lxicon.mic,
+			tooltip: active || this.isAvailable ? label : localize('chat.input.dictationUnavailable', 'Dictation is unavailable'),
 			precondition: this.isAvailable && (!this.service.isBusy || active) && !this.isStarting && this.service.state !== ChatSpeechToTextState.Transcribing ? ContextKeyExpr.true() : ContextKeyExpr.false(),
 			toggled: active && this.service.state === ChatSpeechToTextState.Recording ? ContextKeyExpr.true() : ContextKeyExpr.false(),
 		}, this.contextKeys, this.commands, () => this.toggle());

@@ -28,5 +28,6 @@ export class SessionsPromptsService extends Disposable implements IPromptsServic
 	findAgentSkills(...args: Parameters<IPromptsService['findAgentSkills']>): ReturnType<IPromptsService['findAgentSkills']> { return new SessionScopedPromptsService(this.scopes.getScope(args[1])).findAgentSkills(...args); }
 	readSkillManagement(...args: Parameters<IPromptsService['readSkillManagement']>): ReturnType<IPromptsService['readSkillManagement']> { return new SessionScopedPromptsService(this.scopes.getScope(args[0])).readSkillManagement(...args); }
 	setSkillEnablement(...args: Parameters<IPromptsService['setSkillEnablement']>): ReturnType<IPromptsService['setSkillEnablement']> { return new SessionScopedPromptsService(this.scopes.getScope(args[3])).setSkillEnablement(...args); }
+	registerSkillSource(rootReference: string): Promise<void> { return new SessionScopedPromptsService(this.scopes.getScope()).registerSkillSource(rootReference); }
 	parseNew(...args: Parameters<IPromptsService['parseNew']>): ReturnType<IPromptsService['parseNew']> { return new SessionScopedPromptsService(this.scopes.getScope()).parseNew(...args); }
 }

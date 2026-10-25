@@ -1182,6 +1182,56 @@ exports.activate = context => {
 	assert.equal((await h.invoke('test.node', []).result).body.body.payload, true);
 });
 
+test('document formatting SDK preserves snapshots, options, cancellation and registration retirement', { timeout: 10000 }, async t => {
+	const h = await host(t, `import * as ash from '@ash/sdk';
+let registration; let cancelled = false;
+export function activate(context) {
+ registration = ash.languages.registerDocumentFormattingEditProvider(['json', 'jsonc'], {
+  provideDocumentFormattingEdits(document, options, token) {
+   if (document.getText() === 'wait') return new Promise(resolve => token.onCancellationRequested(() => { cancelled = true; resolve([]); }));
+   return [new ash.TextEdit(new ash.Range(0, 0, 0, document.getText().length), JSON.stringify({ language: document.languageId, version: document.version, options }))];
+  }
+ });
+ context.subscriptions.push(registration, ash.commands.register('test.node', () => { registration.dispose(); return cancelled; }));
+}`, 'extension.mjs', ['command', 'languageProvider']);
+	const registration = h.registrations.find(entry => entry.kind === 'languageProvider');
+	assert.deepEqual(registration.languageIds, ['json', 'jsonc']);
+	const invoke = (text, kind = 'document') => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'formatting', payload: { resource: 'file:///format.jsonc', languageId: 'jsonc', version: 4, text, kind, options: { tabSize: 2, insertSpaces: true } }, deadlineUnixMillis: Date.now() + 5000 });
+	const response = (await invoke('{}').result).body.body.payload;
+	assert.deepEqual(response, { edits: [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } }, text: JSON.stringify({ language: 'jsonc', version: 4, options: { tabSize: 2, insertSpaces: true } }) }] });
+	assert.deepEqual((await invoke('{}', 'range').result).body.body.payload, { edits: [] });
+	const pending = invoke('wait');
+	await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result;
+	assert.deepEqual((await pending.result).body.body.payload, { edits: [] });
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, true);
+	assert.equal((await invoke('{}').result).status, 'failure');
+});
+
+test('JSON schema SDK reads owner snapshots, rejects invalid data and fences disposed change listeners', { timeout: 10000 }, async t => {
+	let value = [{ uri: 'ash://schema/settings', fileMatch: ['**/settings.json'], schema: { type: 'object' } }];
+	const h = await host(t, `import * as ash from '@ash/sdk';
+let changes = 0; let listener;
+export function activate(context) {
+ listener = ash.languages.onDidChangeJsonSchemas(() => { changes++; });
+ context.subscriptions.push(listener, ash.commands.register('test.node', async () => {
+  try { return { schemas: await ash.languages.getJsonSchemaContributions(), changes }; } catch (error) { return { error: error.message, changes }; }
+ }), ash.commands.register('test.second', () => listener.dispose()));
+}`, 'extension.mjs', ['command'], frame => {
+		assert.deepEqual(frame.operation, { operation: 'editorOperation', payload: { method: 'jsonSchemaContributions' } });
+		return { result: 'value', value };
+	});
+	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, { schemas: value, changes: 0 });
+	const event = revision => h.request('invoke', { extensionId: 'test.node', registrationId: 'ash.workspace.events', operation: 'workspaceEvent', payload: { type: 'jsonSchemas', revision, emit: true }, deadlineUnixMillis: Date.now() + 5000 }).result;
+	await event(2);
+	await event(1);
+	value = [{ ...value[0], schema: { type: 'array' } }];
+	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, { schemas: value, changes: 1 });
+	await h.invoke('test.second', []).result;
+	await event(3);
+	value = [{ uri: 'ash://bad', fileMatch: [false], schema: {} }];
+	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, { error: 'Invalid JSON schema contributions', changes: 1 });
+});
+
 test('terminal quick fix selectors run before callbacks and retain opaque command actions', { timeout: 15000 }, async t => {
 	const h = await host(t, `const v = require('@ash/sdk'); let calls = 0; let accepted; let fix;
 exports.activate = context => {

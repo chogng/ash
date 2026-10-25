@@ -695,6 +695,10 @@ class ViewModelCoordinatesConverter implements ICoordinatesConverter {
 	}
 
 	public validateViewRange(viewRange: Range, expectedModelRange: Range): Range {
+		// A caret on one side of injected text must stay collapsed; opposite affinities select the injection.
+		if (viewRange.isEmpty()) {
+			return Range.fromPositions(this.validateViewPosition(viewRange.getStartPosition(), expectedModelRange.getStartPosition()));
+		}
 		const expected = this.convertModelRangeToViewRange(expectedModelRange);
 		if (expected.equalsRange(viewRange)) return expected;
 		return Range.fromPositions(

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>TabList presentations</title>
+		<style>
+			body { margin: 24px; font: 13px system-ui; color: var(--ash-foreground); background: var(--ash-editor-background); }
+			section { display: flex; width: 600px; margin-bottom: 24px; }
+			#document { height: 24px; }
+			#navigation > .ash-tab-list {
+				--ash-tab-height: 28px;
+				--ash-tab-border-radius: 8px;
+				--ash-tabList-itemContentInset: 12px;
+				font-size: 14px;
+				font-weight: 400;
+			}
+		</style>
+	</head>
+	<body>
+		<section id="navigation"></section>
+		<section id="document"></section>
+		<script type="module" src="./tablist.page.ts"></script>
+	</body>
+</html>

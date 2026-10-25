@@ -349,8 +349,14 @@ fn exposed_name(server: &McpServerId, remote_name: &str) -> Result<ToolName, Mcp
     let digest =
         Sha256::digest([server.as_str().as_bytes(), &[0], remote_name.as_bytes()].concat());
     let digest = format!("{digest:x}");
-    let server_slug = slug(server.as_str(), 40);
-    let tool_slug = slug(remote_name, 60);
+    let mut server_slug = slug(server.as_str(), 40);
+    let mut tool_slug = slug(remote_name, 60);
+    // Providers commonly limit function names to 64 ASCII characters. Retain existing
+    // short names and the full-identity hash, sharing the remaining 46 bytes between slugs.
+    if server_slug.len() + tool_slug.len() > 46 {
+        tool_slug = slug(remote_name, 32);
+        server_slug = slug(server.as_str(), 46 - tool_slug.len());
+    }
     ToolName::new(format!("mcp_{server_slug}_{tool_slug}_{}", &digest[..12])).map_err(|error| {
         McpRuntimeError::Catalog {
             server: server.clone(),

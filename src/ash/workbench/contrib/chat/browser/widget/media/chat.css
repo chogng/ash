@@ -102,6 +102,10 @@
 	align-items: center;
 	gap: var(--ash-spacing-size40);
 	margin-top: var(--ash-spacing-size40);
+	/* Match the input's inset so footer actions share its icon centers. */
+	padding-inline: calc(
+		var(--ash-spacing-size80) + var(--ash-strokeThickness)
+	);
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label1);
 }
@@ -287,6 +291,30 @@
 	flex: 1 1 auto;
 }
 
+.ash-chat-input-part.compact > .ash-chat-input-container {
+	flex-direction: row;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-chat-input-inline-toolbar.ash-toolbar {
+	flex: 0 0 auto;
+	align-self: flex-end;
+	width: auto;
+	margin-top: 0;
+}
+
+.ash-chat-input-footer {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+}
+
+.ash-chat-input-footer > .ash-chat-input-toolbars {
+	flex: 1 1 auto;
+	margin-top: 0;
+}
+
 .ash-chat-input-part .ash-chat-input-tip {
 	display: flex;
 	align-items: flex-start;
@@ -408,37 +436,6 @@
 	.ash-chat-input-mode-action {
 	color: var(--ash-charts-green);
 	background: color-mix(in srgb, var(--ash-charts-green) 16%, transparent);
-}
-
-.ash-chat-input-mode-indicator {
-	flex: 0 0 auto;
-	margin-left: 6px;
-}
-
-.ash-chat-input-toolbars.ash-toolbar
-	.ash-action-view-item.ash-chat-input-mode-selector
-	.ash-chat-input-mode-action
-	> .ash-chat-input-mode-indicator {
-	display: inline-flex;
-}
-
-.ash-chat-input-mode-indicator > .ash-icon {
-	width: var(--ash-lxiconFontSize-compact);
-	height: var(--ash-lxiconFontSize-compact);
-	font-size: var(--ash-lxiconFontSize-compact);
-}
-
-.ash-chat-input-toolbars
-	.ash-chat-input-mode-selector
-	.ash-chat-input-action.ash-chat-input-mode-action
-	.ash-chat-input-mode-action-label {
-	position: static;
-	overflow: hidden;
-	width: auto;
-	height: auto;
-	clip-path: none;
-	text-overflow: clip;
-	white-space: nowrap;
 }
 
 .ash-chat-input-mic-action {

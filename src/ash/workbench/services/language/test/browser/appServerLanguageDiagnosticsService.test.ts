@@ -606,7 +606,7 @@ test('language changes retire an in-flight diagnostic binding before synchronizi
 	assert.equal(api.diagnosticPulls.length, 1, 'the retired binding cannot pull diagnostics');
 });
 
-test('local JSON diagnostics follow the language of an acquired model', async () => {
+test('the server diagnostics service does not synthesize extension-owned JSON diagnostics', async () => {
 	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
 	using service = createDiagnosticsService(new FakeLanguageApi(), new FakeServerEvents(), workspace);
 	using model = new TextModel('{', { languageId: 'plaintext' });
@@ -615,7 +615,7 @@ test('local JSON diagnostics follow the language of an acquired model', async ()
 	await tick();
 	assert.equal(service.getDiagnostics(resource), undefined);
 	model.setLanguage('json');
-	assert.ok(service.getDiagnostics(resource)?.diagnostics.length);
+	assert.equal(service.getDiagnostics(resource), undefined);
 	model.setLanguage('plaintext');
 	assert.equal(service.getDiagnostics(resource), undefined);
 });

@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { compileEditorClient } from './editorClients.ts';
 import type { EditorClientApi } from './editorClientApi.ts';
+import { readExtensionUiTargets } from './extensionManifest.ts';
 
 export interface EditorPackageBinary {
 	readonly targetPlatform: string;
@@ -50,7 +51,7 @@ export async function buildEditorPackage(packageRoot: string, binaries: readonly
 		}
 		await mkdir(resolve(assets, 'ash'));
 		await writeFile(resolve(assets, 'ash/editor-extensions.json'), JSON.stringify({ schemaVersion: 1, editorExtensions: declarations }, null, 2) + '\n');
-		const catalog = { schemaVersion: 2, packageType: 'editor', source: 'official', id: `${manifest.publisher}/${manifest.name}`, version: manifest.version, displayName: messages[manifest.displayName?.slice(1, -1)] ?? manifest.displayName ?? manifest.name, description: messages[manifest.description?.slice(1, -1)] ?? manifest.description ?? manifest.name, license: 'LicenseRef-Ash', capabilities };
+		const catalog = { schemaVersion: 2, packageType: 'editor', source: 'official', id: `${manifest.publisher}/${manifest.name}`, version: manifest.version, displayName: messages[manifest.displayName?.slice(1, -1)] ?? manifest.displayName ?? manifest.name, description: messages[manifest.description?.slice(1, -1)] ?? manifest.description ?? manifest.name, license: 'LicenseRef-Ash', uiTargets: readExtensionUiTargets(manifest.ashUiTargets), capabilities };
 		await writeFile(resolve(staging, 'catalog.json'), JSON.stringify(catalog, null, 2) + '\n');
 		await rename(staging, output);
 	} catch (error) {

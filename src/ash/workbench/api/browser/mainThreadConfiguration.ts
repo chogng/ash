@@ -4,11 +4,15 @@ import { localize } from '../../../nls.js';
 import { IConfigurationService, type IConfigurationChange } from '../../../platform/configuration/common/configuration.js';
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
+import { Registry } from '../../../platform/registry/common/platform.js';
+import { Extensions, type IJSONContributionRegistry } from '../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 
 /** ConfigurationService owns values; this bridge retains only ordered, fenced deliveries. */
 export class MainThreadConfiguration extends Disposable {
 	private readonly observers = this._register(new DisposableMap<string, ConfigurationObserver>());
 	private revision = 0;
+	private schemaRevision = 0;
+	private readonly schemas = Registry.as<IJSONContributionRegistry>(Extensions.JSONContribution);
 
 	constructor(
 		private readonly timeoutMillis: number,
@@ -21,6 +25,21 @@ export class MainThreadConfiguration extends Disposable {
 			const payload = this.snapshot(event.change);
 			for (const [, observer] of this.observers) observer.send(payload);
 		}));
+		const schemasChanged = (): void => {
+			const event = { type: 'jsonSchemas', revision: ++this.schemaRevision, emit: true };
+			for (const [, observer] of this.observers) observer.send(event);
+		};
+		this._register(this.schemas.onDidChangeSchema(schemasChanged));
+		this._register(this.schemas.onDidChangeSchemaAssociations(schemasChanged));
+	}
+
+	/** Return a detached view; schema registration and mutation stay with their domain owners. */
+	public getJsonSchemaContributions(): JsonValue {
+		const associations = this.schemas.getSchemaAssociations();
+		const contributions = Object.entries(this.schemas.getSchemaContributions().schemas).map(([uri, schema]) => ({ uri, fileMatch: associations[uri] ?? [], schema }));
+		// Registry schemas contain optional undefined fields and shared sub-schemas. Their
+		// serialized JSON representation is the document contract exposed to extensions.
+		return normalizeExtensionHostPayload(JSON.parse(JSON.stringify(contributions)));
 	}
 
 	public update(snapshot: ExtensionHostFleetSnapshot): void {

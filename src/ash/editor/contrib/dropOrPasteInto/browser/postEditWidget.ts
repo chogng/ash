@@ -23,6 +23,7 @@ import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../e
 import { SnippetController2 } from '../../snippet/browser/snippetController2.js';
 import { createSnippetVariables, parseSnippet, type Snippet } from '../../snippet/common/snippetParser.js';
 import { createCombinedWorkspaceEdit } from './edit.js';
+import { PasteEditSession } from './pasteEditSession.js';
 
 type TransferEdit = DocumentDropEdit | DocumentPasteEdit;
 
@@ -134,6 +135,7 @@ class PostEditWidget<T extends TransferEdit> extends Disposable implements ICont
 
 export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 	private readonly widget = this._register(new MutableDisposable<PostEditWidget<T>>());
+	private readonly editSession = this._register(new MutableDisposable<PasteEditSession>());
 	private readonly visible: IContextKey<boolean>;
 
 	constructor(
@@ -157,6 +159,7 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 
 	clear(): void {
 		this.widget.clear();
+		this.editSession.clear();
 		this.visible.set(false);
 	}
 	tryShowSelector(): void { this.widget.value?.showSelector(); }
@@ -167,7 +170,9 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 		canShowWidget: boolean,
 		resolve: (edit: T, token: CancellationToken) => Promise<T>,
 		token: CancellationToken,
+		editSessionOwner?: PasteEditSession,
 	): Promise<void> {
+		using session = editSessionOwner?.take();
 		this.clear();
 		const model = this.editor.getModel();
 		const candidate = edits.allEdits[edits.activeEditIndex];
@@ -240,18 +245,22 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 		if (snippetController && snippet) snippetController.startSession(model, insertionStarts, snippet);
 		else this.editor.setPosition(anchor.getEndPosition());
 		if (!canShowWidget || (edits.allEdits.length < 2 && !this.configureAction())) return;
+		this.editSession.value = session?.take();
 		// The transient widget uses the current language, which may have changed since controller creation.
 		this.widget.value = this.instantiationService.createInstance(PostEditWidget<T>, this.editor, this.id, anchor, this.label(), edits, (newIndex: number) => {
 			if (newIndex === edits.activeEditIndex) return;
+			const nextSession = this.editSession.value?.take();
 			this.clear();
-			if (this.editor.getModel() !== model) return;
+			if (this.editor.getModel() !== model) { nextSession?.dispose(); return; }
 			snippetController?.cancel();
 			void (async () => {
 				try {
 					await undo();
-					await this.applyEditAndShowIfNeeded(ranges, { allEdits: edits.allEdits, activeEditIndex: newIndex }, canShowWidget, resolve, token);
+					await this.applyEditAndShowIfNeeded(ranges, { allEdits: edits.allEdits, activeEditIndex: newIndex }, canShowWidget, resolve, token, nextSession);
 				} catch (error) {
 					this.notifications.error(localize('dropOrPaste.switchFailed', 'Could not change edit: {0}', String(error)));
+				} finally {
+					nextSession?.dispose();
 				}
 			})();
 		}, () => this.clear(), this.configureAction());

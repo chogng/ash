@@ -6,6 +6,58 @@ import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index
 import { connectProfile } from './sessionProfileFixture.js';
 import { expect, test } from '../../../automation/test.js';
 
+test.describe('Projects sorting persistence', () => {
+	test.use({ electronArgs: ['--agents-window'], electronUserSettings: { 'workbench.locale': 'zh-CN', 'workbench.colorTheme': 'ash-light' } });
+
+	test('Sessions Projects remembers sorting across page changes and Desktop relaunch', { tag: ['@electron-app-server'] }, async ({ workbench, reloadWorkbench }, testInfo) => {
+		test.setTimeout(90_000);
+		let page = workbench.page;
+		const openProjects = async () => {
+			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await expect(page.locator('.ash-projects')).toBeVisible();
+		};
+		const assertSelected = async (label: string) => {
+			await page.getByRole('button', { name: '项目排序', exact: true }).click();
+			const menu = page.locator('.ash-projects-sort-menu');
+			await expect(menu.getByRole('menuitemradio', { name: label, exact: true })).toHaveAttribute('aria-checked', 'true');
+			await expect(menu.locator('[aria-checked="true"]')).toHaveCount(1);
+			await page.keyboard.press('Escape');
+		};
+		await openProjects();
+		for (const name of ['Alpha', 'Zebra']) {
+			await page.locator('.ash-projects').getByRole('button', { name: '新建项目', exact: true }).first().click();
+			const dialog = page.getByRole('dialog', { name: '创建项目' });
+			await dialog.getByRole('textbox', { name: '你正在做什么？', exact: true }).fill(name);
+			await dialog.getByRole('button', { name: '创建项目', exact: true }).click();
+			await expect(dialog).toHaveCount(0);
+			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: '项目', exact: true }).click();
+			for (const caption of await page.locator('.ash-projects-card-caption').all()) { await expect(caption).toHaveText('刚刚'); }
+		}
+		for (const { label, order } of [
+			{ label: '按名称', order: ['Alpha', 'Zebra'] },
+			{ label: '最近更新', order: ['Zebra', 'Alpha'] },
+			{ label: '创建时间', order: ['Zebra', 'Alpha'] },
+		]) {
+			await page.getByRole('button', { name: '项目排序', exact: true }).click();
+			await page.locator('.ash-projects-sort-menu').getByRole('menuitemradio', { name: label, exact: true }).click();
+			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '新建', exact: true }).click();
+			await openProjects();
+			await expect(page.locator('.ash-projects-card-name')).toHaveText(order);
+			await assertSelected(label);
+		}
+		({ workbench } = await reloadWorkbench());
+		page = workbench.page;
+		await openProjects();
+		await expect(page.locator('.ash-projects-card-name')).toHaveText(['Zebra', 'Alpha']);
+		await assertSelected('创建时间');
+		await page.getByRole('button', { name: '项目排序', exact: true }).focus();
+		await page.keyboard.press('Alt+F1');
+		await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue(/所选排序方式会保存在当前用户配置中/);
+		await page.keyboard.press('Escape');
+		await page.screenshot({ path: testInfo.outputPath('projects-sort-restored.png') });
+	});
+});
+
 test('Sessions Projects replaces material categories and supports keyboard creation', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
@@ -14,7 +66,8 @@ test('Sessions Projects replaces material categories and supports keyboard creat
 	await expect(projects).toBeVisible();
 	await expect(projects.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
 	const breadcrumb = page.locator('.ash-sessions-titlebar').getByRole('navigation', { name: 'Project navigation' });
-	await expect(breadcrumb.getByRole('button', { name: 'Projects', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(breadcrumb).toHaveCount(0);
+	await expect(page.locator('.ash-sessions-titlebar-page-content')).toHaveCSS('border-bottom-width', '0px');
 	await expect(projects.getByRole('navigation', { name: 'Project navigation' })).toHaveCount(0);
 	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Library', exact: true })).toHaveCount(0);
@@ -37,7 +90,7 @@ test('Sessions Projects replaces material categories and supports keyboard creat
 	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeVisible();
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 	await expect(projects).toBeVisible();
-	await expect(breadcrumb).toBeVisible();
+	await expect(breadcrumb).toHaveCount(0);
 	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeVisible();
 });
 
@@ -46,6 +99,7 @@ test('Sessions Projects persists creation and goals through a real backend and r
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
 	let projects = page.locator('.ash-projects');
 	await expect(projects.getByText('Looking to start a project?', { exact: true })).toBeVisible();
+	await expect(page.locator('.ash-projects-breadcrumb')).toHaveCount(0);
 	await page.screenshot({ path: testInfo.outputPath('projects-empty.png') });
 	await projects.getByRole('button', { name: 'New project', exact: true }).first().click();
 	const dialog = page.getByRole('dialog', { name: 'Create a project' });
@@ -61,7 +115,11 @@ test('Sessions Projects persists creation and goals through a real backend and r
 	await page.screenshot({ path: testInfo.outputPath('projects-detail.png') });
 	await expect(projects.getByText('Collect images, papers and working documents.', { exact: true })).toBeVisible();
 	await page.getByRole('navigation', { name: 'Project navigation' }).getByRole('button', { name: 'Projects', exact: true }).click();
+	await expect(page.locator('.ash-projects-breadcrumb')).toHaveCount(0);
+	await expect(projects.getByRole('button', { name: 'New project', exact: true }).first()).toBeFocused();
 	await expect(projects.getByRole('button', { name: 'Research workspace', exact: true })).toBeVisible();
+	await expect(projects.locator('.ash-projects-card-caption')).toHaveText('Just now');
+	await page.screenshot({ path: testInfo.outputPath('projects-relative-time.png') });
 	await projects.getByRole('button', { name: 'Search projects', exact: true }).click();
 	await projects.getByRole('searchbox').fill('no matching project');
 	await expect(projects.getByText('No matching projects', { exact: true })).toBeVisible();

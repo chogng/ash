@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "types": ["node", "electron"]
+  },
+  "include": [
+    "../../src/typings/css.d.ts",
+    "../../src/ash/**/common/**/*.ts",
+    "../../src/ash/**/node/**/*.ts",
+    "../../src/ash/**/electron-utility/**/*.ts"
+  ]
+}

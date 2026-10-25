@@ -31,7 +31,7 @@ test('Workbench context picker uploads, previews and removes attachments with th
 	const attachments = chat.locator('.ash-chat-input-editor');
 	const input = chat.locator('.stanza-editor-input');
 	await expect(attachments.locator('.ash-chat-code-reference')).toHaveText('brief.txt');
-	await expect(attachments.getByRole('button', { name: /^Remove /u })).toHaveCount(1);
+	await expect(attachments.getByRole('button', { name: /^Remove /u })).toHaveCount(2);
 	await expect(page.locator('input[type="file"][aria-label="Attach files"]')).toHaveCount(0);
 	await expect(attachments.getByRole('img', { name: 'preview.png' })).toHaveAttribute('src', /^data:image\/png;base64,/);
 	await input.focus();
@@ -39,8 +39,8 @@ test('Workbench context picker uploads, previews and removes attachments with th
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/including unsaved text/);
 	await page.keyboard.press('Escape');
 	await expect(input).toBeFocused();
-	// File references are atomic text in the message; images additionally expose
-	// inline Preview/Remove controls. Exercise both removal paths with the keyboard.
+	// Both references own native controls and remain atomic message text.
+	// Exercise deletion at the file boundary and removal through the image button.
 	await input.press('ControlOrMeta+A');
 	await input.press('ArrowLeft');
 	await input.press('Delete');

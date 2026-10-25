@@ -386,10 +386,6 @@
 		var(--ash-sideBar-background);
 }
 
-.ash-scm-graph-change-row:hover:not(.selected) {
-	--scm-graph-row-background: var(--ash-list-hoverBackground);
-}
-
 .ash-scm-graph-change-row:is(
 		:hover,
 		:focus-within,
@@ -492,8 +488,10 @@
 	font-weight: var(--ash-fontWeight-semiBold);
 }
 
-.ash-scm-graph-hover-message {
-	white-space: pre-wrap;
+.ash-scm-graph-hover-message.ash-markdown {
+	color: inherit;
+	font-size: inherit;
+	white-space: normal;
 	padding-right: var(--ash-spacing-size160);
 }
 

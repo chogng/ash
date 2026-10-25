@@ -3,6 +3,7 @@ packages:
   - extensions/pdf-viewer
   - extensions/markdown-math
   - extensions/markdown-language-features
+  - extensions/json-language-features
   - test/scenario
 engineStrict: true
 allowBuilds:

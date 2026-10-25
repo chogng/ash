@@ -95,14 +95,23 @@ import { TestQuickInputService } from '../../../../../../platform/quickinput/tes
 import { McpServersViewPane } from '../../../browser/extensionsViews.js';
 import { IFileService, type IFileChangeEvent } from '../../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../../platform/files/common/fileService.js';
-import { MemoryFileService } from '../../../../bulkEdit/test/browser/bulkEditTestServices.js';
+import { MemoryFileService, MemoryResourceStore } from '../../../../bulkEdit/test/browser/bulkEditTestServices.js';
+import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
+import { LanguageService } from '../../../../../../editor/common/services/languageService.js';
+import { IModelService } from '../../../../../../editor/common/services/model.js';
+import { ModelService } from '../../../../../../editor/common/services/modelService.js';
+import { IFileTextModelService } from '../../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { BrowserTextModelService } from '../../../../../services/textmodelResolver/browser/browserTextModelService.js';
+import { IExtensionService } from '../../../../../services/extensions/common/extensionService.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';
 import { IUriIdentityService } from '../../../../../../platform/uriIdentity/common/uriIdentity.js';
 import { UriIdentityService } from '../../../../../../platform/uriIdentity/common/uriIdentityService.js';
 import { IWorkspaceExtensionsConfigService, WorkspaceExtensionsConfigService } from '../../../../../services/extensionRecommendations/common/workspaceExtensionsConfig.js';
-import { IExtensionRecommendationsService } from '../../../../../services/extensionRecommendations/common/extensionRecommendations.js';
+import { IExtensionRecommendationsService, IExtensionIgnoredRecommendationsService } from '../../../../../services/extensionRecommendations/common/extensionRecommendations.js';
+import { ExtensionIgnoredRecommendationsService } from '../../../../../services/extensionRecommendations/common/extensionIgnoredRecommendationsService.js';
 import { ExtensionRecommendationsService } from '../../../browser/extensionRecommendationsService.js';
+import { ExtensionUiTarget } from '../../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { ILanguageModelToolsService } from '../../../../chat/common/tools/languageModelToolsService.js';
 import { IMcpServerStatusService, type McpServerStatus } from '../../../../../../platform/mcp/common/mcpServerStatusService.js';
 import { createAppServerMcpServerStatusApi } from '../../../../../../platform/mcp/browser/mcpServerStatusApi.js';
@@ -150,27 +159,29 @@ const configurationChanged = disposables.add(new Emitter<IConfigurationChangeEve
 let discoveryEnabled = true;
 let installed: ExtensionsInstalledPackage[] = [];
 let generation = 1;
-const summary = { id: 'example/web', version: '1.0.0', packageType: 'plugin', displayName: 'Web tools', description: 'TypeScript server and review skill' };
+const legacyUiTargets = new URLSearchParams(location.search).has('legacyUiTargets');
+const summary = { uiTargets: legacyUiTargets ? undefined : [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents], id: 'example/web', version: '1.0.0', packageType: 'plugin', displayName: 'Web tools', description: 'TypeScript server and review skill' };
 const reference = { id: summary.id, version: summary.version, digest: 'sha256:' + 'a'.repeat(64) };
 const capabilities = [
 	{ kind: 'executable' as const, id: 'typescript-language-server', contractVersion: '1', permissions: ['process'], authenticationProvider: null },
+	{ kind: 'language' as const, id: 'typescript', contractVersion: '1', permissions: [], authenticationProvider: null },
 	{ kind: 'skill' as const, id: 'review', contractVersion: '1', permissions: [], authenticationProvider: null },
 	...(new URLSearchParams(location.search).has('connectorBundle') ? [{ kind: 'connector' as const, id: 'github', contractVersion: '1', permissions: [], authenticationProvider: null }] : []),
 ];
-const packageDetails = { package: reference, packageType: summary.packageType, displayName: summary.displayName, description: summary.description, license: 'MIT', source: 'thirdParty' as const, upstream: null, capabilities };
-const mcpSummary = { id: 'catalog/docs@ash', version: '1.0.0', packageType: 'mcp', displayName: 'Docs MCP', description: 'Documentation tools' };
+const packageDetails = { uiTargets: summary.uiTargets, package: reference, packageType: summary.packageType, displayName: summary.displayName, description: summary.description, license: 'MIT', source: 'thirdParty' as const, upstream: null, capabilities };
+const mcpSummary = { uiTargets: legacyUiTargets ? undefined : [ExtensionUiTarget.Agents], id: 'catalog/docs@ash', version: '1.0.0', packageType: 'mcp', displayName: 'Docs MCP', description: 'Documentation tools' };
 const mcpDetails = { ...packageDetails, ...mcpSummary, package: { ...reference, id: mcpSummary.id }, capabilities: [{ kind: 'mcp' as const, id: 'docs-server', contractVersion: '1', permissions: ['network'], authenticationProvider: null }] };
 const discoveryFixture = new URLSearchParams(location.search).has('marketplace');
 const partialDiscoveryFailure = new URLSearchParams(location.search).has('partialDiscoveryFailure');
 const nativeEditor = new URLSearchParams(location.search).has('nativeEditor');
 const extensionId = nativeEditor ? 'ash.academy' : 'publisher.sample';
-const extensionSummary = { ...summary, id: nativeEditor ? 'ash.academy@ash' : 'publisher.sample@ash', packageType: 'editor', displayName: nativeEditor ? 'Academy' : 'Sample editor extension' };
+const extensionSummary = { ...summary, uiTargets: legacyUiTargets ? undefined : [ExtensionUiTarget.IDE], id: nativeEditor ? 'ash.academy@ash' : 'publisher.sample@ash', packageType: 'editor', displayName: nativeEditor ? 'Academy' : 'Sample editor extension' };
 const extensionReference = { ...reference, id: extensionSummary.id };
 const extensionCapabilities = [{ kind: 'editorExtension' as const, id: 'publisher.sample', contractVersion: '1', permissions: [], authenticationProvider: null }];
 const extensionDetails = { ...packageDetails, package: extensionReference, ...extensionSummary, capabilities: extensionCapabilities };
 const uninstalled = new URLSearchParams(location.search).has('uninstalled');
 const rustBuiltIn = new URLSearchParams(location.search).has('rustBuiltIn');
-const rustLanguagePackManifest = { publisher: 'ash', name: 'language-pack-zh-cn', version: '1.0.0', displayName: '中文语言包（Rust 目录）', description: 'Rust package snapshot', contributes: { localizations: [{ languageId: 'zh-CN' }] } };
+const rustLanguagePackManifest = { publisher: 'ash', name: 'language-pack-zh-cn', version: '1.0.0', displayName: '中文语言包（Rust 目录）', description: 'Rust package snapshot', ashUiTargets: ['ide', 'agents'], contributes: { localizations: [{ languageId: 'zh-CN' }] } };
 const extensionManifest = { publisher: 'Fixture publisher', author: { name: 'Fixture author' }, name: 'sample', icon: 'icon.svg', categories: ['Programming Languages'], homepage: 'https://example.invalid/tools' };
 let heldReadme: ((text: string) => void) | undefined;
 let holdReadme = false;
@@ -217,6 +228,15 @@ let sourceRevision = 0;
 let sources = [{ id: 'ash', kind: 'ash' as const, enabled: true, productOwned: true }];
 if (partialDiscoveryFailure) { sources.push({ id: 'offline-source', kind: 'ash', enabled: true, productOwned: false }); }
 if (new URLSearchParams(location.search).has('pagedDiscovery')) { sources.push({ id: 'other', kind: 'ash', enabled: true, productOwned: false }); }
+function discoveryPackages(sourceId: string, kind: 'skill' | 'mcp') {
+	const base = kind === 'mcp' ? mcpDetails : packageDetails;
+	if (!new URLSearchParams(location.search).has('pagedDiscovery')) { return [base]; }
+	return Array.from({ length: 73 }, (_, index) => ({
+		...base,
+		package: { ...base.package, id: `catalog/${kind === 'mcp' ? 'server' : 'item'}-${index}@${sourceId}` },
+		displayName: `Item ${index}`,
+	}));
+}
 const builtInProviderStates = new Map([
 	['ash.github-authentication', { enabled: true, running: true }],
 	['ash.rust', { enabled: true, running: true }],
@@ -225,13 +245,15 @@ function builtInProviders() {
 	return { revision: editorPolicyRevision, canChangeEnablement: !new URLSearchParams(location.search).has('readOnlyProviders'), providers: [...builtInProviderStates].map(([id, state]) => ({ id, ...state })) };
 }
 const api: IExtensionManagementApi = {
+	recommendationEnvironment: async () => ({ platform: 'other', executables: new URLSearchParams(location.search).has('productTips') ? ['python3'] : [] }),
 	searchPage: async params => {
 		requests.push(['searchPage', params]);
 		if (holdSearch) { holdSearch = false; await new Promise<void>((_, reject) => { rejectSearch = reject; }); }
 		if (offline || params.sourceId === 'offline-source') { throw new Error('Catalog unavailable'); }
-		const base = params.capabilityKind === 'mcp' ? mcpSummary : summary;
-		const entries = new URLSearchParams(location.search).has('pagedDiscovery')
-			? Array.from({ length: 73 }, (_, index) => ({ ...base, id: 'catalog/item-' + index + '@' + params.sourceId, displayName: 'Item ' + index })) : [base];
+		const entries = discoveryPackages(params.sourceId, params.capabilityKind === 'mcp' ? 'mcp' : 'skill').map(entry => ({
+			id: entry.package.id, version: entry.package.version, packageType: entry.packageType,
+			displayName: entry.displayName, description: entry.description,
+		}));
 		const filtered = entries.filter(value => [value.id, value.displayName, value.description].some(text => text.toLowerCase().includes(params.query.toLowerCase())));
 		const offset = params.cursor ? Number(params.cursor) : 0;
 		const end = Math.min(offset + params.pageSize, filtered.length);
@@ -285,7 +307,20 @@ const api: IExtensionManagementApi = {
 		}
 		return { packages: [params.capabilityKind === 'editorExtension' || params.query === 'publisher.sample@ash' ? extensionSummary : summary], unavailableSources: [] };
 	},
-	get: async params => { requests.push(['get', params]); if (offline) { throw new Error('Catalog unavailable'); } const details = params.packageId === extensionSummary.id ? extensionDetails : params.packageId === mcpSummary.id ? mcpDetails : packageDetails; return { ...details, package: { ...details.package, version: params.version ?? '2.0.0' } }; },
+	get: async params => {
+		requests.push(['get', params]);
+		if (offline) { throw new Error('Catalog unavailable'); }
+		if (new URLSearchParams(location.search).has('productTips') && ['marketplace.keymap-sublime@ash', 'marketplace.markdown@ash', 'marketplace.aurora-theme@ash', 'marketplace.python@ash'].includes(params.packageId)) {
+			return { ...packageDetails, uiTargets: params.packageId === 'marketplace.aurora-theme@ash' ? [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents] : [ExtensionUiTarget.IDE], packageType: 'editor', package: { ...packageDetails.package, id: params.packageId }, displayName: params.packageId };
+		}
+		const catalog = sources.filter(source => source.enabled).flatMap(source => [
+			...discoveryPackages(source.id, 'skill'), ...discoveryPackages(source.id, 'mcp'),
+		]);
+		if (params.packageId === 'ash.academy@ash') { return { ...extensionDetails, uiTargets: [ExtensionUiTarget.IDE, ExtensionUiTarget.Agents], package: { ...extensionReference, id: params.packageId } }; }
+		const details = [extensionDetails, packageDetails, mcpDetails, ...catalog].find(entry => entry.package.id === params.packageId);
+		if (!details) { throw new Error('Unknown package'); }
+		return { ...details, package: { ...details.package, version: params.version ?? '2.0.0' } };
+	},
 	listInstalled: async () => (managementReads.installed++, { instanceId: 'fixture', generation, packages: installed.map(entry => ({ ...entry, capabilities: entry.capabilities.map(capability => ({ ...capability, permissions: [...capability.permissions] })) })) }),
 	download: async () => { throw new Error('Install owns downloading'); },
 	install: async params => {
@@ -321,12 +356,13 @@ let enabled = true;
 let holdSkillEnablement = false;
 let completeSkillEnablement: (() => void) | undefined;
 const skillId = { source: 'marketplace:example/web', name: 'review' };
+const skillChanges = disposables.add(new Emitter<void>());
 services.registerInstance(IAppServerSkillApi, {
-	onDidChangeSkills: Event.None,
+	onDidChangeSkills: skillChanges.event,
 	readTextResource: async (_reference, _path, signal) => { instructionSignal = signal; if (holdInstructions) { return new Promise<string>(resolve => { completeInstructions = resolve; }); } return '---\r\nname: review\r\ndescription: Review changes\r\nmetadata:\r\n  author: Acme\r\n  version: "2.1.0"\r\n  updated-at: "2026-10-20"\r\n---\r\n# Review\r\nReview changes carefully.'; },
 	list: async () => ({ generation: 1, skills: [] }),
 	read: async () => (managementReads.skills++, { revision, catalog: { generation: 1, skills: [{ id: skillId, description: 'Review changes. Use when reviewing a project before release.', metadata: { author: 'Acme', version: '2.1.0', 'updated-at': '2026-10-20' }, enabled, compatible: true, contentDigest: 'digest' }] }, diagnostics: [{ source: 'workspace', subject: 'bad-skill', message: 'Invalid metadata' }] }),
-	setEnabled: async (id, value, expectedRevision, sessionId) => { if (holdSkillEnablement) { await new Promise<void>(resolve => { completeSkillEnablement = resolve; }); } requests.push(sessionId ? ['skill', id, value, expectedRevision, sessionId] : ['skill', id, value, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } enabled = value; revision++; },
+	registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async (id, value, expectedRevision, sessionId) => { if (holdSkillEnablement) { await new Promise<void>(resolve => { completeSkillEnablement = resolve; }); } requests.push(sessionId ? ['skill', id, value, expectedRevision, sessionId] : ['skill', id, value, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } enabled = value; revision++; skillChanges.fire(); },
 });
 const connectorChanges = disposables.add(new Emitter<number>());
 let connectorGeneration = 1;
@@ -367,6 +403,7 @@ services.registerInstance(ILanguageServerService, {
 	removeConfiguration: async () => { },
 });
 services.registerInstance(IContextKeyService, disposables.add(new ContextKeyService()));
+services.registerInstance(IStorageService, disposables.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'extensions-fixture', backend: window.localStorage, flushInterval: 0 })));
 services.registerInstance(IQuickInputService, disposables.add(new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: services.get(IContextKeyService) })));
 let pluginRevision = 0;
 const pluginEvents = disposables.add(new Emitter<ServerNotification>());
@@ -422,13 +459,19 @@ const themeName = new URLSearchParams(location.search).get('theme');
 const themeService = disposables.add(new TestThemeService(themeName === 'light' ? lightColorTheme : themeName === 'hc' ? highContrastDarkColorTheme : darkColorTheme));
 services.registerInstance(IThemeService, themeService);
 disposables.add(bindTestColorTheme(themeService, document.body));
-services.registerInstance(IStorageService, disposables.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'extensions-fixture', backend: window.localStorage, flushInterval: 0 })));
 services.registerInstance(IGlobalExtensionEnablementService, disposables.add(services.createInstance(GlobalExtensionEnablementService)));
 let pane: ExtensionEditor | undefined;
 let editorAbort = new AbortController();
 disposables.add(toDisposable(() => { editorAbort.abort(); pane?.dispose(); }));
 services.registerInstance(IEditorService, {
 	onDidActiveEditorChange: Event.None,
+	onDidVisibleEditorsChange: Event.None,
+	visibleEditors: [],
+	activeEditor: undefined,
+	activeEditorPane: undefined,
+	visibleEditorPanes: [],
+	save: async () => ({ success: true, editors: [] }),
+	saveAll: async () => ({ success: true, editors: [] }),
 	focusActiveEditor: () => pane?.focus(),
 	openEditor: async (input, options) => {
 		if (!(input instanceof ExtensionsInput) && !(input instanceof ExtensionsCapabilityInput)) { requests.push(['document', input], ['documentOptions', options]); return; }
@@ -454,7 +497,13 @@ disposables.add(files.registerProvider('file', recommendationFiles));
 services.registerInstance(IFileService, files);
 services.registerInstance(IUriIdentityService, disposables.add(new UriIdentityService(files)));
 services.registerInstance(IWorkspaceExtensionsConfigService, disposables.add(services.createInstance(WorkspaceExtensionsConfigService)));
-services.registerInstance(IExtensionRecommendationsService, services.createInstance(ExtensionRecommendationsService));
+services.registerInstance(IExtensionIgnoredRecommendationsService, disposables.add(services.createInstance(ExtensionIgnoredRecommendationsService)));
+const recommendationLanguages = disposables.add(new LanguageService());
+services.registerInstance(ILanguageService, recommendationLanguages);
+services.registerInstance(IModelService, disposables.add(new ModelService(services.get(IConfigurationService), { _serviceBrand: undefined, getEOL: () => '\n' }, recommendationLanguages)));
+services.registerInstance(IExtensionService, { onDidChange: Event.None, currentCatalog: { extensions: [], generation: 1, diagnostics: [] } } as unknown as IExtensionService);
+services.registerInstance(IFileTextModelService, disposables.add(services.createInstance(BrowserTextModelService, disposables.add(new MemoryResourceStore([])), { languageService: recommendationLanguages })));
+services.registerInstance(IExtensionRecommendationsService, disposables.add(services.createInstance(ExtensionRecommendationsService, new URLSearchParams(location.search).has('agentsRecommendations') ? ExtensionUiTarget.Agents : ExtensionUiTarget.IDE)));
 let mcpServers: readonly McpServerStatus[] = [{ id: 'marketplace:example/web:mcp:fixture-server', displayName: 'fixture-server', httpOrigin: 'https://example.com', state: { status: 'connected' }, catalogGeneration: 1, connectionGeneration: 1, toolCount: 1 }];
 let mcpStatusFailure = false;
 let mcpToolsFailure = false;
@@ -548,7 +597,7 @@ const previewHeight = new URLSearchParams(location.search).has('preview') ? 780 
 if (new URLSearchParams(location.search).has('preview')) { document.getElementById('lsp')!.hidden = true; document.getElementById('details')!.style.width = '850px'; document.getElementById('details')!.style.height = `${previewHeight}px`; }
 host.style.width = paneLayout ? '280px' : '360px'; host.style.height = paneLayout ? '260px' : `${previewHeight}px`;
 // The product model drives the classification scenarios; component scenarios mount every list independently.
-const contributions = disposables.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }));
+const contributions = disposables.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.dialogHandler', 'workbench.contrib.extensions', 'workbench.contrib.extensionRecommendations']));
 contributions.advance(WorkbenchPhase.BlockStartup);
 const classification = new URLSearchParams(location.search).has('classification');
 const descriptor = ViewsRegistry.getViewContainer('ash.extensions')!;
@@ -696,6 +745,7 @@ window.ashExtensionsIntegration = {
 		connectorChanges.fire(++connectorGeneration);
 	},
 	setRecommendations: async (content: string) => { await files.writeFile({ resource: recommendationsResource, content }); recommendationChanges.fire({ resources: [recommendationsResource] }); },
+	recommendResource: (resource: string) => services.get(IExtensionRecommendationsService).recommendForResource(URI.parse(resource)),
 	leaveWorkspace: () => workspace.updateWorkspace({ id: 'empty', folders: [] }),
 	startCommand: id => { commandCompletion = commands.executeCommand(id).catch((error: unknown) => requests.push(['commandError', String(error)])); },
 	waitCommand: async () => { await commandCompletion; },
@@ -737,7 +787,7 @@ window.ashExtensionsIntegration = {
 declare global {
 	interface Window {
 
-		ashExtensionsIntegration: { holdSkillEnablement(): void; skillEnablementStarted(): boolean; completeSkillEnablement(): void; managementReads(): { installed: number; skills: number; connectors: number; }; installationSnapshot(): ExtensionsInstalledPackage[]; notifyConnectorsChanged(): void; setConnectors(entries: readonly ConnectorView[]): void; failConnectorList(fail: boolean): void; addConnector(binding?: { declarationId: string; serverId: string | null; }): void; enableMcpOAuth(): void; completeMcpLogin(): void; mcpLoginWaiting(): boolean; holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
+		ashExtensionsIntegration: { holdSkillEnablement(): void; skillEnablementStarted(): boolean; completeSkillEnablement(): void; managementReads(): { installed: number; skills: number; connectors: number; }; installationSnapshot(): ExtensionsInstalledPackage[]; notifyConnectorsChanged(): void; setConnectors(entries: readonly ConnectorView[]): void; failConnectorList(fail: boolean): void; addConnector(binding?: { declarationId: string; serverId: string | null; }): void; enableMcpOAuth(): void; completeMcpLogin(): void; mcpLoginWaiting(): boolean; holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; recommendResource(resource: string): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
 	}
 }
 

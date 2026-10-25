@@ -11,7 +11,8 @@
 /* One composer is retained while navigation changes the surrounding Parts. */
 .ash-chat > .ash-chat-input-part.ash-sessions-chat-input.chat-composer {
 	--ash-chat-input-min-height: 0px;
-	--ash-chat-input-padding: var(--ash-spacing-size160);
+	--ash-chat-input-padding: var(--ash-spacing-size80)
+		var(--ash-spacing-size120);
 	--ash-chat-input-border: var(--ash-border);
 	--ash-chat-input-focus-border: var(--ash-border);
 	--ash-chat-input-shadow: var(--ash-sessions-inputShadow);
@@ -20,23 +21,26 @@
 	width: 100%;
 	max-width: 728px;
 	align-self: center;
-	margin-block: auto;
-	padding: 0 var(--ash-spacing-size240) var(--ash-spacing-size240);
+	margin-top: auto;
+	padding: 0 var(--ash-spacing-size240) var(--ash-spacing-size120);
 }
 
-.ash-chat
-	> .ash-chat-input-part.ash-sessions-chat-input.chat-composer.has-conversation {
-	margin-bottom: 0;
+/* Keep Code quiet at rest; use the notification's soft elevation during interaction. */
+.ash-chat-input-part.ash-sessions-chat-input.chat-composer.floating-card
+	> .ash-chat-input-container {
+	box-shadow: none;
 }
 
-.chat-composer .ash-sessions-chat-welcome-heading {
-	flex: 0 0 auto;
-	margin: 0 0 var(--ash-spacing-size240);
-	color: var(--ash-foreground);
-	font-size: var(--ash-fontSize-heading1);
-	font-weight: var(--ash-fontWeight-semiBold);
-	line-height: 1.4;
-	text-align: center;
+.ash-chat-input-part.ash-sessions-chat-input.chat-composer.floating-card
+	> .ash-chat-input-container:is(:hover, .focused) {
+	box-shadow: 0 2px 8px
+		color-mix(in srgb, var(--ash-chat-input-shadow) 30%, transparent);
+}
+
+.ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-sessions-chat-input.chat-composer.floating-card
+	> .ash-chat-input-container {
+	box-shadow: none;
 }
 
 .ash-sessions-chat-tip-slot {
@@ -46,11 +50,6 @@
 }
 
 .ash-sessions-chat-tip-slot:empty {
-	display: none;
-}
-
-/* Shared operational elements: visibility, file-drop positioning, and keyboard focus. */
-.ash-sessions-chat-input .ash-sessions-chat-welcome-heading[hidden] {
 	display: none;
 }
 
@@ -79,10 +78,35 @@
 	display: flex;
 	align-items: center;
 	padding-top: var(--ash-spacing-size80);
+	gap: var(--ash-spacing-size40);
 }
 
 .ash-sessions-chat-input-footer .ash-chat-input-context-toolbar {
-	margin-inline-start: auto;
+	flex: 0 0 auto;
+}
+
+.ash-sessions-chat-input-footer > .ash-button {
+	flex: 0 0 auto;
+	white-space: nowrap;
+}
+
+.ash-sessions-chat-input-workspace {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	min-width: 0;
+	max-width: 25%;
+	color: var(--ash-description-foreground);
+}
+
+.ash-sessions-chat-input-workspace[hidden] {
+	display: none;
+}
+
+.ash-sessions-chat-input-workspace > span:last-child {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 .ash-sessions-permission-menu {

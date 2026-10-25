@@ -48,6 +48,8 @@ import { ILocalTranscriptionModelService, DictationModelState, type ILocalTransc
 import { bindTestColorTheme } from './themeFixture.js';
 import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
+import { noFileIconTheme } from '../../../src/ash/platform/theme/common/themeService.js';
+import { IResourceIconRenderer } from '../../../src/ash/workbench/browser/labels.js';
 import { LocalTranscriptionModelControls } from '../../../src/ash/workbench/contrib/preferences/browser/localTranscriptionModelControls.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
@@ -61,6 +63,7 @@ import { DictationInput } from '../../../src/ash/workbench/contrib/chat/browser/
 import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
 import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
 import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import { IChatAttachmentResolveService } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import type { ChatInputEditorOptions } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { TestNotificationService } from './notificationFixture.js';
 import type { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
@@ -206,7 +209,19 @@ const theme = resources.add(new TestThemeService(lightColorTheme));
 resources.add(bindTestColorTheme(theme, document.body));
 const controls = resources.add(services.createInstance(LocalTranscriptionModelControls, root));
 controls.setVisible(true);
+const unexpectedAttachment = async (): Promise<never> => { throw new Error('The dictation fixture must not resolve attachments'); };
+services.registerInstance(IChatAttachmentResolveService, {
+	_serviceBrand: undefined,
+	resolveUntitledEditorAttachContext: unexpectedAttachment,
+	resolveSymbolsAttachContext: unexpectedAttachment,
+	resolveSourceControlHistoryItemAttachContext: () => { throw new Error('The dictation fixture must not resolve attachments'); },
+	resolveEditorAttachContext: unexpectedAttachment,
+	resolveResourceAttachContext: unexpectedAttachment,
+	resolveImageEditorAttachContext: unexpectedAttachment,
+	resolveImageAttachContext: unexpectedAttachment,
+});
 registerCodeEditorServices(services);
+services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 setARIAContainer(document.body);
 const inputContainer = document.createElement('div');
 inputContainer.style.width = '600px';

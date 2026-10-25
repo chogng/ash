@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022", "ESNext.Disposable", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "@webgpu/types"]
+  },
+  "include": [
+    "../../src/typings/css.d.ts",
+    "../../src/typings/editContext.d.ts",
+    "../../src/ash/**/common/**/*.ts",
+    "../../src/ash/**/browser/**/*.ts"
+  ],
+  "exclude": ["../../src/ash/**/test/**", "../../src/ash/**/fixtures/**"]
+}

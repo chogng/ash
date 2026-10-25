@@ -71,6 +71,7 @@ const { DesignEditorService, IDesignEditorService } = await import('../../contri
 const { DesignLayersView, DesignPropertiesView } = await import('../../contrib/creator/browser/designViews.js');
 const { CreatorMode } = await import('../../contrib/creator/common/creator.js');
 const { CreatorPage } = await import('../../contrib/creator/browser/creatorPage.js');
+const { IEditorPart } = await import('../../../workbench/browser/parts/editor/editorPart.js');
 await import('../../contrib/creator/browser/creator.contribution.js');
 await import('../../contrib/creator/contrib/design/browser/design.contribution.js');
 await import('../../contrib/creator/contrib/whiteboard/browser/whiteboard.contribution.js');
@@ -1242,6 +1243,7 @@ class CreatorFixture extends Disposable {
 		child.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => 'Press Alt+F1 for help.', show: () => { throw new Error('Unexpected accessible view'); }, disableHint: unexpected, showAccessibleViewHelp: () => { throw new Error('Unexpected accessible view'); }, dispose() { }, [Symbol.dispose]() { } });
 		const storage = this._register(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: generateUuid(), flushInterval: 0 }));
 		child.registerInstance(IStorageService, storage);
+		child.registerInstance(IEditorPart, { groups: [], onDidChangeEditors: AshEvent.None } as unknown as import('../../../workbench/browser/parts/editor/editorPart.js').IEditorPart);
 		this.page = this._register(child.createInstance(CreatorPage, browser.window.document));
 		browser.window.document.body.append(this.page.domNode);
 		this.page.initialize();
@@ -1257,7 +1259,7 @@ class CreatorFixture extends Disposable {
 
 test('Creator routes all seven contributions and retains separate documents, selection and camera', () => {
 	using fixture = new CreatorFixture();
-	assert.equal(fixture.page.domNode.querySelectorAll('[data-creator-mode]').length, 7);
+	assert.equal(fixture.page.domNode.querySelectorAll('.ash-artifacts-create').length, 3);
 	assert.equal(fixture.page.usesCanvasPanels, false);
 	fixture.page.openMode(CreatorMode.Design);
 	const design = fixture.editors.activeEditor.get()!;

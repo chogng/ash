@@ -5,6 +5,7 @@ import { stripTypeScriptTypes } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { readFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 import { after, test } from 'node:test';
 import ts from 'typescript';
 
@@ -179,6 +180,47 @@ test('an executed assertion failure fails the run and retains its diagnostic', (
 	assert.match(result.output, /runner regression sentinel/);
 	assert.match(result.output, /1 tests executed across 1 files; 1 failed files/);
 });
+
+for (const origin of ['page', 'popup', 'teardown'] as const) {
+	test(`browser ${origin} exceptions fail teardown, retain a trace and leave sibling suites clean`, () => {
+		const fixture = join(directory, `browser-errors-${origin}.test.js`);
+		const results = join(directory, `browser-errors-${origin}`);
+		writeFileSync(fixture, `
+import assert from 'node:assert/strict';
+import { suite, test, teardown } from 'mocha';
+import { useBrowserTests } from ${JSON.stringify(pathToFileURL(resolve(desktopDirectory, 'test/unit/browser/context.ts')).href)};
+process.env.ASH_BROWSER_UNIT_BASE_URL = 'http://127.0.0.1:1';
+process.env.ASH_BROWSER_UNIT_RESULTS = ${JSON.stringify(results)};
+suite('browser exception', () => {
+ const browser = useBrowserTests();
+ async function provoke() {
+  const page = ${origin === 'popup' ? 'await browser.context.newPage()' : 'browser.page'};
+  const error = page.waitForEvent('pageerror');
+  await page.evaluate(() => { setTimeout(() => { throw new Error('browser ${origin} sentinel'); }, 0); });
+  assert.equal((await error).message, 'browser ${origin} sentinel');
+ }
+ ${origin === 'teardown' ? 'teardown(provoke);' : ''}
+ test('reaches the deliberate exception', async () => {
+  ${origin === 'teardown' ? '' : 'await provoke();'}
+ });
+});
+suite('clean sibling', () => {
+ const browser = useBrowserTests();
+ test('has no inherited exceptions', async () => {
+  await browser.page.setContent('<button>Clean sibling</button>');
+  assert.equal(await browser.page.locator('button').textContent(), 'Clean sibling');
+ });
+});
+`);
+		const result = run(['--ui', 'tdd', '--timeout', '10000', fixture], 'node_modules/mocha/bin/mocha.js');
+		assert.equal(result.status, 1, result.output);
+		assert.match(result.output, new RegExp(`browser ${origin} sentinel`));
+		assert.match(result.output, /Unhandled browser errors/);
+		assert.match(result.output, /has no inherited exceptions/);
+		assert.match(result.output, /1 failing/);
+		assert.equal(readdirSync(results, { recursive: true }).filter(path => path.toString().endsWith('trace.zip')).length, 1);
+	});
+}
 
 test('a selection containing only skipped tests fails the run', () => {
 	const result = run(['--run', first, '--grep', '^pending behavior$']);

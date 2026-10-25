@@ -25,6 +25,10 @@ export class SessionScopedPromptsService implements IPromptsService {
 		this.scope.assertCurrent();
 		return this.scope.services.prompts.setSkillEnablement(skillId, enabled, revision, sessionId === undefined ? undefined : this.scope.backendIdentity(sessionId));
 	}
+	registerSkillSource(rootReference: string): Promise<void> {
+		this.scope.assertCurrent();
+		return this.scope.services.prompts.registerSkillSource(rootReference);
+	}
 	parseNew(...args: Parameters<IPromptsService['parseNew']>): ReturnType<IPromptsService['parseNew']> {
 		this.scope.assertCurrent(); return this.scope.services.prompts.parseNew(...args);
 	}

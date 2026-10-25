@@ -5,10 +5,18 @@ composition. The shared language identity, editing configuration, and provider
 registries are separate Editor services; Workbench registers App Server and
 product providers into those contracts without subclassing or wrapping them.
 
-`WorkbenchLanguageFeatures` installs JSON providers. App Server, extension-host,
+The built-in `json-language-features` extension installs shared JSON/JSONC completion,
+hover, formatting and diagnostics through `@ash/sdk`. The `json` extension owns language
+declarations, editing rules and syntax assets. App Server, extension-host,
 Tree-sitter, codebase-symbols, and LSP
 adapters register directly through `ILanguageFeaturesService` registries. Every
 registration is disposable and independent of per-document service lifetimes.
+
+The JSON language extension owns syntax and schema diagnostics. Their shared
+Tree-sitter grammar still provides highlighting, folds, symbols and selection ranges;
+its recovery errors are not validation errors, because it rejects legal JSONC trailing commas.
+Core configuration parsing, comment-preserving edits, schema registration and file I/O
+remain available when the language feature extension is disabled.
 
 The core language service registers only plain text. Product language identities,
 file associations, editing configurations and grammars come from `extensions`
@@ -23,7 +31,7 @@ The filename split is intentional:
 
 | Filename family                                                                  | Owner                            | Responsibility                                                                                                                                             |
 | -------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `browser/workbenchLanguageFeatures.ts`                                           | Workbench                        | Product-owned JSON provider composition                                                                                                                    |
+| `extensions/json-language-features/`                                             | Extension                        | Shared JSON/JSONC editing providers and diagnostics                                                                                                        |
 | `browser/appServer*Providers.ts`                                                 | Workbench                        | App Server DTO-to-Editor provider adaptation                                                                                                               |
 | `editor/common/services/languageService.ts`                                      | Editor                           | Language identity and file association                                                                                                                     |
 | `editor/common/services/languageConfigurationService.ts`                         | Editor                           | Composable editing rules                                                                                                                                   |

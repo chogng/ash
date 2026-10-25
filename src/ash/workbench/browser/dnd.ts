@@ -4,10 +4,38 @@ import { onUnexpectedError } from '../../base/common/errors.js';
 import { ICommandService } from '../../platform/commands/common/commands.js';
 import { IContextMenuService } from '../../platform/contextview/browser/contextView.js';
 import { localize } from '../../nls.js';
+import { DataTransfers } from '../../base/browser/dnd.js';
+import { Mimes } from '../../base/common/mime.js';
+import { URI } from '../../base/common/uri.js';
+import { Schemas } from '../../base/common/network.js';
+import { basename } from '../../base/common/resources.js';
+import { isWindows } from '../../base/common/platform.js';
+import { CodeDataTransfers, type IResourceStat } from '../../platform/dnd/browser/dnd.js';
+import { withSelection } from '../../platform/opener/common/opener.js';
+import { ILabelService } from '../../platform/label/common/label.js';
+import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { IViewDescriptorService, ViewContainerLocation, type IViewDescriptor } from '../common/views.js';
 import { IViewsService } from '../services/views/common/viewsService.js';
 
 type ViewDropTarget = { readonly element: HTMLElement; readonly containerId: string; } | { readonly element: HTMLElement; readonly location: ViewContainerLocation; };
+
+/** Writes source identities for native resource drops; captured Chat content stays with its draft. */
+export function fillEditorsDragData(accessor: ServicesAccessor, resources: URI[] | IResourceStat[], event: DragEvent, options?: { disableStandardTransfer: boolean; }): void {
+	const transfer = event.dataTransfer;
+	if (!transfer || !resources.length) return;
+	const entries = resources.map((entry): IResourceStat => URI.isUri(entry) ? { resource: entry } : entry);
+	const uris = entries.map(entry => entry.selection ? withSelection(entry.resource, entry.selection) : entry.resource);
+	const values = uris.map(resource => resource.toString());
+	transfer.setData(DataTransfers.RESOURCES, JSON.stringify(values));
+	transfer.setData(Mimes.uriList, values.join('\r\n'));
+	const localFiles = entries.filter(entry => !entry.isDirectory && entry.resource.scheme === Schemas.file).map(entry => entry.resource);
+	if (localFiles.length) transfer.setData(CodeDataTransfers.FILES, JSON.stringify(localFiles.map(resource => resource.fsPath)));
+	if (!options?.disableStandardTransfer) {
+		const labels = accessor.get(ILabelService);
+		transfer.setData(DataTransfers.TEXT, uris.map(resource => labels.getUriLabel(resource, { noPrefix: true })).join(isWindows ? '\r\n' : '\n'));
+		if (localFiles[0]) transfer.setData(DataTransfers.DOWNLOAD_URL, `${Mimes.binary}:${basename(localFiles[0])}:${localFiles[0].toString()}`);
+	}
+}
 
 /** Routes native view drags within one window; declarations and layout state stay with the descriptor service. */
 export class ViewDragAndDropController extends Disposable {

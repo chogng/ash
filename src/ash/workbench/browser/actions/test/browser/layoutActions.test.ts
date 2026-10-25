@@ -9,6 +9,23 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ActivityBarPosition, WorkbenchConfiguration } from '../../../../common/configuration.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { ActivityBarContextMenu, LayoutActionsContext } from '../../layoutActions.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
+
+test('Quick Input alignment commands reach the current Quick Input service', async () => {
+	using services = new InstantiationService();
+	const alignments: unknown[] = [];
+	services.registerInstance(IQuickInputService, {
+		...quickInputServiceTestControls,
+		createQuickPick() { throw new Error('Unexpected picker'); },
+		async input() { throw new Error('Unexpected prompt'); },
+		setAlignment: alignment => { alignments.push(alignment); },
+	});
+	using commands = new CommandService(services);
+	await commands.executeCommand('workbench.action.alignQuickInputCenter');
+	await commands.executeCommand('workbench.action.alignQuickInputTop');
+	assert.deepEqual(alignments, ['center', 'top']);
+});
 
 test('layout commands and menus follow configuration changes in their own window', async () => {
 	using configuration = new InMemoryConfigurationService();

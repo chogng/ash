@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { suite, test } from "mocha";
 import { JSDOM } from "jsdom";
 import type { IAction } from "../../common/actions.js";
 import { Separator } from "../../common/actions.js";
@@ -8,6 +8,33 @@ import { ActionBar } from "../../browser/ui/actionbar/actionbar.js";
 import { LabelActionViewItem } from "../../browser/ui/actionbar/actionViewItems.js";
 import { setHoverDelegate, type HoverDelegateSetupOptions, type IManagedHover } from "../../browser/ui/hover/hoverDelegate.js";
 import { AnchorPosition } from "../../common/layout.js";
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
+
+suite('ActionBar updated focus availability', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('disabling a focused action transfers the tab stop and focus to an enabled action', () => {
+		const dom = new JSDOM('<!doctype html><body><input></body>');
+		try {
+			const first = action('first');
+			using bar = new ActionBar(dom.window.document.body, { actions: [first, action('second')] });
+			bar.element.querySelector<HTMLButtonElement>('[data-action-id="second"] button')!.focus();
+			bar.updateActions([first, action('second', false)]);
+			const firstButton = bar.element.querySelector<HTMLButtonElement>('[data-action-id="first"] button')!;
+			assert.equal(firstButton.tabIndex, 0);
+			assert.equal(dom.window.document.activeElement, firstButton);
+			bar.updateActions([action('first', false), action('second', false)]);
+			assert.ok([...bar.element.querySelectorAll('button')].every(button => button.tabIndex === -1));
+			const input = dom.window.document.querySelector('input')!;
+			input.focus();
+			bar.updateActions([action('first', false), action('second')]);
+			assert.equal(bar.element.querySelector<HTMLButtonElement>('[data-action-id="second"] button')!.tabIndex, 0);
+			assert.equal(dom.window.document.activeElement, input);
+		} finally {
+			dom.window.close();
+		}
+	});
+});
 
 test("ActionViewItem routes its tooltip through the shared action Hover group", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");

@@ -20,6 +20,7 @@ import { IWorkingCopyService } from '../../../../../services/workingCopy/common/
 import { emptyEditorServiceState } from '../../../../../test/common/testEditorService.js';
 import { ChatAttachmentModel } from '../../../browser/attachments/chatAttachmentModel.js';
 import { ImplicitContextAttachmentWidget } from '../../../browser/attachments/implicitContextAttachment.js';
+import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../../../browser/attachments/chatAttachmentResolveService.js';
 
 setARIAContainer(document.body);
 
@@ -35,10 +36,11 @@ function setup(resources: DisposableStore, read: (resource: URI) => Promise<stri
 		get activeEditor() { return activeEditor; },
 		openEditor: async () => { }, focusActiveEditor() { },
 	});
-	services.registerInstance(IFileService, { readFile: async (resource: URI) => ({ content: await read(resource) }) } as unknown as IFileService);
+	services.registerInstance(IFileService, { hasProvider: () => true, readFile: async (resource: URI) => ({ content: await read(resource) }) } as unknown as IFileService);
 	services.registerInstance(IWorkingCopyService, { get: () => unsaved === undefined ? [] : [{ backupKind: 'text', backup: () => unsaved }] } as unknown as IWorkingCopyService);
 	services.registerInstance(IWorkspaceContextService, {} as IWorkspaceContextService);
 	services.registerInstance(IFileSearchService, {} as IFileSearchService);
+	services.registerSingleton(IChatAttachmentResolveService, () => services.createInstance(ChatAttachmentResolveService));
 	const notifications = resources.add(new TestNotificationService());
 	services.registerInstance(INotificationService, notifications);
 	const attachments = resources.add(new ChatAttachmentModel());
@@ -75,7 +77,7 @@ test('Suggested context follows active files without adding draft context and hi
 test('Adding suggested context captures unsaved text and restores input focus', async () => {
 	using resources = new DisposableStore();
 	const { widget, attachments, input } = setup(resources, async () => { assert.fail('Unsaved text must take precedence'); }, 'const unsaved = true;');
-	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(resolve)));
+	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(() => resolve())));
 	widget.domNode.querySelector('button')!.focus();
 	widget.domNode.querySelector('button')!.click();
 	await added;
@@ -91,7 +93,7 @@ test('A pending suggested file keeps its clicked identity and ignores completion
 	const pending = new Promise<string>(resolve => { complete = resolve; });
 	const reads: string[] = [];
 	const { widget, attachments, activate } = setup(resources, async resource => { reads.push(resource.path); return pending; });
-	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(resolve)));
+	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(() => resolve())));
 	widget.domNode.querySelector('button')!.click();
 	activate(URI.file('/workspace/other.ts'));
 	widget.domNode.querySelector('button')!.click();
@@ -126,7 +128,7 @@ test('SCM diff suggestions attach the modified snapshot instead of the synthetic
 	activateInput(createDiffEditorInput(original, modified));
 	assert.equal(widget.domNode.hidden, false);
 	assert.equal(widget.domNode.textContent, 'current.ts');
-	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(resolve)));
+	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(() => resolve())));
 	widget.domNode.querySelector('button')!.click();
 	await added;
 	assert.equal(widget.domNode.hidden, true);
@@ -143,7 +145,7 @@ test('A file diff suggestion uses its modified working copy rather than the comp
 	const { widget, attachments, activateInput } = setup(resources, async () => { assert.fail('Read the modified working copy'); }, 'Unsaved modified text');
 	activateInput(createDiffEditorInput({ resource: URI.file('/workspace/before.ts') }, { resource: URI.file('/workspace/after.ts') }));
 	assert.equal(widget.domNode.textContent, 'after.ts');
-	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(resolve)));
+	const added = new Promise<void>(resolve => resources.add(attachments.onDidChange(() => resolve())));
 	widget.domNode.querySelector('button')!.click();
 	await added;
 	assert.equal(attachments.attachments[0]!.resource?.path, '/workspace/after.ts');

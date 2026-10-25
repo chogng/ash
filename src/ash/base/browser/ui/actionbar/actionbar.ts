@@ -1,5 +1,5 @@
 import './actionbar.css';
-import { addDisposableListener, h } from "../../dom.js";
+import { addDisposableListener, h, isHTMLElement } from "../../dom.js";
 import { DataTransfers, DragAndDropObserver } from "../../dnd.js";
 import type { IAction } from "../../../common/actions.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../common/lifecycle.js";
@@ -172,7 +172,12 @@ export class ActionBar extends Disposable {
 			const entry = next.find(({ action }) => action.id === focusedActionId && action.enabled);
 			if (entry) {
 				this._setTabStop(entry.item);
-				entry.item.focus();
+				// Moving a retained container can blur a nested control; restore that control, not the item's default target.
+				if (isHTMLElement(activeElement) && entry.container.contains(activeElement)) {
+					activeElement.focus();
+				} else {
+					entry.item.focus();
+				}
 			}
 		}
 	}
@@ -183,10 +188,29 @@ export class ActionBar extends Disposable {
 			this.setActions(actions);
 			return;
 		}
+		const document = this.element.ownerDocument;
+		const hadFocus = this.element.contains(document.activeElement);
+		let replaced = false;
 		for (let index = 0; index < actions.length; index += 1) {
 			if (this.entries[index]!.action !== actions[index]) {
 				this.replaceEntry(this.entries[index]!, actions[index]!);
+				replaced = true;
 			}
+		}
+		if (!replaced) {
+			return;
+		}
+		// An updated action can become disabled without changing the collection's structure.
+		const tabStop = this.entries.find(entry => entry.item === this.tabStop && entry.action.enabled)
+			?? this.entries.find(entry => entry.action.enabled);
+		if (tabStop) {
+			this._setTabStop(tabStop.item);
+		} else {
+			this.tabStop?.setTabbable(false);
+			this.tabStop = undefined;
+		}
+		if (hadFocus && document.activeElement === document.body) {
+			tabStop?.item.focus();
 		}
 	}
 

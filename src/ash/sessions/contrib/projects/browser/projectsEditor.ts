@@ -4,10 +4,14 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import { addDisposableListener, getActiveElement, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
+import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Dialog, DialogContentsAlignment } from '../../../../base/browser/ui/dialog/dialog.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
+import { AnchorAlignment, AnchorPosition } from '../../../../base/browser/ui/contextview/contextview.js';
 import { DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { IntervalTimer } from '../../../../base/common/async.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
@@ -16,7 +20,7 @@ import { autorun } from '../../../../base/common/observable.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { basename } from '../../../../base/common/resources.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { localize } from '../../../../nls.js';
+import { getNLSLanguage, localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import type { Project, ProjectMaterial, ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -25,9 +29,74 @@ import { IHoverService } from '../../../../platform/hover/browser/hoverService.j
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
-import { IProjectsService, type ProjectsState } from './projectsService.js';
-import { ISessionsTitlebarService } from '../../../browser/parts/titlebar/titlebarPart.js';
+import { IProjectsService, type ProjectSortOrder, type ProjectsState } from './projectsService.js';
+import { ISessionsTitlebarService } from '../../../browser/parts/titlebarPart.js';
 import './projects.css';
+
+/** Keeps the expanded input in the search action's slot and preserves text-editing keys. */
+class ProjectsSearchActionViewItem extends ButtonActionViewItem {
+	private field!: HTMLElement;
+	private closeButton!: Button;
+	private tabbable = false;
+
+	constructor(action: IAction, options: ActionViewItemOptions, private readonly input: HTMLInputElement, private readonly closeSearch: () => void) {
+		super(action, options);
+	}
+
+	override render(container: HTMLElement): void {
+		super.render(container);
+		container.classList.add('ash-projects-search-action');
+		this.field = h(container.ownerDocument, 'div', { className: 'ash-projects-search-field', properties: { hidden: true } });
+		const icon = h(container.ownerDocument, 'span', { attributes: { 'aria-hidden': 'true' } });
+		appendIcon(Lxicon.search, icon);
+		this.field.append(icon, this.input);
+		this.closeButton = this.createButton(this.field, {
+			label: localize('projects.closeSearch', 'Close project search'), icon: Lxicon.close, iconOnly: true,
+			onClick: this.closeSearch,
+		});
+		container.append(this.field);
+		this._register(addDisposableListener(this.field, 'focusout', event => {
+			if (this.expanded && !this.input.value && !this.field.contains(event.relatedTarget as Node | null)) {
+				// Collapse empty search without taking focus back from the user's next target.
+				this.setExpanded(false);
+			}
+		}));
+		this._register(addDisposableListener(this.field, 'keydown', event => {
+			if (event.key === 'Escape' && !event.isComposing) {
+				event.preventDefault();
+				event.stopPropagation();
+				this.closeSearch();
+			} else if (event.target === this.input && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
+				// The toolbar must not consume caret movement inside the search input.
+				event.stopPropagation();
+			}
+		}));
+	}
+
+	setExpanded(expanded: boolean): void {
+		this.field.hidden = !expanded;
+		// A closing field remains painted for its transition, but must stop accepting focus immediately.
+		this.field.inert = !expanded;
+		this.field.setAttribute('aria-hidden', String(!expanded));
+		this.button.domNode.hidden = expanded;
+		this.field.parentElement!.classList.toggle('expanded', expanded);
+		this.setTabbable(this.tabbable);
+	}
+
+	get expanded(): boolean { return !this.field.hidden; }
+
+	override setTabbable(tabbable: boolean): void {
+		this.tabbable = tabbable;
+		super.setTabbable(tabbable && !this.expanded);
+		this.input.tabIndex = tabbable && this.expanded ? 0 : -1;
+		this.closeButton.domNode.tabIndex = tabbable && this.expanded ? 0 : -1;
+	}
+
+	override focus(): void {
+		if (this.expanded) { this.input.focus(); }
+		else { super.focus(); }
+	}
+}
 
 /** Projects own the front page. Material types appear only inside an opened project. */
 export class ProjectsEditorPane extends EditorPane implements IEditorPane {
@@ -36,18 +105,24 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	private readonly content = this._register(new DisposableStore());
 	private readonly dialog = this._register(new MutableDisposable<DisposableStore>());
 	private readonly titlebarContent = this._register(new MutableDisposable());
+	private readonly relativeTimeUpdate = this._register(new IntervalTimer());
+	private readonly relativeTime = new Intl.RelativeTimeFormat(getNLSLanguage(), { numeric: 'always' });
 	private title!: HTMLElement;
 	private breadcrumb!: HTMLElement;
 	private breadcrumbProjects!: Button;
 	private breadcrumbSeparator!: HTMLElement;
 	private breadcrumbName!: HTMLElement;
 	private search!: HTMLInputElement;
+	private searchActionViewItem!: ProjectsSearchActionViewItem;
 	private tools!: HTMLElement;
+	private toolbar!: WorkbenchToolBar;
+	private toolbarActions!: readonly IAction[];
 	private body!: HTMLElement;
 	private message!: HTMLElement;
 	private retry!: Button;
-	private createButton!: Button;
-	private sort!: Button;
+	private createActionViewItem!: ButtonActionViewItem;
+	private sortDropdown!: DropdownMenuActionViewItem;
+	private sortMenuOpen = false;
 
 	constructor(
 		@IProjectsService private readonly projects: IProjectsService,
@@ -72,25 +147,67 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const main = h(document, 'div', { className: 'ash-projects-main' });
 		this.breadcrumb = h(document, 'nav', { className: 'ash-projects-breadcrumb', attributes: { 'aria-label': localize('projects.breadcrumb', 'Project navigation') } });
 		this._register(this.contextKeys.createScoped(this.breadcrumb)).createKey('sessionsProjectsFocused', true);
-		this.breadcrumbProjects = this._register(new Button(this.breadcrumb, { ...defaultButtonStyles, label: localize('projects.title', 'Projects'), onClick: () => { this.projects.showProjects(); this.createButton.focus(); } }));
+		this.breadcrumbProjects = this._register(new Button(this.breadcrumb, { ...defaultButtonStyles, label: localize('projects.title', 'Projects'), onClick: () => { this.projects.showProjects(); this.createActionViewItem.focus(); } }));
 		this.breadcrumbSeparator = h(document, 'span', { className: 'ash-projects-breadcrumb-separator', attributes: { 'aria-hidden': 'true' } }, '/');
 		this.breadcrumbName = h(document, 'span', { className: 'ash-projects-breadcrumb-name', attributes: { 'aria-current': 'page' } });
 		this.breadcrumb.append(this.breadcrumbSeparator, this.breadcrumbName);
 		this._register(this.hover.setupDelayedHover(this.breadcrumbName, () => ({ content: this.breadcrumbName.textContent ?? '' })));
 		const heading = h(document, 'header', { className: 'ash-projects-heading' });
 		this.title = h(document, 'h1', { properties: { tabIndex: -1 } }, localize('projects.title', 'Projects'));
-		this.tools = h(document, 'div', { className: 'ash-projects-tools' });
-		this.search = h(document, 'input', { className: 'ash-projects-search', properties: { type: 'search', placeholder: localize('projects.search', 'Search projects'), hidden: true }, attributes: { 'aria-label': localize('projects.search', 'Search projects') } });
-		this._register(new Button(this.tools, { ...defaultButtonStyles, label: localize('projects.search', 'Search projects'), icon: Lxicon.search, iconOnly: true, onClick: () => { this.search.hidden = !this.search.hidden; if (!this.search.hidden) { this.search.focus(); } } }));
-		this.sort = this._register(new Button(this.tools, { ...defaultButtonStyles, label: localize('projects.sort', 'Reverse alphabetical order'), icon: Lxicon.sortPrecedence, iconOnly: true, onClick: () => this.projects.toggleSort() }));
-		this.createButton = this._register(new Button(this.tools, { ...defaultButtonStyles, label: localize('projects.new', 'New project'), presentation: 'primary', onClick: () => this.showProjectDialog() }));
+		this.search = h(document, 'input', { className: 'ash-projects-search', properties: { type: 'search', placeholder: localize('projects.search', 'Search projects') }, attributes: { 'aria-label': localize('projects.search', 'Search projects') } });
+		this.toolbar = this._register(new WorkbenchToolBar(heading, this.contextMenus, {
+			ariaLabel: localize('projects.toolbar', 'Project actions'),
+			actionViewItemProvider: (action, options) => {
+				if (action.id === 'projects.search') {
+					this.searchActionViewItem = new ProjectsSearchActionViewItem(action, options, this.search, () => {
+						this.projects.setQuery('');
+						this.setSearchVisible(false);
+						this.searchActionViewItem.focus();
+					});
+					return this.searchActionViewItem;
+				}
+				if (action.id === 'projects.sort') {
+					const item = new DropdownMenuActionViewItem(action, () => this.getSortActions(), {
+						showContextMenu: delegate => this.contextMenus.showContextMenu({
+							...delegate,
+							anchorPosition: AnchorPosition.Below,
+							getMenuClassName: () => 'ash-projects-sort-menu',
+							getCheckedActionsRepresentation: () => 'radio',
+							autoSelectFirstItem: true,
+						}),
+					}, options, () => ({ anchorAlignment: AnchorAlignment.Right }));
+					this.sortDropdown = item;
+					this._register(item.onDidChangeVisibility(visible => { this.sortMenuOpen = visible; }));
+					return item;
+				}
+				if (action.id === 'projects.create') {
+					this.createActionViewItem = new ButtonActionViewItem(action, { ...options, buttonPresentation: 'primary' });
+					return this.createActionViewItem;
+				}
+				return undefined;
+			},
+		}));
+		this.tools = this.toolbar.element;
+		this.tools.classList.add('ash-projects-tools');
+		const searchLabel = localize('projects.search', 'Search projects');
+		const sortLabel = localize('projects.sort', 'Sort projects');
+		const createLabel = localize('projects.new', 'New project');
+		this.toolbarActions = [
+			{
+				id: 'projects.search', label: searchLabel, tooltip: searchLabel, icon: Lxicon.search, enabled: true,
+				run: () => { this.setSearchVisible(true); this.search.focus(); },
+			},
+			{ id: 'projects.sort', label: sortLabel, tooltip: sortLabel, icon: Lxicon.sort, enabled: true, run: () => this.sortDropdown.show() },
+			{ id: 'projects.create', label: createLabel, tooltip: createLabel, enabled: true, run: () => this.showProjectDialog() },
+		];
+		this.toolbar.setActions(this.toolbarActions);
 		heading.append(this.title, this.tools);
 		const feedback = h(document, 'div', { className: 'ash-projects-feedback' });
 		this.message = h(document, 'p', { attributes: { role: 'status', 'aria-live': 'polite' } });
 		this.retry = this._register(new Button(feedback, { ...defaultButtonStyles, label: localize('projects.retry', 'Try again'), onClick: () => { void this.projects.reload(); } }));
 		feedback.prepend(this.message);
 		this.body = h(document, 'div', { className: 'ash-projects-body' });
-		main.append(heading, this.search, feedback, this.body);
+		main.append(heading, feedback, this.body);
 		this.domNode.append(main);
 		this._register(addDisposableListener(this.search, 'input', () => this.projects.setQuery(this.search.value)));
 		this._register(addDisposableListener(this.body, 'keydown', event => this.navigateCards(event)));
@@ -108,20 +225,32 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	public override clearInput(): void { }
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
+		this.updateTitlebar();
 		if (visible) {
-			this.titlebarContent.value ??= this.titlebar.setPageContent(this.breadcrumb);
 			void this.projects.reload();
 		} else {
-			this.titlebarContent.clear();
+			this.relativeTimeUpdate.cancel();
+			if (this.sortMenuOpen) { this.contextMenus.hideContextMenu(); }
 			this.dialog.clear();
 		}
 	}
 	public override layout(dimension: IDimension): void { this.domNode.classList.toggle('narrow', dimension.width < 760); }
-	public override focus(): void { this.projects.state.get().selectedId ? this.title.focus() : this.createButton.focus(); }
+	public override focus(): void { this.projects.state.get().selectedId ? this.title.focus() : this.createActionViewItem.focus(); }
+
+	private updateTitlebar(): void {
+		// The list has its own heading; only an opened project needs breadcrumb navigation.
+		if (this.isVisible() && this.projects.state.get().selectedId) {
+			this.titlebarContent.value ??= this.titlebar.setPageContent(this.breadcrumb);
+		} else {
+			this.titlebarContent.clear();
+		}
+	}
 
 	private render(state: ProjectsState): void {
+		if (state.selectedId && this.sortMenuOpen) { this.contextMenus.hideContextMenu(); }
 		const focused = getActiveElement(this.domNode.ownerDocument) as HTMLElement;
 		const focusKey = this.body.contains(focused) ? focused.dataset.projectControl : undefined;
+		this.relativeTimeUpdate.cancel();
 		this.content.clear();
 		this.body.replaceChildren();
 		this.breadcrumbSeparator.hidden = !state.selected;
@@ -129,13 +258,18 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.breadcrumbName.textContent = state.selected?.name ?? '';
 		if (state.selectedId) { this.breadcrumbProjects.domNode.removeAttribute('aria-current'); }
 		else { this.breadcrumbProjects.domNode.setAttribute('aria-current', 'page'); }
+		this.updateTitlebar();
 		this.tools.hidden = !!state.selectedId;
 		this.title.textContent = state.selected?.name ?? localize('projects.title', 'Projects');
 		this.title.title = this.title.textContent;
-		this.search.hidden = !!state.selectedId || (this.search.hidden && !state.query);
+		this.setSearchVisible(!state.selectedId && (this.searchActionViewItem.expanded || !!state.query));
 		this.search.value = state.query;
-		this.sort.domNode.setAttribute('aria-pressed', String(state.descending));
-		this.createButton.enabled = !state.busy;
+		const createAction = this.toolbarActions.find(action => action.id === 'projects.create')!;
+		if (createAction.enabled === state.busy) {
+			// Keep the search and dropdown items mounted while the primary action changes availability.
+			this.toolbarActions = this.toolbarActions.map(action => action === createAction ? { ...action, enabled: !state.busy } : action);
+			this.toolbar.setActions(this.toolbarActions);
+		}
 		this.message.textContent = state.message ?? (state.loading ? localize('projects.loading', 'Loading projects…') : '');
 		this.message.parentElement!.hidden = !state.message && !state.loading;
 		this.retry.domNode.hidden = !state.message;
@@ -148,6 +282,29 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		if (focusKey) {
 			(Array.from(this.body.querySelectorAll<HTMLElement>('[data-project-control]')).find(node => node.dataset.projectControl === focusKey) ?? this.title).focus();
 		}
+	}
+
+	private setSearchVisible(visible: boolean): void {
+		this.searchActionViewItem.setExpanded(visible);
+	}
+
+	private getSortActions(): readonly IAction[] {
+		const selected = this.projects.state.get().sortOrder;
+		const options: readonly { order: ProjectSortOrder; label: string; }[] = [
+			{ order: 'updated', label: localize('projects.sortUpdated', 'Last updated') },
+			{ order: 'created', label: localize('projects.sortCreated', 'Date created') },
+			{ order: 'name', label: localize('projects.sortName', 'Alphabetical') },
+		];
+		return options.map(({ order, label }) => ({
+			id: `projects.sort.${order}`, label, tooltip: label, enabled: true, checked: selected === order,
+			run: () => { this.projects.setSortOrder(order); },
+		}));
+	}
+
+	private focusProjectList(): void {
+		const card = this.body.querySelector<HTMLElement>('.ash-projects-card');
+		if (card) { card.focus(); }
+		else { this.createActionViewItem.focus(); }
 	}
 
 	private button(parent: HTMLElement, options: IButtonOptions, key?: string): Button {
@@ -176,7 +333,20 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			card.dataset.projectControl = project.id;
 			const mark = h(document, 'span', { className: 'ash-projects-card-mark', attributes: { 'aria-hidden': 'true' } });
 			appendIcon(Lxicon.projects, mark);
-			const content = h(document, 'span', { className: 'ash-projects-card-content' }, h(document, 'span', { className: 'ash-projects-card-name' }, project.name), h(document, 'span', { className: 'ash-projects-card-caption' }, localize('projects.open', 'Open project')));
+			const content = h(document, 'span', { className: 'ash-projects-card-content' }, h(document, 'span', { className: 'ash-projects-card-name' }, project.name));
+			const timestamp = project.updatedAtMs ?? project.createdAtMs;
+			if (timestamp !== undefined) {
+				const date = new Date(timestamp);
+				const updatedAt = localize('projects.updatedAt', 'Updated {0}', date.toLocaleString(getNLSLanguage()));
+				const caption = h(document, 'time', {
+					className: 'ash-projects-card-caption',
+					properties: { dateTime: date.toISOString(), id: generateUuid() },
+					attributes: { 'aria-label': updatedAt },
+				});
+				card.setAttribute('aria-describedby', caption.id);
+				content.append(caption);
+				this.content.add(this.hover.setupDelayedHover(caption, { content: updatedAt }));
+			}
 			card.append(mark, content);
 			const actionsHost = h(document, 'div', { className: 'ash-projects-card-actions' });
 			const pinned = this.projects.isPinned(project.id);
@@ -194,6 +364,9 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 						getMenuClassName: () => 'ash-projects-menu',
 						onHide: didCancel => { row.classList.remove('menu-visible'); delegate.onHide?.(didCancel); },
 					});
+					// The menu mounts synchronously in this window; Projects owns its destructive styling.
+					const destructiveAction = this.domNode.ownerDocument.querySelector('.ash-projects-menu [data-action-id="projects.delete"]');
+					destructiveAction?.classList.add('ash-projects-destructive-action');
 				},
 			}, { ariaLabel: localize('projects.actions', 'Actions for {0}', project.name), presentation: 'inherit-foreground', highlightToggledItems: false }));
 			toolbar.setActions([], this.projectActions(project), [pin]);
@@ -206,6 +379,27 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			row.append(card, actionsHost); list.append(row);
 		}
 		this.body.append(list);
+		this.updateCardTimes();
+		if (this.isVisible() && list.querySelector('time')) {
+			this.relativeTimeUpdate.cancelAndSet(() => this.updateCardTimes(), 60_000, document.defaultView!);
+		}
+	}
+
+	private updateCardTimes(): void {
+		const now = Date.now();
+		const units = [
+			{ unit: 'year', milliseconds: 365 * 86_400_000 },
+			{ unit: 'month', milliseconds: 30 * 86_400_000 },
+			{ unit: 'day', milliseconds: 86_400_000 },
+			{ unit: 'hour', milliseconds: 3_600_000 },
+			{ unit: 'minute', milliseconds: 60_000 },
+		] as const;
+		// Refresh text in place so time passing never replaces cards or interrupts keyboard focus.
+		for (const caption of this.body.querySelectorAll<HTMLTimeElement>('time.ash-projects-card-caption')) {
+			const elapsed = Math.max(0, now - Date.parse(caption.dateTime));
+			const unit = units.find(candidate => elapsed >= candidate.milliseconds);
+			caption.textContent = unit ? this.relativeTime.format(-Math.floor(elapsed / unit.milliseconds), unit.unit) : localize('projects.justNow', 'Just now');
+		}
 	}
 
 	private projectActions(project: ProjectSummary): readonly IAction[] {
@@ -217,7 +411,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			}),
 			action('projects.archive', localize('projects.archive', 'Archive'), Lxicon.archive, async () => {
 				await this.projects.archive(project);
-				if (!this.isDisposed && this.isVisible()) { (this.body.querySelector<HTMLElement>('.ash-projects-card') ?? this.createButton.domNode).focus(); }
+				if (!this.isDisposed && this.isVisible()) { this.focusProjectList(); }
 			}),
 			action('projects.delete', localize('projects.delete', 'Delete'), Lxicon.trash, async () => {
 				const result = await this.dialogs.confirm({
@@ -227,7 +421,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				});
 				if (result.confirmed) {
 					await this.projects.remove(project);
-					if (!this.isDisposed && this.isVisible()) { (this.body.querySelector<HTMLElement>('.ash-projects-card') ?? this.createButton.domNode).focus(); }
+					if (!this.isDisposed && this.isVisible()) { this.focusProjectList(); }
 				}
 			}),
 		];
@@ -299,6 +493,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const store = new DisposableStore();
 		this.dialog.value = store;
 		const document = this.domNode.ownerDocument;
+		const previousFocus = getActiveElement(document);
 		const form = h(document, 'form', { className: 'ash-projects-form' });
 		const nameLabel = h(document, 'label', {}, localize('projects.nameLabel', 'What are you working on?'));
 		const name = h(document, 'input', { properties: { type: 'text', value: project?.name ?? '', required: true, maxLength: 200, placeholder: localize('projects.namePlaceholder', 'Name your project') } });
@@ -435,7 +630,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		}));
 		void dialog.show().then(() => {
 			if (this.dialog.value === store) { this.dialog.clear(); }
-			if (didSave && !this.isDisposed) { this.title.focus(); }
+			// Updating action availability can replace the toolbar trigger during a save attempt.
+			if (!this.isDisposed && this.isVisible() && (didSave || !previousFocus?.isConnected)) { this.focus(); }
 		});
 		name.focus();
 	}

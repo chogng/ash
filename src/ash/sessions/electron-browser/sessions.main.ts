@@ -30,7 +30,7 @@ import { createSessionsWorkbench } from '../browser/workbenchFactory.js';
 import { isMacintosh } from '../../base/common/platform.js';
 import { NativeMenubarControl } from '../../workbench/electron-browser/parts/titlebar/menubarControl.js';
 import { Menus } from '../browser/menus.js';
-import { TitlebarPart } from '../browser/parts/titlebar/titlebarPart.js';
+import { TitlebarPart } from '../browser/parts/titlebarPart.js';
 import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
 import { RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL } from '../../platform/window/common/window.js';
@@ -171,6 +171,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				'workbench.contrib.settingsChangeRelauncher',
 				'workbench.contrib.partsSplash',
 				'workbench.contrib.preferences',
+				'workbench.contrib.extensionRecommendations',
 				'workbench.contrib.snippets',
 				'workbench.contrib.defaultFormatter',
 				'workbench.contrib.sessionsLayout',

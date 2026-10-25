@@ -8,6 +8,8 @@ use crate::ProjectStoreError;
 use crate::ProjectStoreOutcome;
 use ash_protocol::ProjectId;
 use std::sync::Arc;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProjectCommandDisposition {
@@ -76,7 +78,13 @@ impl ProjectCoordinator {
             Err(ProjectStoreError::NotFound(_)) => None,
             Err(error) => return Err(map_store_error(error)),
         };
-        let result = crate::reducer::apply(current, &request)?;
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|error| ProjectError::Storage(format!("Project clock failed: {error}")))?
+            .as_millis()
+            .try_into()
+            .map_err(|_| ProjectError::Storage("Project clock overflow".into()))?;
+        let result = crate::reducer::apply(current, &request, now_ms)?;
         let commit = ProjectCommit { request, result };
         match self.store.commit(&commit).map_err(map_store_error)? {
             ProjectStoreOutcome::Applied => Ok(ProjectCommandResult {

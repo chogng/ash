@@ -1,5 +1,6 @@
 use crate::JsonSchema;
 use crate::TS;
+use crate::protocol::extension_packages::ExtensionsUiTargetDto;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -11,6 +12,9 @@ pub struct PluginPackageDto {
     pub version: String,
     pub digest: String,
     pub display_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub ui_targets: Option<Vec<ExtensionsUiTargetDto>>,
     pub permissions: Vec<PluginPermissionDto>,
     pub has_editor_extensions: bool,
     pub enabled: bool,

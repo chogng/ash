@@ -5,7 +5,7 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { localize } from '../../../../nls.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import "./titlebarpart.css";
+import "./media/titlebarpart.css";
 import { addDisposableListener, h, type IDimension } from "../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { CommandsRegistry } from "../../../../platform/commands/common/commands.js";

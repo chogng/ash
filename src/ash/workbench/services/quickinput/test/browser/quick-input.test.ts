@@ -12,6 +12,9 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
+import { StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
+import { BrowserLayoutService, ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
+import { QuickInputService } from '../../../../../platform/quickinput/browser/quickInputService.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { errorHandler } from '../../../../../base/common/errors.js';
@@ -810,6 +813,36 @@ suite('Quick Input shared foundations', () => {
 		mainDom.window.close();
 	});
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('Quick Input requires storage and ignores invalid persisted positions', () => {
+		const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+		using browser = toDisposable(() => dom.window.close());
+		using registrationWindow = registerWindow(dom.window as unknown as Window);
+		using globals = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
+		using services = new InstantiationService();
+		using contexts = new ContextKeyService();
+		using layout = new BrowserLayoutService({ root: dom.window.document.body });
+		services.registerInstance(IContextKeyService, contexts);
+		services.registerInstance(ILayoutService, layout);
+		using service = services.createInstance(QuickInputService);
+		assert.throws(() => service.createQuickPick(), /storageService/);
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'position', flushInterval: 0 });
+		services.registerInstance(IStorageService, storage);
+		const key = 'workbench.quickInput.viewState';
+		for (const value of ['broken json', 'null', '[]', '{"top":0.2}', '{"top":-1,"left":0.5}', '{"top":0.2,"left":2}', '{"top":"0.2","left":0.5}']) {
+			storage.store(key, value, StorageScope.APPLICATION, StorageTarget.MACHINE);
+			using picker = service.createQuickPick();
+			picker.show();
+			assert.equal(dom.window.document.querySelector<HTMLElement>('.ash-quick-pick')!.style.transform, '');
+			picker.hide();
+		}
+		storage.store('unrelated', 'preserved', StorageScope.APPLICATION, StorageTarget.MACHINE);
+		service.setAlignment('center');
+		assert.deepEqual(JSON.parse(storage.get(key, StorageScope.APPLICATION)!), { top: 0.25, left: 0.5 });
+		service.setAlignment('top');
+		assert.equal(storage.get(key, StorageScope.APPLICATION), undefined);
+		assert.equal(storage.get('unrelated', StorageScope.APPLICATION), 'preserved');
+	});
 
 	test('Quick Access is lazy and owned by its Quick Input service', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');

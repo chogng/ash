@@ -277,7 +277,7 @@ fn normalized_extension_manifest(
     manifest.remove("rendererClient");
     manifest.insert("version".into(), source.package().version.clone().into());
     if source.kind() == CapabilityKind::EditorExtension && runtime_id.is_none() {
-        // Without a verified runtime, editor packages may only contribute passive resources.
+        // Without a verified runtime, editor packages may contribute resources and user-triggered keybindings.
         // A declarative debugger must not turn an ungranted package into process execution.
         for entry in ["main", "browser", "activationEvents"] {
             manifest.remove(entry);
@@ -290,6 +290,7 @@ fn normalized_extension_manifest(
                 matches!(
                     kind.as_str(),
                     "languages"
+                        | "keybindings"
                         | "grammars"
                         | "snippets"
                         | "themes"

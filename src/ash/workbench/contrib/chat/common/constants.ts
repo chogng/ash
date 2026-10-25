@@ -1,6 +1,10 @@
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { DictationBackend } from '../../../../platform/renderer/common/dictation.js';
 import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
+import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+
+export const MANAGE_CHAT_COMMAND_ID = 'workbench.action.chat.manage';
+export const CONTEXT_MODELS_EDITOR = new RawContextKey<boolean>('inModelsEditor', false);
 
 export const OPEN_AGENTS_WINDOW_COMMAND_ID = 'workbench.action.openAgentsWindow';
 export const ScreenshotCommandId = 'workbench.action.chat.attachScreenshot';

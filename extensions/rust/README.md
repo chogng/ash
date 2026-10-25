@@ -11,7 +11,7 @@ automatic value and named thread modes where supported. Objects and arrays use t
 JSONC settings editor.
 
 The declaration owns the `rust-analyzer` identity, Rust route, `--version` probe,
-`RUSTUP_AUTO_INSTALL=0` environment, Cargo workspace marker and exact official release assets.
+`RUSTUP_AUTO_INSTALL=0` environment and exact official release assets.
 Update the six upstream asset URLs, versions, sizes and SHA-256 digests together.
 The 194 server setting schemas and defaults match that pinned release. The VS Code
 extension's client-only options, such as its debug engine selection, are not server settings;
@@ -40,6 +40,13 @@ The Rust toolchain (`cargo` and `rustc`) remains user managed.
 Ash uses on-demand analysis and retains the started server between visits. This combines
 lower startup memory with reuse of analysis already computed. It does not impose a hard
 memory limit: the working set depends on the project and requested language features.
+
+Opening a workspace containing `Cargo.toml` only advertises Rust support. Opening a Rust
+document (including a restored editor), requesting Rust language features, or explicitly
+starting the server triggers acquisition and startup. Automatic workspace diagnostics use
+only ready servers; they never install, start, or resume an idle or user-stopped server.
+Edits made while the server is manually stopped remain synchronized as document snapshots
+without waking it. An explicit restart replays the latest snapshots before semantic work.
 
 | Setting                              | Default           | Behavior                                                                                                                                                                                                         |
 | ------------------------------------ | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

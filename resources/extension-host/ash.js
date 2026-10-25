@@ -704,6 +704,11 @@ export function createApi(configuration, initialization) {
 			else if (operation === 'codeAction') result = await provider[method](snapshot, new Range(request.range.start, request.range.end), { diagnostics: [], only: request.only?.[0] ? new api.CodeActionKind(request.only[0]) : undefined, triggerKind: 1 }, token);
 			else if (operation === 'selectionRanges') result = await provider[method](snapshot, request.positions.map(value => new Position(value.line, value.character)), token);
 			else if (operation === 'foldingRanges') result = await provider[method](snapshot, {}, token);
+			else if (operation === 'formatting') {
+				if (request.kind !== 'document') return { edits: [] };
+				result = await provider[method](snapshot, request.options, token);
+				return coordinates({ edits: (result ?? []).map(edit => ({ range: edit.range, text: edit.newText })) }, true);
+			}
 			else if (operation === 'definition' || operation === 'documentHighlights') result = await provider[method](snapshot, point, token);
 			else result = await provider[method](snapshot, token);
 			if (operation === 'rename' && request.kind !== 'prepare') return coordinates(await encodeWorkspaceEdit(result), true);
@@ -773,8 +778,8 @@ export function createApi(configuration, initialization) {
 	function unsupported(name) { throw new Error(`Unsupported Ash API: ${name}`); }
 	let workspaceFolders;
 	const workspaceFolderStates = new WeakMap();
-	const workspaceListeners = { configuration: new Set(), workspace: new Set() };
-	const workspaceRevisions = { configuration: 0, workspace: 0 };
+	const workspaceListeners = { configuration: new Set(), workspace: new Set(), jsonSchemas: new Set() };
+	const workspaceRevisions = { configuration: 0, workspace: 0, jsonSchemas: 0 };
 	let workspaceRegistration;
 	function folderKey(uri) {
 		const path = uri.scheme === 'file' && configuration.pathSeparator === '\\' ? uri.path.toLowerCase() : uri.path;
@@ -831,7 +836,7 @@ export function createApi(configuration, initialization) {
 						return scope == null || !equalConfig(getConfiguration(undefined, scope, before).get(section), getConfiguration(undefined, scope, after).get(section));
 					}
 				});
-			} else {
+			} else if (event.type === 'workspace') {
 				if (!Array.isArray(event.workspaceFolders) || event.workspaceFolders.length > 256 || event.workspaceFolders.some((folder, index) => typeof folder.uri !== 'string' || typeof folder.name !== 'string' || folder.index !== index)
 					|| event.workspaceName !== null && typeof event.workspaceName !== 'string' || event.workspaceFile !== null && typeof event.workspaceFile !== 'string') throw new TypeError('Invalid workspace snapshot');
 				const previous = getWorkspaceFolders() ?? [];
@@ -2016,6 +2021,14 @@ export function createApi(configuration, initialization) {
 		}),
 		languages: contract('languages', {
 			createDiagnosticCollection: diagnosticCollection,
+			registerDocumentFormattingEditProvider: (selector, provider) => registerLanguageOperation(selector, 'formatting', provider, 'provideDocumentFormattingEdits'),
+			onDidChangeJsonSchemas: (listener, thisArg, disposables) => listenWorkspace('jsonSchemas', listener, thisArg, disposables),
+			async getJsonSchemaContributions() {
+				const result = await request({ operation: 'editorOperation', payload: { method: 'jsonSchemaContributions' } }, 'value');
+				const values = jsonValue(result.value);
+				if (!Array.isArray(values) || values.length > 4096 || values.some(value => !value || typeof value.uri !== 'string' || !Array.isArray(value.fileMatch) || value.fileMatch.some(pattern => typeof pattern !== 'string') || !value.schema || typeof value.schema !== 'object' || Array.isArray(value.schema))) throw new TypeError('Invalid JSON schema contributions');
+				return values;
+			},
 			registerDefinitionProvider: (selector, provider) => registerLanguageOperation(selector, 'definition', provider, 'provideDefinition'),
 			registerReferenceProvider: (selector, provider) => registerLanguageOperation(selector, 'references', provider, 'provideReferences'),
 			registerRenameProvider: (selector, provider) => registerLanguageOperation(selector, 'rename', provider, 'provideRenameEdits'),

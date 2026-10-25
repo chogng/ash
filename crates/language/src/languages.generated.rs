@@ -245,6 +245,8 @@ const DECLARATIONS: &[Association] = &[
         id: "jsonc",
         extensions: &[
             ".jsonc",
+            ".ash-workspace",
+            ".code-workspace",
             ".eslintrc",
             ".eslintrc.json",
             ".jsfmtrc",
@@ -254,6 +256,12 @@ const DECLARATIONS: &[Association] = &[
             ".babelrc",
         ],
         filenames: &[
+            "settings.json",
+            "keybindings.json",
+            "tasks.json",
+            "launch.json",
+            "extensions.json",
+            "argv.json",
             "babel.config.json",
             "bun.lock",
             ".babelrc.json",

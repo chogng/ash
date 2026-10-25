@@ -13,6 +13,7 @@ fn provider_names_preserve_the_signed_registry_identity() {
 fn verified_catalog_pages_continue_beyond_the_legacy_search_cap_and_bind_the_query() {
     let packages = (0..257)
         .map(|index| crate::PackageSummary {
+            ui_targets: None,
             id: format!("example.item-{index:03}"),
             version: "1.0.0".into(),
             package_type: "skill".into(),

@@ -18,3 +18,4 @@ pub use model::{
 pub(crate) const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
 
 pub use editor_extension::EditorExtensionRuntime;
+pub use model::ExtensionUiTarget;

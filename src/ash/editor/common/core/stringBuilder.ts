@@ -1,7 +1,7 @@
 /** Decodes UTF-16LE code units without dropping a leading BOM. */
-let platformTextDecoder: TextDecoder | undefined;
+let platformTextDecoder: InstanceType<typeof TextDecoder> | undefined;
 
-export function getPlatformTextDecoder(): TextDecoder {
+export function getPlatformTextDecoder(): InstanceType<typeof TextDecoder> {
 	return platformTextDecoder ??= new TextDecoder('UTF-16LE');
 }
 

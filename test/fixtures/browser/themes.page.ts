@@ -46,7 +46,7 @@ import '../../../src/ash/base/browser/ui/list/list.css';
 import '../../../extensions/academy/browser/widget/richTextEditor/richTextEditorWidget.css';
 import '../../../src/ash/editor/contrib/hover/browser/hover.css';
 import '../../../src/ash/platform/actionWidget/browser/actionWidget.css';
-import '../../../src/ash/sessions/browser/parts/titlebar/media/titlebarpart.css';
+import '../../../src/ash/sessions/browser/parts/media/titlebarpart.css';
 import '../../../src/ash/workbench/browser/parts/editor/media/modalEditorPart.css';
 import '../../../src/ash/workbench/contrib/scm/browser/media/scm.css';
 import '../../../src/ash/sessions/common/theme.js';
@@ -229,11 +229,12 @@ window.mountDefaultStyleProbes = (withDisabledSelectOption = false) => {
 	tree.setFocus('Styled tree item');
 	window.openStyledTreeFind = () => tree.openFind();
 	window.openStyledDialog = () => {
-		const dialog = resources.add(new Dialog(host, {
-			title: 'Styled dialog', content: 'Style inheritance probe',
+		const dialog = resources.add(new Dialog(host, 'Styled dialog', ['Styled done'], {
+			detail: 'Style inheritance probe',
 			dialogStyles: { ...defaultDialogStyles, dialogBackground: 'var(--ash-selection-background)' },
 			buttonStyles: getButtonStyles({ buttonBackground: 'error.foreground' }),
-			buttons: [{ label: 'Styled done', value: 'done', presentation: 'primary' }],
+			checkboxStyles: defaultCheckboxStyles,
+			inputBoxStyles: defaultInputBoxStyles,
 		}));
 		void dialog.show().finally(() => dialog.dispose());
 	};

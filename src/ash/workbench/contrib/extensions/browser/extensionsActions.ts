@@ -14,6 +14,8 @@ import { type IGlobalExtensionEnablementService } from '../../../../platform/ext
 import type { IExtensionApi } from '../../../../platform/extensions/common/extensionApi.js';
 import { ExtensionsInputSource, type ExtensionsInput, type ExtensionsCapabilityTarget } from '../common/extensionsInput.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IExtensionIgnoredRecommendationsService, IExtensionRecommendationsService } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
+import { IExtensionRecommendationNotificationService } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import type { McpServerRuntimeState } from '../../../../platform/mcp/common/mcpServerStatusService.js';
 import type { ConnectorState, IConnectorService } from '../../../../platform/connectors/common/connectorService.js';
@@ -36,7 +38,7 @@ export function getSkillSummary(skill: SkillDescriptor): string {
 /** Selection uses the catalog's actions; account and server mutations stay with their domain owners. */
 export async function addConnection(connectors: IConnectorService, mcp: IMcpServerManagementService, quickInput: IQuickInputService, dialogs: IDialogService, signal: AbortSignal): Promise<ExtensionsCapabilityTarget | undefined> {
 	const title = localize({ bundle: 'ash.extensions', key: 'addConnection' }, 'Add connection');
-	const choice = await pickConnectionItem<IQuickPickItem & { readonly kind: 'account' | 'mcp'; }>(quickInput, title,
+	const choice = await pickExtensionItem<IQuickPickItem & { readonly kind: 'account' | 'mcp'; }>(quickInput, title,
 		mcp.isAvailable
 			? localize({ bundle: 'ash.extensions', key: 'connectionChooseKind' }, 'How would you like to connect?')
 			: localize({ bundle: 'ash.extensions', key: 'connectionAccountOnlyHelp' }, 'Sign in to a supported service. Custom MCP configuration is unavailable in this window.'),
@@ -60,7 +62,7 @@ export async function addConnection(connectors: IConnectorService, mcp: IMcpServ
 		);
 		return undefined;
 	}
-	const selected = await pickConnectionItem(quickInput,
+	const selected = await pickExtensionItem(quickInput,
 		localize({ bundle: 'ash.extensions', key: 'connectionChooseService' }, 'Choose a service account'),
 		localize({ bundle: 'ash.extensions', key: 'connectionSearchServices' }, 'Search services to sign in or authorize with an API token'),
 		catalog.connectors.map(connector => ({ label: connector.displayName, description: describeConnectorState(connector.state, connector.enabled), detail: connector.description, connector })), signal);
@@ -94,7 +96,7 @@ export async function addConnection(connectors: IConnectorService, mcp: IMcpServ
 	return { kind: 'connector', connectorId: connector.id };
 }
 
-async function pickConnectionItem<T extends IQuickPickItem>(quickInput: IQuickInputService, label: string, placeholder: string, items: readonly T[], signal: AbortSignal): Promise<T | undefined> {
+async function pickExtensionItem<T extends IQuickPickItem>(quickInput: IQuickInputService, label: string, placeholder: string, items: readonly T[], signal: AbortSignal): Promise<T | undefined> {
 	using resources = new DisposableStore();
 	const picker = resources.add(quickInput.createQuickPick<T>());
 	picker.ariaLabel = label;
@@ -249,6 +251,38 @@ export function describeConnectorState(state: ConnectorState, enabled = true): s
 export function registerExtensionManagementActions(): DisposableStore {
 	const registrations = new DisposableStore();
 	const extensionsTitle = ContextKeyExpr.equals('viewContainer', 'ash.extensions');
+	registrations.add(registerAction2(class ShowRecommendedKeymaps extends Action2 {
+		constructor() { super({ id: 'ash.extensions.showRecommendedKeymaps', title: localize2({ bundle: 'ash.extensions', key: 'showRecommendedKeymaps' }, 'Show recommended keymaps'), f1: true, menu: { id: MenuId.ViewContainerTitle, when: extensionsTitle, group: '2_recommendations', order: 4 } }); }
+		public override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(ICommandService).executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { query: '@recommended keymap' }); }
+	}));
+	for (const undo of [false, true]) {
+		registrations.add(registerAction2(class ConfigureIgnoredRecommendation extends Action2 {
+			constructor() {
+				super({
+					id: undo ? 'ash.extensions.undoIgnoreRecommendation' : 'ash.extensions.ignoreRecommendation',
+					title: undo ? localize2({ bundle: 'ash.extensions', key: 'restoreRecommendation' }, 'Restore an ignored extension recommendation') : localize2({ bundle: 'ash.extensions', key: 'ignoreRecommendation' }, 'Ignore an extension recommendation'),
+					f1: true, menu: { id: MenuId.ViewContainerTitle, when: extensionsTitle, group: '2_recommendations', order: undo ? 2 : 1 },
+				});
+			}
+			public override async run(accessor: ServicesAccessor): Promise<void> {
+				const recommendations = accessor.get(IExtensionRecommendationsService);
+				const ignored = accessor.get(IExtensionIgnoredRecommendationsService);
+				const quick = accessor.get(IQuickInputService);
+				const items = undo ? ignored.globalIgnoredRecommendations.map(id => ({ label: id, id })) : (await recommendations.getRecommendations()).recommendations.map(item => ({ label: item.extensionId, description: item.reason.reasonText, id: item.extensionId }));
+				const selected = await pickExtensionItem(quick, localize({ bundle: 'ash.extensions', key: 'recommendedPane' }, 'Recommended'), undo ? localize({ bundle: 'ash.extensions', key: 'restoreRecommendationPick' }, 'Choose a recommendation to restore. Workspace exclusions are edited in the workspace configuration.') : localize({ bundle: 'ash.extensions', key: 'ignoreRecommendationPick' }, 'Choose an extension to hide from recommendations in this profile.'), items, new AbortController().signal);
+				if (selected) { ignored.toggleGlobalIgnoredRecommendation(selected.id, !undo); }
+			}
+		}));
+	}
+	registrations.add(registerAction2(class RestoreRecommendationNotifications extends Action2 {
+		constructor() {
+			super({ id: 'ash.extensions.resetRecommendationNotifications', title: localize2({ bundle: 'ash.extensions', key: 'restoreRecommendationNotifications' }, 'Restore dismissed extension recommendation notifications'), f1: true, menu: { id: MenuId.ViewContainerTitle, when: extensionsTitle, group: '2_recommendations', order: 3 } });
+		}
+		public override run(accessor: ServicesAccessor): void {
+			accessor.get(IExtensionRecommendationNotificationService).resetIgnoredRecommendations();
+			accessor.get(IExtensionRecommendationsService).refresh();
+		}
+	}));
 	for (const marketplace of [true, false]) {
 		registrations.add(registerAction2(class SwitchExtensionsPresentation extends Action2 {
 			constructor() {

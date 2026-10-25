@@ -2,12 +2,14 @@
 //! OAuth and API implementations belong to the independently supervised extensions.
 mod credentials;
 mod error;
+mod follow_up;
 mod models;
 mod provider;
 mod reporter;
 use ash_async_utils::CancellationToken;
 pub use credentials::*;
 pub use error::Error;
+pub use follow_up::PullRequestFollowUp;
 pub use models::*;
 pub use provider::*;
 pub use reporter::GitHubIssueReporter;

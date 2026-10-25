@@ -260,7 +260,7 @@ export class LineInjectedText {
 		let lastOriginalOffset = 0;
 		for (const injectedText of injectedTexts) {
 			result += lineText.substring(lastOriginalOffset, injectedText.column - 1);
-			lastOriginalOffset = injectedText.column - 1;
+			lastOriginalOffset = injectedText.column - 1 + (injectedText.options.replaceLength ?? 0);
 			result += injectedText.options.content;
 		}
 		result += lineText.substring(lastOriginalOffset);
@@ -322,7 +322,7 @@ export class LineInjectedText {
 			if (widthInEm !== undefined) {
 				result.push({ startOffset, endOffset, widthInEm });
 			}
-			injectedTextLength += length;
+			injectedTextLength += length - (injectedText.options.replaceLength ?? 0);
 		}
 		return result;
 	}

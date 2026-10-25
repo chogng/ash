@@ -58,6 +58,10 @@ fn app_server_exposes_only_the_manager_business_contract() {
         json!({"query": "github", "packageType": "plugin", "capabilityKind": "skill", "languageId": "typescriptreact", "limit": 20}),
     );
     assert_eq!(found["result"]["packages"][0]["id"], "extensions/github");
+    assert_eq!(
+        found["result"]["packages"][0]["uiTargets"],
+        json!(["agents"])
+    );
     let paged = call(
         &server,
         &mut connection,
@@ -69,6 +73,10 @@ fn app_server_exposes_only_the_manager_business_contract() {
         }),
     );
     assert_eq!(paged["result"]["packages"][0]["id"], "extensions/github");
+    assert_eq!(
+        paged["result"]["packages"][0]["uiTargets"],
+        json!(["agents"])
+    );
     assert_eq!(paged["result"]["total"], 1);
     assert_eq!(paged["result"]["nextCursor"], Value::Null);
     assert_eq!(
@@ -84,6 +92,7 @@ fn app_server_exposes_only_the_manager_business_contract() {
         json!({"packageId": "extensions/docs-mcp", "version": "1.2.3"}),
     );
     assert_eq!(details["result"]["upstream"]["registry"], "officialMcp");
+    assert_eq!(details["result"]["uiTargets"], json!(["ide", "agents"]));
     assert_eq!(details["result"]["upstream"]["name"], "ac.example/docs-mcp");
     assert!(details.to_string().find("targetUrl").is_none());
 
@@ -225,6 +234,7 @@ impl ExtensionPackageService for FakeExtensionPackageManager {
         Ok(ash_core_plugins::SearchPackagesResult {
             unavailable_sources: Vec::new(),
             packages: vec![ash_core_plugins::PackageSummary {
+                ui_targets: Some(vec![ash_core_plugins::ExtensionUiTarget::Agents]),
                 id: "extensions/github".to_owned(),
                 version: "1.1.0".to_owned(),
                 package_type: "plugin".to_owned(),
@@ -239,6 +249,7 @@ impl ExtensionPackageService for FakeExtensionPackageManager {
         _: ash_core_plugins::GetPackageRequest,
     ) -> Result<ash_core_plugins::PackageDetails, ash_core_plugins::ExtensionsClientError> {
         Ok(ash_core_plugins::PackageDetails {
+            ui_targets: Some(vec![ash_core_plugins::ExtensionUiTarget::Ide, ash_core_plugins::ExtensionUiTarget::Agents]),
             package: ash_core_plugins::PackageRef {
                 id: "extensions/docs-mcp".to_owned(),
                 version: "1.2.3".to_owned(),

@@ -960,6 +960,27 @@ test("EditorPart replaces preview tabs and preserves pinned tabs", async () => {
 	dom.window.close();
 });
 
+test('external attachment URI drop opens its source range without treating the selection as file identity', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		const revealed = new DeferredPromise<Range>();
+		using registration = registry.registerEditorPane(descriptor('test.attachmentDrop', '.ts', () => {
+			const pane = new TestEditorPane('test.attachmentDrop');
+			pane.revealRange = range => { void revealed.complete(range); };
+			return pane;
+		}));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		await editor.openEditor(input('/project/original.ts'));
+		const transfer = { types: ['text/uri-list'], files: [], getData: (type: string) => type === 'text/uri-list' ? 'file:///project/captured.ts#4,2-5,8' : '' };
+		const event = new dom.window.MouseEvent('drop', { bubbles: true, cancelable: true });
+		Object.defineProperty(event, 'dataTransfer', { value: transfer });
+		editor.activeGroup.domNode.querySelector('.ash-tab')!.dispatchEvent(event);
+		assert.deepEqual(await revealed.p, new Range(4, 2, 5, 8));
+		assert.deepEqual(editor.activeGroup.inputs.map(input => input.resource.toString()), ['file:///project/captured.ts', 'file:///project/original.ts']);
+	} finally { dom.window.close(); }
+});
+
 for (const move of ['drop', 'moveEditorTo', 'openEditor'] as const) {
 	test(`EditorPart keeps a preview after ${move} changes its position`, async () => {
 		const dom = new JSDOM('<!doctype html><body></body>');

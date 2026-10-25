@@ -4,20 +4,26 @@ import { observeResize } from '../../../../base/browser/observer.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { List } from '../../../../base/browser/ui/list/listWidget.js';
-import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
+import { KeybindingLabel } from '../../../../base/browser/ui/keybindinglabel/keybindinglabel.js';
+import { SegmentedControl } from '../../../../base/browser/ui/segmentedControl/segmentedControl.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
-import { autorun } from '../../../../base/common/observable.js';
+import { autorun, type IObservable } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { Keybinding, logicalKey, resolveKeybinding, ResolvedKeybinding } from '../../../../base/common/keybindings.js';
+import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../base/common/keybindingLabels.js';
 import { localize } from '../../../../nls.js';
-import { defaultButtonStyles, defaultDialogStyles, defaultListStyles, defaultCheckboxStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import {
+	defaultButtonStyles, defaultDialogStyles, defaultListStyles, defaultCheckboxStyles,
+	defaultInputBoxStyles, defaultKeybindingLabelStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { SessionsSearchModel, type SearchCategory, type SearchResult, type SearchTarget } from './searchModel.js';
 
-/** Product search owns its DOM and presentation; Dialog, TabList and List supply interaction primitives. */
+/** Product search owns its DOM and presentation; shared controls supply interaction primitives. */
 export class SessionsSearchDialog extends Disposable {
 	private readonly dialog: Dialog;
 	private readonly input: HTMLInputElement;
@@ -28,6 +34,7 @@ export class SessionsSearchDialog extends Disposable {
 
 	constructor(
 		container: HTMLElement,
+		sourceResults: IObservable<readonly SearchResult[]>,
 		@IInstantiationService instantiation: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
@@ -35,7 +42,7 @@ export class SessionsSearchDialog extends Disposable {
 	) {
 		super();
 		const document = container.ownerDocument;
-		this.model = this._register(instantiation.createInstance(SessionsSearchModel));
+		this.model = this._register(instantiation.createInstance(SessionsSearchModel, sourceResults));
 		const content = h(document, 'div', { className: 'ash-sessions-search' });
 		this.dialog = this._register(new Dialog(container, localize('sessions.search.title', 'Search'), [], {
 			buttonStyles: defaultButtonStyles,
@@ -60,11 +67,18 @@ export class SessionsSearchDialog extends Disposable {
 		this.input.setAttribute('aria-label', hint ? localize('sessions.search.ariaLabel', 'Search. {0}', hint) : this.input.placeholder);
 		header.append(this.input);
 		this._register(new Button(header, { ...defaultButtonStyles, label: localize('sessions.search.close', 'Close'), icon: Lxicon.close, iconOnly: true, presentation: 'quiet', onClick: () => this.dialog.dispose() }));
-		const navigation = h(document, 'div', { className: 'ash-sessions-search-tabs' });
-		const tabs = this._register(new TabList<SearchCategory>(navigation, { ariaLabel: localize('sessions.search.categories', 'Search categories'), presentation: 'inset', onActivate: category => this.model.setCategory(category) }));
-		tabs.setSizing({ mode: 'fit' });
+		const navigation = h(document, 'div', { className: 'ash-sessions-search-categories' });
+		const categories = this._register(new SegmentedControl<SearchCategory>(navigation, {
+			ariaLabel: localize('sessions.search.categories', 'Search categories'),
+			items: [
+				{ id: 'all', label: localize('sessions.search.all', 'All') },
+				{ id: 'sessions', label: localize('sessions.search.sessions', 'Sessions') },
+				{ id: 'projects', label: localize('sessions.search.projects', 'Projects') },
+				{ id: 'scheduled', label: localize('sessions.search.scheduled', 'Scheduled') },
+			],
+			selectedId: 'all', onActivate: category => this.model.setCategory(category),
+		}));
 		const body = h(document, 'section', { className: 'ash-sessions-search-body' });
-		const heading = h(document, 'h2', { className: 'ash-sessions-search-heading' });
 		const resultsHost = h(document, 'div', { className: 'ash-sessions-search-results' });
 		this.results = this._register(new List<SearchResult>(resultsHost, {
 			styles: { ...defaultListStyles, listActiveSelectionBackground: 'var(--ash-toolbar-hoverBackground)', listActiveSelectionForeground: 'var(--ash-foreground)' },
@@ -93,15 +107,30 @@ export class SessionsSearchDialog extends Disposable {
 				return row;
 			},
 		}));
-		resultsHost.id = `${this.results.element.id}-panel`;
-		resultsHost.setAttribute('role', 'tabpanel');
 		this.input.setAttribute('aria-controls', this.results.element.id);
 		const message = h(document, 'div', { className: 'ash-sessions-search-empty', attributes: { role: 'status' } });
-		body.append(heading, resultsHost, message);
+		body.append(resultsHost, message);
 		const footer = h(document, 'footer', { className: 'ash-sessions-search-footer' });
-		for (const [label, key] of [[localize('sessions.search.close', 'Close'), 'Esc'], [localize('sessions.search.navigate', 'Navigate'), '↑ ↓'], [localize('sessions.search.open', 'Open'), '↵']]) {
+		const hints = [
+			{ label: localize('sessions.search.close', 'Close'), keys: [{ key: 'Escape', label: 'Esc' }] },
+			{ label: localize('sessions.search.navigate', 'Navigate'), keys: [{ key: 'ArrowUp', label: '↑' }, { key: 'ArrowDown', label: '↓' }] },
+			{ label: localize('sessions.search.open', 'Open'), keys: [{ key: 'Enter', label: '↵' }] },
+		];
+		for (const { label, keys } of hints) {
 			const item = h(document, 'span');
-			item.append(label!, h(document, 'kbd', {}, key!));
+			const shortcuts = h(document, 'span', { className: 'ash-sessions-search-shortcuts' });
+			for (const { key, label: symbol } of keys) {
+				const keybinding = resolveKeybinding(Keybinding.single(logicalKey(key)));
+				const shortcut = this._register(new KeybindingLabel(shortcuts, {
+					...defaultKeybindingLabelStyles, presentation: 'keycap',
+					keybinding: new ResolvedKeybinding(
+						keybinding.chords.map(chord => ({ ...chord, label: symbol })), keybinding.operatingSystem,
+					),
+				}));
+				// Keep the spoken key name independent of the compact visual symbol.
+				shortcut.element.setAttribute('aria-label', getKeybindingLabel(keybinding, KeybindingLabelStyle.Aria));
+			}
+			item.append(label, shortcuts);
 			footer.append(item);
 		}
 		content.append(header, navigation, body, footer);
@@ -135,17 +164,9 @@ export class SessionsSearchDialog extends Disposable {
 		this._register(observeResize(resultsHost, () => this.results.layout(resultsHost.clientHeight)));
 		this._register(autorun(reader => {
 			const state = this.model.state.read(reader);
-			const categories: readonly [SearchCategory, string][] = [
-				['all', localize('sessions.search.all', 'All')],
-				['sessions', localize('sessions.search.sessions', 'Sessions')],
-				['projects', localize('sessions.search.projects', 'Projects')],
-				['scheduled', localize('sessions.search.scheduled', 'Scheduled')],
-			];
-			tabs.setTabs(categories.map(([id, label]) => ({ id, value: id, label, tabId: `${this.results.element.id}-${id}`, panelId: resultsHost.id })), state.category);
-			resultsHost.setAttribute('aria-labelledby', `${this.results.element.id}-${state.category}`);
+			categories.setSelection(state.category);
 			this.results.items = state.results;
 			if (this.results.activeIndex < 0 && state.results.length) { this.results.setActiveIndex(0); }
-			heading.textContent = state.query.trim() ? localize('sessions.search.results', 'Search results') : localize('sessions.search.recents', 'Recents');
 			message.textContent = state.error ?? (state.loading ? localize('sessions.search.loading', 'Searching…') : localize('sessions.search.empty', 'No matching results'));
 			message.hidden = !state.error && state.results.length > 0;
 			body.setAttribute('aria-busy', String(state.loading));

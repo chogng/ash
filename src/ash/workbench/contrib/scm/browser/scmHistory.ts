@@ -1,5 +1,7 @@
 import './media/scm.css';
+import '../../../../base/browser/markdownRenderer.css';
 import { getWindow, h, isHTMLElement, svg as createSvgElement } from '../../../../base/browser/dom.js';
+import { renderMarkdown } from '../../../../base/browser/markdownRenderer.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -16,6 +18,7 @@ import type { IScopedContextKeyService } from '../../../../platform/contextkey/b
 import { IContextMenuService, type IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import type { IHoverService, IManagedHover } from '../../../../platform/hover/browser/hoverService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { openLinkFromMarkdown } from '../../../../platform/markdown/browser/markdownRenderer.js';
 import { localize, getNLSLanguage } from '../../../../nls.js';
 import { findLastIdx } from "../../../../base/common/arraysFind.js";
 import { registerColor } from '../../../../platform/theme/common/colorUtils.js';
@@ -335,7 +338,7 @@ export function toHistoryItemHoverContent(
 	details.className = 'ash-scm-graph-hover-details';
 	details.setAttribute('aria-busy', 'false');
 	if (historyItem.tooltip) {
-		renderCommitDetails(details, historyItem.subject, historyItem.tooltip, resources, options.layout);
+		renderCommitDetails(details, historyItem.subject, historyItem.tooltip, resources, options.layout, openerService);
 	} else {
 		// Providers without rich tooltip content still expose their complete message synchronously.
 		details.textContent = historyItem.message || historyItem.subject;
@@ -393,7 +396,7 @@ export function toHistoryItemHoverContent(
 	return { domNode: hover, toolbar };
 }
 
-function renderCommitDetails(container: HTMLElement, subjectText: string, details: ISCMHistoryItemDetails, resources: DisposableStore, layout: () => void): void {
+function renderCommitDetails(container: HTMLElement, subjectText: string, details: ISCMHistoryItemDetails, resources: DisposableStore, layout: () => void, openerService: IOpenerService): void {
 	const document = container.ownerDocument;
 	const author = h(document, 'div');
 	author.className = 'ash-scm-graph-hover-author';
@@ -416,7 +419,12 @@ function renderCommitDetails(container: HTMLElement, subjectText: string, detail
 	subject.textContent = subjectText;
 	const message = h(document, 'div');
 	message.className = 'ash-scm-graph-hover-message';
-	message.textContent = details.message.startsWith(subjectText) ? details.message.slice(subjectText.length).replace(/^\n+/, '') : details.message;
+	const body = details.message.startsWith(subjectText) ? details.message.slice(subjectText.length).replace(/^\n+/, '') : details.message;
+	// Commit text uses Markdown without granting HTML or command-link trust.
+	resources.add(renderMarkdown({ value: body }, {
+		markedOptions: { breaks: true },
+		actionHandler: (href, markdown) => { void openLinkFromMarkdown(openerService, href, markdown.isTrusted); },
+	}, message));
 	const statistics = h(document, 'div');
 	statistics.className = 'ash-scm-graph-hover-statistics';
 	const files = h(document, 'span');
@@ -429,7 +437,7 @@ function renderCommitDetails(container: HTMLElement, subjectText: string, detail
 	deletions.textContent = localize('scm.history.deletions', '{0} deletions(-)', details.statistics.deletions);
 	statistics.append(files, additions, deletions);
 	container.replaceChildren(author, subject);
-	if (message.textContent) {
+	if (body) {
 		const scrollable = resources.add(new ScrollableElement(container, { direction: 'vertical', ariaLabel: localize('scm.history.message', 'Commit message') }));
 		scrollable.element.classList.add('ash-scm-graph-hover-message-scroll');
 		scrollable.setContent(message);

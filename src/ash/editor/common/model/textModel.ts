@@ -1863,7 +1863,10 @@ export class TextModel implements ITextModel {
 	): CommitResult | undefined {
 		const previousEOL = this.getEndOfLineSequence();
 		const targetEOL = context.eol ?? previousEOL;
-		const prepared = this.prepareEdits(edits);
+		const replayingHistory = context.reason === TextModelChangeReason.Undo
+			|| context.reason === TextModelChangeReason.Redo
+			|| context.reason === TextModelChangeReason.HistoryCancellation;
+		const prepared = this.prepareEdits(edits, replayingHistory);
 		const eolChanged = targetEOL !== previousEOL;
 		if (prepared.length === 0 && !eolChanged) return undefined;
 		const previousLineIds = this.plainLineIds;
@@ -2019,7 +2022,7 @@ export class TextModel implements ITextModel {
 		this.pendingMaintenance.value = pending;
 	}
 
-	private prepareEdits(edits: readonly AnnotatedOffsetEdit[]): PreparedEdit[] {
+	private prepareEdits(edits: readonly AnnotatedOffsetEdit[], replayingHistory: boolean): PreparedEdit[] {
 		const sorted = edits.map(edit => {
 			this.assertOffsetRange(edit);
 			return {
@@ -2045,7 +2048,9 @@ export class TextModel implements ITextModel {
 
 		return sorted.flatMap<PreparedEdit>(edit => {
 			const replacedText = this.buffer.getValueInRange(this.buffer.getRangeAt(edit.startOffset, edit.endOffset - edit.startOffset));
-			if (replacedText === edit.text) return [];
+			// A forced replacement moves markers even when its characters match. Keep
+			// that semantic edit and its history replay observable to model consumers.
+			if (replacedText === edit.text && !edit.forceMoveMarkers && !replayingHistory) return [];
 			return [{
 				...edit,
 				range: Range.fromPositions(
@@ -2262,6 +2267,27 @@ export class TextModel implements ITextModel {
 
 export function getLineTokensWithInjections(tokens: LineTokens, injectionOptions: model.InjectedTextOptions[] | null, injectionOffsets: number[] | null): LineTokens {
 	if (!injectionOffsets) return tokens;
+	if (injectionOptions?.some(options => options.replaceLength)) {
+		const pieces: { text: string; metadata: number; }[] = [];
+		const appendSource = (start: number, end: number): void => {
+			for (let index = tokens.findTokenIndexAtOffset(start); index < tokens.getCount() && start < end; index++) {
+				const stop = Math.min(end, tokens.getEndOffset(index));
+				pieces.push({ text: tokens.getLineContent().slice(start, stop), metadata: tokens.getMetadata(index) });
+				start = stop;
+			}
+		};
+		let cursor = 0;
+		for (let index = 0; index < injectionOffsets.length; index++) {
+			const offset = injectionOffsets[index]!;
+			const options = injectionOptions[index]!;
+			appendSource(cursor, offset);
+			if (options.tokens) options.tokens.forEach((range, info) => pieces.push({ text: range.substring(options.content), metadata: info.metadata }));
+			else pieces.push({ text: options.content, metadata: LineTokens.defaultTokenMetadata });
+			cursor = offset + (options.replaceLength ?? 0);
+		}
+		appendSource(cursor, tokens.getLineContent().length);
+		return LineTokens.createFromTextAndMetadata(pieces, tokens.languageIdCodec);
+	}
 	const tokensToInsert: { offset: number; text: string; tokenMetadata: number; }[] = [];
 	for (let index = 0; index < injectionOffsets.length; index += 1) {
 		const offset = injectionOffsets[index]!;
@@ -2335,6 +2361,11 @@ function validateDecorationOptions(options: IModelDecorationOptions): IModelDeco
 	}
 	if (options.stickiness !== undefined && !Object.values(TrackedRangeStickiness).includes(options.stickiness)) {
 		throw new RangeError('Unknown model decoration stickiness');
+	}
+	for (const injection of [options.before, options.after]) {
+		if (injection?.replaceLength !== undefined && (!Number.isSafeInteger(injection.replaceLength) || injection.replaceLength < 0 || injection.replaceLength > 0 && injection.content.length === 0)) {
+			throw new RangeError('Injected text replacement requires a non-negative source length and visible projection content');
+		}
 	}
 	return Object.freeze({ ...options });
 }

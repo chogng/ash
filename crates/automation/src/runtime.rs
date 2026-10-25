@@ -9,6 +9,10 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+#[cfg(test)]
+#[path = "runtime_tests.rs"]
+mod tests;
+
 /// Host adapter that delivers a stable run identity to the existing execution owner and returns
 /// its observed state. Implementations must reconcile accepted commands before retrying delivery.
 pub trait AutomationExecutor: Send + Sync + 'static {
@@ -101,7 +105,9 @@ fn tick(
             // An unavailable observation must not turn an unknown outcome into a new execution.
             Err(error) => {
                 if run.message.as_deref() != Some(&error) {
-                    let mut observed = run;
+                    // advance may already have durably reserved a provider event. Preserve
+                    // that reservation and any concurrent stop instead of republishing the old snapshot.
+                    let mut observed = store.get_run(&run.id)?;
                     observed.message = Some(error.clone());
                     store.observe(&observed)?;
                     changed = true;

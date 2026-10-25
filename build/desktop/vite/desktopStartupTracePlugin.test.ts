@@ -39,7 +39,7 @@ test('Desktop trace marks each restored region and waits for asynchronous view c
 	const install = new Function('paneParts', 'layout', 'panes', 'viewDescriptors', 'requiredViewContainerToRestore', 'views', 'ViewContainerLocation', 'performance', restoration);
 	install.call(context,
 		new Map(Object.values(locations).map(location => [location, { getCompositeIdToRestore: () => `view-${location}` }])),
-		{ isPartVisible: (part: string) => part !== 'agentSidebar' },
+		{ isPartVisible: (part: string) => part !== 'agentSidebar', isAuxiliaryBarMaximized: () => false },
 		{ getPartId: (location: number) => `part-${location}` },
 		{ getViewContainers: (location: number) => [{ id: `view-${location}` }] },
 		(_service: unknown, _location: number, id: string) => ({ id }),

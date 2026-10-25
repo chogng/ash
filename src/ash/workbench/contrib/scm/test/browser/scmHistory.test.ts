@@ -1,11 +1,13 @@
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { expect, type Locator } from '@playwright/test';
 import { expectVisibleFocusOutline } from '../../../../../../../test/fixtures/browser/focusOutline.js';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { suite, test, setup } from 'mocha';
+import { suite, test, setup, suiteSetup } from 'mocha';
 import { renderSCMHistoryGraphPlaceholder, renderSCMHistoryItemGraph, toISCMHistoryItemViewModelArray } from '../../browser/scmHistory.js';
-import type { ISCMHistoryItem } from '../../common/history.js';
+import { SCMHistoryItemUri, type ISCMHistoryItem } from '../../common/history.js';
+import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IProgressService } from '../../../../../platform/progress/common/progress.js';
@@ -97,6 +99,107 @@ test('summary nodes compare captured branch revisions without changing commit pa
 	assert.equal(toISCMHistoryItemViewModelArray(history, new Map(), { id: 'main', name: 'main', revision: 'local' }, {
 		remote: { id: 'origin/main', name: 'origin/main', revision: 'remote' }, base: 'base', incoming: false, outgoing: false,
 	}).length, history.length);
+});
+
+suite('SCM attachment source commands', () => {
+	suiteSetup(async () => { await import('../../browser/scmHistoryViewPane.js'); });
+	ensureNoDisposablesAreLeakedInTestSuite();
+	for (const changeSource of [false, true]) for (const revisionUris of [false, true]) test(`opens the captured ${changeSource ? 'revision file' : 'commit changes'} through the SCM owner with ${revisionUris ? 'provider' : 'snapshot'} URIs`, async () => {
+		await import('../../browser/scmHistoryViewPane.js');
+		using services = new InstantiationService();
+		using commands = new CommandService(services);
+		const calls: unknown[] = [];
+		const opened: unknown[] = [];
+		const change = { path: 'src/name:中文.ts', uri: URI.file('/working/name.ts'), modifiedUri: revisionUris ? URI.parse('git:/captured/name.ts?revision=tip') : undefined, status: 'modified' };
+		const repository = {
+			id: 'repo:original', provider: {
+				historyProvider: {
+					provideHistoryItemChanges: async (...args: unknown[]) => { calls.push(args); return [change]; },
+					resolveHistoryItemChangeContents: async (...args: unknown[]) => { calls.push(args); return { original: { kind: 'text', text: 'Before' }, modified: { kind: 'text', text: 'Captured after' } }; },
+				}
+			}
+		} as unknown as ISCMRepository;
+		services.registerInstance(ISCMService, { getRepository: id => id === repository.id ? repository : undefined } as ISCMService);
+		services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
+		services.registerInstance(IEditorService, { openEditor: async (...args: unknown[]) => { opened.push(args); } } as unknown as IEditorService);
+		const source = SCMHistoryItemUri.toUri({ repositoryId: repository.id, revision: 'captured:tip', baseRevision: 'captured:parent', ...(changeSource ? { path: change.path } : {}) });
+		await commands.executeCommand(changeSource ? 'workbench.scm.action.graph.openFile' : 'workbench.scm.action.graph.viewChanges', URI.parse(source.toString()), 'Captured label');
+		assert.deepEqual(calls, [['captured:tip', 'captured:parent'], ['captured:tip', change]]);
+		assert.equal(opened.length, 1);
+		const [input, options] = opened[0] as [import('../../../../common/editor.js').IResourceEditorInput, unknown];
+		assert.deepEqual(options, { pinned: true });
+		if (changeSource) {
+			if (change.modifiedUri) assert.equal(input.resource.toString(), change.modifiedUri.toString());
+			else {
+				assert.notEqual(input.resource.toString(), change.uri.toString());
+				assert.equal(input.resource.query.includes('captured:tip'), true);
+			}
+			assert.equal(input.initialText, 'Captured after');
+			assert.equal(input.readOnly, true);
+		} else {
+			assert.ok(isMultiDiffEditorInput(input));
+			assert.equal(input.label, 'Captured label');
+			assert.equal(input.items[0].modified.initialText, 'Captured after');
+			assert.equal(input.items[0].modified.readOnly, true);
+			assert.notEqual(input.items[0].original.resource.toString(), input.items[0].modified.resource.toString());
+		}
+	});
+
+	for (const kind of ['deleted', 'binary']) test(`revision file sources retain ${kind} contents without reading the working file`, async () => {
+		using services = new InstantiationService();
+		using commands = new CommandService(services);
+		const change = { path: 'file.bin', uri: URI.file('/working/file.bin'), originalUri: URI.parse('git:/original/file.bin'), modifiedUri: URI.parse('git:/modified/file.bin'), status: kind };
+		const repository = {
+			id: 'repo', provider: {
+				historyProvider: {
+					provideHistoryItemChanges: async () => [change],
+					resolveHistoryItemChangeContents: async () => ({ parentId: 'captured-parent', original: { kind: 'text', text: 'Deleted content' }, modified: kind === 'deleted' ? { kind: 'missing' } : { kind: 'binary', bytes: new Uint8Array([1, 2, 3]) } }),
+				}
+			}
+		} as unknown as ISCMRepository;
+		services.registerInstance(ISCMService, { getRepository: () => repository } as unknown as ISCMService);
+		let opened = 0;
+		services.registerInstance(IEditorService, {
+			openEditor: async input => {
+				opened++;
+				assert.equal(input.resource.toString(), (kind === 'deleted' ? change.originalUri : change.modifiedUri).toString());
+				assert.equal(input.readOnly, true);
+				if (kind === 'deleted') assert.equal(input.initialText, 'Deleted content');
+				else assert.deepEqual(input.initialBytes, new Uint8Array([1, 2, 3]));
+			}
+		} as IEditorService);
+		await commands.executeCommand('workbench.scm.action.graph.openFile', SCMHistoryItemUri.toUri({ repositoryId: repository.id, revision: 'captured-tip', baseRevision: 'captured-parent', path: change.path }));
+		assert.equal(opened, 1);
+	});
+
+	for (const changeSource of [false, true]) for (const retired of ['cancelled', 'removed', 'replaced']) test(`${changeSource ? 'file' : 'commit'} source cannot open after its owner is ${retired}`, async () => {
+		await import('../../browser/scmHistoryViewPane.js');
+		using services = new InstantiationService();
+		using commands = new CommandService(services);
+		using lifetime = new CancellationTokenSource();
+		const pending = new DeferredPromise<void>();
+		let reads = 0;
+		const change = { path: 'saved.ts', uri: URI.file('/saved.ts'), status: 'modified' };
+		const repository = {
+			id: 'repo', provider: {
+				historyProvider: {
+					provideHistoryItemChanges: async () => [change],
+					resolveHistoryItemChangeContents: async () => { reads++; await pending.p; return { original: { kind: 'missing' }, modified: { kind: 'text', text: 'Saved' } }; },
+				}
+			}
+		} as unknown as ISCMRepository;
+		let current: ISCMRepository | undefined = repository;
+		services.registerInstance(ISCMService, { getRepository: () => current } as unknown as ISCMService);
+		services.registerInstance(IProgressService, { withProgress: (_options, task) => task({ report() { } }) });
+		services.registerInstance(IEditorService, { openEditor: async () => { assert.fail('Retired source opened an editor'); } } as unknown as IEditorService);
+		const source = SCMHistoryItemUri.toUri({ repositoryId: repository.id, revision: 'captured', ...(changeSource ? { path: change.path } : {}) });
+		const operation = commands.executeCommand(changeSource ? 'workbench.scm.action.graph.openFile' : 'workbench.scm.action.graph.viewChanges', source, 'Saved', lifetime.token);
+		await expect.poll(() => reads).toBe(1);
+		if (retired === 'cancelled') lifetime.cancel();
+		else current = retired === 'removed' ? undefined : { ...repository };
+		await pending.complete();
+		await operation;
+	});
 });
 
 suite('SCM history Open Changes', () => {
@@ -490,6 +593,35 @@ suite('scmHistory browser component', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`successive history clicks toggle commits and folders without losing file pinning (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/scmHistory.html?changes&locale=${locale}`);
+			const tree = page.locator('.ash-scm-graph-tree');
+			const commit = tree.getByRole('treeitem', { name: /History metadata:/u });
+			const subject = commit.locator('.ash-scm-graph-subject');
+			const files = tree.locator('.ash-scm-graph-change');
+			await expect(commit).toHaveAttribute('aria-expanded', 'false');
+			// A double-click includes two click events; locator.click() alone always
+			// sends detail=1 and cannot catch a dropped second click.
+			await subject.dblclick({ position: { x: 3, y: 8 } });
+			await expect(commit).toHaveAttribute('aria-expanded', 'false');
+			await expect(commit).toHaveAttribute('aria-selected', 'true');
+			await expect(tree).toBeFocused();
+			await expect(files).toHaveCount(0);
+			await subject.click({ clickCount: 3, position: { x: 3, y: 8 } });
+			await expect(commit).toHaveAttribute('aria-expanded', 'true');
+			await expect(files).toHaveCount(3);
+			await page.evaluate(() => window.ashSCMHistoryIntegration.setViewMode('tree'));
+			const folder = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-graph-folder') });
+			await expect(folder).toHaveAttribute('aria-expanded', 'true');
+			await folder.dblclick({ position: { x: 100, y: 10 } });
+			await expect(folder).toHaveAttribute('aria-expanded', 'true');
+			await expect(files).toHaveCount(3);
+			await tree.locator('[data-history-path="src/first.ts"]').dblclick();
+			await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.opened.at(-1)?.options)).toEqual({ pinned: true, preserveFocus: false });
+			await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.opened.at(-1)?.resource)).toContain('first.ts');
+		});
+
 		test(`virtualized commits hide their details card when scrolled away (${locale})`, async function () {
 			const { page } = browserTests;
 			await page.goto(`/scmHistory.html?locale=${locale}`);
@@ -916,7 +1048,7 @@ suite('scmHistory browser component', () => {
 		}
 	});
 
-	test('commit details preserve whitespace, metadata, scrolling and long-title geometry', async function () {
+	test('commit details preserve code whitespace, metadata, scrolling and long-title geometry', async function () {
 		const { page } = browserTests;
 
 		const { hash, timestamp, subject, message: body } = await page.evaluate(() => window.ashSCMHistoryIntegration);
@@ -927,8 +1059,7 @@ suite('scmHistory browser component', () => {
 		await expect(hover.locator('.ash-scm-graph-hover-author > span[title]')).toHaveText('History Author');
 		await expect(hover.locator('.ash-scm-graph-hover-author > span[title]')).toHaveAttribute('title', 'history@example.invalid');
 		await expect(hover.locator('time')).toHaveAttribute('datetime', new Date(Number(timestamp) * 1000).toISOString());
-		await expect(hover.locator('.ash-scm-graph-hover-message')).toHaveText(body);
-		expect(await hover.locator('.ash-scm-graph-hover-message').textContent()).toBe(body);
+		expect(await hover.locator('.ash-scm-graph-hover-message pre code').textContent()).toBe(`${body.replace(/^ {4}/gm, '')}\n`);
 		const messageScroll = hover.getByRole('region', { name: 'Commit message', exact: true });
 		const messageViewport = messageScroll.locator('.ash-scrollbar-viewport');
 		await expect(messageScroll).toHaveCSS('height', '180px');
@@ -966,12 +1097,56 @@ suite('scmHistory browser component', () => {
 		await browserTests.info.attach('scm-history-hover', { body: await hover.screenshot(), contentType: 'image/png' });
 	});
 
+	test('commit details render Markdown within the existing themed and keyboard-accessible hover', async function () {
+		const { page } = browserTests;
+		await page.goto('/scmHistory.html?markdown&locale=zh-CN');
+		const tree = page.locator('.ash-scm-graph-tree');
+		const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
+		for (let theme = 0; theme < 4; theme++) {
+			await page.evaluate(index => window.ashSCMHistoryIntegration.setTheme(index), theme);
+			await tree.focus();
+			await tree.press('Home');
+			await tree.press('Alt+ArrowDown');
+			const message = hover.locator('.ash-scm-graph-hover-message');
+			await expect(message.locator('h2')).toHaveText(['Why', 'What changed']);
+			await expect(message.locator('strong')).toHaveText('commit details');
+			await expect(message.locator('li')).toHaveText(['Headings and lists', 'Documentation']);
+			await expect(message.locator('p code')).toHaveText('Markdown');
+			await expect(message.locator('pre code')).toHaveText('const message = "rendered";');
+			await expect(message.locator('script')).toHaveCount(0);
+			await expect(message.locator('a[href^="command:"]')).toHaveCount(0);
+			await expect(message.locator('a[href]')).toHaveAttribute('href', 'https://example.invalid/docs');
+			await expect(message).toHaveCSS('white-space', 'normal');
+			expect(await message.evaluate(element => {
+				const heading = element.querySelector('h2')!;
+				const link = element.querySelector('a[href]')!;
+				return {
+					headingIsLarger: parseFloat(getComputedStyle(heading).fontSize) > parseFloat(getComputedStyle(element).fontSize),
+					linkIsDistinct: getComputedStyle(link).color !== getComputedStyle(element).color,
+					inheritsHoverText: getComputedStyle(element).color === getComputedStyle(element.closest('.ash-hover')!).color
+						&& getComputedStyle(element).fontSize === getComputedStyle(element.closest('.ash-hover')!).fontSize,
+					fitsCard: element.scrollWidth <= element.clientWidth,
+				};
+			})).toEqual({ headingIsLarger: true, linkIsDistinct: true, inheritsHoverText: true, fitsCard: true });
+			await expect(hover.getByRole('region', { name: '提交消息', exact: true })).toBeVisible();
+			await hover.getByRole('link', { name: 'Documentation', exact: true }).focus();
+			await expect(hover.getByRole('link', { name: 'Documentation', exact: true })).toBeFocused();
+			await browserTests.info.attach(`scm-history-markdown-${theme}`, { body: await hover.screenshot(), contentType: 'image/png' });
+			await page.keyboard.press('Escape');
+			await expect(hover).toHaveCount(0);
+			await expect(tree).toBeFocused();
+		}
+	});
+
 	test('slow pointer movement and action tooltip delays retain the details card', async function () {
 		const { page } = browserTests;
 
+		await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+		await page.clock.pauseAt(new Date('2026-01-01T00:00:01Z'));
 		const commit = page.getByRole('treeitem', { name: /History metadata:/u });
 		const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
 		await commit.locator('.ash-scm-graph-subject').hover({ position: { x: 3, y: 8 } });
+		await page.clock.runFor(1000);
 		await expect(hover).toBeVisible();
 		const pointerCopy = hover.getByRole('button', { name: 'Copy Commit Hash', exact: true });
 		const hoverId = await hover.getAttribute('id');
@@ -979,21 +1154,22 @@ suite('scmHistory browser component', () => {
 		const hoverBounds = (await hover.boundingBox())!;
 		expect(hoverBounds.x).toBeGreaterThan(commitBounds.x + commitBounds.width);
 		await page.mouse.move((commitBounds.x + commitBounds.width + hoverBounds.x) / 2, commitBounds.y + commitBounds.height / 2);
-		// A deliberate pause in the gap reproduces a slow move from the row to its actions.
-		await page.waitForTimeout(150);
+		// Advance through the gap before entering the card, without a wall-clock pause.
+		await page.clock.runFor(150);
 		await expect(hover).toHaveAttribute('id', hoverId!);
 		await pointerCopy.hover();
 		// Hold past the action-tooltip delay to detect replacement of the details card.
-		await page.waitForTimeout(700);
+		await page.clock.runFor(700);
 		await expect(hover).toHaveAttribute('id', hoverId!);
 		await hover.getByRole('button', { name: 'Open on GitHub', exact: true }).hover();
-		await page.waitForTimeout(700);
+		await page.clock.runFor(700);
 		await expect(hover).toHaveAttribute('id', hoverId!);
 		await page.locator('#outside').click();
 		await expect(hover).toHaveCount(0);
 		await page.locator('.ash-scm-graph-tree').focus();
 		await page.locator('.ash-scm-graph-tree').press('Home');
 		await page.locator('.ash-scm-graph-tree').press('Alt+ArrowDown');
+		await page.clock.runFor(1000);
 		await expect(hover).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(hover).toHaveCount(0);

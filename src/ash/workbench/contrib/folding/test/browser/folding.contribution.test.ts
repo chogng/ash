@@ -22,7 +22,7 @@ import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../comm
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { IExtensionService, type ExtensionCatalog } from '../../../../services/extensions/common/extensionService.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
-import { createJsonCompletionProvider } from '../../../../services/language/common/jsonLanguageFeatures.js';
+import { createJsonCompletionProvider } from '../../../../../../../test/fixtures/jsonLanguageFeatures.js';
 import '../../browser/folding.contribution.js';
 
 const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);

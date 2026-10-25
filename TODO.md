@@ -77,7 +77,7 @@
 
 - [ ] **复核 · 自举场景的完整外部 Codex 目录接入**：相同普通代码目录在无外部账号连接的对照场景中启动通过；使用完整外部 Codex home 时重复出现初始化或 `env/dirs/set` 超时，仅引用认证文件的隔离目录则可启动并调用真实模型。尚未证明是模型目录导入、认证路径还是其他初始化问题；排查前保留失败日志，补启动失败时的证据收集，不将有限启动重试当作通过。记录见上述场景目录的 `startup-attempt*.log` 与 `preflight-no-auth.log`。临时认证文件引用已移除，重跑需重新显式准备只读引用，不能复制凭证进入证据。
 
-- [ ] **复核 · 共享 Codex 登录记录兼容性**：`crates/chatgpt/src/storage.rs` 的新登录写入尚无 `oauth_provenance`／`login_owner_id`，`maintenance.rs` 刷新固定使用默认 client 与 endpoint。参考 [Codex 登录来源与登录标识](https://github.com/openai/codex/pull/55397)（2026-10-19 已合并，未确认稳定版包含），核对当前共享文件契约再补齐 Ash 托管登录的兼容路径；这是源码层面的新格式缺口，未复现真实登录故障。普通刷新已保留未知 JSON 字段，不重复列为字段丢失问题。
+- [ ] **复核 · 共享 Codex 登录记录兼容性**：`crates/chatgpt/src/storage.rs` 的新登录写入尚无 `oauth_provenance`／`login_owner_id`，`maintenance.rs` 刷新固定使用默认 client 与 endpoint。参考 [Codex 登录来源与登录标识](https://github.com/openai/codex/pull/55397)（2026-10-19 已合并，已包含于 [Codex 0.164.0](https://github.com/openai/codex/releases/tag/rust-v0.164.0)），核对当前共享文件契约再补齐 Ash 托管登录的兼容路径；这是源码层面的新格式缺口，未复现真实登录故障。普通刷新已保留未知 JSON 字段，不重复列为字段丢失问题。
   - 范围与前提：只记录当前登录流程实际使用的可信 issuer／client，并为每次完成的新登录生成独立标识；刷新保留标识，不从未经验证的 token 声明推断来源。只对已经明确允许的来源／client 按记录刷新，其他来源在发送凭据前拒绝，不扩大 issuer 信任范围；保留旧记录兼容回退及 Codex 托管模式不刷新共享凭据的边界。不借此支持任意 issuer、企业 MCP、运行时注册或新凭据共享。
   - 验收：沿 `crates/chatgpt/src/storage_tests.rs`、`maintenance_tests.rs` 用合成记录覆盖旧格式、新登录／同账户重登、轮换时保留标识与其他字段、外部替换竞争、已允许来源按记录刷新、不可信 issuer 或未支持 client 的发送前拒绝、托管模式、登出与错误脱敏；对照上游解析器验证新记录，不使用真实凭据。若上游契约或实际消费需求变化，先调整本项，不改变已有账号生命周期 owner。
 
@@ -103,6 +103,10 @@
 布局、工作集、Common 与 Changes 契约见 [Sessions](docs/sessions.md)。
 
 ## Chat / Speech · TODO
+
+- [ ] **修复候选 · Chat 回复的相对文件链接**：`src/ash/workbench/contrib/chat/browser/widget/chatListWidget.ts` 创建助手 Markdown 时未传入目录基址，`src/ash/base/browser/markdownRenderer.ts` 因缺少 `baseUri` 拒绝 `README.md` 等相对链接。参考 [相对回复链接解析](https://github.com/microsoft/vscode/pull/344087)（2026-10-25 已合并 main，未确认稳定版包含），沿 `src/ash/sessions/browser/chatWidgetModel.ts` 的 Session／Thread owner 与 `chatWidget.ts` 为渲染提供带来源身份的权威工作目录，补齐回复 → 文件打开链路；不借用当前全局工作区、不改写历史原文。本项为静态调用链缺口，尚未运行行为验收，不扩大到任意资源自动读取。
+  - 前提与范围：复用 `ISessionWorkspace` 的 `authorityId`／`root`、既有本地／SSH URI 和 `openChatMarkdownLink` 打开边界；优先采用所属 Thread 的执行目录，不能用父 Session 的目录覆盖子 agent／worktree；目录 URI 须保留目录基址语义。先明确历史回复所属目录的来源，目录未水合、历史来源不确定或 provider 不支持时不猜测回退本机。来源 Session／Thread／目录变化时使对应渲染基址失效；不全局放宽 file scheme、不将模型 Markdown 标为可信，也不新增第二份工作区状态。
+  - 验收：在 `src/ash/workbench/contrib/chat/test/browser/chatListWidget.test.ts` 和 `widget/chatContentMarkdownRenderer.test.ts` 补实时／历史恢复、切换会话及线程、流式重渲染、空格／Unicode／父目录路径、本地与 SSH 同名文件场景，并从真实 Chat 点击验证目标执行环境。复用现有打开与文件权限检查，不跨连接；外链和已有会话链接保持可用，脚本与未信任 command 仍拒绝，缺少来源的链接不伪造可打开地址。
 
 - [ ] **可做 · Chat 表格单元格换行**：`src/ash/workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.ts` 的普通助手 Markdown 未开启 HTML，表格里的 `<br>` 当前会显示为字面文本。参考 [VS Code 表格换行](https://github.com/microsoft/vscode/pull/342956)（2026-10-20 已合并，未确认稳定版包含），仅在 Chat 的 table header／body 内递归处理 inline token，将严格无属性的 `<br>`、`<BR/>`、`<br />` 转为原生换行 token，改善模型多行表格的可读性；复用现有 marked token walk、数学扩展和 sanitizer，不打开通用 HTML，也不改变共享基础 Markdown 的默认策略。
   - 风险与验收：在 `src/ash/workbench/contrib/chat/test/browser/widget/chatContentMarkdownRenderer.test.ts` 覆盖完整渲染、逐字流式与前缀纠正输出一致，包含表头／单元格、嵌套强调／链接、未闭合及长表格。代码字面量和表格外 HTML 仍按原语义显示，带属性标签和脚本不放行；保留数学、代码块与 sanitizer 回归。当前依据源码核对，未运行新行为测试；Ash 已通过 parser 执行 token walk，不照搬上游另一条 lexer 旁路修补。
@@ -161,7 +165,7 @@
     - 仅在测量显示屏幕外解析占据实质成本后，评估现有 row／block owner 的首次激活，保留完整原文与唯一 transcript；否则记录结果并停止，不预设全列表虚拟化或另建缓存。使用普通文本、代码及工具 Markdown 的重复样本，覆盖恢复滚动／阅读锚点、异步高度变化、流式尾部、复制／搜索／导出、辅助阅读与焦点；成本下降且上述行为不退化才采用。
 - [ ] **测量** · 把后端结果构造和 writer／producer 等待纳入资源准入测量，评估有界数据／控制输出契约与同连接队头阻塞；不靠降低既有文件上限掩盖成本。
 
-- [ ] **测量 · 流式文件路径索引的重复存储**：`crates/file-search/src/lib.rs` 的 `walker_worker` 为每条路径同时保存 `Arc<str>` 与 Nucleo 的 `Utf32String` 列，`build_snapshot` 再从原路径计算排名与高亮。参考 [Codex 减少路径索引副本](https://github.com/openai/codex/pull/55351)（2026-10-19 已合并，未确认稳定版包含），先量化 TUI `@file` 与独立文件搜索 CLI 所用 `Service::start` 在大目录的分配字节、峰值内存、扫描和连续查询耗时，再决定是否让纯 ASCII 路径复用匹配列；尚无 Ash 收益测量，不泛化到使用 tgrep 的 Desktop 搜索。
+- [ ] **测量 · 流式文件路径索引的重复存储**：`crates/file-search/src/lib.rs` 的 `walker_worker` 为每条路径同时保存 `Arc<str>` 与 Nucleo 的 `Utf32String` 列，`build_snapshot` 再从原路径计算排名与高亮。参考 [Codex 减少路径索引副本](https://github.com/openai/codex/pull/55351)（2026-10-19 已合并，已包含于 [Codex 0.164.0](https://github.com/openai/codex/releases/tag/rust-v0.164.0)），先量化 TUI `@file` 与独立文件搜索 CLI 所用 `Service::start` 在大目录的分配字节、峰值内存、扫描和连续查询耗时，再决定是否让纯 ASCII 路径复用匹配列；尚无 Ash 收益测量，不泛化到使用 tgrep 的 Desktop 搜索。
   - 范围与风险：保留单根、仅普通文件、目录准入、取消和 `query_revision` 契约，不引入多根索引或第二份缓存。Unicode 匹配列并非原路径的无损表示，组合字符与 emoji 不能由该列重建；非 ASCII 路径仍须保留可精确返回的原串。
   - 验收：在 `crates/file-search/src/file_search_tests.rs`、`ranking_tests.rs` 及 TUI／CLI 消费链覆盖 ASCII、中文、组合字符、emoji、同分排序、截断、快速改查询和取消；对比原路径、分数、顺序与高亮索引，并记录相同目录与查询的重复样本。仅在内存确有下降且延迟及行为不退化时采用，不把局部测量当作整条 IDE 性能结论。
 

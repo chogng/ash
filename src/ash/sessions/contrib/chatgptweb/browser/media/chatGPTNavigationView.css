@@ -1,4 +1,6 @@
 .ash-chatgpt-navigation {
+	--ash-list-rowHeight: var(--ash-spacing-size360);
+
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
@@ -16,46 +18,18 @@
 .ash-chatgpt-navigation * {
 	box-sizing: border-box;
 }
-.ash-chatgpt-navigation input {
-	font: inherit;
-	color: inherit;
-}
 
-.ash-chatgpt-navigation
-	:is(.ash-chatgpt-new-chat, .ash-chatgpt-conversation, .ash-action-label) {
+.ash-chatgpt-navigation :is(.ash-chatgpt-conversation, .ash-action-label) {
 	min-height: var(--ash-spacing-size360);
 	padding: var(--ash-spacing-size60) var(--ash-spacing-size120);
 	text-align: left;
 }
 
 .ash-chatgpt-navigation
-	:is(
-		.ash-chatgpt-new-chat,
-		.ash-chatgpt-conversation,
-		.ash-action-label
-	)[aria-current] {
+	:is(.ash-chatgpt-conversation, .ash-action-label)[aria-current] {
 	font-weight: var(--ash-fontWeight-semiBold, 600);
 	border-color: var(--ash-contrastBorder, transparent);
 	background: var(--ash-sessions-selectionBackground);
-}
-
-.ash-chatgpt-navigation input {
-	min-height: 36px;
-	padding: 8px 12px;
-	border: var(--ash-strokeThickness, 1px) solid
-		var(--ash-widget-border, GrayText);
-	border-radius: var(--ash-cornerRadius-large, 8px);
-	background: transparent;
-}
-
-.ash-chatgpt-navigation > :is(button, input) {
-	flex-shrink: 0;
-	margin-inline: 12px;
-}
-.ash-chatgpt-navigation input:focus-visible {
-	outline: var(--ash-strokeThickness, 1px) solid
-		var(--ash-focusBorder, Highlight);
-	outline-offset: -1px;
 }
 
 .ash-chatgpt-navigation-list {
@@ -112,8 +86,9 @@
 	/* Overlay the title when revealed instead of reserving room in every row. */
 	position: absolute;
 	z-index: 1;
-	inset-block-start: 0;
+	inset-block: 0;
 	inset-inline-end: 0;
+	align-items: center;
 	gap: 0;
 	border-radius: inherit;
 	border-start-start-radius: 0;
@@ -189,18 +164,8 @@
 }
 
 @media (forced-colors: active) {
-	.ash-chatgpt-navigation
-		:is(
-			.ash-chatgpt-new-chat,
-			.ash-chatgpt-conversation,
-			.ash-action-label
-		) {
-		min-height: var(--ash-spacing-size360);
-		padding: var(--ash-spacing-size60) var(--ash-spacing-size120);
-		text-align: left;
-	}
-
 	.ash-chatgpt-navigation-list button[aria-current] {
-		border: 2px solid Highlight;
+		outline: 2px solid Highlight;
+		outline-offset: -2px;
 	}
 }

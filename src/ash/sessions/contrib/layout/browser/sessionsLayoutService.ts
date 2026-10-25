@@ -20,9 +20,9 @@ import { IEditorService } from '../../../../workbench/services/editor/common/edi
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
-import type { EditorPart as SessionsEditorPart } from '../../../browser/parts/editor/editorPart.js';
+import type { EditorPart as SessionsEditorPart } from '../../../browser/parts/editorPart.js';
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../services/layout/common/sessionsLayoutService.js';
-import { CODE_NAVIGATION_CONTAINER_ID, SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../browser/parts/sidebar/sidebarPart.js';
+import { CODE_NAVIGATION_CONTAINER_ID, SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../browser/parts/sidebarPart.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
@@ -59,6 +59,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	public isChangingContent = false;
 	public get isSessionContent(): boolean { return !this.customViews.activeCustomView.get() && this.activeEntry.get()?.content !== 'editor'; }
 	public get isDocumentContent(): boolean { return this.documentContent.get(); }
+	public get newSessionCommand(): string | undefined { return this.customViews.activeCustomView.get() ? undefined : this.activeEntry.get()?.newSessionCommand; }
 
 	constructor(
 		@IEditorPart private readonly editor: IEditorPart,
@@ -276,12 +277,13 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		if (!saved && oldEntry !== undefined && !Object.hasOwn(oldCommands, oldEntry)) {
 			throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 		}
-		const requested = saved ?? (oldEntry ? oldCommands[oldEntry]! : 'sessions.open.chat');
+		const defaultEntry = CommandsRegistry.hasCommand('sessions.open.new') ? 'sessions.open.new' : 'sessions.open.chat';
+		const requested = saved ?? (oldEntry ? oldCommands[oldEntry]! : defaultEntry);
 		const available = CommandsRegistry.hasCommand(requested);
 		// Entry commands can disappear during development or when a contribution is
 		// removed. Discard stale navigation state without invoking an unknown command.
 		if (!available) { this.storage.remove(activeEntryKey, StorageScope.WORKSPACE); }
-		await this.commands.executeCommand(available ? requested : 'sessions.open.chat', 'restore');
+		await this.commands.executeCommand(available ? requested : defaultEntry, 'restore');
 		if (this.isDisposed) { return; }
 		for (const key of ['sessions.layout.activeMode', 'sessions.layout.primaryPage', 'sessions.activityBar.activePage', 'sessions.layout.primaryEditor']) {
 			this.storage.remove(key, StorageScope.WORKSPACE);

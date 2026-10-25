@@ -1,3 +1,13 @@
+import { IDebugService } from '../../common/debug.js';
+import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { observableValue } from '../../../../../base/common/observable.js';
+import {
+	isChatContextPickerPickItem,
+	type IChatContextPickerItem,
+	type IChatContextValueItem,
+	type IChatContextPickerPickItem,
+} from '../../../chat/browser/attachments/chatContextPickService.js';
+import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -15,7 +25,7 @@ import { TestNotificationService } from '../../../../services/notification/test/
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { IStatusbarService } from '../../../../services/statusbar/browser/statusbar.js';
 import { ProgressService } from '../../../../services/progress/browser/progressService.js';
-import { ChatContextPickService } from '../../../../services/chat/browser/chatContextPickService.js';
+import { ChatContextPickService, IChatContextPickService } from '../../../../contrib/chat/browser/attachments/chatContextPickService.js';
 import { TestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { parseExtensionManifest } from '../../../../services/extensions/common/extensionManifest.js';
 import { canSetBreakpointsIn } from '../../common/breakpoints.js';
@@ -145,14 +155,17 @@ test('Debug Chat picker resolves selected snapshots and retires with its contrib
 	debug.activate(debug.sessions[0]);
 	for (let attempt = 0; !debug.getViewModel().focusedStackFrame && attempt < 50; attempt++) await timeout(5);
 	const contexts = new ChatContextPickService();
-	const contribution = new DebugChatContextContribution(debug, contexts);
+	using owner = new InstantiationService();
+	owner.registerInstance(IDebugService, debug);
+	owner.registerInstance(IChatContextPickService, contexts);
+	const contribution = owner.createInstance(DebugChatContextContribution);
 	try {
-		const picks = await contexts.items[0].providePicks('parent');
+		const picks = await readContextPicks(contexts.items[0]!, 'parent');
 		assert.equal(picks.length, 1);
-		const selected = picks[0].attachment;
 		(debug.session as MockDebugSession).state = 'running';
+		const selected = await selectedAttachment(picks[0]!);
 		assert.match((await selected.resolve()).content, /parent = Object/);
-		assert.deepEqual(await contexts.items[0].providePicks(''), []);
+		assert.deepEqual(await readContextPicks(contexts.items[0]!, ''), []);
 	} finally {
 		contribution.dispose();
 	}
@@ -244,3 +257,32 @@ test('Debug status color lease ends when the last live session ends', () => {
 	debug.activate(debug.sessions[0]);
 	assert.equal(statusbar.style, undefined);
 });
+
+
+async function readContextPicks(source: IChatContextPickerItem | IChatContextValueItem, query: string): Promise<IChatContextPickerPickItem[]> {
+	if (source.type !== 'pickerPick') throw new Error('Expected the registered picker contract');
+	const picker = source.asPicker();
+	const cancellation = new CancellationTokenSource();
+	try {
+		if (typeof picker.picks !== 'function') return (await picker.picks).filter(isChatContextPickerPickItem);
+		const state = picker.picks(observableValue('test.query', query), cancellation.token);
+		if (!state.get().busy) {
+			if (state.get().error) throw state.get().error;
+			return state.get().picks.filter(isChatContextPickerPickItem);
+		}
+		return await new Promise((resolve, reject) => {
+			const listener = state.onDidChange(value => {
+				if (value.busy) return;
+				listener.dispose();
+				if (value.error) reject(value.error);
+				else resolve(value.picks.filter(isChatContextPickerPickItem));
+			});
+		});
+	} finally { cancellation.dispose(true); picker.dispose?.(); }
+}
+
+async function selectedAttachment(item: IChatContextPickerPickItem): Promise<ChatContextAttachment> {
+	const result = await item.asAttachment();
+	if (result === 'noop' || Array.isArray(result)) throw new Error('Expected one captured context');
+	return result;
+}

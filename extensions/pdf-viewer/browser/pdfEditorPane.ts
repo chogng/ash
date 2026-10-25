@@ -13,6 +13,8 @@ import { DisposableStore, toDisposable } from "../../../src/ash/base/common/life
 import { Lxicon } from "../../../src/ash/base/common/lxicons.js";
 import { clamp } from "../../../src/ash/base/common/numbers.js";
 import { assertDefined } from "../../../src/ash/base/common/types.js";
+import { Button } from '../../../src/ash/base/browser/ui/button/button.js';
+import { PdfFindWidget } from './pdfFindWidget.js';
 import { ToolBar } from "../../../src/ash/base/browser/ui/toolbar/toolbar.js";
 import { EditorPaneMatch, EditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
 import type { PdfAnnotationPoint, PdfAnnotationRect, PdfNoteAnnotation } from "../common/pdfAnnotations.js";
@@ -60,6 +62,15 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 	private container: HTMLDivElement | undefined;
 	private toolbar: ToolBar | undefined;
 	private pages: HTMLDivElement | undefined;
+	private findWidget: PdfFindWidget | undefined;
+	private zoomSelect: HTMLSelectElement | undefined;
+	private zoomOut: Button | undefined;
+	private zoomIn: Button | undefined;
+	private fitWidthButton: Button | undefined;
+	private findButton: Button | undefined;
+	private zoomLevel = 1.25;
+	private zoomController: AbortController | undefined;
+	private zoomOperation: Promise<void> = Promise.resolve();
 	private sidebar: HTMLElement | undefined;
 	private annotationList: HTMLDivElement | undefined;
 	private annotationText: HTMLTextAreaElement | undefined;
@@ -92,6 +103,9 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 			this.container?.remove();
 			this.container = undefined;
 			this.toolbar = undefined;
+			this.findWidget = undefined;
+			this.zoomSelect = undefined;
+			this.zoomOut = this.zoomIn = this.fitWidthButton = this.findButton = undefined;
 			this.pages = undefined;
 			this.sidebar = undefined;
 			this.annotationList = undefined;
@@ -109,6 +123,39 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 		container.className = "ash-pdf-editor";
 		container.setAttribute("role", "region");
 		container.setAttribute("aria-label", localize('pdf.viewer.reader', "PDF reader"));
+
+		const readingTools = h(ownerDocument, 'div');
+		readingTools.className = 'ash-pdf-reading-tools';
+		readingTools.setAttribute('role', 'group');
+		readingTools.setAttribute('aria-label', localize('pdf.viewer.readingTools', 'PDF reading tools'));
+		this.zoomOut = this._register(new Button(readingTools, {
+			...defaultButtonStyles, label: localize('pdf.viewer.zoomOut', 'Zoom out'), icon: Lxicon.remove,
+			iconOnly: true, size: 'small', onClick: () => this.changeZoom(-0.25),
+		}));
+		const zoomSelect = this.zoomSelect = h(ownerDocument, 'select');
+		zoomSelect.className = 'ash-pdf-zoom';
+		zoomSelect.setAttribute('aria-label', localize('pdf.viewer.zoom', 'PDF zoom'));
+		readingTools.append(zoomSelect);
+		this.zoomIn = this._register(new Button(readingTools, {
+			...defaultButtonStyles, label: localize('pdf.viewer.zoomIn', 'Zoom in'), icon: Lxicon.add,
+			iconOnly: true, size: 'small', onClick: () => this.changeZoom(0.25),
+		}));
+		this.fitWidthButton = this._register(new Button(readingTools, {
+			...defaultButtonStyles, label: localize('pdf.viewer.fitWidth', 'Fit width'), size: 'small',
+			onClick: () => this.fitWidth(),
+		}));
+		this.findButton = this._register(new Button(readingTools, {
+			...defaultButtonStyles, label: localize('pdf.viewer.find', 'Find in PDF'), icon: Lxicon.search,
+			size: 'small', onClick: () => this.findWidget?.open(),
+		}));
+		container.append(readingTools);
+		this.findWidget = this._register(new PdfFindWidget(container, () => this.focus()));
+		this._register(addDisposableListener(zoomSelect, 'change', () => this.setZoom(Number(zoomSelect.value))));
+		// The Workbench handles keys at document capture. A focus-scoped window listener lets
+		// this resource pane consume its reading shortcuts before those global commands.
+		this._register(addDisposableListener(ownerDocument.defaultView!, 'keydown', event => {
+			if (container.contains(event.target as Node)) this.onReadingKeyDown(event);
+		}, true));
 
 		const toolbar = this._register(new ToolBar(container, {
 			buttonStyles: defaultButtonStyles,
@@ -183,6 +230,12 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 		this._register(addDisposableListener(annotationText, "change", () => this.commitSelectedNote()));
 		this.renderToolbar();
 		this.renderSidebar();
+		this.updateStyles();
+	}
+
+	public override updateStyles(): void {
+		// Package styles cannot select Workbench ancestors outside their isolated scope.
+		this.container?.classList.toggle('high-contrast', this.theme.colorScheme === 'hcDark' || this.theme.colorScheme === 'hcLight');
 	}
 
 	/** Retirement freezes an existing view and its draft; a replacement provider opens a new pane. */
@@ -193,7 +246,10 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 			this.inputController?.abort();
 			this.activeAnnotation?.preview.remove();
 			this.activeAnnotation = undefined;
+			this.zoomController?.abort();
+			this.container?.removeAttribute('aria-busy');
 			this.renderResult?.freeze?.();
+			this.updateReadingTools();
 			this.statusMessage = undefined;
 			this.renderToolbar();
 			this.renderSidebar();
@@ -222,12 +278,14 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 				input.readOnly ? Promise.resolve({ document: { version: 1 as const, annotations: [] }, revision: undefined }) : this.annotationStore.load(input.resource, signal),
 			]);
 			throwIfCancelled(signal, "PDF document loading was cancelled");
-			const renderResult = await this.renderer.render({ bytes, container: pages, scale: 1.25, signal });
+			const renderResult = await this.renderer.render({ bytes, container: pages, scale: this.zoomLevel, signal });
 			if (signal.aborted) {
 				renderResult.dispose();
 				throwIfCancelled(signal, "PDF document loading was cancelled");
 			}
 			this.renderResult = renderResult;
+			this.findWidget?.setPages(renderResult.pages);
+			this.updateReadingTools();
 			this.annotationModel.restore(snapshot);
 			this.statusMessage = undefined;
 			this.renderAnnotations();
@@ -242,12 +300,17 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 	public override clearInput(): void {
 		this.inputController?.abort();
 		this.inputController = undefined;
+		this.zoomController?.abort();
+		this.zoomController = undefined;
+		this.container?.removeAttribute('aria-busy');
+		this.findWidget?.setPages([]);
 		this.activeAnnotation?.preview.remove();
 		this.activeAnnotation = undefined;
 		this.annotationInteractions.clear();
 		this.sidebarInteractions.clear();
 		this.renderResult?.dispose();
 		this.renderResult = undefined;
+		this.updateReadingTools();
 		this.pages?.replaceChildren();
 		this.input = undefined;
 		this.selectedAnnotationId = undefined;
@@ -304,7 +367,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 	private renderToolbar(): void {
 		const available = this.canAnnotate();
 		this.toolbar?.setActions([
-			action("ash.pdf.annotations.select", localize('pdf.viewer.select', "Select"), localize('pdf.viewer.selectHint', "Select annotations"), Lxicon.check, available, this.mode === "select", () => this.setMode("select")),
+			action("ash.pdf.annotations.select", localize('pdf.viewer.select', "Select"), localize('pdf.viewer.selectHint', "Select text or annotations"), Lxicon.check, available, this.mode === "select", () => this.setMode("select")),
 			action("ash.pdf.annotations.highlight", localize('pdf.viewer.highlight', "Highlight"), localize('pdf.viewer.highlightHint', "Draw a highlight"), Lxicon.bold, available, this.mode === "highlight", () => this.setMode("highlight")),
 			action("ash.pdf.annotations.ink", localize('pdf.viewer.draw', "Draw"), localize('pdf.viewer.drawHint', "Draw freehand ink"), Lxicon.italics, available, this.mode === "ink", () => this.setMode("ink")),
 			action("ash.pdf.annotations.note", localize('pdf.viewer.note', "Note"), localize('pdf.viewer.noteHint', "Place a note"), Lxicon.chat4, available, this.mode === "note", () => this.setMode("note")),
@@ -360,7 +423,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 			page.element.querySelector(".ash-pdf-annotation-layer")?.remove();
 			const layer = h(page.element.ownerDocument, "div");
 			layer.className = "ash-pdf-annotation-layer";
-			layer.dataset.annotationMode = this.mode;
+			layer.dataset.annotationMode = this.canAnnotate() ? this.mode : "select";
 			layer.tabIndex = 0;
 			layer.setAttribute('role', 'group');
 			layer.setAttribute('aria-label', localize('pdf.viewer.page', 'Page {0} annotations', page.pageNumber));
@@ -544,7 +607,108 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	getAccessibilityHelp(): string {
-		return localize('pdf.viewer.help', 'PDF Viewer keeps the original PDF unchanged. Tab moves between tools, page annotation surfaces, and annotation controls. Select a tool, focus a page, and use arrow keys to position the annotation cursor. Enter places a note, or starts and finishes a highlight or ink stroke; Escape cancels it. The annotation list supports arrow keys, Home and End. Select a note to edit its text, then leave the field to apply it. Undo, Redo, Delete and Save are toolbar actions. Save writes a companion annotations file. Open Accessible View reads extracted PDF text and annotations. Scanned pages without text need a separate OCR capability. Disabling the extension freezes this view; save annotations before disabling or closing it.');
+		return localize('pdf.viewer.help', 'PDF Viewer keeps the original PDF unchanged. Use the zoom controls or Ctrl/Cmd plus +, - or 0 to zoom in, out or reset to 100%; Fit width fits pages to the reading area. In Select mode, drag over text to select it and use Ctrl/Cmd+C to copy; Ctrl/Cmd+A in the pages selects all text. Ctrl/Cmd+F opens PDF search. Search ignores case; Enter and Shift+Enter move between matches, and Escape closes search and returns to the pages. Tab moves between tools, page annotation surfaces, and annotation controls. Select a tool, focus a page, and use arrow keys to position the annotation cursor. Enter places a note, or starts and finishes a highlight or ink stroke; Escape cancels it. The annotation list supports arrow keys, Home and End. Select a note to edit its text, then leave the field to apply it. Undo, Redo, Delete and Save are toolbar actions. Save writes a companion annotations file. Open Accessible View reads extracted PDF text and annotations. Scanned pages without text need a separate OCR capability. Disabling the extension freezes this view; save annotations before disabling or closing it.');
+	}
+
+	private updateReadingTools(): void {
+		const enabled = !!this.renderResult && !this.providerSignal?.aborted;
+		if (this.zoomSelect) {
+			const values = [...new Set([0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, this.zoomLevel])].sort((a, b) => a - b);
+			this.zoomSelect.replaceChildren(...values.map(value => {
+				const option = h(this.zoomSelect!.ownerDocument, 'option');
+				option.value = String(value);
+				option.textContent = `${Math.round(value * 100)}%`;
+				option.selected = value === this.zoomLevel;
+				return option;
+			}));
+			this.zoomSelect.disabled = !enabled;
+		}
+		if (this.zoomOut) this.zoomOut.enabled = enabled && this.zoomLevel > 0.25;
+		if (this.zoomIn) this.zoomIn.enabled = enabled && this.zoomLevel < 4;
+		if (this.fitWidthButton) this.fitWidthButton.enabled = enabled;
+		if (this.findButton) this.findButton.enabled = enabled;
+		this.findWidget?.setEnabled(enabled);
+		this.container?.classList.toggle('retired', !!this.providerSignal?.aborted);
+	}
+
+	private changeZoom(delta: number): void {
+		this.setZoom(this.zoomLevel + delta);
+	}
+
+	private fitWidth(): void {
+		const result = this.renderResult;
+		const pages = this.pages;
+		if (!result?.pages.length || !pages) return;
+		const style = pages.ownerDocument.defaultView!.getComputedStyle(pages);
+		const available = pages.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight);
+		const widest = Math.max(...result.pages.map(page => page.width / result.scale));
+		this.setZoom(Math.floor(available / widest * 100) / 100);
+	}
+
+	private setZoom(scale: number): void {
+		const result = this.renderResult;
+		const pages = this.pages;
+		if (!result || !pages || this.providerSignal?.aborted || !Number.isFinite(scale)) return;
+		scale = Math.round(clamp(scale, 0.25, 4) * 100) / 100;
+		if (scale === this.zoomLevel) return;
+		this.zoomLevel = scale;
+		this.zoomController?.abort();
+		const controller = this.zoomController = new AbortController();
+		const signal = AbortSignal.any([controller.signal, this.inputController!.signal]);
+		this.updateReadingTools();
+		// Serialize canvas work, cancelling superseded paints without replacing pages or annotation history.
+		this.zoomOperation = this.zoomOperation.then(async () => {
+			if (signal.aborted || this.renderResult !== result) return;
+			const viewport = pages.getBoundingClientRect();
+			const centerY = viewport.top + pages.clientHeight / 2;
+			const anchor = result.pages.find(page => page.element.getBoundingClientRect().bottom > centerY) ?? result.pages.at(-1);
+			const before = anchor?.element.getBoundingClientRect();
+			const point = before ? { x: (viewport.left + pages.clientWidth / 2 - before.left) / before.width, y: (centerY - before.top) / before.height } : undefined;
+			this.activeAnnotation?.preview.remove();
+			this.activeAnnotation = undefined;
+			this.container?.setAttribute('aria-busy', 'true');
+			try {
+				const painting = result.setScale(scale, signal);
+				// Geometry changes synchronously; preserve the same point in the reading viewport.
+				if (anchor && point) {
+					const after = anchor.element.getBoundingClientRect();
+					pages.scrollTop += after.top + point.y * after.height - centerY;
+					pages.scrollLeft += after.left + point.x * after.width - viewport.left - pages.clientWidth / 2;
+				}
+				await painting;
+				this.findWidget?.layout();
+			} catch (error) {
+				if (!signal.aborted) {
+					this.statusMessage = localize('pdf.viewer.zoomFailed', 'Could not redraw PDF: {0}', error instanceof Error ? error.message : String(error));
+					this.renderSidebar();
+				}
+			} finally {
+				if (this.zoomController === controller) this.container?.removeAttribute('aria-busy');
+			}
+		});
+	}
+
+	private onReadingKeyDown(event: KeyboardEvent): void {
+		if (event.isComposing || !this.renderResult || this.providerSignal?.aborted || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+		const key = event.key.toLowerCase();
+		const target = event.target as HTMLElement;
+		if (key === 'f') this.findWidget?.open();
+		else if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
+		else if (key === '+' || key === '=') this.changeZoom(0.25);
+		else if (key === '-') this.changeZoom(-0.25);
+		else if (key === '0') this.setZoom(1);
+		else if (key === 'a' && this.mode === 'select' && this.pages?.contains(target)) {
+			const text = this.renderResult.pages.flatMap(page => page.textRuns).filter(run => run.end > run.start);
+			if (!text.length) return;
+			const range = target.ownerDocument.createRange();
+			range.setStartBefore(text[0].element);
+			range.setEndAfter(text.at(-1)!.element);
+			const selection = target.ownerDocument.getSelection();
+			selection?.removeAllRanges();
+			selection?.addRange(range);
+		} else return;
+		event.preventDefault();
+		event.stopPropagation();
 	}
 
 	private canAnnotate(): boolean {

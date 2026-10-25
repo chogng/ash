@@ -1,5 +1,8 @@
 {
   "name": "git-base",
+  "ashUiTargets": [
+    "ide"
+  ],
   "publisher": "vscode",
   "version": "10.0.0",
   "displayName": "%displayName%",

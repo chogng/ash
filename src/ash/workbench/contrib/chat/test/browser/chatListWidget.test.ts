@@ -304,7 +304,7 @@ test('Skill diagnostic contribution handles open, edits, language changes and di
 	const model = resources.add(models.createModel('---\nname: review\n---', languages.createById('markdown'), uri));
 	markers.changeOne('other', uri, [{ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2, severity: MarkerSeverity.Warning, message: 'existing' }]);
 	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], sourceGroups: [] }) }));
-	services.registerInstance(IPromptsService, resources.add(new PromptsService({ onDidChangeSkills: Event.None, list: async () => ({ generation: 1, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 1, skills: [] }, diagnostics: [] }), setEnabled: async () => { }, readTextResource: async () => { throw new Error('No discovered Skill'); } }, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } })));
+	services.registerInstance(IPromptsService, resources.add(new PromptsService({ onDidChangeSkills: Event.None, list: async () => ({ generation: 1, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 1, skills: [] }, diagnostics: [] }), registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async () => { }, readTextResource: async () => { throw new Error('No discovered Skill'); } }, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } })));
 	using contribution = services.createInstance(PromptLanguageFeaturesProvider);
 	assert.deepEqual(markers.read({ resource: uri, owner: PromptLanguageFeaturesProvider.ID }).map(marker => marker.code), ['requiredField']);
 	model.setValue('---\nname: review\ndescription: Review changes\n---');
@@ -358,7 +358,7 @@ test('Skill resource content provider shares readonly models and cancels a late 
 	const prompts = resources.add(new PromptsService({
 		onDidChangeSkills: Event.None,
 		list: async () => ({ generation: 1, skills: [{ id: { source: 'user:review', name: 'review' }, description: 'Review', contentDigest: `sha256:${'a'.repeat(64)}`, enabled: true, compatible: true }] }),
-		read: async () => { throw new Error('Unexpected management read'); }, setEnabled: async () => { },
+		read: async () => { throw new Error('Unexpected management read'); }, registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async () => { },
 		readTextResource: async (reference, path, signal, sessionId) => {
 			calls.push([reference, path, sessionId]);
 			if (path === 'references/late.md') { delayed = signal; return pending.p; }

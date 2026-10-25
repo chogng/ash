@@ -1730,7 +1730,9 @@ suite('textModel browser component', () => {
 	test("text-model editor has the accessibility contract", async function () {
 		const { page } = browserTests;
 
+		await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
 		await openEditor(page);
+		await page.clock.pauseAt(new Date('2026-01-01T00:00:05Z'));
 		const editor = page.locator(".stanza-editor");
 		const input = page.locator(".stanza-editor-input");
 		await expect(editor).toHaveAttribute("role", "region");
@@ -1739,9 +1741,10 @@ suite('textModel browser component', () => {
 		await expect(input).toHaveAttribute("aria-roledescription", "code editor");
 		await expect(editor.locator('.stanza-editor-token.token-keyword').filter({ hasText: 'fn' }).first()).toBeVisible();
 		await input.focus();
+		await page.clock.runFor(32);
 		const screenReaderContent = input.locator('.stanza-native-screen-reader-content');
 		await expect(screenReaderContent).toContainText('fn main()');
-		await page.waitForTimeout(110);
+		await page.clock.runFor(110);
 		await screenReaderContent.evaluate(element => {
 			const text = element.firstChild;
 			if (!text) throw new Error('Simple screen-reader content has no text node');
@@ -1759,13 +1762,14 @@ suite('textModel browser component', () => {
 		await screenReaderContent.evaluate(element => { element.dataset.contentKind = 'simple'; });
 
 		await page.evaluate(() => window.ashTextModelIntegration.setRenderRichScreenReaderContent(true));
+		await page.clock.runFor(32);
 		await expect(input.locator('[data-content-kind="simple"]')).toHaveCount(0);
 		await expect(screenReaderContent.locator('span[data-line-index]')).not.toHaveCount(0);
 		const viewportBracket = page.locator('.view-line .stanza-editor-bracket-level-1').first();
 		const richBracket = screenReaderContent.locator('.stanza-editor-bracket-level-1').first();
 		await expect(richBracket).toHaveCSS('color', await viewportBracket.evaluate(element => getComputedStyle(element).color));
 		expect(await richBracket.evaluate(element => getComputedStyle(element).color)).not.toBe(await editor.evaluate(element => getComputedStyle(element).color));
-		await page.waitForTimeout(110);
+		await page.clock.runFor(110);
 		await screenReaderContent.evaluate(element => {
 			const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
 			const text = walker.nextNode();
@@ -1788,6 +1792,7 @@ suite('textModel browser component', () => {
 		await expect(screenReaderContent).toContainText('fn main()');
 		await expect(screenReaderContent.locator('span[data-line-index]')).toHaveCount(0);
 
+		await page.clock.resume();
 		await injectAxe(page);
 		const accessibility = await getAxeResults(page, undefined, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"] } });
 		expect(accessibility.violations.filter(violation => violation.impact === "critical")).toEqual([]);

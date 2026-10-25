@@ -66,6 +66,8 @@ export class CompositeBar extends Disposable {
 	private readonly openComposite: ICompositeBarOptions['openComposite'];
 	private containers: readonly IViewContainerDescriptor[] = [];
 	private readonly containerListeners = this._register(new DisposableMap<string, IDisposable>());
+	private readonly compositeActions = this._register(new DisposableMap<string, CompositeBarAction>());
+	private readonly overflowAction: CompositeOverflowActivityAction;
 	private displayedContainers: readonly IViewContainerDescriptor[] = [];
 	private hiddenContainerIds = new Set<string>();
 	private disabledBadgeIds = new Set<string>();
@@ -91,6 +93,7 @@ export class CompositeBar extends Disposable {
 		this.activityHoverOptions = options.activityHoverOptions;
 		this.viewDescriptorService = options.viewDescriptorService;
 		this.localizationService = options.localizationService;
+		this.overflowAction = new CompositeOverflowActivityAction(localize(this.localizationService, { bundle: 'ash.regions', key: 'additionalViews' }, 'Additional views'));
 		this.location = options.location;
 		this.orientation = options.orientation ?? 'horizontal';
 		this.contextMenuProvider = options.contextMenuProvider;
@@ -222,8 +225,18 @@ export class CompositeBar extends Disposable {
 			throw new Error(`Composite Bar item is not available: ${compositeId}`);
 		}
 		if (this._activeCompositeId === compositeId) return;
+		const previousId = this._activeCompositeId;
 		this._activeCompositeId = compositeId;
-		this.render();
+		if (previousId) this.compositeActions.get(previousId)?.setChecked(false);
+		if (compositeId) this.compositeActions.get(compositeId)?.setChecked(true);
+		// Unpinned active views change the item set. Ordinary selection only changes
+		// two retained actions; measuring the whole bar here would force style/layout.
+		if ((previousId && this.hiddenContainerIds.has(previousId)) || (compositeId && this.hiddenContainerIds.has(compositeId))) {
+			this.render();
+		} else {
+			if (this.overflowingContainerIds.size > 0) this.layout();
+			if (compositeId && this.renderedContainerIds.includes(compositeId)) this.actionBar.setTabStop(compositeId);
+		}
 	}
 
 	public setDensity(density: 'default' | 'compact'): void {
@@ -311,6 +324,10 @@ export class CompositeBar extends Disposable {
 
 	private render(): void {
 		const availableContainers = this.viewDescriptorService.getViewContainers(this.location);
+		const availableIds = new Set(availableContainers.map(container => container.id));
+		for (const id of this.compositeActions.keys()) {
+			if (!availableIds.has(id)) this.compositeActions.deleteAndDispose(id);
+		}
 		const conditionalContainers = availableContainers.filter(container => container.hideIfEmpty);
 		for (const id of this.containerListeners.keys()) {
 			if (!conditionalContainers.some(container => container.id === id)) this.containerListeners.deleteAndDispose(id);
@@ -355,7 +372,7 @@ export class CompositeBar extends Disposable {
 		this.actionBar.setActions([
 			...containers.map((container) => {
 				const label = localize(this.localizationService, container.localizationKey, container.title);
-				return new CompositeBarAction({
+				const options = {
 					id: container.id,
 					label,
 					tooltip: label,
@@ -365,10 +382,22 @@ export class CompositeBar extends Disposable {
 					checked: container.id === this._activeCompositeId,
 					badge: this.getBadge(container.id),
 					badgeEnabled: this.badgesEnabled && this.areBadgesEnabled(container.id),
-					onActivate: (compositeId) => { void this.openComposite(compositeId).catch(onUnexpectedError); },
-				});
+					onActivate: (compositeId: string) => { void this.openComposite(compositeId).catch(onUnexpectedError); },
+				};
+				const retained = this.compositeActions.get(container.id);
+				const previous = retained?.options;
+				if (retained && previous && previous.label === options.label && previous.tooltip === options.tooltip
+					&& previous.icon === options.icon && previous.tabId === options.tabId && previous.panelId === options.panelId
+					&& previous.badgeEnabled === options.badgeEnabled && previous.badge?.count === options.badge?.count
+					&& previous.badge?.description === options.badge?.description) {
+					retained.setChecked(options.checked);
+					return retained;
+				}
+				const action = new CompositeBarAction(options);
+				this.compositeActions.set(container.id, action);
+				return action;
 			}),
-			...(showOverflow ? [new CompositeOverflowActivityAction(localize(this.localizationService, { bundle: "ash.regions", key: "additionalViews" }, "Additional views"))] : []),
+			...(showOverflow ? [this.overflowAction] : []),
 		]);
 		if (this.renderedContainerIds.includes(this._activeCompositeId ?? "")) {
 			this.actionBar.setTabStop(this._activeCompositeId!);

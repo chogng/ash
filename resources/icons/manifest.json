@@ -432,6 +432,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "diff-added",
+      "file": "diff-added.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "diff-changes",
+      "file": "diff-changes.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "diff-line-add",
       "file": "diff-line-add.svg",
       "rendering": "symbolic"
@@ -619,6 +629,11 @@
     {
       "id": "folder-open",
       "file": "folder-open.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "folder-opened",
+      "file": "folder-opened.svg",
       "rendering": "symbolic"
     },
     {
@@ -1354,6 +1369,11 @@
     {
       "id": "terminal-powershell",
       "file": "terminal-powershell.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "terminal-session",
+      "file": "terminal-session.svg",
       "rendering": "symbolic"
     },
     {

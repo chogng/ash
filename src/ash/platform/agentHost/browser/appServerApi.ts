@@ -100,7 +100,7 @@ export async function readAppServerResource(api: IResourceApi, resource: Resourc
 }
 
 export function createDisconnectedSkillOperations(unavailable: UnavailableOperation): IAppServerSkillApi {
-	return { onDidChangeSkills: Event.None, list: () => unavailable("skills.list"), read: () => unavailable("skills.read"), setEnabled: () => unavailable("skills.setEnabled"), readTextResource: () => unavailable("skills.readTextResource") };
+	return { onDidChangeSkills: Event.None, list: () => unavailable("skills.list"), read: () => unavailable("skills.read"), setEnabled: () => unavailable("skills.setEnabled"), registerSource: () => unavailable("skills.registerSource"), readTextResource: () => unavailable("skills.readTextResource") };
 }
 
 export function createAppServerSkillOperations(connection: AppServerProtocolClient): IAppServerSkillApi {
@@ -126,6 +126,21 @@ export function createAppServerSkillOperations(connection: AppServerProtocolClie
 		},
 		setEnabled: async (skillId, enabled, expectedRevision, sessionId) => {
 			await appServerRequest(connection, "skill/enablement/set", { commandId: generateUuid(), expectedRevision, skillId, enablement: enabled ? "enabled" : "disabled", sessionId });
+		},
+		registerSource: async rootReference => {
+			const config = await appServerRequest(connection, 'config/read', {});
+			const existing = Object.values(config.skillSources).find(source => source.rootReference === rootReference);
+			if (existing?.enablement === 'enabled') return;
+			if (existing) {
+				await appServerRequest(connection, 'skill/source/enablement/set', {
+					commandId: generateUuid(), expectedRevision: config.revision, sourceId: existing.id, enablement: 'enabled',
+				});
+			} else {
+				await appServerRequest(connection, 'skill/source/add', {
+					commandId: generateUuid(), expectedRevision: config.revision,
+					source: { id: `user:skill-source:customize-${generateUuid()}`, rootReference, enablement: 'enabled' },
+				});
+			}
 		},
 	};
 }

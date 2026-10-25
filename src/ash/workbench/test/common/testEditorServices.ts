@@ -9,6 +9,9 @@ import { IMessageHistoryService } from '../../../platform/messageHistory/common/
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import '../../contrib/chat/browser/chat.shared.contribution.js';
+import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../../contrib/chat/browser/attachments/chatAttachmentResolveService.js';
+import { IFileSearchService } from '../../../platform/search/common/fileSearch.js';
+import { BrowserFileSearchService } from '../../../platform/search/browser/browserFileSearchService.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../services/configuration/test/common/testServices.js';
 import type { ITextResourceStore } from '../../services/textmodelResolver/common/textResourceStore.js';
 import { BrowserPathService } from '../../services/path/browser/pathService.js';
@@ -103,6 +106,10 @@ export function createTestComponentServices(storage?: IStorageService, parent?: 
 	if (storage) {
 		services.registerInstance(IStorageService, storage);
 	}
+	if (parent && !parent.has(IFileService)) {
+		// Shadow the editor-only parent's identity descriptor in this new file-owning scope.
+		services.registerSingleton(IUriIdentityService, () => services.createInstance(UriIdentityService));
+	}
 	return registerTestComponentServices(services, document);
 }
 
@@ -181,6 +188,9 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 	if (!services.has(IPathService)) services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	if (!services.has(ILabelService)) services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 	if (!services.has(IWorkingCopyService)) services.registerSingleton(IWorkingCopyService, () => services.createInstance(BrowserWorkingCopyService));
+	// File-based Chat services resolve in this host scope, alongside their file and working-copy owners.
+	if (!services.has(IFileSearchService)) services.registerSingleton(IFileSearchService, () => services.createInstance(BrowserFileSearchService));
+	services.registerSingleton(IChatAttachmentResolveService, () => services.createInstance(ChatAttachmentResolveService));
 	if (!services.has(IUntitledTextEditorService)) services.registerSingleton(IUntitledTextEditorService, () => services.createInstance(UntitledTextEditorService));
 	if (!services.has(ILogService)) services.registerInstance(ILogService, new NullLoggerService());
 	if (!services.has(IDecorationsService)) services.registerSingleton(IDecorationsService, () => services.createInstance(DecorationsService, document));

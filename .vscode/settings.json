@@ -67,5 +67,8 @@
 		"--message-format=json",
 		"--target-dir",
 		".build/rust-analyzer"
-	]
+	],
+	"[jsonc]": {
+		"editor.defaultFormatter": "vscode.json-language-features"
+	}
 }

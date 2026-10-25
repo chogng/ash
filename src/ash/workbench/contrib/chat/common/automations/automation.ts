@@ -13,6 +13,8 @@ export interface AutomationTarget {
 }
 
 export interface IAutomationDescriptor {
+	/** Dedicated workflow controls preserve its provider condition and captured target. */
+	readonly kind?: 'pullRequestFollowUp';
 	readonly id: string;
 	readonly name: string;
 	readonly prompt: string;

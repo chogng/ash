@@ -53,7 +53,10 @@ impl AutomationStore {
                ON automation_runs(automation_id, created_at DESC, id);
              CREATE TABLE IF NOT EXISTS automation_commands (
                id TEXT PRIMARY KEY, request TEXT NOT NULL, result TEXT NOT NULL);
-             CREATE TABLE IF NOT EXISTS automation_deleted (id TEXT PRIMARY KEY);",
+             CREATE TABLE IF NOT EXISTS automation_deleted (id TEXT PRIMARY KEY);
+             CREATE TABLE IF NOT EXISTS automation_events (
+               subject TEXT NOT NULL, event_key TEXT NOT NULL, run_id TEXT NOT NULL,
+               PRIMARY KEY(subject, event_key));",
         )?;
         Ok(Self {
             connection: Mutex::new(connection),
@@ -100,6 +103,15 @@ impl AutomationStore {
         if previous.as_ref().map_or(0, |plan| plan.revision) != request.expected_revision {
             return Err(AutomationError::Conflict);
         }
+        if previous
+            .as_ref()
+            .is_some_and(|plan| plan.definition.condition.is_some())
+            && request.definition.condition.is_none()
+        {
+            return Err(AutomationError::Invalid(
+                "cannot remove a provider condition".into(),
+            ));
+        }
         if previous.is_none() && plans(&transaction)?.len() >= 1_000 {
             return Err(AutomationError::Invalid(
                 "profile plan limit reached".into(),
@@ -134,6 +146,19 @@ impl AutomationStore {
             ON CONFLICT(id) DO UPDATE SET record = excluded.record",
             params![plan.id, record],
         )?;
+        // A changed or paused follow-up revokes every old dispatch, including work whose
+        // provider read is still in flight. Ordinary scheduled plans retain their pause semantics.
+        if previous
+            .as_ref()
+            .is_some_and(|plan| plan.definition.condition.is_some())
+        {
+            for mut run in active_runs(&transaction)? {
+                if run.automation_id == plan.id {
+                    run.status = AutomationRunStatus::Stopping;
+                    save_run(&transaction, &run)?;
+                }
+            }
+        }
         receipt(&transaction, &request.command_id, &payload, &record)?;
         transaction.commit()?;
         Ok(plan)
@@ -283,11 +308,7 @@ impl AutomationStore {
             .connection
             .lock()
             .map_err(|_| AutomationError::LockPoisoned)?;
-        let mut statement = connection.prepare(
-            "SELECT record FROM automation_runs WHERE active = 1 ORDER BY created_at, id",
-        )?;
-        let records = statement.query_map([], |row| row.get::<_, String>(0))?;
-        records.map(|record| decode_run(&record?)).collect()
+        active_runs(&connection)
     }
 
     /// Installs an observation from the execution owner. A stop requested concurrently with an
@@ -305,6 +326,7 @@ impl AutomationStore {
         if current.automation_id != observation.automation_id
             || current.definition != observation.definition
             || current.revision != observation.revision
+            || current.event != observation.event
         {
             return Err(AutomationError::Conflict);
         }
@@ -330,6 +352,62 @@ impl AutomationStore {
         }
         transaction.commit()?;
         Ok(run)
+    }
+
+    /// Reserves an observed event and its prompt context atomically with the durable run.
+    /// The subject spans plan IDs and revisions, so two windows cannot duplicate the same effect.
+    pub fn claim_event(
+        &self,
+        id: &str,
+        event: ash_protocol::AutomationEvent,
+    ) -> Result<bool, AutomationError> {
+        if event.key.is_empty() || event.key.len() > 4_096 || event.context.len() > 100_000 {
+            return Err(AutomationError::Invalid("invalid provider event".into()));
+        }
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| AutomationError::LockPoisoned)?;
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut run = load_run(&transaction, id)?;
+        if !dispatch_current(&transaction, &run)? {
+            return Ok(false);
+        }
+        if let Some(current) = &run.event {
+            return Ok(current == &event);
+        }
+        let subject = serde_json::to_string(&run.definition.session)?;
+        let inserted = transaction.execute(
+            "INSERT OR IGNORE INTO automation_events(subject, event_key, run_id) VALUES (?1, ?2, ?3)",
+            params![subject, event.key, id],
+        )?;
+        if inserted == 0 {
+            return Ok(false);
+        }
+        run.event = Some(event);
+        save_run(&transaction, &run)?;
+        transaction.commit()?;
+        Ok(true)
+    }
+
+    /// Serializes the final dispatch boundary against stop and configuration writes.
+    /// The callback only admits work to the existing execution owner; it must not reenter this store.
+    pub fn dispatch_if_current<T>(
+        &self,
+        id: &str,
+        dispatch: impl FnOnce() -> T,
+    ) -> Result<Option<T>, AutomationError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| AutomationError::LockPoisoned)?;
+        let run = load_run(&connection, id)?;
+        if !dispatch_current(&connection, &run)? {
+            return Ok(None);
+        }
+        // The profile's single store owner serializes writes with this mutex. Do not hold
+        // a SQLite transaction: Turn admission writes through another connection to the same DB.
+        Ok(Some(dispatch()))
     }
 
     pub fn needs_host(&self) -> Result<bool, AutomationError> {
@@ -376,6 +454,25 @@ fn plan(connection: &Connection, id: &str) -> Result<Option<Automation>, Automat
         )
         .optional()?;
     record.map(|record| decode_plan(&record)).transpose()
+}
+
+fn active_runs(connection: &Connection) -> Result<Vec<AutomationRun>, AutomationError> {
+    let mut statement = connection
+        .prepare("SELECT record FROM automation_runs WHERE active = 1 ORDER BY created_at, id")?;
+    let records = statement.query_map([], |row| row.get::<_, String>(0))?;
+    records.map(|record| decode_run(&record?)).collect()
+}
+
+fn dispatch_current(connection: &Connection, run: &AutomationRun) -> Result<bool, AutomationError> {
+    if run.status.is_finished() || run.status == AutomationRunStatus::Stopping {
+        return Ok(false);
+    }
+    if run.definition.condition.is_none() {
+        return Ok(true);
+    }
+    Ok(plan(connection, &run.automation_id)?.is_some_and(|plan| {
+        plan.status == AutomationStatus::Enabled && plan.revision == run.revision
+    }))
 }
 
 fn has_active_run(connection: &Connection, id: &str) -> Result<bool, AutomationError> {
@@ -438,6 +535,7 @@ fn new_run(
         thread_id: None,
         turn_id: None,
         message: None,
+        event: None,
     }
 }
 

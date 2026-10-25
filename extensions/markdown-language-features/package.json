@@ -1,5 +1,9 @@
 {
   "name": "markdown-language-features",
+  "ashUiTargets": [
+    "ide",
+    "agents"
+  ],
   "publisher": "ash",
   "version": "1.0.0",
   "type": "module",

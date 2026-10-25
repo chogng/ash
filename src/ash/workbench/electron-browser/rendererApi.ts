@@ -80,7 +80,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 	// Connections are created before the Workbench window and own an independent service scope.
 	connectionServices.registerSingleton(IWebWorkerService, () => connectionServices.createInstance(WebWorkerService), { instantiation: InstantiationType.Delayed });
 	connectionServices.registerInstance(IMainProcessService, mainProcessService);
-	const connectionLogger = resources.add(connectionServices.createInstance(LoggerChannelClient)).createLogger('app-server', { hidden: true });
+	const connectionLogger = resources.add(new LoggerChannelClient(mainProcessService.getChannel('logger'))).createLogger('app-server', { hidden: true });
 	connectionServices.registerInstance(ILogService, connectionLogger);
 	connectionServices.registerSingleton(IRemoteSocketFactoryService, () => connectionServices.createInstance(RemoteSocketFactoryService));
 	const agentHost = resources.add(connectionServices.createInstance(WorkbenchAgentHostService, {

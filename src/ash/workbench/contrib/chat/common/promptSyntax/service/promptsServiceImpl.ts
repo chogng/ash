@@ -84,6 +84,11 @@ export class PromptsService extends Disposable implements IPromptsService {
 		}
 	}
 
+	public async registerSkillSource(rootReference: string): Promise<void> {
+		if (this.isDisposed) throw new CancellationError();
+		await this.backend.registerSource(rootReference);
+	}
+
 	public async parseNew(uri: URI, token: CancellationToken = CancellationToken.None): Promise<ParsedPromptFile> {
 		throwIfCancelled(token);
 		const match = /^\/([^/]+)\/(.+)$/u.exec(uri.path);

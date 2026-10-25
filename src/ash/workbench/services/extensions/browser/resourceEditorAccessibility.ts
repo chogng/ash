@@ -15,6 +15,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		return value;
 	},
 	setting: {
+		included: false,
 		valueType: 'boolean',
 		get title() { return localize('resourceEditor.verbosityTitle', 'Resource editor accessibility help'); },
 		get description() { return localize('resourceEditor.verbosityDescription', 'Announce how to open accessibility help in resource editors.'); },

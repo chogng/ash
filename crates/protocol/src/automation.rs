@@ -76,6 +76,38 @@ pub struct AutomationDefinition {
     pub directory: String,
     pub session: AutomationSession,
     pub schedule: AutomationSchedule,
+    /// Optional provider condition evaluated before creating an Agent Turn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub condition: Option<AutomationCondition>,
+}
+
+/// Captures the exact account and PR the user enabled; execution never selects a fallback account.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum AutomationCondition {
+    GitHubChecks {
+        host: String,
+        owner: String,
+        repository: String,
+        #[ts(type = "number")]
+        number: u64,
+        account_id: String,
+        credential_revision: String,
+    },
+}
+
+/// Durable provider observation, reserved before dispatch and retained across restart.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationEvent {
+    pub key: String,
+    pub context: String,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -137,4 +169,7 @@ pub struct AutomationRun {
     pub thread_id: Option<crate::ThreadId>,
     pub turn_id: Option<crate::TurnId>,
     pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub event: Option<AutomationEvent>,
 }

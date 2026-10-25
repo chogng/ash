@@ -55,6 +55,7 @@ export async function generateLanguageRegistry(options: { root?: string; check?:
 		let manifest;
 		try { manifest = JSON.parse(await readFile(resolve(root, 'extensions', directory, 'package.json'), 'utf8')); }
 		catch (error) { if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) continue; throw error; }
+		if (manifest.ashDistribution === 'marketplace') { continue; }
 		for (const declaration of manifest.contributes?.languages ?? []) {
 			if (typeof declaration.id !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(declaration.id)) throw new TypeError(`Invalid language identity in ${directory}`);
 			for (const key of ['extensions', 'filenames', 'filenamePatterns'] as const) {

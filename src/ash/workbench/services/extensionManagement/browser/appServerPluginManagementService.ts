@@ -11,6 +11,7 @@ import { canceled } from '../../../../base/common/errors.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import type { IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { localize } from '../../../../nls.js';
+import { ExtensionUiTarget } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 
 export class AppServerPluginManagementService extends Disposable implements IPluginManagementService {
 	private readonly _onDidChange = this._register(new Emitter<number>());
@@ -32,7 +33,8 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 	}
 
 	async list(): Promise<PluginCatalogView> {
-		return this.api.list();
+		const catalog = await this.api.list();
+		return { ...catalog, packages: catalog.packages.map(({ uiTargets, ...plugin }) => ({ ...plugin, ...(uiTargets ? { uiTargets: uiTargets.map(target => target === 'ide' ? ExtensionUiTarget.IDE : ExtensionUiTarget.Agents) } : {}) })) };
 	}
 
 	async installLocal(path: string, expectedRevision: number): Promise<PluginInstallation> {

@@ -1,0 +1,17 @@
+# PDF Reading
+
+PDF Reading is an optional MCP + Skill package for AI reading. It shares PDF.js with PDF Viewer but runs in an independent Node process. It works on unopened local PDFs and does not require a Renderer or create another annotation state owner.
+
+The package exposes `pdf_read` (page-numbered text, bounded continuation, normalized single-page regions and explicitly requested saved annotations) and `pdf_render_page` (one page or region as an MCP image). Results identify the exact source SHA-256; callers can pin subsequent reads to that version. Image-only pages return an explicit no-text signal. There is no OCR, embedded-image extraction, PDF mutation or access to unsaved viewer drafts.
+
+Install the signed PDF Reading package through Extensions, then ask Chat to read a specified local PDF. The installed MCP capability is discovered by the existing host; individual calls use the session approval policy. The bundled Skill guides page citations and visual checks. PDF Viewer remains a separately installed editor. Uninstalling PDF Reading invalidates its MCP binding through the existing Manager lease; requests cannot be redirected to an unrelated replacement.
+
+The registry package currently has no separate MCP enablement switch; uninstall it to remove the capability.
+
+The stdio program requires Node.js 22.13 or newer on PATH. Build the submission on its target macOS/Linux host with `node extensions/pdf-viewer/ai/package.ts <new-output-directory>`. It bundles pinned PDF.js, MCP SDK and the current platform's native canvas dependency, fonts, CMaps and codecs; reads and rendering need no network or package download. `runtime.json` records the target. The signed native library is gzip-compressed to meet the package file budget; startup verifies its SHA-256 and bounded expanded size, extracts it into a private temporary directory and removes that directory on normal shutdown. Abrupt process termination can leave that temporary directory for OS cleanup. This launcher is not a Windows distribution.
+
+Each call is a normal Ash MCP invocation with its exact arguments and existing approval policy. The process can read the requested local file under the current OS identity; MCP process permission is not a directory sandbox or an attachment grant. The tools do not fetch URLs, execute embedded PDF actions, enumerate directories or write files. Supply only a user-authorized path; Chat attachments must first be materialized through their owning file workflow. No extra model connection or credential is created by this package.
+
+Limits: 32 MiB input PDF, at most 20 text pages per call (5 by default), 60,000 output characters, 256 KiB saved sidecar, 2,048-pixel image long edge, 700,000-byte PNG, two concurrent reads, 256 MiB JavaScript heap per worker and a 30-second deadline. Image dimensions may reduce to fit the output budget. Native allocations are outside the JavaScript heap limit. Embedded images above 16,777,216 pixels are omitted by PDF.js, and rendered results explicitly report this limitation; output canvases are bounded by dimensions. Cancellation terminates the parsing worker; documents and canvases are released after each call. Protected or malformed documents fail explicitly.
+
+Protocol and rendering follow the [MCP tools contract](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) and [PDF.js](https://mozilla.github.io/pdf.js/examples/). The package keeps document parsing out of Ash core and does not grant the Skill execution privileges.

@@ -1,6 +1,11 @@
 // Recognize CSS files as valid side-effect imports.
 declare module "*.css" {}
 
+declare module "*.css?inline" {
+	const css: string;
+	export default css;
+}
+
 // Vite turns URL-query imports into emitted assets for the renderer bundle.
 declare module "*?url" {
 	const url: string;

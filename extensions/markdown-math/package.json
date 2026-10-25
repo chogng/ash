@@ -1,5 +1,9 @@
 {
   "name": "markdown-math",
+  "ashUiTargets": [
+    "ide",
+    "agents"
+  ],
   "publisher": "ash",
   "version": "1.0.0",
   "private": true,

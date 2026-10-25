@@ -51,6 +51,13 @@ use super::update_broker::UpdateBroker;
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(15);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Document transport retains edits while stopped; semantic requests require a ready server.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(super) enum LanguageDocumentPurpose {
+    Synchronization,
+    SemanticRequest,
+}
+
 struct AppServerLanguageMetrics;
 
 impl LspRequestMetricsSink for AppServerLanguageMetrics {
@@ -1033,33 +1040,33 @@ impl AppServerLanguageRuntime {
             .map_err(|error| error.to_string())
     }
 
-    /// Background pulls may activate a declared workspace kind, but not install servers in
-    /// unrelated folders merely because the client enumerates every available language.
-    pub(super) fn allows_workspace_diagnostics(
-        &self,
+    /// Background diagnostics consume a ready session; only document/semantic demand and
+    /// explicit controls may acquire a server or resume one released while idle.
+    pub(super) fn request_workspace_diagnostics(
+        &mut self,
         root: &Path,
         language: &str,
-        configuration: &LanguageServersConfig,
-    ) -> bool {
-        let active = if self.dir_state.root.as_deref() == Some(root) {
-            Some(self)
-        } else {
-            self.env_runtimes.get(root).map(Box::as_ref)
+    ) -> Result<Option<LanguageRequestId>, String> {
+        if self.dir_state.root.as_deref() != Some(root) {
+            let Some(runtime) = self.env_runtimes.get_mut(root) else {
+                return Ok(None);
+            };
+            self.active_dir_root = Some(root.to_path_buf());
+            return runtime.request_workspace_diagnostics(root, language);
+        }
+        self.active_dir_root = None;
+        let Some(server) = self.dir_state.language_servers.get(language).cloned() else {
+            return Ok(None);
         };
-        self.acquisitions(configuration)
-            .filter(|server| server.languages.iter().any(|id| id == language))
-            .all(|server| {
-                active.is_some_and(|runtime| {
-                    runtime
-                        .acquired
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .contains_key(&server.id)
-                }) || server
-                    .workspace_files
-                    .iter()
-                    .any(|file| root.join(file).is_file())
-            })
+        if self.server_states(root).get(&server) != Some(&LanguageServerState::Ready) {
+            return Ok(None);
+        }
+        self.active_language_id = Some(language.to_owned());
+        self.manager
+            .as_ref()
+            .map(|manager| manager.request_workspace_diagnostics(language))
+            .transpose()
+            .map_err(|error| error.to_string())
     }
 
     pub(super) fn server_running(&self, id: &str) -> bool {
@@ -1178,6 +1185,7 @@ impl AppServerLanguageRuntime {
         config_generation: u64,
         configuration: &LanguageServersConfig,
         language_id: &str,
+        purpose: LanguageDocumentPurpose,
     ) -> Result<&LspManager, String> {
         if self.env_runtimes.contains_key(dir_root)
             || (self.dir_state.root.is_some() && self.dir_state.root.as_deref() != Some(dir_root))
@@ -1198,6 +1206,7 @@ impl AppServerLanguageRuntime {
                 config_generation,
                 configuration,
                 language_id,
+                purpose,
             );
         }
         self.active_dir_root = None;
@@ -1225,7 +1234,7 @@ impl AppServerLanguageRuntime {
         {
             self.restart(dir_root, config_generation, configuration, language_id)?;
         }
-        self.wait_until_ready(language_id)?;
+        self.wait_until_ready(language_id, purpose)?;
         self.manager
             .as_deref()
             .ok_or_else(|| "language service is unavailable".into())
@@ -1249,6 +1258,7 @@ impl AppServerLanguageRuntime {
         configuration: &LanguageServersConfig,
         relative_path: &Path,
         document: LspDocumentSnapshot,
+        purpose: LanguageDocumentPurpose,
     ) -> Result<(), String> {
         let language_id = document.language_id().to_owned();
         self.ensure(
@@ -1257,6 +1267,7 @@ impl AppServerLanguageRuntime {
             config_generation,
             configuration,
             &language_id,
+            purpose,
         )?;
         if let Some(root) = self.active_dir_root.clone() {
             return self
@@ -1464,18 +1475,19 @@ impl AppServerLanguageRuntime {
                 &self.dir_state.settings,
             )?);
         }
-        if let Some(selected) = selected {
-            // An explicit single-server start must not activate other idle declarations.
-            // Keep every existing route, including user-stopped definitions.
-            definitions.retain(|definition| {
-                definition.name().as_str() == selected
-                    || self
-                        .dir_state
-                        .language_servers
-                        .values()
-                        .any(|id| id == definition.name().as_str())
-            });
-        }
+        // Discovery includes configured executables for every language. Admit only the
+        // current demand plus existing routes, whose running/idle/user-stopped states the
+        // supervisor preserves. Otherwise opening JSON can also launch an unused Rust server.
+        definitions.retain(|definition| {
+            selected.map_or_else(
+                || definition.language_ids().any(|id| id == language_id),
+                |selected| definition.name().as_str() == selected,
+            ) || self
+                .dir_state
+                .language_servers
+                .values()
+                .any(|id| id == definition.name().as_str())
+        });
         // Selection can perform process/network I/O. Recheck its source while registering the
         // manager, so a concurrent disable or uninstall cannot launch a retired recipe.
         let mut sources = self
@@ -1677,7 +1689,11 @@ impl AppServerLanguageRuntime {
         result.map_err(|error| error.to_string())
     }
 
-    fn wait_until_ready(&mut self, language_id: &str) -> Result<(), String> {
+    fn wait_until_ready(
+        &mut self,
+        language_id: &str,
+        purpose: LanguageDocumentPurpose,
+    ) -> Result<(), String> {
         let server = self
             .dir_state
             .language_servers
@@ -1736,6 +1752,13 @@ impl AppServerLanguageRuntime {
                 }
                 Some(LanguageServerState::Failed(message)) => return Err(message.clone()),
                 Some(LanguageServerState::CrashLoop { message, .. }) => return Err(message.clone()),
+                Some(LanguageServerState::UserStopped)
+                    if purpose == LanguageDocumentPurpose::Synchronization =>
+                {
+                    // The manager retains the unrouted snapshot and replays it only after
+                    // an explicit restart. Editing must neither wake the process nor fail.
+                    return Ok(());
+                }
                 Some(LanguageServerState::UserStopped) => {
                     return Err("language server was stopped by the user".into());
                 }

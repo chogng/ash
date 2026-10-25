@@ -94,6 +94,16 @@ export class RangeUtil {
 		}
 		startChildIndex = Math.min(max, Math.max(min, startChildIndex));
 		endChildIndex = Math.min(max, Math.max(min, endChildIndex));
+		const startObject = domNode.children[startChildIndex] as HTMLElement;
+		const endObject = domNode.children[endChildIndex] as HTMLElement;
+		// An object replacement character's glyph has no advance in some fonts. Its reserved box owns both caret edges.
+		if (startChildIndex === endChildIndex && startObject.dataset.ashInlineObject === 'true') {
+			const box = startObject.getBoundingClientRect();
+			context.markDidDomLayout();
+			const left = (box.left - context.clientRectDeltaLeft) / context.clientRectScale;
+			const right = (box.right - context.clientRectDeltaLeft) / context.clientRectScale;
+			return [new FloatHorizontalRange(startOffset === 0 ? left : right, startOffset === endOffset ? 0 : right - left)];
+		}
 
 		if (startChildIndex === endChildIndex && startOffset === endOffset && startOffset === 0 && !domNode.children[startChildIndex].firstChild) {
 			// We must find the position at the beginning of a <span>
@@ -136,6 +146,13 @@ export class RangeUtil {
 
 		const clientRects = this._readClientRects(startElement, startOffset, endElement, endOffset, context.endNode);
 		context.markDidDomLayout();
-		return this._createHorizontalRangesFromClientRects(clientRects, context.clientRectDeltaLeft, context.clientRectScale);
+		const ranges = this._createHorizontalRangesFromClientRects(clientRects, context.clientRectDeltaLeft, context.clientRectScale) ?? [];
+		for (const [element, include] of [[startObject, startOffset === 0], [endObject, endOffset > 0]] as const) {
+			if (!include || element.dataset.ashInlineObject !== 'true') continue;
+			const box = element.getBoundingClientRect();
+			context.markDidDomLayout();
+			ranges.push(new FloatHorizontalRange((box.left - context.clientRectDeltaLeft) / context.clientRectScale, box.width / context.clientRectScale));
+		}
+		return ranges.length > 0 ? this._mergeAdjacentRanges(ranges) : null;
 	}
 }

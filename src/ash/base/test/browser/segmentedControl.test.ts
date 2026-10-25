@@ -138,6 +138,19 @@ suite('SegmentedControl rendered component', () => {
 				if (theme.startsWith('hc')) {
 					await expect(buttons.nth(0)).toHaveCSS('outline-width', '2px');
 					await expect(buttons.nth(0)).toHaveCSS('border-top-width', '1px');
+					const contrast = await text.evaluate(element => ({
+						selected: getComputedStyle(element.querySelector('.checked')!).color,
+						unselected: getComputedStyle(element.querySelector('button:not(.checked)')!).color,
+						slider: getComputedStyle(element, '::before').backgroundColor,
+						background: getComputedStyle(element).backgroundColor,
+					}));
+					expect(contrast.selected).not.toBe(contrast.unselected);
+					expect(contrast.slider).not.toBe(contrast.background);
+					expect(contrast.selected).not.toBe(contrast.slider);
+					await buttons.first().press('End');
+					await expect(buttons.nth(3)).toBeFocused();
+					const selectedOutline = await buttons.nth(3).evaluate(element => getComputedStyle(element).outlineColor);
+					expect(selectedOutline).not.toBe(contrast.slider);
 				}
 				await icons.getByRole('button').nth(2).click();
 				await expect(icons.getByRole('button').nth(2)).toHaveAttribute('aria-pressed', 'true');

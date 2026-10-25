@@ -150,6 +150,7 @@ mod extension_packages_operations_tests;
 mod extension_packages_projection;
 pub(crate) mod extension_packages_runtime;
 mod extension_packages_skill_sources;
+mod extension_recommendations;
 #[path = "server/request_processors/filesystem.rs"]
 mod fs_operations;
 mod fs_watcher;
@@ -3604,7 +3605,11 @@ impl AppServer {
                 .automation_processor
                 .automation_preview(&request.params),
             Some(ClientMethod::AutomationWrite) => {
-                self.automation_processor.automation_write(&request.params)
+                let response = self
+                    .automation_processor
+                    .automation_write(&request.params)?;
+                self.advance_stopping_automations()?;
+                Ok(response)
             }
             Some(ClientMethod::AutomationDelete) => {
                 self.automation_processor.automation_delete(&request.params)
@@ -3619,7 +3624,9 @@ impl AppServer {
                 self.automation_processor.automation_runs(&request.params)
             }
             Some(ClientMethod::AutomationStop) => {
-                self.automation_processor.automation_stop(&request.params)
+                let response = self.automation_processor.automation_stop(&request.params)?;
+                self.advance_stopping_automations()?;
+                Ok(response)
             }
             Some(ClientMethod::ProjectRead) => self
                 .project_processor()
@@ -3763,6 +3770,9 @@ impl AppServer {
                         .extension_source_set_enabled(&request.params)
                 }
             }
+            Some(ClientMethod::ExtensionsRecommendationEnvironment) => self
+                .extension_packages_processor()
+                .extension_recommendations_environment(&request.params),
             Some(ClientMethod::ExtensionsSearch) => self
                 .extension_packages_processor()
                 .extension_packages_search(&request.params),

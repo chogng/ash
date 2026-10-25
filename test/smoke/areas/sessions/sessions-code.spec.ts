@@ -7,10 +7,51 @@ import { QuickAccess } from '../../../automation/quickaccess.js';
 import { Workbench } from '../../../automation/workbench.js';
 import { Menus } from '../../../automation/menus.js';
 import { installMainChannelTestClient } from '../../../automation/mainProcessIpc.js';
+import { readUserSettings } from '../../../automation/settings.js';
 import type { IBrowserViewInfo } from '../../../../src/ash/platform/browserView/common/browserView.js';
 
 // Native application menus follow OS focus on macOS.
 const focusTest = test.extend({ electronWindowMode: process.platform === 'darwin' ? 'active' : undefined });
+
+test('Code Sessions consumes the shared JSON extension for settings completion, hover, formatting and diagnostics', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await installMainChannelTestClient(page);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const commands = new QuickAccess(page);
+	await commands.runCommand('workbench.action.openSettingsJson');
+	const content = page.locator('[data-part="editor"] .ash-editor-group:visible > .ash-editor-group-content');
+	const editor = new Editor(content);
+	const replace = async (text: string): Promise<void> => {
+		await editor.input.press('ControlOrMeta+A');
+		await editor.input.evaluate((element, text) => {
+			const clipboardData = new DataTransfer();
+			clipboardData.setData('text/plain', text);
+			element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+		}, text);
+	};
+	await replace('{\n// shared JSON extension\n/* 💡 */ "editor.fo",\n}');
+	await editor.input.press('ControlOrMeta+Home');
+	await editor.input.press('ArrowDown');
+	await editor.input.press('ArrowDown');
+	await editor.input.press('End');
+	await editor.input.press('ArrowLeft');
+	await editor.input.press('ArrowLeft');
+	await editor.input.press(process.platform === 'darwin' ? 'Control+Space' : 'ControlOrMeta+Space');
+	await content.locator('.stanza-editor-completion-option').filter({ has: page.locator('.stanza-editor-completion-label').getByText('editor.fontSize', { exact: true }) }).click();
+	await commands.runCommand('editor.action.formatDocument');
+	await editor.input.press('ControlOrMeta+S');
+	await expect.poll(async () => (await readUserSettings(page)).content).toMatch(/\n\s+(?:\/\* 💡 \*\/\s*)?"editor.fontSize"\s*:\s*\d+/u);
+	expect((await readUserSettings(page)).content).toContain('// shared JSON extension');
+	expect((await readUserSettings(page)).content).toContain('/* 💡 */');
+	await replace('{ "editor.fontSize": "invalid" }');
+	await expect(editor.element.locator('.squiggly-warning')).not.toHaveCount(0);
+	await replace('{// shared JSON extension\n"editor.fontSize":19,}');
+	await expect(editor.element.locator('.squiggly-warning, .squiggly-error')).toHaveCount(0);
+	await editor.input.press('ControlOrMeta+S');
+	await expect.poll(async () => (await readUserSettings(page)).content).toContain('"editor.fontSize":19');
+	await editor.element.getByText('"editor.fontSize"', { exact: true }).hover();
+	await expect(page.locator('.stanza-editor-hover:visible')).toContainText('Set the editor text size in pixels');
+});
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Sessions browser tabs support keyboard selection, reload and Main cleanup in ${locale}`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
@@ -25,7 +66,7 @@ for (const locale of ['en', 'zh-CN']) {
 			? { code: '代码', browser: '浏览器', tabs: '浏览器标签页', newTab: '打开新的浏览器标签页' }
 			: { code: 'Code', browser: 'Browser', tabs: 'Browser tabs', newTab: 'Open new browser tab' };
 		const page = await workbench.openAgentsWindow(target.kind);
-		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 		await installMainChannelTestClient(page);
 		const commands = new QuickAccess(page);
 		const tabs = page.getByRole('tab', { name: copy.browser, exact: true });
@@ -145,7 +186,7 @@ test('Code panel stays below the main region and retains its views across sessio
 	await expect(toggle).toBeFocused();
 	const panelBefore = await panel.boundingBox();
 	expect(await sidebar.boundingBox()).toEqual(sidebarBefore);
-	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await expect(panel).toBeHidden();
 	await expect(toggle).toHaveCount(0);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -155,13 +196,14 @@ test('Code panel stays below the main region and retains its views across sessio
 	navigation = page.locator('.ash-sessions-activity-content');
 	panel = page.locator('[data-part="panel"]');
 	toggle = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Toggle Code panel', exact: true });
-	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await expect(panel).toBeHidden();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panel).toBeVisible();
 	await toggle.click();
 	await expect(panel).toBeHidden();
-	await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await expect(panel).toBeHidden();
 	await expect(toggle).toHaveCount(0);
 });
@@ -311,7 +353,7 @@ test.describe('Sessions from an Electron Workbench', () => {
 		page.on('pageerror', error => failures.push(error.message));
 		const auxiliary = page.locator('[data-part="auxiliarybar"]');
 		const editors = page.locator('[data-part="editor"]');
-		const navigation = page.locator('.ash-sessions-activity-content');
+		const mode = page.locator('.ash-window-mode-control');
 		await expect(auxiliary).toBeHidden();
 		await expect(page.getByText('Session details', { exact: true })).toHaveCount(0);
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -345,16 +387,16 @@ test.describe('Sessions from an Electron Workbench', () => {
 			await page.keyboard.press('ControlOrMeta+S');
 			await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('const value = 42;\n');
 			const input = await editor.input.elementHandle();
-			await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+			await mode.getByRole('button', { name: /^Chat/u }).click();
 			await expect(auxiliary).toBeHidden();
-			await expect(editors).toBeHidden();
+			await expect(page.locator('.ash-chatgpt-widget')).toBeVisible();
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await expect(editors).toBeVisible();
 			await editor.waitForEditorContents(text => text === 'const value = 42;\n');
 			expect(await editor.input.evaluate((element, original) => element === original, input)).toBe(true);
 			await input?.dispose();
 		} else {
-			await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+			await mode.getByRole('button', { name: /^Chat/u }).click();
 			await expect(auxiliary).toBeHidden();
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await expect(files).toHaveAttribute('aria-selected', 'true');

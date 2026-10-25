@@ -6,7 +6,6 @@
 	align-items: start;
 	gap: 8px;
 	padding: 12px;
-	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	color: var(--ash-foreground);
 	background: var(--ash-dialog-background);
 	font-size: var(--ash-fontSize-body1);
@@ -53,6 +52,17 @@
 	user-select: text;
 	-webkit-user-select: text;
 }
+.ash-notification:not(.expanded) .ash-notification-message,
+.ash-notifications-row:not(.expanded) .ash-notification-message {
+	line-height: var(--ash-toolbar-actionSize);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.ash-notification:not(.expanded) .ash-notification-details,
+.ash-notifications-row:not(.expanded) .ash-notification-details {
+	display: none;
+}
 .ash-notification-source {
 	min-width: 0;
 	overflow-wrap: anywhere;
@@ -63,18 +73,18 @@
 	display: flex;
 	min-height: 0;
 	flex-direction: column;
-	gap: 8px;
-	padding: 8px;
 	overflow-y: auto;
+}
+.ash-notifications-list:not(:empty) {
+	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 .ash-notifications-row {
 	flex-shrink: 0;
-	border-radius: var(--ash-cornerRadius-medium);
+}
+.ash-notifications-row + .ash-notifications-row {
+	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 .ash-notifications-row:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
-}
-.ash-notifications-empty {
-	margin: 8px;
 }

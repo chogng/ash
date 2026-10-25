@@ -1,6 +1,6 @@
 import { IWorkbenchEnvironmentService } from '../../environment/common/environmentService.js';
 import { parseLogLevel } from '../../../../platform/log/common/log.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
 import { ConsoleLogSink } from '../../../../platform/log/common/consoleLogSink.js';
 import type { ILogFileService } from '../../../../platform/log/common/log.js';
 import { LoggerChannelClient } from '../../../../platform/log/common/logIpc.js';
@@ -10,8 +10,8 @@ import { LogService } from '../../../../platform/log/common/logServiceImpl.js';
 export class NativeLogService extends LogService {
 	readonly files: ILogFileService;
 
-	constructor(category: string, @IInstantiationService instantiationService: IInstantiationService, @IWorkbenchEnvironmentService environment: IWorkbenchEnvironmentService) {
-		const client = instantiationService.createInstance(LoggerChannelClient);
+	constructor(category: string, @IMainProcessService mainProcessService: IMainProcessService, @IWorkbenchEnvironmentService environment: IWorkbenchEnvironmentService) {
+		const client = new LoggerChannelClient(mainProcessService.getChannel('logger'));
 		super({
 			level: environment.initialLogLevel ?? (environment.logLevel ? parseLogLevel(environment.logLevel) : undefined),
 			sinks: [new ConsoleLogSink(), {

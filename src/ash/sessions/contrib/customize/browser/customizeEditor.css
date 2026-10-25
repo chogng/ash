@@ -1,0 +1,251 @@
+.ash-customize {
+	box-sizing: border-box;
+	padding: var(--ash-spacing-size320);
+	overflow: auto;
+	color: var(--ash-foreground);
+	background: var(--ash-editor-background);
+}
+
+.ash-customize [hidden] {
+	display: none;
+}
+
+.ash-customize h1 {
+	margin: 0 0 var(--ash-spacing-size280);
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-customize-toolbar,
+.ash-customize-tools,
+.ash-customize-results-heading {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size120);
+	min-width: 0;
+}
+
+.ash-customize-toolbar {
+	flex-wrap: wrap;
+	margin-bottom: var(--ash-spacing-size280);
+}
+
+.ash-customize-toolbar > .ash-tab-list {
+	flex: 0 1 auto;
+	--ash-tab-height: var(--ash-spacing-size280);
+	--ash-tab-border-radius: var(--ash-cornerRadius-large);
+	--ash-tabList-itemContentInset: var(--ash-spacing-size120);
+	--ash-actionBar-gap: var(--ash-spacing-size40);
+	--ash-tabList-activeBackground: var(--ash-toolbar-hoverBackground);
+	--ash-tabList-hoverBackground: color-mix(
+		in srgb,
+		var(--ash-tabList-activeBackground) 50%,
+		transparent
+	);
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-regular);
+}
+
+.ash-customize-toolbar > .ash-segmented-control {
+	flex-shrink: 0;
+}
+
+.ash-customize-tools {
+	flex: 1 1 280px;
+	justify-content: flex-end;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-customize-tools > .ash-input-box {
+	flex: 1 1 200px;
+	max-width: 360px;
+	min-width: 100px;
+}
+
+.ash-customize .ash-customize-search {
+	position: relative;
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-customize .ash-customize-search > .ash-icon {
+	position: absolute;
+	inset-inline-start: var(--ash-spacing-size80);
+	top: 50%;
+	translate: 0 -50%;
+	color: var(--ash-input-placeholderForeground);
+	pointer-events: none;
+}
+
+.ash-customize .ash-customize-search > input {
+	padding-inline-start: calc(
+		var(--ash-lxiconFontSize) + 2 * var(--ash-spacing-size80)
+	);
+}
+
+.ash-customize-actions {
+	flex-shrink: 0;
+	--ash-actionBar-gap: var(--ash-spacing-size80);
+}
+
+.ash-customize-actions .ash-button-quiet {
+	width: 28px;
+	padding: 0;
+}
+
+.ash-customize-actions .ash-button-quiet .ash-icon-label-container,
+.ash-customize-actions .ash-button-quiet > .ash-dropdown-menu-indicator {
+	display: none;
+}
+
+.ash-menu.ash-customize-add-menu {
+	box-sizing: border-box;
+	min-width: 240px;
+	padding: var(--ash-spacing-size80);
+}
+
+.ash-customize-add-menu.ash-menu .ash-button {
+	height: var(--ash-spacing-size360);
+	min-height: var(--ash-spacing-size360);
+	gap: var(--ash-spacing-size120);
+	padding: 0 var(--ash-spacing-size80);
+}
+
+.ash-customize-panel {
+	min-width: 0;
+}
+
+.ash-customize-hero {
+	padding: var(--ash-spacing-size320);
+	margin-bottom: var(--ash-spacing-size280);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-xLarge);
+	background: var(--ash-sideBar-background);
+}
+
+.ash-customize-hero h2 {
+	margin: 0 0 var(--ash-spacing-size120);
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-customize-hero p {
+	margin: 0;
+	line-height: 1.5;
+	color: var(--ash-description-foreground);
+}
+
+.ash-customize-results-heading {
+	justify-content: space-between;
+}
+
+.ash-customize-results-heading h2 {
+	margin: 0;
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-customize-message {
+	color: var(--ash-description-foreground);
+	line-height: 1.5;
+	white-space: pre-wrap;
+	margin: var(--ash-spacing-size80) 0 var(--ash-spacing-size200);
+}
+
+.ash-customize-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--ash-spacing-size160);
+	margin-bottom: var(--ash-spacing-size240);
+}
+
+.ash-customize-card {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--ash-spacing-size160);
+	min-width: 0;
+	padding: var(--ash-spacing-size200);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-xLarge);
+	background: var(--ash-sideBar-background);
+}
+
+.ash-customize-card:hover,
+.ash-customize-card:focus-within {
+	border-color: var(--ash-contrastBorder, var(--ash-widget-border));
+	box-shadow: 0 2px 8px
+		color-mix(in srgb, var(--ash-widget-shadow) 20%, transparent);
+}
+
+.ash-customize-card-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 48px;
+	height: 48px;
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-large);
+	color: var(--ash-description-foreground);
+}
+
+.ash-customize-card-content {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-customize-card .ash-customize-card-name {
+	display: block;
+	max-width: 100%;
+	padding: 0;
+	min-height: 28px;
+	text-align: left;
+	font-weight: var(--ash-fontWeight-semiBold);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-customize-card-description {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	overflow: hidden;
+	line-height: 1.5;
+	margin: var(--ash-spacing-size40) 0;
+	color: var(--ash-description-foreground);
+	overflow-wrap: anywhere;
+}
+
+.ash-customize-card-metadata {
+	font-size: var(--ash-fontSize-body2);
+	line-height: 1.5;
+	margin: var(--ash-spacing-size80) 0 0;
+	color: var(--ash-description-foreground);
+	overflow-wrap: anywhere;
+}
+
+.ash-customize-card-open {
+	flex-shrink: 0;
+}
+
+.ash-customize.narrow {
+	padding: var(--ash-spacing-size200);
+}
+
+.ash-customize.narrow .ash-customize-grid {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.ash-customize.narrow .ash-customize-tools {
+	flex-basis: 100%;
+}
+
+.ash-customize.narrow .ash-customize-tools > .ash-input-box {
+	max-width: none;
+}
+
+.hc-black .ash-customize-card,
+.hc-light .ash-customize-card {
+	box-shadow: none;
+}

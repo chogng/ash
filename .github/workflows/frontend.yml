@@ -52,7 +52,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Check localization, styles and generated contracts
         run: |
-          pnpm run prepare:generated
+          pnpm run valid-layers-check
           pnpm exec bun build/resources/localization.ts --check
           pnpm stylelint
           ./node_modules/.bin/bun check -p tsconfig.protocol.json --all

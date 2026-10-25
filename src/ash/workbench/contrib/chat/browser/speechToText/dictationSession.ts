@@ -37,6 +37,17 @@ function publishEditor(): void {
 	editorChanged.fire();
 }
 
+function finishRecording(current: EditorRecording): void {
+	if (recording !== current) return;
+	recording = undefined;
+	current.lifetime.dispose();
+	if (!current.cancelled && current.wholeDraft && current.committed) {
+		const { editor, service, surface } = current;
+		samples.set(editor, { service, text: current.committed, backend: service.currentBackend, surface, disposal: editor.onDidDispose(() => settleSample(editor, false)) });
+	}
+	publishEditor();
+}
+
 export function isDictating(): boolean { return !!recording || !!pending; }
 export function activeDictationEditor(): ICodeEditor | undefined { return recording?.editor ?? pending?.editor; }
 export function isDictationActiveForEditor(editor: ICodeEditor): boolean { return activeDictationEditor() === editor; }
@@ -69,15 +80,6 @@ async function bindEditor(service: IChatSpeechToTextService, editor: ICodeEditor
 	recording = current;
 	const abort = (): void => { if (recording === current) cancelDictation(); };
 	if (signal) lifetime.add(addDisposableListener(signal, 'abort', abort, { once: true }));
-	const clear = (): void => {
-		if (recording !== current) return;
-		recording = undefined;
-		lifetime.dispose();
-		if (!current.cancelled && current.wholeDraft && current.committed) {
-			samples.set(editor, { service, text: current.committed, backend: service.currentBackend, surface, disposal: editor.onDidDispose(() => settleSample(editor, false)) });
-		}
-		publishEditor();
-	};
 	lifetime.add(service.onDidUpdateTranscript(event => {
 		if (recording !== current || current.cancelled || !event.finalizedText.startsWith(current.committed)) return;
 		const text = event.finalizedText.slice(current.committed.length);
@@ -95,7 +97,9 @@ async function bindEditor(service: IChatSpeechToTextService, editor: ICodeEditor
 	}));
 	lifetime.add(editor.onWillChangeModel(() => cancelDictation()));
 	lifetime.add(editor.onDidDispose(() => cancelDictation()));
-	lifetime.add(service.onDidChangeState(() => { if (!service.isBusy) clear(); }));
+	// Capture can become idle before its finalization promise settles. Keep the
+	// editor bound so another submit waits for the same final transcript or error.
+	lifetime.add(service.onDidChangeState(() => { if (!service.isBusy && !current.stopping) finishRecording(current); }));
 	const timeout = window.setTimeout(() => { if (recording === current) void stopDictation().catch(error => logService.error(error)); }, 20 * 60 * 1000);
 	lifetime.add(toDisposable(() => window.clearTimeout(timeout)));
 	current.starting = service.start(window, surface);
@@ -104,8 +108,8 @@ async function bindEditor(service: IChatSpeechToTextService, editor: ICodeEditor
 		await current.starting;
 		if (current.cancelled) throw canceled();
 		// Provider acquisition can finish before Started arrives. The service still owns that pending capture.
-		if (!service.isBusy) clear();
-	} catch (error) { clear(); throw error; }
+		if (!service.isBusy && !current.stopping) finishRecording(current);
+	} catch (error) { finishRecording(current); throw error; }
 }
 
 export async function stopDictation(): Promise<void> {
@@ -113,8 +117,12 @@ export async function stopDictation(): Promise<void> {
 	if (!current && pending) { await pending.promise; return stopDictation(); }
 	if (!current) return releasing;
 	current.stopping ??= (async () => {
-		await current.starting;
-		if (!current.cancelled) await current.service.stopAndTranscribe();
+		try {
+			await current.starting;
+			if (!current.cancelled) await current.service.stopAndTranscribe();
+		} finally {
+			finishRecording(current);
+		}
 	})();
 	return current.stopping;
 }

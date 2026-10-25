@@ -1,4 +1,5 @@
-use super::{exposed_name, slug};
+use super::exposed_name;
+use super::slug;
 use ash_config::McpServerId;
 
 #[test]
@@ -10,7 +11,34 @@ fn aliases_are_valid_bounded_and_preserve_exact_identity_in_digest() {
     let dotted = exposed_name(&server, "docs.search").expect("valid alias");
     let underscored = exposed_name(&server, "docs_search").expect("valid alias");
     assert_ne!(dotted, underscored);
-    assert!(dotted.as_str().len() <= 128);
+    assert!(dotted.as_str().len() <= 64);
+}
+
+#[test]
+fn long_registry_tool_aliases_fit_provider_limits_without_collisions() {
+    let server = McpServerId::new("marketplace:ash.pdf-reading@ash:mcp:pdf-reading").unwrap();
+    for remote in ["pdf_read", "pdf_render_page", &"x".repeat(200), "🔥"] {
+        let name = exposed_name(&server, remote).unwrap();
+        assert!(name.as_str().len() <= 64, "{name:?}");
+        assert!(
+            name.as_str()
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+        );
+        assert_eq!(name, exposed_name(&server, remote).unwrap());
+    }
+    let prefix = "x".repeat(200);
+    assert_ne!(
+        exposed_name(&server, &format!("{prefix}a")).unwrap(),
+        exposed_name(&server, &format!("{prefix}b")).unwrap()
+    );
+    let short = McpServerId::new("user:mcp:docs").unwrap();
+    assert!(
+        exposed_name(&short, "docs.search")
+            .unwrap()
+            .as_str()
+            .starts_with("mcp_user_mcp_docs_docs_search_")
+    );
 }
 
 #[test]

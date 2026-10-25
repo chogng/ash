@@ -39,6 +39,20 @@ Exercise the consuming extension through registration, invocation and disposal;
 for new privileged operations also verify denial and cancellation. When testing
 with substituted OS actions, report which native behavior remains untested.
 
+## Declarative keymaps
+
+A package can contribute `keybindings` without a JavaScript entry point. Each entry
+declares `command`, `key`, optional `mac`/`linux`/`win` overrides, an optional `when`
+expression and JSON `args`. An empty platform override disables that binding on
+that platform. Bindings use the client keyboard platform, respect user overrides,
+and are removed when the package is disabled, uninstalled or its host is disposed.
+Non-built-in packages currently admit the eight selection and line-editing actions in
+the optional keymap below, without arguments. General Workbench commands and
+argument-bearing bindings are excluded from external declarative assets. Built-in
+bindings retain their host-owned command contract. Context matching uses the
+existing Workbench keybinding service. Removing another package's binding with a `-command` entry
+is unsupported. See the optional [keymap package](../../extensions/keymap-sublime/package.json).
+
 ## Using the API
 
 ```ts
@@ -62,6 +76,19 @@ client-owned documents and configuration in `workspace`, UI and comparison opera
 `window`, language providers, tasks, debugging, terminal providers, speech and SCM providers.
 Each group exposes implemented domain operations with self-contained TypeScript types.
 Registration, execution and events retain their existing admission and disposal owners.
+
+`languages.registerDocumentFormattingEditProvider` registers document formatting for
+the selected language IDs. The provider receives an immutable document snapshot,
+indentation options and a cancellation token, and returns `TextEdit[]`; the host
+applies current-version edits through its existing undo and save owners. Disposing
+the registration or disabling the extension withdraws the provider.
+
+`languages.getJsonSchemaContributions()` reads detached JSON schemas and their file
+patterns from the window's schema registry. `languages.onDidChangeJsonSchemas`
+invalidates cached analysis when schemas or associations change. The consuming
+[`json-language-features`](../../extensions/json-language-features/README.md) extension
+owns JSON/JSONC editing enhancements; neither API grants schema mutation or network
+access. Configuration parsing and comment-preserving file editing remain host-owned.
 
 `context.storage.get(key)` reads a fresh JSON value from this extension's profile state;
 `update(key, value)` stores one value, or removes it with `undefined`. Missing keys return
@@ -182,3 +209,7 @@ selection, theme and accessibility owners; it keeps only a projection of provide
 Disposing the registration or retiring the extension removes the view and cancels
 in-flight requests. Nodes are bounded to 10,000 per provider, item text to 4,096
 characters, IDs to 1,024 characters and rename input to 32,768 characters.
+
+### Product window metadata
+
+Declare `ashUiTargets` in an editor extension's `package.json` as `["ide"]`, `["agents"]`, or `["ide", "agents"]`. Package builders preserve it as `uiTargets` in the signed market `catalog.json`; local Plugin manifests use `uiTargets` directly. Marketplace, details and recommendations consume this declaration. Omission preserves an unknown audience for legacy packages and does not imply shared support. Recommendation rules and capability types cannot override it. This metadata is separate from OS/runtime compatibility and execution authorization.

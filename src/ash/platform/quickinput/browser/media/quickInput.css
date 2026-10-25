@@ -53,7 +53,12 @@
 		var(--ash-spacing-size40);
 }
 
+.ash-quick-pick:not(.anchored) > .ash-quick-pick-input {
+	cursor: grab;
+}
+
 .ash-quick-pick-input input {
+	cursor: text;
 	height: 26px;
 	padding: 0 var(--ash-spacing-size80);
 	border: var(--ash-strokeThickness) solid

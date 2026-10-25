@@ -1,23 +1,166 @@
-.ash-chat-context-reference-control {
-	width: 2em;
+/* The editor positions the host; one flex row owns the complete attachment surface. */
+.ash-chat-code-reference-widget {
+	width: max-content;
 	height: var(--ash-chat-context-reference-height);
+}
+
+.ash-chat-reference-attachment-widget {
+	width: max-content;
+	height: var(--ash-chat-context-reference-height);
+}
+
+.ash-chat-reference-attachment {
+	display: flex;
+	align-items: center;
+	box-sizing: border-box;
+	height: var(--ash-chat-context-reference-height);
+	gap: var(--ash-spacing-size40);
+	padding-inline: var(--ash-spacing-size40);
+	color: var(--ash-chat-slashCommandForeground);
+	background: var(--ash-chat-slashCommandBackground);
+	border-radius: var(--ash-cornerRadius-small);
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+}
+
+.ash-chat-reference-attachment > .ash-button {
+	min-width: 0;
+	height: 100%;
+	padding: 0;
+	color: inherit;
+	font: inherit;
+}
+
+.ash-chat-reference-attachment-source {
+	white-space: nowrap;
+}
+
+.ash-chat-reference-attachment > .ash-button:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-chat-reference-attachment.selected {
+	background: var(--ash-editor-inactiveSelectionBackground);
+}
+
+.input-focused .ash-chat-reference-attachment.selected {
+	background: var(--ash-editor-selectionBackground);
+}
+
+.ash-chat-code-reference-chip {
+	display: flex;
+	align-items: center;
+	box-sizing: border-box;
+	max-width: 100%;
+	height: var(--ash-chat-context-reference-height);
+	gap: var(--ash-spacing-size40);
+	padding: 0 var(--ash-spacing-size40);
+	border: var(--ash-strokeThickness) solid transparent;
+	/* The inline label keeps the message font and uses the Workbench text line box. */
+	line-height: 1.4;
+	color: var(--ash-chat-slashCommandForeground);
+	background-color: var(--ash-chat-slashCommandBackground);
+	border-radius: var(--ash-cornerRadius-small);
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+}
+
+.ash-chat-code-reference-source {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 100%;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.ash-chat-code-reference-source:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-chat-code-reference-source > .ash-icon-label {
+	max-width: 100%;
+	height: 100%;
+}
+
+.ash-chat-code-reference-chip > .ash-chat-attachment-remove {
+	flex: 0 0 auto;
+	height: 100%;
+	padding: 0;
+	color: inherit;
+}
+
+.ash-chat-code-reference-chip > .ash-chat-attachment-remove:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-chat-attachment-chip {
+	display: flex;
+	align-items: center;
+	box-sizing: border-box;
+	height: var(--ash-chat-context-reference-height);
+	gap: var(--ash-spacing-size40);
+	padding-inline: var(--ash-spacing-size40);
+	color: var(--ash-foreground);
 	background: var(--ash-button-secondaryBackground);
 	border-radius: var(--ash-cornerRadius-small);
 	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 }
 
-.ash-chat-context-reference-control > .ash-button {
-	width: 100%;
+.ash-chat-attachment-chip > .ash-button {
+	min-width: 0;
 	height: 100%;
 	padding: 0;
+	color: inherit;
+	font: inherit;
 }
 
-.ash-chat-context-reference-control img {
-	width: 20px;
-	height: 20px;
-	max-width: 100%;
-	max-height: 100%;
+.ash-chat-attachment-source {
+	white-space: nowrap;
+}
+
+.ash-chat-attachment-source > img {
+	flex: 0 0 auto;
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
 	object-fit: contain;
+}
+
+.ash-chat-attachment-chip > .ash-button:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-chat-attachment-chip.selected {
+	background: var(--ash-editor-inactiveSelectionBackground);
+}
+
+.input-focused .ash-chat-attachment-chip.selected {
+	background: var(--ash-editor-selectionBackground);
+}
+
+.ash-chat-code-reference-icon > span {
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
+}
+
+.ash-chat-code-reference-chip.selected {
+	background-color: var(--ash-editor-inactiveSelectionBackground);
+	background-image: linear-gradient(
+		var(--ash-chat-slashCommandBackground),
+		var(--ash-chat-slashCommandBackground)
+	);
+}
+
+.input-focused .ash-chat-code-reference-chip.selected {
+	background-color: var(--ash-editor-selectionBackground);
 }
 
 .ash-chat-context-reference-preview {

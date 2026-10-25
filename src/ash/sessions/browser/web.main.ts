@@ -28,7 +28,7 @@ import { workspaceFromIdentifier } from '../../platform/workspace/common/workspa
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import type { Workbench } from './workbench.js';
 import { createSessionsWorkbench } from './workbenchFactory.js';
-import { TitlebarPart } from './parts/titlebar/titlebarPart.js';
+import { TitlebarPart } from './parts/titlebarPart.js';
 import { BrowserStorageService } from '../../workbench/services/storage/browser/storageService.js';
 import { LogService } from '../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
@@ -90,6 +90,7 @@ export class SessionsBrowserMain extends Disposable {
 					'workbench.contrib.partsSplash',
 					'workbench.contrib.webUpdate',
 					'workbench.contrib.preferences',
+					'workbench.contrib.extensionRecommendations',
 					'workbench.contrib.snippets',
 					'workbench.contrib.defaultFormatter',
 					'workbench.contrib.sessionsLayout',

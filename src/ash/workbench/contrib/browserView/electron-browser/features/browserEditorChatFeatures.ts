@@ -1,10 +1,13 @@
+import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
+import { IChatContextPickService, picksWithPromiseFn } from '../../../chat/browser/attachments/chatContextPickService.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { encodeBase64 } from '../../../../../base/common/buffer.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { IChatContextPickService, type ChatContextPick } from '../../../../services/chat/common/chatContextService.js';
+
 import type { IBrowserViewModel } from '../../common/browserView.js';
 import { BrowserEditor, BrowserEditorContribution } from '../browserEditor.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -49,8 +52,10 @@ export class BrowserEditorChatIntegration extends BrowserEditorContribution {
 }
 
 /** Main owns the page; this model-scoped source owns immutable user-selected context snapshots. */
+interface CapturedBrowserContext { readonly label: string; readonly description?: string; readonly attachment: ChatContextAttachment; }
+
 class BrowserPageSelections extends Disposable {
-	private readonly snapshots = new Map<string, ChatContextPick>();
+	private readonly snapshots = new Map<string, CapturedBrowserContext>();
 	private readonly comments = new Map<string, string>();
 	private readonly status = this._register(new Emitter<string>());
 	private epoch = 0;
@@ -59,11 +64,11 @@ class BrowserPageSelections extends Disposable {
 
 	constructor(public readonly model: IBrowserViewModel, @IChatContextPickService contexts: IChatContextPickService) {
 		super();
-		this._register(contexts.registerPicker({
-			id: 'browser.selection.' + crypto.randomUUID(),
-			label: localize({ bundle: 'ash.workbench', key: 'browser.selectionContext' }, 'Browser selections'),
+		const label = localize({ bundle: 'ash.workbench', key: 'browser.selectionContext' }, 'Browser selections');
+		this._register(contexts.registerChatContextItem({
+			type: 'pickerPick', label, icon: Lxicon.code,
 			isEnabled: () => this.snapshots.size > 0,
-			providePicks: async query => [...this.snapshots.values()].filter(item => (item.label + ' ' + item.description).toLowerCase().includes(query.toLowerCase())),
+			asPicker: () => ({ placeholder: localize('chat.context.select', 'Select {0}', label), picks: picksWithPromiseFn(async query => [...this.snapshots.values()].filter(item => (item.label + ' ' + item.description).toLowerCase().includes(query.toLowerCase())).map(item => ({ label: item.label, description: item.description, asAttachment: () => item.attachment }))) }),
 		}));
 		this._register(model.onWillDispose(() => this.dispose()));
 		this._register(model.onDidClose(() => this.dispose()));
@@ -145,7 +150,7 @@ class BrowserPageSelections extends Disposable {
 		this.addSnapshot(fullPage ? 'full-page' : 'page', { label: name, description: url, attachment: { id: this.model.id + (fullPage ? ':full-page' : ':page'), name, kind: 'image', resource: URI.parse(url), resolve: async () => ({ name, kind: 'image', content }) } });
 		this.status.fire(localize({ bundle: 'ash.workbench', key: 'browser.pageCaptured' }, 'Screenshot captured. Choose Browser selections in Chat to attach it.'));
 	}
-	private addSnapshot(id: string, pick: ChatContextPick): void {
+	private addSnapshot(id: string, pick: CapturedBrowserContext): void {
 		if (!this.snapshots.has(id) && this.snapshots.size >= 50) {
 			const retired = this.snapshots.keys().next().value!;
 			this.snapshots.delete(retired);

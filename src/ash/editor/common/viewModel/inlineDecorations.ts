@@ -23,7 +23,8 @@ export class InlineDecoration {
 	constructor(
 		public readonly range: Range,
 		public readonly inlineClassName: string,
-		public readonly type: InlineDecorationType
+		public readonly type: InlineDecorationType,
+		public readonly widthInEm?: number,
 	) { }
 }
 
@@ -267,12 +268,12 @@ export class InjectedTextInlineDecorationsComputer implements IInlineDecorations
 										? InlineDecorationType.RegularAffectingLetterSpacing
 										: InlineDecorationType.Regular
 							);
-							inlineDecorations.push(new InlineDecoration(range, options.inlineClassName, type));
+							inlineDecorations.push(new InlineDecoration(range, options.inlineClassName, type, options.widthInEm));
 						}
 					}
 				}
 				if (injectedTextEndOffsetInInputWithInjections <= lineEndOffsetInInputWithInjections) {
-					totalInjectedTextLengthBefore += length;
+					totalInjectedTextLengthBefore += length - (options.replaceLength ?? 0);
 					currentInjectedOffset++;
 				} else {
 					// injected text breaks into next line, process it again

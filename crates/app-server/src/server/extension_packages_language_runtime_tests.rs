@@ -519,6 +519,7 @@ impl ExtensionSource for LanguageRegistry {
         Ok(SearchPackagesResult {
             unavailable_sources: Vec::new(),
             packages: vec![PackageSummary {
+                ui_targets: None,
                 id: "example.demo-language".into(),
                 version: "1.0.0".into(),
                 package_type: "language".into(),
@@ -531,6 +532,7 @@ impl ExtensionSource for LanguageRegistry {
     fn get(&self, _: GetPackageRequest) -> Result<PackageDetails, ExtensionsClientError> {
         let payload = LanguagePayload::new();
         Ok(PackageDetails {
+            ui_targets: None,
             package: payload.package,
             package_type: "language".into(),
             display_name: "Demo Language".into(),

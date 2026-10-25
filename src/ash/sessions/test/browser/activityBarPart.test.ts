@@ -26,7 +26,7 @@ const { HoverService, IHoverService } = await import('../../../platform/hover/br
 const { Event } = await import('../../../base/common/event.js');
 const { setARIAContainer } = await import('../../../base/browser/ui/aria/aria.js');
 const { ActivityBar } = await import('../../browser/parts/activitybar/activityBarPart.js');
-const { TitlebarPart } = await import('../../browser/parts/titlebar/titlebarPart.js');
+const { TitlebarPart } = await import('../../browser/parts/titlebarPart.js');
 const { MenusRegistry, IMenuService } = await import('../../../platform/actions/common/actions.js');
 const { MenuService } = await import('../../../platform/actions/common/menuService.js');
 const { ContextKeyService, IContextKeyService } = await import('../../../platform/contextkey/browser/contextKeyService.js');
@@ -116,12 +116,12 @@ test('Chat navigation includes Search and selects New, Projects and Creator with
 			{ icon: 'add', disabled: false },
 			{ icon: 'search', disabled: false },
 			{ icon: 'projects', disabled: false },
-			{ icon: 'symbol-color', disabled: false },
+			{ icon: 'artifacts', disabled: false },
 			{ icon: 'account', disabled: false },
 		]);
 		assert.deepEqual([...bar.domNode.querySelectorAll('.ash-sessions-activity-top, .ash-sessions-activity-bottom')].map(group =>
 			[...group.querySelectorAll('button')].map(button => button.textContent),
-		), [['New', 'Search', 'Projects', 'Creator'], ['Accounts']]);
+		), [['New', 'Search', 'Projects', 'Artifacts'], ['Accounts']]);
 		assert.ok(buttons.every(button => !button.classList.contains('icon-only')));
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item > button.ash-sessions-activity-item').length, 4);
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
@@ -131,7 +131,7 @@ test('Chat navigation includes Search and selects New, Projects and Creator with
 		assert.equal(buttons[0]?.getAttribute('aria-current'), null);
 		assert.equal(buttons[2]?.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'projects');
 		buttons[3]?.click();
-		assert.equal(buttons[3]?.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'symbol-color');
+		assert.equal(buttons[3]?.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'artifacts');
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
 		buttons[0]?.click();
 		assert.deepEqual(selectedActions, ['chat', 'projects', 'creator', 'chat']);
@@ -274,9 +274,9 @@ test('navigation order survives a new window and includes new menu contributions
 	assert.equal(bar.domNode.querySelectorAll('button')[2], buttons[3]);
 	await storage.flush();
 	using restored = registerTestComponentServices(services).createInstance(ActivityBar, document.body, { showAccountMenu() { } });
-	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 4).map(button => button.textContent), ['New', 'Search', 'Creator', 'Projects']);
+	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 4).map(button => button.textContent), ['New', 'Search', 'Artifacts', 'Projects']);
 	using contribution = MenusRegistry.appendMenuItem(Menus.ActivityBar, { command: { id: 'test.activity', title: 'Test action', icon: Lxicon.chat2 }, order: 60 });
-	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.textContent), ['New', 'Search', 'Creator', 'Projects', 'Test action', 'Accounts']);
+	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.textContent), ['New', 'Search', 'Artifacts', 'Projects', 'Test action', 'Accounts']);
 	assert.equal(restored.domNode.querySelector('button')!.getAttribute('aria-current'), 'page');
 });
 
@@ -332,7 +332,7 @@ test('Code navigation has its own actions and order while Chat keeps its saved n
 	storage.store('sessions.activityBar.actionOrder', JSON.stringify(chatOrder.filter(id => id !== 'sessions.search')), StorageScope.PROFILE, StorageTarget.USER);
 	using bar = registerTestComponentServices(services).createInstance(ActivityBar, document.body, { showAccountMenu() { } });
 	const labels = () => [...bar.domNode.querySelectorAll('.ash-sessions-navigation button')].map(button => button.textContent);
-	assert.deepEqual(labels(), ['Creator', 'New', 'Search', 'Projects']);
+	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects']);
 	contexts.setContext('sessions.workspaceMode', 'code');
 	assert.deepEqual(labels(), ['New', 'Search', 'Automations', 'Collab', 'Agent Teams', 'Symphony']);
 	assert.equal(bar.domNode.querySelector('[data-action-id="sessions.open.code"]'), null);
@@ -342,7 +342,7 @@ test('Code navigation has its own actions and order while Chat keeps its saved n
 	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Agent Teams', 'Symphony']);
 	assert.equal(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE), JSON.stringify(chatOrder));
 	contexts.setContext('sessions.workspaceMode', 'chat');
-	assert.deepEqual(labels(), ['Creator', 'New', 'Search', 'Projects']);
+	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects']);
 	contexts.setContext('sessions.workspaceMode', 'code');
 	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Agent Teams', 'Symphony']);
 });

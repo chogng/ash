@@ -5,6 +5,9 @@ import { URI } from '../../../../../base/common/uri.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Range } from '../../../../../editor/common/core/range.js';
+import { Selection } from '../../../../../editor/common/core/selection.js';
+import { TextModel } from '../../../../../editor/common/model/textModel.js';
+import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 import { IBulkEditService, ResourceEdit, ResourceFileEdit, ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
 import type { LanguageWorkspaceEdit } from '../../../../../editor/common/languages.js';
 import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
@@ -25,6 +28,47 @@ import { EditSources } from '../../../../../editor/common/textModelEditSource.js
 ensureNoDisposablesAreLeakedInTestSuite();
 const first = URI.file('/workspace/one.ts');
 const second = URI.file('/workspace/two.ts');
+
+test('An explicit editor-owned text model keeps paste and undo on its own history without file acquisition', async () => {
+	using fixture = new BulkEditTestServices([]);
+	using model = new TextModel('Before  after');
+	const selections = [new Selection(1, 8, 1, 8)];
+	const editor = { getModel: () => model, getSelections: () => selections } as unknown as ICodeEditor;
+	const result = await fixture.service.apply([new ResourceTextEdit(model.uri, { range: new Range(1, 8, 1, 8), text: 'copied text' }, model.getVersionId())], { editor });
+	assert.equal(result.isApplied, true);
+	assert.equal(model.getText(), 'Before copied text after');
+	assert.deepEqual(fixture.models.getModels(), []);
+	assert.deepEqual(fixture.store.saved, []);
+	if (!result.isApplied) assert.fail('The editor edit must apply');
+	let restoredSelection: readonly Selection[] | null | undefined;
+	using listener = model.onDidChangeContent(event => { restoredSelection = event.resultingSelection; });
+	await result.undo();
+	assert.equal(model.getText(), 'Before  after');
+	assert.deepEqual(restoredSelection, selections);
+	model.redo();
+	assert.equal(model.getText(), 'Before copied text after');
+	model.applyOperations([{ range: new Range(1, 1, 1, 1), text: 'Later ' }]);
+	await assert.rejects(result.undo(), /changed before the paste option/u);
+	assert.equal(model.getText(), 'Later Before copied text after');
+});
+
+test('Retiring an editor during paste cannot roll back a newer draft from a content listener', async () => {
+	using fixture = new BulkEditTestServices([]);
+	using model = new TextModel('original');
+	const editor = { getModel: () => model, getSelections: () => null } as unknown as ICodeEditor;
+	const controller = new AbortController();
+	let retired = false;
+	using listener = model.onDidChangeContent(() => {
+		if (retired) return;
+		retired = true;
+		controller.abort();
+		model.setValue('A newer draft');
+	});
+	await assert.rejects(fixture.service.apply([new ResourceTextEdit(model.uri, { range: model.getFullModelRange(), text: 'paste' })], { editor, token: controller.signal }), /changed while the edit/u);
+	assert.equal(model.getText(), 'A newer draft');
+	assert.deepEqual(fixture.models.getModels(), []);
+	assert.deepEqual(fixture.store.saved, []);
+});
 
 function textEdit(resource: URI, text: string): LanguageWorkspaceEdit {
 	return { entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 1, 1, 1), text }] }] };

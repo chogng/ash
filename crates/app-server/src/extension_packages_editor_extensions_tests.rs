@@ -148,6 +148,7 @@ impl ExtensionSource for Registry {
         Ok(SearchPackagesResult {
             unavailable_sources: Vec::new(),
             packages: vec![PackageSummary {
+                ui_targets: None,
                 id: "marketplace.demo-plugin".into(),
                 version: "1.0.0".into(),
                 package_type: "plugin".into(),
@@ -160,6 +161,7 @@ impl ExtensionSource for Registry {
     fn get(&self, _: GetPackageRequest) -> Result<PackageDetails, ExtensionsClientError> {
         let payload = Payload::new();
         Ok(PackageDetails {
+            ui_targets: None,
             package: payload.package,
             package_type: "plugin".into(),
             display_name: "Demo".into(),

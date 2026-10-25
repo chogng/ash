@@ -70,7 +70,7 @@ for (const locale of ['en', 'zh-CN']) {
 				await agentsWorkbench.waitForReady();
 			}
 			page = await agentsWorkbench.openAgentsWindow(target.kind);
-			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 			await page.locator('[data-action-id="sessions.newSession"] button').click();
 			const active = (): ReturnType<Page['locator']> => page!.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 			const editor = new Editor(active());
@@ -106,7 +106,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const draftId = await active().getAttribute('data-untitled-session-id');
 			expect(draftId).toBeTruthy();
 			page = await agentsWorkbench.reopenAgentsWindow(application, page);
-			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 			await expect(active()).toHaveAttribute('data-untitled-session-id', draftId!);
 			await new Editor(active()).waitForEditorContents(text => text === 'Keep this unsent lifecycle draft.');
 			const readCatalog = async () => (await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId: created.sessionId })).session;

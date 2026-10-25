@@ -26,6 +26,8 @@ import { InstantiationService } from '../../../../../../platform/instantiation/c
 import type { IKeybindingService } from '../../../../../../platform/keybinding/common/keybinding.js';
 import { BrowserLayoutService, ILayoutService } from '../../../../../../platform/layout/browser/layoutService.js';
 import { QuickInputService } from '../../../../../../platform/quickinput/browser/quickInputService.js';
+import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../../../services/storage/browser/storageService.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
@@ -48,6 +50,7 @@ const { registerCollabViews } = await import('../../../browser/collab.contributi
 const { registerCallView } = await import('../../../../call/browser/call.contribution.js');
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
+services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'collaboration', flushInterval: 0 })));
 const root = document.querySelector<HTMLElement>('#app')!;
 setARIAContainer(root);
 document.querySelector('#title')!.textContent = localize('collaboration.title', 'Collab');

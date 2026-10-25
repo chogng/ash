@@ -5,6 +5,44 @@ use super::language_ids_for;
 use super::validate_manifest;
 
 #[test]
+fn ui_targets_are_explicit_manifest_metadata_with_legacy_absence_preserved() {
+    let legacy = serde_json::json!({
+        "schemaVersion": 2, "packageType": "skill", "source": "official",
+        "id": "ash/review", "version": "1.0.0", "displayName": "Review",
+        "description": "Review changes.", "license": "MIT",
+        "capabilities": [{ "kind": "skill", "id": "review", "path": "skills/review" }]
+    });
+    let manifest: CatalogManifest = serde_json::from_value(legacy.clone()).unwrap();
+    validate_manifest(&manifest).unwrap();
+    assert_eq!(manifest.ui_targets, None);
+    for targets in [
+        serde_json::json!(["ide"]),
+        serde_json::json!(["agents"]),
+        serde_json::json!(["ide", "agents"]),
+    ] {
+        let mut value = legacy.clone();
+        value["uiTargets"] = targets.clone();
+        let manifest: CatalogManifest = serde_json::from_value(value).unwrap();
+        validate_manifest(&manifest).unwrap();
+        assert_eq!(serde_json::to_value(manifest.ui_targets).unwrap(), targets);
+    }
+    for targets in [
+        serde_json::json!([]),
+        serde_json::json!(["ide", "ide"]),
+        serde_json::json!(["agents", "ide", "agents"]),
+        serde_json::json!(["web"]),
+        serde_json::json!("ide"),
+    ] {
+        let mut value = legacy.clone();
+        value["uiTargets"] = targets;
+        let rejected = serde_json::from_value::<CatalogManifest>(value)
+            .map(|manifest| validate_manifest(&manifest).is_err())
+            .unwrap_or(true);
+        assert!(rejected);
+    }
+}
+
+#[test]
 fn editor_family_maps_only_its_editor_asset_to_the_existing_editor_extension_capability() {
     let value = serde_json::json!({
         "schemaVersion": 2, "packageType": "editor", "source": "official",

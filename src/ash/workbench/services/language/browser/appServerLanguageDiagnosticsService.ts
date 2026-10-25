@@ -1,7 +1,7 @@
 import { ITextFileService } from "../../textfile/common/textfiles.js";
 import { VSBuffer } from "../../../../base/common/buffer.js";
 import { Emitter } from "../../../../base/common/event.js";
-import { Disposable, MutableDisposable, combinedDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, combinedDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
@@ -19,7 +19,6 @@ import { AppServerLanguageSupport } from "./appServerLanguageSupport.js";
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { resolveAppServerLanguageDirAccess } from "./appServerLanguageWorkspace.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from "../common/languageDiagnosticsService.js";
-import { acquireJsonLanguageDiagnostics } from '../common/jsonLanguageDiagnostics.js';
 
 const MAX_LANGUAGE_DOCUMENT_BYTES = 10 * 1024 * 1024;
 const SYNCHRONIZE_DELAY_MS = 150;
@@ -177,14 +176,13 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		const key = resource.toString();
 		const existing = this.entries.get(key);
 		if (existing && (existing.model !== model || existing.languageId !== languageId)) throw new Error("One language document resource cannot bind multiple models or languages");
-		const localDiagnostics = this.acquireLocalDiagnostics(resource, languageId, model);
-		if (!target || model.largeFile.tooLargeForSynchronization) return localDiagnostics;
+		if (!target || model.largeFile.tooLargeForSynchronization) return Disposable.None;
 		if (existing) {
 			const reopening = existing.references === 0;
 			if (reopening) existing.modelListener = this.listenToModel(existing);
 			existing.references += 1;
 			if (reopening) this.schedule(existing, true);
-			return combinedDisposable(localDiagnostics, toDisposable(() => this.release(key, existing)));
+			return toDisposable(() => this.release(key, existing));
 		}
 		const entry: LanguageDocumentEntry = {
 			resource,
@@ -213,17 +211,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		}
 		this.entries.set(key, entry);
 		this.schedule(entry, true);
-		return combinedDisposable(localDiagnostics, toDisposable(() => this.release(key, entry)));
-	}
-
-	private acquireLocalDiagnostics(resource: URI, languageId: string, model: TextModel): IDisposable {
-		const diagnostics = new MutableDisposable<IDisposable>();
-		const update = (language: string): void => {
-			diagnostics.clear();
-			if (this.alive) diagnostics.value = acquireJsonLanguageDiagnostics(resource, language, model, () => this.createPublisher(resource));
-		};
-		update(languageId);
-		return combinedDisposable(diagnostics, model.onDidChangeLanguage(event => update(event.newLanguage)));
+		return toDisposable(() => this.release(key, entry));
 	}
 
 	private listenToModel(entry: LanguageDocumentEntry): IDisposable {

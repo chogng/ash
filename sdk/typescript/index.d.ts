@@ -109,6 +109,10 @@ export interface SymbolInformation { name: string; kind: SymbolKind; location: L
 export type DocumentSelector = string | readonly string[];
 export interface CompletionItemProvider { provideCompletionItems(document: TextDocument, position: Position, token: CancellationToken, context: { triggerKind: CompletionTriggerKind; triggerCharacter?: string }): ProviderResult<CompletionItem[] | CompletionList>; }
 export interface HoverProvider { provideHover(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Hover>; }
+export interface FormattingOptions { tabSize: number; insertSpaces: boolean; }
+export interface DocumentFormattingEditProvider { provideDocumentFormattingEdits(document: TextDocument, options: FormattingOptions, token: CancellationToken): ProviderResult<TextEdit[]>; }
+/** Read-only schema metadata from the current window's contribution registry. */
+export interface JsonSchemaContribution { readonly uri: string; readonly fileMatch: readonly string[]; readonly schema: { readonly [key: string]: JsonValue }; }
 export interface DefinitionProvider { provideDefinition(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Location | Location[]>; }
 export interface ReferenceProvider { provideReferences(document: TextDocument, position: Position, context: { includeDeclaration: boolean }, token: CancellationToken): ProviderResult<Location[]>; }
 export interface RenameProvider { prepareRename?(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Range | { range: Range; placeholder: string }>; provideRenameEdits(document: TextDocument, position: Position, newName: string, token: CancellationToken): ProviderResult<WorkspaceEdit>; }
@@ -121,6 +125,9 @@ export namespace languages {
 	function createDiagnosticCollection(name?: string): DiagnosticCollection;
 	function registerCompletionItemProvider(selector: DocumentSelector, provider: CompletionItemProvider, ...triggerCharacters: string[]): Disposable;
 	function registerHoverProvider(selector: DocumentSelector, provider: HoverProvider): Disposable;
+	function registerDocumentFormattingEditProvider(selector: DocumentSelector, provider: DocumentFormattingEditProvider): Disposable;
+	function getJsonSchemaContributions(): Promise<readonly JsonSchemaContribution[]>;
+	const onDidChangeJsonSchemas: Event<void>;
 	function registerDefinitionProvider(selector: DocumentSelector, provider: DefinitionProvider): Disposable;
 	function registerReferenceProvider(selector: DocumentSelector, provider: ReferenceProvider): Disposable;
 	function registerRenameProvider(selector: DocumentSelector, provider: RenameProvider): Disposable;

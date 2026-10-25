@@ -114,6 +114,8 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly contextResourceHost?: IDisposable;
 	/** Actual local OS user directory when supplied by the desktop host. */
 	readonly localUserHome?: URI;
+	/** Granted local profile directory; absent in browser-only hosts. */
+	readonly userDataHome?: URI;
 	/** Opens this host's profile TOML; absent when the host cannot edit a local profile. */
 	readonly editUserConfiguration?: () => Promise<void>;
 	/** Available when the host supplies profile-backed recovery storage. */

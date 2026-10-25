@@ -1,6 +1,5 @@
 import type { IChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { isRecord } from '../../../base/common/types.js';
-import { IMainProcessService } from '../../ipc/common/mainProcessService.js';
 import { ConsoleLogSink } from './consoleLogSink.js';
 import { isLogLevel, LogLevel, AbstractLoggerService, type ILogSink, type LogEntry, type ILogFileService, type ILogFile, type ILogFileReadResult } from './log.js';
 import { LogService } from './logServiceImpl.js';
@@ -11,7 +10,6 @@ const MaxPendingCharacters = 256 * 1024;
 
 /** The authenticated channel supplies the source window; entries cannot choose files. */
 export class LoggerChannelClient extends AbstractLoggerService<LogService> implements ILogSink {
-	private readonly channel: IChannel;
 	private writes: Promise<void> = Promise.resolve();
 	private pendingEntries = 0;
 	private pendingCharacters = 0;
@@ -20,9 +18,8 @@ export class LoggerChannelClient extends AbstractLoggerService<LogService> imple
 	private failure: { error: unknown; } | undefined;
 	readonly files: ILogFileService;
 
-	constructor(@IMainProcessService mainProcessService: IMainProcessService) {
+	constructor(private readonly channel: IChannel) {
 		super();
-		this.channel = mainProcessService.getChannel('logger');
 		this.files = {
 			list: async () => {
 				await this.whenWritten();

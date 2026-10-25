@@ -290,7 +290,8 @@ async function runPageScript(page: Page, cdp: CDPSession, code: string, requestS
 		if (!frame) { throw new Error('Browser script frame is unavailable'); }
 		// Wait for the sandbox document, so an initial about:blank realm cannot select
 		// the parent's terminator before Chromium moves the opaque frame to another process.
-		const ready = await raceCancellationError(frame.waitForFunction(() => location.href === 'about:srcdoc', undefined, { timeout: 5000 }), signal, 'BrowserScriptTimedOut');
+		// The predicate runs in the frame's DOM realm, not in this Node host.
+		const ready = await raceCancellationError(frame.waitForFunction("location.href === 'about:srcdoc'", undefined, { timeout: 5000 }), signal, 'BrowserScriptTimedOut');
 		await ready.dispose();
 		try { scriptSession = await page.context().newCDPSession(frame); }
 		catch (error) {

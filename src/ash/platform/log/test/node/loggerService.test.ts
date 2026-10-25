@@ -37,7 +37,7 @@ suite('Desktop log files', () => {
 			}),
 			registerChannel: () => { throw new Error('Unexpected channel registration'); },
 		});
-		using client = services.createInstance(LoggerChannelClient);
+		using client = new LoggerChannelClient(services.get(IMainProcessService).getChannel('logger'));
 		try {
 			for (let index = 0; index < 10000; index++) { client.log(entry(`diagnostic ${index}`)); }
 			await started.p;
@@ -65,7 +65,7 @@ suite('Desktop log files', () => {
 			}),
 			registerChannel: () => { throw new Error('Unexpected channel registration'); },
 		});
-		using client = services.createInstance(LoggerChannelClient);
+		using client = new LoggerChannelClient(services.get(IMainProcessService).getChannel('logger'));
 		client.log(entry('x'.repeat(1024 * 1024)));
 		client.log(entry('still writable'));
 		await client.flush();
@@ -83,7 +83,7 @@ suite('Desktop log files', () => {
 			getChannel: () => ({ call: async () => { throw failure; }, listen: () => Event.None }),
 			registerChannel: () => { throw new Error('Unexpected channel registration'); },
 		});
-		using client = services.createInstance(LoggerChannelClient);
+		using client = new LoggerChannelClient(services.get(IMainProcessService).getChannel('logger'));
 		const original = console.error;
 		let reports = 0;
 		console.error = () => { reports++; throw new Error('Disconnected console'); };
@@ -101,7 +101,6 @@ suite('Desktop log files', () => {
 			await owner.initialize();
 			const channel = new LoggerChannel(owner);
 			using services = new InstantiationService();
-			assert.throws(() => services.createInstance(LoggerChannelClient), /mainProcessService/);
 			services.registerInstance(IMainProcessService, {
 				_serviceBrand: undefined,
 				getChannel: () => ({
@@ -110,7 +109,7 @@ suite('Desktop log files', () => {
 				}),
 				registerChannel: () => { throw new Error('Unexpected channel registration'); },
 			});
-			using client = services.createInstance(LoggerChannelClient);
+			using client = new LoggerChannelClient(services.get(IMainProcessService).getChannel('logger'));
 			using logger = client.createLogger('agents');
 			logger.info('connection', 'ready', { generation: 2 });
 			logger.error('connection', 'crashed', new Error('carrier exited'));

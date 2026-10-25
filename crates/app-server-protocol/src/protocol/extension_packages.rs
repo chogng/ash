@@ -75,6 +75,17 @@ pub struct ExtensionsPackageSummaryDto {
     pub package_type: String,
     pub display_name: String,
     pub description: String,
+    /// Absent for legacy packages that have not declared their product windows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub ui_targets: Option<Vec<ExtensionsUiTargetDto>>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ExtensionsUiTargetDto {
+    Ide,
+    Agents,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -94,6 +105,23 @@ pub struct ExtensionsSearchResult {
     #[serde(default)]
     pub unavailable_sources: Vec<String>,
     pub packages: Vec<ExtensionsPackageSummaryDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ExtensionsRecommendationPlatformDto {
+    Macos,
+    Linux,
+    Windows,
+    Other,
+}
+
+/// Read-only facts from the connected execution host; never exposes PATH or executable locations.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtensionsRecommendationEnvironmentResult {
+    pub platform: ExtensionsRecommendationPlatformDto,
+    pub executables: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -135,6 +163,9 @@ pub struct ExtensionsPackageDetailsDto {
     pub source: ExtensionsPackageSourceDto,
     pub upstream: Option<ExtensionsUpstreamReferenceDto>,
     pub capabilities: Vec<ExtensionsAvailableCapabilityDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub ui_targets: Option<Vec<ExtensionsUiTargetDto>>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

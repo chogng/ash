@@ -63,7 +63,7 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		let type: IContextKey<string>;
 		let focus: IContextKey<boolean>;
 		let end: IContextKey<boolean>;
-		const controller: QuickInputController = new QuickInputController(this.layoutService.activeContainer, className, {
+		const controller: QuickInputController = this.instantiationService.createInstance(QuickInputController, this.layoutService.activeContainer, className, {
 			onShow: input => {
 				for (const [, controller] of this.inputControllers) {
 					if (controller.currentQuickInput !== input) controller.currentQuickInput?.hide();
@@ -84,7 +84,7 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 			// Dismissing an overlay during a window switch must leave focus in the new window.
 			shouldRestoreFocus: () => this.layoutService.activeContainer === controller.getDomNode().parentElement,
 			onDispose: () => scope.dispose(),
-		});
+		} satisfies ConstructorParameters<typeof QuickInputController>[2]);
 		// Context belongs to this DOM host and is released with it, including standalone editors.
 		scope = this.contextKeyService.createScoped(controller.getDomNode());
 		type = quickInputTypeContextKey.bindTo(scope);
@@ -107,6 +107,10 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 	}
 
 	public focus(): void { this.currentQuickInput?.focus(); }
+
+	public setAlignment(alignment: 'top' | 'center' | { top: number; left: number; }): void {
+		this.controller.setAlignment(alignment);
+	}
 
 	public toggle(): void {
 		if (this.currentQuickInput?.type === QuickInputType.QuickPick) (this.currentQuickInput as IQuickPick<IQuickPickItem>).toggle();

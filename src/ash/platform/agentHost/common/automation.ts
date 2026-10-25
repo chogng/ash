@@ -5,12 +5,23 @@ export type AutomationSession = { readonly type: 'new'; } | { readonly type: 'co
 export type AutomationStatus = 'enabled' | 'paused';
 export type AutomationRunStatus = 'pending' | 'running' | 'needsInput' | 'stopping' | 'completed' | 'failed' | 'stopped' | 'skipped';
 
+export interface PullRequestChecksCondition {
+	readonly type: 'gitHubChecks';
+	readonly host: string;
+	readonly owner: string;
+	readonly repository: string;
+	readonly number: number;
+	readonly accountId: string;
+	readonly credentialRevision: string;
+}
+
 export interface AutomationDefinition {
 	readonly title: string;
 	readonly prompt: string;
 	readonly directory: string;
 	readonly session: AutomationSession;
 	readonly schedule: AutomationSchedule;
+	readonly condition?: PullRequestChecksCondition;
 }
 
 export interface Automation {
@@ -46,6 +57,7 @@ export interface AutomationRunResult {
 
 /** Host automation operations; the Rust backend owns schedules and run history. */
 export interface IAutomationBackendService {
+	readonly supportsPullRequestFollowUp?: boolean;
 	readonly onDidChange: Event<void>;
 	list(): Promise<readonly Automation[]>;
 	save(id: string, revision: number, definition: AutomationDefinition, status: AutomationStatus): Promise<Automation>;

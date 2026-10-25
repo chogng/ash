@@ -2053,8 +2053,15 @@ export class AshApplication extends Disposable {
 							getTitleBarStyle: () => titleBarStyle,
 							...this.windowHostOperations(window, windowDisposables),
 							openWindow: async options => {
+								if (options.forceReuseWindow) {
+									const existing = this.windowsMainService.getLastActiveWindow('workbench');
+									if (existing) {
+										this.windowsMainService.getWindowById(existing.id)!.focus();
+										return;
+									}
+								}
 								const workspace = { ...createEmptyWorkspaceIdentifier(), ...(options.remoteAuthority ? { remoteAuthority: options.remoteAuthority } : {}) };
-								// An empty Workbench requires its own window kind even when the requesting Agents window asks for reuse.
+								// Reuse applies only to IDE windows; Agents keeps its own renderer and state.
 								await this.openWorkspace(workspace, workspaces);
 							},
 							openWorkspace: async (root, forceNewWindow) => { await this.openWorkspace(await workspaces.resolveFolder(root), workspaces, forceNewWindow); },

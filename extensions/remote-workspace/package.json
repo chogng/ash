@@ -1,0 +1,46 @@
+{
+  "name": "remote-workspace",
+  "ashUiTargets": [
+    "ide"
+  ],
+  "publisher": "ash",
+  "version": "1.0.0",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "engines": {
+    "ash": "*"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "ssh-config",
+        "aliases": [
+          "SSH Config",
+          "ssh-config"
+        ],
+        "filenames": [
+          "ssh_config"
+        ],
+        "filenamePatterns": [
+          "**/.ssh/config",
+          "**/ssh_config.d/*"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ssh-config",
+        "scopeName": "source.ssh-config",
+        "path": "./syntaxes/ssh-config.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "ssh-config",
+        "path": "./snippets/ssh-config.json"
+      }
+    ]
+  },
+  "ashDistribution": "marketplace"
+}

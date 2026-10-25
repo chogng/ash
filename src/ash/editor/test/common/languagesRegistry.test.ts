@@ -43,3 +43,31 @@ test("directory globs recognize snippets at the root and in nested profiles", ()
 	}
 	assert.equal(registry.resolveLanguageId({ resource: URI.from({ scheme: "untitled", path: "User/snippets/nested/ruby.json" }) }), "json");
 });
+
+test("exact filename associations use the basename of Windows-style paths", () => {
+	using registry = new LanguagesRegistry();
+	using json = registry.register({ id: "json", extensions: [".json"] });
+	using jsonc = registry.register({ id: "jsonc", filenames: ["tasks.json"] });
+	for (const path of ["C:\\project\\.vscode\\tasks.json", "/repo/.vscode/tasks.json"]) {
+		assert.equal(registry.resolveLanguageId({ resource: URI.file(path) }), "jsonc", path);
+	}
+	assert.equal(registry.resolveLanguageId({ resource: URI.file("C:\\project\\data.json") }), "json");
+	assert.equal(registry.resolveLanguageId({ resource: URI.parse("file:///repo/folder%2Ftasks.json") }), "json");
+});
+
+test("supplemental JSONC associations retain the language name, aliases and MIME types", () => {
+	using registry = new LanguagesRegistry();
+	using jsonc = registry.register({ id: "jsonc", aliases: ["JSON with Comments"], extensions: [".jsonc"], mimetypes: ["application/jsonc"] });
+	using typescript = registry.register({ id: "jsonc", filenames: ["tsconfig.json"] });
+	assert.equal(registry.getLanguageName("jsonc"), "JSON with Comments");
+	assert.equal(registry.getLanguageIdByLanguageName("JSON WITH COMMENTS"), "jsonc");
+	assert.equal(registry.getLanguageIdByLanguageName("jsonc"), "jsonc");
+	assert.equal(registry.getLanguageIdByMimeType("application/jsonc"), "jsonc");
+	assert.equal(registry.resolveLanguageId({ resource: URI.file("/repo/tsconfig.json") }), "jsonc");
+	assert.equal(registry.resolveLanguageId({ resource: URI.file("/repo/settings.jsonc") }), "jsonc");
+	using renamed = registry.register({ id: "jsonc", aliases: ["Commented JSON"] }, { priority: 200 });
+	assert.equal(registry.getLanguageName("jsonc"), "Commented JSON");
+	assert.equal(registry.getLanguageIdByLanguageName("JSON with Comments"), "jsonc");
+	renamed.dispose();
+	assert.equal(registry.getLanguageName("jsonc"), "JSON with Comments");
+});

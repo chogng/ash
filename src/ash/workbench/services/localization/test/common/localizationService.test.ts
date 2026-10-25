@@ -20,7 +20,7 @@ import { AppServerProtocolIncompatibleError } from '../../../../../platform/agen
 import { commandActionLabel } from '../../../../../platform/action/common/action.js';
 import { workspaceTrustPermissionNames } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { JSDOM } from 'jsdom';
-import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
+import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { colorThemeSchemaId, registerColorThemeSchemas } from '../../../themes/common/colorThemeSchema.js';
 import '../../../../common/theme.js';
@@ -66,6 +66,12 @@ suite('Workbench localization', () => {
 			localize('workbench.panel.defaultLocation.title', ''),
 		], ['将面板移到左侧', '将面板移到右侧', '将面板移到顶部', '将面板移到底部', '默认面板位置']);
 		assert.equal(localize('workbench.panel.defaultLocation.invalid', ''), '面板位置必须为左侧、右侧、顶部或底部。');
+		assert.equal(localize('workbench.panel.opensMaximized.title', ''), '面板打开时最大化');
+		assert.deepEqual([
+			localize('workbench.secondarySideBar.defaultVisibility.title', ''),
+			localize('workbench.secondarySideBar.defaultVisibility.maximizedInWorkspace', ''),
+			localize('workbench.secondarySideBar.forceMaximized.title', ''),
+		], ['辅助侧栏默认可见性', '在工作区中最大化', '启动时最大化辅助侧栏']);
 		assert.match(localize('accessibility.editorPanel', ''), /将焦点移入面板[\s\S]*恢复编辑器区域/u);
 		assert.match(localize('accessibility.editorAuxiliaryBar', ''), /最大化辅助侧栏[\s\S]*保留会话和草稿/u);
 	});
@@ -233,7 +239,9 @@ suite('Workbench localization', () => {
 			localization.translate('ash', 'sessions.activity.chat', 'Chat'),
 			localization.translate('ash', 'sessions.mode.code', 'Code'),
 		], ['显示侧边栏', '隐藏侧边栏', '聊天', '代码']);
-		assert.match(localization.translate('ash', 'sessions.activity.help', ''), /聊天和代码共用选中的会话、导航记录、未发送的文字和附件，切换时只改变布局/u);
+		const activityHelp = localization.translate('ash', 'sessions.activity.help', '');
+		assert.match(activityHelp, /每个 ChatGPT 会话和 Agent 会话分别保留自己的历史、未发送的文字和附件/u);
+		assert.match(activityHelp, /每个会话恢复自己的编辑器标签/u);
 		assert.equal(localization.translate('ash', 'chat.modelPicker.context', '{0} context tokens', { '0': '128,000' }), '上下文：128,000 个词元');
 		assert.equal(localization.translate('ash', 'chat.defaultModel.title', 'Default chat model'), '默认聊天模型');
 		assert.deepEqual([
@@ -433,7 +441,7 @@ suite('Workbench localization', () => {
 		const { localize } = await import('../../../../../nls.js');
 		assert.equal(localize('parameterHints.dialog', 'Parameter hints'), '参数提示');
 		assert.equal(localize('chat.providerKeys.manage', 'Manage Model Connections'), '管理模型接入');
-		assert.equal(localize('chat.input.dictate', 'Dictate message'), '语音输入');
+		assert.equal(localize('chat.input.dictate', 'Dictate message'), '听写');
 		assert.equal(localize('dictation.cloudProvider.title', 'Cloud dictation provider'), '云端听写供应商');
 		assert.equal(localize('dictation.cloudProvider.description', 'Choose the cloud transcription provider. Its API key is required.'), '选择云端语音转写供应商，并配置对应的 API 密钥。');
 		assert.equal(localize('dictation.connectionLost', 'Dictation connection lost'), '语音输入连接已断开');
@@ -482,7 +490,9 @@ suite('Workbench localization', () => {
 		try {
 			await localization.whenReady;
 			initializeTestLocalization('zh-CN');
-			using controller = new QuickInputController(dom.window.document.body);
+			using controller = new TestQuickInputService({ container: dom.window.document.body });
+			assert.equal(localize('alignQuickInputTop', 'Align Quick Input Top'), '快速输入顶部对齐');
+			assert.equal(localize('alignQuickInputCenter', 'Align Quick Input Center'), '快速输入居中对齐');
 			using picker = controller.createQuickPick();
 			picker.show();
 			assert.equal(dom.window.document.querySelector('[role="dialog"]')?.getAttribute('aria-label'), '快速选择');
@@ -530,6 +540,7 @@ suite('Workbench localization', () => {
 
 	function createExtensions(): IExtensionManagementService {
 		return {
+			recommendationEnvironment: async () => ({ platform: 'other', executables: [] }),
 			searchPage: async () => { throw new Error('Localization does not use customization paging'); },
 			onDidChangeInstalled: Event.None,
 			sources: async () => ({ revision: 0, sources: [] }),

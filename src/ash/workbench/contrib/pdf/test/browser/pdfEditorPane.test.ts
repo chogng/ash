@@ -16,7 +16,7 @@ import { WorkspacePdfDocumentLoader } from "../../../../../../../extensions/pdf-
 import type { IPdfRenderResult, IPdfRenderer, PdfRenderRequest } from "../../../../../../../extensions/pdf-viewer/browser/pdfRenderer.js";
 import { matchPdfEditor } from "../../../../../../../extensions/pdf-viewer/browser/pdfEditorInput.js";
 import { emptyPdfAnnotationDocument, type PdfAnnotationDocument } from "../../../../../../../extensions/pdf-viewer/common/pdfAnnotations.js";
-import { h } from "../../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 
 test("PDF editor matching selects only application/pdf and .pdf resources", () => {
 	assert.equal(matchPdfEditor(input("paper.PDF")), EditorPaneMatch.Default);
@@ -109,6 +109,33 @@ test("PDF editor observes cancellation before rendering pages", async () => {
 	dom.window.close();
 });
 
+test('PDF reading shortcuts precede document commands only while the pane is focused', async () => {
+	const dom = new JSDOM('<!doctype html><body><button id="outside">Outside</button></body>');
+	using services = createTestComponentServices(undefined, undefined, dom.window.document);
+	using pane = registerTestComponentServices(services).createInstance(PdfEditorPane, { load: async () => new Uint8Array([37]) }, new TestAnnotationStore(), new TestRenderer());
+	pane.create(dom.window.document.body);
+	await pane.setInput(input('paper.pdf'), new AbortController().signal);
+	let globalKeys = 0;
+	using globalListener = addDisposableListener(dom.window.document, 'keydown', () => { globalKeys++; }, true);
+	const pages = dom.window.document.querySelector<HTMLElement>('.ash-pdf-pages')!;
+	const zoom = dom.window.document.querySelector<HTMLSelectElement>('.ash-pdf-zoom')!;
+	const key = () => new dom.window.KeyboardEvent('keydown', { key: '0', metaKey: true, bubbles: true, cancelable: true });
+	pages.focus();
+	pages.dispatchEvent(key());
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(zoom.value, '1');
+	assert.equal(globalKeys, 0);
+	const outside = dom.window.document.getElementById('outside')!;
+	outside.focus();
+	outside.dispatchEvent(key());
+	assert.equal(globalKeys, 1);
+	pane.dispose();
+	pages.dispatchEvent(key());
+	outside.dispatchEvent(key());
+	assert.equal(globalKeys, 2);
+	dom.window.close();
+});
+
 test("workspace PDF loader reads only through the binary file contract", async () => {
 	const resource = URI.file("C:\\project\\paper.pdf");
 	using fileService = createTestFileService({
@@ -179,7 +206,9 @@ class TestRenderer implements IPdfRenderer {
 		page.append(canvas);
 		request.container.append(page);
 		return {
-			pages: [{ pageNumber: 1, element: page, width: 300, height: 144 }],
+			pages: [{ pageNumber: 1, element: page, width: 300, height: 144, text: "", textRuns: [] }],
+			scale: request.scale,
+			setScale: async () => { },
 			pageCount: 1,
 			dispose: () => {
 				this.disposed += 1;

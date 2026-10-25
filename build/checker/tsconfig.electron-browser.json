@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.browser.json",
+  "include": [
+    "../../src/typings/css.d.ts",
+    "../../src/typings/editContext.d.ts",
+    "../../src/ash/**/common/**/*.ts",
+    "../../src/ash/**/browser/**/*.ts",
+    "../../src/ash/**/electron-browser/**/*.ts"
+  ],
+  "exclude": [
+    "../../src/ash/**/test/**",
+    "../../src/ash/**/fixtures/**",
+    "../../src/ash/base/parts/sandbox/electron-browser/preload.cts",
+    "../../src/ash/platform/browserView/electron-browser/preload-browserView.ts"
+  ]
+}

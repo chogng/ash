@@ -135,9 +135,21 @@ fn extension_advertisement_is_lazy_and_respects_language_and_extension_disableme
             .is_empty()
     );
     assert!(!root.path().join("capabilities").exists());
-    assert!(!runtime.allows_workspace_diagnostics(root.path(), "rust", &configuration));
+    assert!(
+        runtime
+            .request_workspace_diagnostics(root.path(), "rust")
+            .unwrap()
+            .is_none()
+    );
     fs::write(root.path().join("Cargo.toml"), "").unwrap();
-    assert!(runtime.allows_workspace_diagnostics(root.path(), "rust", &configuration));
+    assert!(
+        runtime
+            .request_workspace_diagnostics(root.path(), "rust")
+            .unwrap()
+            .is_none()
+    );
+    assert!(runtime.manager().is_none());
+    assert!(!root.path().join("capabilities").exists());
     configuration.servers.insert(
         LanguageServerId::new(RUST_ANALYZER_SERVER_ID).unwrap(),
         LanguageServerConfig {

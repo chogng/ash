@@ -383,7 +383,7 @@ test('SCM history details expose copy and remote actions without extension menu 
 			provideHistoryItems: async options => {
 				requestedLimit = options.limit;
 				reads++;
-				return [{ id, displayId: 'abcdef0', parentIds: [], subject: 'Details', message: 'Details', tooltip: { authorName: 'Author', authorEmail: 'author@example.invalid', timestamp: 1700000000000, message: 'Details\n\nFull message', statistics: { files: 1, additions: 2, deletions: 0 } }, remoteLinks: [{ name: 'origin', uri }], references: [{ id: 'tag:v1', name: 'v1', category: 'tag' }, { id: 'localBranch:topic', name: 'topic', category: 'localBranch' }] }];
+				return [{ id, displayId: 'abcdef0', parentIds: [], subject: 'Details', message: 'Details', tooltip: { authorName: 'Author', authorEmail: 'author@example.invalid', timestamp: 1700000000000, message: 'Details\n\nFull message\n\n[Documentation](https://example.invalid/docs)', statistics: { files: 1, additions: 2, deletions: 0 } }, remoteLinks: [{ name: 'origin', uri }], references: [{ id: 'tag:v1', name: 'v1', category: 'tag' }, { id: 'localBranch:topic', name: 'topic', category: 'localBranch' }] }];
 			},
 			provideHistoryItemChanges: async () => [{ uri: URI.file('/workspace/file.txt'), path: 'file.txt', status: 'added' }],
 			resolveHistoryItemChangeContents: async () => ({ parentId: undefined, original: { kind: 'missing' }, modified: { kind: 'text', text: 'Committed contents' } }),
@@ -430,8 +430,12 @@ test('SCM history details expose copy and remote actions without extension menu 
 		buttons[1].click();
 		await waitFor(() => opened.length > 0);
 		assert.deepEqual(opened, [[uri, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true }]]);
+		const messageLink = card.querySelector<HTMLAnchorElement>('.ash-scm-graph-hover-message a')!;
+		messageLink.click();
+		await waitFor(() => opened.length === 2);
+		assert.deepEqual(opened[1], ['https://example.invalid/docs', { fromUserGesture: true, allowContributedOpeners: true, allowCommands: false, skipValidation: undefined }]);
 		assert.equal(card.querySelector('.ash-scm-graph-hover-message-scroll')?.getAttribute('aria-label'), 'Commit message');
-		assert.equal(card.querySelector('.ash-scm-graph-hover-message')?.textContent, 'Full message');
+		assert.equal(card.querySelector('.ash-scm-graph-hover-message p')?.textContent, 'Full message');
 		assert.deepEqual([...card.querySelectorAll('.ash-scm-graph-hover-references > span')].map(label => label.textContent), ['topic', 'v1']);
 		const openCommit = card.querySelector<HTMLButtonElement>('.ash-scm-graph-hover-hash button')!;
 		assert.equal(openCommit.getAttribute('aria-label'), 'Open Commit abcdef0');
@@ -440,10 +444,12 @@ test('SCM history details expose copy and remote actions without extension menu 
 		assert.ok(isMultiDiffEditorInput(openedEditors[0].input));
 		assert.equal(openedEditors[0].input.resource.path, `/scm-history/hover/parent/${id}`);
 		hoverOptions!.onDidHide?.();
+		messageLink.click();
+		assert.equal(opened.length, 2, 'Closing the card disposes its Markdown link handler');
 		const repeated = content(CancellationToken.None);
 		assert.ok(repeated instanceof browser.window.HTMLElement);
 		assert.equal(repeated.querySelector('.ash-scm-graph-hover-status'), null, 'Reopening the shared hover never inserts a loading status for warm data');
-		assert.equal(repeated.querySelector('.ash-scm-graph-hover-message')?.textContent, 'Full message');
+		assert.equal(repeated.querySelector('.ash-scm-graph-hover-message p')?.textContent, 'Full message');
 		assert.equal(reads, 1, 'Neither the first nor the repeated hover reads history');
 		hoverOptions!.onDidHide?.();
 		referenceChanges.fire([{ id, parentIds: [], subject: 'Details', message: 'Details', references: [{ id: 'tag:v2', name: 'v2', category: 'tag' }] }]);
@@ -451,7 +457,7 @@ test('SCM history details expose copy and remote actions without extension menu 
 		assert.ok(typeof updatedContent === 'function');
 		const updated = updatedContent(CancellationToken.None);
 		assert.ok(updated instanceof browser.window.HTMLElement);
-		assert.equal(updated.querySelector('.ash-scm-graph-hover-message')?.textContent, 'Full message', 'Reference-only updates retain the prepared tooltip');
+		assert.equal(updated.querySelector('.ash-scm-graph-hover-message p')?.textContent, 'Full message', 'Reference-only updates retain the prepared tooltip');
 		assert.deepEqual([...updated.querySelectorAll('.ash-scm-graph-hover-references > span')].map(label => label.textContent), ['v2']);
 		assert.equal(reads, 1);
 	} finally {
