@@ -47,6 +47,8 @@ export interface IContextMenuDelegate {
 	readonly anchorAlignment?: AnchorAlignment;
 	readonly anchorAxisAlignment?: AnchorAxisAlignment;
 	readonly anchorPosition?: AnchorPosition;
+	/** Space between the trigger and a browser-rendered menu. */
+	readonly gap?: number;
 	readonly layer?: number;
 	readonly openSubmenusImmediatelyOnHover?: boolean;
 }

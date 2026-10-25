@@ -32,7 +32,7 @@ if (new URL(location.href).searchParams.has('search') || new URL(location.href).
 	const unexpectedAutomation = async (): Promise<never> => { throw new Error('Search must not mutate or run the fixture schedule'); };
 	globalThis.ashWebWorkbenchHost = {
 		api: {
-			...globalThis.ashWebWorkbenchHost.api,
+			...globalThis.ashWebWorkbenchHost!.api,
 			projects: { ...disconnectedApi.projects, list: async () => [project], read: async () => project },
 			automation: {
 				onDidChange: Event.None,
@@ -47,11 +47,50 @@ if (new URL(location.href).searchParams.has('search') || new URL(location.href).
 		},
 	};
 }
+// Synthetic catalogs exercise the real Sessions composition without using a personal profile.
+if (new URL(location.href).searchParams.has('customize')) {
+	const catalog = { generation: 1, skills: ['research-notes', 'code-review', 'writing-guide'].map(name => ({
+		id: { source: 'fixture', name }, description: `Reusable ${name.toLowerCase()} instructions with a deliberately long description to verify card wrapping without pushing actions outside the page.`,
+		metadata: { author: 'Ash fixtures' }, contentDigest: 'a'.repeat(64), enabled: true, compatible: true,
+	})) };
+	const summaries = ['Data explorer', 'Document studio', 'Team knowledge', 'Writing companion'].map((displayName, index) => ({
+		id: `fixture.package-${index}`, version: '1.0.0', packageType: 'plugin', displayName, description: `Tools and reusable instructions for ${displayName.toLowerCase()}.`,
+	}));
+	globalThis.ashWebWorkbenchHost = { api: {
+		...globalThis.ashWebWorkbenchHost!.api,
+		skills: { ...disconnectedApi.skills, list: async () => catalog, read: async () => ({ revision: 1, catalog, diagnostics: [] }) },
+		plugins: { ...disconnectedApi.plugins, list: async () => ({ revision: 1, activationGeneration: 1, packages: [{
+			id: 'fixture.local', version: '1.0.0', digest: 'a'.repeat(64), displayName: 'Local productivity', permissions: [],
+			hasEditorExtensions: true, enabled: true, granted: false, effective: false, revoked: false,
+		}] }) },
+		connectors: { ...disconnectedApi.connectors, list: async () => ({ generation: 1, connectors: [{
+			id: 'fixture.connector', displayName: 'Team library', description: 'Search shared project documents.', runtimeServerId: 'fixture.mcp', mcpServerId: null,
+			definitionDigest: 'a'.repeat(64), connectionGeneration: 1, enabled: false, state: { status: 'disconnected' },
+			availableActions: [], oauthMethods: [], credentialCleanupPending: false,
+		}] }) },
+		extensionManagement: {
+			...disconnectedApi.extensionManagement,
+			listInstalled: async () => ({ instanceId: 'fixture', generation: 1, packages: [] }),
+			sources: async () => ({ revision: 1, sources: [{ id: 'Ash fixtures', kind: 'ash', enabled: true, productOwned: true }] }),
+			search: async ({ query }) => ({ unavailableSources: [], packages: summaries.filter(item => item.displayName.toLowerCase().includes(query.toLowerCase())) }),
+			searchPage: async ({ query, cursor }) => {
+				if (query === 'error') throw new Error('Synthetic catalog failure');
+				const matches = summaries.filter(item => item.displayName.toLowerCase().includes(query.toLowerCase()));
+				return { packages: matches.slice(cursor ? 2 : 0, cursor ? 4 : 2), total: BigInt(matches.length), nextCursor: !cursor && matches.length > 2 ? 'page-two' : null };
+			},
+			get: async ({ packageId }) => {
+				const summary = summaries.find(item => item.id === packageId)!;
+				return { ...summary, package: { id: summary.id, version: summary.version, digest: 'a'.repeat(64) }, license: 'MIT', source: 'official', upstream: null,
+					capabilities: [{ kind: 'skill', id: 'fixture-skill', contractVersion: '1', permissions: [], authenticationProvider: null }] };
+			},
+		},
+	} };
+}
 // Sessions Parts need startup workspace storage while debugger processes remain outside this fixture.
 const unexpectedTransport = async (): Promise<never> => { throw new Error('Sessions component tests must not launch or use a debug adapter'); };
 globalThis.ashWebWorkbenchHost = {
 	api: {
-		...globalThis.ashWebWorkbenchHost.api,
+		...globalThis.ashWebWorkbenchHost!.api,
 		debugAdapter: installDebugClientFixture({
 			start: unexpectedTransport, send: unexpectedTransport, read: unexpectedTransport, close: unexpectedTransport,
 			getConnectionState: async () => 'stopped', onConnectionState: Event.None,
@@ -61,7 +100,7 @@ globalThis.ashWebWorkbenchHost = {
 if (new URL(location.href).searchParams.has('automations')) {
 	globalThis.ashWebWorkbenchHost = {
 		api: {
-			...globalThis.ashWebWorkbenchHost.api, automation: {
+			...globalThis.ashWebWorkbenchHost!.api, automation: {
 				onDidChange: Event.None, list: async () => [], runs: async () => [],
 				getRun: async () => { throw new Error('Unexpected automation run lookup'); },
 				preview: async () => [], readResult: async () => ({ output: '', files: [] }),

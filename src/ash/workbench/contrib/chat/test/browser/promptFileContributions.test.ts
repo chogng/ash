@@ -25,7 +25,7 @@ for (const end of ['disposed', 'created'] as const) test(`Skill text content pro
 	resources.add(languages.registerLanguage({ id: 'markdown' }));
 	const pending = new DeferredPromise<string>();
 	let signal: AbortSignal | undefined;
-	const prompts = resources.add(new PromptsService({ onDidChangeSkills: Event.None, list: async () => ({ generation: 1, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 1, skills: [{ id: { source: 'user:test', name: 'review' }, contentDigest: `sha256:${'a'.repeat(64)}`, description: 'Review', enabled: true, compatible: true }] }, diagnostics: [] }), setEnabled: async () => { }, readTextResource: (_ref, _path, current) => { signal = current; return pending.p; } }, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } }));
+	const prompts = resources.add(new PromptsService({ onDidChangeSkills: Event.None, list: async () => ({ generation: 1, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 1, skills: [{ id: { source: 'user:test', name: 'review' }, contentDigest: `sha256:${'a'.repeat(64)}`, description: 'Review', enabled: true, compatible: true }] }, diagnostics: [] }), registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async () => { }, readTextResource: (_ref, _path, current) => { signal = current; return pending.p; } }, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } }));
 	const { catalog } = await prompts.readSkillManagement();
 	let provider: ITextModelContentProvider | undefined;
 	const models: TextModel[] = [];

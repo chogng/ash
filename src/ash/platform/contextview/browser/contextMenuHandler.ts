@@ -139,6 +139,7 @@ export class ContextMenuHandler extends Disposable {
 				anchorAxisAlignment: delegate.anchorAxisAlignment,
 				anchorAlignment: delegate.anchorAlignment,
 				anchorPosition: delegate.anchorPosition ?? AnchorPosition.Below,
+				gap: delegate.gap,
 				presentation: "menu",
 				focusRestore: ContextViewFocusRestore.Previous,
 				layer: delegate.layer ?? 10,

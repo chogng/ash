@@ -210,7 +210,7 @@ const skillResourceRequests: unknown[] = [];
 const prompts = resources.add(new PromptsService({
 	onDidChangeSkills: Event.None,
 	list: async () => ({ generation: 1, skills: [{ id: { source: 'user:review', name: 'review' }, description: 'Review', contentDigest: `sha256:${'a'.repeat(64)}`, enabled: true, compatible: true }] }),
-	read: async () => { throw new Error('Unexpected management read'); }, setEnabled: async () => { },
+	read: async () => { throw new Error('Unexpected management read'); }, registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async () => { },
 	readTextResource: async (reference, path, _signal, sessionId) => {
 		skillResourceRequests.push([reference, path, sessionId]);
 		if (path === 'SKILL.md') return '---\nname: review\ndescription: Review changes\n---\n[Guide](references/guide.md)';

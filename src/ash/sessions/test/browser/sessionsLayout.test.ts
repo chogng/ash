@@ -24,7 +24,7 @@ suite('sessions browser component', () => {
 			else { await expect(item).toHaveCSS('width', `${itemSize}px`); }
 			await expect(item).toHaveCSS('height', `${itemSize}px`);
 		}
-		await expect(icons).toHaveCount(horizontal || labeled ? 4 : 5);
+		await expect(icons).toHaveCount(horizontal || labeled ? 5 : 6);
 		const accounts = navigation.page().getByRole('button', { name: 'Accounts', exact: true });
 		await expect(accounts).toHaveCount(1);
 		const titlebarAccounts = navigation.page().locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });

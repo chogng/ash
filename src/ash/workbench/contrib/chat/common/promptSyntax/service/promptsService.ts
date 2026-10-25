@@ -30,6 +30,8 @@ export interface IPromptsService extends IDisposable {
 	readSkillManagement(sessionId?: string): Promise<SkillManagementSnapshot>;
 	/** Uses the displayed backend revision, with no automatic mutation retry on conflict. */
 	setSkillEnablement(skillId: SkillIdentity, enabled: boolean, expectedRevision: number, sessionId?: string): Promise<void>;
+	/** Adds a saved collection to the backend catalog without maintaining another source list. */
+	registerSkillSource(rootReference: string): Promise<void>;
 	parseNew(uri: URI, token: CancellationToken): Promise<ParsedPromptFile>;
 }
 

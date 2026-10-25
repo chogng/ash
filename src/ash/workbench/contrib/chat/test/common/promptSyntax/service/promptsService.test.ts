@@ -26,6 +26,7 @@ class Backend extends Disposable implements IAppServerSkillApi {
 	readonly calls: unknown[] = [];
 	public list = async (reload: 'cached' | 'refresh', sessionId?: string): Promise<SkillCatalog> => { this.calls.push(['list', reload, sessionId]); return catalog; };
 	public read = async (sessionId?: string) => { this.calls.push(['read', sessionId]); return { revision: 7, catalog, diagnostics: [] }; };
+	public registerSource = async (root: string) => { this.calls.push(['source', root]); };
 	public setEnabled = async (skillId: typeof id, enabled: boolean, revision: number, sessionId?: string) => { this.calls.push(['set', skillId, enabled, revision, sessionId]); };
 	public readTextResource = async (reference: SkillReference, path: string, signal: AbortSignal, sessionId?: string) => { this.calls.push(['body', reference, sessionId, signal.aborted, path]); return instructions; };
 }

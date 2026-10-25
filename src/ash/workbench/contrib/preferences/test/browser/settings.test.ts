@@ -1935,7 +1935,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		readTextResource: async () => { throw new Error("No Skill body in this test fixture"); },
 		list: async () => ({ generation: 0, skills: [] }),
 		read: async sessionId => { skillScopes.push(sessionId); return { revision: 7, catalog: { generation: 1, skills: [{ id: skillId, description: 'Review changes', contentDigest: 'sha256:review', enabled: skillEnabled, compatible: true }] }, diagnostics: [] }; },
-		setEnabled: async (...args) => { skillMutations.push(args); skillEnabled = args[1]; },
+		registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async (...args) => { skillMutations.push(args); skillEnabled = args[1]; },
 	});
 	services.registerInstance(IExtensionManagementService, { onDidChangeInstalled: Event.None } as IExtensionManagementService);
 	services.registerInstance(ILanguageServerService, { control: async () => { }, read: async () => ({ revision: 0, configurations: {}, servers: [] }), configure: async () => { }, removeConfiguration: async () => { } });
