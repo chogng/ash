@@ -18,7 +18,7 @@ Ash 通过独立的 server provider、LSP manager 和 LSP 运行时连接现有�
 内置服务器的 Disabled/Enabled 与可选绝对 executable path。Settings 中每个 server
 都有独立的 Enable switch。Rust 由默认随产品提供的 [`extensions/rust`](../extensions/rust/package.json) 声明语言与服务器获取策略，核心只解释通用 `ashLanguageServers` 契约。Rust 扩展默认启用，在实际 Rust 请求时探测本地 rust-analyzer，缺失时按需下载固定、校验过的官方版本；停用扩展或服务器后不探测或安装，扩展缺失不回退到核心 Rust 实现。其他未配置的 PATH server 默认 Disabled；用户显式开启后才从进程
 启动时冻结的 PATH 解析。Extensions package 的安装确认同时写入 activation receipt，因此其 packaged
-route 默认启用；显式 Config `Disabled` 仍可关闭。显式路径失效会报告错误，不自动替换。语言列表查询不探测进程或下载；没有 Cargo.toml 的目录不会因后台 workspace diagnostics 自动安装 Rust。
+route 默认启用；显式 Config `Disabled` 仍可关闭。显式路径失效会报告错误，不自动替换。语言列表查询不探测进程或下载；即使目录包含 Cargo.toml，后台 workspace diagnostics 也只使用 Ready 服务，不安装、启动或恢复进程。打开匹配语言的文档（包括恢复的编辑器）、请求语义功能或显式启动时才激活对应服务器；使用其他语言不会启动未使用的服务器。
 
 | 使用场景                                              | 当前结果                                                                                                                               | 谁负责下一步                                |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |

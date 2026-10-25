@@ -397,8 +397,13 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let source_path = dir
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        let _runtime =
-            self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
+        let _runtime = self.prepare_document_runtime_for(
+            &dir,
+            &source_path,
+            &params.document,
+            cancellation,
+            super::language_runtime::LanguageDocumentPurpose::Synchronization,
+        )?;
         result(&())
     }
 
@@ -495,36 +500,17 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let dir = self
             .context
             .language_dir_root_for(params.dir_id.as_deref(), params.session_directory.as_ref())?;
-        let snapshot = self
-            .config
-            .as_ref()
-            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
-            .read_snapshot()
-            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let language_id = ash_language::canonical_language_id(&params.language_id);
         let mut runtime = self.runtime()?;
-        if !runtime.allows_workspace_diagnostics(
-            dir.canonical_path(),
-            language_id,
-            &snapshot.values.language_servers,
-        ) {
+        let Some(request_id) = runtime
+            .request_workspace_diagnostics(dir.canonical_path(), language_id)
+            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?
+        else {
             return result(&LanguageDirectoryDiagnosticsResult {
                 supported: false,
                 snapshots: Vec::new(),
             });
-        }
-        let service = runtime
-            .ensure(
-                dir.canonical_path(),
-                params.dir_id.as_deref(),
-                snapshot.generation.get(),
-                &snapshot.values.language_servers,
-                language_id,
-            )
-            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
-        let request_id = service
-            .request_workspace_diagnostics(language_id)
-            .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
+        };
         let documents = runtime.document_snapshots();
         let response = match runtime
             .wait_for_request(request_id, cancellation)
@@ -623,6 +609,23 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         document: &ash_app_server_protocol::protocol::language::LanguageDocumentDto,
         cancellation: &CancellationToken,
     ) -> Result<super::language_runtime::LanguageRuntimeGuard, RpcError> {
+        self.prepare_document_runtime_for(
+            dir,
+            source_path,
+            document,
+            cancellation,
+            super::language_runtime::LanguageDocumentPurpose::SemanticRequest,
+        )
+    }
+
+    fn prepare_document_runtime_for(
+        &self,
+        dir: &ash_file_access::Dir,
+        source_path: &Path,
+        document: &ash_app_server_protocol::protocol::language::LanguageDocumentDto,
+        cancellation: &CancellationToken,
+        purpose: super::language_runtime::LanguageDocumentPurpose,
+    ) -> Result<super::language_runtime::LanguageRuntimeGuard, RpcError> {
         if cancellation.is_cancelled() {
             return Err(language_error(AppServerErrorName::RequestCancelled));
         }
@@ -649,6 +652,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
                 &snapshot.values.language_servers,
                 &document.path,
                 service_document,
+                purpose,
             )
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         Ok(runtime)
@@ -1188,6 +1192,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
                 &snapshot.values.language_servers,
                 &params.document.path,
                 document,
+                super::language_runtime::LanguageDocumentPurpose::SemanticRequest,
             )
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let service = runtime
@@ -1301,6 +1306,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
                 &snapshot.values.language_servers,
                 &params.document.path,
                 document,
+                super::language_runtime::LanguageDocumentPurpose::SemanticRequest,
             )
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let service = runtime
@@ -1383,6 +1389,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
                 snapshot.generation.get(),
                 &snapshot.values.language_servers,
                 language_id,
+                super::language_runtime::LanguageDocumentPurpose::SemanticRequest,
             )
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service

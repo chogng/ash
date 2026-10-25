@@ -37,6 +37,8 @@ while :; do
       root_uri=$(printf '%s' "$message" | sed -n 's/.*"rootUri":"\([^"]*\)".*/\1/p')
       if [ "$LSP_OPTION" = projection ]; then
         result='{"capabilities":{"positionEncoding":"utf-8","textDocumentSync":{"openClose":true,"change":1},"definitionProvider":true,"renameProvider":true,"workspaceSymbolProvider":true,"completionProvider":{},"documentFormattingProvider":true,"documentRangeFormattingProvider":true}}'
+      elif [ "$LSP_OPTION" = diagnostics ]; then
+        result='{"capabilities":{"textDocumentSync":{"openClose":true,"change":1},"hoverProvider":true,"diagnosticProvider":{"interFileDependencies":true,"workspaceDiagnostics":true}}}'
       else
         result='{"capabilities":{"textDocumentSync":{"openClose":true,"change":1,"save":{"includeText":true}},"hoverProvider":true,"completionProvider":{"triggerCharacters":["="]},"signatureHelpProvider":{"triggerCharacters":["["],"retriggerCharacters":["]"]}}}'
       fi;;
@@ -46,6 +48,8 @@ while :; do
       result="{\"changes\":{\"$root_uri/target.demo\":[{\"range\":{\"start\":{\"line\":0,\"character\":12},\"end\":{\"line\":0,\"character\":18}},\"newText\":\"renamed\"}]}}";;
     *'"method":"workspace/symbol"'*)
       result="[{\"name\":\"target\",\"kind\":12,\"location\":{\"uri\":\"$root_uri/target.demo\",\"range\":{\"start\":{\"line\":0,\"character\":12},\"end\":{\"line\":0,\"character\":18}}}}]";;
+    *'"method":"workspace/diagnostic"'*)
+      result="{\"items\":[{\"uri\":\"$root_uri/same.demo\",\"version\":null,\"kind\":\"full\",\"items\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":4}},\"severity\":2,\"message\":\"workspace fixture\"}]}]}";;
     *'"method":"textDocument/completion"'*)
       result='[{"label":"keyword","textEdit":{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"newText":"keyword"}}]';;
     *'"method":"textDocument/formatting"'*|*'"method":"textDocument/rangeFormatting"'*)
@@ -170,6 +174,21 @@ impl Fixture {
             self.root.path().join("logs/blocked").exists(),
             "fixture received slow hover"
         );
+    }
+
+    fn workspace_diagnostics(
+        &self,
+        connection: &mut crate::ConnectionState,
+        language: &str,
+    ) -> Value {
+        let operation = self.sequence.fetch_add(1, Ordering::Relaxed);
+        self.call(
+            connection,
+            "language/directoryDiagnostics",
+            json!({
+                "operationId":format!("diagnostics-{operation}"), "request":{"languageId":language}
+            }),
+        )
     }
 
     fn release(&self) {
@@ -623,4 +642,177 @@ fn language_server_discovery_and_batch_restart_leave_idle_servers_unstarted() {
         contents(&fixture.hover(&mut connection, "demo", 2, "alpha")),
         contents(&first)
     );
+}
+
+#[test]
+fn workspace_diagnostics_do_not_start_unused_languages_or_peer_connections() {
+    let fixture = Fixture::new();
+    let mut connection = fixture.connection();
+    fixture.configure(&mut connection, "fixture", "demo", true, "diagnostics");
+    fixture.configure(&mut connection, "other", "other", true, "second");
+    std::fs::write(fixture.root.path().join("Cargo.toml"), "[workspace]\n").unwrap();
+    let mut peer = fixture.connection();
+    for client in [&mut connection, &mut peer] {
+        for language in ["demo", "other", "rust"] {
+            let response = fixture.workspace_diagnostics(client, language);
+            assert_eq!(
+                response["result"],
+                json!({"supported":false,"snapshots":[]}),
+                "{response}"
+            );
+        }
+    }
+    assert_eq!(
+        std::fs::read_dir(fixture.root.path().join("logs"))
+            .unwrap()
+            .count(),
+        0
+    );
+
+    let started = fixture.hover(&mut connection, "demo", 1, "alpha");
+    assert!(contents(&started).starts_with("alpha||"));
+    for (client, language) in [(&mut connection, "other"), (&mut peer, "demo")] {
+        let response = fixture.workspace_diagnostics(client, language);
+        assert_eq!(
+            response["result"],
+            json!({"supported":false,"snapshots":[]}),
+            "{response}"
+        );
+    }
+    assert_eq!(
+        std::fs::read_dir(fixture.root.path().join("logs"))
+            .unwrap()
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn workspace_diagnostics_reuse_ready_servers_without_resuming_idle_or_stopped_servers() {
+    let fixture = Fixture::new();
+    let mut connection = fixture.connection();
+    fixture.configure(&mut connection, "fixture", "demo", true, "diagnostics");
+    let opened = fixture.call(
+        &mut connection,
+        "language/synchronize",
+        json!({
+            "document":{"path":"same.demo", "languageId":"demo", "revision":1, "text":"alpha"}
+        }),
+    );
+    assert!(opened.get("result").is_some(), "{opened}");
+    let first = fixture.hover(&mut connection, "demo", 1, "alpha");
+    let pull = |client: &mut crate::ConnectionState| fixture.workspace_diagnostics(client, "demo");
+    let ready = pull(&mut connection);
+    assert_eq!(ready["result"]["supported"], true, "{ready}");
+    assert_eq!(
+        ready["result"]["snapshots"][0]["path"], "same.demo",
+        "{ready}"
+    );
+    assert_eq!(
+        ready["result"]["snapshots"][0]["diagnostics"][0]["message"], "workspace fixture",
+        "{ready}"
+    );
+
+    let closed = fixture.call(
+        &mut connection,
+        "language/close",
+        json!({"path":"same.demo"}),
+    );
+    assert!(closed.get("result").is_some(), "{closed}");
+    assert_eq!(pull(&mut connection)["result"]["supported"], true);
+    assert_eq!(
+        contents(&fixture.hover(&mut connection, "demo", 2, "alpha")),
+        contents(&first),
+        "closing and reopening a document reuses the running server"
+    );
+    let closed = fixture.call(
+        &mut connection,
+        "language/close",
+        json!({"path":"same.demo"}),
+    );
+    assert!(closed.get("result").is_some(), "{closed}");
+
+    let suspended = fixture.call(
+        &mut connection,
+        "language/serverControl",
+        json!({"action":"suspend", "serverId":"fixture"}),
+    );
+    assert!(suspended.get("result").is_some(), "{suspended}");
+    for _ in 0..3 {
+        let response = pull(&mut connection);
+        assert_eq!(
+            response["result"],
+            json!({"supported":false,"snapshots":[]}),
+            "{response}"
+        );
+    }
+    assert_eq!(
+        std::fs::read_dir(fixture.root.path().join("logs"))
+            .unwrap()
+            .count(),
+        1,
+        "background diagnostics never resume the idle process"
+    );
+    let resumed = fixture.hover(&mut connection, "demo", 3, "alpha");
+    assert_ne!(
+        contents(&resumed),
+        contents(&first),
+        "semantic demand resumes the idle server"
+    );
+    assert_eq!(pull(&mut connection)["result"]["supported"], true);
+
+    let stopped = fixture.call(
+        &mut connection,
+        "language/serverControl",
+        json!({"action":"stop", "serverId":"fixture"}),
+    );
+    assert!(stopped.get("result").is_some(), "{stopped}");
+    let synchronized = fixture.call(
+        &mut connection,
+        "language/synchronize",
+        json!({"document":{"path":"same.demo", "languageId":"demo", "revision":4, "text":"edited while stopped"}}),
+    );
+    assert!(
+        synchronized.get("result").is_some(),
+        "edits remain synchronized without waking a stopped server: {synchronized}"
+    );
+    let response = pull(&mut connection);
+    assert_eq!(
+        response["result"],
+        json!({"supported":false,"snapshots":[]}),
+        "{response}"
+    );
+    assert_eq!(
+        std::fs::read_dir(fixture.root.path().join("logs"))
+            .unwrap()
+            .count(),
+        2
+    );
+    let restarted = fixture.call(
+        &mut connection,
+        "language/serverControl",
+        json!({"action":"restart", "serverId":"fixture"}),
+    );
+    assert!(restarted.get("result").is_some(), "{restarted}");
+    let demand = fixture.hover(&mut connection, "demo", 4, "edited while stopped");
+    assert_ne!(contents(&demand), contents(&resumed));
+    let messages = std::fs::read_dir(fixture.root.path().join("logs"))
+        .unwrap()
+        .flat_map(|entry| {
+            std::fs::read_to_string(entry.unwrap().path())
+                .unwrap()
+                .lines()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .filter_map(|line| serde_json::from_str::<Value>(&line).ok())
+        .collect::<Vec<_>>();
+    assert!(
+        messages
+            .iter()
+            .any(|message| message["method"] == "textDocument/didOpen"
+                && message["params"]["textDocument"]["text"] == "edited while stopped"),
+        "restart replays the latest stopped document before semantic work"
+    );
+    assert_eq!(pull(&mut connection)["result"]["supported"], true);
 }

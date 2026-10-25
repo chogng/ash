@@ -2039,9 +2039,6 @@
         "environment": {
           "RUSTUP_AUTO_INSTALL": "0"
         },
-        "workspaceFiles": [
-          "Cargo.toml"
-        ],
         "releases": [
           {
             "version": "2026-10-12",

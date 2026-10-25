@@ -102,9 +102,9 @@ environment、host override 和 duplicate provider gate。
 
 ## 内置扩展的服务器获取
 
-`extensions/rust/package.json` 的版本化 `ashLanguageServers` 声明拥有 Rust 的服务器 ID、语言路由、探测参数、环境变量、工作区标志和六个平台的固定发布资产。它与语言和语法贡献一起经过现有不可变扩展目录装载；Rust 配置不编译进核心 crate。核心只接纳 BuiltIn 来源的获取声明，用户/市场包不能通过添加同名字段取得进程或网络授权。
+`extensions/rust/package.json` 的版本化 `ashLanguageServers` 声明拥有 Rust 的服务器 ID、语言路由、探测参数、环境变量和六个平台的固定发布资产。它与语言和语法贡献一起经过现有不可变扩展目录装载；Rust 配置不编译进核心 crate。核心只接纳 BuiltIn 来源的获取声明，用户/市场包不能通过添加同名字段取得进程或网络授权。
 
-语言列表无进程或网络副作用。文档请求，或匹配扩展 `workspaceFiles` 的目录诊断请求，才执行通用 `LanguageServerAcquisition`。显式路径不可运行时报错，不回退；自动模式依次探测冻结 PATH，在工作区目录执行声明中的参数，保留工具链代理调用名。所有候选失败后，按扩展固定的 URL、大小和 SHA-256，通过 `ash-package-store` 安装。安装锁、原子选择、完整文件校验和运行期 lease 沿用包管理机制。
+语言列表无进程或网络副作用。打开匹配语言的文档、请求语义功能或显式启动服务器时，才执行通用 `LanguageServerAcquisition`；首次提交给 manager 的 definitions 只包含本次需求，后续需求保留已有路由及其运行、空闲或用户停止状态。自动目录诊断只使用 Ready 会话，不安装、启动或恢复服务器。旧 v1 声明中的 `workspaceFiles` 仍可读取和校验，但不影响激活或启动身份，当前内置声明已移除此字段。显式路径不可运行时报错，不回退；自动模式依次探测冻结 PATH，在工作区目录执行声明中的参数，保留工具链代理调用名。所有候选失败后，按扩展固定的 URL、大小和 SHA-256，通过 `ash-package-store` 安装。安装锁、原子选择、完整文件校验和运行期 lease 沿用包管理机制。
 
 Extensions 的整包停用与 LSP 设置的 server Disabled 都阻止探测和下载；扩展移除或停用没有核心 Rust fallback。LSP manager 继续拥有协议和进程监管。已有系统服务器或已验证的托管缓存会直接复用；package-store 仅在缓存检查与跨进程锁之后确实发起 HTTP 获取时通知下载进度，等待锁、校验与复用缓存不会显示下载。Rust 工具链（cargo/rustc）由用户管理。此声明路径不建立另一套可执行扩展 RPC；需要任意运行逻辑的扩展继续使用已有 Host RPC/SDK。
 

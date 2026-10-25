@@ -156,6 +156,25 @@ fn rust_support() -> LanguageServerAcquisition {
         .unwrap()
         .remove(0)
 }
+
+#[test]
+fn legacy_workspace_markers_are_optional_and_do_not_change_launch_policy() {
+    let current = rust_support();
+    let mut legacy = rust_manifest()["ashLanguageServers"].clone();
+    assert!(legacy["servers"][0].get("workspaceFiles").is_none());
+    legacy["servers"][0]["workspaceFiles"] = serde_json::json!(["Cargo.toml"]);
+    let legacy = LanguageServerAcquisition::from_contribution(legacy)
+        .unwrap()
+        .remove(0);
+    assert!(current.same_policy(&legacy));
+    assert!(
+        serde_json::to_value(legacy)
+            .unwrap()
+            .get("workspaceFiles")
+            .is_none()
+    );
+}
+
 #[test]
 fn contribution_rejects_incompatible_or_unsafe_recipes() {
     for (pointer, value) in [
@@ -174,6 +193,7 @@ fn contribution_rejects_incompatible_or_unsafe_recipes() {
         ),
     ] {
         let mut contribution = rust_manifest()["ashLanguageServers"].clone();
+        contribution["servers"][0]["workspaceFiles"] = serde_json::json!(["Cargo.toml"]);
         *contribution.pointer_mut(pointer).unwrap() = value;
         assert!(LanguageServerAcquisition::from_contribution(contribution).is_err());
     }
