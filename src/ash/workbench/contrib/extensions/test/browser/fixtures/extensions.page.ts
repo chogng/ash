@@ -225,6 +225,15 @@ let sourceRevision = 0;
 let sources = [{ id: 'ash', kind: 'ash' as const, enabled: true, productOwned: true }];
 if (partialDiscoveryFailure) { sources.push({ id: 'offline-source', kind: 'ash', enabled: true, productOwned: false }); }
 if (new URLSearchParams(location.search).has('pagedDiscovery')) { sources.push({ id: 'other', kind: 'ash', enabled: true, productOwned: false }); }
+function discoveryPackages(sourceId: string, kind: 'skill' | 'mcp') {
+	const base = kind === 'mcp' ? mcpDetails : packageDetails;
+	if (!new URLSearchParams(location.search).has('pagedDiscovery')) { return [base]; }
+	return Array.from({ length: 73 }, (_, index) => ({
+		...base,
+		package: { ...base.package, id: `catalog/${kind === 'mcp' ? 'server' : 'item'}-${index}@${sourceId}` },
+		displayName: `Item ${index}`,
+	}));
+}
 const builtInProviderStates = new Map([
 	['ash.github-authentication', { enabled: true, running: true }],
 	['ash.rust', { enabled: true, running: true }],
@@ -238,9 +247,10 @@ const api: IExtensionManagementApi = {
 		requests.push(['searchPage', params]);
 		if (holdSearch) { holdSearch = false; await new Promise<void>((_, reject) => { rejectSearch = reject; }); }
 		if (offline || params.sourceId === 'offline-source') { throw new Error('Catalog unavailable'); }
-		const base = params.capabilityKind === 'mcp' ? mcpSummary : summary;
-		const entries = new URLSearchParams(location.search).has('pagedDiscovery')
-			? Array.from({ length: 73 }, (_, index) => ({ ...base, id: 'catalog/item-' + index + '@' + params.sourceId, displayName: 'Item ' + index })) : [base];
+		const entries = discoveryPackages(params.sourceId, params.capabilityKind === 'mcp' ? 'mcp' : 'skill').map(entry => ({
+			id: entry.package.id, version: entry.package.version, packageType: entry.packageType,
+			displayName: entry.displayName, description: entry.description,
+		}));
 		const filtered = entries.filter(value => [value.id, value.displayName, value.description].some(text => text.toLowerCase().includes(params.query.toLowerCase())));
 		const offset = params.cursor ? Number(params.cursor) : 0;
 		const end = Math.min(offset + params.pageSize, filtered.length);
@@ -294,7 +304,19 @@ const api: IExtensionManagementApi = {
 		}
 		return { packages: [params.capabilityKind === 'editorExtension' || params.query === 'publisher.sample@ash' ? extensionSummary : summary], unavailableSources: [] };
 	},
-	get: async params => { requests.push(['get', params]); if (offline) { throw new Error('Catalog unavailable'); } if (new URLSearchParams(location.search).has('productTips') && ['ash.keymap-sublime@ash', 'marketplace.markdown@ash', 'marketplace.aurora-theme@ash', 'marketplace.python@ash'].includes(params.packageId)) { return { ...packageDetails, packageType: 'editor', package: { ...packageDetails.package, id: params.packageId }, displayName: params.packageId }; } if (![summary.id, extensionSummary.id, mcpSummary.id].includes(params.packageId)) { throw new Error('Unknown package'); } const details = params.packageId === extensionSummary.id ? extensionDetails : params.packageId === mcpSummary.id ? mcpDetails : packageDetails; return { ...details, package: { ...details.package, version: params.version ?? '2.0.0' } }; },
+	get: async params => {
+		requests.push(['get', params]);
+		if (offline) { throw new Error('Catalog unavailable'); }
+		if (new URLSearchParams(location.search).has('productTips') && ['ash.keymap-sublime@ash', 'marketplace.markdown@ash', 'marketplace.aurora-theme@ash', 'marketplace.python@ash'].includes(params.packageId)) {
+			return { ...packageDetails, packageType: 'editor', package: { ...packageDetails.package, id: params.packageId }, displayName: params.packageId };
+		}
+		const catalog = sources.filter(source => source.enabled).flatMap(source => [
+			...discoveryPackages(source.id, 'skill'), ...discoveryPackages(source.id, 'mcp'),
+		]);
+		const details = [extensionDetails, packageDetails, mcpDetails, ...catalog].find(entry => entry.package.id === params.packageId);
+		if (!details) { throw new Error('Unknown package'); }
+		return { ...details, package: { ...details.package, version: params.version ?? '2.0.0' } };
+	},
 	listInstalled: async () => (managementReads.installed++, { instanceId: 'fixture', generation, packages: installed.map(entry => ({ ...entry, capabilities: entry.capabilities.map(capability => ({ ...capability, permissions: [...capability.permissions] })) })) }),
 	download: async () => { throw new Error('Install owns downloading'); },
 	install: async params => {

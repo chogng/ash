@@ -522,6 +522,10 @@ suite('extensions browser component', () => {
 			await page.locator('#extensions').getByRole('searchbox').press('Enter');
 			await expect(pane.getByRole('status')).toHaveText(count(4, 4));
 			await expect(pane.getByRole('button', { name: loadMore, exact: true })).toBeHidden();
+			await pane.getByRole('option').filter({ hasText: 'Item 72' }).click();
+			const editor = page.locator('.ash-extension-editor');
+			await expect(editor.locator('.extension-detail-header')).toContainText('Item 72');
+			await expect(editor.locator('.extension-detail-header')).toContainText('catalog/item-72@other');
 		});
 	}
 
