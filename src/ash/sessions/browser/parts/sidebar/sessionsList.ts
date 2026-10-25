@@ -344,7 +344,7 @@ class SessionListSection extends AbstractDisposable {
 		this.button.title = title;
 		this.collapsed = collapsed;
 		this.button.setAttribute('aria-expanded', String(!collapsed));
-		const icon = this.subgroup ? collapsed ? Lxicon.folder : Lxicon.folderOpen : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
+		const icon = this.subgroup ? collapsed ? Lxicon.folder : Lxicon.folderOpened : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
 		if (this.icon.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
 			this.icon.replaceChildren(); appendIcon(icon, this.icon);
 		}

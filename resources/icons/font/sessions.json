@@ -35,6 +35,7 @@
     "download-file": [0],
     "error-small": [0, 1],
     "file-code": [0],
+    "folder": [0],
     "files": [1],
     "folders": [1],
     "fork": [0],

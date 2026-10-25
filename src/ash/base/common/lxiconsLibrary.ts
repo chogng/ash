@@ -128,6 +128,7 @@ export const lxiconsLibrary = {
 	folder: registerLxicon("folder", 0xe130),
 	folderDownloaded: registerLxicon("folder-downloaded", 0xe075),
 	folderOpen: registerLxicon("folder-open", 0xe12f),
+	folderOpened: registerLxicon("folder-opened", 0xe136),
 	folders: registerLxicon("folders", 0xe076),
 	follow: registerLxicon("follow", 0xe077),
 	fork: registerLxicon("fork", 0xe078),

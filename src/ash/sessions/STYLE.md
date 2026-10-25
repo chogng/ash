@@ -78,7 +78,7 @@ Activity Bar 用于产品页面导航，顺序与入口位置稳定，页面内�
 - 标题是首要信息，第二行只放工作摘要、来源或状态，时间与计数降低强调程度。
 - 内容增长时条目增高，保留状态、操作与文字可读性。
 - 头像用于识别人、Agent 或工作来源，没有识别用途时省略。
-- 顶部全局导航的“＋ New”新建会话并打开输入区，下方列表按 Pinned、Projects、Chats（Code 为 Recents）分组。大组的 chevron 紧跟标题文字之后，点击展开收起；没有内容的大组不显示。Chat 只保留大组，Code 的小组使用标题前的 folder / folder-open 表达展开状态，会话标题前显示图标。
+- 顶部全局导航的“＋ New”新建会话并打开输入区，下方列表按 Pinned、Projects、Chats（Code 为 Recents）分组。大组的 chevron 紧跟标题文字之后，点击展开收起；没有内容的大组不显示。Chat 只保留大组，Code 的小组使用标题前的 folder / folder-opened 表达展开状态，会话标题前显示图标。
 - 选中使用连续轻量背景，错误与待回应有文字或形状辅助。
 - 悬停辅助操作采用共享的[悬停叠层与渐变规范](../../../.agents/skills/design-philosophy/SKILL.md#hover-overlays)。
 - 保留选择与滚动位置，后台更新不自动重排用户正在操作的条目。

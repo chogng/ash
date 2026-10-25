@@ -622,6 +622,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "folder-opened",
+      "file": "folder-opened.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "folders",
       "file": "folders.svg",
       "rendering": "symbolic"
