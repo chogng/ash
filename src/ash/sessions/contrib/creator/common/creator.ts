@@ -1,5 +1,8 @@
 import { localize } from '../../../../nls.js';
 
+export const DOCS_EDITOR_SETTING = 'sessions.docs.editor';
+export type DocsEditorPreference = 'automatic' | 'rich' | 'markdown';
+
 export enum CreatorMode {
 	Design = 'design',
 	Whiteboard = 'whiteboard',

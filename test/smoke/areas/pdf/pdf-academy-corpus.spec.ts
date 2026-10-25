@@ -1,6 +1,7 @@
+import { Workbench } from '../../../automation/workbench.js';
 import { SignedExtensionRegistry } from '../../../automation/extensionRegistry.js';
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { expect, test as base } from "../../../automation/test.js";
 import { academyPdfCorpus, downloadAcademyPdfCorpus } from "../../../automation/academyPdfCorpus.js";
 import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from "../../../automation/testWorkspace.js";
@@ -32,16 +33,12 @@ const corpusTest = test.extend<{ readonly testWorkspace: TestWorkspace; }>({
 
 test.setTimeout(420_000);
 
-corpusTest("Installed optional PDF Viewer renders and annotates the open-access academy PDF corpus", { tag: ['@electron-app-server'] }, async ({ application, backendFixture, testWorkspace, workbench }) => {
-	await installViewer(application, backendFixture, workbench);
-	const explorer = workbench.page.locator(".ash-explorer");
-	const group = workbench.editors.groupAt(0);
+corpusTest("Agents Window optional PDF Viewer renders and annotates the open-access academy PDF corpus", { tag: ['@electron-app-server'] }, async ({ application, backendFixture, testWorkspace, workbench, target }) => {
+	const agents = new Workbench(await workbench.openAgentsWindow(target.kind));
+	await installViewer(backendFixture, agents);
 	for (const document of academyPdfCorpus) {
-		const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: document.fileName });
-		await expect.poll(() => fileRow.count(), { timeout: 15_000, message: `${document.fileName} appears in Explorer` }).toBe(1);
-		await fileRow.click();
-
-		const reader = group.content.locator(".ash-pdf-editor:visible");
+		await openPdf(application, agents, join(testWorkspace.directory, document.fileName));
+		const reader = agents.page.locator(".ash-pdf-editor:visible");
 		await expect(reader).toBeVisible();
 		const canvases = reader.locator(".ash-pdf-page-canvas");
 		await expect.poll(
@@ -80,37 +77,47 @@ corpusTest("Installed optional PDF Viewer renders and annotates the open-access 
 	}
 });
 
-async function installViewer(application: import('../../../automation/playwrightDriver.js').PlaywrightApplication, backendFixture: import('../../../automation/test.js').BackendFixture | undefined, workbench: import('../../../automation/workbench.js').Workbench): Promise<void> {
+async function installViewer(backendFixture: import('../../../automation/test.js').BackendFixture | undefined, workbench: Workbench): Promise<void> {
 	const registry = backendFixture as SignedExtensionRegistry;
-	await workbench.quickaccess.runCommand('ash.extensions.open');
+	await workbench.quickaccess.runCommand('ash.extensions.browse');
 	const extensions = workbench.page.locator('.ash-extensions-view-container');
 	await extensions.getByRole('searchbox').fill('pdf-viewer');
 	await extensions.getByRole('searchbox').press('Enter');
 	const row = extensions.locator(`[data-package-id="${registry.packageId}"]`);
-	await workbench.dialogs.confirm(application, 'Install', 'Install', () => row.getByRole('button', { name: 'Install', exact: true }).click());
+	await row.getByRole('button', { name: 'Install', exact: true }).click();
+	await workbench.page.getByRole('dialog', { name: 'Install', exact: true }).getByRole('button', { name: 'Install', exact: true }).click();
 	await expect.poll(() => registry.installations()).toMatchObject([{ package: { id: registry.packageId }, state: 'installed' }]);
 	const installation = (await registry.installations())[0];
-	await workbench.quickaccess.runCommand('ash.extensions.installed');
+	await workbench.quickaccess.runCommand('ash.extensions.showInstalled');
 	await extensions.locator(`[data-installation-id="${installation.installationId}"]`).click();
 	const editor = workbench.page.locator('.ash-extension-editor');
 	const enable = editor.getByRole('button', { name: 'Enable', exact: true });
 	if (await enable.count()) await enable.click();
-	await workbench.dialogs.confirm(application, registry.packageId, 'Authorize execution', () => editor.getByRole('button', { name: 'Authorize execution', exact: true }).click());
+	await editor.getByRole('button', { name: 'Authorize execution', exact: true }).click();
+	await workbench.page.getByRole('dialog', { name: registry.packageId, exact: true }).getByRole('button', { name: 'Authorize execution', exact: true }).click();
 	await expect(editor.getByRole('button', { name: 'Revoke execution authorization', exact: true })).toBeVisible();
-	await workbench.openExplorer();
 }
 
-test("Installed optional PDF Viewer renders workspace PDFs and persists review annotations", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, backendFixture, testWorkspace, workbench }) => {
-	await installViewer(application, backendFixture, workbench);
+/** Only replace the OS picker; resource routing, files and rendering remain product-owned. */
+async function openPdf(application: import('../../../automation/playwrightDriver.js').PlaywrightApplication, workbench: Workbench, filePath: string): Promise<void> {
+	if (!('windows' in application)) throw new Error('The signed PDF corpus requires Electron');
+	const original = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
+	try {
+		await application.evaluate(({ dialog }, filePath) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] }); }, filePath);
+		await workbench.quickaccess.runCommand('workbench.action.files.openFile');
+		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: basename(filePath) })).toHaveAttribute('aria-selected', 'true');
+	} finally {
+		await application.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original; }, original);
+		await original.dispose();
+	}
+}
 
-	const explorer = workbench.page.locator(".ash-explorer");
-	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "paper.pdf" });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "PDF appears in Explorer" }).toBe(1);
-	await fileRow.click();
-
-	const group = workbench.editors.groupAt(0);
-	await expect(group.tabs.filter({ hasText: "paper.pdf" })).toHaveAttribute("aria-selected", "true");
-	const reader = group.content.locator(".ash-pdf-editor");
+test("Agents Window PDF Viewer persists annotations without exposing a reader in IDE", { tag: ['@electron-app-server'] }, async ({ application, backendFixture, testWorkspace, workbench, target }) => {
+	const agents = new Workbench(await workbench.openAgentsWindow(target.kind));
+	await installViewer(backendFixture, agents);
+	await openPdf(application, agents, testWorkspace.pdfFile);
+	await agents.page.locator('[data-action-id="ash.sessions.toggleDetails"] button').first().click();
+	const reader = agents.page.locator(".ash-pdf-editor:visible");
 	await expect(reader).toBeVisible();
 	await expect(reader.locator(".ash-pdf-page-canvas")).toBeVisible();
 
@@ -121,11 +128,12 @@ test("Installed optional PDF Viewer renders workspace PDFs and persists review a
 		return layer.getBoundingClientRect().left - pages.getBoundingClientRect().left;
 	}), { message: "PDF page leading edge remains reachable in the scroll viewport" }).toBeGreaterThanOrEqual(0);
 	const bounds = await layer.boundingBox();
-	if (!bounds) throw new Error("PDF annotation layer has no visual bounds");
-	await workbench.page.mouse.move(bounds.x + 24, bounds.y + 24);
-	await workbench.page.mouse.down();
-	await workbench.page.mouse.move(bounds.x + Math.min(180, bounds.width - 12), bounds.y + Math.min(90, bounds.height - 12));
-	await workbench.page.mouse.up();
+	const viewport = await reader.locator('.ash-pdf-pages').boundingBox();
+	if (!bounds || !viewport) throw new Error("PDF annotation layer has no visual bounds");
+	await agents.page.mouse.move(bounds.x + 24, bounds.y + 24);
+	await agents.page.mouse.down();
+	await agents.page.mouse.move(Math.min(bounds.x + 120, viewport.x + viewport.width - 12), bounds.y + Math.min(90, bounds.height - 12));
+	await agents.page.mouse.up();
 
 	await expect(reader.locator(".ash-pdf-annotation-highlight")).toHaveCount(1);
 	await expect(reader.locator(".ash-pdf-annotation-status")).toContainText("Unsaved annotations");
@@ -141,4 +149,11 @@ test("Installed optional PDF Viewer renders workspace PDFs and persists review a
 		},
 		{ timeout: 15_000, message: "PDF annotation sidecar is saved through the App Server workspace" },
 	).toBe(1);
+
+	await openPdf(application, workbench, testWorkspace.pdfFile);
+	await expect(workbench.page.locator('.ash-pdf-editor')).toHaveCount(0);
+	await expect(workbench.page.locator('[data-editor-id="ash.workbench.pdfViewer"]')).toHaveCount(0);
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.element.getByRole('searchbox').fill('accessibility.verbosity.resourceEditor');
+	await expect(workbench.page.locator('input[data-configuration-key="accessibility.verbosity.resourceEditor"]')).toHaveCount(0);
 });

@@ -7,6 +7,7 @@ import { MenusRegistry, type ISubmenuItem } from '../../../../platform/actions/c
 import { extensionMenuId } from '../common/extensionMenus.js';
 import { ViewsRegistry } from '../../../common/views.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { KeybindingsRegistry, KeybindingSource, KeybindingWeight, type IKeybindingRule } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { URI } from "../../../../base/common/uri.js";
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationNode, type IConfigurationDefaults } from '../../../../platform/configuration/common/configurationRegistry.js';
@@ -60,6 +61,15 @@ interface LanguageConfigurationContribution {
 	readonly priority?: number;
 }
 
+// External declarative assets can remap text editing, but cannot invoke general
+// Workbench commands or supply arguments that carry process or terminal actions.
+const declarativeEditingCommands = new Set([
+	'editor.action.addSelectionToNextFindMatch', 'editor.action.selectHighlights',
+	'editor.action.insertCursorAbove', 'editor.action.insertCursorBelow',
+	'editor.action.copyLinesDownAction', 'editor.action.deleteLines',
+	'editor.action.insertLineAfter', 'editor.action.insertLineBefore',
+]);
+
 /** Activates Rust-discovered declarative extensions without materializing legacy grammar resources. */
 export class AppServerExtensionService extends Disposable implements IExtensionService {
 	private readonly colorContributions = this._register(new ColorExtensionPoint());
@@ -93,6 +103,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private activeConfigurationDefaults: IConfigurationDefaults[] = [];
 	private readonly submenuRegistrations = this._register(new DisposableStore());
 	private readonly welcomeRegistrations = this._register(new DisposableStore());
+	private readonly keybindingRegistrations = this._register(new DisposableStore());
 	private activeLanguages: readonly LanguageDescriptionContribution[] = Object.freeze([]);
 	private activeLanguageConfigurations: readonly LanguageConfigurationContribution[] = Object.freeze([]);
 	private readonly fileIconRegistration = this._register(WorkbenchFileIconThemesRegistry.registerThemes());
@@ -297,6 +308,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			if (signature === this.activeCatalogSignature && snippetOwnerRevision === this.activeSnippetOwnerRevision) return;
 			const catalog = projectExtensionCatalog(transportCatalog);
 			const preparedManifests = new Map<string, ExtensionManifest>();
+			const keybindings: IKeybindingRule[] = [];
 			let nextExtension = 0;
 			const preparationFailures = new Map<number, ExtensionServiceFailure>();
 			// Package resources are independent, but publishing contributions is one
@@ -356,6 +368,9 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			for (const extension of transportCatalog.extensions) {
 				activeExtension = projectExtensionDescriptor(extension);
 				const manifest = preparedManifests.get(extension.id)!;
+				keybindings.push(...manifest.contributes.keybindings
+					.filter(rule => extension.sourceKind === 'builtIn' || rule.args === undefined && declarativeEditingCommands.has(rule.command))
+					.map(rule => ({ ...rule, source: KeybindingSource.Workbench, priority: extension.sourceKind === 'builtIn' ? KeybindingWeight.BuiltinExtension : KeybindingWeight.ExternalExtension })));
 				manifests.push({ description: activeExtension, manifest });
 				welcome.push(...manifest.contributes.viewsWelcome.map(entry => [entry.view, { content: entry.contents, when: entry.when ? ContextKeyExpr.deserialize(entry.when) : undefined, precondition: entry.precondition ? ContextKeyExpr.deserialize(entry.precondition) : undefined, group: entry.group, order: entry.order }] as Parameters<typeof ViewsRegistry.registerViewWelcomeContent>));
 				configurations.push(...manifest.contributes.configuration);
@@ -511,6 +526,8 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					for (const args of welcome) this.welcomeRegistrations.add(ViewsRegistry.registerViewWelcomeContent(...args));
 					this.replaceContributions(languages, languageConfigurations, themes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions, { matchers: problemMatchers, patterns: problemPatterns }, configurations, configurationDefaults);
 					snippetActivation?.commit();
+					this.keybindingRegistrations.clear();
+					for (const rule of keybindings) { this.keybindingRegistrations.add(KeybindingsRegistry.registerKeybindingRule(rule)); }
 					this.activeThemeContributions = themeContributions;
 					this.activeLanguages = Object.freeze([...languages]);
 					this.activeLanguageConfigurations = Object.freeze([...languageConfigurations]);

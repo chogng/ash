@@ -381,7 +381,7 @@
     "github.repository.description": "选择 Git 协议和受保护分支的行为。",
     "browser.agent.description": "控制浏览器自动化和高级调试访问权限。",
     "browser.chatgpt.label": "ChatGPT",
-    "browser.chatgpt.description": "配置此窗口中的 ChatGPT 网页。",
+    "browser.chatgpt.description": "配置此窗口中的 ChatGPT。",
     "categories.voice-input.label": "语音输入",
     "categories.voice-input.description": "选择本地或云端转写，并管理听写模型。",
     "hooks.managementLink": "在 Agent 自定义中管理 Hooks。",

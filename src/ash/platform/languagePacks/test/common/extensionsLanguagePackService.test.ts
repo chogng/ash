@@ -80,6 +80,7 @@ function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionM
 	}));
 	return {
 		onDidChangeInstalled: Event.None,
+		recommendationEnvironment: async () => ({ platform: 'other', executables: [] }),
 		searchPage: async () => { throw new Error('Language packs do not use customization paging'); },
 		sources: async () => ({ revision: 0, sources: [] }),
 		addSource: async () => { throw new Error("unused"); },

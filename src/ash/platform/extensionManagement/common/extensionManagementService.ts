@@ -3,6 +3,11 @@ import { createServiceIdentifier } from "../../instantiation/common/instantiatio
 
 export type ExtensionsCapabilityKind = "skill" | "mcp" | "connector" | "theme" | "language" | "localization" | "executable" | "editorExtension" | "asset";
 
+export interface ExtensionsRecommendationEnvironment {
+	readonly platform: 'macos' | 'linux' | 'windows' | 'other';
+	readonly executables: readonly string[];
+}
+
 export interface ExtensionsSearchOptions {
 	readonly packageType?: string;
 	readonly limit?: number;
@@ -156,6 +161,7 @@ export interface AshExtensionSource {
 
 /** Frontend Extensions business capability, independent of distribution and package internals. */
 export interface IExtensionManagementService {
+	recommendationEnvironment(): Promise<ExtensionsRecommendationEnvironment>;
 	searchPage(query: string, options: ExtensionsSearchOptions & { readonly sourceId: string; readonly pageSize: number; readonly cursor?: string; }): Promise<ExtensionsSearchPage>;
 	readonly onDidChangeInstalled: Event<void>;
 	sources(): Promise<ExtensionRegistrySources>;

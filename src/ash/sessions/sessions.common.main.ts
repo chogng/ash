@@ -17,6 +17,8 @@ import './common/sessionConfig.js';
 import './browser/actions/devContainerActions.js';
 // The independent Sessions renderer hosts the same text and diff editors as Code.
 import '../editor/editor.all.js';
+// Multi Diff needs hidden-region breadcrumbs before the full Code features load.
+import '../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js';
 import '../platform/uriIdentity/common/uriIdentityService.js';
 import '../workbench/contrib/commands/common/commands.contribution.js';
 import '../workbench/contrib/extensions/browser/extensions.contribution.js';
@@ -67,6 +69,7 @@ import './contrib/automations/browser/automations.contribution.js';
 import './contrib/sessions/browser/sessions.contribution.js';
 import './contrib/layout/browser/sessions.layout.contribution.js';
 import '../workbench/contrib/codeEditor/browser/codeEditor.contribution.js';
+import '../workbench/contrib/documentEditor/browser/documentEditor.contribution.js';
 import '../workbench/contrib/snippets/browser/snippets.contribution.js';
 import '../workbench/contrib/scm/browser/scm.service.contribution.js';
 import '../workbench/contrib/scm/browser/quickDiff.contribution.js';

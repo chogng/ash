@@ -1,0 +1,18 @@
+{
+  "scopeName": "source.ssh-config",
+  "patterns": [
+    {
+      "name": "comment.line.number-sign.ssh-config",
+      "match": "#.*$"
+    },
+    {
+      "name": "keyword.control.ssh-config",
+      "match": "(?i)^\\s*(Host|Match|HostName|User|Port|IdentityFile|ProxyJump|ForwardAgent|ServerAliveInterval)\\b"
+    },
+    {
+      "name": "string.quoted.double.ssh-config",
+      "begin": "\"",
+      "end": "\""
+    }
+  ]
+}

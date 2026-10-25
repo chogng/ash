@@ -109,6 +109,189 @@ suite('notifications browser component', () => {
 		});
 	}
 
+	test('duplicate bursts produce one toast and retain only the replacement in history', async function () {
+		const { page } = browserTests;
+		await page.goto('/notifications.html');
+		const ids = await page.evaluate(() => Array.from({ length: 15 }, () => window.ashNotificationsIntegration.notifyOptions('Repeated notification')));
+		await expect(page.locator('.ash-notification')).toHaveCount(1);
+		expect(await page.evaluate(() => window.ashNotificationsIntegration.history())).toEqual([ids.at(-1)]);
+		await page.evaluate(() => window.ashNotificationsIntegration.show());
+		await expect(page.locator('.ash-notifications-row')).toHaveCount(1);
+		await expect(page.locator('.ash-notifications-row')).toBeFocused();
+	});
+
+	test('notification details share expansion between toast and center and follow position changes', async function () {
+		const { page } = browserTests;
+		for (const language of ['', '?zh']) {
+			await page.goto(`/notifications.html${language}`);
+			await page.evaluate(() => window.ashNotificationsIntegration.notifyOptions('Long notification message '.repeat(30)));
+			const toast = page.locator('.ash-notification');
+			const expandLabel = language ? '展开通知' : 'Expand Notification';
+			const collapseLabel = language ? '收起通知' : 'Collapse Notification';
+			await expect(toast.locator('.ash-notification-message')).toHaveCSS('white-space', 'nowrap');
+			await toast.getByRole('button', { name: expandLabel, exact: true }).click();
+			await expect(toast.getByRole('button', { name: collapseLabel, exact: true })).toHaveAttribute('aria-expanded', 'true');
+			await expect(toast.locator('.ash-notification-message')).toHaveCSS('white-space', 'pre-wrap');
+			await page.evaluate(() => window.ashNotificationsIntegration.show());
+			const row = page.locator('.ash-notifications-row');
+			await expect(row).toBeFocused();
+			await expect(row.getByRole('button', { name: collapseLabel, exact: true })).toHaveAttribute('aria-expanded', 'true');
+			await page.keyboard.press('ArrowLeft');
+			await expect(row.getByRole('button', { name: expandLabel, exact: true })).toHaveAttribute('aria-expanded', 'false');
+			await page.keyboard.press('Enter');
+			await expect(row).toHaveClass(/expanded/);
+			await page.keyboard.press('Space');
+			await expect(row).not.toHaveClass(/expanded/);
+			await page.evaluate(() => window.ashNotificationsIntegration.setPosition('top-right' as import('../../common/notifications.js').NotificationsPosition));
+			const hide = page.locator('.ash-notifications-hide .ash-icon');
+			await expect(hide).toHaveAttribute('data-ash-icon-id', 'chevron-up');
+			await expect(row.getByRole('button', { name: expandLabel, exact: true }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'chevron-down');
+			await row.getByRole('button', { name: expandLabel, exact: true }).click();
+			await expect(row.getByRole('button', { name: collapseLabel, exact: true })).toBeFocused();
+			await page.evaluate(() => window.ashNotificationsIntegration.setPosition('bottom-right' as import('../../common/notifications.js').NotificationsPosition));
+			await expect(hide).toHaveAttribute('data-ash-icon-id', 'chevron-down');
+			await browserTests.info.attach(`expanded-${language ? 'zh' : 'en'}`, { body: await page.screenshot(), contentType: 'image/png' });
+		}
+	});
+
+	test('notification rows navigate, dismiss adjacent rows and protect active progress', async function () {
+		const { page } = browserTests;
+		await page.goto('/notifications.html');
+		const ids = await page.evaluate(() => {
+			const ids = ['First', 'Second', 'Third'].map(message => window.ashNotificationsIntegration.notifyOptions(message));
+			window.ashNotificationsIntegration.show();
+			return ids;
+		});
+		const rows = page.locator('.ash-notifications-row');
+		await expect(rows.nth(0)).toBeFocused();
+		await page.keyboard.press('ArrowDown');
+		await expect(rows.nth(1)).toBeFocused();
+		await page.keyboard.press('Delete');
+		await expect(rows).toHaveCount(2);
+		await expect(rows.nth(1)).toBeFocused();
+		await expect(rows.nth(1)).toHaveAttribute('data-notification-id', String(ids[0]));
+		await page.keyboard.press('Home');
+		await expect(rows.nth(0)).toBeFocused();
+		await page.keyboard.press('End');
+		await expect(rows.nth(1)).toBeFocused();
+		await page.keyboard.press('ArrowUp');
+		await expect(rows.nth(0)).toBeFocused();
+		await rows.nth(0).click({ button: 'middle' });
+		await expect(rows).toHaveCount(1);
+		await page.evaluate(() => window.ashNotificationsIntegration.startProgress());
+		const progress = rows.filter({ has: page.getByRole('progressbar') });
+		await progress.focus();
+		await page.keyboard.press('Delete');
+		await progress.click({ button: 'middle' });
+		await expect(progress).toBeVisible();
+		await expect(rows).toHaveCount(2);
+		await page.evaluate(() => window.ashNotificationsIntegration.finishProgress());
+		await expect(progress).toHaveCount(0);
+		await page.evaluate(() => window.ashNotificationsIntegration.notify('Action notification'));
+		await rows.first().focus();
+		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter');
+		await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.actionRuns)).toBe(1);
+	});
+
+	test('empty notification center shows its state only in the title and keeps read history visible', async function () {
+		const { page } = browserTests;
+		for (const language of ['', '?zh']) {
+			await page.goto(`/notifications.html${language}`);
+			await page.evaluate(() => window.ashNotificationsIntegration.show());
+			const center = page.locator('.ash-notifications-center');
+			const title = center.getByRole('heading');
+			const header = center.locator('.ash-notifications-center-header');
+			const clear = header.getByRole('button', { name: language ? '全部清除' : 'Clear All', exact: true });
+			const emptyTitle = language ? '没有新通知' : 'No New Notifications';
+			await expect(title).toHaveText(emptyTitle);
+			await expect(clear).toBeDisabled();
+			await expect(center.getByRole('listitem')).toHaveCount(0);
+			for (let theme = 0; theme < 4; theme++) {
+				await page.evaluate(index => window.ashNotificationsIntegration.theme(index), theme);
+				const bounds = (await center.boundingBox())!;
+				const headerBounds = (await header.boundingBox())!;
+				expect(bounds.height).toBe(headerBounds.height + 2);
+				await browserTests.info.attach(`empty-center-${language ? 'zh' : 'en'}-theme-${theme}`, { body: await center.screenshot(), contentType: 'image/png' });
+			}
+			const id = await page.evaluate(() => window.ashNotificationsIntegration.notify('Retained notification'));
+			await expect(title).toHaveText(language ? '通知' : 'Notifications');
+			await expect(clear).toBeEnabled();
+			await expect(center.getByRole('listitem')).toHaveCount(1);
+			await page.evaluate(() => {
+				window.ashNotificationsIntegration.hide();
+				window.ashNotificationsIntegration.show();
+			});
+			await expect(title).toHaveText(language ? '通知' : 'Notifications');
+			await expect(center.getByRole('listitem')).toHaveText(/Retained notification/);
+			await page.evaluate(id => window.ashNotificationsIntegration.remove(id), id);
+			await expect(center).toBeHidden();
+			await page.evaluate(() => window.ashNotificationsIntegration.show());
+			await expect(title).toHaveText(emptyTitle);
+			await expect(clear).toBeDisabled();
+			await expect(center.getByRole('listitem')).toHaveCount(0);
+		}
+	});
+
+	test('notification center uses a continuous list and a compact keyboard toolbar across themes and languages', async function () {
+		const { page } = browserTests;
+		for (const language of ['', '?zh']) {
+			await page.goto(`/notifications.html${language}`);
+			await page.evaluate(() => {
+				window.ashNotificationsIntegration.notify('First notification');
+				window.ashNotificationsIntegration.notify('Second notification');
+				window.ashNotificationsIntegration.show();
+			});
+			const center = page.locator('.ash-notifications-center');
+			const header = center.locator('.ash-notifications-center-header');
+			const toolbar = header.getByRole('toolbar');
+			const buttons = toolbar.getByRole('button');
+			await expect(buttons).toHaveCount(4);
+			await expect(buttons.nth(0)).toHaveAccessibleName(language ? '全部清除' : 'Clear All');
+			await expect(buttons.nth(0).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'clear-all');
+			for (let theme = 0; theme < 4; theme++) {
+				await page.evaluate(index => window.ashNotificationsIntegration.theme(index), theme);
+				const rows = center.locator('.ash-notifications-row');
+				await expect(header).toHaveCSS('height', '36px');
+				await expect(center.locator('.ash-notifications-list')).toHaveCSS('padding', '0px');
+				await expect(rows.first()).toHaveCSS('border-radius', '0px');
+				await expect(rows.first()).toHaveCSS('border-width', '0px');
+				await expect(rows.nth(1)).toHaveCSS('border-top-width', '1px');
+				const bounds = await rows.evaluateAll(elements => elements.map(element => {
+					const { x, y, width, height } = element.getBoundingClientRect();
+					return { x, y, width, height };
+				}));
+				expect(bounds[0].x).toBe(bounds[1].x);
+				expect(bounds[0].width).toBe(bounds[1].width);
+				expect(bounds[0].y + bounds[0].height).toBe(bounds[1].y);
+				for (const button of await buttons.all()) {
+					await expect(button).toHaveCSS('width', '22px');
+					await expect(button).toHaveCSS('height', '22px');
+					await expect(button).toHaveCSS('box-sizing', 'border-box');
+					await expect(button.locator('.ash-icon-label-container')).toBeHidden();
+				}
+				await browserTests.info.attach(`center-${language ? 'zh' : 'en'}-theme-${theme}`, { body: await center.screenshot(), contentType: 'image/png' });
+			}
+			await buttons.nth(0).focus();
+			await page.keyboard.press('ArrowRight');
+			await expect(buttons.nth(1)).toBeFocused();
+			await page.keyboard.press('ArrowDown');
+			await expect(buttons.nth(1)).toHaveAttribute('aria-expanded', 'true');
+			await expect(page.getByRole('menu')).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(buttons.nth(1)).toBeFocused();
+			await expect(buttons.nth(1)).toHaveAttribute('aria-expanded', 'false');
+			await page.keyboard.press('ArrowRight');
+			await expect(buttons.nth(2)).toBeFocused();
+			await page.keyboard.press('End');
+			await expect(buttons.nth(3)).toBeFocused();
+			await page.keyboard.press('Home');
+			await expect(buttons.nth(0)).toBeFocused();
+			await page.keyboard.press('Enter');
+			await expect(center).toBeHidden();
+			expect(await page.evaluate(() => window.ashNotificationsIntegration.history())).toEqual([]);
+		}
+	});
+
 	test('notification rows share standard controls, preserve focus, and fit narrow themed surfaces', async function () {
 		const { page } = browserTests;
 		const testInfo = browserTests.info;
@@ -154,7 +337,7 @@ suite('notifications browser component', () => {
 		const id = await toast.getAttribute('data-notification-id');
 		await page.evaluate(() => window.ashNotificationsIntegration.notify('Another notification'));
 		await expect(page.locator('.ash-notification')).toHaveCount(2);
-		await expect(close.filter({ has: page.locator('.ash-icon') }).first()).toBeFocused();
+		await expect(page.locator(`[data-notification-close="${id}"]`)).toBeFocused();
 		await page.evaluate(() => window.ashNotificationsIntegration.show());
 		await page.evaluate(() => window.ashNotificationsIntegration.notify('Arrival with hidden toasts'));
 		await expect(page.locator('.ash-aria-status').filter({ hasText: 'Arrival with hidden toasts' })).toHaveCount(1);
@@ -210,7 +393,7 @@ suite('notifications browser component', () => {
 			for (let index = 0; index < 8; index++) window.ashNotificationsIntegration.notify(`Burst ${index}`);
 		});
 		await expect(page.locator('.ash-notification')).toHaveCount(3);
-		await expect(page.locator('.ash-notification .ash-notification-message')).toHaveText(['Burst 5', 'Burst 6', 'Burst 7']);
+		await expect(page.locator('.ash-notification .ash-notification-message')).toHaveText(['Burst 7', 'Burst 6', 'Burst 5']);
 		await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.history().length)).toBe(9);
 	});
 
@@ -263,10 +446,11 @@ suite('notifications browser component', () => {
 		const toasts = page.locator('.ash-notification');
 		await expect(toasts).toHaveCount(3);
 		for (const [index, id] of ['info', 'warning', 'error'].entries()) {
-			await expect(toasts.nth(index).locator('.ash-notification-severity .ash-icon')).toHaveAttribute('data-ash-icon-id', id);
-			await expect(toasts.nth(index).getByRole('img')).toHaveAttribute('aria-label', ['信息', '警告', '错误'][index]);
+			const toast = page.locator(`.ash-notification[data-severity="${id}"]`);
+			await expect(toast.locator('.ash-notification-severity .ash-icon')).toHaveAttribute('data-ash-icon-id', id);
+			await expect(toast.getByRole('img')).toHaveAttribute('aria-label', ['信息', '警告', '错误'][index]);
 		}
-		const error = toasts.last();
+		const error = page.locator('.ash-notification[data-severity="error"]');
 		await expect(error.locator('.ash-notification-source')).toHaveText('来源：Git');
 		await expect(error.getByRole('button', { name: '更多操作', exact: true })).toBeVisible();
 		for (let theme = 0; theme < 4; theme++) {
@@ -638,6 +822,7 @@ suite('notifications browser component', () => {
 			window.ashNotificationsIntegration.notifyOptions('Keyboard notification');
 		});
 		const toast = page.locator('.ash-notification');
+		await expect(toast).toBeVisible();
 		const origin = page.getByRole('button', { name: 'Toast keyboard origin', exact: true });
 		for (let theme = 0; theme < 4; theme++) {
 			await page.evaluate(theme => window.ashNotificationsIntegration.theme(theme), theme);

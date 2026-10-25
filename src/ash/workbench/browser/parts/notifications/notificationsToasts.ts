@@ -76,7 +76,7 @@ export class NotificationsToasts extends Disposable {
 			this.pending.clear();
 			this.render();
 			// DOM removal can transfer ownership of focus or dispose this window's presentation.
-			if (!this.hidden && !this.isDisposed && this.element.isConnected && document.activeElement === document.body && previousFocus?.isConnected && !previousFocus.closest("[hidden], [inert], [aria-hidden='true']") && !previousFocus.matches(":disabled") && previousFocus.checkVisibility({ checkVisibilityCSS: true })) {
+			if (!this.hidden && !this.isDisposed && this.element.isConnected && document.activeElement === document.body && previousFocus?.isConnected && !previousFocus.closest("[hidden], [inert], [aria-hidden='true']") && !previousFocus.matches(":disabled") && previousFocus.checkVisibility?.({ checkVisibilityCSS: true })) {
 				previousFocus.focus();
 			}
 		}));
@@ -85,12 +85,17 @@ export class NotificationsToasts extends Disposable {
 			const button = this.element.querySelector<HTMLButtonElement>(`[data-notification-close="${id}"]`);
 			const buttons = [...this.element.querySelectorAll<HTMLButtonElement>("[data-notification-close]")];
 			const focusedIndex = document.activeElement === button ? buttons.indexOf(button!) : -1;
+			const rows = [...this.element.children] as HTMLElement[];
+			const focusedRowIndex = rows.findIndex(row => row.contains(document.activeElement));
 			model.remove(id);
 			// Removal listeners can open the center, move focus, or dispose this owner.
 			if (focusedIndex >= 0 && !this.hidden && !this.isDisposed && this.element.isConnected && document.activeElement === document.body) {
 				const remaining = this.element.querySelectorAll<HTMLButtonElement>("[data-notification-close]");
 				const nextFocus = remaining[Math.min(focusedIndex, remaining.length - 1)] ?? this.previousFocus;
 				if (nextFocus?.isConnected) nextFocus.focus();
+			} else if (focusedRowIndex >= 0 && !this.hidden && !this.isDisposed && this.element.isConnected && document.activeElement === document.body) {
+				const nextFocus = this.element.children[Math.min(focusedRowIndex, this.element.children.length - 1)] as HTMLElement | undefined;
+				(nextFocus ?? this.previousFocus)?.focus();
 			}
 		}));
 		for (const item of model.getNotifications().filter(item => item.priority !== NotificationPriority.SILENT && !this.isFiltered(item) && !this.coversActiveInput(item)).slice(-3)) this.visible.add(item.id);
@@ -111,7 +116,7 @@ export class NotificationsToasts extends Disposable {
 
 	private render(): void {
 		if (this.isDisposed) return;
-		const items = this.hidden ? [] : this.model.getNotifications().filter(item => this.visible.has(item.id));
+		const items = this.hidden ? [] : this.model.getNotifications().filter(item => this.visible.has(item.id)).reverse();
 		this.list.updateNotificationsList(0, this.element.children.length, items);
 		for (const [id] of this.toastLifetimes) {
 			if (!this.visible.has(id) || this.hidden) this.toastLifetimes.deleteAndDispose(id);
@@ -166,7 +171,7 @@ export class NotificationsToasts extends Disposable {
 					// Give the returning user a full reading interval, with one owned focus wait.
 					const onFocus: Event<void> = listener => this.hostService.onDidChangeFocus(focused => { if (focused) listener(); });
 					pending.value = Event.once(onFocus)(schedule);
-				} else if (current.sticky || current.hasActiveProgress || (current.severity === Severity.Error && !!current.actions?.primary?.length) || hovered || node.contains(node.ownerDocument.activeElement) || node.querySelector('[aria-expanded="true"]')) {
+				} else if (current.sticky || current.hasActiveProgress || (current.severity === Severity.Error && !!current.actions?.primary?.length) || hovered || node.contains(node.ownerDocument.activeElement) || node.querySelector('[aria-haspopup="menu"][aria-expanded="true"]')) {
 					schedule();
 				} else {
 					this.visible.delete(id);

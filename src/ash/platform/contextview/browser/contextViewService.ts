@@ -6,7 +6,7 @@ import {
 import { Disposable } from "../../../base/common/lifecycle.js";
 import type { ILayoutService } from "../../layout/browser/layoutService.js";
 import type { IContextViewService } from "./contextView.js";
-import { getWindow, isNode } from '../../../base/browser/dom.js';
+import { getWindow, isHTMLElement, isNode } from '../../../base/browser/dom.js';
 import { onWillUnregisterWindow } from '../../../base/browser/window.js';
 
 /** Browser ContextView service scoped to one Workbench container. */
@@ -31,15 +31,18 @@ export class BrowserContextViewService
 	}
 
 	show(options: ContextViewOptions): boolean {
+		let container = this.container;
 		if (this.layoutService) {
 			const targetWindow = isNode(options.anchor) ? getWindow(options.anchor) :
 				'targetWindow' in options.anchor ? (options.anchor as { targetWindow: Window; }).targetWindow : getWindow(this.layoutService.activeContainer);
-			const container = this.layoutService.getContainer(targetWindow);
-			if (this.contextView.element.parentElement !== container) {
-				this.hide();
-				// Mount under the window's themed root, so adopted menus and hovers inherit its tokens.
-				container.append(this.contextView.element);
-			}
+			container = this.layoutService.getContainer(targetWindow);
+		}
+		// Native modals occupy the browser's top layer. Their overlays must be
+		// descendants to remain visible and interactive above the dialog.
+		if (isHTMLElement(options.anchor)) container = options.anchor.closest<HTMLElement>('dialog:modal') ?? container;
+		if (this.contextView.element.parentElement !== container) {
+			this.hide();
+			container.append(this.contextView.element);
 		}
 		return this.contextView.show(options);
 	}

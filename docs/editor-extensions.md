@@ -147,7 +147,7 @@ Academy 使用中立 `editor` 市场包，`editor/` 的标准扩展 manifest 和
 
 ### 可选文献管理与 PDF 资源编辑器
 
-PDF 查看器由独立的 [`ash.pdf-viewer`](../extensions/pdf-viewer/README.md) 包提供，Code／Agents 产品均不预装；Agent Window、工作台组合入口和 Chat 不静态导入 PDF 实现。Academy 负责写作与文档编辑事务，文献检索由包含工具与 Skills 的 Plugin 提供，独立 [`ash.reference-manager`](../extensions/reference-manager/README.md) 已支持 RIS 导入、去重、文献库管理和稳定 ID 关联的引用插入／更新；BibTeX 和 CSL 样式不在首版范围。文献管理通过 Academy 的版本绑定 `academy.citations.v1` 提交一次可撤销文档事务，不能另存一份正文状态。Academy 的 PDF 导出不依赖 PDF 查看器。
+PDF 查看器由独立的 [`ash.pdf-viewer`](../extensions/pdf-viewer/README.md) 包提供，仅服务 Agent Window 的文件阅读和聊天附件预览，相关设置也只在 Agent Window 中展示。IDE 的窗口组合从扩展目录投影中排除该包，不能因同一 profile 已安装、启用或授权插件而注册 PDF 编辑器、预览或设置；共享宿主只执行窗口传入的筛选，不拥有 PDF 产品策略。Agent Window 不预装或静态导入 PDF 实现。Academy 负责写作与文档编辑事务，文献检索由包含工具与 Skills 的 Plugin 提供，独立 [`ash.reference-manager`](../extensions/reference-manager/README.md) 已支持 RIS 导入、去重、文献库管理和稳定 ID 关联的引用插入／更新；BibTeX 和 CSL 样式不在首版范围。文献管理通过 Academy 的版本绑定 `academy.citations.v1` 提交一次可撤销文档事务，不能另存一份正文状态。Academy 的 PDF 导出不依赖 PDF 查看器。
 
 PDF 包使用已安装第一方客户端的相同签名、精确授权与资源校验链，经 `editor.resource.v1` 注册二进制资源 pane。`describe` 的 `version: 1`、`clientModule`、`clientDigest` 与 `editors` 字段沿用客户端声明；每个 editor 含 `editorId`、`displayName`、`selectors` 和 `contentType`，不含文本 `documentType`。声明必须匹配包 manifest 的 custom editor。模块通过 `getResourceEditor(editorId, createInstance)` 提供构造器，宿主经 DI 构造并传入 Provider 的终止信号。`createInstance` 是随 Provider 终止失效的窄构造回调，不提供服务查找、注册或容器访问；资源 pane 用它构造自己拥有的工作副本。资源 pane 负责观察信号、取消 I/O 和冻结已有视图；宿主负责撤销路由及按 pane 生命周期释放样式。Chat 附件通过通用 `resourceEditor` 能力提供只读预览，不依赖具体 PDF 类型。
 
@@ -219,7 +219,17 @@ IDE 和 Agent Window 共用 Extensions 入口，默认包含可折叠的 Skills�
 
 插件列表依次显示名称、发布者和描述。发布者显示使用清单 `author` 的姓名字符串或 `{ name }`，详情、搜索和无障碍名称保持一致；未声明时省略该行。内部 `publisher` 继续用于包命名空间和身份校验。
 
-Recommended 读取各工作区文件夹的 `.ash/extensions.json`，以及多根工作区文件中的顶层 `extensions` 对象。配置支持 JSONC，`recommendations` 声明推荐 ID，`unwantedRecommendations` 排除 ID；合并时忽略大小写并去重，任一工作区声明的排除项适用于合并结果。现有记录可能包含 Open VSX 的 `publisher.name`；Ash 包使用目录中的完整 ID，退休旧来源不能改写已有包的来源身份。读取遵循当前文件服务的授权范围，不可访问的配置会显示诊断。文件修改自动刷新；无效编辑显示诊断并保留当前工作区的上次有效配置，删除文件则清空对应声明。推荐只提供发现入口，安装和权限审核继续由包详情处理。
+Recommended 读取各工作区文件夹的 `.ash/extensions.json`，以及多根工作区文件中的顶层 `extensions` 对象。配置支持 JSONC，`recommendations` 声明推荐 ID，`unwantedRecommendations` 排除 ID；合并时忽略大小写并去重，任一工作区声明的排除项适用于合并结果。现有记录可能包含 Open VSX 的 `publisher.name`；Ash 包使用目录中的完整 ID，退休旧来源不能改写已有包的来源身份。读取遵循当前文件服务的授权范围，不可访问的配置会显示诊断。文件修改自动刷新；无效编辑显示诊断并保留当前工作区的上次有效配置，删除文件则清空对应声明。推荐提供发现入口，安装和权限审核继续由包详情处理。
+
+场景触发的推荐通知由 Workbench 的 `IExtensionRecommendationNotificationService` 统一持有：已安装、已忽略及工作区排除的扩展不再提示，未能从启用源查到的包不产生通知；注册源不可用不阻塞编辑。通知在同一窗口内按扩展身份去重，“不再显示”对场景推荐保存到 profile，对工作区推荐保存到工作区状态。`extensions.ignoreRecommendations` 隐藏自动通知，仍允许主动浏览扩展。`extensions.showRecommendationsOnlyOnDemand` 可将推荐改为仅在扩展列表中查看。
+
+打开文件、切换语言、工作区声明和项目配置变化统一由 `IExtensionRecommendationsService` 汇总。文件工作副本和编辑器模型分别通过其 owner 事件接入，内部模型和简单输入控件不参与推荐。文件后缀与语言推荐查询当前启用目录的语言元数据，语言服务器和不含服务器的语言资源包分别查询；富文档和 PDF 使用产品指定的编辑器包身份。工作区根目录的 Cargo、Python、JavaScript/TypeScript、Go、JVM、PHP、Ruby、Docker、CMake 和 Make 配置可触发对应语言推荐，目录监听负责新增和删除后的刷新；多根工作区各根分别检查。Recommended 展示合并后的推荐原因，按扩展身份去重并排除已安装项和工作区排除项；目录离线时仍显示未知的声明 ID。异步发现以当前编辑器、语言和工作区代次为准，过期结果不发布。Docs 缺少富文档 Provider 时也只提交目标文件资源，不拥有推荐包、安装、启用或精确授权状态。
+
+近期文件推荐以包 ID 和时间戳保存到 profile 的 machine 状态，最多保留 200 项，七天后过期；不保存文件路径或文档内容。关闭文件或重启后仍能在 Recommended 查阅历史原因，历史项不重放自动通知。全局忽略由 `IExtensionIgnoredRecommendationsService` 唯一持有并与工作区排除项合并，列表和通知共用；扩展菜单和命令面板可忽略或恢复单项推荐，恢复不会覆盖工作区排除文件。通知的“不再显示”单独保留其原有作用域，“恢复已关闭的扩展推荐通知”可撤销这些选择，保留用户的全局配置开关。每个窗口工作区最多显示三条文件/工具自动推荐，显式工作区推荐保留独立策略；上下文取消不计为用户关闭。多包通知的查看入口打开 Recommended，安装继续逐包审核。
+
+产品推荐目录由 `resources/extension-recommendations.json` 随 Ash 版本分发，统一描述编辑器、项目配置、工具、键位、远程和 Web 的候选；新增候选不另建通知或忽略机制。工具存在性通过版本化 `extensionRecommendations` 契约查询当前连接的 App Server，仅检查目录列出的程序名在绝对 PATH 目录中的文件和执行位，不运行程序，也不向 renderer 返回 PATH、程序路径或内容。远程工作区检查远端主机，旧后端缺少契约或断线时跳过。工具推荐最多弹出一次，已有两条场景通知后让位于文件推荐；远程和 Web 工具推荐仅在列表中显示。键位可通过“显示推荐的键位方案”主动查看；远程连接和工作区 authority 变化刷新远程候选；浏览器工作台补充 Web 候选。产品候选必须先由当前启用来源解析，来源未发布的候选保持安静，已安装、全局忽略和工作区排除继续由统一服务过滤。
+
+`extensions/keymap-sublime` 和 `extensions/remote-workspace` 是可选声明式包，分别提供常用多光标/行编辑键位和 SSH 配置的语言、语法与片段；后者复用产品的 Remote 连接，不实现 SSH 客户端或读取密钥。仓库包的 `ashDistribution: "marketplace"` 只控制构建分发，使其不进入内置目录。用 `pnpm package:declarative <源码目录> <新输出目录>` 生成原有签名市场工具接收的 catalog 与 package；该入口拒绝运行时入口、符号链接和覆盖已有输出。目录候选只有在包发布到启用源后才可安装，源码提交不等于生产市场发布。安装、停用和卸载沿用现有声明式贡献生命周期。
 
 扩展包是安装、更新和卸载单位，capability 是发现和使用单位。纯 Skill 保留标准 `SKILL.md`，由 Skills authority 校验并加载；包含 executable Provider 的能力才进入 `external-ext`。Connector 账号、MCP 会话、Skill 上下文和编辑器文档分别保留原领域 owner。
 

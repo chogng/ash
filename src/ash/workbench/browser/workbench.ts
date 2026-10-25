@@ -606,7 +606,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
 		const enablement = this._register(services.createInstance(GlobalExtensionEnablementService));
 		services.registerInstance(IGlobalExtensionEnablementService, enablement);
-		const enabledExtensions = withEnabledBuiltInExtensions(api.extensions, enablement, extensionManagementService);
+		// PDF reading belongs to the Agents Window, including installed packages and Chat previews.
+		const enabledExtensions = withEnabledBuiltInExtensions(api.extensions, enablement, extensionManagementService, extension => extension.id !== 'ash.pdf-viewer');
 		services.registerInstance(IWorkbenchEnvironmentService, environmentService);
 		const embedderTerminals = services.get(IEmbedderTerminalService);
 		this.window = {

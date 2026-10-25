@@ -29,6 +29,7 @@ test("Extensions browse snapshots survive view recreation and invalidate after l
 	const detailRequests: string[] = [];
 	const installed = { installationId: "installed-1", package: packageReference, state: "installed" as const, capabilities: [] };
 	const api = {
+		recommendationEnvironment: async () => ({ platform: 'other', executables: [] }),
 		searchPage: async () => { throw new Error('This test exercises the existing browse API'); },
 		builtInProviders: async () => ({ revision: 1, canChangeEnablement: true, providers: [] }),
 		setBuiltInProviderEnablement: async () => { throw new Error('unused'); },
@@ -108,4 +109,13 @@ test("Extensions browse snapshots survive view recreation and invalidate after l
 	await service.browse('', { capabilityKind: 'skill' });
 	await service.setSourceEnabled('vendor', false, 1);
 	assert.equal(service.cachedBrowse('', { capabilityKind: 'skill' }), undefined, 'pausing a source cannot reuse its cached search results');
+});
+
+test('Tool recommendations read the current host through the API without keeping a second environment snapshot', async () => {
+	let executables = ['python3'];
+	const api: Pick<IExtensionManagementApi, 'recommendationEnvironment'> = { recommendationEnvironment: async () => ({ platform: 'linux', executables }) };
+	using service = new AppServerExtensionManagementService(api as IExtensionManagementApi, { subscribe: () => ({ dispose() { } }) } as IServerEventApi);
+	assert.deepEqual(await service.recommendationEnvironment(), { platform: 'linux', executables: ['python3'] });
+	executables = ['node'];
+	assert.deepEqual(await service.recommendationEnvironment(), { platform: 'linux', executables: ['node'] });
 });

@@ -133,14 +133,15 @@ const createStatusbarPart = (): void => {
 	part.domNode.style.bottom = '0';
 };
 const registerAfterPart = new URL(location.href).searchParams.has('registerAfterPart');
-if (registerAfterPart) { createStatusbarPart(); }
-const center = resources.add(services.createInstance(NotificationsCenter, root, notifications.model, feedback, runner, statusbar, undefined));
+const hasStatusbar = !new URL(location.href).searchParams.has('noStatusbar');
+if (hasStatusbar && registerAfterPart) { createStatusbarPart(); }
+const center = resources.add(services.createInstance(NotificationsCenter, root, notifications.model, feedback, runner, hasStatusbar ? statusbar : undefined, undefined));
 services.registerInstance(INotificationsCenter, center);
 const titlebar = h(document, 'div');
 titlebar.style.cssText = 'position: absolute; top: 0; right: 12px; height: 35px; display: flex; align-items: center';
 root.append(titlebar);
 resources.add(new MenuWorkbenchToolBar(titlebar, services.get(IMenuService), services.get(IContextMenuService), MenuId.TitleBar));
-if (!registerAfterPart) { createStatusbarPart(); }
+if (hasStatusbar && !registerAfterPart) { createStatusbarPart(); }
 services.registerInstance(IExtensionApi, { list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'fixture.git', displayName: 'Git' }] }) } as unknown as import('../../../../platform/extensions/common/extensionApi.js').IExtensionApi);
 const extensionMessages = resources.add(services.createInstance(MainThreadMessageService));
 let managed: unknown;

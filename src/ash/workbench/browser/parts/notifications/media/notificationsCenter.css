@@ -7,6 +7,7 @@
 	max-height: min(70vh, calc(100% - 48px));
 	display: flex;
 	flex-direction: column;
+	overflow: hidden;
 	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	border-radius: var(--ash-cornerRadius-large);
 	color: var(--ash-foreground);
@@ -27,27 +28,26 @@
 }
 .ash-notifications-center-header {
 	display: flex;
+	box-sizing: border-box;
+	min-height: 36px;
+	flex-shrink: 0;
 	align-items: center;
-	gap: 8px;
-	padding: 8px 12px;
-	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	gap: var(--ash-spacing-size80);
+	padding: 0 var(--ash-spacing-size80) 0 var(--ash-spacing-size120);
 }
 .ash-notifications-center-header h2 {
 	flex: 1;
 	margin: 0;
-	font-size: var(--ash-fontSize-heading3);
+	font-size: var(--ash-fontSize-label1);
 	font-weight: var(--ash-fontWeight-semiBold);
 }
 .ash-notifications-center:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
-.ash-notifications-hide {
+.ash-notifications-center-header > .ash-toolbar {
 	flex: 0 0 auto;
 }
-.ash-notifications-toggle {
-	position: absolute;
-	z-index: 1000;
-	inset-inline-end: 12px;
-	inset-block-end: 8px;
+.ash-high-contrast .ash-notifications-center {
+	box-shadow: none;
 }

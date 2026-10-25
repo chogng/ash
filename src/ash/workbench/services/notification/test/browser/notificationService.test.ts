@@ -47,7 +47,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { ILayoutService, BrowserLayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 
-test("clearing a toast removes only its shared record from the notification center", async () => {
+test("windows without a status bar keep toast actions and notification history without a floating toggle", async () => {
 	const browser = new JSDOM("<!doctype html><body><main></main></body>");
 	try {
 		using service = new TestNotificationService();
@@ -55,15 +55,13 @@ test("clearing a toast removes only its shared record from the notification cent
 		const root = browser.window.document.querySelector<HTMLElement>("main")!;
 		using presentation = new NotificationsPresentation(root, root, service, runner);
 		const center = presentation.center;
-		const toggle = root.querySelector<HTMLButtonElement>(".ash-notifications-toggle")!;
-		assert.equal(toggle.textContent, "Notifications");
-		assert.equal(toggle.hidden, true);
+		assert.equal(root.querySelector(".ash-notifications-toggle"), null);
 		let actionRuns = 0;
 		const removed: number[] = [];
 		service.model.onDidRemove(item => removed.push(item.id));
 		const handle = service.notify({ severity: Severity.Warning, message: "Workspace needs attention", source: "fixture", actions: { primary: [{ tooltip: '', enabled: true, id: "open", label: "Open", run: () => { actionRuns++; } }] } });
 		const handleItem = service.model.getNotifications().at(-1)!;
-		assert.equal(toggle.hidden, false);
+		assert.equal(root.querySelector(".ash-notifications-toggle"), null);
 		assert.equal(root.querySelectorAll(".ash-notification").length, 1);
 		const completed = new Promise<void>(resolve => runner.onDidRun(() => resolve()));
 		root.querySelector<HTMLButtonElement>(".ash-notification-action")!.click();
@@ -71,7 +69,7 @@ test("clearing a toast removes only its shared record from the notification cent
 		assert.equal(actionRuns, 1);
 		const retained = service.notify({ severity: Severity.Info, message: "Keep this notification" });
 		const retainedItem = service.model.getNotifications().at(-1)!;
-		root.querySelector<HTMLButtonElement>(".ash-notification-close")!.click();
+		root.querySelector<HTMLButtonElement>(`[data-notification-close="${handleItem.id}"]`)!.click();
 		handle.close(); handle.close();
 		assert.equal(root.querySelectorAll(".ash-notification").length, 1);
 		assert.deepEqual(service.model.getNotifications().map(item => item.id), [retainedItem.id]);
@@ -82,15 +80,15 @@ test("clearing a toast removes only its shared record from the notification cent
 		root.querySelector<HTMLButtonElement>(".ash-notifications-clear")!.click();
 		assert.deepEqual(removed, [handleItem.id, retainedItem.id]);
 		assert.equal(service.model.getNotifications().length, 0);
-		assert.equal(toggle.hidden, true);
+		assert.equal(root.querySelector(".ash-notifications-toggle"), null);
 		assert.equal(root.querySelector<HTMLElement>(".ash-notifications-center")?.hidden, true);
 		center.show();
-		assert.equal(root.querySelector(".ash-notifications-empty")?.textContent, "No notifications");
+		assert.equal(root.querySelector(".ash-notifications-center-header h2")?.textContent, "No New Notifications");
 		center.hide();
 		assert.equal(root.querySelector<HTMLElement>(".ash-notifications-center")?.hidden, true);
 		service.info("Another notification");
-		assert.equal(toggle.hidden, false);
-		toggle.click();
+		assert.equal(root.querySelector(".ash-notifications-toggle"), null);
+		await presentation.services.get(ICommandService).executeCommand('notifications.toggleList');
 		assert.equal(root.querySelector<HTMLElement>(".ash-notifications-center")?.hidden, false);
 	} finally { browser.window.close(); }
 });
@@ -110,10 +108,10 @@ test("clearing focused toasts moves to adjacent actions and returns to the previ
 		origin.focus();
 		close(1).focus();
 		close(1).click();
-		assert.equal(document.activeElement, close(2));
-		close(2).click();
 		assert.equal(document.activeElement, close(0));
 		close(0).click();
+		assert.equal(document.activeElement, close(2));
+		close(2).click();
 		assert.equal(document.activeElement, origin);
 		assert.deepEqual(service.model.getNotifications(), []);
 	} finally { browser.window.close(); }
@@ -173,7 +171,7 @@ for (const control of ["action", "remove"] as const) {
 			const lastItem = service.model.getNotifications().at(-1)!;
 			assert.equal(document.activeElement, retained ? toastControl(document, focusedItem.id, control) : document.body);
 			assert.equal(toastControl(document, handleItems[0].id, "remove"), undefined);
-			assert.deepEqual([...document.querySelectorAll<HTMLElement>("[data-notification-close]")].map(element => Number(element.dataset.notificationClose)), [handleItems[1].id, handleItems[2].id, lastItem.id]);
+			assert.deepEqual([...document.querySelectorAll<HTMLElement>("[data-notification-close]")].map(element => Number(element.dataset.notificationClose)), [lastItem.id, handleItems[2].id, handleItems[1].id]);
 			assert.deepEqual(service.model.getNotifications().map(item => item.id), [...handleItems.map(item => item.id), lastItem.id]);
 		});
 	}
@@ -232,7 +230,7 @@ for (const dispose of [false, true]) {
 			else center.show();
 		});
 		toastControl(document, firstItem.id, "remove")!.click();
-		assert.equal(document.activeElement, dispose ? outside : panel);
+		assert.equal(document.activeElement, dispose ? outside : panel.querySelector(".ash-notifications-row") ?? panel);
 		assert.equal(document.querySelectorAll(".ash-notification-host .ash-notification").length, 0);
 	});
 }
@@ -245,7 +243,7 @@ test("a center opened during notification arrival keeps focus and hides every to
 	toastControl(document, retainedItem.id, "action")!.focus();
 	using listener = service.model.onDidAdd(() => center.show());
 	service.info("Added");
-	assert.equal(document.activeElement, panel);
+	assert.equal(document.activeElement, panel.querySelector(".ash-notifications-row") ?? panel);
 	assert.equal(document.querySelectorAll(".ash-notification-host .ash-notification").length, 0);
 });
 
@@ -352,7 +350,7 @@ for (const transition of ["outside", "center", "dispose"] as const) {
 		});
 		const escape = new document.defaultView!.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
 		target.dispatchEvent(escape);
-		assert.equal(document.activeElement, transition === "center" ? panel : outside);
+		assert.equal(document.activeElement, transition === "center" ? panel.querySelector(".ash-notifications-row") ?? panel : outside);
 		assert.equal(escape.defaultPrevented, false);
 		assert.deepEqual(service.model.getNotifications(), [handleItem]);
 	});
@@ -376,7 +374,7 @@ for (const transition of ["outside", "center", "dispose"] as const) {
 		};
 		target.dispatchEvent(new document.defaultView!.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
 		assert.equal(transitions, 1);
-		assert.equal(document.activeElement, transition === "center" ? panel : outside);
+		assert.equal(document.activeElement, transition === "center" ? panel.querySelector(".ash-notifications-row") ?? panel : outside);
 		assert.equal(document.querySelectorAll(".ash-notification-host .ash-notification").length, 0);
 		assert.deepEqual(service.model.getNotifications(), [handleItem]);
 	});
@@ -539,7 +537,7 @@ test("an explicitly opened empty center stays open when a new notification arriv
 	origin.focus();
 	center.show(); center.show();
 	assert.equal(panel.hidden, false);
-	assert.equal(panel.querySelector(".ash-notifications-empty")?.textContent, "No notifications");
+	assert.equal(panel.querySelector(".ash-notifications-center-header h2")?.textContent, "No New Notifications");
 	assert.equal(panel.querySelector<HTMLButtonElement>(".ash-notifications-clear")?.disabled, true);
 	const handle = service.notify({ severity: Severity.Info, message: "Arrived while open" });
 	const handleItem = service.model.getNotifications().at(-1)!;
@@ -570,7 +568,7 @@ for (const addOnFocus of [false, true]) {
 		center.clearAll();
 		assert.deepEqual(service.model.getNotifications().map(item => item.message), ["Arrived during clear"]);
 		assert.equal(panel.hidden, false);
-		assert.equal(document.activeElement, panel);
+		assert.equal(document.activeElement, panel.querySelector(".ash-notifications-row") ?? panel);
 		assert.equal(panel.querySelectorAll("[data-notification-id]").length, 1);
 		for (const handle of handles) handle.close();
 		assert.equal(panel.hidden, false);
@@ -614,8 +612,8 @@ test("hiding can restore focus into a callback that reopens an empty center", as
 	center.hide();
 	await Promise.resolve();
 	assert.equal(panel.hidden, false);
-	assert.equal(document.activeElement, panel);
-	assert.equal(panel.querySelector(".ash-notifications-empty")?.textContent, "No notifications");
+	assert.equal(document.activeElement, panel.querySelector(".ash-notifications-row") ?? panel);
+	assert.equal(panel.querySelector(".ash-notifications-center-header h2")?.textContent, "No New Notifications");
 });
 
 for (const clearAll of [false, true]) {
@@ -1667,4 +1665,78 @@ suite('notification review regressions', () => {
 			assert.equal(fixture.service.model.getNotifications().length, 1);
 		} finally { mock.timers.reset(); }
 	});
+});
+
+
+test('duplicate notifications replace older records and both producer handles can close the replacement', () => {
+	using service = new TestNotificationService();
+	const options = { severity: Severity.Info, message: 'Repeated problem', source: { id: 'fixture', label: 'Fixture' } };
+	const first = service.notify(options);
+	let firstClosed = 0;
+	using firstListener = first.onDidClose(() => { firstClosed++; });
+	service.info('Unrelated');
+	const second = service.notify({ ...options, severity: Severity.Warning });
+	let secondClosed = 0;
+	using secondListener = second.onDidClose(() => { secondClosed++; });
+	assert.equal(firstClosed, 1);
+	assert.deepEqual(service.model.getNotifications().map(item => [item.message, item.severity]), [['Unrelated', Severity.Info], ['Repeated problem', Severity.Warning]]);
+	first.close();
+	assert.equal(secondClosed, 1);
+	assert.deepEqual(service.model.getNotifications().map(item => item.message), ['Unrelated']);
+	second.close();
+	assert.equal(secondClosed, 1);
+});
+
+test('notification deduplication preserves different sources, primary choices and completed progress', () => {
+	using service = new TestNotificationService();
+	const action = { id: 'open', label: 'Open', tooltip: '', enabled: true, run() { } };
+	service.notify({ severity: Severity.Info, message: 'Same', source: 'First' });
+	service.notify({ severity: Severity.Info, message: 'Same', source: 'Second' });
+	service.notify({ severity: Severity.Info, message: 'Same', source: 'First', actions: { primary: [action] } });
+	service.notify({ severity: Severity.Info, message: 'Same', source: 'First', actions: { primary: [{ ...action, label: 'Retry' }] } });
+	const progress = service.notify({ severity: Severity.Info, message: 'Same' });
+	progress.progress.infinite();
+	progress.progress.done();
+	service.notify({ severity: Severity.Info, message: 'Same' });
+	assert.equal(service.model.getNotifications().length, 6);
+	progress.close();
+	assert.equal(service.model.getNotifications().length, 5);
+});
+
+test('disposing during duplicate replacement closes the new handle without reviving the model', () => {
+	using service = new TestNotificationService();
+	const first = service.notify({ severity: Severity.Info, message: 'Duplicate' });
+	using listener = first.onDidClose(() => service.model.dispose());
+	const replacement = service.notify({ severity: Severity.Info, message: 'Duplicate' });
+	let closed = 0;
+	using closeListener = replacement.onDidClose(() => { closed++; });
+	assert.equal(closed, 1);
+	assert.deepEqual(service.model.getNotifications(), []);
+});
+
+test('notification expansion belongs to the model and primary actions remain expanded', () => {
+	using service = new TestNotificationService();
+	const handle = service.notify({ severity: Severity.Info, message: 'Details', source: 'Fixture' });
+	const id = service.model.getNotifications()[0].id;
+	const item = service.model.get(id)!;
+	assert.equal(item.expanded, false);
+	item.expand();
+	assert.equal(service.model.get(id)!.expanded, true);
+	item.collapse();
+	assert.equal(service.model.get(id)!.expanded, false);
+	handle.updateActions({ primary: [{ id: 'retry', label: 'Retry', tooltip: '', enabled: true, run() { } }] });
+	item.collapse();
+	assert.equal(service.model.get(id)!.expanded, true);
+	assert.equal(service.model.get(id)!.canCollapse, false);
+});
+
+test('closing the notification center does not restore a connected but invisible focus origin', () => {
+	using fixture = new NotificationsFixture();
+	const { document, service, center, origin } = fixture;
+	service.info('Notification');
+	origin.focus();
+	center.show();
+	origin.checkVisibility = () => false;
+	center.hide();
+	assert.notEqual(document.activeElement, origin);
 });

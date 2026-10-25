@@ -1,0 +1,58 @@
+.ash-chat-input-capsule {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	min-width: 0;
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-circle);
+	box-shadow: 0 2px 8px
+		color-mix(in srgb, var(--ash-sessions-inputShadow) 20%, transparent);
+	transition:
+		border-color var(--ash-animation-durationNormal) ease,
+		box-shadow var(--ash-animation-durationNormal) ease;
+}
+
+.ash-chat-input-capsule:hover,
+.ash-chat-input-capsule:focus-within {
+	border-color: var(--ash-widget-border);
+	box-shadow: 0 4px 16px var(--ash-sessions-inputShadow);
+}
+
+.ash-chat-input-capsule-editor {
+	flex: 1 0 64px;
+	min-width: 64px;
+	align-self: center;
+}
+
+.ash-chat-input-capsule .ash-button.ash-chat-input-capsule-button {
+	flex: 0 0 auto;
+	display: grid;
+	place-items: center;
+	width: 32px;
+	min-height: 32px;
+	height: 32px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--ash-cornerRadius-circle);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-chat-input-capsule-button .ash-icon {
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
+}
+
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-chat-input-capsule {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ash-chat-input-capsule {
+		transition: none;
+	}
+}

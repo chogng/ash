@@ -197,6 +197,7 @@
     "tree-sitter:prepare": "node build/treeSitter.ts",
     "extension:sdk": "node build/builtin/extensionSdk.ts",
     "package:editor": "node build/builtin/editorPackages.ts",
+    "package:declarative": "node build/builtin/declarativePackages.ts",
     "pretest:component-fixtures:screenshots": "pnpm run prepare:generated",
     "test:component-fixtures:screenshots": "node test/componentFixtures/run.ts --screenshots",
     "test:component-fixtures:screenshots:prepared": "node test/componentFixtures/run.ts --screenshots",

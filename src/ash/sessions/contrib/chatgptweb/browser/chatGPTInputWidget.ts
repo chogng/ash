@@ -20,6 +20,7 @@ import { ModelPickerWidget } from '../../chat/browser/modelPickerWidget.js';
 import '../../../common/theme.js';
 import '../../../../base/browser/ui/button/button.css';
 import './media/chatGPTInputWidget.css';
+import '../../chat/browser/media/chatInputCapsule.css';
 
 /** Owns the ChatGPT composer controls; the service retains drafts and request state. */
 export class ChatGPTInputWidget extends Disposable {
@@ -50,7 +51,7 @@ export class ChatGPTInputWidget extends Disposable {
 	) {
 		super();
 		this.element = h(container.ownerDocument, 'form');
-		this.element.className = 'ash-chatgpt-composer';
+		this.element.className = 'ash-chatgpt-composer ash-chat-input-capsule';
 		container.append(this.element);
 		this.attachmentList = h(container.ownerDocument, 'div');
 		this.attachmentList.className = 'ash-chatgpt-input-attachments';
@@ -69,7 +70,7 @@ export class ChatGPTInputWidget extends Disposable {
 		picker.type = 'file'; picker.multiple = true; picker.hidden = true;
 		this.attachButton = h(container.ownerDocument, 'button');
 		this.attachButton.type = 'button';
-		this.attachButton.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-add ash-chatgpt-round-button';
+		this.attachButton.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-add ash-chat-input-capsule-button';
 		const attachLabel = localize('sessions.chatgpt.attachFiles', 'Attach files');
 		this.attachButton.setAttribute('aria-label', attachLabel); this.attachButton.title = attachLabel;
 		appendIcon(Lxicon.add, this.attachButton);
@@ -100,7 +101,7 @@ export class ChatGPTInputWidget extends Disposable {
 			else { this.chat.removeAttachment(button.dataset.attachmentId!); }
 		}));
 		const input = h(container.ownerDocument, 'div');
-		input.className = 'ash-chatgpt-input';
+		input.className = 'ash-chatgpt-input ash-chat-input-capsule-editor';
 		this.element.append(input);
 		const prompt = localize('sessions.chatgpt.prompt', 'Ask ChatGPT');
 		this.editor = this._register(instantiation.createInstance(ChatInputEditor, {
@@ -123,7 +124,7 @@ export class ChatGPTInputWidget extends Disposable {
 			async () => { await preferences.openSettings({ section: 'dictation' }); }, 'chat'));
 		this.updateDictationHost();
 		this.dictationButton = h(container.ownerDocument, 'button');
-		this.dictationButton.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-dictation ash-chatgpt-round-button';
+		this.dictationButton.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-dictation ash-chat-input-capsule-button';
 		this.dictationButton.type = 'button';
 		appendIcon(Lxicon.mic, this.dictationButton);
 		this._register(addDisposableListener(this.dictationButton, 'click', () => { void this.dictation.action.run(); }));
@@ -141,7 +142,7 @@ export class ChatGPTInputWidget extends Disposable {
 			}
 		}));
 		this.sendButton = h(container.ownerDocument, 'button');
-		this.sendButton.className = 'ash-button ash-button-standard ash-button-primary ash-chatgpt-send ash-chatgpt-round-button';
+		this.sendButton.className = 'ash-button ash-button-standard ash-button-primary ash-chatgpt-send ash-chat-input-capsule-button';
 		this.sendButton.type = 'button';
 		this.element.append(this.dictationButton, this.sendButton);
 		this._register(addDisposableListener(this.sendButton, 'click', () => {
@@ -182,7 +183,8 @@ export class ChatGPTInputWidget extends Disposable {
 			this.renderAttachments(state.attachments, state.busy || state.sending);
 			this.voiceStatus.hidden = !voiceActive;
 			this.voiceStatus.textContent = state.voice === 'connecting' ? localize('sessions.chatgpt.voiceConnecting', 'Connecting voice…')
-				: state.voice === 'connected' ? localize('sessions.chatgpt.voiceConnected', 'Voice conversation is active') : '';
+				: state.voice === 'connected' ? localize('sessions.chatgpt.voiceConnected', 'Voice conversation is active')
+					: state.voice === 'stopping' ? localize('sessions.chatgpt.voiceStopping', 'Finishing voice conversation…') : '';
 			this.voiceTranscript.hidden = !voiceActive || !state.voiceTranscript.length;
 			this.voiceTranscript.textContent = state.voiceTranscript.map(item => localize('sessions.chatgpt.voiceTranscript', '{0}: {1}', item.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT', item.text)).join('\n');
 			this.renderDictation();

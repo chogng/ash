@@ -68,7 +68,7 @@ export const SettingsNavigation = [
 						id: 'interaction',
 						label: 'Interaction',
 						description: 'Tune hover feedback and resize handles.',
-						settings: ['workbench.hover.*', 'workbench.sash.*', 'workbench.commandPalette.history', 'onboarding.enabled', 'output.smartScroll.enabled', 'chat.disableAIFeatures', 'sessions.automations.notifyOnSuccess', 'task.allowAutomaticTasks'],
+						settings: ['workbench.hover.*', 'workbench.sash.*', 'workbench.commandPalette.history', 'onboarding.enabled', 'output.smartScroll.enabled', 'chat.disableAIFeatures', 'sessions.automations.notifyOnSuccess', 'task.allowAutomaticTasks', 'extensions.ignoreRecommendations', 'extensions.showRecommendationsOnlyOnDemand'],
 					},
 				],
 			},
@@ -210,7 +210,7 @@ export const SettingsNavigation = [
 					{
 						id: 'chatgpt',
 						label: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.label' }, 'ChatGPT'),
-						description: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.description' }, 'Configure the ChatGPT website in this window.'),
+						description: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.description' }, 'Configure ChatGPT in this window.'),
 						settings: ['sessions.chatgpt.optimizeScrolling'],
 					},
 				],

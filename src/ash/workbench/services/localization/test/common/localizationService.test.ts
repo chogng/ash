@@ -239,7 +239,9 @@ suite('Workbench localization', () => {
 			localization.translate('ash', 'sessions.activity.chat', 'Chat'),
 			localization.translate('ash', 'sessions.mode.code', 'Code'),
 		], ['显示侧边栏', '隐藏侧边栏', '聊天', '代码']);
-		assert.match(localization.translate('ash', 'sessions.activity.help', ''), /聊天和代码共用选中的会话、导航记录、未发送的文字和附件，切换时只改变布局/u);
+		const activityHelp = localization.translate('ash', 'sessions.activity.help', '');
+		assert.match(activityHelp, /每个 ChatGPT 会话和 Agent 会话分别保留自己的历史、未发送的文字和附件/u);
+		assert.match(activityHelp, /每个会话恢复自己的编辑器标签/u);
 		assert.equal(localization.translate('ash', 'chat.modelPicker.context', '{0} context tokens', { '0': '128,000' }), '上下文：128,000 个词元');
 		assert.equal(localization.translate('ash', 'chat.defaultModel.title', 'Default chat model'), '默认聊天模型');
 		assert.deepEqual([
@@ -536,6 +538,7 @@ suite('Workbench localization', () => {
 
 	function createExtensions(): IExtensionManagementService {
 		return {
+			recommendationEnvironment: async () => ({ platform: 'other', executables: [] }),
 			searchPage: async () => { throw new Error('Localization does not use customization paging'); },
 			onDidChangeInstalled: Event.None,
 			sources: async () => ({ revision: 0, sources: [] }),

@@ -6,6 +6,8 @@ import { createAppServerDaemonLauncher } from '../../../../src/ash/platform/app-
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../../../../src/ash/platform/agentHost/common/appServerTransport.js';
 import { execFile } from 'node:child_process';
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 const run = promisify(execFile);
@@ -60,6 +62,31 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		};
 		const a = await create('Selected files A', process.platform === 'win32' ? 'echo const value = 42;>main.ts & echo remaining A>remaining.txt' : "printf 'const value = 42;\\n' > main.ts; printf 'remaining A\\n' > remaining.txt");
 		const b = await create('Selected files B', process.platform === 'win32' ? 'echo separate B>other-session.txt' : "printf 'separate B\\n' > other-session.txt");
+		const git = async (...args: string[]): Promise<string> => (await run('git', args, { cwd: testWorkspace.directory })).stdout.trim();
+		const initialHead = await git('rev-parse', 'HEAD');
+		const changeB = (await client.request(APP_SERVER_METHODS['turnChanges/list'], b)).changeSets[0]!;
+		const selectionB = { changeSetId: changeB.changeSetId, expectedRevision: changeB.revision, paths: ['other-session.txt'] };
+		// Shared repository identity must never substitute for the capture's Session/Thread owner.
+		await expect(client.request(APP_SERVER_METHODS['turnChanges/prepareCommit'], {
+			...a, commandId: 'reject-cross-session-selection', selections: [selectionB], message: 'must not commit B as A',
+		})).rejects.toMatchObject({ code: -32082, errorName: 'TurnChangesOperationFailed' });
+		await expect(client.request(APP_SERVER_METHODS['turnChanges/prepareCommit'], {
+			sessionId: a.sessionId, threadId: b.threadId, commandId: 'reject-cross-session-thread', selections: [selectionB], message: 'must not use B thread as A',
+		})).rejects.toMatchObject({ code: -32082, errorName: 'TurnChangesOperationFailed' });
+		const previewB = await client.request(APP_SERVER_METHODS['turnChanges/prepareCommit'], {
+			...b, commandId: 'preview-owner-check-B', selections: [selectionB], message: 'owned by B',
+		});
+		await expect(client.request(APP_SERVER_METHODS['turnChanges/commit'], {
+			...a, commandId: 'reject-cross-session-preview', commitId: previewB.commitId,
+		})).rejects.toMatchObject({ code: -32082, errorName: 'TurnChangesOperationFailed' });
+		expect(await git('rev-parse', 'HEAD')).toBe(initialHead);
+		expect((await client.request(APP_SERVER_METHODS['turnChanges/list'], b)).changeSets[0]?.commitState).toBe('idle');
+		// Local staged, unstaged and untracked content is outside both frozen Turn selections.
+		await writeFile(join(testWorkspace.directory, 'external.txt'), 'staged local\n');
+		await git('add', 'external.txt');
+		await writeFile(join(testWorkspace.directory, 'external.txt'), 'unstaged local\n');
+		await writeFile(join(testWorkspace.directory, 'untracked.txt'), 'untracked local\n');
+		const localState = await git('status', '--porcelain');
 		const page = await workbench.openAgentsWindow(target.kind);
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		const open = async (name: string): Promise<void> => {
@@ -72,13 +99,13 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		const review = page.locator('.ash-sessions-changes-editor .stanza-multi-diff-editor');
 		await expect(review).toBeVisible();
 		const fileHeader = review.getByRole('button', { name: /main.ts/ });
-		await fileHeader.click();
+		await fileHeader.press('Enter');
 		await expect(fileHeader).toHaveAttribute('aria-expanded', 'false');
 		await commands.runCommand('ash.sessions.hideEditor');
 		await expect(review).toHaveCount(0);
 		await commands.runCommand('ash.sessions.showEditor');
 		await expect(fileHeader).toHaveAttribute('aria-expanded', 'false');
-		await fileHeader.click();
+		await fileHeader.press('Enter');
 		await expect(fileHeader).toHaveAttribute('aria-expanded', 'true');
 		const changes = page.locator('.ash-sessions-changes');
 		const rows = changes.getByRole('treeitem');
@@ -92,10 +119,16 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		await expect(page.locator('.ash-sessions-frame-end[data-part="editor"]')).toContainText('const value = 42;');
 		await page.getByRole('button', { name: 'Commit this preview', exact: true }).click();
 		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['turnChanges/list'], a)).changeSets[0]?.commitState).toBe('partiallyCommitted');
-		const git = async (...args: string[]): Promise<string> => (await run('git', args, { cwd: testWorkspace.directory })).stdout.trim();
+		expect(await git('diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD')).toBe('main.ts');
 		expect(await git('show', 'HEAD:main.ts')).toBe('const value = 42;');
 		expect(await git('ls-tree', '--name-only', 'HEAD')).not.toContain('remaining.txt');
 		expect(await git('ls-tree', '--name-only', 'HEAD')).not.toContain('other-session.txt');
+		expect(await git('status', '--porcelain')).toBe(localState);
+		const committedA = await git('rev-parse', 'HEAD');
+		// B's old preview must fail after A advances their shared target, then allow a fresh review.
+		await client.request(APP_SERVER_METHODS['turnChanges/commit'], { ...b, commandId: 'reject-stale-preview-B', commitId: previewB.commitId });
+		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['turnChanges/list'], b)).changeSets[0]?.commitState).toBe('conflict');
+		expect(await git('rev-parse', 'HEAD')).toBe(committedA);
 		await open('Selected files B');
 		await expect(rows).toHaveCount(1);
 		await expect(changes.getByRole('button', { name: 'Preview selected changes', exact: true })).toBeDisabled();
@@ -105,10 +138,12 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		await message.press('Enter');
 		await page.getByRole('button', { name: 'Commit this preview', exact: true }).click();
 		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['turnChanges/list'], b)).changeSets[0]?.commitState).toBe('committed');
+		expect(await git('diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD')).toBe('other-session.txt');
 		expect(await git('show', 'HEAD:main.ts')).toBe('const value = 42;');
 		expect(await git('show', 'HEAD:other-session.txt')).toBe('separate B');
 		expect(await git('ls-tree', '--name-only', 'HEAD')).not.toContain('remaining.txt');
 		expect(await git('rev-list', '--count', 'HEAD')).toBe('3');
+		expect(await git('status', '--porcelain')).toBe(localState);
 		await open('Selected files A');
 		await expect(rows).toHaveCount(2);
 		await rows.filter({ hasText: 'main.ts' }).click();
@@ -121,9 +156,14 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		await page.getByRole('button', { name: 'Commit this preview', exact: true }).click();
 		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['turnChanges/list'], a)).changeSets[0]?.commitState).toBe('committed');
 		expect((await client.request(APP_SERVER_METHODS['turnChanges/list'], b)).changeSets[0]?.commitState).toBe('committed');
+		expect(await git('diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD')).toBe('remaining.txt');
 		expect(await git('show', 'HEAD:remaining.txt')).toBe('remaining A');
 		expect(await git('show', 'HEAD:main.ts')).toBe('const value = 42;');
 		expect(await git('show', 'HEAD:other-session.txt')).toBe('separate B');
 		expect(await git('rev-list', '--count', 'HEAD')).toBe('4');
+		expect(await git('status', '--porcelain')).toBe(localState);
+		expect(await git('show', ':external.txt')).toBe('staged local');
+		expect(await readFile(join(testWorkspace.directory, 'external.txt'), 'utf8')).toBe('unstaged local\n');
+		expect(await readFile(join(testWorkspace.directory, 'untracked.txt'), 'utf8')).toBe('untracked local\n');
 	} finally { client.dispose(); incoming.dispose(); closed.dispose(); await frames.close(); launcher.dispose(); }
 });

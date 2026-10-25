@@ -3,9 +3,10 @@ import type { Icon } from '../../../../base/common/icon.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { CreatorMode } from '../common/creator.js';
-import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import { SessionsViewRegistry } from '../../../common/views.js';
-import { CreatorWorkspaceView } from './creatorViews.js';
+import { localize2 } from '../../../../nls.js';
+import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 
 export interface ICreatorWorkspace extends IDisposable {
 	readonly domNode: HTMLElement;
@@ -26,17 +27,18 @@ export interface CreatorModeContribution {
 	create(instantiation: IInstantiationService, ownerDocument: Document): ICreatorWorkspace;
 }
 
-export const CREATOR_NAVIGATION_CONTAINER_ID = 'sessions.creator.navigation';
-
 /** Workspace content is created lazily; entries are registered before the editor opens. */
 export const CreatorModes = new Map<CreatorMode, CreatorModeContribution>();
 
 export function registerCreatorMode(contribution: CreatorModeContribution): void {
 	CreatorModes.set(contribution.id, contribution);
-	SessionsViewRegistry.registerStaticViews(CREATOR_NAVIGATION_CONTAINER_ID, [{
-		id: `${CREATOR_NAVIGATION_CONTAINER_ID}.${contribution.id}`,
-		title: contribution.title,
-		ctorDescriptor: new SyncDescriptor(CreatorWorkspaceView, [contribution]),
-		canToggleVisibility: false,
-	}]);
+	// Secondary workspaces remain available from the Command Palette without a second sidebar.
+	registerAction2(class OpenWorkspace extends Action2 {
+		constructor() {
+			super({ id: `sessions.creator.open.${contribution.id}`, title: localize2('sessions.artifacts.openMode', 'Open {0}', contribution.title), f1: true });
+		}
+		public override async run(accessor: ServicesAccessor): Promise<void> {
+			await accessor.get(ICommandService).executeCommand('sessions.creator.openMode', contribution.id);
+		}
+	});
 }

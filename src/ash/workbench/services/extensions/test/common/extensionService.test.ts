@@ -1136,6 +1136,30 @@ test('catalog refresh preserves an unchanged declarative Debug owner and retires
 	assert.equal(adapters.get('demo'), undefined);
 });
 
+test('window package support filters disabled declarations without changing shared profile enablement', async () => {
+	const dom = new JSDOM('', { url: 'https://ash.test' });
+	try {
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'window-package-support', flushInterval: 0 });
+		using enablement = new GlobalExtensionEnablementService(storage);
+		const pdf = { ...descriptor, id: 'ash.pdf-viewer', name: 'pdf-viewer', sourceKind: 'registry' as const };
+		const catalog = { generation: 7, diagnostics: [], extensions: [descriptor, pdf] };
+		const packages: IExtensionApi = {
+			list: async () => catalog,
+			resources: new ExtensionResourceLoaderService(async () => { throw new Error('No resource should load'); }),
+		};
+		const ide = withEnabledBuiltInExtensions(packages, enablement, undefined, extension => extension.id !== pdf.id);
+		const agents = withEnabledBuiltInExtensions(packages, enablement);
+		for (const includeDisabled of [false, true]) {
+			assert.deepEqual((await ide.list('cached', { includeDisabled })).extensions, [descriptor]);
+			assert.deepEqual((await agents.list('cached', { includeDisabled })).extensions, [descriptor, pdf]);
+		}
+		assert.deepEqual(enablement.getDisabledExtensions(), []);
+		assert.deepEqual(catalog.extensions, [descriptor, pdf], 'window projections must not mutate the shared catalog');
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('profile disablement retires declarative settings and welcome content without a catalog mutation', async () => {
 	const dom = new JSDOM('', { url: 'https://ash.test' });
 	try {

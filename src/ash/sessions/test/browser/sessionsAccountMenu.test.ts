@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import type { IAction } from '../../../base/common/actions.js';
 import { Event } from '../../../base/common/event.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
-import { resetNlsResolver, setNlsMessages } from '../../../nls.js';
+import { localize, resetNlsResolver, setNlsMessages } from '../../../nls.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
@@ -12,6 +12,7 @@ import { CommandService } from '../../../workbench/services/commands/common/comm
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { SessionsAccountMenu } from '../../contrib/accounts/browser/sessionsAccountMenu.js';
 import type { SessionsPreferences } from '../../contrib/preferences/browser/sessionsPreferences.js';
+import { OPEN_ASH_WINDOW_COMMAND_ID } from '../../common/sessionCommands.js';
 
 for (const locale of ['en', 'zh-CN']) test(`Sessions account menu opens settings, account management, IDE and shortcuts (${locale})`, async () => {
 	setNlsMessages(locale, productLanguagePackCatalogs.find(catalog => catalog.locale === locale)!.bundles);
@@ -22,7 +23,7 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions account menu opens settings
 		const commands = resources.add(services.createInstance(CommandService));
 		services.registerInstance(ICommandService, commands);
 		const invoked: string[] = [];
-		for (const id of ['workbench.action.manageAccounts', 'workbench.action.openKeyboardShortcuts']) {
+		for (const id of ['workbench.action.manageAccounts', OPEN_ASH_WINDOW_COMMAND_ID, 'workbench.action.openKeyboardShortcuts']) {
 			resources.add(CommandsRegistry.register(id, () => { invoked.push(id); }));
 		}
 		const anchor = browser.window.document.querySelector('button')!;
@@ -41,15 +42,16 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions account menu opens settings
 			hideContextMenu() { },
 		});
 		const preferences = { open: async () => { invoked.push('settings'); } } as SessionsPreferences;
-		const menu = services.createInstance(SessionsAccountMenu, preferences, () => { invoked.push('ide'); });
+		const menu = services.createInstance(SessionsAccountMenu, preferences);
 		menu.show(anchor);
 		assert.deepEqual(actions.map(action => action.label), locale === 'zh-CN'
 			? ['设置', '账号', '打开 IDE', '快捷键']
 			: ['Settings', 'Account', 'Open IDE', 'Keyboard Shortcuts']);
 		assert.ok(actions.every(action => action.enabled));
+		assert.match(localize('sessions.activity.help', ''), locale === 'zh-CN' ? /保留 Agent 窗口及其中未发送的草稿/u : /keeping the Agents window and its unsent drafts open/u);
 		assert.equal(anchor.getAttribute('aria-expanded'), 'true');
 		for (const action of actions) { await action.run(); }
-		assert.deepEqual(invoked, ['settings', 'workbench.action.manageAccounts', 'ide', 'workbench.action.openKeyboardShortcuts']);
+		assert.deepEqual(invoked, ['settings', 'workbench.action.manageAccounts', OPEN_ASH_WINDOW_COMMAND_ID, 'workbench.action.openKeyboardShortcuts']);
 		hide?.();
 		assert.equal(anchor.getAttribute('aria-expanded'), 'false');
 	} finally {

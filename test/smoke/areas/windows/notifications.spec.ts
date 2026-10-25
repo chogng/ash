@@ -443,7 +443,7 @@ test('notification toast Escape, Copy Text, help, and removal use the Chinese la
 	await expect(center).toBeVisible();
 	await center.getByRole('button', { name: '移除通知', exact: true }).click();
 	await workbench.quickaccess.runCommand('notifications.showList');
-	await expect(center.getByText('没有通知', { exact: true })).toBeVisible();
+	await expect(center.getByRole('heading', { name: '没有新通知', exact: true })).toBeVisible();
 });
 
 for (const useCenter of [false, true]) {

@@ -32,9 +32,16 @@ export interface NotificationItem extends Omit<INotification, 'message' | 'sourc
 	readonly source?: string;
 	readonly sourceId?: string;
 	readonly visible: boolean;
+	/** Progress records keep their identity after completion and never deduplicate. */
+	readonly hasProgress: boolean;
 	readonly hasActiveProgress: boolean;
+	readonly expanded: boolean;
+	readonly canCollapse: boolean;
 	readonly onDidChange: Event<NotificationItem>;
 	updateVisibility(visible: boolean): void;
+	expand(): void;
+	collapse(): void;
+	toggle(): void;
 }
 
 /** The notification history shared by every notification surface in one window. */
@@ -44,7 +51,7 @@ export class NotificationsModel extends Disposable {
 	private readonly _onDidRemove = this._register(new Emitter<NotificationItem>());
 	private readonly _onDidChange = this._register(new Emitter<NotificationItem>());
 	private nextId = 1;
-	private readonly closeCallbacks = new Map<number, (visible: boolean) => void>();
+	private readonly closeCallbacks = new Map<number, (item: NotificationItem) => void>();
 
 	readonly onDidAdd: Event<NotificationItem> = this._onDidAdd.event;
 	readonly onDidRemove: Event<NotificationItem> = this._onDidRemove.event;
@@ -73,6 +80,7 @@ export class NotificationsModel extends Disposable {
 		const closedEmitter = resources.add(new Emitter<void>());
 		const visibilityEmitter = resources.add(new Emitter<boolean>());
 		let closed = false;
+		let closedItem: NotificationItem | undefined;
 		const updateVisibility = (visible: boolean): void => {
 			if (closed || this.items.get(id)?.visible === visible) return;
 			this.update(id, { visible });
@@ -86,7 +94,13 @@ export class NotificationsModel extends Disposable {
 			sourceId: typeof options.source === 'object' ? options.source.id : undefined,
 			visible: false,
 			progress: options.progress ? Object.freeze({ ...options.progress }) : undefined,
+			hasProgress: options.progress !== undefined,
 			hasActiveProgress: hasActiveProgress(options.progress),
+			expanded: !!options.actions?.primary?.length,
+			canCollapse: !options.actions?.primary?.length,
+			expand: () => this.setExpanded(id, true),
+			collapse: () => this.setExpanded(id, false),
+			toggle: () => this.setExpanded(id, !this.items.get(id)?.expanded),
 			updateVisibility,
 			onDidChange: ((listener, thisArgs, disposables) => this._onDidChange.event(current => {
 				if (current.id === id) listener.call(thisArgs, current);
@@ -123,14 +137,28 @@ export class NotificationsModel extends Disposable {
 				},
 				done: () => this.update(id, { progress: undefined }),
 			},
-			close: () => { this.remove(id); },
+			close: () => {
+				// A producer's old handle must still dismiss a replacement of the same notification.
+				const target = this.get(id) ?? closedItem;
+				if (target) this.remove(this.findEquivalent(target)?.id ?? target.id);
+			},
 		};
-		this.closeCallbacks.set(id, visible => {
+		const close = (current: NotificationItem): void => {
 			closed = true;
-			if (visible) visibilityEmitter.fire(false);
+			closedItem = current;
+			if (current.visible) visibilityEmitter.fire(false);
 			closedEmitter.fire();
 			resources.dispose();
-		});
+		};
+		this.closeCallbacks.set(id, close);
+		const duplicate = this.findEquivalent(item);
+		if (duplicate) this.remove(duplicate.id);
+		// Closing the old record can synchronously dispose the window's model.
+		if (this.isDisposed) {
+			this.closeCallbacks.delete(id);
+			close(item);
+			return handle;
+		}
 		this.items.set(item.id, item);
 		this._onDidAdd.fire(item);
 		return handle;
@@ -139,10 +167,30 @@ export class NotificationsModel extends Disposable {
 	getNotifications(): readonly NotificationItem[] { return [...this.items.values()]; }
 	get(id: number): NotificationItem | undefined { return this.items.get(id); }
 
-	private update(id: number, changes: Partial<Pick<NotificationItem, 'severity' | 'message' | 'actions' | 'progress' | 'visible'>>): void {
+	private setExpanded(id: number, expanded: boolean): void {
+		const item = this.items.get(id);
+		if (item?.canCollapse && item.expanded !== expanded) this.update(id, { expanded });
+	}
+
+	private findEquivalent(candidate: NotificationItem): NotificationItem | undefined {
+		if (candidate.hasProgress) return undefined;
+		return [...this.items.values()].find(item => {
+			if (item.hasProgress || item.source !== candidate.source || item.sourceId !== candidate.sourceId || item.message !== candidate.message) return false;
+			const primary = item.actions?.primary ?? [];
+			const other = candidate.actions?.primary ?? [];
+			return primary.length === other.length && primary.every((action, index) => action.id === other[index].id && action.label === other[index].label);
+		});
+	}
+
+	private update(id: number, changes: Partial<Pick<NotificationItem, 'severity' | 'message' | 'actions' | 'progress' | 'visible' | 'expanded'>>): void {
 		const current = this.items.get(id);
 		if (!current) return;
-		const item = Object.freeze({ ...current, ...changes, hasActiveProgress: hasActiveProgress('progress' in changes ? changes.progress : current.progress) });
+		const item = Object.freeze({
+			...current, ...changes,
+			hasProgress: current.hasProgress || changes.progress !== undefined,
+			hasActiveProgress: hasActiveProgress('progress' in changes ? changes.progress : current.progress),
+			...('actions' in changes ? { expanded: !!changes.actions?.primary?.length, canCollapse: !changes.actions?.primary?.length } : {}),
+		});
 		this.items.set(id, item);
 		this._onDidChange.fire(item);
 	}
@@ -153,7 +201,7 @@ export class NotificationsModel extends Disposable {
 		const close = this.closeCallbacks.get(id);
 		this.closeCallbacks.delete(id);
 		this.items.delete(id);
-		close?.(item.visible);
+		close?.(item);
 		this._onDidRemove.fire(item);
 		return true;
 	}

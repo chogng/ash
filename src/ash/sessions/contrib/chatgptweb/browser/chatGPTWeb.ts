@@ -32,7 +32,7 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 					resource: URI.from({ scheme: 'ash-chatgpt', path: '/page' }), label: localize('sessions.chatgpt.title', 'ChatGPT'),
 					showBreadcrumbs: false, readOnly: true, capabilities: EditorInputCapabilities.CannotClose,
 				},
-				restoreCommand: 'sessions.show.chatgpt', focus: 'editor',
+				restoreCommand: 'sessions.show.chatgpt', newSessionCommand: 'sessions.chatgpt.newChat', focus: 'editor',
 			}, undefined, source === 'restore' ? { source } : undefined);
 		};
 		this._register(search.registerSource(derived<readonly SearchResult[]>(reader => {
@@ -51,6 +51,20 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 				},
 			}));
 		})));
+		const newChat = () => {
+			chat.newChat();
+			editors.focusActiveEditor();
+		};
+		this._register(CommandsRegistry.register('sessions.chatgpt.newChat', newChat));
 		this._register(CommandsRegistry.register('sessions.show.chatgpt', (_accessor, source) => showChat(source)));
+		this._register(CommandsRegistry.register('sessions.open.new', async (_accessor, source) => {
+			if (source !== 'restore') { chat.newChat(); }
+			await showChat(source);
+		}));
+		// Saved window entries and existing keybindings from the experiment retain the same chat owner.
+		this._register(CommandsRegistry.register('sessions.chatgptNative.newChat', newChat));
+		for (const command of ['sessions.show.chatgptNative', 'sessions.open.chatgptNative']) {
+			this._register(CommandsRegistry.register(command, (_accessor, source) => showChat(source)));
+		}
 	}
 }

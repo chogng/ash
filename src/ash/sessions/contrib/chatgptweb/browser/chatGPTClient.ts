@@ -30,11 +30,10 @@ export interface ChatGPTFile {
 	readonly width?: number;
 	readonly height?: number;
 }
-export interface ChatGPTVoiceConnection {
-	readonly url: string;
-	readonly token: string;
-	readonly encryptionKey: string;
+export interface ChatGPTVoiceUpdate {
 	readonly conversationId?: string;
+	readonly parentId?: string;
+	readonly message?: ChatGPTMessage;
 }
 export interface ChatGPTResource {
 	readonly uri: string;
@@ -62,6 +61,7 @@ export interface ChatGPTHistory {
 	readonly messages: readonly ChatGPTMessage[];
 }
 export interface ChatGPTStreamUpdate { readonly conversationId?: string; readonly message?: ChatGPTMessage; }
+interface ChatGPTStreamFrame extends ChatGPTStreamUpdate { readonly resumeToken?: string; readonly handoff?: boolean; readonly finished?: boolean; }
 
 /** An explicit HTTP rejection is different from an interrupted, possibly accepted message. */
 export class ChatGPTRequestError extends Error {
@@ -140,7 +140,7 @@ export class ChatGPTClient {
 		const cursors = new Set<string>();
 		let cursor: string | undefined;
 		do {
-			const query = new URLSearchParams({ conversations_per_gizmo: '0', limit: '100', owned_only: 'false', ...(cursor ? { cursor } : {}) });
+			const query = new URLSearchParams({ conversations_per_gizmo: '0', limit: '20', owned_only: 'false', ...(cursor ? { cursor } : {}) });
 			const value = await this.json('/gizmos/snorlax/sidebar?' + query, signal);
 			if (!isRecord(value) || !Array.isArray(value.items) || (value.cursor != null && typeof value.cursor !== 'string')) { throw this.invalidResponse(); }
 			for (const item of value.items) {
@@ -249,24 +249,37 @@ export class ChatGPTClient {
 		throw new Error(localize('sessions.chatgpt.uploadNotReady', 'The file is still processing. Retry the attachment.'));
 	}
 
-	async voice(input: { conversationId?: string; parentId: string; language: string; }, signal: AbortSignal): Promise<ChatGPTVoiceConnection> {
-		const response = await this.fetcher('/service/voice/get_token', {
-			method: 'POST', headers: { 'Content-Type': 'application/json' }, signal,
-			body: JSON.stringify({
-				voice: 'cove', voice_mode: 'standard', model_slug: 'auto', language: input.language,
-				parent_message_id: input.parentId, voice_session_id: crypto.randomUUID(),
-				...(input.conversationId ? { conversation_id: input.conversationId } : {}),
-				voice_training_allowed: false, video_training_allowed: false, enable_message_streaming: true,
-			}),
-		});
+	async voice(input: { conversationId?: string; parentId: string; language: string; sdp: string; }, signal: AbortSignal): Promise<string> {
+		const form = new FormData();
+		form.set('sdp', input.sdp);
+		form.set('session', JSON.stringify({
+			voice: 'cove', voice_mode: 'advanced', model_slug: 'auto', language_code: input.language,
+			parent_message_id: input.parentId, voice_session_id: crypto.randomUUID(),
+			...(input.conversationId ? { conversation_id: input.conversationId } : {}),
+			conversation_mode: { kind: 'primary_assistant' }, history_and_training_disabled: false,
+			timezone_offset_min: new Date().getTimezoneOffset(), user_locale: input.language,
+			voice_training_allowed: false, video_training_allowed: false, enable_message_streaming: true,
+		}));
+		const response = await this.fetcher('/service/realtime/vp?dcid=0', { method: 'POST', body: form, signal });
 		if (!response.ok) { throw new ChatGPTRequestError(response.status, localize('sessions.chatgpt.voiceRequestFailed', 'Could not start ChatGPT voice ({0}).', response.status)); }
-		const value: unknown = await response.json();
-		if (!isRecord(value) || typeof value.url !== 'string' || value.url.length > 2048 || typeof value.token !== 'string' || !value.token || value.token.length > 32768
-			|| typeof value.e2ee_key !== 'string' || !value.e2ee_key || value.e2ee_key.length > 4096
-			|| (value.conversation_id !== undefined && (typeof value.conversation_id !== 'string' || !/^[A-Za-z0-9_-]{1,240}$/u.test(value.conversation_id)))) { throw this.invalidResponse(); }
-		const url = new URL(value.url);
-		if (url.protocol !== 'wss:' || !url.hostname.endsWith('.livekit.cloud') || url.port || url.username || url.password || url.hash) { throw this.invalidResponse(); }
-		return { url: url.href, token: value.token, encryptionKey: value.e2ee_key, conversationId: value.conversation_id as string | undefined ?? input.conversationId };
+		const answer = await response.text();
+		if (answer.length > 128 * 1024 || !/^v=0\r?\n/u.test(answer)) { throw this.invalidResponse(); }
+		return answer;
+	}
+
+	/** Voice persistence can finish after media disconnects. Never continue from an older branch. */
+	async voiceHistory(id: string, messageId: string | undefined, signal: AbortSignal): Promise<ChatGPTHistory> {
+		const deadline = Date.now() + 8_000;
+		while (true) {
+			try {
+				const history = await this.history(id, signal);
+				if (!messageId || history.messages.some(message => message.id === messageId)) { return history; }
+			} catch (error) {
+				if (!(error instanceof ChatGPTRequestError) || error.status !== 404 || !messageId) { throw error; }
+			}
+			if (Date.now() >= deadline) { throw new Error(localize('sessions.chatgpt.voiceHistoryPending', 'The voice conversation has not finished saving. Reload it before sending another message.')); }
+			await waitForUpload(signal);
+		}
 	}
 
 	async *send(input: { text: string; model: string; thinkingEffort?: string; parentId: string; conversationId?: string; messageId: string; files?: readonly ChatGPTFile[]; }, signal: AbortSignal): AsyncGenerator<ChatGPTStreamUpdate> {
@@ -301,11 +314,35 @@ export class ChatGPTClient {
 		for (const name of ['OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token']) {
 			if (typeof verification[name] === 'string') { verificationHeaders[name] = verification[name]; }
 		}
-		const response = await this.request('/f/conversation', signal, {
+		let response = await this.request('/f/conversation', signal, {
 			method: 'POST', headers: { ...verificationHeaders, Accept: 'text/event-stream', 'Content-Type': 'application/json', 'x-conduit-token': preparation.conduit_token }, body: JSON.stringify(body),
 		});
-		if (!response.headers.get('content-type')?.includes('text/event-stream') || !response.body) { throw this.invalidResponse(); }
-		yield* decodeChatGPTStream(response.body, signal);
+		let conversationId = input.conversationId;
+		let resumeToken: string | undefined;
+		for (let resumes = 0; ; resumes++) {
+			if (!response.headers.get('content-type')?.includes('text/event-stream') || !response.body) { throw this.invalidResponse(); }
+			let handoff = false;
+			for await (const frame of decodeChatGPTStream(response.body, signal)) {
+				conversationId = frame.conversationId ?? conversationId;
+				resumeToken = frame.resumeToken ?? resumeToken;
+				handoff = frame.finished ? false : handoff || frame.handoff === true;
+				if (frame.message || frame.conversationId) { yield { conversationId: frame.conversationId, message: frame.message }; }
+			}
+			if (!handoff) { return; }
+			if (!conversationId || !resumeToken || resumes >= 3) { throw this.invalidResponse(); }
+			// [DONE] closes this transport, not a Pro turn handed to background generation.
+			// Resume the accepted turn; replayed message IDs merge in the service as usual.
+			try {
+				response = await this.request('/f/conversation/resume', signal, {
+					method: 'POST', headers: { Accept: 'text/event-stream', 'Content-Type': 'application/json', 'x-conduit-token': resumeToken },
+					body: JSON.stringify({ conversation_id: conversationId, offset: 0 }),
+				});
+			} catch (error) {
+				// The message was accepted before handoff. A resume rejection cannot undo it.
+				if (error instanceof ChatGPTRequestError) { throw new Error(error.message, { cause: error }); }
+				throw error;
+			}
+		}
 	}
 
 	async stop(conversationId: string, messageId: string, signal: AbortSignal): Promise<void> {
@@ -361,6 +398,24 @@ export class ChatGPTClient {
 	private invalidResponse(): Error { return new Error(localize('sessions.chatgpt.invalidResponse', 'ChatGPT returned an unsupported response.')); }
 }
 
+/** Decode the current ChatGPT voice data channel; it wraps JSON events in data_message. */
+export function readChatGPTVoiceUpdate(data: unknown): ChatGPTVoiceUpdate | undefined {
+	if (typeof data !== 'string' || data.length > 128 * 1024) { return undefined; }
+	let value: unknown;
+	try {
+		value = JSON.parse(data);
+		if (isRecord(value) && value.type === 'data_message' && typeof value.data === 'string' && value.data.length <= 128 * 1024) { value = JSON.parse(value.data); }
+	} catch { return undefined; }
+	if (!isRecord(value) || !isRecord(value.payload)) { return undefined; }
+	const payload = value.payload;
+	const id = (value: unknown): string | undefined => typeof value === 'string' && /^[A-Za-z0-9_-]{1,240}$/u.test(value) ? value : undefined;
+	const conversationId = id(payload.conversation_id);
+	if (value.type === 'startup_telemetry' || value.type === 'conversation_update') { return { conversationId, parentId: id(payload.parent_message_id) }; }
+	if (value.type !== 'full_chat_message' || !isRecord(payload.message) || !id(payload.message.id) || !isRecord(payload.message.author)
+		|| !['user', 'assistant'].includes(payload.message.author.role as string)) { return undefined; }
+	return { conversationId, message: readMessage(payload.message, conversationId) };
+}
+
 function readMessage(value: unknown, conversationId: string | undefined): ChatGPTMessage | undefined {
 	if (!isRecord(value) || typeof value.id !== 'string' || !isRecord(value.author) || !['user', 'assistant', 'tool'].includes(value.author.role as string)
 		|| !isRecord(value.content)) { return undefined; }
@@ -401,7 +456,7 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 		if (!isRecord(part)) { return part == null ? '' : fallback; }
 		// Keep mixed text/media parts in source order. Selecting only string parts
 		// used to silently discard an image whenever that same message had a caption.
-		if (part.content_type === 'text' && typeof part.text === 'string') { return part.text; }
+		if (['text', 'audio_transcription', 'text_audio'].includes(part.content_type as string) && typeof part.text === 'string') { return part.text; }
 		const resource = resourcePart(part);
 		if (resource) { resources.push(resource); return literal(resource.name); }
 		for (const key of ['audio', 'video', 'image']) {
@@ -458,7 +513,7 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 }
 
 /** SSE framing is independent of HTTP chunks; delta paths are restricted to ordinary JSON properties. */
-export async function* decodeChatGPTStream(stream: ReadableStream<Uint8Array>, signal: AbortSignal): AsyncGenerator<ChatGPTStreamUpdate> {
+export async function* decodeChatGPTStream(stream: ReadableStream<Uint8Array>, signal: AbortSignal): AsyncGenerator<ChatGPTStreamFrame> {
 	const reader = stream.getReader();
 	const cancel = (): void => { void reader.cancel().catch(() => { }); };
 	signal.addEventListener('abort', cancel, { once: true });
@@ -506,6 +561,21 @@ export async function* decodeChatGPTStream(stream: ReadableStream<Uint8Array>, s
 					const value: unknown = JSON.parse(data);
 					if (!isRecord(value)) { continue; }
 					if (value.error) { throw new Error(localize('sessions.chatgpt.streamFailed', 'ChatGPT could not finish this reply. The message may already have been sent. Reload the conversation before trying again.')); }
+					if (value.type === 'resume_conversation_token') {
+						if (typeof value.token !== 'string' || !value.token || value.token.length > 16384 || /[\r\n\0]/u.test(value.token)) { throw new Error(localize('sessions.chatgpt.invalidResponse', 'ChatGPT returned an unsupported response.')); }
+						yield { resumeToken: value.token };
+						continue;
+					}
+					if (value.type === 'stream_handoff') {
+						if (typeof value.conversation_id !== 'string' || !/^[A-Za-z0-9_-]{1,240}$/u.test(value.conversation_id)
+							|| !Array.isArray(value.options) || !value.options.some(option => isRecord(option) && option.type === 'resume_sse_endpoint')) { throw new Error(localize('sessions.chatgpt.invalidResponse', 'ChatGPT returned an unsupported response.')); }
+						yield { conversationId: value.conversation_id, handoff: true };
+						continue;
+					}
+					if (value.type === 'message_stream_complete') {
+						yield { finished: true };
+						continue;
+					}
 					if (typeof value.o === 'string') {
 						const patches = value.o === 'patch' && Array.isArray(value.v) ? value.v : [value];
 						for (const patch of patches) {

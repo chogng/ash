@@ -39,6 +39,20 @@ Exercise the consuming extension through registration, invocation and disposal;
 for new privileged operations also verify denial and cancellation. When testing
 with substituted OS actions, report which native behavior remains untested.
 
+## Declarative keymaps
+
+A package can contribute `keybindings` without a JavaScript entry point. Each entry
+declares `command`, `key`, optional `mac`/`linux`/`win` overrides, an optional `when`
+expression and JSON `args`. An empty platform override disables that binding on
+that platform. Bindings use the client keyboard platform, respect user overrides,
+and are removed when the package is disabled, uninstalled or its host is disposed.
+Non-built-in packages currently admit the eight selection and line-editing actions in
+the optional keymap below, without arguments. General Workbench commands and
+argument-bearing bindings are excluded from external declarative assets. Built-in
+bindings retain their host-owned command contract. Context matching uses the
+existing Workbench keybinding service. Removing another package's binding with a `-command` entry
+is unsupported. See the optional [keymap package](../../extensions/keymap-sublime/package.json).
+
 ## Using the API
 
 ```ts

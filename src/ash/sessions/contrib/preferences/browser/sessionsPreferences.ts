@@ -5,6 +5,7 @@ import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browse
 import { TraceSettingsModel } from '../../../../workbench/contrib/trace/browser/traceSettingsModel.js';
 import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferences/browser/settingsSectionRenderer.js';
 import './media/sessionsPreferences.css';
+import '../../../../workbench/services/extensions/browser/resourceEditorAccessibility.js';
 import '../../../../workbench/contrib/preferences/browser/media/settingsCard.css';
 import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
@@ -537,7 +538,8 @@ export class SessionsPreferences extends Disposable {
 			ChatAIDisabledSettingId,
 			AccessibilityVerbositySettingId.SessionsActivityBar,
 			AccessibilityVerbositySettingId.SessionsSettings,
-			AccessibilityVerbositySettingId.ExecutionSettings
+			AccessibilityVerbositySettingId.ExecutionSettings,
+			AccessibilityVerbositySettingId.ResourceEditor
 		].map(id => defaults.get(id));
 		const designSettings: readonly ISetting[] = [
 			DesignConfiguration.usePointerCursor,

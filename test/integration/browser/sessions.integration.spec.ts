@@ -631,12 +631,12 @@ test('a corrupt legacy draft reports its failure while other drafts and startup 
 	expect(JSON.parse(entries['sessions.inputDraft:untitled:saved'].value)).toEqual({ mode: 'agent', text: 'synthetic preserved draft', contexts: [] });
 });
 
-test('Creator canvas responds to wheel, drag and keyboard input', async ({ page }) => {
-	const creator = page.locator('.ash-sessions-navigation').getByRole('button', { name: 'Creator', exact: true });
+test('Artifacts canvas responds to wheel, drag and keyboard input', async ({ page }) => {
+	const creator = page.locator('.ash-sessions-navigation').getByRole('button', { name: 'Artifacts', exact: true });
 	await creator.click();
-	await expect(creator.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'symbol-color');
+	await expect(creator.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'artifacts');
 	await expect(creator).toHaveAttribute('aria-current', 'page');
-	await expect(page.locator('.ash-sessions-list:visible')).toBeHidden();
+	await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await expect(canvas).toBeVisible();
