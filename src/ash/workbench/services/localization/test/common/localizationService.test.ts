@@ -441,7 +441,7 @@ suite('Workbench localization', () => {
 		const { localize } = await import('../../../../../nls.js');
 		assert.equal(localize('parameterHints.dialog', 'Parameter hints'), '参数提示');
 		assert.equal(localize('chat.providerKeys.manage', 'Manage Model Connections'), '管理模型接入');
-		assert.equal(localize('chat.input.dictate', 'Dictate message'), '语音输入');
+		assert.equal(localize('chat.input.dictate', 'Dictate message'), '听写');
 		assert.equal(localize('dictation.cloudProvider.title', 'Cloud dictation provider'), '云端听写供应商');
 		assert.equal(localize('dictation.cloudProvider.description', 'Choose the cloud transcription provider. Its API key is required.'), '选择云端语音转写供应商，并配置对应的 API 密钥。');
 		assert.equal(localize('dictation.connectionLost', 'Dictation connection lost'), '语音输入连接已断开');
