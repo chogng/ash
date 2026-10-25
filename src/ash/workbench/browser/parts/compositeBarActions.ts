@@ -11,7 +11,8 @@ import type { IDelayedHoverOptions } from '../../../base/browser/ui/hover/hover.
 import { HoverPosition } from '../../../base/browser/ui/hover/hoverWidget.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
-import type { Event } from '../../../base/common/event.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
 import { ActivityBarPosition, type SideBarLocation } from '../../common/configuration.js';
 
@@ -53,10 +54,16 @@ export interface CompositeBarActionOptions {
 }
 
 /** Action model for a View Container selector; CompositeBar owns its lifecycle. */
-export class CompositeBarAction implements IAction {
+export class CompositeBarAction extends Disposable implements IAction {
 	readonly enabled = true;
+	private readonly changed = this._register(new Emitter<void>());
+	readonly onDidChange = this.changed.event;
 
-	constructor(readonly options: CompositeBarActionOptions) { }
+	constructor(private _options: CompositeBarActionOptions) {
+		super();
+	}
+
+	get options(): CompositeBarActionOptions { return this._options; }
 
 	get id(): string {
 		return this.options.id;
@@ -76,6 +83,12 @@ export class CompositeBarAction implements IAction {
 
 	get checked(): boolean {
 		return this.options.checked;
+	}
+
+	setChecked(checked: boolean): void {
+		if (this.options.checked === checked) return;
+		this._options = { ...this.options, checked };
+		this.changed.fire();
 	}
 
 	run(): void {
@@ -130,10 +143,14 @@ export class CompositeActionViewItem extends ActionViewItem {
 		container.classList.add("ash-composite-bar-destination");
 		if (!(this.compositeAction instanceof CompositeBarAction)) { throw new TypeError('Composite tabs require a CompositeBarAction'); }
 		const options = this.compositeAction.options;
-		container.classList.toggle("checked", options.checked);
+		const updateSelection = (): void => {
+			container.classList.toggle('checked', this.compositeAction.checked === true);
+			container.setAttribute('aria-selected', String(this.compositeAction.checked === true));
+		};
+		updateSelection();
+		this._register(this.compositeAction.onDidChange(updateSelection));
 		container.id = options.tabId;
 		container.setAttribute("role", "tab");
-		container.setAttribute("aria-selected", String(options.checked));
 		container.setAttribute("aria-label", options.badge ? `${options.label}, ${options.badge.description}` : options.label);
 		if (options.panelId) container.setAttribute("aria-controls", options.panelId);
 		this.setupDelayedHover(container, options.badge ? `${this.compositeAction.tooltip}, ${options.badge.description}` : this.compositeAction.tooltip);

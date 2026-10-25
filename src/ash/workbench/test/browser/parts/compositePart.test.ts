@@ -436,6 +436,78 @@ suite('composite browser component', () => {
 		expect(await label.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
 	});
 
+	test('retained selectors keep keyboard activation and drag ordering connected to the live panes', async function () {
+		const { page } = browserTests;
+		const panel = page.locator('.ash-workbench-panel');
+		const first = panel.getByRole('tab', { name: 'first container', exact: true });
+		const second = panel.getByRole('tab', { name: 'second container', exact: true });
+		const originalFirst = await first.elementHandle();
+		const originalSecond = await second.elementHandle();
+		await first.focus();
+		await first.press('ArrowRight');
+		await expect(second).toBeFocused();
+		await expect(first).toHaveAttribute('aria-selected', 'true');
+		await second.press('Enter');
+		await expect(second).toHaveAttribute('aria-selected', 'true');
+		await expect(panel.getByRole('textbox', { name: 'First input', exact: true })).toBeFocused();
+		await first.focus();
+		await first.press('Space');
+		await expect(first).toHaveAttribute('aria-selected', 'true');
+		expect(await first.evaluate((element, original) => element === original, originalFirst)).toBe(true);
+		expect(await second.evaluate((element, original) => element === original, originalSecond)).toBe(true);
+		await first.dragTo(second, { targetPosition: { x: 100, y: 10 } });
+		await expect.poll(() => panel.locator('.ash-composite-bar-destination').evaluateAll(tabs => tabs.map(tab => tab.getAttribute('data-action-id')))).toEqual(['second', 'first']);
+		expect(await first.evaluate((element, original) => element === original, originalFirst)).toBe(true);
+		expect(await second.evaluate((element, original) => element === original, originalSecond)).toBe(true);
+		await second.click();
+		await expect(second).toHaveAttribute('aria-selected', 'true');
+		await expect(panel.getByRole('textbox', { name: 'First input', exact: true })).toBeFocused();
+	});
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`retained overflow selector restores keyboard focus and activates hidden views (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/composite.html?problems&locale=${locale}`);
+			await page.waitForFunction(() => !!window.ashCompositeIntegration);
+			await page.evaluate(() => window.ashCompositeIntegration.resize(240, 280));
+			const panel = page.locator('.ash-workbench-panel');
+			const overflow = panel.locator('.ash-composite-bar-overflow');
+			await expect(overflow).toBeVisible();
+			const original = await overflow.elementHandle();
+			await overflow.focus();
+			await overflow.press('Enter');
+			await expect(overflow).toHaveAttribute('aria-expanded', 'true');
+			await expect(page.getByRole('menu')).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(overflow).toBeFocused();
+			await expect(overflow).toHaveAttribute('aria-expanded', 'false');
+			await overflow.press('Enter');
+			await page.getByRole('menu').getByText('second container', { exact: true }).click();
+			await expect(panel.getByRole('tab', { name: 'second container', exact: true })).toHaveAttribute('aria-selected', 'true');
+			await expect(panel.getByRole('textbox', { name: 'First input', exact: true })).toBeFocused();
+			expect(await overflow.evaluate((element, previous) => element === previous, original)).toBe(true);
+			await page.evaluate(() => window.ashCompositeIntegration.resize(800, 280));
+			await expect(overflow).toHaveCount(0);
+			await expect(panel.getByRole('tab', { name: 'first container', exact: true })).toBeVisible();
+		});
+	}
+
+	test('badge updates retain unrelated selectors and their focused keyboard target', async function () {
+		const { page } = browserTests;
+		await page.goto('/composite.html?badges');
+		await page.waitForFunction(() => !!window.ashCompositeIntegration);
+		const second = page.locator('#badge-icon [data-action-id="second"]');
+		const original = await second.elementHandle();
+		await second.focus();
+		for (const count of [13, 1234, 0]) {
+			await page.evaluate(count => window.ashCompositeIntegration.setBadge(count), count);
+			await expect(second).toBeFocused();
+			expect(await second.evaluate((element, previous) => element === previous, original)).toBe(true);
+		}
+		await second.press('ArrowLeft');
+		await expect(page.locator('#badge-icon [data-action-id="first"]')).toBeFocused();
+	});
+
 	test('Panel lays out active and retained panes before resize or activation returns', async function () {
 		const { page } = browserTests;
 

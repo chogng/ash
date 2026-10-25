@@ -1490,6 +1490,101 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 	dom.window.close();
 });
 
+test('CompositeBar retains selectors and keyboard focus through selection and unrelated badge updates', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using resources = new DisposableStore();
+		const registry = resources.add(new WorkbenchViewRegistry());
+		for (const id of ['first', 'second', 'third']) {
+			resources.add(registry.registerViewContainer({ id, title: id, location: ViewContainerLocation.Sidebar }));
+		}
+		const contexts = resources.add(new ContextKeyService());
+		const views = resources.add(new TestViewDescriptorService({ registry }, contexts));
+		const activity = resources.add(new ActivityService(views));
+		const opened: string[] = [];
+		const bar = resources.add(new CompositeBar(dom.window.document.body, {
+			overflowActionSize: 22, orientation: 'vertical', location: ViewContainerLocation.Sidebar,
+			ariaLabel: 'Views', viewDescriptorService: views, activityHoverOptions: { position: () => HoverPosition.RIGHT },
+			contextMenuProvider: { showContextMenu() { } },
+			openComposite: async id => { opened.push(id); bar.setActiveComposite(id); return null; },
+		}, activity));
+		const tabs = [...bar.domNode.querySelectorAll<HTMLElement>('[role="tab"]')];
+		bar.setActiveComposite('first');
+		tabs[1]!.focus();
+		tabs[1]!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+		assert.deepEqual(opened, ['second']);
+		assert.deepEqual([...bar.domNode.querySelectorAll('[role="tab"]')], tabs);
+		assert.deepEqual(tabs.map(tab => [tab.getAttribute('aria-selected'), tab.tabIndex]), [['false', -1], ['true', 0], ['false', -1]]);
+		assert.equal(dom.window.document.activeElement, tabs[1]);
+		using badge = activity.showViewContainerActivity('third', { badge: new NumberBadge(3, () => '3 changes') });
+		assert.equal(bar.domNode.querySelector('[data-action-id="second"]'), tabs[1]);
+		assert.equal(dom.window.document.activeElement, tabs[1]);
+		assert.equal(bar.domNode.querySelector('[data-action-id="third"] .ash-count-badge')?.textContent, '3');
+		bar.setActiveComposite(undefined);
+		bar.setActiveComposite('first');
+		assert.equal(bar.domNode.querySelector('[data-action-id="first"]'), tabs[0]);
+		tabs[1]!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+		assert.equal(dom.window.document.activeElement?.getAttribute('data-action-id'), 'third');
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('CompositePart only redistributes changed constraints and publishes each active allocation once', async () => {
+	const { CompositePart } = await import('../../browser/parts/compositePart.js');
+	const { Composite } = await import('../../browser/composite.js');
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using resources = new DisposableStore();
+		const services = resources.add(createTestComponentServices(undefined, undefined, dom.window.document));
+		class MeasuredComposite extends Composite {
+			readonly allocations: { width: number; height: number; }[] = [];
+			constructor(readonly id: string, private readonly width: number) {
+				super(id, services.get(IThemeService), services.get(IStorageService));
+				const root = dom.window.document.createElement('div');
+				this.create(root);
+				this._register(toDisposable(() => root.remove()));
+			}
+			override get minimumWidth(): number { return this.width; }
+			focus(): void { }
+			layout(dimension: { width: number; height: number; }): void { this.allocations.push({ ...dimension }); }
+		}
+		class MeasuredPart extends CompositePart<MeasuredComposite> {
+			constructor() { super(dom.window.document.body, 'measured', services.get(IThemeService), services.get(IStorageService)); }
+			get content(): HTMLElement { return this.contentDomNode; }
+		}
+		const part = resources.add(new MeasuredPart());
+		let width = 640;
+		Object.defineProperties(part.content, { clientWidth: { get: () => width }, clientHeight: { get: () => 400 } });
+		const first = new MeasuredComposite('first', 0);
+		const second = new MeasuredComposite('second', 0);
+		const wide = new MeasuredComposite('wide', 420);
+		for (const composite of [first, second, wide]) part.addComposite(composite);
+		const constraints: number[] = [];
+		resources.add(part.onDidChangeConstraints(() => { constraints.push(part.minimumWidth); part.layout(new Dimension(width, 400)); }));
+		part.showComposite('first');
+		part.showComposite('second');
+		assert.deepEqual(constraints, []);
+		part.showComposite('wide');
+		assert.deepEqual(constraints, [420]);
+		assert.deepEqual(wide.allocations, [{ width: 640, height: 400 }]);
+		part.layout(new Dimension(width, 400));
+		part.showComposite('wide');
+		assert.equal(wide.allocations.length, 1);
+		width = 720;
+		part.layout(new Dimension(width, 400));
+		assert.deepEqual(wide.allocations.at(-1), { width: 720, height: 400 });
+		part.setVisible(false);
+		part.setVisible(true);
+		assert.equal(wide.allocations.length, 3, 'A reopened body receives its current allocation');
+		part.showComposite('first');
+		assert.deepEqual(constraints, [420, 0]);
+		assert.deepEqual(first.allocations.at(-1), { width: 720, height: 400 });
+	} finally {
+		dom.window.close();
+	}
+});
+
 test("Pane Composite Parts restore workspace selections with Registry fallback", () => {
 	const dom = new JSDOM("<!doctype html><body></body>", {
 		url: "https://ash.test",
@@ -1777,7 +1872,7 @@ test('Transient view navigation follows its active session and ignores stale res
 for (const [overflowActionSize, availableWidth] of [[22, 110], [60, 134]] as const) {
 	test(`CompositeBar moves non-fitting label tabs into its overflow menu (${overflowActionSize}px action)`, () => {
 		const dom = new JSDOM("<!doctype html><body></body>");
-		const disposables = new DisposableStore();
+		using disposables = new DisposableStore();
 		const registry = new WorkbenchViewRegistry();
 		const panels = [
 			["ash.panel.problems", "Problems"],
@@ -1822,8 +1917,11 @@ for (const [overflowActionSize, availableWidth] of [[22, 110], [60, 134]] as con
 		});
 		compositeBar.setActiveComposite("ash.panel.terminal");
 		const tabs = [...compositeBar.domNode.querySelectorAll<HTMLElement>(".ash-composite-bar-destination")];
-		for (const [index, tab] of tabs.entries()) {
-			tab.getBoundingClientRect = () => ({ left: index * 50, right: (index + 1) * 50, width: 50 } as DOMRect);
+		for (const tab of tabs) {
+			tab.getBoundingClientRect = () => {
+				const index = [...compositeBar.domNode.querySelectorAll('.ash-composite-bar-destination')].indexOf(tab);
+				return { left: index * 50, right: (index + 1) * 50, width: 50 } as DOMRect;
+			};
 		}
 		compositeBar.layout();
 
@@ -1855,6 +1953,16 @@ for (const [overflowActionSize, availableWidth] of [[22, 110], [60, 134]] as con
 		hideOverflowMenu();
 		assert.equal(overflowItem.getAttribute("aria-expanded"), "false");
 		assert.equal(overflowItem.isConnected, true);
+		const retainedTerminal = tabs.find(tab => tab.dataset.actionId === 'ash.panel.terminal')!;
+		compositeBar.setActiveComposite('ash.panel.terminal');
+		compositeBar.layout();
+		assert.equal(compositeBar.domNode.querySelector('[data-action-id="ash.panel.terminal"]'), retainedTerminal);
+		assert.equal(compositeBar.domNode.querySelector('.ash-composite-bar-overflow'), overflowItem);
+		assert.equal(retainedTerminal.getAttribute('aria-selected'), 'true');
+		compositeBar.setActiveComposite('ash.panel.problems');
+		assert.equal(compositeBar.domNode.querySelector('[data-action-id="ash.panel.problems"]')?.getAttribute('aria-selected'), 'true');
+		compositeBar.domNode.querySelector<HTMLElement>('.ash-composite-bar-overflow')!.click();
+		assert.deepEqual(overflowActions.map(action => action.label), ['Output', 'Terminal']);
 
 		disposables.dispose();
 		dom.window.close();
@@ -2186,6 +2294,8 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
 	problems.dispatchEvent(compositeBarDragEvent(dom.window, "dragstart"));
 	output.dispatchEvent(compositeBarDragEvent(dom.window, "dragover", 175));
 	output.dispatchEvent(compositeBarDragEvent(dom.window, "drop", 175));
+	assert.equal(compositeBar.domNode.querySelector('[data-action-id="ash.panel.problems"]'), problems);
+	assert.equal(compositeBar.domNode.querySelector('[data-action-id="ash.panel.output"]'), output);
 
 	assert.deepEqual(
 		[...compositeBar.domNode.querySelectorAll<HTMLElement>("[role='tab']")].map((tab) => tab.textContent),

@@ -26,6 +26,7 @@ export abstract class CompositePart<T extends Composite> extends Part {
 	private readonly composites = this._register(new DisposableMap<string, T>());
 	private readonly progressIndicators = this._register(new DisposableMap<string, IDisposable & { readonly indicator: IProgressIndicator; }>());
 	private activeComposite: T | undefined;
+	private lastLayout: { readonly composite: T; readonly dimension: IDimension; } | undefined;
 	private readonly titleAreaListener = this._register(new MutableDisposable());
 	private readonly constraintsListener = this._register(new MutableDisposable());
 
@@ -138,11 +139,13 @@ export abstract class CompositePart<T extends Composite> extends Part {
 		const composite = this.composites.get(compositeId);
 		if (!composite) { return false; }
 		if (this.activeComposite === composite) {
+			const previousMinimumWidth = this.minimumWidth;
 			const visible = composite.isVisible();
 			this.activeComposite = undefined;
+			this.lastLayout = undefined;
 			this.titleAreaListener.clear();
 			this.constraintsListener.clear();
-			this.notifyConstraintsChanged();
+			if (this.minimumWidth !== previousMinimumWidth) this.notifyConstraintsChanged();
 			this.updateTitleArea();
 			composite.setVisible(false);
 			if (visible) { this.compositeClosed.fire(composite); }
@@ -171,6 +174,7 @@ export abstract class CompositePart<T extends Composite> extends Part {
 			}
 			return;
 		}
+		const previousMinimumWidth = this.minimumWidth;
 		if (this.activeComposite) {
 			const previous = this.activeComposite;
 			const visible = previous.isVisible();
@@ -180,12 +184,15 @@ export abstract class CompositePart<T extends Composite> extends Part {
 			if (visible) { this.compositeClosed.fire(previous); }
 		}
 		this.activeComposite = composite;
+		this.lastLayout = undefined;
 		this.titleAreaListener.value = composite.onTitleAreaUpdate(() => this.updateTitleArea());
 		this.constraintsListener.value = composite.onDidChangeConstraints(() => this.notifyConstraintsChanged());
 		this.contentDomNode.append(composite.getContainer()!);
 		composite.setVisible(!this.domNode.hidden);
-		this.notifyConstraintsChanged();
 		this.updateTitleArea();
+		// Only a changed constraint requires Grid to redistribute the Workbench.
+		// Publish title changes first so that pass measures the final content area.
+		if (this.minimumWidth !== previousMinimumWidth) this.notifyConstraintsChanged();
 		this.layoutActiveComposite();
 		if (!this.domNode.hidden) {
 			this.compositeOpened.fire({ composite, focus });
@@ -197,6 +204,7 @@ export abstract class CompositePart<T extends Composite> extends Part {
 	override setVisible(visible: boolean): void {
 		const changed = this.domNode.hidden === visible;
 		super.setVisible(visible);
+		if (!visible) this.lastLayout = undefined;
 		this.activeComposite?.setVisible(visible);
 		if (visible) { this.layoutActiveComposite(); }
 		if (changed && this.activeComposite) {
@@ -217,7 +225,11 @@ export abstract class CompositePart<T extends Composite> extends Part {
 		// during the host layout, before focus or paint can use the previous pane size.
 		const { clientWidth, clientHeight } = this.contentDomNode;
 		if (clientWidth > 0 && clientHeight > 0) {
-			this.activeComposite.layout(new Dimension(clientWidth, clientHeight));
+			const previous = this.lastLayout;
+			if (previous?.composite === this.activeComposite && previous.dimension.width === clientWidth && previous.dimension.height === clientHeight) return;
+			const dimension = new Dimension(clientWidth, clientHeight);
+			this.lastLayout = { composite: this.activeComposite, dimension };
+			this.activeComposite.layout(dimension);
 		}
 	}
 
