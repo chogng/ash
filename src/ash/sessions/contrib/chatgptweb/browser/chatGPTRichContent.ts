@@ -63,6 +63,31 @@ function codeEnd(source: string, index: number): number | undefined {
 	return end < 0 ? undefined : end + marker.length;
 }
 
+/** Writing metadata is a transport envelope, not Markdown or executable attributes. */
+function readWriting(source: string): { raw: string; body: string; } | undefined {
+	const prefix = /^ {0,3}:::writing\{/u.exec(source);
+	if (!prefix) { return undefined; }
+	let quote = false;
+	for (let index = prefix[0].length; index < Math.min(source.length, 8192); index++) {
+		const character = source[index];
+		if (character === '\\' && quote) { index++; continue; }
+		if (character === '"') { quote = !quote; }
+		if (character !== '}' || quote) { continue; }
+		const start = index + 1;
+		for (index = start; index < source.length;) {
+			const end = codeEnd(source, index);
+			if (end !== undefined) { index = end; continue; }
+			if (source.startsWith(':::', index) && /^(?:\s|$)/u.test(source.slice(index + 3))) {
+				return { raw: source.slice(0, index + 3), body: source.slice(start, index).trim() };
+			}
+			index++;
+		}
+		// The body is useful before its closing delimiter arrives during streaming.
+		return { raw: source, body: source.slice(start).trim() };
+	}
+	return source.length < 8192 ? { raw: source, body: '' } : undefined;
+}
+
 function readContent(source: string): RichContent | undefined {
 	const tag = readTag(source);
 	if (!tag) { return undefined; }
@@ -310,6 +335,21 @@ function createRichContentExtension(references: readonly ChatGPTReference[] = []
 				}
 				return referenceMarkup(ids, references);
 			},
+		}, {
+			name: 'chatgptWriting', level: 'block',
+			// Marked omits the paragraph's first character here; an offset-zero match
+			// would split a codespan whose opening backtick was that character.
+			start: source => /\n {0,3}:::writing\{/u.exec(source)?.index ?? -1,
+			tokenizer(source) {
+				const depth = lexerDepth.get(this.lexer) ?? 0;
+				if (depth >= 32) { return undefined; }
+				const writing = readWriting(source);
+				if (!writing) { return undefined; }
+				lexerDepth.set(this.lexer, depth + 1);
+				try { return { type: 'chatgptWriting', raw: writing.raw, tokens: this.lexer.blockTokens(writing.body) }; }
+				finally { lexerDepth.set(this.lexer, depth); }
+			},
+			renderer(token) { return this.parser.parse(token.tokens ?? []); },
 		}],
 	};
 }

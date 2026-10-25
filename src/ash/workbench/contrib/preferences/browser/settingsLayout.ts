@@ -210,7 +210,7 @@ export const SettingsNavigation = [
 					{
 						id: 'chatgpt',
 						label: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.label' }, 'ChatGPT'),
-						description: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.description' }, 'Configure the ChatGPT website in this window.'),
+						description: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.description' }, 'Configure ChatGPT in this window.'),
 						settings: ['sessions.chatgpt.optimizeScrolling'],
 					},
 				],

@@ -84,7 +84,7 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		modeHost.className = 'ash-sessions-workspace-mode';
 		left.append(modeHost);
 		this._register(instantiationService.createInstance(WindowModeControl, modeHost, activeMode, {
-			agents: 'sessions.open.chat',
+			agents: environment.runtime === 'electron' ? 'sessions.show.chatgpt' : 'sessions.open.chat',
 			code: 'sessions.open.code',
 		}));
 		const updateModeVisibility = (): void => {

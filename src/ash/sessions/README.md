@@ -7,20 +7,20 @@ is canonical for the renderer implementation and extension points.
 
 UI design and style boundaries are defined in [Sessions style](STYLE.md).
 
-The ChatGPT contribution uses `chatgpt.com/backend-api` conversation requests,
-streaming replies and the web verification runtime. It does not use the OpenAI
-API. The host attaches the current externally managed login credentials per
-request; the contribution does not query account identity, retain account
-bindings, detect account changes or reset chats and drafts when login changes.
-Credentials and cookies remain in the host, outside renderer state.
+The Desktop `contrib/chatgptweb` contribution owns the ChatGPT entry and the
+Chat workspace's New action. Ash renders the conversation, composer, model
+selection, attachments and history sidebar. `ChatGPTService` remains the window's
+single owner for drafts, selected conversation, history and streamed replies.
+The `ash-chatgpt` editor resource and conversation storage keys stay stable
+across entry restoration. Previous native-experiment restore commands resolve
+to this same entry without creating or sending a new conversation.
 
-ChatGPTService owns file upload status and file references alongside each draft.
-The host accepts bounded file bytes only for signed storage uploads and never
-forwards login headers to storage. Voice uses the ChatGPT voice-session endpoint
-and an encrypted LiveKit media connection; its short-lived room ticket and key
-stay in memory for that call. Leaving ChatGPT or switching conversations releases
-the microphone, playback, worker and room. Voice does not create an Agent Thread.
-The chat history returned by ChatGPT remains the canonical conversation record.
+The window-owned Main transport reads the existing Codex credentials and makes
+ChatGPT requests; credentials never enter the renderer. Its hidden Chromium
+runtime only performs the website's request verification. It does not host an
+additional chat UI or own conversation state. Voice capture and playback use
+the renderer's existing media lifecycle. ChatGPT remains separate from the
+Agent/Codex model service, local Threads and execution lifecycle.
 
 Shared Agent execution, Thread records, model catalogs, approval metadata and
 profile execution defaults belong to `platform/agentHost/common/`. Its browser

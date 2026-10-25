@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { chatGPTModelCatalog } from '../../../../../../../test/fixtures/chatGPTModels.js';
-import { ChatGPTClient, decodeChatGPTStream } from '../../browser/chatGPTClient.js';
+import { ChatGPTClient, ChatGPTRequestError, decodeChatGPTStream, readChatGPTVoiceUpdate } from '../../browser/chatGPTClient.js';
 
 const signal = (): AbortSignal => new AbortController().signal;
 const json = (value: unknown): Response => Response.json(value);
@@ -13,6 +13,67 @@ async function collect<T>(values: AsyncIterable<T>): Promise<T[]> {
 }
 
 suite('Bundled ChatGPT client', () => {
+	test('resumes an accepted background turn without sending another user message or exposing its token', async () => {
+		const paths: string[] = [];
+		const frame = (value: unknown) => `data: ${JSON.stringify(value)}\n\n`;
+		const client = new ChatGPTClient((async (input, init) => {
+			const path = String(input); paths.push(path);
+			if (path.includes('/.headers/')) { return json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' }); }
+			if (path.endsWith('/prepare')) { return json({ conduit_token: 'initial-token' }); }
+			if (path.endsWith('/resume')) {
+				assert.equal(new Headers(init?.headers).get('x-conduit-token'), 'resume-token');
+				assert.deepEqual(JSON.parse(String(init?.body)), { conversation_id: 'chat', offset: 0 });
+				// Offset zero replays the original handoff before the actual completion.
+				return new Response(frame({ type: 'stream_handoff', conversation_id: 'chat', options: [{ type: 'resume_sse_endpoint' }] })
+					+ frame({ conversation_id: 'chat', message: message('reply', 'assistant', 'Completed Pro reply') })
+					+ frame({ type: 'message_stream_complete', conversation_id: 'chat' }) + 'data: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+			}
+			return new Response(frame({ type: 'resume_conversation_token', token: 'resume-token' })
+				+ frame({ type: 'stream_handoff', conversation_id: 'chat', options: [{ type: 'resume_sse_endpoint' }] }) + 'data: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+		}) as typeof fetch);
+		const updates = await collect(client.send({ text: 'Question', model: 'pro', parentId: 'parent', messageId: 'user' }, signal()));
+		assert.equal(updates.at(-1)?.message?.text, 'Completed Pro reply');
+		assert.ok(updates.every(update => !('resumeToken' in update)));
+		assert.equal(paths.filter(path => path === '/service/backend-api/f/conversation').length, 1);
+		assert.equal(paths.filter(path => path.endsWith('/resume')).length, 1);
+	});
+
+	test('handoff cancellation never resumes and a resume rejection retains accepted-message semantics', async () => {
+		let resumes = 0;
+		const client = new ChatGPTClient((async input => {
+			const path = String(input);
+			if (path.includes('/.headers/')) { return json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' }); }
+			if (path.endsWith('/prepare')) { return json({ conduit_token: 'initial' }); }
+			if (path.endsWith('/resume')) { resumes++; return new Response(null, { status: 401 }); }
+			return new Response('data: {"type":"resume_conversation_token","token":"resume"}\n\ndata: {"type":"stream_handoff","conversation_id":"chat","options":[{"type":"resume_sse_endpoint"}]}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+		}) as typeof fetch);
+		const input = { text: 'Question', model: 'pro', parentId: 'parent', messageId: 'user' };
+		const controller = new AbortController();
+		await assert.rejects(async () => { for await (const update of client.send(input, controller.signal)) { if (update.conversationId) { controller.abort(); } } });
+		assert.equal(resumes, 0);
+		await assert.rejects(collect(client.send(input, signal())), error => error instanceof Error && !(error instanceof ChatGPTRequestError) && /401/u.test(error.message));
+		assert.equal(resumes, 1);
+	});
+
+	test('loads all project pages when the service rejects oversized sidebar requests', async () => {
+		const cursors: (string | null)[] = [];
+		const projects = Array.from({ length: 21 }, (_, index) => ({ id: `project-${index}`, title: `Project ${index}` }));
+		const client = new ChatGPTClient((async input => {
+			const url = new URL(String(input), 'https://fixture.test');
+			assert.equal(url.pathname, '/service/backend-api/gizmos/snorlax/sidebar');
+			if (Number(url.searchParams.get('limit')) > 20) { return new Response(null, { status: 422 }); }
+			const cursor = url.searchParams.get('cursor');
+			cursors.push(cursor);
+			const page = cursor === null ? projects.slice(0, 20) : projects.slice(20);
+			return json({
+				items: page.map(project => ({ gizmo: { id: project.id, display: { name: project.title } } })),
+				cursor: cursor === null ? 'next-page' : null,
+			});
+		}) as typeof fetch);
+		assert.deepEqual(await client.projects(signal()), projects);
+		assert.deepEqual(cursors, [null, 'next-page']);
+	});
+
 	test('shows only version families and preserves the five product presets and their request targets', async () => {
 		const client = new ChatGPTClient((async () => json(chatGPTModelCatalog())) as typeof fetch);
 		const catalog = await client.models(signal());
@@ -81,29 +142,57 @@ suite('Bundled ChatGPT client', () => {
 		assert.deepEqual(history.messages.map(message => message.text), ['Old reply', 'New reply']);
 	});
 
-	test('accepts bounded encrypted room tickets and rejects non-LiveKit, insecure or malformed tickets', async () => {
-		const ticket = { url: 'wss://chatgpt.livekit.cloud', token: 'fixture-room-token', e2ee_key: 'fixture-media-key', conversation_id: 'chat-one' };
-		let value: object = ticket;
-		let body: Record<string, unknown> = {};
+	test('negotiates ChatGPT voice with multipart SDP on the current endpoint', async () => {
+		let answer = 'v=0\r\ns=Fixture\r\n';
 		const client = new ChatGPTClient((async (url, init) => {
-			assert.equal(url, '/service/voice/get_token');
-			body = JSON.parse(String(init?.body));
-			return json(value);
+			assert.equal(url, '/service/realtime/vp?dcid=0');
+			assert.ok(init?.body instanceof FormData);
+			assert.equal(init.body.get('sdp'), 'v=0\r\ns=Offer\r\n');
+			const session = JSON.parse(String(init.body.get('session')));
+			assert.equal(session.parent_message_id, 'parent');
+			assert.equal(session.conversation_id, 'chat-one');
+			assert.equal(session.language_code, 'zh-CN');
+			assert.equal(session.voice_mode, 'advanced');
+			assert.equal(session.enable_message_streaming, true);
+			assert.equal(session.voice_training_allowed, false);
+			return new Response(answer, { status: 201 });
 		}) as typeof fetch);
-		assert.deepEqual(await client.voice({ parentId: 'parent', conversationId: 'chat-one', language: 'zh-CN' }, signal()), {
-			url: ticket.url + '/', token: ticket.token, encryptionKey: ticket.e2ee_key, conversationId: ticket.conversation_id,
-		});
-		assert.equal(body.parent_message_id, 'parent');
-		assert.equal(body.conversation_id, 'chat-one');
-		assert.equal(body.language, 'zh-CN');
-		assert.equal(body.voice_training_allowed, false);
-		for (const change of [
-			{ url: 'ws://chatgpt.livekit.cloud' }, { url: 'wss://chatgpt.livekit.cloud.evil.test' }, { url: 'wss://user@chatgpt.livekit.cloud' },
-			{ token: '' }, { token: 'x'.repeat(32769) }, { e2ee_key: '' }, { conversation_id: '../invalid' },
-		]) {
-			value = { ...ticket, ...change };
-			await assert.rejects(client.voice({ parentId: 'parent', language: 'en' }, signal()), /unsupported response/u);
+		const input = { parentId: 'parent', conversationId: 'chat-one', language: 'zh-CN', sdp: 'v=0\r\ns=Offer\r\n' };
+		assert.equal(await client.voice(input, signal()), answer);
+		for (const invalid of ['{}', 'https://outside.test', 'v=0\n' + 'x'.repeat(128 * 1024)]) {
+			answer = invalid; await assert.rejects(client.voice(input, signal()), /unsupported response/u);
 		}
+	});
+
+	test('voice data messages retain canonical message and conversation identities', () => {
+		const payload = { id: 'spoken-user', author: { role: 'user' }, content: { content_type: 'multimodal_text', parts: [{ content_type: 'audio_transcription', text: 'Synthetic spoken question', direction: 'in' }] } };
+		assert.deepEqual(readChatGPTVoiceUpdate(JSON.stringify({ type: 'data_message', data: JSON.stringify({ type: 'full_chat_message', payload: { message: payload } }) })), {
+			conversationId: undefined, message: { id: 'spoken-user', role: 'user', text: 'Synthetic spoken question' },
+		});
+		assert.deepEqual(readChatGPTVoiceUpdate(JSON.stringify({ type: 'conversation_update', payload: { conversation_id: 'chat-one', parent_message_id: 'voice-reply' } })), { conversationId: 'chat-one', parentId: 'voice-reply' });
+		assert.equal(readChatGPTVoiceUpdate('{invalid'), undefined);
+		assert.equal(readChatGPTVoiceUpdate('x'.repeat(128 * 1024 + 1)), undefined);
+	});
+
+	test('voice stop waits for the committed message before returning the next continuation node', async () => {
+		let reads = 0;
+		const client = new ChatGPTClient((async () => {
+			reads++;
+			if (reads === 1) { return new Response(null, { status: 404 }); }
+			return json({
+				current_node: reads === 2 ? 'old' : 'hidden-leaf', mapping: {
+					old: { parent: null, message: message('old', 'assistant', 'Before voice') },
+					...(reads === 2 ? {} : {
+						'voice-reply': { parent: 'old', message: { id: 'voice-reply', author: { role: 'assistant' }, content: { content_type: 'multimodal_text', parts: [{ content_type: 'audio_transcription', text: 'Spoken answer' }] } } },
+						'hidden-leaf': { parent: 'voice-reply', message: message('hidden-leaf', 'assistant', '') },
+					}),
+				}
+			});
+		}) as typeof fetch);
+		const history = await client.voiceHistory('chat-one', 'voice-reply', signal());
+		assert.equal(reads, 3);
+		assert.equal(history.parentId, 'hidden-leaf');
+		assert.equal(history.messages.at(-1)!.text, 'Spoken answer');
 	});
 	test('retains authenticated resources and source metadata instead of reducing them to web links', async () => {
 		const client = new ChatGPTClient((async () => json({

@@ -19,28 +19,19 @@
 	box-sizing: border-box;
 }
 
-.ash-chatgpt-navigation
-	:is(.ash-chatgpt-new-chat, .ash-chatgpt-conversation, .ash-action-label) {
+.ash-chatgpt-navigation :is(.ash-chatgpt-conversation, .ash-action-label) {
 	min-height: var(--ash-spacing-size360);
 	padding: var(--ash-spacing-size60) var(--ash-spacing-size120);
 	text-align: left;
 }
 
 .ash-chatgpt-navigation
-	:is(
-		.ash-chatgpt-new-chat,
-		.ash-chatgpt-conversation,
-		.ash-action-label
-	)[aria-current] {
+	:is(.ash-chatgpt-conversation, .ash-action-label)[aria-current] {
 	font-weight: var(--ash-fontWeight-semiBold, 600);
 	border-color: var(--ash-contrastBorder, transparent);
 	background: var(--ash-sessions-selectionBackground);
 }
 
-.ash-chatgpt-navigation > :is(button, input) {
-	flex-shrink: 0;
-	margin-inline: 12px;
-}
 .ash-chatgpt-navigation-list {
 	/* Keep content inset while the scroll track reaches the sidebar edge. */
 	padding: 0 12px 20px;

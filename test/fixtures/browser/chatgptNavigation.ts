@@ -43,7 +43,6 @@ import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio, type TestDictationCapture } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
-import type { ChatGPTVoiceConnection } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTClient.js';
 
 import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
@@ -59,7 +58,7 @@ import { DialogService } from '../../../src/ash/workbench/services/dialogs/commo
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 
 declare global {
-	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; connectVoicePeer(connection: ChatGPTVoiceConnection): Promise<void>; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; }; }
+	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; }; }
 }
 
 const parameters = new URLSearchParams(location.search);
@@ -164,11 +163,6 @@ window.ashChatGPTIntegration = {
 	dictate: (text, final) => transcript?.(text, final),
 	dictationStops: () => dictationStops,
 	setVisible: visible => widget.setVisible(visible),
-	connectVoicePeer: async connection => {
-		const { ChatGPTVoiceSession } = await import('../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTVoiceSession.js');
-		const media = resources.add(new ChatGPTVoiceSession(window, () => { }, error => { if (error) { console.error(error); } }));
-		await media.connect(connection, new AbortController().signal);
-	},
 };
 widget = resources.add(services.createInstance(ChatGPTWidget, document.getElementById('editor')!));
 const host = document.getElementById('navigation')!;

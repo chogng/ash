@@ -1,50 +1,3 @@
-.ash-chatgpt-composer {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: flex-end;
-	gap: var(--ash-spacing-size80);
-	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
-	min-width: 0;
-	background: var(--ash-input-background);
-	border: var(--ash-strokeThickness) solid var(--ash-border);
-	border-radius: var(--ash-cornerRadius-circle);
-	box-shadow: 0 2px 8px
-		color-mix(in srgb, var(--ash-sessions-inputShadow) 20%, transparent);
-	transition:
-		border-color var(--ash-animation-durationNormal) ease,
-		box-shadow var(--ash-animation-durationNormal) ease;
-}
-
-.ash-chatgpt-composer:hover,
-.ash-chatgpt-composer:focus-within {
-	border-color: var(--ash-widget-border);
-	box-shadow: 0 4px 16px var(--ash-sessions-inputShadow);
-}
-
-.ash-chatgpt-input {
-	flex: 1 0 64px;
-	min-width: 64px;
-	align-self: center;
-}
-
-.ash-chatgpt-widget .ash-button.ash-chatgpt-round-button {
-	flex: 0 0 auto;
-	display: grid;
-	place-items: center;
-	width: 32px;
-	min-height: 32px;
-	height: 32px;
-	padding: 0;
-	border: 0;
-	border-radius: var(--ash-cornerRadius-circle);
-	font-size: var(--ash-fontSize-label1);
-}
-
-.ash-chatgpt-round-button .ash-icon {
-	width: var(--ash-lxiconFontSize);
-	height: var(--ash-lxiconFontSize);
-}
-
 .ash-chatgpt-dictation.active {
 	background: var(--ash-toolbar-hoverBackground);
 	outline: var(--ash-strokeThickness) solid var(--ash-foreground);
@@ -113,16 +66,4 @@
 	overflow: auto;
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
-}
-
-:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
-	.ash-chatgpt-composer {
-	border-color: var(--ash-contrastBorder);
-	box-shadow: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.ash-chatgpt-composer {
-		transition: none;
-	}
 }

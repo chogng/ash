@@ -21,6 +21,9 @@ import { approvalModeDefinitions, type ApprovalMode } from '../../../platform/ag
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { ISessionsProvidersService, SessionsProvidersService } from '../../services/sessions/browser/sessionsProvidersService.js';
+import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
+import { ISessionsLayoutService } from '../../services/layout/common/sessionsLayoutService.js';
 
 test('permission commands use shared Chinese copy and require confirmation only for Bypass', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
@@ -88,6 +91,22 @@ test("Sessions owns the local New Chat command without requiring regular Workben
 
 	assert.equal(created, 1);
 	onDidChange.dispose();
+});
+
+test('navigation New uses the active entry owner before the default ChatGPT entry', async () => {
+	using services = new InstantiationService();
+	const calls: string[] = [];
+	let entryCommand: string | undefined = 'test.entry.newChat';
+	services.registerInstance(IContextKeyService, { getValue: () => 'chat' } as unknown as IContextKeyService);
+	services.registerInstance(ISessionsLayoutService, { get newSessionCommand() { return entryCommand; } } as ISessionsLayoutService);
+	using native = CommandsRegistry.register('test.entry.newChat', () => { calls.push('native'); });
+	using chatgpt = CommandsRegistry.register('sessions.open.new', () => { calls.push('chatgpt'); });
+	using commands = new CommandService(services);
+	services.registerInstance(ICommandService, commands);
+	await commands.executeCommand('sessions.newSession');
+	entryCommand = undefined;
+	await commands.executeCommand('sessions.newSession');
+	assert.deepEqual(calls, ['native', 'chatgpt']);
 });
 
 test("Sessions History opens the selected active chat", async () => {

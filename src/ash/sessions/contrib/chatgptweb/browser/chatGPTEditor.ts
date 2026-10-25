@@ -6,6 +6,7 @@ import { AccessibilityVerbositySettingId } from '../../../../platform/accessibil
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
@@ -28,8 +29,11 @@ export class ChatGPTEditorPane extends EditorPane {
 		root.setAttribute('aria-label', localize('sessions.chatgpt.title', 'ChatGPT'));
 		parent.append(root);
 		super.create(root);
-		this._register(this.contextKeys.createScoped(root)).createKey('chatGPTFocused', true);
-		this.widget = this._register(this.instantiation.createInstance(ChatGPTWidget, root));
+		const contextKeys = this._register(this.contextKeys.createScoped(root));
+		contextKeys.createKey('chatGPTFocused', true);
+		// Nested input editors must inherit this page's accessibility context.
+		const instantiation = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, contextKeys])));
+		this.widget = this._register(instantiation.createInstance(ChatGPTWidget, root));
 		const update = (): void => this.widget.setScrollingOptimization(this.configuration.getValue<boolean>(chatGPTScrollOptimization));
 		update();
 		this._register(this.configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(chatGPTScrollOptimization)) { update(); } }));

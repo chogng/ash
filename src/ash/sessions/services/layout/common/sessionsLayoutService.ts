@@ -17,10 +17,13 @@ export interface ISessionsEntry {
 	readonly detailsContainerId?: string;
 	readonly editorInput?: IResourceEditorInput;
 	readonly restoreCommand: string;
+	/** Routes the window's New action to this entry's own conversation owner. */
+	readonly newSessionCommand?: string;
 	readonly focus: 'conversation' | 'sidebar' | 'editor';
 }
 
 export interface ISessionsLayoutService extends IDisposable {
+	readonly newSessionCommand?: string;
 	readonly conversationVisible: boolean;
 	readonly onDidChangeConversationVisibility: Event<void>;
 	setConversationVisible(visible: boolean): Promise<void>;

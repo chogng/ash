@@ -51,7 +51,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			}
 			await installHistory(application);
 			const page = await workbench.openAgentsWindow(target.kind);
-			await page.locator('.ash-sessions-navigation').getByRole('button', { name: /^(ChatGPT|ChatGPT Native \(Experimental\)|ChatGPT 原生实验)$/u }).click();
+			await page.locator('.ash-sessions-navigation').getByRole('button', { name: 'ChatGPT', exact: true }).click();
 			const sidebar = page.locator('.ash-chatgpt-navigation');
 			await expect(sidebar.getByRole('button', { name: 'First native history', exact: true })).toBeVisible();
 			await expect(sidebar.getByRole('searchbox')).toHaveCount(0);

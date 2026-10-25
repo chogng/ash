@@ -29,6 +29,23 @@ function render(value: string, references?: readonly ChatGPTReference[]): string
 
 suite('ChatGPT rich content', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('renders writing bodies as shared Markdown without displaying envelope metadata', () => {
+		const source = 'Before\n\n:::writing{variant="chat_message" id="64821" title="A } quoted title"}**杭州周末**\n\n两间房共1160元。:::\n\nAfter';
+		const html = render(source);
+		assert.match(html, /Before[\s\S]*<strong>杭州周末<\/strong>[\s\S]*两间房共1160元。[\s\S]*After/u);
+		assert.doesNotMatch(html, /:::|variant=|64821|quoted title/u);
+		const text = getChatGPTRichContentText(source);
+		assert.match(text, /Before[\s\S]*杭州周末[\s\S]*1160[\s\S]*After/u);
+		assert.doesNotMatch(text, /:::|variant=|64821/u);
+	});
+
+	test('keeps writing text while streaming and preserves writing examples inside code', () => {
+		assert.match(render(':::writing{variant="chat_message"}**Visible draft**'), /<strong>Visible draft<\/strong>/u);
+		assert.doesNotMatch(render('Before\n\n:::writing{variant="chat_message'), /:::|variant=/u);
+		const source = '`:::writing{id="inline"}literal:::`\n\n```text\n:::writing{id="fenced"}example:::\n```';
+		const root = document.createElement('div'); root.innerHTML = render(source);
+		assert.deepEqual([...root.querySelectorAll('code')].map(element => element.textContent?.trim()), [':::writing{id="inline"}literal:::', ':::writing{id="fenced"}example:::']);
+	});
 	test('keeps the shared formula grammar when rich content extensions are installed', () => {
 		const cases = JSON.parse(readFileSync('test/fixtures/markdownMath.json', 'utf8')) as { name: string; markdown: string; formulas: { source: string; display: string; }[]; }[];
 		const combined = cases.filter(entry => entry.formulas.length || ['code and escapes', 'currency and jQuery'].includes(entry.name));

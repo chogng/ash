@@ -25,7 +25,7 @@ for (const locale of ['en', 'zh-CN']) {
 			? { code: '代码', browser: '浏览器', tabs: '浏览器标签页', newTab: '打开新的浏览器标签页' }
 			: { code: 'Code', browser: 'Browser', tabs: 'Browser tabs', newTab: 'Open new browser tab' };
 		const page = await workbench.openAgentsWindow(target.kind);
-		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 		await installMainChannelTestClient(page);
 		const commands = new QuickAccess(page);
 		const tabs = page.getByRole('tab', { name: copy.browser, exact: true });
@@ -311,7 +311,7 @@ test.describe('Sessions from an Electron Workbench', () => {
 		page.on('pageerror', error => failures.push(error.message));
 		const auxiliary = page.locator('[data-part="auxiliarybar"]');
 		const editors = page.locator('[data-part="editor"]');
-		const navigation = page.locator('.ash-sessions-activity-content');
+		const mode = page.locator('.ash-window-mode-control');
 		await expect(auxiliary).toBeHidden();
 		await expect(page.getByText('Session details', { exact: true })).toHaveCount(0);
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -345,16 +345,16 @@ test.describe('Sessions from an Electron Workbench', () => {
 			await page.keyboard.press('ControlOrMeta+S');
 			await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('const value = 42;\n');
 			const input = await editor.input.elementHandle();
-			await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+			await mode.getByRole('button', { name: /^Chat/u }).click();
 			await expect(auxiliary).toBeHidden();
-			await expect(editors).toBeHidden();
+			await expect(page.locator('.ash-chatgpt-widget')).toBeVisible();
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await expect(editors).toBeVisible();
 			await editor.waitForEditorContents(text => text === 'const value = 42;\n');
 			expect(await editor.input.evaluate((element, original) => element === original, input)).toBe(true);
 			await input?.dispose();
 		} else {
-			await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+			await mode.getByRole('button', { name: /^Chat/u }).click();
 			await expect(auxiliary).toBeHidden();
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await expect(files).toHaveAttribute('aria-selected', 'true');

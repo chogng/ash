@@ -71,12 +71,6 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 				status(localize('sessions.chatgpt.navigationHint', 'Press Alt+F1 for ChatGPT accessibility help.'));
 			}
 		}));
-		const newChat = document.createElement('button');
-		newChat.type = 'button';
-		newChat.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-new-chat';
-		newChat.textContent = localize('sessions.chatgpt.newChat', 'New chat');
-		this._register(addDisposableListener(newChat, 'click', () => { chat.newChat(); editors.focusActiveEditor(); }));
-		root.prepend(newChat);
 		const scrollable = this.scrollable!;
 		scrollable.element.classList.add('ash-chatgpt-navigation-scrollable');
 		const list = scrollable.contentElement;
@@ -169,7 +163,6 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 				if (pane instanceof ChatGPTNavigationView) { pane.render(group.conversations, state); }
 			}
 			list.setAttribute('aria-busy', String(state.busy));
-			newChat.disabled = !state.connected || state.sending || state.managing;
 			scrollable.layout();
 			if (focusedId && hadFocus) { focusConversation(root, focusedId, true); }
 			if (focusedGroup) { this.getView(`${chatGPTNavigationContainerId}.${focusedGroup}`)?.element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')?.focus({ preventScroll: true }); }

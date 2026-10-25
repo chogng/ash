@@ -8,7 +8,7 @@ import type { ChatGPTRequest, ChatGPTResponse, IChatGPTTransport } from '../comm
 import type { IChatGPTVerificationRuntime } from './chatGPTVerificationRuntime.js';
 
 const readPaths = new Set(['/backend-api/models', '/backend-api/conversations', '/backend-api/pins', '/backend-api/gizmos/snorlax/sidebar']);
-const writePaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/stop_conversation', '/backend-api/files', '/backend-api/share/v2/create', '/voice/get_token']);
+const writePaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/f/conversation/resume', '/backend-api/stop_conversation', '/backend-api/files', '/backend-api/share/v2/create', '/realtime/vp']);
 const uploadedPath = (path: string): boolean => /^\/backend-api\/files\/[^/]+\/uploaded$/u.test(path);
 const conversationPath = (path: string): boolean => /^\/backend-api\/conversation\/[^/]+$/u.test(path);
 const renamePath = (path: string): boolean => /^\/backend-api\/conversation\/id\/[^/]+\/rename$/u.test(path);
@@ -141,9 +141,10 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 		for (const [name, value] of authorization) { headers.set(name, value); }
 		signal.throwIfAborted();
 		try {
-			const response = await runtime.session.fetch(url.href, { method: request.method, headers, body: request.body as string | undefined, credentials: 'include', redirect: 'error', signal });
+			const response = await runtime.session.fetch(url.href, { method: request.method, headers, body: request.body instanceof VSBuffer ? request.body.buffer : request.body, credentials: 'include', redirect: 'error', signal });
 			const contentType = response.headers.get('content-type') ?? '';
-			if (response.status !== 204 && !/^(?:application\/(?:[\w.-]+\+)?json|text\/event-stream)(?:;|$)/iu.test(contentType)) {
+			const sdp = url.pathname === '/realtime/vp' && /^text\/plain(?:;|$)/iu.test(contentType);
+			if (response.status !== 204 && !sdp && !/^(?:application\/(?:[\w.-]+\+)?json|text\/event-stream)(?:;|$)/iu.test(contentType)) {
 				await response.body?.cancel();
 				return new Response(null, { status: response.ok ? 502 : response.status });
 			}
@@ -227,6 +228,10 @@ function readRequest(value: unknown): ChatGPTRequest {
 		if (value.method !== 'PUT' || !(value.body instanceof VSBuffer) || url.searchParams.size !== 1 || !url.searchParams.has('url')
 			|| Object.keys(value.headers).some(name => !['content-type', 'x-ms-blob-type'].includes(name.toLowerCase()))) { throw new TypeError('Invalid ChatGPT upload request'); }
 		readUploadUrl(url.searchParams.get('url')!);
+		return value as unknown as ChatGPTRequest;
+	}
+	if (value.path === '/service/realtime/vp?dcid=0' && value.method === 'POST' && value.body instanceof VSBuffer && value.body.byteLength <= 128 * 1024
+		&& Object.keys(value.headers).length === 1 && /^multipart\/form-data; boundary=[\w-]{1,100}$/u.test(new Headers(value.headers as Record<string, string>).get('Content-Type') ?? '')) {
 		return value as unknown as ChatGPTRequest;
 	}
 	if (value.body instanceof VSBuffer || value.method === 'PUT') { throw new TypeError('Invalid ChatGPT upload endpoint'); }

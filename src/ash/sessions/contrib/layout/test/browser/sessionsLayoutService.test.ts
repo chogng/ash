@@ -44,6 +44,31 @@ import { SessionsLayoutService, documentEntry } from '../../browser/sessionsLayo
 import type { ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 
 suite('SessionsLayoutService lifecycle and focus', () => {
+	test('New follows the active entry and does not retain an override under a Custom View', async () => {
+		using fixture = new EntryFixture();
+		const entry = { ...chatEntry, newSessionCommand: 'test.entry.newChat' };
+		await fixture.service.openEntry(entry);
+		assert.equal(fixture.service.newSessionCommand, entry.newSessionCommand);
+		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+		fixture.customViews.showCustomView('automations');
+		assert.equal(fixture.service.newSessionCommand, undefined);
+		fixture.customViews.hideCustomView();
+		assert.equal(fixture.service.newSessionCommand, entry.newSessionCommand);
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(fixture.service.newSessionCommand, undefined);
+	});
+
+	for (const saved of [undefined, 'sessions.show.removedFeature']) {
+		test(`restores the Desktop New entry when the saved entry is ${saved ?? 'absent'}`, async () => {
+			using fixture = new EntryFixture();
+			if (saved) { fixture.storage.store('sessions.layout.activeEntry', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE); }
+			const calls: (readonly unknown[])[] = [];
+			using entry = CommandsRegistry.register('sessions.open.new', (_accessor, ...args) => { calls.push(args); });
+			await fixture.service.restore();
+			assert.deepEqual(calls, [['restore']]);
+		});
+	}
+
 	for (const command of ['sessions.show.library', 'sessions.show.removedFeature']) {
 		test(`discards the unavailable saved entry ${command} and restores Chat`, async () => {
 			using fixture = new EntryFixture();

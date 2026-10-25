@@ -6,7 +6,7 @@ import { Action2, registerAction2 } from "../../../platform/actions/common/actio
 import type { ServicesAccessor } from "../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../platform/quickinput/common/quickInput.js";
 import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
-import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import type { IUntitledChatSession, SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
@@ -16,6 +16,7 @@ import { ForkConversationAction } from '../../../workbench/contrib/chat/browser/
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
+import { ISessionsLayoutService } from '../../services/layout/common/sessionsLayoutService.js';
 
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
@@ -149,6 +150,15 @@ registerAction2(class NewSessionFromNavigationAction extends Action2 {
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const commands = accessor.get(ICommandService);
 		const mode = accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key);
+		const entryCommand = accessor.get(ISessionsLayoutService).newSessionCommand;
+		if (entryCommand) {
+			await commands.executeCommand(entryCommand);
+			return;
+		}
+		if (mode !== 'code' && CommandsRegistry.hasCommand('sessions.open.new')) {
+			await commands.executeCommand('sessions.open.new');
+			return;
+		}
 		const created = await commands.executeCommand<IUntitledChatSession | undefined>(NEW_CHAT_COMMAND_ID);
 		if (created) {
 			await commands.executeCommand(mode === 'code' ? 'sessions.open.code' : 'sessions.open.chat');
