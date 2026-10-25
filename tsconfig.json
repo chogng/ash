@@ -5,6 +5,6 @@
     "rootDir": ".",
     "types": ["node", "electron", "@webgpu/types", "vite/client"]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "test/fixtures/browser/**/*.ts"],
   "exclude": ["src/typings/base-common.d.ts", "src/typings/crypto.d.ts"]
 }
