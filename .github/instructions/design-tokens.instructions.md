@@ -5,9 +5,9 @@ applyTo: src/ash/**/*.css
 
 # Design tokens for sizing, spacing & radii
 
-Token registration and CSS variable naming are shared infrastructure. The role assignments and default values below describe the IDE Workbench; Agent Window assignments and overrides belong to [Sessions style](../../src/ash/sessions/STYLE.md). Keep window-specific values in the owning window's scope instead of changing shared defaults.
+IDE and Agent Window share token registration, CSS variable naming, and the default values below. Agent Window-only assignments and overrides belong to [Sessions style](../../src/ash/sessions/STYLE.md); unoverridden rules keep the shared defaults. Reuse existing tokens for the same semantic role, and apply window-specific values in the owning window or component's scope instead of changing shared defaults. A window-specific assignment does not by itself require a separate token namespace.
 
-> **These tokens are the *moves*, not the reasoning.** They implement the **design philosophy** (Values → Principles → Moves): reach for a token *after* naming the feeling and the principle it serves - the owning surface determines a radius or typography role. See the [`design-philosophy` skill](../skills/design-philosophy/SKILL.md) for the full vocabulary, worked examples, and how to give UI feedback in design terms.
+> **These tokens are the *moves*, not the reasoning.** They implement the **design philosophy** (Values → Principles → Moves): reach for a token *after* naming the feeling and the principle it serves - the owning surface determines a radius or typography role. See the [`design-philosophy` skill](../../.agents/skills/design-philosophy/SKILL.md) for the full vocabulary, worked examples, and how to give UI feedback in design terms.
 
 Ash ships a design-system **size** ramp. These tokens are registered in [baseSizes.ts](../../src/ash/platform/theme/common/sizes/baseSizes.ts) and emitted as `--ash-*` CSS variables. **When generating or editing CSS, use the token variable instead of a raw `px` value** wherever a token exists for that value. This keeps new UI visually consistent with the design system.
 
@@ -15,7 +15,7 @@ Ash ships a design-system **size** ramp. These tokens are registered in [baseSiz
 
 ## Rows and toolbar actions
 
-Use the semantic tokens below for CSS row and action geometry, use `border-box` for icon action areas, and reserve spacing tokens for spacing. Each component owns its JS layout geometry: list/tree delegates supply row heights, and action hosts supply or measure action sizes. Keep those values consistent with the component's CSS, including local overrides; theme token registration is not a dependency of JS layout code.
+The table gives **IDE defaults**. Use the semantic tokens below for CSS row and action geometry, use `border-box` for icon action areas, and reserve spacing tokens for spacing. Each component owns its JS layout geometry: list/tree delegates supply row heights, and action hosts supply or measure action sizes. Keep those values consistent with the component's CSS, including local overrides; theme token registration is not a dependency of JS layout code.
 
 | Use | Size | CSS | JS |
 | --- | --- | --- | --- |
@@ -55,6 +55,8 @@ Use for `padding`, `margin`, `gap`, and fixed `width`/`height` of spacers. The n
 
 ## Corner radius — `border-radius`
 
+Token values are shared; the role assignments below are **IDE defaults**. Agent Window-only component assignments are defined in [Sessions style](../../src/ash/sessions/STYLE.md#圆角与边界).
+
 | px | Variable | Use |
 |----|----------|-----|
 | 2  | `--ash-cornerRadius-xSmall` | very compact elements |
@@ -72,7 +74,7 @@ Use for `padding`, `margin`, `gap`, and fixed `width`/`height` of spacers. The n
 
 ## Font size — `font-size`
 
-Generic UI ramp — pair a **size** token with a **weight** token; "Strong" reuses the matching size token + `fontWeight.semiBold`, **never** a separate "strong" size:
+The values below are **IDE defaults**; Agent Window-only typography assignments are defined in [Sessions style](../../src/ash/sessions/STYLE.md#字体与留白). Pair a **size** token with a **weight** token; "Strong" reuses the matching size token + `fontWeight.semiBold`, **never** a separate "strong" size:
 
 | px | Size var | Weight |
 |----|----------|--------|
@@ -105,7 +107,7 @@ The generic ramp uses two weights — there are no others. Pair every text style
 
 ## Lxicon size — icon `font-size`
 
-Lxicons are **only ever 16px or 12px**. There is no in-between size — never use `14px` (or any other value) for a codicon. Pick the base or the compact token:
+Lxicons default to **16px or 12px** in both windows. Other sizes require an explicit component assignment; Agent Window-only exceptions are defined in [Sessions style](../../src/ash/sessions/STYLE.md#图标与点击区域). Pick the base or the compact token unless such an exception applies:
 
 | px | Variable | Use |
 |----|----------|-----|
