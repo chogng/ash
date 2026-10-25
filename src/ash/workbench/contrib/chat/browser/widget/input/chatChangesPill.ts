@@ -97,20 +97,14 @@ export class ChatChangesPill extends Disposable {
 
 	private renderCurrent(): void {
 		const statistics = this.statistics.get();
-		const visible = this.enabled && (!!this.error || (statistics !== undefined && statistics.files > 0));
+		// Only confirmed file changes belong in the composer summary.
+		const visible = this.enabled && !this.error && statistics !== undefined && statistics.files > 0;
 		if (!visible && this.domNode.contains(this.domNode.ownerDocument.activeElement)) {
 			this.focusInput();
 		}
 		this.domNode.hidden = !visible;
-		this.counts.hidden = !!this.error;
+		if (!visible || !statistics) return;
 		this.counts.classList.toggle('partial', statistics?.partial === true);
-		if (this.error) {
-			this.button.label = localize('chat.changes.unavailableLabel', 'Changes unavailable');
-			this.button.domNode.setAttribute('aria-label', this.error);
-			this.button.setTitle(this.error);
-			return;
-		}
-		if (!statistics) return;
 		this.button.label = getChangesStatsFilesLabel(statistics.files);
 		let label = this.scope === 'workspace'
 			? localize('chat.changes.openWorkspace', 'Open Workspace Changes: {0} files, {1} lines added, {2} lines removed', statistics.files, statistics.additions, statistics.deletions)

@@ -3246,12 +3246,14 @@ suite('chatInput browser component', () => {
 		await expect(changes).toBeFocused();
 		await expect(changes.locator('.ash-chat-changes-statistics')).toHaveAttribute('aria-hidden', 'true');
 		await page.evaluate(() => window.ashChatInputIntegration.setChangesError('Repository unavailable'));
-		await expect(changes).toHaveAccessibleName('Repository unavailable');
-		await expect(changes).toBeFocused();
+		await expect(changes).toBeHidden();
+		await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
 		expect(await changes.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
 		await page.evaluate(() => window.ashChatInputIntegration.setChanges({ files: 1, additions: 3, deletions: 0 }));
+		await expect(changes).toBeVisible();
 		await expect(changes).toHaveText('1 file+3 −0');
 		await expect(changes.locator('.ash-animated-counter-outgoing')).toHaveCount(0);
+		await changes.focus();
 		await page.evaluate(() => window.ashChatInputIntegration.setChanges(undefined));
 		await expect(changes).toBeHidden();
 		await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
@@ -3293,9 +3295,14 @@ suite('chatInput browser component', () => {
 					await expect(changes).toBeFocused();
 					await page.keyboard.press('Space');
 					await expect(page.getByLabel('Opened sources')).toHaveText('[{"changes":true},{"changes":true}]');
-					await page.evaluate(() => window.ashChatInputIntegration.setChanges(undefined));
+					await page.evaluate(() => window.ashChatInputIntegration.setChanges({ files: 0, additions: 0, deletions: 0 }));
 					await expect(changes).toBeHidden();
 					await expect(input).toBeFocused();
+					await page.evaluate(() => window.ashChatInputIntegration.setChangesError('Repository unavailable'));
+					await expect(changes).toBeHidden();
+					await expect(page.getByRole('button', { name: /Changes unavailable|变更不可用/ })).toHaveCount(0);
+					const help = await page.evaluate(() => window.ashChatInputIntegration.inputAccessibility());
+					expect(help).toContain(locale === 'en' ? 'The button is hidden when there are no changes or the summary is unavailable.' : '没有变更或摘要不可用时，按钮会隐藏。');
 					await expect(input).toHaveValue('Keep my draft');
 				});
 			}
@@ -3521,7 +3528,9 @@ suite('chatInput browser component', () => {
 			await page.evaluate(() => { window.ashChatInputIntegration.setVisible(true); window.ashChatInputIntegration.setChangesScope('conversation'); window.ashChatInputIntegration.setChanges({ files: 0, additions: 0, deletions: 0 }); });
 			await expect(changes).toBeHidden();
 			await page.evaluate(() => window.ashChatInputIntegration.setChangesError('Changes are unavailable. Open Changes to retry.'));
-			await expect(changes).toHaveText('Changes unavailable');
+			await expect(changes).toBeHidden();
+			await page.evaluate(() => window.ashChatInputIntegration.setChanges({ files: 1, additions: 3, deletions: 0 }));
+			await expect(changes).toBeVisible();
 			await changes.click();
 			await expect(page.getByLabel('Opened sources')).toHaveText('[{"changes":true}]');
 		});
