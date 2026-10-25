@@ -48,6 +48,24 @@
 	margin: 0;
 	font-size: var(--ash-fontSize-heading1);
 }
+
+.ash-sessions-chat-view-empty.loading {
+	width: 100%;
+	max-width: none;
+	align-content: start;
+	margin: 0;
+	padding: 0;
+}
+
+:is(.ash-chat, .ash-cowork).loading-history > .ash-sessions-loading {
+	flex: 1;
+	min-height: 0;
+}
+
+:is(.ash-chat, .ash-cowork).loading-history
+	> :is(.ash-chat-list-widget, .ash-cowork-list-widget) {
+	display: none;
+}
 .ash-sessions-chat-view-empty p {
 	margin: 0;
 	color: var(--ash-description-foreground);

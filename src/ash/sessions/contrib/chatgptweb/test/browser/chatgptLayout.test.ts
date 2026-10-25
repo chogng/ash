@@ -55,6 +55,38 @@ suite('chatgptweb browser component', () => {
 	}
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`ChatGPT history and conversation show independent skeletons (${locale})`, async () => {
+			const { page } = browserTests;
+			await mockChatGPTRequests(page);
+			let releaseHistory!: () => void;
+			const history = new Promise<void>(resolve => { releaseHistory = resolve; });
+			await page.route('**/service/backend-api/conversations?*', async route => { await history; await route.fallback(); });
+			await page.goto(`/chatgptNavigation.html?locale=${locale}`);
+			const navigation = page.locator('.ash-chatgpt-navigation');
+			const editor = page.locator('.ash-chatgpt-widget');
+			try {
+				await expect(navigation.locator('.ash-sessions-loading')).toBeVisible();
+				await expect(editor.locator('.ash-sessions-loading')).toBeHidden();
+				await expect(editor.locator('.ash-chatgpt-welcome')).toBeVisible();
+			} finally { releaseHistory(); }
+			const conversation = navigation.getByRole('button', { name: 'Synthetic conversation', exact: true });
+			await expect(conversation).toBeVisible();
+			await expect(navigation.locator('.ash-sessions-loading')).toBeHidden();
+			let releaseConversation!: () => void;
+			const pending = new Promise<void>(resolve => { releaseConversation = resolve; });
+			await page.route('**/service/backend-api/conversation/fixture-chat', async route => { await pending; await route.fallback(); });
+			try {
+				await conversation.click();
+				await expect(editor.locator('.ash-sessions-loading')).toBeVisible();
+				await expect(navigation.locator('.ash-sessions-loading')).toBeHidden();
+				await expect(conversation).toBeEnabled();
+				await expect(editor.locator('.ash-chatgpt-welcome')).toBeHidden();
+				await page.screenshot({ path: browserTests.info.outputPath(`chat-independent-loading-${locale}.png`) });
+			} finally { releaseConversation(); }
+			await expect(editor.locator('.ash-chatgpt-messages')).toContainText('Synthetic answer');
+			await expect(editor.locator('.ash-sessions-loading')).toBeHidden();
+		});
+
 		test(`ChatGPT conversations load more on scroll and keyboard navigation (${locale})`, async function () {
 			const { page } = browserTests;
 

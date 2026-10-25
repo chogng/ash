@@ -1,6 +1,7 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import "./media/sessionsList.css";
+import { LoadingSkeleton } from '../../ui/loadingSkeleton.js';
 import { addDisposableListener, getWindow, h } from "../../../../base/browser/dom.js";
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -44,6 +45,9 @@ export class SessionsList extends DomWidget {
 	private projects: readonly Project[] = [];
 	private projectLoad = 0;
 	private projectsFailed = false;
+	private projectsLoading = false;
+	private readonly loading: LoadingSkeleton;
+	private readonly projectLoading: LoadingSkeleton;
 	private readonly empty: HTMLParagraphElement;
 	private readonly projectError: HTMLButtonElement;
 	private readonly navigation: HTMLElement;
@@ -76,6 +80,8 @@ export class SessionsList extends DomWidget {
 		this.heading.textContent = title;
 		this.list = h(ownerDocument, "div");
 		this.list.className = "ash-sessions-list-items";
+		this.loading = this._register(new LoadingSkeleton(this.list, localize('sessions.list.loading', 'Loading sessions…')));
+		this.projectLoading = this._register(new LoadingSkeleton(this.list, localize('projects.loading', 'Loading projects…'), 'list', 3));
 		this.empty = h(ownerDocument, "p");
 		this.empty.className = "ash-sessions-empty";
 		this.projectError = h(ownerDocument, 'button', { className: 'ash-sessions-list-item' });
@@ -161,6 +167,8 @@ export class SessionsList extends DomWidget {
 
 	private async loadProjects(): Promise<void> {
 		const generation = ++this.projectLoad;
+		this.projectsLoading = true;
+		this.render();
 		try {
 			const summaries = await this.projectService.list();
 			const projects = await Promise.all(summaries.filter(project => !project.archived).map(project => this.projectService.read(project.id)));
@@ -171,6 +179,7 @@ export class SessionsList extends DomWidget {
 			if (this.isDisposed || generation !== this.projectLoad) return;
 			this.projectsFailed = true;
 		}
+		this.projectsLoading = false;
 		this.render();
 	}
 
@@ -256,6 +265,8 @@ export class SessionsList extends DomWidget {
 			}
 		}
 		if (this.projectsFailed) projects.push(this.projectError);
+		this.projectLoading.setVisible(this.projectsLoading && !this.projects.length && !this.projectsFailed);
+		if (!this.projectLoading.element.hidden) projects.push(this.projectLoading.element);
 		for (const group of this.groups.groups) {
 			const members: HTMLElement[] = [];
 			for (const id of group.sessionIds) {
@@ -281,6 +292,9 @@ export class SessionsList extends DomWidget {
 			for (const [key, group] of workspaces) recent.push(sectionFor(`workspace:${key}`, group.title, group.items, true));
 		} else recent.push(...remaining.values());
 		const showEmpty = recent.length === 0 && pinned.length === 0 && chatGroups.length === 0;
+		const loading = this.sessionService.state === 'loading';
+		this.loading.setVisible(loading && showEmpty);
+		this.list.setAttribute('aria-busy', String(loading || this.projectsLoading));
 		if (showEmpty) {
 			this.empty.textContent = this.sessionService.state === 'loading' ? localize('sessions.list.loading', 'Loading sessions…') : this.sessionService.error ?? localize('sessions.list.empty', 'Create a session to begin.');
 		}
@@ -289,7 +303,8 @@ export class SessionsList extends DomWidget {
 		if (projects.length) ordered.push(sectionFor('projects', localize('projects.title', 'Projects'), projects));
 		ordered.push(...chatGroups);
 		if (recent.length) ordered.push(sectionFor('recent', this.mode === 'chat' ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents'), recent));
-		if (showEmpty) ordered.push(this.empty);
+		if (!this.loading.element.hidden) ordered.push(this.loading.element);
+		else if (showEmpty) ordered.push(this.empty);
 		for (const key of this.items.keys()) if (!present.has(key)) this.items.deleteAndDispose(key);
 		for (const key of this.sections.keys()) if (!activeSections.has(key)) this.sections.deleteAndDispose(key);
 		reconcileChildren(this.list, ordered);

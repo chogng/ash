@@ -15,6 +15,7 @@ import { IChatGPTService, type ChatGPTState } from './chatGPTService.js';
 import { completeChatGPTRichContent, getChatGPTMarkdownRenderOptions } from './chatGPTRichContent.js';
 import { ChatGPTInputWidget } from './chatGPTInputWidget.js';
 import './media/chatGPTWidget.css';
+import { LoadingSkeleton } from '../../../browser/ui/loadingSkeleton.js';
 
 export class ChatGPTWidget extends Disposable {
 	private readonly markdownRenderer: ChatContentMarkdownRenderer;
@@ -32,6 +33,7 @@ export class ChatGPTWidget extends Disposable {
 	private readonly status = this.element('span', 'ash-chatgpt-status');
 	private readonly jumpButton: HTMLButtonElement;
 	private followOutput = true;
+	private readonly loading: LoadingSkeleton;
 
 	constructor(private readonly root: HTMLElement, @IChatGPTService private readonly chat: IChatGPTService, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
@@ -40,6 +42,7 @@ export class ChatGPTWidget extends Disposable {
 		root.tabIndex = -1;
 		const main = this.element('main', 'ash-chatgpt-main');
 		this.scroll.append(this.welcome, this.messages);
+		this.loading = this._register(new LoadingSkeleton(this.scroll, localize('sessions.loadingConversation', 'Loading conversation…'), 'transcript', 3));
 		this.messages.setAttribute('role', 'log');
 		this.messages.setAttribute('aria-label', localize('sessions.chatgpt.conversation', 'Conversation'));
 		this.messages.setAttribute('aria-live', 'off');
@@ -147,15 +150,18 @@ export class ChatGPTWidget extends Disposable {
 		const follow = this.atBottom() || conversationChanged;
 		this.followOutput = follow;
 		this.renderedConversationId = state.conversationId;
-		this.root.classList.toggle('empty', !state.messages.length);
+		const loading = state.loading?.kind === 'conversation' && (state.loading.id !== state.conversationId || !state.messages.length);
+		this.loading.setVisible(loading);
+		this.messages.hidden = loading;
+		this.root.classList.toggle('empty', !state.messages.length && !loading);
 		this.welcome.textContent = localize('sessions.chatgpt.welcome', 'What can I help with?');
-		this.welcome.hidden = state.messages.length > 0;
+		this.welcome.hidden = loading || state.messages.length > 0;
 		this.error.textContent = state.error;
 		this.error.hidden = !state.error;
 		this.status.textContent = state.sending ? localize('sessions.chatgpt.replying', 'ChatGPT is replying…') :
 			state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : '';
 		this.status.hidden = !this.status.textContent;
-		this.messages.setAttribute('aria-busy', String(state.sending || state.busy));
+		this.messages.setAttribute('aria-busy', String(state.sending || state.loading?.kind === 'conversation'));
 		const ids = new Set(state.messages.filter(message => !message.activity).map(message => message.id));
 		// One execution entry per user turn, derived from the service-owned record.
 		const groups = new Map<string, ChatGPTMessage[]>();

@@ -30,6 +30,7 @@ import { IChatGPTService, chatGPTNavigationContainerId, type ChatGPTState } from
 import { SessionsViewRegistry } from '../../../common/views.js';
 import '../../../../base/browser/ui/button/button.css';
 import './media/chatGPTNavigationView.css';
+import { LoadingSkeleton } from '../../../browser/ui/loadingSkeleton.js';
 
 interface ConversationGroup {
 	readonly key: string;
@@ -77,6 +78,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 		list.classList.add('ash-chatgpt-navigation-list');
 		list.setAttribute('role', 'navigation');
 		list.setAttribute('aria-label', localize('sessions.chatgpt.conversations', 'Conversations'));
+		const loading = this._register(new LoadingSkeleton(list, localize('sessions.loadingHistory', 'Loading history…')));
 		this._register(addDisposableListener(list, 'click', event => {
 			const item = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('.ash-chatgpt-conversation') : null;
 			if (item?.dataset.conversation) { void chat.select(item.dataset.conversation).then(() => editors.focusActiveEditor()); }
@@ -162,7 +164,9 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 				const pane = this.getView(`${chatGPTNavigationContainerId}.${group.key}`);
 				if (pane instanceof ChatGPTNavigationView) { pane.render(group.conversations, state); }
 			}
-			list.setAttribute('aria-busy', String(state.busy));
+			const readingHistory = state.loading?.kind === 'history';
+			loading.setVisible(readingHistory && !state.conversations.length);
+			list.setAttribute('aria-busy', String(readingHistory));
 			scrollable.layout();
 			if (focusedId && hadFocus) { focusConversation(root, focusedId, true); }
 			if (focusedGroup) { this.getView(`${chatGPTNavigationContainerId}.${focusedGroup}`)?.element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')?.focus({ preventScroll: true }); }
@@ -229,10 +233,10 @@ export class ChatGPTNavigationView extends ViewPane {
 	public override get maximumSize(): number { return this.minimumSize; }
 
 	public render(conversations: readonly ChatGPTConversation[], state: ChatGPTState): void {
-		if (state.busy && !this.loadingProgress.value) {
+		if (state.loading?.kind === 'history' && !this.loadingProgress.value) {
 			const progress = this.getProgressIndicator().show(true, 150);
 			this.loadingProgress.value = toDisposable(() => progress.done());
-		} else if (!state.busy) this.loadingProgress.clear();
+		} else if (state.loading?.kind !== 'history') this.loadingProgress.clear();
 		if (conversations.length !== this.conversations.length || conversations.some((conversation, index) => conversation !== this.conversations[index])) {
 			this.rows.clear();
 			this.conversations = conversations;

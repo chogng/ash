@@ -4,6 +4,7 @@
     "sessions.creator.make.session": "Make 开发",
     "sessions.creator.make.request": "继续开发附带的页面。",
     "sessions.creator.title": "Artifacts",
+    "sessions.artifacts.loading": "正在加载创作成果…",
     "sessions.creator.verbosityInvalid": "Artifacts 无障碍提示设置必须为布尔值。",
     "sessions.creator.verbosityTitle": "Artifacts 无障碍帮助",
     "sessions.creator.verbosityDescription": "提示如何打开 Artifacts 无障碍帮助。",

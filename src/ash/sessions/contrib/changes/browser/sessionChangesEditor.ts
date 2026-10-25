@@ -3,6 +3,7 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import { Dimension, h, addDisposableListener, type IDimension } from '../../../../base/browser/dom.js';
 import './media/sessionChangesEditor.css';
+import { LoadingSkeleton } from '../../../browser/ui/loadingSkeleton.js';
 import { MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
@@ -38,6 +39,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	private readonly comparison = this._register(new MutableDisposable<IEditorPane>());
 	private domNode!: HTMLDivElement;
 	private messageDomNode!: HTMLParagraphElement;
+	private skeleton!: LoadingSkeleton;
 	private input: IResourceEditorInput | undefined;
 	private comparisonInput: MultiDiffEditorInput | undefined;
 	private viewState: unknown;
@@ -90,6 +92,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		}));
 		updateHint();
 		this.domNode.append(this.messageDomNode);
+		this.skeleton = this._register(new LoadingSkeleton(this.domNode, localize('sessions.changes.loading', 'Loading changes…'), 'diff', 6));
 		parent.append(this.domNode);
 		super.create(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -132,6 +135,8 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		this.revision++;
 		this.pending.clear();
 		this.comparison.clear();
+		this.skeleton?.setVisible(false);
+		this.domNode?.setAttribute('aria-busy', 'false');
 	}
 
 	public override dispose(): void {
@@ -253,9 +258,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		// Resolving changes replaces the child pane; keep its snapshot until the new widget can restore it.
 		this.viewState = this.saveViewState();
 		this.pending.clear();
-		this.comparison.clear();
-		this.comparisonInput = undefined;
-		this.messageDomNode.hidden = false;
+		this.messageDomNode.hidden = !!this.comparison.value;
 		// The old count cannot describe a capture that is still loading or failed to resolve.
 		this.changesService.setChangesCount(input.resource, undefined);
 		const threadId = new URLSearchParams(input.resource.query).get('thread');
@@ -268,6 +271,9 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			return;
 		}
 		this.messageDomNode.textContent = localize('sessions.changes.loading', 'Loading changes…');
+		this.skeleton.setVisible(!this.comparison.value);
+		this.messageDomNode.hidden = true;
+		this.domNode.setAttribute('aria-busy', 'true');
 		const controller = new AbortController();
 		const abortListener = signal ? addDisposableListener(signal, 'abort', () => controller.abort(), { once: true }) : undefined;
 		if (signal?.aborted) { controller.abort(); }
@@ -281,6 +287,9 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			if (selected?.kind === 'transient') {
 				const changes = selected.changeset.isEnabled.get() ? selected.changeset.changes.get() : [];
 				if (!changes.length) {
+					this.comparison.clear();
+					this.comparisonInput = undefined;
+					this.messageDomNode.hidden = false;
 					this.changesService.setChangesCount(input.resource, 0);
 					this.messageDomNode.textContent = localize('sessions.changes.empty', 'No changes in this conversation.');
 					return;
@@ -313,6 +322,9 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 				if (this.isDisposed || revision !== this.revision || controller.signal.aborted) { return; }
 				const candidates = selected?.id ? changes.filter(change => change.changeSetId === selected.id) : changes;
 				if (!candidates.some(change => change.captureState !== 'discarded' && change.statistics.files > 0)) {
+					this.comparison.clear();
+					this.comparisonInput = undefined;
+					this.messageDomNode.hidden = false;
 					this.changesService.setChangesCount(input.resource, 0);
 					this.messageDomNode.textContent = localize('sessions.changes.empty', 'No changes in this conversation.');
 					return;
@@ -346,10 +358,15 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			if (!this.isDisposed && revision === this.revision && !controller.signal.aborted) {
 				this.changesService.setChangesCount(input.resource, undefined);
 				this.messageDomNode.textContent = localize('sessions.changes.error', 'Could not load changes: {0}', String(error));
+				this.messageDomNode.hidden = false;
 			}
 		} finally {
 			// The caller's open operation ends here; the child pane retains its own controller until hidden or cleared.
 			abortListener?.dispose();
+			if (!this.isDisposed && revision === this.revision) {
+				this.skeleton.setVisible(false);
+				this.domNode.setAttribute('aria-busy', 'false');
+			}
 		}
 	}
 }

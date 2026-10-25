@@ -42,6 +42,7 @@ import { IChatSessionNavigationService } from '../../../../workbench/services/ch
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { CustomizeSkillActions } from './customizeSkillActions.js';
 import './customizeEditor.css';
+import { LoadingSkeleton } from '../../../browser/ui/loadingSkeleton.js';
 
 type Category = 'skills' | 'connectors' | 'plugins';
 type Collection = 'yours' | 'discover';
@@ -67,6 +68,7 @@ export class CustomizeEditorPane extends EditorPane {
 	private root!: HTMLElement;
 	private panel!: HTMLElement;
 	private grid!: HTMLElement;
+	private loading!: LoadingSkeleton;
 	private message!: HTMLElement;
 	private heading!: HTMLElement;
 	private hero!: HTMLElement;
@@ -295,9 +297,13 @@ export class CustomizeEditorPane extends EditorPane {
 			this.renderCards();
 		}
 		this.panel.setAttribute('aria-busy', 'true');
+		this.loading ??= this._register(new LoadingSkeleton(this.panel, localize('customize.loading', 'Loading resources…'), 'cards', 6));
+		this.grid.before(this.loading.element);
+		this.loading.setVisible(!this.cards.length);
 		this.more.enabled = false;
 		this.retry.domNode.hidden = true;
-		this.message.textContent = localize('customize.loading', 'Loading resources…');
+		this.message.hidden = !this.cards.length;
+		this.message.textContent = this.cards.length ? localize('customize.loading', 'Loading resources…') : '';
 		try {
 			const result = this.collection === 'discover' ? await this.readDiscover(request, cursor) : await this.readYours(sessionId);
 			if (request.token.isCancellationRequested || !this.shown) return;
@@ -306,16 +312,19 @@ export class CustomizeEditorPane extends EditorPane {
 			this.cards = [...unique.values()];
 			this.note = result.note ?? '';
 			this.cursor = result.cursor;
+			this.message.hidden = false;
 			this.renderCards();
 		} catch (error) {
 			if (request.token.isCancellationRequested || !this.shown || isCancellationError(error)) return;
 			this.cursor = undefined;
 			this.more.domNode.hidden = true;
 			this.message.textContent = localize('customize.loadFailed', 'Could not load resources: {0}', String(error));
+			this.message.hidden = false;
 			this.retry.domNode.hidden = false;
 		} finally {
 			if (this.request === request && !request.token.isCancellationRequested) {
 				this.panel.setAttribute('aria-busy', 'false');
+				this.loading.setVisible(false);
 				this.more.enabled = true;
 			}
 		}

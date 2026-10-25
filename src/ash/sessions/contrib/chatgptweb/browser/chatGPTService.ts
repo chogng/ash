@@ -28,6 +28,8 @@ export interface ChatGPTState {
 	readonly voiceTranscript: readonly { readonly id: string; readonly text: string; readonly role: 'user' | 'assistant'; }[];
 	readonly connected: boolean;
 	readonly busy: boolean;
+	/** Distinguishes content reads from sending, uploads and voice operations. */
+	readonly loading?: { readonly kind: 'history'; } | { readonly kind: 'conversation'; readonly id: string; };
 	readonly sending: boolean;
 	readonly conversations: readonly ChatGPTConversation[];
 	readonly projects: readonly ChatGPTProject[];
@@ -77,7 +79,7 @@ export const IChatGPTService = createServiceIdentifier<IChatGPTService>('chatGPT
 
 export class ChatGPTService extends Disposable implements IChatGPTService {
 	private readonly model = observableValue<ChatGPTState>('chatgpt', {
-		draft: '', attachments: [], voice: 'idle', voiceTranscript: [], connected: false, busy: false, sending: false, conversations: [], projects: [], hasMore: false,
+		draft: '', attachments: [], voice: 'idle', voiceTranscript: [], connected: false, busy: false, loading: undefined, sending: false, conversations: [], projects: [], hasMore: false,
 		models: [], model: '', title: 'ChatGPT', parentId: crypto.randomUUID(), messages: [], error: '', uncertain: false, stopped: false, managing: false,
 	});
 	private readonly drafts = new Map<string, ChatGPTDraft>();
@@ -271,7 +273,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			} catch (error) {
 				if (generation === this.generation) { this.update({ error: this.errorText(error), uncertain: !!messageId }); }
 			} finally {
-				if (generation === this.generation) { this.update({ voice: 'idle', busy: false, voiceTranscript: [] }); }
+				if (generation === this.generation) { this.update({ voice: 'idle', busy: false, loading: undefined, voiceTranscript: [] }); }
 			}
 		})();
 		try { await this.voiceStopping; } finally { this.voiceStopping = undefined; }
@@ -359,7 +361,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private async loadCatalog(): Promise<void> {
 		if (this.isDisposed || this.model.get().sending || this.model.get().managing) { return; }
 		const { signal, generation } = this.beginOperation();
-		this.update({ busy: true, error: '' });
+		this.update({ busy: true, loading: { kind: 'history' }, error: '' });
 		try {
 			const [catalog, groups] = await Promise.all([
 				this.client.models(signal),
@@ -378,7 +380,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			const listError = conversations.status === 'rejected' ? localize('sessions.chatgpt.historyListFailed', 'Could not refresh the conversation list. You can continue the current chat. {0}', this.errorText(conversations.reason)) : '';
 			const selected = catalog.models.find(model => model.id === state.model) ?? catalog.models.find(model => model.id === catalog.defaultModel)!;
 			this.update({
-				connected: true, busy: false, models: catalog.models,
+				connected: true, busy: false, loading: undefined, models: catalog.models,
 				model: selected.id, modelPreset: this.resolveModelPreset(selected, state.modelPreset),
 				uncertain: false, stopped: false, conversations: [...items.values()], hasMore: conversations.status === 'fulfilled' ? conversations.value.hasMore : state.hasMore,
 				projects: projects.status === 'fulfilled' ? projects.value : state.projects,
@@ -394,7 +396,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				}
 			}
 		} catch (error) {
-			if (generation === this.generation) { this.update({ busy: false, error: this.errorText(error) }); }
+			if (generation === this.generation) { this.update({ busy: false, loading: undefined, error: this.errorText(error) }); }
 		}
 	}
 
@@ -409,7 +411,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (this.voiceController) { void this.endVoice(true).then(() => this.newChat()); return; }
 		this.operation?.abort();
 		this.generation++;
-		this.update({ draft: this.drafts.get('new')?.text ?? '', attachments: this.drafts.get('new')?.attachments ?? [], conversationId: undefined, title: 'ChatGPT', messages: [], parentId: crypto.randomUUID(), error: '', busy: false, uncertain: false, stopped: false });
+		this.update({ draft: this.drafts.get('new')?.text ?? '', attachments: this.drafts.get('new')?.attachments ?? [], conversationId: undefined, title: 'ChatGPT', messages: [], parentId: crypto.randomUUID(), error: '', busy: false, loading: undefined, uncertain: false, stopped: false });
 		this.rememberConversation(undefined);
 	}
 
@@ -417,13 +419,13 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (this.isDisposed || this.model.get().sending || this.model.get().managing) { return; }
 		await this.endVoice(true);
 		const { signal, generation } = this.beginOperation();
-		this.update({ busy: true, error: '' });
+		this.update({ busy: true, loading: { kind: 'conversation', id }, error: '' });
 		try {
 			const history = await this.client.history(id, signal);
 			if (generation !== this.generation) { return; }
 			this.restoreHistory(history);
 			this.rememberConversation(id);
-		} catch (error) { if (generation === this.generation) { this.update({ busy: false, error: this.errorText(error) }); } }
+		} catch (error) { if (generation === this.generation) { this.update({ busy: false, loading: undefined, error: this.errorText(error) }); } }
 	}
 
 	private restoreHistory(history: ChatGPTHistory): void {
@@ -435,7 +437,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.update({
 			draft: this.drafts.get(history.id)?.text ?? '', attachments: this.drafts.get(history.id)?.attachments ?? [], conversationId: history.id, title: history.title, messages: history.messages, parentId: history.parentId,
 			model: selected?.id ?? state.model, modelPreset: preset?.id ?? this.resolveModelPreset(selected, state.modelPreset),
-			busy: false, uncertain: false, stopped: false,
+			busy: false, loading: undefined, uncertain: false, stopped: false,
 		});
 	}
 
@@ -450,7 +452,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	public async loadMore(): Promise<void> {
 		if (!this.model.get().connected || this.model.get().busy || this.model.get().sending || this.model.get().managing || !this.model.get().hasMore) { return; }
 		const { signal, generation } = this.beginOperation();
-		this.update({ busy: true, error: '' });
+		this.update({ busy: true, loading: { kind: 'history' }, error: '' });
 		try {
 			const state = this.model.get();
 			const result = await this.client.conversations(this.recentOffset, signal);
@@ -458,8 +460,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			this.recentOffset = result.nextOffset;
 			for (const item of result.items) { this.recentIds.add(item.id); }
 			const existing = new Set(state.conversations.map(item => item.id));
-			this.update({ conversations: [...state.conversations, ...result.items.filter(item => !existing.has(item.id))], hasMore: result.hasMore, busy: false });
-		} catch (error) { if (generation === this.generation) { this.update({ busy: false, error: this.errorText(error) }); } }
+			this.update({ conversations: [...state.conversations, ...result.items.filter(item => !existing.has(item.id))], hasMore: result.hasMore, busy: false, loading: undefined });
+		} catch (error) { if (generation === this.generation) { this.update({ busy: false, loading: undefined, error: this.errorText(error) }); } }
 	}
 
 	public async send(): Promise<void> {

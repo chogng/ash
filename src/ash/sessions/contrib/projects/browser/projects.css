@@ -194,6 +194,15 @@
 	flex: 1;
 }
 
+.ash-projects-feedback.loading {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+}
+
 .ash-projects-empty {
 	display: flex;
 	flex-direction: column;
@@ -597,18 +606,77 @@
 	display: none;
 }
 
-.ash-projects-skeleton {
-	display: grid;
-	grid-template-columns: 1.6fr 1fr;
-	gap: var(--ash-spacing-size400);
+.ash-projects-placeholder,
+.ash-projects-breadcrumb .ash-projects-placeholder {
+	display: block;
+	height: var(--ash-spacing-size120);
+	border-radius: var(--ash-cornerRadius-small);
+	background: color-mix(
+		in srgb,
+		var(--ash-foreground) 8%,
+		var(--ash-editor-background)
+	);
 }
-.ash-projects-skeleton > div {
-	height: 120px;
+
+.ash-projects h1.ash-projects-loading-title {
+	width: min(60%, 360px);
+	height: 1.35em;
+}
+
+.ash-projects-breadcrumb
+	.ash-projects-breadcrumb-name.ash-projects-placeholder {
+	width: 120px;
+	height: var(--ash-spacing-size160);
+	min-height: 0;
+	padding: 0;
+	border: 0;
+	opacity: 1;
+}
+
+.ash-projects .ash-projects-skeleton-card {
+	box-sizing: border-box;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-projects-skeleton-card .ash-projects-card-content {
+	gap: var(--ash-spacing-size60);
+}
+
+.ash-projects-skeleton-card .ash-projects-card-mark {
+	height: var(--ash-spacing-size320);
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-projects-skeleton-name {
+	width: 70%;
+	height: var(--ash-spacing-size160);
+}
+
+.ash-projects-skeleton-section-title {
+	width: 40%;
+	height: var(--ash-spacing-size200);
+}
+
+.ash-projects-skeleton-lines {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size120);
+}
+
+.ash-projects-materials > .ash-projects-skeleton-lines {
+	margin-top: var(--ash-spacing-size200);
+}
+
+.ash-projects-skeleton-short {
+	width: 45%;
+}
+
+:is(.hc-black, .hc-light) .ash-projects-placeholder {
 	background: var(--ash-sideBar-background);
-	border-radius: var(--ash-cornerRadius-medium);
-}
-.ash-projects-skeleton > div:last-child {
-	height: 320px;
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	outline-offset: -1px;
 }
 
 .ash-projects.narrow .ash-projects-main {
