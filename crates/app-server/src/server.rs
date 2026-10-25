@@ -150,6 +150,7 @@ mod extension_packages_operations_tests;
 mod extension_packages_projection;
 pub(crate) mod extension_packages_runtime;
 mod extension_packages_skill_sources;
+mod extension_recommendations;
 #[path = "server/request_processors/filesystem.rs"]
 mod fs_operations;
 mod fs_watcher;
@@ -3769,6 +3770,9 @@ impl AppServer {
                         .extension_source_set_enabled(&request.params)
                 }
             }
+            Some(ClientMethod::ExtensionsRecommendationEnvironment) => self
+                .extension_packages_processor()
+                .extension_recommendations_environment(&request.params),
             Some(ClientMethod::ExtensionsSearch) => self
                 .extension_packages_processor()
                 .extension_packages_search(&request.params),

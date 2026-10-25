@@ -33,6 +33,8 @@ import { IExtensionService } from '../../../extensions/common/extensionService.j
 import { IExtensionManagementService, type ExtensionsPackageSummary, type ExtensionsSearchOptions } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { RecommendationSource } from '../../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
 
+import { IAppServerRemoteAgentService } from '../../../remote/common/appServerRemoteAgentService.js';
+
 type MemoryFileBytes = Awaited<ReturnType<MemoryFileService['readFile']>>;
 
 class RecommendationsFileProvider extends MemoryFileService {
@@ -74,6 +76,11 @@ function fixture(resources: readonly (readonly [URI, string])[] = []) {
 	const editorModels = lifetime.add(new ModelService(lifetime.add(new TestConfigurationService()), { _serviceBrand: undefined, getEOL: () => '\n' }, languages));
 	const installedChanged = lifetime.add(new Emitter<void>());
 	let installed: string[] = [];
+	let environment: Awaited<ReturnType<IExtensionManagementService['recommendationEnvironment']>> = { platform: 'other', executables: [] };
+	let productIds: readonly string[] = [];
+	let connection: IAppServerRemoteAgentService['connection'];
+	const connectionChanged = lifetime.add(new Emitter<void>());
+	services.registerInstance(IAppServerRemoteAgentService, { onDidChangeConnection: connectionChanged.event, onDidChangeConnectionState: Event.None, get connection() { return connection; } } as unknown as IAppServerRemoteAgentService);
 	let search: (query: string, options?: ExtensionsSearchOptions) => Promise<readonly ExtensionsPackageSummary[]> = async (_query, options) => options?.languageId || _query === '.yaml' ? [{ id: `support.${options?.languageId ?? 'yaml'}@ash`, version: '1', packageType: 'language', displayName: options?.languageId ?? 'YAML', description: '' }] : [];
 	const queries: { query: string; options?: ExtensionsSearchOptions; }[] = [];
 	services.registerInstance(IWorkspaceExtensionsConfigService, configs);
@@ -87,16 +94,46 @@ function fixture(resources: readonly (readonly [URI, string])[] = []) {
 	services.registerInstance(IFileService, files);
 	services.registerInstance(IExtensionManagementService, {
 		onDidChangeInstalled: installedChanged.event,
+		recommendationEnvironment: async () => environment,
+		get: async (id: string) => { if (!productIds.includes(id)) { throw new Error('Product package is unavailable'); } return { package: { id }, displayName: id }; },
 		listInstalled: async () => installed.map(id => ({ package: { id } })),
 		search: async (query: string, options?: ExtensionsSearchOptions) => { queries.push({ query, options }); return search(query, options); },
 	} as unknown as IExtensionManagementService);
 	services.registerInstance(IExtensionService, { onDidChange: Event.None, currentCatalog: { extensions: [], generation: 1, diagnostics: [] } } as unknown as IExtensionService);
 	const recommendations = lifetime.add(services.createInstance(ExtensionRecommendationsService));
-	return { lifetime, workspace, files, provider, configs, recommendations, models, editorModels, languages, queries, installedChanged, services, storage, ignored, setInstalled: (ids: string[]) => { installed = ids; installedChanged.fire(); }, setSearch: (value: typeof search) => { search = value; } };
+	return { lifetime, workspace, files, provider, configs, recommendations, models, editorModels, languages, queries, installedChanged, services, storage, ignored, setProductIds: (ids: readonly string[]) => { productIds = ids; recommendations.refresh(); }, setEnvironment: (value: typeof environment) => { environment = value; recommendations.refresh(); }, setConnection: (value: typeof connection) => { connection = value; connectionChanged.fire(); }, setInstalled: (ids: string[]) => { installed = ids; installedChanged.fire(); }, setSearch: (value: typeof search) => { search = value; } };
 }
 
 suite('Workspace extension recommendations', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('product tips resolve available packages and share installed and ignored filtering', async () => {
+		const f = fixture(); using lifetime = f.lifetime;
+		f.setProductIds(['ash.keymap-sublime@ash', 'marketplace.python@ash']);
+		f.setEnvironment({ platform: 'linux', executables: ['python3'] });
+		let snapshot = await f.recommendations.getRecommendations();
+		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId).sort(), ['ash.keymap-sublime@ash', 'marketplace.python@ash']);
+		assert.equal(snapshot.recommendations.find(item => item.extensionId.includes('python'))?.context?.source, RecommendationSource.EXE);
+		assert.equal(snapshot.recommendations.find(item => item.extensionId.includes('keymap'))?.context, undefined, 'keymaps are offered on demand');
+		f.ignored.toggleGlobalIgnoredRecommendation('MARKETPLACE.PYTHON', true);
+		f.setInstalled(['ash.keymap-sublime@ash']);
+		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);
+	});
+
+	test('remote authority changes refresh remote tips and keep executable suggestions quiet', async () => {
+		const f = fixture(); using lifetime = f.lifetime;
+		f.setProductIds(['ash.remote-workspace@ash', 'marketplace.python@ash']);
+		f.setEnvironment({ platform: 'linux', executables: ['python'] });
+		assert.equal((await f.recommendations.getRecommendations()).recommendations.length, 1);
+		f.setConnection({ kind: 'ssh', generation: 2 } as NonNullable<IAppServerRemoteAgentService['connection']>);
+		const snapshot = await f.recommendations.getRecommendations();
+		assert.ok(snapshot.recommendations.some(item => item.extensionId === 'ash.remote-workspace@ash'));
+		const python = snapshot.recommendations.find(item => item.extensionId.includes('python'))!;
+		assert.equal(python.reason.reasonId, ExtensionRecommendationReason.Executable);
+		assert.equal(python.context, undefined, 'remote tool discovery cannot create a local installation prompt');
+		f.setConnection(undefined);
+		assert.ok(!(await f.recommendations.getRecommendations()).recommendations.some(item => item.extensionId === 'ash.remote-workspace@ash'));
+	});
+
 	test('merges Ash JSONC and multi-root workspace declarations, normalizes IDs and applies exclusions', async () => {
 		const resource = URI.file('/project/.ash/extensions.json');
 		const workspaceFile = URI.file('/project.ash-workspace');

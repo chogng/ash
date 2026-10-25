@@ -136,6 +136,7 @@ impl RequestLane {
                 // Catalog I/O can outlive navigation and must not occupy the workers used by Settings reads.
                 | ClientMethod::ExtensionsSearch
                 | ClientMethod::ExtensionsSearchPage
+                | ClientMethod::ExtensionsRecommendationEnvironment
                 | ClientMethod::ExtensionsGet
                 | ClientMethod::FsCopy
                 | ClientMethod::FsPasteSystemFiles

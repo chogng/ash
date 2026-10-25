@@ -3,7 +3,7 @@ import type { URI } from '../../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IExtensionRecommendations } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
 
-export enum ExtensionRecommendationReason { Workspace = 'workspace', File = 'file', Application = 'application', WorkspaceConfig = 'workspaceConfig' }
+export enum ExtensionRecommendationReason { Workspace = 'workspace', Executable = 'executable', File = 'file', Application = 'application', WorkspaceConfig = 'workspaceConfig' }
 
 export interface ExtensionRecommendation {
 	readonly extensionId: string;

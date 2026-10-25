@@ -1,0 +1,25 @@
+{
+  "SSH host": {
+    "prefix": "ssh-host",
+    "body": [
+      "Host ${1:alias}",
+      "    HostName ${2:example.com}",
+      "    User ${3:user}",
+      "    Port ${4:22}",
+      "    IdentityFile ${5:~/.ssh/id_ed25519}",
+      "$0"
+    ],
+    "description": "SSH host configuration"
+  },
+  "SSH jump host": {
+    "prefix": "ssh-jump",
+    "body": [
+      "Host ${1:target}",
+      "    HostName ${2:internal.example.com}",
+      "    User ${3:user}",
+      "    ProxyJump ${4:bastion}",
+      "$0"
+    ],
+    "description": "SSH host through a jump host"
+  }
+}

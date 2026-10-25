@@ -1671,6 +1671,10 @@ use crate::protocol::extension_packages::ExtensionsPackageSourceDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsPackageSummaryDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsRecommendationEnvironmentResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsRecommendationPlatformDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsReleaseCapabilityParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsResourceContentDto;
@@ -4347,6 +4351,11 @@ client_methods! {
         response: ExtensionsSearchPageResult,
         serialization: None,
     },
+    ExtensionsRecommendationEnvironment => "extensions/recommendations/environment" {
+        params: EmptyParams,
+        response: ExtensionsRecommendationEnvironmentResult,
+        serialization: None,
+    },
     ExtensionsSearch => "extensions/search" {
         params: ExtensionsSearchParams,
         response: ExtensionsSearchResult,
@@ -6377,6 +6386,8 @@ typescript_bindings! {
     ExtensionsPackageSummaryDto,
     ExtensionsSearchParams,
     ExtensionsSearchResult,
+    ExtensionsRecommendationEnvironmentResult,
+    ExtensionsRecommendationPlatformDto,
     ExtensionsSearchPageParams,
     ExtensionsSearchPageResult,
     ExtensionsSourcesResult,

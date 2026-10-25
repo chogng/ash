@@ -233,6 +233,7 @@ function builtInProviders() {
 	return { revision: editorPolicyRevision, canChangeEnablement: !new URLSearchParams(location.search).has('readOnlyProviders'), providers: [...builtInProviderStates].map(([id, state]) => ({ id, ...state })) };
 }
 const api: IExtensionManagementApi = {
+	recommendationEnvironment: async () => ({ platform: 'other', executables: new URLSearchParams(location.search).has('productTips') ? ['python3'] : [] }),
 	searchPage: async params => {
 		requests.push(['searchPage', params]);
 		if (holdSearch) { holdSearch = false; await new Promise<void>((_, reject) => { rejectSearch = reject; }); }
@@ -293,7 +294,7 @@ const api: IExtensionManagementApi = {
 		}
 		return { packages: [params.capabilityKind === 'editorExtension' || params.query === 'publisher.sample@ash' ? extensionSummary : summary], unavailableSources: [] };
 	},
-	get: async params => { requests.push(['get', params]); if (offline) { throw new Error('Catalog unavailable'); } if (![summary.id, extensionSummary.id, mcpSummary.id].includes(params.packageId)) { throw new Error('Unknown package'); } const details = params.packageId === extensionSummary.id ? extensionDetails : params.packageId === mcpSummary.id ? mcpDetails : packageDetails; return { ...details, package: { ...details.package, version: params.version ?? '2.0.0' } }; },
+	get: async params => { requests.push(['get', params]); if (offline) { throw new Error('Catalog unavailable'); } if (new URLSearchParams(location.search).has('productTips') && ['ash.keymap-sublime@ash', 'marketplace.markdown@ash', 'marketplace.aurora-theme@ash', 'marketplace.python@ash'].includes(params.packageId)) { return { ...packageDetails, packageType: 'editor', package: { ...packageDetails.package, id: params.packageId }, displayName: params.packageId }; } if (![summary.id, extensionSummary.id, mcpSummary.id].includes(params.packageId)) { throw new Error('Unknown package'); } const details = params.packageId === extensionSummary.id ? extensionDetails : params.packageId === mcpSummary.id ? mcpDetails : packageDetails; return { ...details, package: { ...details.package, version: params.version ?? '2.0.0' } }; },
 	listInstalled: async () => (managementReads.installed++, { instanceId: 'fixture', generation, packages: installed.map(entry => ({ ...entry, capabilities: entry.capabilities.map(capability => ({ ...capability, permissions: [...capability.permissions] })) })) }),
 	download: async () => { throw new Error('Install owns downloading'); },
 	install: async params => {

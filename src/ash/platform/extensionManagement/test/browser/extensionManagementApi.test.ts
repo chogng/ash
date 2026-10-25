@@ -22,3 +22,17 @@ test('Extensions filtered search requires an advertised search contract before s
 		['extensions/search', params],
 	]);
 });
+
+
+test('Extension tool detection requires its capability and requests the current App Server only', async () => {
+	const calls: unknown[] = [];
+	const contracts: Record<string, { version: number; }> = {};
+	const environment = { platform: 'linux', executables: ['python3'] };
+	const connection = { capabilities: { contracts }, request: async (definition: { method: string; }, params: unknown) => { calls.push([definition.method, params]); return environment; } } as unknown as AppServerProtocolClient;
+	const api = createAppServerExtensionManagementApi(connection);
+	assert.deepEqual(await api.recommendationEnvironment(), { platform: 'other', executables: [] });
+	assert.deepEqual(calls, []);
+	contracts.extensionRecommendations = { version: 1 };
+	assert.deepEqual(await api.recommendationEnvironment(), environment);
+	assert.deepEqual(calls, [['extensions/recommendations/environment', {}]]);
+});

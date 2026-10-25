@@ -1,6 +1,6 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { localize } from '../../../../nls.js';
-import type { ExtensionsBuiltInProviders, ExtensionsEditorExtensionPolicy, ExtensionsEditorExtensionPolicyAction, ExtensionsEditorExtensions } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import type { ExtensionsBuiltInProviders, ExtensionsEditorExtensionPolicy, ExtensionsEditorExtensionPolicyAction, ExtensionsEditorExtensions, ExtensionsRecommendationEnvironment } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { IExtensionManagementApi } from "../../../../platform/extensionManagement/common/extensionManagementApi.js";
@@ -17,6 +17,11 @@ export class AppServerExtensionManagementService extends Disposable implements I
 	private readonly _onDidChangeInstalled = this._register(new Emitter<void>());
 
 	readonly onDidChangeInstalled = this._onDidChangeInstalled.event;
+
+	async recommendationEnvironment(): Promise<ExtensionsRecommendationEnvironment> {
+		const environment = await this.api.recommendationEnvironment();
+		return { platform: environment.platform, executables: environment.executables };
+	}
 
 	sources(): Promise<ExtensionRegistrySources> { return this.api.sources(); }
 

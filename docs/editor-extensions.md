@@ -227,7 +227,9 @@ Recommended 读取各工作区文件夹的 `.ash/extensions.json`，以及多根
 
 近期文件推荐以包 ID 和时间戳保存到 profile 的 machine 状态，最多保留 200 项，七天后过期；不保存文件路径或文档内容。关闭文件或重启后仍能在 Recommended 查阅历史原因，历史项不重放自动通知。全局忽略由 `IExtensionIgnoredRecommendationsService` 唯一持有并与工作区排除项合并，列表和通知共用；扩展菜单和命令面板可忽略或恢复单项推荐，恢复不会覆盖工作区排除文件。通知的“不再显示”单独保留其原有作用域，“恢复已关闭的扩展推荐通知”可撤销这些选择，保留用户的全局配置开关。每个窗口工作区最多显示三条文件/工具自动推荐，显式工作区推荐保留独立策略；上下文取消不计为用户关闭。多包通知的查看入口打开 Recommended，安装继续逐包审核。
 
-对照上游场景时，必须区分推荐机制与产品目录。上游的可执行程序检测、键位方案、远程/虚拟工作区和纯 Web 推荐由产品专属 tips 目录驱动；Ash 当前没有这些目录和原生工具发现契约，因此没有填入上游专属包 ID、创建空推荐源或在 renderer 检测本机 PATH。现有远程文件和自定义工作区 URI scheme 仍使用共用的文件、语言和配置推荐机制；目录未提供候选时保持安静。
+产品推荐目录由 `resources/extension-recommendations.json` 随 Ash 版本分发，统一描述编辑器、项目配置、工具、键位、远程和 Web 的候选；新增候选不另建通知或忽略机制。工具存在性通过版本化 `extensionRecommendations` 契约查询当前连接的 App Server，仅检查目录列出的程序名在绝对 PATH 目录中的文件和执行位，不运行程序，也不向 renderer 返回 PATH、程序路径或内容。远程工作区检查远端主机，旧后端缺少契约或断线时跳过。工具推荐最多弹出一次，已有两条场景通知后让位于文件推荐；远程和 Web 工具推荐仅在列表中显示。键位可通过“显示推荐的键位方案”主动查看；远程连接和工作区 authority 变化刷新远程候选；浏览器工作台补充 Web 候选。产品候选必须先由当前启用来源解析，来源未发布的候选保持安静，已安装、全局忽略和工作区排除继续由统一服务过滤。
+
+`extensions/keymap-sublime` 和 `extensions/remote-workspace` 是可选声明式包，分别提供常用多光标/行编辑键位和 SSH 配置的语言、语法与片段；后者复用产品的 Remote 连接，不实现 SSH 客户端或读取密钥。仓库包的 `ashDistribution: "marketplace"` 只控制构建分发，使其不进入内置目录。用 `pnpm package:declarative <源码目录> <新输出目录>` 生成原有签名市场工具接收的 catalog 与 package；该入口拒绝运行时入口、符号链接和覆盖已有输出。目录候选只有在包发布到启用源后才可安装，源码提交不等于生产市场发布。安装、停用和卸载沿用现有声明式贡献生命周期。
 
 扩展包是安装、更新和卸载单位，capability 是发现和使用单位。纯 Skill 保留标准 `SKILL.md`，由 Skills authority 校验并加载；包含 executable Provider 的能力才进入 `external-ext`。Connector 账号、MCP 会话、Skill 上下文和编辑器文档分别保留原领域 owner。
 

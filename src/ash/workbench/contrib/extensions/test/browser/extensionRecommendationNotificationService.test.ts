@@ -233,6 +233,22 @@ suite('Contextual extension recommendation notifications', () => {
 		const item = await added; f.notifications.model.remove(item.id); await result;
 	});
 
+	test('tool suggestions allow at most one prompt and yield when two file prompts have been shown', async () => {
+		const f = fixture(); using lifetime = f.lifetime;
+		const service = f.create();
+		const added = nextNotification(f.notifications);
+		const result = service.promptImportantExtensionsInstallNotification({ ...recommendation, source: RecommendationSource.EXE });
+		const item = await added; f.notifications.model.remove(item.id); await result;
+		assert.equal(await service.promptImportantExtensionsInstallNotification({ ...recommendation, source: RecommendationSource.EXE, extensions: ['other@ash'] }), RecommendationsNotificationResult.TooMany);
+		service.resetIgnoredRecommendations();
+		for (const id of ['first@ash', 'second@ash']) {
+			const added = nextNotification(f.notifications);
+			const result = service.promptImportantExtensionsInstallNotification({ ...recommendation, extensions: [id] });
+			const item = await added; f.notifications.model.remove(item.id); await result;
+		}
+		assert.equal(await service.promptImportantExtensionsInstallNotification({ ...recommendation, source: RecommendationSource.EXE }), RecommendationsNotificationResult.TooMany);
+	});
+
 	test('restores dismissed notification preferences without overwriting global settings', async () => {
 		const f = fixture(); using lifetime = f.lifetime;
 		const service = f.create();

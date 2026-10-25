@@ -1,0 +1,66 @@
+{
+  "name": "keymap-sublime",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "engines": {
+    "ash": "*"
+  },
+  "categories": [
+    "Keymaps"
+  ],
+  "contributes": {
+    "keybindings": [
+      {
+        "key": "ctrl+d",
+        "mac": "cmd+d",
+        "command": "editor.action.addSelectionToNextFindMatch",
+        "when": "editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+shift+l",
+        "mac": "cmd+shift+l",
+        "command": "editor.action.selectHighlights",
+        "when": "editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+alt+up",
+        "mac": "ctrl+shift+up",
+        "command": "editor.action.insertCursorAbove",
+        "when": "editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+alt+down",
+        "mac": "ctrl+shift+down",
+        "command": "editor.action.insertCursorBelow",
+        "when": "editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+shift+d",
+        "mac": "cmd+shift+d",
+        "command": "editor.action.copyLinesDownAction",
+        "when": "editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+shift+k",
+        "mac": "cmd+shift+k",
+        "command": "editor.action.deleteLines",
+        "when": "editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "command": "editor.action.insertLineAfter",
+        "when": "editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "command": "editor.action.insertLineBefore",
+        "when": "editorTextFocus && !editorReadonly"
+      }
+    ]
+  },
+  "ashDistribution": "marketplace"
+}

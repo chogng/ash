@@ -98,6 +98,23 @@ pub struct ExtensionsSearchResult {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub enum ExtensionsRecommendationPlatformDto {
+    Macos,
+    Linux,
+    Windows,
+    Other,
+}
+
+/// Read-only facts from the connected execution host; never exposes PATH or executable locations.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtensionsRecommendationEnvironmentResult {
+    pub platform: ExtensionsRecommendationPlatformDto,
+    pub executables: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub struct ExtensionsSearchPageParams {
     pub source_id: String,
     pub query: String,

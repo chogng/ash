@@ -1,3 +1,6 @@
+import { extensionTips, type ProductExtensionTip } from '../../../../platform/extensionManagement/common/extensionTipsService.js';
+import { isWeb } from '../../../../base/common/platform.js';
+import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import { localize } from '../../../../nls.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { CancellationError } from '../../../../base/common/errors.js';
@@ -21,21 +24,8 @@ import { ExtensionRecommendationReason, IExtensionIgnoredRecommendationsService,
 
 const recentKey = 'extensionsAssistant/recentRecommendations';
 const recentDuration = 7 * 24 * 60 * 60 * 1000;
-// Product editor suggestions use package identities, rather than guessing from marketplace search text.
-const editorTips = [
-	{ extensions: ['.ash-doc', '.ash-academy', '.ash-paper'], id: 'ash.academy@ash', name: 'Docs', query: 'academy' },
-	{ extensions: ['.pdf'], id: 'ash.pdf-viewer@ash', name: 'PDF', query: 'pdf' },
-] as const;
-const projectLanguages = [
-	{ filename: 'Cargo.toml', language: 'rust' }, { filename: 'pyproject.toml', language: 'python' },
-	{ filename: 'requirements.txt', language: 'python' }, { filename: 'Pipfile', language: 'python' },
-	{ filename: 'package.json', language: 'javascript' }, { filename: 'go.mod', language: 'go' },
-	{ filename: 'tsconfig.json', language: 'typescript' }, { filename: 'jsconfig.json', language: 'javascript' },
-	{ filename: 'pom.xml', language: 'java' }, { filename: 'build.gradle', language: 'groovy' },
-	{ filename: 'build.gradle.kts', language: 'kotlin' }, { filename: 'composer.json', language: 'php' },
-	{ filename: 'Gemfile', language: 'ruby' }, { filename: 'Dockerfile', language: 'dockerfile' },
-	{ filename: 'CMakeLists.txt', language: 'cmake' }, { filename: 'Makefile', language: 'makefile' },
-] as const;
+const editorTips = extensionTips.editors;
+const projectLanguages = extensionTips.projects;
 
 /** Derives recommendations from the current editors, language catalog and workspace declarations. */
 export class ExtensionRecommendationsService extends Disposable implements IExtensionRecommendationsService {
@@ -59,6 +49,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 		@IStorageService private readonly storage: IStorageService,
 		@IExtensionIgnoredRecommendationsService private readonly ignored: IExtensionIgnoredRecommendationsService,
 		@IUriIdentityService private readonly uriIdentity: IUriIdentityService,
+		@IAppServerRemoteAgentService private readonly remote: IAppServerRemoteAgentService,
 	) {
 		super();
 		for (const event of [configs.onDidChangeExtensionsConfigs, editors.onDidActiveEditorChange, editors.onDidVisibleEditorsChange, languages.onDidChange, packages.onDidChangeInstalled, extensions.onDidChange]) {
@@ -77,6 +68,8 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 		this._register(files.onDidChangeFiles(event => {
 			if (!event.resources || this.projectResources().some(({ resource }) => event.resources!.some(changed => uriIdentity.extUri.isEqual(changed, resource) || uriIdentity.extUri.isEqual(changed, dirname(resource))))) { this.invalidate(); }
 		}));
+		this._register(remote.onDidChangeConnection(() => this.invalidate()));
+		this._register(remote.onDidChangeConnectionState(() => this.invalidate()));
 		this.watchProjects();
 	}
 
@@ -141,7 +134,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 			const extension = extname(resource.path).toLowerCase();
 			const tip = editorTips.find(tip => (tip.extensions as readonly string[]).includes(extension));
 			if (tip) {
-				const name = tip.name === 'Docs' ? localize({ bundle: 'ash.extensions', key: 'recommendationDocs' }, 'Docs') : localize({ bundle: 'ash.extensions', key: 'recommendationPdf' }, 'PDF');
+				const name = tip.kind === 'docs' ? localize({ bundle: 'ash.extensions', key: 'recommendationDocs' }, 'Docs') : localize({ bundle: 'ash.extensions', key: 'recommendationPdf' }, 'PDF');
 				add({ extensionId: tip.id, reason: { reasonId: ExtensionRecommendationReason.File, reasonText: localize({ bundle: 'ash.extensions', key: 'fileRecommendationReason' }, 'Recommended for {0} files', extension) }, context: { source: RecommendationSource.FILE, name, searchValue: tip.query } });
 			}
 			const language = languageId && languageId !== 'plaintext' ? languageId : this.languages.guessLanguageIdByFilepathOrFirstLine(resource);
@@ -159,6 +152,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 			}
 		}
 		await Promise.all(work);
+		await this.collectProductRecommendations(add);
 		const diagnostics = [...declared.diagnostics];
 		await Promise.all(this.projectResources().map(async ({ resource, language }) => {
 			try {
@@ -181,6 +175,27 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 			add({ extensionId, reason: { reasonId: ExtensionRecommendationReason.File, reasonText: localize({ bundle: 'ash.extensions', key: 'recentRecommendationReason' }, 'Recommended because of recently opened files') } });
 		}
 		return { recommendations: [...recommendations.values()], resources: declared.resources, diagnostics };
+	}
+
+	private async collectProductRecommendations(add: (recommendation: ExtensionRecommendation) => void): Promise<void> {
+		const remoteWorkspace = !!this.workspace.getWorkspace().remoteAuthority || !!this.remote.connection && this.remote.connection.kind !== 'local';
+		const candidates: { tip: ProductExtensionTip; reason: string; executable?: boolean; }[] = extensionTips.keymaps.map(tip => ({ tip, reason: localize({ bundle: 'ash.extensions', key: 'keymapRecommendationReason' }, 'Keymap recommended for {0}', tip.name) }));
+		if (remoteWorkspace) { candidates.push(...extensionTips.remote.map(tip => ({ tip, reason: localize({ bundle: 'ash.extensions', key: 'remoteRecommendationReason' }, 'Recommended for remote workspaces') }))); }
+		if (isWeb) { candidates.push(...extensionTips.web.map(tip => ({ tip, reason: localize({ bundle: 'ash.extensions', key: 'webRecommendationReason' }, 'Recommended for Ash in a browser') }))); }
+		try {
+			const environment = await this.packages.recommendationEnvironment();
+			for (const tip of extensionTips.executables) {
+				if (tip.executables.some(name => environment.executables.includes(name))) {
+					candidates.push({ tip, reason: localize({ bundle: 'ash.extensions', key: 'executableRecommendationReason' }, 'Recommended because {0} is available on this host', tip.name), executable: tip.important && !remoteWorkspace && !isWeb });
+				}
+			}
+		} catch { /* Older or disconnected hosts still support file and workspace recommendations. */ }
+		await Promise.all(candidates.map(async ({ tip, reason, executable }) => {
+			try {
+				const details = await this.packages.get(tip.id);
+				add({ extensionId: details.package.id, reason: { reasonId: executable !== undefined ? ExtensionRecommendationReason.Executable : ExtensionRecommendationReason.Application, reasonText: reason }, ...(executable ? { context: { source: RecommendationSource.EXE, name: tip.name, searchValue: details.displayName } } : {}) });
+			} catch { /* A product catalog entry is only offered when an enabled source can resolve it. */ }
+		}));
 	}
 
 	private readRecent(): Record<string, number> {

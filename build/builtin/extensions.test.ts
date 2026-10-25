@@ -53,6 +53,8 @@ test('browser packaging excludes independent capabilities and rejects missing JS
 		await mkdir(join(directory, 'extensions/optional-language'), { recursive: true });
 		await writeFile(join(directory, 'extensions/optional-language/package.json'), JSON.stringify({ publisher: 'test', name: 'optional-language', engines: { ash: '*' }, contributes: { localizations: [{ languageId: 'fr' }] } }));
 		await writeFile(join(directory, 'extensions/optional-language/optional.json'), 'French must be downloaded');
+		await mkdir(join(directory, 'extensions/optional-keymap'));
+		await writeFile(join(directory, 'extensions/optional-keymap/package.json'), JSON.stringify({ publisher: 'test', name: 'optional-keymap', ashDistribution: 'marketplace', contributes: { keybindings: [{ key: 'ctrl+d', command: 'editor.action.addSelectionToNextFindMatch' }] } }));
 		const run = () => spawnSync(process.execPath, ['build/builtin/extensions.ts'], {
 			cwd: directory, encoding: 'utf8', timeout: 15_000,
 			// This fixture owns its catalog, including any externally configured roots.

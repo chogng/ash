@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "editors": [
+    {
+      "extensions": [".ash-doc", ".ash-academy", ".ash-paper"],
+      "id": "ash.academy@ash",
+      "kind": "docs",
+      "query": "academy"
+    },
+    {
+      "extensions": [".pdf"],
+      "id": "ash.pdf-viewer@ash",
+      "kind": "pdf",
+      "query": "pdf"
+    }
+  ],
+  "projects": [
+    { "filename": "Cargo.toml", "language": "rust" },
+    { "filename": "pyproject.toml", "language": "python" },
+    { "filename": "requirements.txt", "language": "python" },
+    { "filename": "Pipfile", "language": "python" },
+    { "filename": "package.json", "language": "javascript" },
+    { "filename": "go.mod", "language": "go" },
+    { "filename": "tsconfig.json", "language": "typescript" },
+    { "filename": "jsconfig.json", "language": "javascript" },
+    { "filename": "pom.xml", "language": "java" },
+    { "filename": "build.gradle", "language": "groovy" },
+    { "filename": "build.gradle.kts", "language": "kotlin" },
+    { "filename": "composer.json", "language": "php" },
+    { "filename": "Gemfile", "language": "ruby" },
+    { "filename": "Dockerfile", "language": "dockerfile" },
+    { "filename": "CMakeLists.txt", "language": "cmake" },
+    { "filename": "Makefile", "language": "makefile" }
+  ],
+  "executables": [
+    {
+      "id": "marketplace.python@ash",
+      "name": "Python",
+      "executables": ["python3", "python"],
+      "important": true
+    },
+    {
+      "id": "marketplace.typescript@ash",
+      "name": "Node.js",
+      "executables": ["node", "nodejs"],
+      "important": true
+    },
+    {
+      "id": "marketplace.go@ash",
+      "name": "Go",
+      "executables": ["go"],
+      "important": true
+    },
+    {
+      "id": "marketplace.github@ash",
+      "name": "Git",
+      "executables": ["git"],
+      "important": false
+    }
+  ],
+  "keymaps": [{ "id": "ash.keymap-sublime@ash", "name": "Sublime Text" }],
+  "remote": [{ "id": "ash.remote-workspace@ash", "name": "SSH" }],
+  "web": [
+    { "id": "marketplace.markdown@ash", "name": "Markdown" },
+    { "id": "marketplace.aurora-theme@ash", "name": "Aurora" }
+  ]
+}

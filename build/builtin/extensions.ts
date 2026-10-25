@@ -79,7 +79,9 @@ async function preparePackages(): Promise<boolean> {
 		if (files.includes('package.json')) {
 			const manifestPath = resolve(packageRoot, 'package.json');
 			if ((await stat(manifestPath)).size > 4 * 1024 * 1024) throw new RangeError('Browser extension manifest exceeds its byte limit');
-			if (JSON.parse(await readFile(manifestPath, 'utf8')).ashRuntime?.client) continue;
+			const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+			if (manifest.ashDistribution !== undefined && manifest.ashDistribution !== 'marketplace') { throw new TypeError('Invalid extension distribution'); }
+			if (manifest.ashRuntime?.client || manifest.ashDistribution === 'marketplace') continue;
 		}
 		packages.push(packageRoot);
 	}

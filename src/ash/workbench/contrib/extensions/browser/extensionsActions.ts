@@ -251,6 +251,10 @@ export function describeConnectorState(state: ConnectorState, enabled = true): s
 export function registerExtensionManagementActions(): DisposableStore {
 	const registrations = new DisposableStore();
 	const extensionsTitle = ContextKeyExpr.equals('viewContainer', 'ash.extensions');
+	registrations.add(registerAction2(class ShowRecommendedKeymaps extends Action2 {
+		constructor() { super({ id: 'ash.extensions.showRecommendedKeymaps', title: localize2({ bundle: 'ash.extensions', key: 'showRecommendedKeymaps' }, 'Show recommended keymaps'), f1: true, menu: { id: MenuId.ViewContainerTitle, when: extensionsTitle, group: '2_recommendations', order: 4 } }); }
+		public override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(ICommandService).executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { query: '@recommended keymap' }); }
+	}));
 	for (const undo of [false, true]) {
 		registrations.add(registerAction2(class ConfigureIgnoredRecommendation extends Action2 {
 			constructor() {

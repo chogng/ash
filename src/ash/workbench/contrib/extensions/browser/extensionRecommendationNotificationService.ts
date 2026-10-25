@@ -24,6 +24,7 @@ export class ExtensionRecommendationNotificationService extends Disposable imple
 	private readonly notifications = this._register(new DisposableStore());
 	private generation = 0;
 	private shown = 0;
+	private executableShown = false;
 	public get ignoredRecommendations(): readonly string[] {
 		try {
 			const value: unknown = JSON.parse(this.storage.get(ignoredKey, StorageScope.PROFILE, '[]'));
@@ -54,7 +55,7 @@ export class ExtensionRecommendationNotificationService extends Disposable imple
 		this._register(workspace.onDidChangeWorkspace(() => { this.clearSession(); }));
 	}
 
-	private clearSession(): void { ++this.generation; this.attempted.clear(); this.prompted.clear(); this.shown = 0; this.notifications.clear(); }
+	private clearSession(): void { ++this.generation; this.attempted.clear(); this.prompted.clear(); this.shown = 0; this.executableShown = false; this.notifications.clear(); }
 	public resetIgnoredRecommendations(): void {
 		this.clearSession();
 		this.storage.remove(ignoredKey, StorageScope.PROFILE);
@@ -110,12 +111,13 @@ export class ExtensionRecommendationNotificationService extends Disposable imple
 		}
 		// Keep automatic discovery quiet during a busy window. Explicit workspace recommendations
 		// retain their own suppression scope, and all candidates remain available in Recommended.
-		if (request.source !== RecommendationSource.WORKSPACE && this.shown >= 3) {
+		if (request.source !== RecommendationSource.WORKSPACE && (this.shown >= 3 || request.source === RecommendationSource.EXE && (this.executableShown || this.shown >= 2))) {
 			for (const candidate of candidates) { this.prompted.delete(identity(candidate.id)); }
 			this.attempted.delete(key);
 			return RecommendationsNotificationResult.TooMany;
 		}
 		if (request.source !== RecommendationSource.WORKSPACE) { ++this.shown; }
+		if (request.source === RecommendationSource.EXE) { this.executableShown = true; }
 		// Each request completes on a user action, dismissal or window shutdown.
 		return new Promise(resolve => {
 			const lifetime = this.notifications.add(new DisposableStore());
@@ -156,6 +158,7 @@ export class ExtensionRecommendationNotificationService extends Disposable imple
 					this.attempted.delete(key);
 					for (const candidate of candidates) { this.prompted.delete(identity(candidate.id)); }
 					if (request.source !== RecommendationSource.WORKSPACE) { --this.shown; }
+					if (request.source === RecommendationSource.EXE) { this.executableShown = false; }
 					handle.close();
 				};
 				request.signal.addEventListener('abort', close, { once: true });

@@ -1,4 +1,7 @@
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { parseKeybinding } from '../../../../base/common/keybindingParser.js';
+import { isMacintosh, isLinux } from '../../../../base/common/platform.js';
+import type { IKeybindingRule } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { ExtensionsRegistry } from './extensionsRegistry.js';
 import { localize } from '../../../../nls.js';
 import { validateJsonValue } from '../../../../base/common/jsonValue.js';
@@ -66,6 +69,7 @@ export interface ExtensionManifest {
 	readonly version: string;
 	readonly displayName: string;
 	readonly contributes: {
+		readonly keybindings: readonly IKeybindingRule[];
 		readonly imageEditors: readonly { readonly id: string; readonly displayName: string; readonly default?: boolean; readonly accessibilityHelp: string; }[];
 		readonly breakpoints: readonly { readonly language: string; readonly when?: string; }[];
 		readonly debugVisualizers: readonly { readonly id: string; readonly title: string; readonly command: string; readonly type?: string; }[];
@@ -150,6 +154,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			}],
 			submenus: parseSubmenus(contributes.submenus, contributes.menus),
 			viewsWelcome: parseViewsWelcome(contributes.viewsWelcome),
+			keybindings: parseKeybindings(contributes.keybindings, descriptor.id),
 			languages: Object.freeze(contributes.languages === undefined ? [] : parseLanguages(contributes.languages, descriptor.id)),
 			grammars: Object.freeze(contributes.grammars === undefined ? [] : parseGrammars(contributes.grammars, descriptor.id)),
 			snippets: Object.freeze(contributes.snippets === undefined ? [] : parseSnippets(contributes.snippets, descriptor.id)),
@@ -165,6 +170,25 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			problemPatterns: parseProblemContributions(contributes.problemPatterns, 'problemPatterns'),
 			debuggers: Object.freeze(contributes.debuggers === undefined ? [] : parseDebuggers(contributes.debuggers, descriptor)),
 		}),
+	});
+}
+
+function parseKeybindings(value: unknown, extensionId: string): readonly IKeybindingRule[] {
+	if (value === undefined) { return []; }
+	const invalid = () => new TypeError(localize({ bundle: 'ash.extensions', key: 'invalidKeybindingContribution' }, 'Invalid keybinding contribution in {0}.', extensionId));
+	if (!Array.isArray(value) || value.length > 4096) { throw invalid(); }
+	return value.flatMap(item => {
+		const entry = record(item, 'Keybinding contribution');
+		if (typeof entry.command !== 'string' || !entry.command.length || entry.command.length > 256 || entry.command.startsWith('-')) { throw invalid(); }
+		for (const key of ['key', 'mac', 'linux', 'win']) {
+			const binding = entry[key];
+			if (binding === undefined && key !== 'key') { continue; }
+			if (typeof binding !== 'string' || binding.length > 256 || binding && !parseKeybinding(binding)) { throw invalid(); }
+		}
+		if (entry.when !== undefined && (typeof entry.when !== 'string' || entry.when.length > 4096 || !ContextKeyExpr.deserialize(entry.when))) { throw invalid(); }
+		const key = entry[isMacintosh ? 'mac' : isLinux ? 'linux' : 'win'] ?? entry.key;
+		if (!key) { return []; }
+		return [{ command: entry.command, keybinding: parseKeybinding(key as string)!, when: typeof entry.when === 'string' ? ContextKeyExpr.deserialize(entry.when) : undefined, args: entry.args === undefined ? undefined : [validateJsonValue(entry.args)] }];
 	});
 }
 

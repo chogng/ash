@@ -672,6 +672,10 @@ fn extension_packages_search_supports_capabilities_and_exact_language_routes() {
     capabilities.advertise_contracts();
     assert_eq!(capabilities.contracts["extensionsSearch"].version, 1);
     assert_eq!(capabilities.contracts["extensionsPaging"].version, 1);
+    assert_eq!(
+        capabilities.contracts["extensionRecommendations"].version,
+        1
+    );
     assert!(
         !capabilities
             .contracts
@@ -1059,4 +1063,17 @@ fn git_file_admission_keeps_staged_order_and_rejects_invalid_comparisons() {
     ] {
         assert!(definition.serialization_scope(&invalid).is_err());
     }
+}
+
+#[test]
+fn extension_recommendation_environment_round_trips_without_host_paths() {
+    use super::super::extension_packages::ExtensionsRecommendationEnvironmentResult;
+    let wire = serde_json::json!({ "platform": "linux", "executables": ["python3", "node"] });
+    let environment: ExtensionsRecommendationEnvironmentResult =
+        serde_json::from_value(wire.clone()).unwrap();
+    assert_eq!(serde_json::to_value(environment).unwrap(), wire);
+    assert_eq!(
+        super::client_method("extensions/recommendations/environment"),
+        Some(super::ClientMethod::ExtensionsRecommendationEnvironment)
+    );
 }

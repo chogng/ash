@@ -940,6 +940,20 @@ suite('extensions browser component', () => {
 		await expect(recommended.getByRole('status')).toContainText('Open a file or workspace');
 	});
 
+	for (const locale of ['en', 'zh-CN']) {
+		test(`Browser and keymap recommendations use product tips and common filtering in ${locale}`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/extensions.html?productTips&locale=${locale}`);
+			await page.evaluate(() => window.ashExtensionsIntegration.open({ query: '@recommended' }));
+			const recommended = page.locator('[data-view-id="ash.extensions.recommended"]');
+			await expect(recommended.getByRole('option').filter({ hasText: 'marketplace.markdown@ash' })).toContainText(locale === 'zh-CN' ? '为浏览器中的 Ash 推荐' : 'Recommended for Ash in a browser');
+			await expect(recommended.getByRole('option').filter({ hasText: 'marketplace.python@ash' })).toContainText(locale === 'zh-CN' ? '此主机可使用 Python' : 'Python is available on this host');
+			await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.showRecommendedKeymaps'));
+			await expect(recommended.getByRole('option')).toHaveCount(1);
+			await expect(recommended.getByRole('option')).toContainText('ash.keymap-sublime@ash');
+		});
+	}
+
 	test('Recommendations retain declared IDs when the catalog is offline', async function () {
 		const { page } = browserTests;
 
@@ -2083,15 +2097,15 @@ suite('extensions browser component', () => {
 
 			await page.goto(`/extensions.html?classification&locale=${locale}`);
 			const labels = locale === 'en'
-				? ['Browse Marketplace', 'Show installed', 'Manage built-in editor extensions', 'Manage extension sources', 'Install extension from workspace', 'Install extension from Git repository']
-				: ['浏览扩展市场', '显示已安装', '管理内置编辑器扩展', '管理扩展来源', '从工作区安装扩展', '从 Git 仓库安装扩展'];
+				? ['Browse Marketplace', 'Show installed', 'Manage built-in editor extensions', 'Ignore an extension recommendation', 'Restore an ignored extension recommendation', 'Restore dismissed extension recommendation notifications', 'Show recommended keymaps', 'Manage extension sources', 'Install extension from workspace', 'Install extension from Git repository']
+				: ['浏览扩展市场', '显示已安装', '管理内置编辑器扩展', '忽略扩展推荐', '恢复已忽略的扩展推荐', '恢复已关闭的扩展推荐通知', '显示推荐的键位方案', '管理扩展来源', '从工作区安装扩展', '从 Git 仓库安装扩展'];
 			const more = page.locator('#extensions [data-action-id="ash.toolbar.moreActions"] button');
 			await expect(more).toHaveCount(1);
 			await more.focus();
 			await more.press('Enter');
 			const menu = page.getByRole('menu');
 			await expect(menu.getByRole('menuitem')).toHaveText(labels);
-			await expect(menu.getByRole('separator')).toHaveCount(2);
+			await expect(menu.getByRole('separator')).toHaveCount(3);
 			await page.screenshot({ path: `.build/desktop/ui-previews/extensions-more-${locale}.png` });
 			await expect(more).toHaveAttribute('aria-expanded', 'true');
 			await menu.getByRole('menuitem').first().press('End');
@@ -2108,8 +2122,9 @@ suite('extensions browser component', () => {
 			await expect(page.locator('[data-view-id="ash.extensions.view"]')).toHaveCount(0);
 			await expect(page.locator('#extensions .ash-pane-view-header-title')).toHaveCount(4);
 			await more.click();
-			await page.getByRole('menuitem', { name: labels[4], exact: true }).click();
-			const dialog = page.getByRole('dialog', { name: labels[4], exact: true });
+			const installLabel = locale === 'en' ? 'Install extension from workspace' : '从工作区安装扩展';
+			await page.getByRole('menuitem', { name: installLabel, exact: true }).click();
+			const dialog = page.getByRole('dialog', { name: installLabel, exact: true });
 			await expect(dialog).toBeVisible();
 			await dialog.getByRole('button', { name: locale === 'en' ? 'Cancel' : '取消', exact: true }).click();
 			await expect(dialog).toHaveCount(0);
