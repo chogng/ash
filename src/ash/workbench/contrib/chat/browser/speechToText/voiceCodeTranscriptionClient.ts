@@ -2,6 +2,7 @@ import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { canceled } from '../../../../../base/common/errors.js';
+import { raceCancellationError } from '../../../../../base/common/async.js';
 import { createDecorator } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IVoiceCodeTranscriptionBackendService, type DictationBackend } from '../../../../../platform/renderer/common/dictation.js';
@@ -62,7 +63,7 @@ export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCo
 	private readonly closed = this._register(new Emitter<number>());
 	public readonly onDidClose = this.closed.event;
 	private connected = false;
-	private connectionGeneration = 0;
+	private connecting: AbortController | undefined;
 	private session: { backend: DictationBackend; language: string | null; resourceId: string; claimed: boolean; operations: Promise<void>; error?: string; } | undefined;
 	private active: TranscriptionTurn | undefined;
 	private release = Promise.resolve();
@@ -109,14 +110,18 @@ export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCo
 	public async connect(_window: Window & typeof globalThis, _authToken: string): Promise<void> {
 		this.assertNotDisposed();
 		this.disconnect();
-		const generation = this.connectionGeneration;
-		await this.release;
-		// Resource release belongs to the old session; only the latest connect may admit its replacement.
-		if (generation !== this.connectionGeneration) throw canceled();
-		if (this.isDisposed || !this.backend?.isConnected) throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable'));
-		// The host already authenticates this renderer and resolves provider credentials.
-		// Browser bearer credentials never replace the host's account authority.
-		this.connected = true;
+		const connecting = this.connecting = new AbortController();
+		try {
+			// A cancelled caller can leave immediately; a replacement still waits for backend release.
+			await raceCancellationError(this.release, connecting.signal);
+			if (connecting.signal.aborted) throw canceled();
+			if (this.isDisposed || !this.backend?.isConnected) throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable'));
+			// The host already authenticates this renderer and resolves provider credentials.
+			// Browser bearer credentials never replace the host's account authority.
+			this.connected = true;
+		} finally {
+			if (this.connecting === connecting) this.connecting = undefined;
+		}
 	}
 
 	public async startSession(options?: { readonly backend: DictationBackend; readonly language: string | null; }): Promise<void> {
@@ -193,7 +198,8 @@ export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCo
 	}
 
 	public disconnect(): void {
-		this.connectionGeneration++;
+		this.connecting?.abort();
+		this.connecting = undefined;
 		this.connected = false;
 		const session = this.session;
 		this.session = undefined;

@@ -384,7 +384,7 @@ test('Settings sidebar stays at two levels and searches voice input inside Featu
 test('Dictation settings entry reveals Voice input in Features', async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.chat.open');
-	await workbench.quickaccess.runCommand('workbench.action.chat.dictation.showIntroduction');
+	await workbench.quickaccess.runCommand('workbench.action.chat.showSpeechToTextIntroduction');
 	await page.getByRole('button', { name: 'Model and API settings', exact: true }).click();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	await expect(settings.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'voice-input');
