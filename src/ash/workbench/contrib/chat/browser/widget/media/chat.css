@@ -102,6 +102,10 @@
 	align-items: center;
 	gap: var(--ash-spacing-size40);
 	margin-top: var(--ash-spacing-size40);
+	/* Match the input's inset so footer actions share its icon centers. */
+	padding-inline: calc(
+		var(--ash-spacing-size80) + var(--ash-strokeThickness)
+	);
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label1);
 }

@@ -1,4 +1,5 @@
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
+import { readFileSync } from 'node:fs';
 import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import type { } from '../../../../../../../test/fixtures/browser/chatInput.page.js';
@@ -2688,8 +2689,13 @@ suite('chatInput browser component', () => {
 				await context.hover();
 				await expect(context).toHaveAttribute('title', locale === 'en' ? 'Context budget: 25%\nEstimated input tokens: 200 / 800' : '上下文预算：25%\n估算输入 token 数：200 / 800');
 				const ring = context.locator('svg');
+				// Desktop can load the shared button rules after the widget's styles.
+				await page.addStyleTag({ content: readFileSync('src/ash/base/browser/ui/button/button.css', 'utf8') });
 				const ringBounds = await ring.boundingBox();
+				const buttonBounds = (await context.boundingBox())!;
 				expect([ringBounds!.width, ringBounds!.height]).toEqual([16, 16]);
+				expect(ringBounds!.x + ringBounds!.width / 2).toBeCloseTo(buttonBounds.x + buttonBounds.width / 2, 5);
+				expect(ringBounds!.y + ringBounds!.height / 2).toBeCloseTo(buttonBounds.y + buttonBounds.height / 2, 5);
 				expect(await context.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
 				expect(await ring.locator('.ash-chat-context-usage-track').evaluate(element => getComputedStyle(element).stroke)).not.toBe('none');
 
