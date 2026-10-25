@@ -44,6 +44,22 @@ suite('Chat context budget', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`a reserved empty meter does not invent usage and becomes available with a snapshot (${locale})`, () => {
+			initializeTestLocalization(locale);
+			widget.update(undefined, true);
+			assert.equal(widget.domNode.hidden, false);
+			assert.equal(widget.domNode.disabled, true);
+			assert.equal(widget.domNode.getAttribute('aria-label'), locale === 'en' ? 'Context usage is not available yet' : '暂无上下文用量数据');
+			assert.equal(widget.showDetails(), false);
+			widget.update(usage(), true);
+			assert.equal(widget.domNode.disabled, false);
+			assert.equal(widget.showDetails(), true);
+			widget.update(undefined, true);
+			assert.equal(widget.domNode.hidden, false);
+			assert.equal(widget.domNode.disabled, true);
+			assert.equal(environment.window.document.querySelector('.ash-chat-context-details'), null);
+		});
+
 		test(`the meter and details reach 100% at Core's compaction boundary (${locale})`, () => {
 			initializeTestLocalization(locale);
 			widget.update(usage());

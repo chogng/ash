@@ -51,6 +51,7 @@ class Recognition extends Disposable implements IChatSpeechToTextService {
 	cancels = 0;
 	startBarrier?: DeferredPromise<void>;
 	stopBarrier?: DeferredPromise<void>;
+	idleBeforeStop = false;
 	cancelBarrier?: DeferredPromise<void>;
 	finalText = '';
 	readonly measurements: IDictationAccuracyMeasurement[] = [];
@@ -60,7 +61,9 @@ class Recognition extends Disposable implements IChatSpeechToTextService {
 		this.states.fire(this.state); await this.startBarrier?.p;
 	}
 	async stopAndTranscribe() {
-		this.stops++; await this.stopBarrier?.p;
+		this.stops++;
+		if (this.idleBeforeStop) this.idle();
+		await this.stopBarrier?.p;
 		this.transcripts.fire({ text: this.finalText, finalizedText: this.finalText });
 		this.idle(); return this.finalText;
 	}
@@ -129,6 +132,46 @@ suite('Dictation editor binding', () => {
 		f.speech.transcripts.fire({ text: 'replacement only', finalizedText: 'replacement only' });
 		assert.equal(f.model.getValue(), '');
 		assert.equal(f.otherModel.getValue(), 'replacement only');
+	});
+	test('repeated editor stops wait for finalization even after capture becomes idle', async () => {
+		using f = fixture();
+		f.speech.stopBarrier = new DeferredPromise<void>();
+		f.speech.idleBeforeStop = true;
+		f.speech.finalText = 'complete draft';
+		await startDictation(f.speech, f.editor, f.window, f.log);
+		await stopDictationForEditor(f.other);
+		assert.equal(f.speech.stops, 0);
+		const first = stopDictationForEditor(f.editor);
+		await Promise.resolve();
+		let secondFinished = false;
+		const second = stopDictationForEditor(f.editor).then(() => { secondFinished = true; });
+		try {
+			await new Promise(resolve => setTimeout(resolve, 0));
+			assert.equal(secondFinished, false);
+			assert.equal(activeDictationEditor(), f.editor);
+			assert.equal(f.model.getValue(), '');
+		} finally {
+			await f.speech.stopBarrier.complete();
+			await Promise.all([first, second]);
+		}
+		assert.equal(f.speech.stops, 1);
+		assert.equal(f.model.getValue(), 'complete draft');
+		assert.ok(activeDictationEditor() === undefined);
+	});
+	test('failed finalization releases the editor and permits a new dictation', async () => {
+		using f = fixture();
+		f.speech.stopBarrier = new DeferredPromise<void>();
+		await startDictation(f.speech, f.editor, f.window, f.log);
+		const failed = assert.rejects(stopDictationForEditor(f.editor), /transcription failed/u);
+		await f.speech.stopBarrier.error(new Error('transcription failed'));
+		await failed;
+		assert.ok(activeDictationEditor() === undefined);
+		f.speech.stopBarrier = undefined;
+		await startDictation(f.speech, f.other, f.window, f.log);
+		f.speech.finalText = 'new recording';
+		await stopDictationForEditor(f.other);
+		assert.equal(f.model.getValue(), '');
+		assert.equal(f.otherModel.getValue(), 'new recording');
 	});
 	test('replacement waits for cancellation and late results cannot edit the retired editor', async () => {
 		using f = fixture();

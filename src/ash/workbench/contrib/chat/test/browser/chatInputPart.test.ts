@@ -1,3 +1,4 @@
+import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
@@ -94,7 +95,7 @@ class ObservableInputPart extends ChatInputPart {
 	readonly onDidChangeInputForTest = this.onDidChangeInput;
 }
 
-function inputPart(notifications: TestNotificationService, dictation?: TestDictationCapture, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}, sharedServices?: InstantiationService, localTranscription?: ILocalTranscriptionModelService & ILocalTranscriptionService, telemetry?: ITelemetryService): ObservableInputPart {
+function inputPart(notifications: TestNotificationService, dictation?: TestDictationCapture, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}, sharedServices?: InstantiationService, localTranscription?: ILocalTranscriptionModelService & ILocalTranscriptionService, telemetry?: ITelemetryService, layout?: 'compact'): ObservableInputPart {
 	const container = document.createElement('div');
 	document.body.append(container);
 	let state: ChatInputState = { mode, queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
@@ -168,7 +169,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 		discoverProviderModels: async () => [],
 	} satisfies ILanguageModelsService);
 	partServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
-	const part = partServices.createInstance(ObservableInputPart, container, { ...delegate, selectMode: delegate.selectMode ?? (selected => { state = { ...state, mode: selected }; part.render(state); }) } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
+	const part = partServices.createInstance(ObservableInputPart, container, { ...delegate, selectMode: delegate.selectMode ?? (selected => { state = { ...state, mode: selected }; part.render(state); }) } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { layout, modePicker: 'visible', modelPickerPosition: 'leading' });
 	part.render(state);
 	return part;
 }
@@ -574,7 +575,7 @@ test('Chat dictation session failure appears in notifications and releases the m
 	assert.notEqual(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')?.getAttribute('aria-pressed'), 'true');
 });
 
-test('Dictation replaces the selection and submission waits for final transcription', async () => {
+for (const layout of [undefined, 'compact'] as const) test(`Dictation replaces the selection and submission waits for final transcription (${layout ?? 'default'})`, async () => {
 	let transcript!: (text: string, final: boolean) => void;
 	let finishStop!: () => void;
 	const stopRequested = new DeferredPromise<void>();
@@ -584,7 +585,7 @@ test('Dictation replaces the selection and submission waits for final transcript
 			transcript = onTranscript;
 			return { stop: async () => { await new Promise<void>(resolve => { finishStop = resolve; void stopRequested.complete(); }); transcript('replacement', true); onEnded(); }, cancel: async () => { } };
 		},
-	}, 'agent', { send: async text => { sent.push(text); } });
+	}, 'agent', { send: async text => { sent.push(text); } }, undefined, undefined, undefined, layout);
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'before old after');
 	const input = part.element.querySelector('textarea')!;
@@ -600,6 +601,96 @@ test('Dictation replaces the selection and submission waits for final transcript
 	finishStop();
 	await submit;
 	assert.deepEqual(sent, ['before replacement after']);
+});
+
+for (const layout of [undefined, 'compact'] as const) test(`Enter submits an interim-only dictation after finalization (${layout ?? 'default'})`, async () => {
+	const stopping = new DeferredPromise<void>();
+	const finalization = new DeferredPromise<void>();
+	const sent: string[] = [];
+	let transcript!: (text: string, final: boolean) => void;
+	using part = inputPart(sharedNotifications, {
+		start: async (_options, onTranscript) => {
+			transcript = onTranscript;
+			return {
+				stop: async () => {
+					void stopping.complete();
+					await finalization.p;
+					onTranscript('Final recognized words', true);
+				},
+				cancel: async () => { },
+			};
+		},
+	}, 'agent', { send: async text => { sent.push(text); } }, undefined, undefined, undefined, layout);
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	transcript('interim words', false);
+	const input = part.element.querySelector('textarea')!;
+	assert.equal(input.value, '');
+	input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+	try {
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(stopping.isSettled, true);
+		input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		assert.deepEqual(sent, []);
+	} finally {
+		await finalization.complete();
+	}
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.deepEqual(sent, ['Final recognized words']);
+});
+
+for (const layout of [undefined, 'compact'] as const) test(`Failed dictation finalization preserves the unsent draft (${layout ?? 'default'})`, async () => {
+	using notifications = new TestNotificationService();
+	const sent: string[] = [];
+	using part = inputPart(notifications, {
+		start: async () => ({ stop: async () => { throw new Error('transcription failed'); }, cancel: async () => { } }),
+	}, 'agent', { send: async text => { sent.push(text); } }, undefined, undefined, undefined, layout);
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'Existing draft');
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	await assert.rejects(part.acceptInput(), /transcription failed/u);
+	assert.deepEqual(sent, []);
+	assert.equal(part.element.querySelector('textarea')!.value, 'Existing draft');
+	assert.equal(notifications.model.getNotifications().length, 1);
+	assert.match(notifications.model.getNotifications()[0]!.message, /Dictation failed: .*transcription failed/u);
+	await part.acceptInput();
+	assert.deepEqual(sent, ['Existing draft']);
+});
+
+for (const locale of ['en', 'zh-CN']) for (const layout of [undefined, 'compact'] as const) test(`Dictation stop circle keeps recognized text as an unsent draft (${layout ?? 'default'}, ${locale})`, async () => {
+	initializeTestLocalization(locale);
+	try {
+		const sent: string[] = [];
+		const inserted = new DeferredPromise<void>();
+		let stopped = 0;
+		using part = inputPart(sharedNotifications, {
+			start: async (_options, onTranscript, onEnded) => ({
+				stop: async () => { stopped++; onTranscript('Recognized words', true); onEnded(); },
+				cancel: async () => { },
+			}),
+		}, 'agent', { send: async text => { sent.push(text); } }, undefined, undefined, undefined, layout);
+		part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+		const microphone = () => part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!;
+		assert.ok(microphone().querySelector('.ash-icon-mic'));
+		microphone().click();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(microphone().getAttribute('aria-label'), locale === 'en' ? 'Stop dictation' : '结束听写');
+		assert.ok(microphone().querySelector('.ash-icon-stop-circle'));
+		using changed = part.onDidChangeInputForTest(() => { if (part.element.querySelector('textarea')!.value === 'Recognized words') void inserted.complete(); });
+		microphone().click();
+		await inserted.p;
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(stopped, 1);
+		assert.deepEqual(sent, []);
+		assert.equal(microphone().getAttribute('aria-label'), locale === 'en' ? 'Dictate message' : '听写');
+		assert.ok(microphone().querySelector('.ash-icon-mic'));
+		if (layout === 'compact') assert.equal(part.element.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		part.element.querySelector('textarea')!.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.deepEqual(sent, ['Recognized words']);
+	} finally { initializeTestLocalization('en'); }
 });
 
 test('submitting an edited dictated draft records aggregate accuracy once without sending transcript text', async () => {
@@ -830,6 +921,88 @@ test('Chat input retry restores the original Skill revision and backward selecti
 	assert.deepEqual(sent, [[skill('original').skill], [skill('original').skill]]);
 });
 
+for (const layout of [undefined, 'compact'] as const) for (const outcome of ['success', 'failure'] as const) for (const replacement of ['attachment', 'emptied'] as const) test(`Submission cleanup preserves a draft created by its change listener (${layout ?? 'default'}, ${outcome}, ${replacement})`, async () => {
+	const reply = new DeferredPromise<void>();
+	const sent: string[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		send: async text => { sent.push(text); await reply.p; },
+	}, undefined, undefined, undefined, layout);
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'Original request');
+	part.addContext({ id: 'old', kind: 'file', name: 'old.txt', resolve: async () => ({ name: 'old.txt', content: 'Original capture' }) });
+	const original = (await part.captureDraft())!.draft;
+	let replaced = false;
+	using changed = part.onDidChangeInputForTest(() => {
+		if (replaced || part.element.querySelector('textarea')!.value !== '') return;
+		replaced = true;
+		edit(part, 'Next request');
+		if (replacement === 'attachment') {
+			part.addContext({ id: 'next', kind: 'file', name: 'next.txt', resolve: async () => ({ name: 'next.txt', content: 'Next capture' }) });
+		} else {
+			edit(part, '');
+		}
+	});
+	const sending = part.acceptInput();
+	const settled = outcome === 'failure' ? assert.rejects(sending, /Original rejected/u) : sending;
+	assert.equal(replaced, true);
+	if (outcome === 'failure') await reply.error(new Error('Original rejected'));
+	else await reply.complete();
+	await settled;
+	assert.deepEqual(sent, [original.text]);
+	if (replacement === 'attachment') {
+		const next = (await part.captureDraft())!.draft;
+		assert.equal(next.text, 'Next request next.txt ');
+		assert.deepEqual(next.contexts.map(context => ({ id: context.id, content: context.content })), [{ id: 'next', content: 'Next capture' }]);
+	} else {
+		assert.equal(part.element.querySelector('textarea')!.value, '');
+		assert.equal(await part.captureDraft(), undefined);
+	}
+});
+
+for (const layout of [undefined, 'compact'] as const) test(`Failed submission publishes one complete restored draft (${layout ?? 'default'})`, async () => {
+	const reply = new DeferredPromise<void>();
+	using part = inputPart(sharedNotifications, undefined, 'agent', { send: () => reply.p }, undefined, undefined, undefined, layout);
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'Original request');
+	part.addContext({ id: 'original-file', kind: 'file', name: 'original.txt', resolve: async () => ({ name: 'original.txt', content: 'Original capture' }) });
+	const input = part.element.querySelector('textarea')!;
+	input.setSelectionRange(2, 7, 'backward');
+	const originalText = input.value;
+	const sending = assert.rejects(part.acceptInput(), /Original rejected/u);
+	const restored: { ids: string[]; selection: (number | string | null)[]; }[] = [];
+	using changed = part.onDidChangeInputForTest(() => {
+		if (input.value === originalText) restored.push({ ids: [...part.attachmentModel.getAttachmentIDs()], selection: [input.selectionStart, input.selectionEnd, input.selectionDirection] });
+	});
+	await reply.error(new Error('Original rejected'));
+	await sending;
+	assert.ok(restored.length > 0);
+	for (const snapshot of restored) assert.deepEqual(snapshot, { ids: ['original-file'], selection: [2, 7, 'backward'] });
+	assert.equal((await part.captureDraft())!.draft.contexts[0]!.content, 'Original capture');
+});
+
+for (const stage of ['clear', 'recovery'] as const) test(`Disposing the composer from its ${stage} notification retires submission cleanly`, async () => {
+	const reply = new DeferredPromise<void>();
+	let sends = 0;
+	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async () => { sends++; await reply.p; } });
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'Original request');
+	using changed = part.onDidChangeInputForTest(() => {
+		const value = part.element.querySelector('textarea')?.value;
+		if (stage === 'clear' ? value === '' : sends === 1 && value === 'Original request') part.dispose();
+	});
+	const sending = part.acceptInput();
+	if (stage === 'recovery') {
+		const rejected = assert.rejects(sending, /Original rejected/u);
+		await reply.error(new Error('Original rejected'));
+		await rejected;
+	} else {
+		await reply.complete();
+		await sending;
+		assert.equal(sends, 0);
+	}
+	assert.equal(part.element.isConnected, false);
+});
+
 test('Chat input failure does not restore over a new draft that was edited and emptied', async () => {
 	const failure = new DeferredPromise<void>();
 	using part = inputPart(sharedNotifications, undefined, 'agent', { send: () => failure.p });
@@ -859,6 +1032,75 @@ test('Chat input waits for file preparation before sending its inline reference 
 	await Promise.all([attaching, sending]);
 	assert.deepEqual(sent, ['file contents']);
 	assert.equal(part.element.querySelector('.ash-chat-input-attachments'), null);
+});
+
+for (const layout of [undefined, 'compact'] as const) test(`Submission blocked during attachment preparation retains the draft for retry (${layout ?? 'default'})`, async () => {
+	const prepared = new DeferredPromise<readonly ChatContextAttachment[]>();
+	const sent: { text: string; contents: string[]; }[] = [];
+	using notifications = new TestNotificationService();
+	using part = inputPart(notifications, undefined, 'agent', {
+		send: async (text, _mode, _skills, contexts) => {
+			sent.push({ text, contents: await Promise.all((contexts ?? []).map(async context => (await context.resolve()).content)) });
+		},
+	}, undefined, undefined, undefined, layout);
+	const ready: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	part.render(ready);
+	edit(part, 'Keep this task');
+	const acquiring = part.acquireContext(() => prepared.p);
+	const sending = part.acceptInput();
+	part.render({ ...ready, inputBlocked: true });
+	await prepared.complete([{ id: 'held-file', kind: 'file', name: 'held.txt', resolve: async () => ({ name: 'held.txt', content: 'Captured content' }) }]);
+	await Promise.all([acquiring, sending]);
+	assert.deepEqual(sent, []);
+	const draft = (await part.captureDraft())!.draft;
+	assert.equal(draft.text, 'Keep this task held.txt ');
+	assert.deepEqual(draft.contexts.map(context => context.content), ['Captured content']);
+	assert.deepEqual(notifications.model.getNotifications(), []);
+	part.render(ready);
+	assert.deepEqual(sent, []);
+	await part.acceptInput();
+	assert.deepEqual(sent, [{ text: draft.text, contents: ['Captured content'] }]);
+});
+
+for (const layout of [undefined, 'compact'] as const) for (const input of [
+	{ text: 'Keep this task', kind: 'message' },
+	{ text: '/compact', kind: 'server command' },
+	{ text: '/config', kind: 'local command' },
+]) test(`Submission blocked during dictation finalization respects ${input.kind} eligibility (${layout ?? 'default'})`, async () => {
+	const stopping = new DeferredPromise<void>();
+	const finalization = new DeferredPromise<void>();
+	const calls: string[] = [];
+	using part = inputPart(sharedNotifications, {
+		start: async () => ({
+			stop: async () => { void stopping.complete(); await finalization.p; },
+			cancel: async () => { },
+		}),
+	}, 'agent', {
+		send: async () => { calls.push('message'); },
+		executeServerCommand: async () => { calls.push('server command'); },
+		executeCommand: async () => { calls.push('local command'); },
+	}, undefined, undefined, undefined, layout);
+	const ready: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [{ name: 'compact', description: 'Compact context', argumentMode: 'none' }], skillSelectors: [], canSelectAgent: false };
+	part.render(ready);
+	// Start capture while the draft is empty; slash commands intentionally hide the microphone.
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	edit(part, input.text);
+	const sending = part.acceptInput();
+	await stopping.p;
+	part.render({ ...ready, inputBlocked: true });
+	await finalization.complete();
+	await sending;
+	if (input.kind === 'local command') {
+		assert.deepEqual(calls, ['local command']);
+	} else {
+		assert.deepEqual(calls, []);
+		assert.equal(part.element.querySelector('textarea')!.value, input.text);
+		part.render(ready);
+		assert.deepEqual(calls, []);
+		await part.acceptInput();
+		assert.deepEqual(calls, [input.kind]);
+	}
 });
 
 test('Failed file preparation blocks the waiting send and notifies once while preserving the draft', async () => {
@@ -1320,6 +1562,129 @@ test('a hidden cleared composer does not overwrite the active renderer draft dur
 });
 suite('chatInput browser component', () => {
 	const browserTests = useBrowserTests();
+	for (const locale of ['en', 'zh-CN']) for (const nextDraft of ['restore', 'typed', 'reentrant', 'emptied'] as const) test(`Compact failed submission preserves the owned draft and selection (${nextDraft}, ${locale})`, async () => {
+		const { page } = browserTests;
+		await page.goto(`/chatInput.html?inlineCode&compact&holdSubmission&locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const input = page.locator('.ash-chat-input-container .stanza-editor-input');
+		await input.pressSequentially('Original request');
+		await page.evaluate(() => window.ashChatInputIntegration.addHistoryContext());
+		const original = await page.evaluate(() => window.ashChatInputIntegration.dropState().text);
+		await input.press('Home');
+		for (let i = 0; i < 7; i++) await input.press('ArrowRight');
+		for (let i = 0; i < 5; i++) await input.press('Shift+ArrowLeft');
+		expect(await page.evaluate(() => window.ashChatInputIntegration.inputSelection())).toEqual({ anchor: 7, active: 2 });
+		if (nextDraft === 'reentrant') await page.evaluate(() => window.ashChatInputIntegration.replaceDraftOnClear());
+		await input.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.recoveryState().pending)).toBe(true);
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe(nextDraft === 'reentrant' ? 'Next request next.txt ' : '');
+		if (nextDraft === 'typed' || nextDraft === 'emptied') {
+			await input.pressSequentially('Next typed draft');
+			if (nextDraft === 'typed') await page.evaluate(() => window.ashChatInputIntegration.addHistoryContext());
+			else { await input.press('ControlOrMeta+A'); await input.press('Backspace'); }
+		}
+		const nextSelection = await page.evaluate(() => window.ashChatInputIntegration.inputSelection());
+		const text = nextDraft === 'restore' ? original : nextDraft === 'reentrant' ? 'Next request next.txt ' : nextDraft === 'typed' ? 'Next typed draft draft.txt ' : '';
+		await page.evaluate(() => window.ashChatInputIntegration.finishSubmission('Controlled rejection'));
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe(text);
+		expect(await page.evaluate(() => window.ashChatInputIntegration.inputSelection())).toEqual(nextDraft === 'restore' ? { anchor: 7, active: 2 } : nextSelection);
+		const contexts = nextDraft === 'emptied' ? [] : [{ name: nextDraft === 'reentrant' ? 'next.txt' : 'draft.txt', content: nextDraft === 'reentrant' ? 'Next captured content' : 'synthetic context' }];
+		await expect.poll(() => page.evaluate(() => {
+			const draft = window.ashChatInputIntegration.recoveryState().drafts.at(-1)!;
+			return { text: draft.text, contexts: draft.contexts.map(context => ({ name: context.name, content: context.content })) };
+		})).toEqual({ text, contexts });
+		expect(await page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: original }] });
+		await expect(input).toBeFocused();
+		await expect(page.locator('[data-action-id="ash.chat.input.send"]')).toHaveCount(0);
+		if (text) {
+			await input.press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: original }, { text }] });
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('');
+		}
+	});
+
+	for (const locale of ['en', 'zh-CN']) for (const stage of ['attachments', 'dictation'] as const) test(`Compact Enter retains the prepared draft when submission becomes blocked (${stage}, ${locale})`, async () => {
+		const { page } = browserTests;
+		await page.goto(`/chatInput.html?inlineCode&compact&contextSources&dropSources&dictation&locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const composer = page.locator('.ash-chat-input-container');
+		const input = composer.locator('.stanza-editor-input');
+		await input.pressSequentially('Review ');
+		const microphone = composer.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] button');
+		if (stage === 'attachments') {
+			await dropResources(['file:///workspace/drop-pending.ts']);
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().pending)).toBe(true);
+		} else {
+			await microphone.click();
+			await expect(microphone).toHaveAccessibleName(locale === 'en' ? 'Stop dictation' : '结束听写');
+			await expect(microphone).toBeEnabled();
+			await page.evaluate(() => window.ashChatInputIntegration.emitDictation('recognized task', false));
+		}
+		await input.press('Enter');
+		if (stage === 'dictation') await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dictationState().stops)).toBe(1);
+		await page.evaluate(stage => {
+			window.ashChatInputIntegration.setInputBlocked(true);
+			if (stage === 'attachments') window.ashChatInputIntegration.releaseDropRead();
+			else window.ashChatInputIntegration.finishDictation('recognized task');
+		}, stage);
+		const text = stage === 'attachments' ? 'Review drop-pending.ts ' : 'Review recognized task';
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe(text);
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().pending)).toBe(false);
+		await expect(microphone).toHaveAccessibleName(locale === 'en' ? 'Dictate message' : '听写');
+		expect(await page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ writes: [], submissions: [] });
+		await expect(input).toBeEditable();
+		await expect(input).toBeFocused();
+		await expect(composer.locator('[data-action-id="ash.chat.input.send"]')).toHaveCount(0);
+		await input.press('Enter');
+		expect(await page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ writes: [], submissions: [] });
+		await page.evaluate(() => window.ashChatInputIntegration.setInputBlocked(false));
+		expect(await page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [] });
+		await input.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text }] });
+		if (stage === 'attachments') await expect(page.getByLabel('Submission')).toContainText('first captured line');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('');
+	});
+
+	for (const outcome of ['success', 'empty', 'failure'] as const) test(`Rich compact input finalizes dictation before Enter submission (${outcome})`, async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode&compact&dictation');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const composer = page.locator('.ash-chat-input-container');
+		const input = composer.locator('.stanza-editor-input');
+		const microphone = composer.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] button');
+		if (outcome === 'failure') {
+			await input.focus();
+			await page.keyboard.insertText('Keep this draft');
+		}
+		await microphone.click();
+		await expect(microphone).toHaveAccessibleName('Stop dictation');
+		await expect(microphone).toBeEnabled();
+		await page.evaluate(() => window.ashChatInputIntegration.emitDictation('Still recognizing', false));
+		await expect(page.locator('.ash-chat-dictation-preview')).toHaveText('Still recognizing');
+		await expect(composer.locator('[data-action-id="ash.chat.input.send"]')).toHaveCount(0);
+		await input.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dictationState().stops)).toBe(1);
+		await input.press('Enter');
+		const submissions = () => page.evaluate(() => (window.ashChatInputIntegration.historyState() as { submissions: { text: string; }[]; }).submissions.map(item => item.text));
+		expect(await submissions()).toEqual([]);
+		await page.evaluate(result => window.ashChatInputIntegration.finishDictation(
+			result === 'success' ? 'Complete recognized task' : '', result === 'failure' ? 'Transcription unavailable' : undefined,
+		), outcome);
+		await expect(microphone).toHaveAccessibleName('Dictate message');
+		if (outcome === 'success') {
+			await expect.poll(submissions).toEqual(['Complete recognized task']);
+		} else if (outcome === 'failure') {
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dictationState().errors)).toEqual([expect.stringMatching(/Transcription unavailable/u)]);
+			await expect(composer.locator('.view-lines')).toHaveText('Keep this draft');
+			expect(await submissions()).toEqual([]);
+			await input.press('Enter');
+			await expect.poll(submissions).toEqual(['Keep this draft']);
+		} else {
+			expect(await submissions()).toEqual([]);
+		}
+		expect(await page.evaluate(() => window.ashChatInputIntegration.dictationState().stops)).toBe(1);
+	});
+
 	for (const locale of ['en', 'zh-CN']) for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) test(`a corrupt saved image stays removable through undo, restore and clipboard in ${locale}, ${theme}`, async () => {
 		const { page } = browserTests;
 		const chinese = locale === 'zh-CN';

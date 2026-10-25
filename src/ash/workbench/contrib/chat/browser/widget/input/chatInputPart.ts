@@ -27,7 +27,7 @@ import { Separator } from "../../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../../base/common/icon.js";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
 import { URI } from '../../../../../../base/common/uri.js';
-import { Emitter } from '../../../../../../base/common/event.js';
+import { Emitter, PauseableEmitter } from '../../../../../../base/common/event.js';
 import { Lxicon } from "../../../../../../base/common/lxicons.js";
 import { localize } from "../../../../../../nls.js";
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
@@ -103,6 +103,8 @@ const approvalModeIcons: Record<ChatInputState['approvalMode'], Icon> = {
 export interface ChatInputPartOptions {
 	readonly modePicker: 'visible' | 'hidden';
 	readonly modelPickerPosition: 'leading' | 'trailing';
+	/** Keep attachment and dictation or stop beside the editor; submit with Enter and keep configuration below. */
+	readonly layout?: 'compact';
 	readonly renderSecondaryToolbar?: boolean;
 	/** Sessions hosts bind their own paste/drop events while sharing preparation and pending state. */
 	readonly fileEvents?: 'input' | 'host';
@@ -159,7 +161,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private persistentDrafts = false;
 	private draftIdentity: ChatInputState['draftIdentity'];
 	private readonly conversationDrafts = new Map<string, InputHistoryDraft & { readonly mode: ChatInputMode; }>();
-	private readonly inputChanges = this._register(new Emitter<void>());
+	private readonly inputChanges = this._register(new PauseableEmitter<void>({ merge: () => undefined }));
 	protected readonly onDidChangeInput = this.inputChanges.event;
 	private readonly delegate: ChatInputDelegate;
 	private readonly interactionListeners = this._register(new DisposableStore());
@@ -188,6 +190,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	protected readonly inputContainer: HTMLFormElement;
 	protected readonly input: IChatInputEditor;
 	private readonly inputToolbar: WorkbenchToolBar;
+	private readonly attachmentToolbar: WorkbenchToolBar | undefined;
+	private readonly inlineActionsToolbar: WorkbenchToolBar | undefined;
+	protected readonly inputFooter: HTMLElement | undefined;
 	private readonly changesPill: ChatChangesPill;
 	private readonly secondaryToolbarContainer: HTMLElement | undefined;
 	private readonly footerChanged = this._register(new Emitter<void>());
@@ -280,7 +285,24 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.inputToolbar.element.classList.add("ash-chat-input-toolbars");
 		this.inputToolbar.element.classList.toggle('model-picker-trailing', options.modelPickerPosition === 'trailing');
 		this.pickerResponsiveLayout = this._register(new ChatInputPickerResponsiveLayout(this.inputToolbar.element));
-		this.inputContainer.append(editorHost, this.inputToolbar.element);
+		if (options.layout === 'compact') {
+			this.element.classList.add('compact');
+			this.inputFooter = h(ownerDocument, 'div', { className: 'ash-chat-input-footer' });
+			this.attachmentToolbar = this._register(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
+				ariaLabel: localize('chat.context.add', 'Add context'),
+				actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
+			}));
+			this.attachmentToolbar.element.classList.add('ash-chat-input-inline-toolbar');
+			this.inputContainer.append(editorHost);
+			this.inlineActionsToolbar = this._register(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
+				ariaLabel: localize('chat.input.actions', 'Chat input actions'),
+				actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
+			}));
+			this.inlineActionsToolbar.element.classList.add('ash-chat-input-inline-toolbar', 'ash-chat-input-toolbars');
+			this.inputFooter.append(this.inputToolbar.element);
+		} else {
+			this.inputContainer.append(editorHost, this.inputToolbar.element);
+		}
 		this.secondaryToolbarContainer = options.renderSecondaryToolbar === false
 			? undefined
 			: this.createSecondaryToolbar(contextMenuService, menuService);
@@ -335,6 +357,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}));
 		if (!this.secondaryToolbarContainer) this.element.append(this.status);
 		this.element.append(this.dictationPreview, this.interaction, this.changesPill.domNode, this.inputContainer);
+		if (this.inputFooter) this.element.append(this.inputFooter);
 		if (this.secondaryToolbarContainer) this.element.append(this.secondaryToolbarContainer);
 		this.updateDictationHost();
 		this._register(addDisposableListener(this.inputContainer, "focusin", event => {
@@ -395,7 +418,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(toDisposable(() => this.inputLifecycle.abort()));
 		this._register(toDisposable(() => this.conversationDrafts.clear()));
-		this._register(toDisposable(() => { this.logDictationSample(false); void this.stopDictation(); }));
+		this._register(toDisposable(() => { this.logDictationSample(false); void this.stopDictation().catch(() => undefined); }));
 	}
 
 	private captureHistoryDraft(): InputHistoryDraft {
@@ -403,14 +426,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private applyHistoryDraft(draft: InputHistoryDraft): void {
+		this.inputChanges.pause();
 		this.applyingHistory = true;
 		try {
 			this.setInputValue(draft.text);
-			this.input.setSelection(draft.selection);
 			this.setReferenceState(draft.attachments);
+			this.input.setSelection(draft.selection);
 			this.draftSkills = { text: draft.text, references: draft.skills };
 		} finally {
 			this.applyingHistory = false;
+			// Draft consumers must observe references and selection together with the restored text.
+			if (!this.isDisposed) this.inputChanges.resume();
 		}
 	}
 
@@ -534,13 +560,21 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		});
 		// Preparation can finish after the user has started another input; never erase that text.
 		const cleared = this.textRevision === textRevision;
+		let revision = this.draftRevision;
 		if (cleared) {
-			this.setInputValue("");
-			if (this.isDisposed || lifecycle.aborted || !this.visible) return;
-			this.setReferenceState([]);
-			this.pasteTarget.addAttachments(draft.attachments.filter(context => context.kind === 'toolSelection'));
+			this.inputChanges.pause();
+			try {
+				this.setInputValue("");
+				if (this.isDisposed || lifecycle.aborted || !this.visible) return;
+				this.setReferenceState([]);
+				this.pasteTarget.addAttachments(draft.attachments.filter(context => context.kind === 'toolSelection'));
+				// A consumer can start a new draft as soon as the completed clear is published.
+				// Its edits must fall outside the revision owned by this request's recovery.
+				revision = this.draftRevision;
+			} finally {
+				if (!this.isDisposed) this.inputChanges.resume();
+			}
 		}
-		const revision = this.draftRevision;
 		this.renderToolbar();
 		try {
 			// Clearing the editor notifies owners synchronously and can retire this submission.
@@ -741,14 +775,15 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const intent = parseSlashCommandInput(value ?? this.commandText(), this.slashCommands);
 		// Local product settings must remain available while the model catalog is loading.
 		const localCommand = intent.kind === 'command' && intent.binding.origin === 'local';
-		if (this.submitting || this.state.phase === 'submitting' || ((this.state.inputBlocked || this.state.phase === 'loading') && !localCommand)) return;
+		if (this.submitting || this.isSubmissionBlocked(localCommand)) return;
 		if (value !== undefined) {
 			const tools = this.contexts.filter(context => context.kind === 'toolSelection');
 			this.setInputValue(value);
 			this.pasteTarget.addAttachments(tools);
 			this.setReferenceState(this.inlineContext.getInputState());
 		}
-		if (!this.commandText().trim() && !this.attachmentModel.hasPendingContext && !this.contexts.some(attachment => attachment.kind !== 'toolSelection')) return;
+		// Interim speech is not part of the draft until stopping flushes the transcript.
+		if (!this.dictationSession.isActive && !this.commandText().trim() && !this.attachmentModel.hasPendingContext && !this.contexts.some(attachment => attachment.kind !== 'toolSelection')) return;
 		const lifecycle = this.inputLifecycle.signal;
 		this.submitting = true;
 		this.renderToolbar();
@@ -773,8 +808,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				? [...new Map([...draft.attachments, ...await this.attachmentModel.resolvePendingContext()].map(attachment => [attachment.id, attachment])).values()] : draft.attachments;
 			if (this.isDisposed || lifecycle.aborted || !this.visible) return;
 			const localCommand = input.kind === 'command' && input.binding.origin === 'local';
-			const currentState = this.state;
-			if (currentState.phase === 'submitting' || (currentState.phase === 'loading' && !localCommand)) return;
+			// Preparation can outlast the permission to send. Recheck before consuming the draft or recording history.
+			if (this.isSubmissionBlocked(localCommand)) return;
 			if (!this.commandText(draft.text, contexts).trim() && !contexts.some(attachment => attachment.kind !== 'toolSelection')) return;
 			if (input.kind === "command" && input.binding.origin === "local") {
 				const invocation = { commandId: input.binding.actionId, argumentsText: input.argumentsText };
@@ -984,6 +1019,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		return text.trim();
 	}
 
+	private isSubmissionBlocked(localCommand: boolean): boolean {
+		return this.state.phase === 'submitting' || (!localCommand && (this.state.inputBlocked === true || this.state.phase === 'loading'));
+	}
+
 	private renderToolbar(): void {
 		const input = parseSlashCommandInput(this.commandText(), this.slashCommands);
 		const canSubmitIntent = input.kind === "message" ? input.text.trim().length > 0 || this.attachmentModel.hasPendingContext || this.contexts.some(attachment => attachment.kind !== 'toolSelection') : true;
@@ -993,7 +1032,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			voiceActive: this.delegate.voiceConversation?.isActive === true,
 			voiceConnected: this.delegate.voiceConversation?.isConnected === true,
 			mode: this.mode,
-			canSubmit: canSubmitIntent && !this.submitting && this.state.phase !== 'submitting' && (localCommand || !this.state.inputBlocked && (this.state.phase === 'ready' || this.state.phase === 'error')),
+			canSubmit: canSubmitIntent && !this.submitting && !this.isSubmissionBlocked(localCommand),
 			hasInput: canSubmitIntent,
 			canInterrupt: this.state.canInterrupt,
 			inputKind: input.kind === "message" ? "message" : "command",
@@ -1087,31 +1126,39 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				},
 			);
 		const micAction = this.dictationSession.action;
-		let sendAction: ChatInputAction;
-		if (this.toolbarState.hasInput) {
-			const tooltip = this.toolbarState.inputKind === "command" ? "Run command" : "Send message";
-			sendAction = new ChatInputAction("ash.chat.input.send", "Send", tooltip, Lxicon.arrowUp, this.toolbarState.canSubmit, "send", () => this.inputContainer.requestSubmit());
-		} else {
-			const voice = this.delegate.voiceConversation;
-			const label = voice?.isActive ? localize('chat.voice.stop', 'Stop voice conversation') : localize('chat.input.voice', 'Voice conversation');
-			sendAction = new ChatInputAction("ash.chat.input.voice", label, voice?.isAvailable || voice?.isActive ? label : localize('chat.input.voiceUnavailable', 'Voice conversation is unavailable'), Lxicon.voiceMode, voice?.isAvailable === true || voice?.isActive === true, "voice", () => voice?.toggle());
+		const trailingActions: ChatInputAction[] = [];
+		if (!this.inlineActionsToolbar) {
+			if (this.toolbarState.hasInput) {
+				const label = localize('chat.input.send', 'Send');
+				const tooltip = this.toolbarState.inputKind === "command" ? localize('chat.input.runCommand', 'Run command') : localize('chat.input.sendMessage', 'Send message');
+				trailingActions.push(new ChatInputAction("ash.chat.input.send", label, tooltip, Lxicon.arrowUp, this.toolbarState.canSubmit, "send", () => this.inputContainer.requestSubmit()));
+			} else {
+				const voice = this.delegate.voiceConversation;
+				const label = voice?.isActive ? localize('chat.voice.stop', 'Stop voice conversation') : localize('chat.input.voice', 'Voice conversation');
+				trailingActions.push(new ChatInputAction("ash.chat.input.voice", label, voice?.isAvailable || voice?.isActive ? label : localize('chat.input.voiceUnavailable', 'Voice conversation is unavailable'), Lxicon.voiceMode, voice?.isAvailable === true || voice?.isActive === true, "voice", () => voice?.toggle()));
+			}
 		}
-		const trailingActions = this.toolbarState.canInterrupt
-			? [
-				sendAction,
-				new ChatInputAction("ash.chat.input.interrupt", "Stop", "Stop response", Lxicon.close, true, "interrupt", () => void this.delegate.interrupt()),
-			]
-			: [sendAction];
+		if (this.toolbarState.canInterrupt) {
+			const label = localize('chat.input.stopTask', 'Stop task');
+			trailingActions.push(new ChatInputAction("ash.chat.input.interrupt", label, label, this.inlineActionsToolbar ? Lxicon.stopCircle : Lxicon.close, true, this.inlineActionsToolbar ? "mic" : "interrupt", () => void this.delegate.interrupt()));
+		}
 		if (this.delegate.voiceConversation?.isActive) {
-			if (this.toolbarState.hasInput) trailingActions.push(new ChatInputAction('ash.chat.input.voiceStop', localize('chat.voice.stop', 'Stop voice conversation'), localize('chat.voice.stop', 'Stop voice conversation'), Lxicon.voiceMode, true, 'voice', () => this.delegate.voiceConversation?.toggle()));
-			trailingActions.push(new ChatInputAction('ash.chat.input.voiceInterrupt', localize('chat.voice.interrupt', 'Interrupt voice reply'), localize('chat.voice.interrupt', 'Interrupt voice reply'), Lxicon.close, this.toolbarState.voiceConnected, 'voice', () => this.delegate.voiceConversation?.interrupt()));
+			if (this.inlineActionsToolbar) {
+				if (!this.toolbarState.canInterrupt) trailingActions.push(new ChatInputAction('ash.chat.input.voiceStop', localize('chat.voice.stop', 'Stop voice conversation'), localize('chat.voice.stop', 'Stop voice conversation'), Lxicon.stopCircle, true, 'mic', () => this.delegate.voiceConversation?.toggle()));
+			} else {
+				if (this.toolbarState.hasInput) trailingActions.push(new ChatInputAction('ash.chat.input.voiceStop', localize('chat.voice.stop', 'Stop voice conversation'), localize('chat.voice.stop', 'Stop voice conversation'), Lxicon.voiceMode, true, 'voice', () => this.delegate.voiceConversation?.toggle()));
+				trailingActions.push(new ChatInputAction('ash.chat.input.voiceInterrupt', localize('chat.voice.interrupt', 'Interrupt voice reply'), localize('chat.voice.interrupt', 'Interrupt voice reply'), Lxicon.close, this.toolbarState.voiceConnected, 'voice', () => this.delegate.voiceConversation?.interrupt()));
+			}
 		}
 		// Localized getters must be evaluated for each presentation; ActionBar retains identical action objects.
 		const additionalActions = this.additionalActions.filter(action => action.id !== 'ash.chat.input.attach').map(action => ({ ...action, run: (...args: readonly unknown[]) => action.run(...args) }));
-		if (!this.secondaryToolbarContainer) additionalActions.unshift(this.attachAction);
+		if (!this.secondaryToolbarContainer && !this.attachmentToolbar) additionalActions.unshift(this.attachAction);
 		const modeActions = modeAction ? [modeAction] : [];
-		const inputActions = this.toolbarState.inputKind === "command" ? modeActions : [...additionalActions, ...modeActions, this.modelAction, ...(this.dictationSession.showButton ? [micAction] : [])];
-		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
+		const dictationActions = this.dictationSession.showButton ? [micAction] : [];
+		const inputActions = this.toolbarState.inputKind === "command" ? modeActions : [...additionalActions, ...modeActions, this.modelAction, ...(this.inlineActionsToolbar ? [] : dictationActions)];
+		this.attachmentToolbar?.setActions([this.attachAction]);
+		this.inlineActionsToolbar?.setActions(trailingActions.length > 0 ? trailingActions : dictationActions);
+		this.inputToolbar.setActions(this.inlineActionsToolbar ? inputActions : [...inputActions, ...trailingActions]);
 		this.modelPickerPresentationChanged.fire();
 		this.pickerResponsiveLayout.layout();
 	}
@@ -1126,6 +1173,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		try { await this.dictationSession.stop(); }
 		catch (error) {
 			if (!this.isDisposed) { this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', String(error))); }
+			throw error;
 		}
 	}
 
@@ -1212,16 +1260,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	private renderFooter(): void {
 		if (!this.footerContextToolbar || !this.footerContextAction) return;
-		const hasUsage = this.state.contextUsage !== undefined;
-		this.footerContextToolbar.setActions(hasUsage ? [this.footerContextAction] : []);
-		if (hasUsage) {
-			this.contextUsageWidget?.update(this.state.contextUsage);
+		const showWhenEmpty = this.options.layout === 'compact';
+		const showMeter = showWhenEmpty || this.state.contextUsage !== undefined;
+		this.footerContextToolbar.setActions(showMeter ? [this.footerContextAction] : []);
+		if (showMeter) {
+			this.contextUsageWidget?.update(this.state.contextUsage, showWhenEmpty);
 			if (!this.visible) this.contextUsageWidget?.hide();
 		} else {
 			this.contextUsageWidget = undefined;
 		}
-		this.footerContextToolbar.element.hidden = !hasUsage;
-		this.footerContextToolbar.element.classList.toggle('empty', !hasUsage);
+		this.footerContextToolbar.element.hidden = !showMeter;
+		this.footerContextToolbar.element.classList.toggle('empty', !showMeter);
 		this.status.title = this.status.textContent ?? '';
 		this.footerChanged.fire();
 	}

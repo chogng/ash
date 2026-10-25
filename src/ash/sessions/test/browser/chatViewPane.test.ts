@@ -903,7 +903,7 @@ class SessionsInputForTest extends NewChatInputWidget {
 	}
 }
 
-async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () => { }, stored?: string) {
+async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () => { }, stored?: string, interrupt: ChatInputDelegate['interrupt'] = async () => { }) {
 	const resources = new DisposableStore();
 	try {
 		const fake = fakeApi({ sessions: [] });
@@ -916,6 +916,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		const contextView = resources.add(new BrowserContextViewService(document.body));
 		const parentServices = resources.add(createInputServices(contextView, chat));
 		const services = resources.add(parentServices.createChild());
+		services.registerInstance(ISessionsManagementService, sessions);
 		const storage = resources.add(createTestStorage());
 		const notices = resources.add(new TestNotificationService());
 		services.registerInstance(IStorageService, storage);
@@ -929,7 +930,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		const identity = `untitled:${draft.untitledSessionId}`;
 		if (stored !== undefined) storage.store(`sessions.inputDraft:${identity}`, stored, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const delegate: ChatInputDelegate = {
-			send, executeCommand: async () => { }, executeServerCommand: async () => { }, interrupt: async () => { },
+			send, executeCommand: async () => { }, executeServerCommand: async () => { }, interrupt,
 			selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
 			listAgents: async () => [], selectAgent: () => { }, selectMode: mode => model.selectMode(mode),
 			openModelSettings: async () => { }, resolveInteraction: async () => { },
@@ -993,8 +994,62 @@ test('Cowork composer submits the exact Skill reference through the shared input
 	assert.deepEqual(submissions, [{ text: '$commit staged changes', skills: [skill] }]);
 });
 
-test('Sessions custom composer footer displays and clears the shared context budget', async () => {
-	using fixture = await sessionsInputFixture();
+for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with Enter and replaces dictation with Stop task in ${locale}`, async () => {
+	initializeTestLocalization(locale);
+	try {
+		const sent: string[] = [];
+		let interrupted = 0;
+		using fixture = await sessionsInputFixture(async text => { sent.push(text); }, undefined, async () => { interrupted++; });
+		const form = fixture.input.element.querySelector('.ash-chat-input-container')!;
+		const footer = fixture.input.element.querySelector('.ash-sessions-chat-input-footer')!;
+		assert.ok(form.querySelector('[data-action-id="ash.chat.input.attach"]'));
+		const microphone = form.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!;
+		assert.ok(microphone);
+		assert.equal(microphone.getAttribute('aria-label'), locale === 'en' ? 'Dictate message' : '听写');
+		assert.equal(form.querySelector('[data-action-id="ash.chat.input.model"]'), null);
+		assert.ok(footer.querySelector('[data-action-id="ash.chat.input.model"]'));
+		assert.equal(footer.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		assert.equal(form.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		fixture.input.appendToDraft('Keep this text');
+		assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep this text');
+		assert.deepEqual(sent, []);
+		assert.equal(form.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		const ring = footer.querySelector<HTMLButtonElement>('.ash-chat-context-usage-button')!;
+		assert.equal(ring.hidden, false);
+		assert.equal(ring.disabled, true);
+		assert.ok(footer.lastElementChild!.contains(ring));
+		assert.equal(ring.getAttribute('aria-label'), locale === 'en' ? 'Context usage is not available yet' : '暂无上下文用量数据');
+		fixture.input.focus();
+		const help = new SessionsChatAccessibilityHelp(fixture.input.element, () => fixture.input.focus()).getProvider()!;
+		assert.match(help.provideContent(), locale === 'en' ? /Dictation inserts editable text without sending it/u : /不会自动发送/u);
+		const editor = form.querySelector('.stanza-editor-input')!;
+		editor.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true }));
+		assert.deepEqual(sent, []);
+		editor.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		await waitFor(() => sent.length === 1);
+		assert.deepEqual(sent, ['Keep this text']);
+
+		fixture.input.appendToDraft('Keep the next draft');
+		fixture.input.render({ ...fixture.model.inputState, canInterrupt: true });
+		const stop = form.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.interrupt"] button')!;
+		assert.equal(stop.getAttribute('aria-label'), locale === 'en' ? 'Stop task' : '停止任务');
+		assert.ok(stop.querySelector('.ash-icon-stop-circle'));
+		assert.equal(form.querySelector('[data-action-id="workbench.action.chat.toggleSpeechToText"]'), null);
+		assert.equal(form.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		stop.click();
+		assert.equal(interrupted, 1);
+		assert.deepEqual(sent, ['Keep this text']);
+		assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep the next draft');
+		fixture.input.render({ ...fixture.model.inputState, canInterrupt: false });
+		assert.equal(form.querySelector('[data-action-id="ash.chat.input.interrupt"]'), null);
+		assert.ok(form.querySelector('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-icon-mic'));
+	} finally { initializeTestLocalization('en'); }
+});
+
+test('Sessions custom composer context ring opens details without sending and stays visible when usage clears', async () => {
+	const sent: string[] = [];
+	using fixture = await sessionsInputFixture(async text => { sent.push(text); });
+	fixture.input.appendToDraft('Keep the draft while inspecting context');
 	const state = fixture.model.inputState;
 	fixture.input.render({
 		...state, contextUsage: {
@@ -1008,8 +1063,19 @@ test('Sessions custom composer footer displays and clears the shared context bud
 	assert.equal(ring.disabled, false);
 	assert.equal(ring.getAttribute('aria-label'), 'Context budget: 100%, estimated input 800 of 800 tokens');
 	assert.equal(fixture.input.element.querySelectorAll('.ash-chat-context-usage-button').length, 1);
+	ring.click();
+	assert.equal(ring.getAttribute('aria-expanded'), 'true');
+	const details = document.querySelector('.ash-chat-context-details')!;
+	assert.match(details.textContent!, /Model context capacity: 1,000 tokens/u);
+	assert.deepEqual(sent, []);
+	assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep the draft while inspecting context');
 	fixture.input.render(state);
-	assert.equal(fixture.input.element.querySelector('.ash-chat-context-usage-button'), null);
+	assert.equal(fixture.input.element.querySelector('.ash-chat-context-usage-button'), ring);
+	assert.equal(ring.hidden, false);
+	assert.equal(ring.disabled, true);
+	assert.equal(ring.getAttribute('aria-expanded'), 'false');
+	assert.equal(details.isConnected, false);
+	assert.equal(ring.querySelector('.ash-chat-context-usage-value')!.getAttribute('stroke-dasharray'), '0 100');
 });
 
 test('Sessions composer forwards its original submission lifetime to the owning widget', async () => {
@@ -1029,7 +1095,7 @@ test('Sessions composer does not submit when clearing the old input synchronousl
 	using transition = fixture.input.retireWhenInputChanges();
 	await fixture.input.acceptInput();
 	assert.equal(sends, 0);
-	assert.equal(fixture.input.element.querySelector<HTMLHeadingElement>('.ash-sessions-chat-welcome-heading')!.hidden, false);
+	assert.equal(fixture.input.element.classList.contains('has-conversation'), false);
 });
 
 test('an old Sessions submission failure cannot hide the new submission or replace its unsent text', async () => {
@@ -1043,12 +1109,11 @@ test('an old Sessions submission failure cannot hide the new submission or repla
 	const newSending = fixture.input.acceptInput('New request');
 	await waitFor(() => sends === 2);
 	fixture.input.appendToDraft('Keep the new unsent text');
-	const heading = fixture.input.element.querySelector<HTMLHeadingElement>('.ash-sessions-chat-welcome-heading')!;
-	assert.equal(heading.hidden, true);
+	assert.equal(fixture.input.element.classList.contains('has-conversation'), true);
 	const oldFailure = assert.rejects(oldSending, /Old request failed/u);
 	await oldResult.error(new Error('Old request failed'));
 	await oldFailure;
-	assert.equal(heading.hidden, true);
+	assert.equal(fixture.input.element.classList.contains('has-conversation'), true);
 	assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep the new unsent text');
 	await newResult.complete();
 	await newSending;
@@ -1207,8 +1272,7 @@ test('sending from one session preserves a later draft during first-session crea
 	);
 	widget.setVisible(true);
 	const input = widget.element.querySelector<HTMLElement>('.ash-chat-input-part');
-	const heading = widget.element.querySelector<HTMLHeadingElement>('.ash-sessions-chat-welcome-heading');
-	assert.equal(heading?.hidden, false);
+	assert.equal(input?.classList.contains('has-conversation'), false);
 	assert.equal(input?.classList.contains('chat-composer'), true);
 	const welcomeTip = input?.querySelector('.ash-chat-input-tip');
 	assert.ok(welcomeTip);
@@ -1232,7 +1296,6 @@ test('sending from one session preserves a later draft during first-session crea
 	const restoredChatDraft = { ...chatDraft, text: 'Keep my Chat draft chat.txt ', contexts: chatDraft.contexts.map(context => ({ ...context, reference: { start: 19, end: 27 } })) };
 	await attachment.complete({ name: 'code.ts', content: 'Code context' });
 	await sending;
-	assert.equal(heading?.hidden, true);
 	assert.equal(input?.classList.contains('has-conversation'), true);
 	assert.equal(widget.element.querySelector('.ash-chat-input-part'), input);
 	assert.equal(widget.sessionId, 'session-1');

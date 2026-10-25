@@ -33,6 +33,9 @@ import { IEditorService } from '../../../../../services/editor/common/editorServ
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import { CopyPasteController } from '../../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
 import { MouseTargetType } from '../../../../../../editor/browser/editorBrowser.js';
+import { PlaceholderTextContribution } from '../../../../../../editor/contrib/placeholderText/browser/placeholderTextContribution.js';
+import { EditorContributionInstantiation } from '../../../../../../editor/browser/editorExtensions.js';
+import '../../../../../../editor/contrib/placeholderText/browser/placeholderText.css';
 
 const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 // The input container owns the inset; editor heights exclude it to avoid applying it twice.
@@ -82,7 +85,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			createChatSkillCompletionProvider(options.skills),
 		];
 		// Keep basic text commands alongside Chat features; unrelated editor features add work to every Chat tab.
-		const contributionIds = [EditorCoreCommandId.selectAll, 'editor.contrib.codeServices', 'editor.contrib.placeholderText', 'editor.contrib.suggestController', 'editor.contrib.hover', CopyPasteController.ID];
+		const contributionIds = [EditorCoreCommandId.selectAll, 'editor.contrib.codeServices', 'editor.contrib.suggestController', 'editor.contrib.hover', CopyPasteController.ID];
 		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
 			container: this.element,
 			model: this.model,
@@ -99,6 +102,8 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			lineWrapping: EditorLineWrapping.On,
 			tabFocusMode: this.tabFocusMode,
 			contributionIds,
+			// Plain-text hosts do not activate the full editor feature package.
+			contributions: [{ id: PlaceholderTextContribution.ID, ctor: PlaceholderTextContribution, instantiation: EditorContributionInstantiation.Eager }],
 			completionProviders,
 			completionWidgetContainer: this.element,
 		}));

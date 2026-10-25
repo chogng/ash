@@ -287,6 +287,30 @@
 	flex: 1 1 auto;
 }
 
+.ash-chat-input-part.compact > .ash-chat-input-container {
+	flex-direction: row;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-chat-input-inline-toolbar.ash-toolbar {
+	flex: 0 0 auto;
+	align-self: flex-end;
+	width: auto;
+	margin-top: 0;
+}
+
+.ash-chat-input-footer {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+}
+
+.ash-chat-input-footer > .ash-chat-input-toolbars {
+	flex: 1 1 auto;
+	margin-top: 0;
+}
+
 .ash-chat-input-part .ash-chat-input-tip {
 	display: flex;
 	align-items: flex-start;

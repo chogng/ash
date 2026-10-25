@@ -107,7 +107,7 @@ import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/
 import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
-import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
+import { createTestDictationBackend, installTestDictationAudio, registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { bindTestColorTheme } from './themeFixture.js';
@@ -127,7 +127,15 @@ import { HoverService, IHoverService } from '../../../src/ash/platform/hover/bro
 import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDelegate.js';
 
 declare global {
-	interface Window { ashChatInputIntegration: { finishPaste(): Promise<void>; dropState(): { text: string; pending: boolean; reads: readonly string[]; }; setDropSourceText(text: string): void; releaseDropRead(): void; replaceDropDraft(): void; inputSelection(): { anchor: number; active: number; }; changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; addDeferredContext(content: string): void; releaseReferencePreview(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseContextSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
+	interface Window { ashChatInputIntegration: {
+		dictationState(): { stops: number; errors: string[]; };
+		emitDictation(text: string, final: boolean): void;
+		finishDictation(text: string, error?: string): void;
+		setInputBlocked(blocked: boolean): void;
+		finishSubmission(error?: string): void;
+		replaceDraftOnClear(): void;
+		recoveryState(): { pending: boolean; drafts: NonNullable<Parameters<ChatInputPart['restoreDraft']>[0]>[]; };
+		finishPaste(): Promise<void>; dropState(): { text: string; pending: boolean; reads: readonly string[]; }; setDropSourceText(text: string): void; releaseDropRead(): void; replaceDropDraft(): void; inputSelection(): { anchor: number; active: number; }; changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; addDeferredContext(content: string): void; releaseReferencePreview(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseContextSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -389,7 +397,28 @@ services.registerInstance(ILanguageModelsService, {
 	discoverProviderModels: async () => [],
 } satisfies ILanguageModelsService);
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
-services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
+let dictationStops = 0;
+let emitDictation: ((text: string, final: boolean) => void) | undefined;
+let finishDictation: ((result: { text: string; error?: string; }) => void) | undefined;
+const dictationFixture = new URLSearchParams(location.search).has('dictation');
+if (dictationFixture) {
+	resources.add(installTestDictationAudio(window));
+	await services.get(IConfigurationService).updateValue('dictation.backend', 'cloud');
+}
+services.registerInstance(IVoiceCodeTranscriptionBackendService, dictationFixture ? createTestDictationBackend(resources, {
+	start: async (_options, transcript) => {
+		emitDictation = transcript;
+		return {
+			stop: async () => {
+				dictationStops++;
+				const result = await new Promise<{ text: string; error?: string; }>(resolve => { finishDictation = resolve; });
+				if (result.error) throw new Error(result.error);
+				transcript(result.text, true);
+			},
+			cancel: async () => { finishDictation?.({ text: '' }); },
+		};
+	},
+}) : undefined);
 services.registerSingleton(IImageEditorService, () => services.createInstance(BrowserImageEditorService));
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
@@ -587,10 +616,22 @@ if (new URLSearchParams(location.search).has('contextHover') || new URLSearchPar
 
 let workspaceChangesReads = 0;
 let releaseWorkspaceChanges: ((changes: ChatInputState['changes']) => void) | undefined;
+let holdNextSubmission = new URLSearchParams(location.search).has('holdSubmission');
+let finishSubmission: ((error?: string) => void) | undefined;
 const delegate: ChatInputDelegate = {
 	send: async (_text, _mode, _skills, contexts) => {
 		historySubmissions.push({ text: _text, skills: _skills });
 		submission.textContent = JSON.stringify(await Promise.all((contexts ?? []).map(context => context.resolve())));
+		if (holdNextSubmission) {
+			holdNextSubmission = false;
+			await new Promise<void>((resolve, reject) => {
+				finishSubmission = error => {
+					finishSubmission = undefined;
+					if (error) reject(new Error(error));
+					else resolve();
+				};
+			});
+		}
 		if (new URLSearchParams(location.search).has('sendFailure')) { throw new Error('Send failed'); }
 	}, executeCommand: async invocation => { recordDestination({ command: invocation.commandId }); }, executeServerCommand: async () => { }, interrupt: async () => { },
 	openChanges: async () => { recordDestination({ changes: true }); },
@@ -624,6 +665,7 @@ const editorProvider = inlineCode ? { create: (options: Parameters<typeof ChatIn
 const snapshotFixture = new URLSearchParams(location.search).has('screenshotFixture') ? await startSnapshotFixture(services, resources) : undefined;
 
 const part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { contextMenuStyle: 'custom', showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
+	layout: new URLSearchParams(location.search).has('compact') ? 'compact' : undefined,
 	modePicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
 	renderSecondaryToolbar: !cowork,
@@ -767,8 +809,30 @@ function renderModels(): void {
 	part.render({ ...state, interaction: undefined });
 }
 part.render(state);
+let replaceDraftOnClear = false;
+const recoveryDrafts: Parameters<ChatInputPart['restoreDraft']>[0][] = [];
+if (new URLSearchParams(location.search).has('holdSubmission')) {
+	part.bindDraftStorage({ threadId: 'recovery-fixture', onDidChange: Event.None } as Parameters<ChatInputPart['bindDraftStorage']>[0], {
+		read: () => undefined,
+		write: (_identity, draft) => {
+			if (draft) recoveryDrafts.push(draft);
+			if (!replaceDraftOnClear || draft?.text !== '') return;
+			replaceDraftOnClear = false;
+			part.appendToDraft('Next request');
+			part.addContext({ id: 'next-capture', kind: 'file', name: 'next.txt', resolve: async () => ({ name: 'next.txt', content: 'Next captured content' }) });
+		},
+		flush: async () => { },
+	}, Event.None);
+}
 let releaseReferencePreview: (() => void) | undefined;
 window.ashChatInputIntegration = {
+	finishSubmission: error => finishSubmission?.(error),
+	replaceDraftOnClear: () => { replaceDraftOnClear = true; },
+	recoveryState: () => ({ pending: finishSubmission !== undefined, drafts: recoveryDrafts }),
+	setInputBlocked: inputBlocked => { state = { ...state, inputBlocked }; part.render(state); },
+	dictationState: () => ({ stops: dictationStops, errors: notifications.model.getNotifications().map(item => item.message) }),
+	emitDictation: (text, final) => emitDictation?.(text, final),
+	finishDictation: (text, error) => finishDictation?.({ text, error }),
 	finishPaste: () => CopyPasteController.get(inlineEditor!.codeEditor)!.finishedPaste(),
 	inputSelection: () => inlineEditor!.getSelection(),
 	changeTools: () => { toolsChanged = true; toolCatalogChanges.fire(); },
