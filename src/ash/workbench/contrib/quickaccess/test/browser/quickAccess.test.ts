@@ -4,6 +4,121 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 
 suite('quickAccess browser component', () => {
 	const browserTests = useBrowserTests();
+
+	test('Quick Input releases an interrupted drag when the picker closes', async () => {
+		const { page } = browserTests;
+		await page.goto('/quickAccess.html');
+		const trigger = page.getByRole('button', { name: 'Open files' });
+		await trigger.click();
+		const picker = page.getByRole('dialog');
+		const initial = (await picker.boundingBox())!;
+		await page.mouse.move(initial.x + 3, initial.y + 3);
+		await page.mouse.down();
+		await page.mouse.move(initial.x + 103, initial.y + 93);
+		await picker.getByRole('combobox').press('Escape');
+		await page.mouse.move(initial.x + 150, initial.y + 150);
+		await page.mouse.up();
+		await trigger.click();
+		expect(await picker.boundingBox()).toEqual(initial);
+	});
+
+	for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', theme: 'dark' }, { locale: 'en', theme: 'hc' }]) {
+		test(`Quick Input drags, snaps, restores and resets without changing appearance (${variant.locale}, ${variant.theme})`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/quickAccess.html?${new URLSearchParams(variant)}`);
+			const trigger = page.getByRole('button', { name: 'Open files' });
+			await trigger.click();
+			const picker = page.getByRole('dialog');
+			const input = picker.getByRole('combobox');
+			const initial = (await picker.boundingBox())!;
+			const appearance = () => picker.evaluate(element => {
+				const style = getComputedStyle(element);
+				return [style.width, style.fontSize, style.border, style.borderRadius, style.backgroundColor, style.boxShadow];
+			});
+			const originalAppearance = await appearance();
+			const drag = async (left: number, top: number): Promise<void> => {
+				const bounds = (await picker.boundingBox())!;
+				await page.mouse.move(bounds.x + 3, bounds.y + 3);
+				await page.mouse.down();
+				await page.mouse.move(left + 3, top + 3, { steps: 8 });
+				await page.mouse.up();
+			};
+			await drag(initial.x + 130, 85);
+			await expect.poll(async () => Math.round((await picker.boundingBox())!.x)).toBe(Math.round(initial.x + 130));
+			await expect.poll(async () => Math.round((await picker.boundingBox())!.y)).toBe(85);
+			await expect(input).toBeFocused();
+			expect(await appearance()).toEqual(originalAppearance);
+			await input.press('Escape');
+			await trigger.click();
+			expect(Math.round((await picker.boundingBox())!.y)).toBe(85);
+			// Reload destroys the service/controller and restores through the storage adapter.
+			await page.reload();
+			await trigger.click();
+			expect(Math.round((await picker.boundingBox())!.y)).toBe(85);
+			expect(Math.round((await picker.boundingBox())!.x)).toBe(Math.round(initial.x + 130));
+			await drag(initial.x + 12, 190);
+			await expect.poll(async () => Math.round((await picker.boundingBox())!.x)).toBe(Math.round(initial.x));
+			await expect.poll(async () => Math.round((await picker.boundingBox())!.y)).toBe(180);
+			await page.setViewportSize({ width: 1000, height: 800 });
+			await expect.poll(async () => Math.round((await picker.boundingBox())!.y)).toBe(200);
+			await expect.poll(async () => Math.round((await picker.boundingBox())!.x)).toBe(200);
+			// Clamp both axes even when the pointer leaves the surface's valid range.
+			await drag(-100, 1000);
+			const clamped = (await picker.boundingBox())!;
+			expect(clamped.x).toBe(0);
+			expect(clamped.y + clamped.height).toBeLessThanOrEqual(801);
+			await page.mouse.dblclick(clamped.x + 3, clamped.y + 3);
+			await expect.poll(async () => Math.round((await picker.boundingBox())!.y)).toBe(Math.round(initial.y));
+			await page.reload();
+			await trigger.click();
+			expect(Math.round((await picker.boundingBox())!.y)).toBe(Math.round(initial.y));
+			await picker.screenshot({ path: browserTests.info.outputPath('quick-input-reset.png') });
+		});
+	}
+
+	test('Quick Input keeps text selection, actions and anchored pickers independent of dragging', async () => {
+		const { page } = browserTests;
+		await page.goto('/quickAccess.html');
+		await page.getByRole('button', { name: 'Open files' }).click();
+		const picker = page.getByRole('dialog');
+		const input = picker.getByRole('combobox');
+		await input.fill('file-12');
+		const initial = await picker.boundingBox();
+		await input.dblclick();
+		expect(await input.evaluate(element => (element as HTMLInputElement).selectionEnd! - (element as HTMLInputElement).selectionStart!)).toBeGreaterThan(0);
+		expect(await picker.boundingBox()).toEqual(initial);
+		const selection = () => input.evaluate(element => [(element as HTMLInputElement).selectionStart, (element as HTMLInputElement).selectionEnd]);
+		const selectedWord = await selection();
+		await page.mouse.move(initial!.x + 3, initial!.y + 3);
+		await page.mouse.down();
+		await page.mouse.move(initial!.x + 103, initial!.y + 93, { steps: 8 });
+		await page.mouse.up();
+		expect(await selection()).toEqual(selectedWord);
+		await picker.getByRole('button', { name: 'Clear input' }).click();
+		await expect(input).toHaveValue('');
+		await expect(input).toBeFocused();
+		await page.evaluate(() => window.ashQuickAccessIntegration.align('center'));
+		await expect.poll(async () => Math.round((await picker.boundingBox())!.y)).toBe(180);
+		await input.press('Escape');
+		await page.evaluate(() => window.ashQuickAccessIntegration.showAnchored());
+		const anchored = (await picker.boundingBox())!;
+		// Dispatch the drag stream without the native blur that dismisses anchored surfaces.
+		await picker.locator('.ash-quick-pick-input').dispatchEvent('mousedown', { button: 0, clientX: anchored.x + 3, clientY: anchored.y + 3 });
+		await page.evaluate(bounds => {
+			window.dispatchEvent(new MouseEvent('mousemove', { buttons: 1, clientX: bounds.x + 90, clientY: bounds.y + 90 }));
+			window.dispatchEvent(new MouseEvent('mouseup'));
+		}, anchored);
+		expect(await picker.boundingBox()).toEqual(anchored);
+		await picker.locator('.ash-quick-pick-input').dispatchEvent('dblclick', { button: 0 });
+		await page.evaluate(() => window.ashQuickAccessIntegration.align('top'));
+		expect(await picker.boundingBox()).toEqual(anchored);
+		await input.press('Escape');
+		await page.evaluate(() => window.ashQuickAccessIntegration.showInput());
+		await expect.poll(async () => Math.round((await picker.boundingBox())!.y)).toBe(180);
+		await page.evaluate(() => window.ashQuickAccessIntegration.align('top'));
+		await expect.poll(async () => Math.round((await picker.boundingBox())!.y)).toBe(8);
+		await picker.getByRole('textbox').press('Escape');
+	});
 	test('Quick Access virtualizes single-line results while retaining keyboard and ARIA positions', async function () {
 		const { page } = browserTests;
 		await page.goto('/quickAccess.html?singleLineRows');

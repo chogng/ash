@@ -20,7 +20,7 @@ import { AppServerProtocolIncompatibleError } from '../../../../../platform/agen
 import { commandActionLabel } from '../../../../../platform/action/common/action.js';
 import { workspaceTrustPermissionNames } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { JSDOM } from 'jsdom';
-import { QuickInputController } from '../../../../../platform/quickinput/browser/quickInputController.js';
+import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { colorThemeSchemaId, registerColorThemeSchemas } from '../../../themes/common/colorThemeSchema.js';
 import '../../../../common/theme.js';
@@ -490,7 +490,9 @@ suite('Workbench localization', () => {
 		try {
 			await localization.whenReady;
 			initializeTestLocalization('zh-CN');
-			using controller = new QuickInputController(dom.window.document.body);
+			using controller = new TestQuickInputService({ container: dom.window.document.body });
+			assert.equal(localize('alignQuickInputTop', 'Align Quick Input Top'), '快速输入顶部对齐');
+			assert.equal(localize('alignQuickInputCenter', 'Align Quick Input Center'), '快速输入居中对齐');
 			using picker = controller.createQuickPick();
 			picker.show();
 			assert.equal(dom.window.document.querySelector('[role="dialog"]')?.getAttribute('aria-label'), '快速选择');

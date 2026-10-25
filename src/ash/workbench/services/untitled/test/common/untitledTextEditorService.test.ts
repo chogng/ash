@@ -338,6 +338,7 @@ class TestQuickInputService implements IQuickInputServiceContract {
 	readonly currentQuickInput = undefined;
 	focus = quickInputServiceTestControls.focus;
 	toggle = quickInputServiceTestControls.toggle;
+	setAlignment = quickInputServiceTestControls.setAlignment;
 	navigate = quickInputServiceTestControls.navigate;
 	accept = quickInputServiceTestControls.accept;
 	cancel = quickInputServiceTestControls.cancel;

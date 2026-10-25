@@ -65,6 +65,9 @@ import '../../../../../../base/browser/ui/inputbox/inputbox.css';
 declare global {
 	interface Window {
 		ashQuickAccessIntegration: {
+			align(alignment: 'top' | 'center'): void;
+			showAnchored(): void;
+			showInput(): void;
 			setNavigationBinding(mode: 'default' | 'rebound' | 'blocked'): void;
 			setHistoryLength(value: number): Promise<void>;
 			setSearchPatterns(include: string, exclude: string): Promise<void>;
@@ -375,6 +378,15 @@ resources.add(addDisposableListener(document.querySelector('#files')!, 'click', 
 }));
 const navigationBinding = resources.add(new MutableDisposable<DisposableStore>());
 window.ashQuickAccessIntegration = {
+	align: alignment => quickInput.setAlignment(alignment),
+	showAnchored: () => {
+		const picker = quickInput.createQuickPick();
+		picker.anchor = document.querySelector('#files')!;
+		picker.items = [{ label: 'Anchored result' }];
+		picker.onDidHide(() => picker.dispose());
+		picker.show();
+	},
+	showInput: () => { void quickInput.input({ title: 'Test prompt' }); },
 	writeShortcutBindings: async bindings => {
 		if (!writeShortcutBindings) throw new Error('Shortcut fixture is not enabled');
 		await writeShortcutBindings(bindings);

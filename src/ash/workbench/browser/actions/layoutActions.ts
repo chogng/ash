@@ -14,6 +14,21 @@ import { IViewsService } from '../../services/views/common/viewsService.js';
 import { ToggleSideBarCommandId } from '../parts/titlebar/titlebarActions.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
 
+for (const alignment of ['top', 'center'] as const) {
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({
+				id: alignment === 'top' ? 'workbench.action.alignQuickInputTop' : 'workbench.action.alignQuickInputCenter',
+				title: alignment === 'top' ? localize2('alignQuickInputTop', 'Align Quick Input Top') : localize2('alignQuickInputCenter', 'Align Quick Input Center'),
+				f1: true,
+			});
+		}
+		public override run(accessor: ServicesAccessor): void {
+			accessor.get(IQuickInputService).setAlignment(alignment);
+		}
+	});
+}
+
 async function selectItem<T extends IQuickPickItem>(quickInput: IQuickInputService, items: readonly T[], placeholder: string): Promise<T | undefined> {
 	using lifetime = new DisposableStore();
 	const picker = lifetime.add(quickInput.createQuickPick<T>());

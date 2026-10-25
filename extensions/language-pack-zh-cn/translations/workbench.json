@@ -1829,6 +1829,8 @@
     "quickAccess.fileSearchFailed": "无法搜索文件：{0}",
     "quickInput.searching": "正在搜索…",
     "quickInput.clearInput": "清空输入",
+    "alignQuickInputTop": "快速输入顶部对齐",
+    "alignQuickInputCenter": "快速输入居中对齐",
     "quickInput.itemActions": "“{0}”的操作",
     "modalEditor.close": "关闭{0}",
     "terminal.context.closed": "此终端已关闭",
