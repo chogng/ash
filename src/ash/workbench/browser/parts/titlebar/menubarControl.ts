@@ -1,5 +1,5 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import "./menubarControl.css";
+import "./media/menubarControl.css";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { ButtonActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { SubmenuAction, type IAction } from "../../../../base/common/actions.js";

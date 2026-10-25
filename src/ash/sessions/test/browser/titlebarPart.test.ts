@@ -26,7 +26,7 @@ import { Part } from '../../../workbench/browser/part.js';
 import { registerLayoutActions } from '../../browser/layoutActions.js';
 import { DesktopWorkbenchLayout } from '../../browser/desktopWorkbench.js';
 import { Menus } from '../../browser/menus.js';
-import { TitlebarPart } from '../../browser/parts/titlebar/titlebarPart.js';
+import { TitlebarPart } from '../../browser/parts/titlebarPart.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 
 class TestPart extends Part {

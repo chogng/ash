@@ -1,13 +1,13 @@
-import { IStorageService } from '../../../../platform/storage/common/storage.js';
-import { IThemeService } from '../../../../platform/theme/common/themeService.js';
-import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
-import { Direction } from '../../../../base/browser/ui/grid/grid.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { EditorPart as WorkbenchEditorPart, type IEditorPartOptions } from '../../../../workbench/browser/parts/editor/editorPart.js';
+import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../platform/theme/common/themeService.js';
+import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIdentity.js';
+import { Direction } from '../../../base/browser/ui/grid/grid.js';
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { EditorPart as WorkbenchEditorPart, type IEditorPartOptions } from '../../../workbench/browser/parts/editor/editorPart.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
-import { Emitter } from '../../../../base/common/event.js';
-import type { IEditorPane, IResourceEditorInput } from '../../../../workbench/common/editor.js';
-import type { EditorOpenOptions, EditorOpenTarget } from '../../../../workbench/services/editor/common/editorService.js';
+import { Emitter } from '../../../base/common/event.js';
+import type { IEditorPane, IResourceEditorInput } from '../../../workbench/common/editor.js';
+import type { EditorOpenOptions, EditorOpenTarget } from '../../../workbench/services/editor/common/editorService.js';
 
 /** Sessions keeps product pages alive independently of per-session document restoration. */
 export class EditorPart extends WorkbenchEditorPart {

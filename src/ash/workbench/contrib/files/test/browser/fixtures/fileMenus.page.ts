@@ -108,7 +108,7 @@ services.registerInstance(IContextViewService, views);
 const menus = lifetime.add(services.createInstance(BrowserContextMenuService));
 services.registerInstance(IContextMenuService, menus);
 if (new URLSearchParams(location.search).has('applicationMenu')) {
-	await import('../../../../../browser/parts/titlebar/titlebarpart.css');
+	await import('../../../../../browser/parts/titlebar/media/titlebarpart.css');
 	// Render controlled states through the production titlebar control and menu services.
 	// Real command dispatch and Workbench visibility remain covered by application smoke.
 	const rootMenu = new MenuId('integration.application');

@@ -233,7 +233,7 @@ import { IExtensionService } from '../../workbench/services/extensions/common/ex
 import { DiffService } from '../../workbench/services/diff/browser/diffService.js';
 import { IDiffService } from '../../workbench/services/diff/common/diffService.js';
 import { IEditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
-import { EditorPart } from './parts/editor/editorPart.js';
+import { EditorPart } from './parts/editorPart.js';
 import { BrowserEditorService } from '../../workbench/services/editor/browser/browserEditorService.js';
 import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
@@ -312,18 +312,18 @@ import { ISessionsManagementService } from "../services/sessions/common/sessions
 import { ISessionsService, SessionsService } from "../services/sessions/browser/sessionsService.js";
 import { ISessionsLayoutService } from '../services/layout/common/sessionsLayoutService.js';
 import { registerLayoutActions } from './layoutActions.js';
-import { PanelPart } from './parts/panel/panelPart.js';
+import { PanelPart } from './parts/panelPart.js';
 import { ITerminalProcessService } from '../../platform/terminal/common/terminal.js';
 import { installWorkbenchServiceContributions } from '../../workbench/browser/workbenchServiceContributions.js';
-import { AuxiliaryBarPart } from "./parts/auxiliarybar/auxiliaryBarPart.js";
+import { AuxiliaryBarPart } from "./parts/auxiliaryBarPart.js";
 import { disposableWindowTimeout } from '../../base/browser/scheduler.js';
 import { ActivityBar } from './parts/activitybar/activityBarPart.js';
 import type { PaneCompositePart } from '../../workbench/browser/parts/paneCompositePart.js';
 import { PaneCompositePartService } from '../../workbench/browser/parts/paneCompositePartService.js';
 import { IPaneCompositePartService } from '../../workbench/services/panecomposite/browser/panecomposite.js';
 import { SessionsPart, type SessionsPartOptions } from "./parts/sessionsPart.js";
-import { SidebarPart, registerSessionsNavigation } from "./parts/sidebar/sidebarPart.js";
-import { ISessionsTitlebarService, type TitlebarPart } from "./parts/titlebar/titlebarPart.js";
+import { SidebarPart, registerSessionsNavigation } from "./parts/sidebarPart.js";
+import { ISessionsTitlebarService, type TitlebarPart } from "./parts/titlebarPart.js";
 
 export interface IWorkbenchOptions {
 	/** Host-owned services are borrowed before this window creates its consumers. */

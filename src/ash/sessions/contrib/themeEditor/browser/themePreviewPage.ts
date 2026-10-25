@@ -9,7 +9,7 @@ import { ConsoleLogSink } from '../../../../platform/log/common/consoleLogSink.j
 import { createThemePreviewHost, connectThemePreview } from '../../../../workbench/contrib/themeEditor/browser/themePreviewHost.js';
 import { BrowserHostColorSchemeService } from '../../../../workbench/services/themes/browser/browserHostColorSchemeService.js';
 import { createSessionsWorkbench } from '../../../browser/workbenchFactory.js';
-import { TitlebarPart } from '../../../browser/parts/titlebar/titlebarPart.js';
+import { TitlebarPart } from '../../../browser/parts/titlebarPart.js';
 import { IWorkingCopyBackupService, InMemoryWorkingCopyBackupService } from '../../../../workbench/services/workingCopy/common/workingCopyBackupService.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { IWorkbenchEnvironmentService } from '../../../../workbench/services/environment/common/environmentService.js';

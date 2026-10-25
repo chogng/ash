@@ -66,6 +66,12 @@ suite('Workbench localization', () => {
 			localize('workbench.panel.defaultLocation.title', ''),
 		], ['将面板移到左侧', '将面板移到右侧', '将面板移到顶部', '将面板移到底部', '默认面板位置']);
 		assert.equal(localize('workbench.panel.defaultLocation.invalid', ''), '面板位置必须为左侧、右侧、顶部或底部。');
+		assert.equal(localize('workbench.panel.opensMaximized.title', ''), '面板打开时最大化');
+		assert.deepEqual([
+			localize('workbench.secondarySideBar.defaultVisibility.title', ''),
+			localize('workbench.secondarySideBar.defaultVisibility.maximizedInWorkspace', ''),
+			localize('workbench.secondarySideBar.forceMaximized.title', ''),
+		], ['辅助侧栏默认可见性', '在工作区中最大化', '启动时最大化辅助侧栏']);
 		assert.match(localize('accessibility.editorPanel', ''), /将焦点移入面板[\s\S]*恢复编辑器区域/u);
 		assert.match(localize('accessibility.editorAuxiliaryBar', ''), /最大化辅助侧栏[\s\S]*保留会话和草稿/u);
 	});

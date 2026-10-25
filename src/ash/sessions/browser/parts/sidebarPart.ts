@@ -1,28 +1,28 @@
-import { IActivityService } from '../../../../workbench/services/activity/common/activity.js';
-import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { IActivityService } from '../../../workbench/services/activity/common/activity.js';
+import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import "./media/sidebarPart.css";
-import { h } from '../../../../base/browser/dom.js';
-import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
-import { SessionsViewRegistry } from '../../../common/views.js';
-import { localize } from '../../../../nls.js';
-import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
-import { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagement.js";
-import { ISessionsService } from "../../../services/sessions/browser/sessionsService.js";
-import { SidebarPart as WorkbenchSidebarPart } from '../../../../workbench/browser/parts/sidebar/sidebarPart.js';
-import { IViewDescriptorService, ViewContainerLocation } from '../../../../workbench/common/views.js';
-import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { IStorageService } from '../../../../platform/storage/common/storage.js';
-import { SessionsList } from "./sessionsList.js";
-import { TeamsPanel, type TeamRoleOption } from './teamsPanel.js';
-import { ITeamsManagementService } from '../../../services/teams/common/teamsManagement.js';
-import { SESSION_SIDEBAR_DEFAULT_WIDTH } from '../../../common/layoutConstants.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
-import { IWorkbenchLayoutService } from '../../../../workbench/services/layout/browser/layoutService.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { h } from '../../../base/browser/dom.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { SyncDescriptor } from '../../../platform/instantiation/common/descriptors.js';
+import { ViewPane, type IViewPaneOptions } from '../../../workbench/browser/parts/views/viewPane.js';
+import { SessionsViewRegistry } from '../../common/views.js';
+import { localize } from '../../../nls.js';
+import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
+import { ActivityBarPosition } from '../../../workbench/common/configuration.js';
+import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
+import { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
+import { SidebarPart as WorkbenchSidebarPart } from '../../../workbench/browser/parts/sidebar/sidebarPart.js';
+import { IViewDescriptorService, ViewContainerLocation } from '../../../workbench/common/views.js';
+import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { SessionsList } from "./sidebar/sessionsList.js";
+import { TeamsPanel, type TeamRoleOption } from './sidebar/teamsPanel.js';
+import { ITeamsManagementService } from '../../services/teams/common/teamsManagement.js';
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
+import { IWorkbenchLayoutService } from '../../../workbench/services/layout/browser/layoutService.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+import { isWeb } from '../../../base/common/platform.js';
 
 export const SESSIONS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.chats';
 export const CODE_NAVIGATION_CONTAINER_ID = 'sessions.navigation.code';
@@ -102,10 +102,11 @@ export class SidebarPart extends WorkbenchSidebarPart {
 	private readonly topActivityBarHost: HTMLDivElement;
 	private readonly bottomActivityBarHost: HTMLDivElement;
 	public get activityBarAccountHost(): HTMLElement { return this.bottomActivityBarHost; }
-	override get maximumWidth(): number { return 520; }
+	override get minimumWidth(): number { return isWeb ? 270 : 170; }
+	override get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
 	override get preferredWidth(): number {
 		const width = this.activeCompositeId ? this.getComposite(this.activeCompositeId)!.getOptimalWidth() : 0;
-		return Math.max(this.minimumWidth, SESSION_SIDEBAR_DEFAULT_WIDTH, width);
+		return Math.max(this.minimumWidth, 300, width);
 	}
 	constructor(
 		container: HTMLElement,

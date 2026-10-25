@@ -37,7 +37,12 @@ export class Workbench {
 	async waitForReady(): Promise<void> {
 		await waitForWindowLoad(this.page);
 		await this.element.waitFor({ state: "visible" });
-		if (!await this.page.locator(".ash-sessions-window").isVisible()) await this.editors.waitForReady();
+		if (!await this.page.locator(".ash-sessions-window").isVisible()) {
+			// Restored layouts can legitimately give the Panel or Auxiliary Bar
+			// the content area. Module restoration above still owns readiness.
+			if (await this.editors.element.isVisible()) await this.editors.waitForReady();
+			else await this.page.locator('.ash-workbench-panel:visible, .ash-workbench-auxiliarybar:visible').first().waitFor({ state: 'visible' });
+		}
 		await this.waitForUiIdle();
 	}
 

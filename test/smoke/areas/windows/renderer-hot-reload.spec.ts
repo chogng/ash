@@ -108,7 +108,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 				const chatModule = await import(moduleUrl(chatSurface === 'code' ? 'workbench/contrib/chat/browser/widget/chatWidget.ts' : 'sessions/contrib/cowork/browser/widget/coworkWidget.ts'));
 				const ChatWidget = chatSurface === 'code' ? chatModule.ChatWidget : chatModule.CoworkWidget;
 				const { SessionsViewRegistry } = await import(moduleUrl('sessions/common/views.ts'));
-				const { registerSessionsNavigation, SESSIONS_NAVIGATION_CONTAINER_ID } = await import(moduleUrl('sessions/browser/parts/sidebar/sidebarPart.ts'));
+				const { registerSessionsNavigation, SESSIONS_NAVIGATION_CONTAINER_ID } = await import(moduleUrl('sessions/browser/parts/sidebarPart.ts'));
 				const { ISessionsManagementService } = await import(moduleUrl('sessions/services/sessions/common/sessionsManagement.ts'));
 				const { ISessionsService } = await import(moduleUrl('sessions/services/sessions/browser/sessionsService.ts'));
 				const { IGitHubService } = await import(moduleUrl('sessions/contrib/github/browser/githubService.ts'));

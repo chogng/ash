@@ -180,7 +180,7 @@ export const SettingsNavigation = [
 					id: 'startup-editor',
 					label: localize('settings.workbench.startup.group.label', 'Startup editor'),
 					description: localize('settings.workbench.startup.group.description', 'Choose what appears when no editor is restored.'),
-					settings: ['workbench.startupEditor', 'workbench.editor.restoreEditors'],
+					settings: ['workbench.startupEditor', 'workbench.editor.restoreEditors', 'workbench.secondarySideBar.defaultVisibility', 'workbench.secondarySideBar.forceMaximized', 'workbench.panel.opensMaximized'],
 				}],
 			},
 			{

@@ -26,7 +26,7 @@ import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { IProjectsService, type ProjectsState } from './projectsService.js';
-import { ISessionsTitlebarService } from '../../../browser/parts/titlebar/titlebarPart.js';
+import { ISessionsTitlebarService } from '../../../browser/parts/titlebarPart.js';
 import './projects.css';
 
 /** Projects own the front page. Material types appear only inside an opened project. */

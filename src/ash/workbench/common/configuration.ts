@@ -17,6 +17,8 @@ export const enum ActivityBarPosition {
 }
 export type SideBarLocation = 'left' | 'right';
 export type PanelLocation = 'left' | 'right' | 'top' | 'bottom';
+export type PanelOpensMaximized = 'always' | 'never' | 'preserve';
+export type SecondarySideBarDefaultVisibility = 'hidden' | 'visibleInWorkspace' | 'visible' | 'maximizedInWorkspace' | 'maximized';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
@@ -293,6 +295,64 @@ export const WorkbenchConfiguration = Object.freeze({
 			valueType: 'boolean',
 			get title() { return localize('workbench.activityBar.compact.title', 'Compact Activity Bar'); },
 			get description() { return localize('workbench.activityBar.compact.description', 'Use smaller Activity Bar items when the bar is on the side.'); },
+		},
+	}),
+	secondarySideBarDefaultVisibility: configurationRegistry.registerConfiguration<SecondarySideBarDefaultVisibility>({
+		key: 'workbench.secondarySideBar.defaultVisibility', defaultValue: 'visibleInWorkspace', scope: ConfigurationScope.WINDOW,
+		agentsWindow: { default: 'visibleInWorkspace', readOnly: true },
+		schema: { type: 'string', enum: ['hidden', 'visibleInWorkspace', 'visible', 'maximizedInWorkspace', 'maximized'] },
+		parse(value: unknown): SecondarySideBarDefaultVisibility {
+			if (value === 'hidden' || value === 'visibleInWorkspace' || value === 'visible' || value === 'maximizedInWorkspace' || value === 'maximized') return value;
+			throw new TypeError(localize('workbench.secondarySideBar.defaultVisibility.invalid', 'Invalid default secondary side bar visibility.'));
+		},
+		setting: {
+			valueType: 'select',
+			get title() { return localize('workbench.secondarySideBar.defaultVisibility.title', 'Default Secondary Side Bar Visibility'); },
+			get description() { return localize('workbench.secondarySideBar.defaultVisibility.description', 'Choose whether the secondary side bar is visible or maximized when opening a workspace or empty window for the first time.'); },
+			get options() {
+				return [
+					{ value: 'hidden', label: localize('workbench.secondarySideBar.defaultVisibility.hidden', 'Hidden') },
+					{ value: 'visibleInWorkspace', label: localize('workbench.secondarySideBar.defaultVisibility.visibleInWorkspace', 'Visible in Workspace') },
+					{ value: 'visible', label: localize('workbench.secondarySideBar.defaultVisibility.visible', 'Visible') },
+					{ value: 'maximizedInWorkspace', label: localize('workbench.secondarySideBar.defaultVisibility.maximizedInWorkspace', 'Maximized in Workspace') },
+					{ value: 'maximized', label: localize('workbench.secondarySideBar.defaultVisibility.maximized', 'Maximized') },
+				] as const;
+			},
+		},
+	}),
+	secondarySideBarForceMaximized: configurationRegistry.registerConfiguration<boolean>({
+		key: 'workbench.secondarySideBar.forceMaximized', defaultValue: false, scope: ConfigurationScope.WINDOW,
+		agentsWindow: { default: false, readOnly: true },
+		schema: { type: 'boolean' },
+		parse(value: unknown): boolean {
+			if (typeof value === 'boolean') return value;
+			throw new TypeError(localize('workbench.secondarySideBar.forceMaximized.invalid', 'Secondary side bar maximization must be true or false.'));
+		},
+		setting: {
+			valueType: 'boolean',
+			get title() { return localize('workbench.secondarySideBar.forceMaximized.title', 'Maximize Secondary Side Bar on Startup'); },
+			get description() { return localize('workbench.secondarySideBar.forceMaximized.description', 'Maximize the secondary side bar when opening the window, overriding saved layout state.'); },
+		},
+	}),
+	panelOpensMaximized: configurationRegistry.registerConfiguration<PanelOpensMaximized>({
+		key: 'workbench.panel.opensMaximized', defaultValue: 'preserve', scope: ConfigurationScope.WINDOW,
+		agentsWindow: { default: 'never', readOnly: true },
+		schema: { type: 'string', enum: ['always', 'never', 'preserve'] },
+		parse(value: unknown): PanelOpensMaximized {
+			if (value === 'always' || value === 'never' || value === 'preserve') return value;
+			throw new TypeError(localize('workbench.panel.opensMaximized.invalid', 'Panel maximization must be always, never, or preserve.'));
+		},
+		setting: {
+			valueType: 'select',
+			get title() { return localize('workbench.panel.opensMaximized.title', 'Panel Opens Maximized'); },
+			get description() { return localize('workbench.panel.opensMaximized.description', 'Choose whether the panel opens maximized or restores its last maximized state.'); },
+			get options() {
+				return [
+					{ value: 'always', label: localize('workbench.panel.opensMaximized.always', 'Always') },
+					{ value: 'never', label: localize('workbench.panel.opensMaximized.never', 'Never') },
+					{ value: 'preserve', label: localize('workbench.panel.opensMaximized.preserve', 'Preserve') },
+				] as const;
+			},
 		},
 	}),
 	panelDefaultLocation: configurationRegistry.registerConfiguration<PanelLocation>({

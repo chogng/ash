@@ -37,7 +37,7 @@ import { IViewsService } from '../../../../../workbench/services/views/common/vi
 import { IPaneCompositePartService } from '../../../../../workbench/services/panecomposite/browser/panecomposite.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
-import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../../browser/parts/sidebar/sidebarPart.js';
+import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../../browser/parts/sidebarPart.js';
 import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 import { SessionsLayoutService, documentEntry } from '../../browser/sessionsLayoutService.js';
