@@ -37,6 +37,11 @@
   ],
   "type": "module",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@napi-rs/canvas": "1.0.3",
     "pdfjs-dist": "6.1.200"
+  },
+  "devDependencies": {
+    "esbuild": "0.27.3"
   }
 }

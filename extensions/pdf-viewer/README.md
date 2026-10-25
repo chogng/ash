@@ -12,9 +12,11 @@ Select mode exposes the PDF's text layer for native selection and copy. Ctrl/Cmd
 
 Ctrl/Cmd plus `+`, `-` and `0` zoom in, out and reset to 100%. The annotation tools still use page-relative coordinates. Select mode leaves text selectable; choosing a drawing or note tool routes page gestures to annotations instead.
 
-## Planned PDF reading, annotations and AI use
+## AI reading
 
-The separate [PDF content plan](docs/pdf-content.md) scopes future work to viewing, extension-owned annotations and AI access to text or page images, composed with a Skill and a Plugin bundle where supported. It does not require a general document-editing API. The plan distinguishes existing viewer behavior from unimplemented AI/tool/Skill integration; it does not change package admission or add runtime capabilities.
+The companion [PDF Reading package](ai/README.md) exposes `pdf_read` and `pdf_render_page` through the existing MCP host and includes a `pdf-reading` Skill. It reads unopened local files, returns physical page numbers and source SHA-256, supports bounded text continuation and page regions, and supplies actual page images for visual models. Saved annotations are opt-in; viewer drafts remain local. It does not perform OCR or mutate PDFs.
+
+PDF Reading is a separate optional `plugin` package because the current registry `editor` package does not compose MCP and Skill capabilities. It uses the existing installation, tool approval and model image pipeline without introducing a PDF service in core. See [PDF content ownership](docs/pdf-content.md) for the implemented boundaries and remaining limitations.
 
 ## Installation and lifecycle
 

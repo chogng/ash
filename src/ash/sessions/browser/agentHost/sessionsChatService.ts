@@ -1,12 +1,16 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
 import type { IChatService, ThreadRead, Thread, ThreadGoal } from '../../../workbench/services/chat/common/chatService.js';
+import type { AgentInteractionOffer } from '../../../platform/agentHost/common/agent.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from './sessionProviderScopeService.js';
 
 type EventValue<T> = T extends Event<infer V> ? V : never;
 
 /** Routes window Chat calls to the Session's exact host and qualifies backend events. */
 export class SessionsChatService extends Disposable implements IChatService {
+	// Chat models use offer identity to reject responses after replacement or reconnection.
+	// Qualifying IDs must preserve that identity without retaining retired host scopes/offers.
+	private readonly scopedOffers = new WeakMap<ISessionProviderScope, WeakMap<AgentInteractionOffer, AgentInteractionOffer>>();
 	private readonly listeners = this._register(new DisposableStore());
 	private readonly onDidSubmitRequestEmitter = this._register(new Emitter<EventValue<IChatService['onDidSubmitRequest']>>());
 	readonly onDidSubmitRequest = this.onDidSubmitRequestEmitter.event;
@@ -36,7 +40,7 @@ export class SessionsChatService extends Disposable implements IChatService {
 		for (const scope of this.scopes.getScopes()) {
 			const chat = scope.services.chat;
 			this.listeners.add(chat.onDidSubmitRequest(event => this.onDidSubmitRequestEmitter.fire(pair(event, scope))));
-			this.listeners.add(chat.onDidChangeInteractionOffer(event => this.onDidChangeInteractionOfferEmitter.fire({ ...pair(event, scope), offer: event.offer && pair(event.offer, scope) })));
+			this.listeners.add(chat.onDidChangeInteractionOffer(event => this.onDidChangeInteractionOfferEmitter.fire({ ...pair(event, scope), offer: event.offer && this.qualifyOffer(event.offer, scope) })));
 			this.listeners.add(chat.onDidChangeSession(event => this.onDidChangeSessionEmitter.fire({ ...event, sessionId: scope.identity(event.sessionId) })));
 			this.listeners.add(chat.onDidUpdateThread(event => this.onDidUpdateThreadEmitter.fire(pair(event, scope))));
 			this.listeners.add(chat.onDidUpdateThreadTranscript(event => this.onDidUpdateThreadTranscriptEmitter.fire(pair(event, scope))));
@@ -58,8 +62,15 @@ export class SessionsChatService extends Disposable implements IChatService {
 			const scope = this.scopes.getScope(args[0]);
 			scope.assertCurrent();
 			const offer = scope.services.chat.getInteractionOffer(scope.backendIdentity(args[0]), scope.backendIdentity(args[1]));
-			return offer && pair(offer, scope);
+			return offer && this.qualifyOffer(offer, scope);
 		} catch { return undefined; }
+	}
+	private qualifyOffer(offer: AgentInteractionOffer, scope: ISessionProviderScope): AgentInteractionOffer {
+		let offers = this.scopedOffers.get(scope);
+		if (!offers) { offers = new WeakMap(); this.scopedOffers.set(scope, offers); }
+		let qualified = offers.get(offer);
+		if (!qualified) { qualified = pair(offer, scope); offers.set(offer, qualified); }
+		return qualified;
 	}
 	renameThread(...args: Parameters<IChatService['renameThread']>): ReturnType<IChatService['renameThread']> {
 		return this.run(args[0], async scope => {
