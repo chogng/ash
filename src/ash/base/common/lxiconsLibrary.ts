@@ -275,6 +275,7 @@ export const lxiconsLibrary = {
 	terminalCmd: registerLxicon("terminal-cmd", 0xe0fe),
 	terminalGitBash: registerLxicon("terminal-git-bash", 0xe0ff),
 	terminalPowershell: registerLxicon("terminal-powershell", 0xe100),
+	terminalSession: registerLxicon("terminal-session", 0xe135),
 	terminalUbuntu: registerLxicon("terminal-ubuntu", 0xe101),
 	text: registerLxicon("text", 0xe104),
 	text2: registerLxicon("text-2", 0xe103),

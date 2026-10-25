@@ -1357,6 +1357,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "terminal-session",
+      "file": "terminal-session.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "terminal-ubuntu",
       "file": "terminal-ubuntu.svg",
       "rendering": "symbolic"
