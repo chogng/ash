@@ -391,10 +391,13 @@ suite('extensions browser component', () => {
 			const details = page.locator('.ash-extension-editor');
 			await expect(details.getByRole('heading', { name: 'Standalone test', exact: true })).toBeVisible();
 			await expect(details.getByRole('status')).toHaveText(labels.disabled);
+			const savedEnablement = details.locator('dt').filter({ hasText: labels.locale === 'en' ? /^Saved enablement$/u : /^保存的启用状态$/u });
+			await expect(savedEnablement.locator('xpath=following-sibling::dd[1]')).toHaveText(labels.disabled);
 			await expect(details.getByRole('button', { name: labels.connect, exact: true })).toBeDisabled();
 			await expect(details.getByRole('switch')).toBeFocused();
 			await details.getByRole('switch').press('Space');
 			await expect(details.getByRole('status')).toHaveText(labels.disconnected);
+			await expect(savedEnablement).toHaveCount(0);
 			await details.getByRole('button', { name: labels.connect, exact: true }).click();
 			await expect(details.getByRole('status')).toHaveText(labels.connected);
 			await expect(mcp.getByRole('option').filter({ hasText: 'Standalone test' })).toContainText(labels.connected);
@@ -1399,7 +1402,8 @@ suite('extensions browser component', () => {
 			await page.goto(`/extensions.html?locale=${locale}&readOnlyProviders`);
 			await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
 			const provider = page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions').locator('[data-package-id="ash.github-authentication"]');
-			await expect(provider).toHaveAccessibleName(new RegExp(locale === 'en' ? 'Enabled' : '已启用', 'u'));
+			await expect(provider).toBeVisible();
+			await expect(provider).not.toHaveAccessibleName(new RegExp(locale === 'en' ? 'Enabled' : '已启用', 'u'));
 			await expect(provider.getByRole('button')).toHaveCount(0);
 			await provider.click();
 			const editor = page.locator('.ash-extension-editor');
@@ -1433,7 +1437,7 @@ suite('extensions browser component', () => {
 			await expect(header).toHaveAttribute('aria-expanded', 'true');
 			const list = skills.getByRole('listbox');
 			await expect(list.getByRole('option').locator('.extension-description')).toHaveText('Review changes.');
-			await expect(list.getByRole('option').locator('.extension-metadata')).toHaveText(locale === 'en' ? 'Acme · Enabled' : 'Acme · 已启用');
+			await expect(list.getByRole('option').locator('.extension-metadata')).toHaveText('Acme');
 			await expect(list.getByRole('option')).not.toContainText('marketplace:example/web');
 			await list.focus();
 			await list.press('Enter');
@@ -1452,10 +1456,12 @@ suite('extensions browser component', () => {
 			await toggle.press('Space');
 			await expect(toggle).not.toBeChecked();
 			await expect(toggle).toBeFocused();
+			await expect(list.getByRole('option').locator('.extension-metadata')).toHaveText(locale === 'en' ? 'Acme · Disabled' : 'Acme · 已禁用');
 			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'skill'))).toEqual([['skill', { source: 'marketplace:example/web', name: 'review' }, false, 3, 'session-scope']]);
 			await toggle.press('Space');
 			await expect(toggle).toBeChecked();
 			await expect(toggle).toBeEnabled();
+			await expect(list.getByRole('option').locator('.extension-metadata')).toHaveText('Acme');
 			expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'skill').at(-1))).toEqual(['skill', { source: 'marketplace:example/web', name: 'review' }, true, 4, 'session-scope']);
 			await page.evaluate(() => window.ashExtensionsIntegration.changeRevision());
 			await toggle.press('Space');
@@ -1546,13 +1552,21 @@ suite('extensions browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/extensions.html');
-		await page.evaluate(() => { window.ashExtensionsIntegration.addMcpPackage(); window.ashExtensionsIntegration.failMcpStatus(); });
+		await page.evaluate(() => {
+			window.ashExtensionsIntegration.addMcpPackage();
+			window.ashExtensionsIntegration.configureMcp({ id: 'user:mcp:fallback', displayName: 'Configured fallback', transport: { type: 'streamableHttp', url: 'https://example.test/mcp' }, credential: { type: 'unauthenticated' }, enablement: 'enabled' });
+			window.ashExtensionsIntegration.configureMcp({ id: 'user:mcp:disabled', displayName: 'Disabled fallback', transport: { type: 'streamableHttp', url: 'https://example.test/mcp' }, credential: { type: 'unauthenticated' }, enablement: 'disabled' });
+			window.ashExtensionsIntegration.failMcpStatus();
+		});
 		const mcp = page.locator('[data-view-id="ash.extensions.mcp"]');
 		await mcp.getByRole('button', { name: /^(Connections|连接)$/u }).click();
-		await expect(mcp.getByRole('option')).toHaveCount(1);
+		await expect(mcp.getByRole('option')).toHaveCount(3);
 		await expect(mcp.getByRole('status')).toContainText('Could not load MCP server status: Error: Status connection lost');
-		await expect(mcp.getByRole('option')).not.toContainText('Connected');
-		await mcp.getByRole('option').click();
+		await expect(mcp.getByRole('option').filter({ hasText: 'Configured fallback' }).locator('.extension-metadata')).toHaveCount(0);
+		await expect(mcp.getByRole('option').filter({ hasText: 'Disabled fallback' }).locator('.extension-metadata')).toHaveText('Disabled');
+		const installed = mcp.getByRole('option').filter({ hasText: 'fixture-server' });
+		await expect(installed).not.toContainText('Connected');
+		await installed.click();
 		const details = page.locator('.ash-extension-editor');
 		await expect(details.getByRole('status')).toContainText('MCP server status is unavailable.');
 		await expect(details).toContainText('Status connection lost');

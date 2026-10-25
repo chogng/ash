@@ -122,7 +122,7 @@ class ExtensionsContent extends Disposable {
 					item.summary.displayName,
 					extensionUiTargetsLabel(item.summary.uiTargets),
 					...this.isPluginsPane ? [item.attribution, item.summary.description] : [item.summary.version, item.summary.description],
-					item.enabled === undefined ? '' : item.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled'),
+					item.enabled === false ? localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled') : '',
 				].filter(Boolean).join(', ')
 			},
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.summary.displayName },
@@ -213,9 +213,11 @@ class ExtensionsContent extends Disposable {
 			const state = h(mainWindow.document, 'span'); state.className = 'extension-state'; state.textContent = item.source === ExtensionsInputSource.BuiltIn ? localize({ bundle: 'ash.extensions', key: 'builtInFilter' }, 'Built-in') : item.installation?.state === 'pendingRemoval' ? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending') : localize({ bundle: 'ash.extensions', key: 'installedFilter' }, 'Installed'); actions.append(state);
 		}
 		if (item.enabled !== undefined) {
-			const state = h(mainWindow.document, 'span'); state.className = 'extension-state';
-			state.textContent = item.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
-			footer.append(state);
+			if (!item.enabled) {
+				const state = h(mainWindow.document, 'span'); state.className = 'extension-state';
+				state.textContent = localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
+				footer.append(state);
+			}
 			if (item.canChangeEnablement) {
 				const toggle = resources.add(new Button(actions, {
 					...defaultButtonStyles,
@@ -431,13 +433,14 @@ abstract class ExtensionsListViewPane extends ViewPane {
 			keyboardNavigation: true,
 			focusOnMouseMove: false,
 			getId: item => item.target.kind === 'recommendation' ? item.target.id : item.target.kind === 'marketplace' ? getCustomizationMarketplaceResourceKey(item.target.resource) : JSON.stringify(item.target),
-			accessibilityProvider: { getAriaLabel: item => `${item.name}, ${item.description}, ${item.metadata}` },
+			accessibilityProvider: { getAriaLabel: item => [item.name, item.description, item.metadata].filter(Boolean).join(', ') },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.name },
 			renderItem: (item, _index, row) => {
 				const resources = new DisposableStore(); this.rows.set(row, resources);
 				const content = h(mainWindow.document, 'div'); content.className = 'extension-row';
 				const labels = h(mainWindow.document, 'div'); labels.className = 'extension-body';
 				for (const [className, text] of [['extension-name', item.name], ['extension-description', item.description], ['extension-metadata', item.metadata]]) {
+					if (!text) { continue; }
 					const label = resources.add(new IconLabel(labels, { label: text, title: text, hideIcon: true }));
 					label.element.classList.add(className);
 				}
@@ -679,7 +682,7 @@ export class SkillsViewPane extends ExtensionsListViewPane {
 		return {
 			note: snapshot.diagnostics.map(entry => `${entry.source}${entry.subject ? ` / ${entry.subject}` : ''}: ${entry.message}`).join('\n'), items: snapshot.catalog.skills.map(skill => ({
 				target: { kind: 'skill', source: skill.id.source, name: skill.id.name, sessionId }, name: skill.name, description: getSkillSummary(skill),
-				metadata: [skill.metadata?.author, skill.enabled ? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled')].filter(Boolean).join(' · '),
+				metadata: [skill.metadata?.author, skill.enabled ? '' : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled')].filter(Boolean).join(' · '),
 			}))
 		};
 	}
@@ -771,7 +774,7 @@ export class McpServersViewPane extends ExtensionsListViewPane {
 				target: { kind: 'mcp', serverId: server.id }, name: server.displayName,
 				description: server.id,
 				metadata: server.enablement === 'enabled'
-					? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled')
+					? ''
 					: localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled'),
 			});
 		}

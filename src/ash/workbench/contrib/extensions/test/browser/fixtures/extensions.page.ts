@@ -356,12 +356,13 @@ let enabled = true;
 let holdSkillEnablement = false;
 let completeSkillEnablement: (() => void) | undefined;
 const skillId = { source: 'marketplace:example/web', name: 'review' };
+const skillChanges = disposables.add(new Emitter<void>());
 services.registerInstance(IAppServerSkillApi, {
-	onDidChangeSkills: Event.None,
+	onDidChangeSkills: skillChanges.event,
 	readTextResource: async (_reference, _path, signal) => { instructionSignal = signal; if (holdInstructions) { return new Promise<string>(resolve => { completeInstructions = resolve; }); } return '---\r\nname: review\r\ndescription: Review changes\r\nmetadata:\r\n  author: Acme\r\n  version: "2.1.0"\r\n  updated-at: "2026-10-20"\r\n---\r\n# Review\r\nReview changes carefully.'; },
 	list: async () => ({ generation: 1, skills: [] }),
 	read: async () => (managementReads.skills++, { revision, catalog: { generation: 1, skills: [{ id: skillId, description: 'Review changes. Use when reviewing a project before release.', metadata: { author: 'Acme', version: '2.1.0', 'updated-at': '2026-10-20' }, enabled, compatible: true, contentDigest: 'digest' }] }, diagnostics: [{ source: 'workspace', subject: 'bad-skill', message: 'Invalid metadata' }] }),
-	registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async (id, value, expectedRevision, sessionId) => { if (holdSkillEnablement) { await new Promise<void>(resolve => { completeSkillEnablement = resolve; }); } requests.push(sessionId ? ['skill', id, value, expectedRevision, sessionId] : ['skill', id, value, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } enabled = value; revision++; },
+	registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async (id, value, expectedRevision, sessionId) => { if (holdSkillEnablement) { await new Promise<void>(resolve => { completeSkillEnablement = resolve; }); } requests.push(sessionId ? ['skill', id, value, expectedRevision, sessionId] : ['skill', id, value, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } enabled = value; revision++; skillChanges.fire(); },
 });
 const connectorChanges = disposables.add(new Emitter<number>());
 let connectorGeneration = 1;
@@ -402,6 +403,7 @@ services.registerInstance(ILanguageServerService, {
 	removeConfiguration: async () => { },
 });
 services.registerInstance(IContextKeyService, disposables.add(new ContextKeyService()));
+services.registerInstance(IStorageService, disposables.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'extensions-fixture', backend: window.localStorage, flushInterval: 0 })));
 services.registerInstance(IQuickInputService, disposables.add(new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: services.get(IContextKeyService) })));
 let pluginRevision = 0;
 const pluginEvents = disposables.add(new Emitter<ServerNotification>());
@@ -457,7 +459,6 @@ const themeName = new URLSearchParams(location.search).get('theme');
 const themeService = disposables.add(new TestThemeService(themeName === 'light' ? lightColorTheme : themeName === 'hc' ? highContrastDarkColorTheme : darkColorTheme));
 services.registerInstance(IThemeService, themeService);
 disposables.add(bindTestColorTheme(themeService, document.body));
-services.registerInstance(IStorageService, disposables.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'extensions-fixture', backend: window.localStorage, flushInterval: 0 })));
 services.registerInstance(IGlobalExtensionEnablementService, disposables.add(services.createInstance(GlobalExtensionEnablementService)));
 let pane: ExtensionEditor | undefined;
 let editorAbort = new AbortController();

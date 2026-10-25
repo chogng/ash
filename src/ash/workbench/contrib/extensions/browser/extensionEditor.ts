@@ -449,11 +449,9 @@ export class ExtensionEditor extends EditorPane {
 				label: localize({ bundle: 'ash.extensions', key: 'detailServer' }, 'Server'), rows: [
 					{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: target.serverId },
 					{ label: localize({ bundle: 'ash.extensions', key: 'mcpState' }, 'Status'), value: statusLabel },
-					...(configuredServer ? [{
+					...(configuredServer?.enablement === 'disabled' ? [{
 						label: localize({ bundle: 'ash.extensions', key: 'mcpSavedEnablement' }, 'Saved enablement'),
-						value: configuredServer.enablement === 'enabled'
-							? localize({ bundle: 'ash.extensions', key: 'enabledState' }, 'Enabled')
-							: localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled'),
+						value: localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled'),
 					}] : []),
 					{ label: localize({ bundle: 'ash.extensions', key: 'mcpDiagnostic' }, 'Diagnostic'), value: diagnostic },
 					{ label: localize({ bundle: 'ash.extensions', key: 'mcpOrigin' }, 'HTTP origin'), value: server?.httpOrigin ?? '' },
