@@ -9,6 +9,50 @@ suite('Projects toolbar', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`shows localized update times and refreshes them without replacing focused cards (${locale})`, async () => {
+			const { page, info } = browser;
+			const chinese = locale === 'zh-CN';
+			const updatedAt = new Date('2026-10-25T18:00:00Z');
+			const createdAt = updatedAt.getTime() - 5 * 86_400_000;
+			await page.clock.install({ time: updatedAt });
+			await page.goto(`/sessions.html?search&locale=${locale}&projectUpdatedAt=${updatedAt.getTime()}&projectCreatedAt=${createdAt}`);
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			const card = page.locator('.ash-projects-card');
+			const caption = card.locator('time.ash-projects-card-caption');
+			await expect(caption).toHaveText(chinese ? '刚刚' : 'Just now');
+			await expect(caption).toHaveAttribute('datetime', updatedAt.toISOString());
+			await expect(card).toHaveAccessibleName('Search project fixture');
+			const absoluteTime = await caption.getAttribute('aria-label');
+			await expect(card).toHaveAccessibleDescription(absoluteTime!);
+			const originalCard = await card.elementHandle();
+			await card.focus();
+			for (const [advance, expected] of [
+				[60_000, chinese ? '1分钟前' : '1 minute ago'],
+				[4 * 60_000, chinese ? '5分钟前' : '5 minutes ago'],
+				[2 * 3_600_000, chinese ? '2小时前' : '2 hours ago'],
+				[3 * 86_400_000, chinese ? '3天前' : '3 days ago'],
+			] as const) {
+				await page.clock.fastForward(advance);
+				await expect(caption).toHaveText(expected);
+				await expect(card).toBeFocused();
+				expect(await originalCard!.evaluate(element => element.isConnected)).toBe(true);
+			}
+			await caption.hover();
+			await expect(page.getByRole('tooltip')).toHaveText(absoluteTime!);
+			await page.screenshot({ path: info.outputPath(`projects-relative-time-${locale}.png`) });
+			await page.goto(`/sessions.html?search&locale=${locale}&projectCreatedAt=${createdAt}`);
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await expect(caption).toHaveAttribute('datetime', new Date(createdAt).toISOString());
+			await expect(caption).toHaveText(chinese ? '8天前' : '8 days ago');
+			await page.goto(`/sessions.html?search&locale=${locale}`);
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await expect(card).toBeVisible();
+			await expect(caption).toHaveCount(0);
+		});
+
 		test(`uses the Sessions menu geometry without changing shared menu defaults (${locale})`, async () => {
 			const { page, info } = browser;
 			await page.goto(`/sessions.html?search&locale=${locale}`);

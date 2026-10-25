@@ -28,7 +28,14 @@ globalThis.ashWebWorkbenchHost = {
 	}
 };
 if (new URL(location.href).searchParams.has('search') || new URL(location.href).searchParams.has('sidebarGroups')) {
-	const project = { id: 'search-project', revision: 1, name: 'Search project fixture', archived: false, sessionCount: 0, description: 'Synthetic project for Search navigation', materials: [], sessionIds: new URL(location.href).searchParams.has('sidebarGroups') ? [sessionIdentity('Host A', 'same', 'local-agent-host')] : [] };
+	const updatedAt = new URL(location.href).searchParams.get('projectUpdatedAt');
+	const createdAt = new URL(location.href).searchParams.get('projectCreatedAt');
+	const project = {
+		id: 'search-project', revision: 1, name: 'Search project fixture', archived: false, sessionCount: 0,
+		description: 'Synthetic project for Search navigation', materials: [],
+		sessionIds: new URL(location.href).searchParams.has('sidebarGroups') ? [sessionIdentity('Host A', 'same', 'local-agent-host')] : [],
+		updatedAtMs: updatedAt === null ? undefined : Number(updatedAt), createdAtMs: createdAt === null ? undefined : Number(createdAt),
+	};
 	const unexpectedAutomation = async (): Promise<never> => { throw new Error('Search must not mutate or run the fixture schedule'); };
 	globalThis.ashWebWorkbenchHost = {
 		api: {

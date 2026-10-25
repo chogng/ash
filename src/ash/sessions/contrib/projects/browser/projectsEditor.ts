@@ -11,6 +11,7 @@ import { Dialog, DialogContentsAlignment } from '../../../../base/browser/ui/dia
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { AnchorAlignment, AnchorPosition } from '../../../../base/browser/ui/contextview/contextview.js';
 import { DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { IntervalTimer } from '../../../../base/common/async.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
@@ -19,7 +20,7 @@ import { autorun } from '../../../../base/common/observable.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { basename } from '../../../../base/common/resources.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { localize } from '../../../../nls.js';
+import { getNLSLanguage, localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import type { Project, ProjectMaterial, ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -104,6 +105,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	private readonly content = this._register(new DisposableStore());
 	private readonly dialog = this._register(new MutableDisposable<DisposableStore>());
 	private readonly titlebarContent = this._register(new MutableDisposable());
+	private readonly relativeTimeUpdate = this._register(new IntervalTimer());
+	private readonly relativeTime = new Intl.RelativeTimeFormat(getNLSLanguage(), { numeric: 'always' });
 	private title!: HTMLElement;
 	private breadcrumb!: HTMLElement;
 	private breadcrumbProjects!: Button;
@@ -222,22 +225,32 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	public override clearInput(): void { }
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
+		this.updateTitlebar();
 		if (visible) {
-			this.titlebarContent.value ??= this.titlebar.setPageContent(this.breadcrumb);
 			void this.projects.reload();
 		} else {
+			this.relativeTimeUpdate.cancel();
 			if (this.sortMenuOpen) { this.contextMenus.hideContextMenu(); }
-			this.titlebarContent.clear();
 			this.dialog.clear();
 		}
 	}
 	public override layout(dimension: IDimension): void { this.domNode.classList.toggle('narrow', dimension.width < 760); }
 	public override focus(): void { this.projects.state.get().selectedId ? this.title.focus() : this.createActionViewItem.focus(); }
 
+	private updateTitlebar(): void {
+		// The list has its own heading; only an opened project needs breadcrumb navigation.
+		if (this.isVisible() && this.projects.state.get().selectedId) {
+			this.titlebarContent.value ??= this.titlebar.setPageContent(this.breadcrumb);
+		} else {
+			this.titlebarContent.clear();
+		}
+	}
+
 	private render(state: ProjectsState): void {
 		if (state.selectedId && this.sortMenuOpen) { this.contextMenus.hideContextMenu(); }
 		const focused = getActiveElement(this.domNode.ownerDocument) as HTMLElement;
 		const focusKey = this.body.contains(focused) ? focused.dataset.projectControl : undefined;
+		this.relativeTimeUpdate.cancel();
 		this.content.clear();
 		this.body.replaceChildren();
 		this.breadcrumbSeparator.hidden = !state.selected;
@@ -245,6 +258,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.breadcrumbName.textContent = state.selected?.name ?? '';
 		if (state.selectedId) { this.breadcrumbProjects.domNode.removeAttribute('aria-current'); }
 		else { this.breadcrumbProjects.domNode.setAttribute('aria-current', 'page'); }
+		this.updateTitlebar();
 		this.tools.hidden = !!state.selectedId;
 		this.title.textContent = state.selected?.name ?? localize('projects.title', 'Projects');
 		this.title.title = this.title.textContent;
@@ -319,7 +333,20 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			card.dataset.projectControl = project.id;
 			const mark = h(document, 'span', { className: 'ash-projects-card-mark', attributes: { 'aria-hidden': 'true' } });
 			appendIcon(Lxicon.projects, mark);
-			const content = h(document, 'span', { className: 'ash-projects-card-content' }, h(document, 'span', { className: 'ash-projects-card-name' }, project.name), h(document, 'span', { className: 'ash-projects-card-caption' }, localize('projects.open', 'Open project')));
+			const content = h(document, 'span', { className: 'ash-projects-card-content' }, h(document, 'span', { className: 'ash-projects-card-name' }, project.name));
+			const timestamp = project.updatedAtMs ?? project.createdAtMs;
+			if (timestamp !== undefined) {
+				const date = new Date(timestamp);
+				const updatedAt = localize('projects.updatedAt', 'Updated {0}', date.toLocaleString(getNLSLanguage()));
+				const caption = h(document, 'time', {
+					className: 'ash-projects-card-caption',
+					properties: { dateTime: date.toISOString(), id: generateUuid() },
+					attributes: { 'aria-label': updatedAt },
+				});
+				card.setAttribute('aria-describedby', caption.id);
+				content.append(caption);
+				this.content.add(this.hover.setupDelayedHover(caption, { content: updatedAt }));
+			}
 			card.append(mark, content);
 			const actionsHost = h(document, 'div', { className: 'ash-projects-card-actions' });
 			const pinned = this.projects.isPinned(project.id);
@@ -352,6 +379,27 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			row.append(card, actionsHost); list.append(row);
 		}
 		this.body.append(list);
+		this.updateCardTimes();
+		if (this.isVisible() && list.querySelector('time')) {
+			this.relativeTimeUpdate.cancelAndSet(() => this.updateCardTimes(), 60_000, document.defaultView!);
+		}
+	}
+
+	private updateCardTimes(): void {
+		const now = Date.now();
+		const units = [
+			{ unit: 'year', milliseconds: 365 * 86_400_000 },
+			{ unit: 'month', milliseconds: 30 * 86_400_000 },
+			{ unit: 'day', milliseconds: 86_400_000 },
+			{ unit: 'hour', milliseconds: 3_600_000 },
+			{ unit: 'minute', milliseconds: 60_000 },
+		] as const;
+		// Refresh text in place so time passing never replaces cards or interrupts keyboard focus.
+		for (const caption of this.body.querySelectorAll<HTMLTimeElement>('time.ash-projects-card-caption')) {
+			const elapsed = Math.max(0, now - Date.parse(caption.dateTime));
+			const unit = units.find(candidate => elapsed >= candidate.milliseconds);
+			caption.textContent = unit ? this.relativeTime.format(-Math.floor(elapsed / unit.milliseconds), unit.unit) : localize('projects.justNow', 'Just now');
+		}
 	}
 
 	private projectActions(project: ProjectSummary): readonly IAction[] {
