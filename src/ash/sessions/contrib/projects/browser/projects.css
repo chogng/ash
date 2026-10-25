@@ -21,7 +21,8 @@
 	min-width: 0;
 	box-sizing: border-box;
 	margin: 0 auto;
-	padding: var(--ash-spacing-size400);
+	padding: var(--ash-spacing-size200) var(--ash-spacing-size400)
+		var(--ash-spacing-size400);
 }
 
 .ash-projects-heading,
@@ -38,7 +39,7 @@
 
 .ash-projects-heading {
 	justify-content: space-between;
-	margin: var(--ash-spacing-size200) 0 var(--ash-spacing-size320);
+	margin: 0 0 var(--ash-spacing-size320);
 }
 
 .ash-projects h1 {
@@ -60,6 +61,15 @@
 .ash-projects-tools {
 	flex-shrink: 0;
 	gap: var(--ash-spacing-size80);
+}
+
+.ash-projects-sort-menu {
+	border-radius: var(--ash-cornerRadius-xLarge);
+}
+
+.ash-projects-sort-menu .ash-menu-leading-check {
+	order: 1;
+	margin-left: auto;
 }
 
 .ash-projects-search,

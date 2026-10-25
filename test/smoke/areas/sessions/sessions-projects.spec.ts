@@ -6,6 +6,57 @@ import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index
 import { connectProfile } from './sessionProfileFixture.js';
 import { expect, test } from '../../../automation/test.js';
 
+test.describe('Projects sorting persistence', () => {
+	test.use({ electronArgs: ['--agents-window'], electronUserSettings: { 'workbench.locale': 'zh-CN', 'workbench.colorTheme': 'ash-light' } });
+
+	test('Sessions Projects remembers sorting across page changes and Desktop relaunch', { tag: ['@electron-app-server'] }, async ({ workbench, reloadWorkbench }, testInfo) => {
+		test.setTimeout(90_000);
+		let page = workbench.page;
+		const openProjects = async () => {
+			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await expect(page.locator('.ash-projects')).toBeVisible();
+		};
+		const assertSelected = async (label: string) => {
+			await page.getByRole('button', { name: '项目排序', exact: true }).click();
+			const menu = page.locator('.ash-projects-sort-menu');
+			await expect(menu.getByRole('menuitemradio', { name: label, exact: true })).toHaveAttribute('aria-checked', 'true');
+			await expect(menu.locator('[aria-checked="true"]')).toHaveCount(1);
+			await page.keyboard.press('Escape');
+		};
+		await openProjects();
+		for (const name of ['Alpha', 'Zebra']) {
+			await page.locator('.ash-projects').getByRole('button', { name: '新建项目', exact: true }).first().click();
+			const dialog = page.getByRole('dialog', { name: '创建项目' });
+			await dialog.getByRole('textbox', { name: '你正在做什么？', exact: true }).fill(name);
+			await dialog.getByRole('button', { name: '创建项目', exact: true }).click();
+			await expect(dialog).toHaveCount(0);
+			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: '项目', exact: true }).click();
+		}
+		for (const { label, order } of [
+			{ label: '按名称', order: ['Alpha', 'Zebra'] },
+			{ label: '最近更新', order: ['Zebra', 'Alpha'] },
+			{ label: '创建时间', order: ['Zebra', 'Alpha'] },
+		]) {
+			await page.getByRole('button', { name: '项目排序', exact: true }).click();
+			await page.locator('.ash-projects-sort-menu').getByRole('menuitemradio', { name: label, exact: true }).click();
+			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '新建', exact: true }).click();
+			await openProjects();
+			await expect(page.locator('.ash-projects-card-name')).toHaveText(order);
+			await assertSelected(label);
+		}
+		({ workbench } = await reloadWorkbench());
+		page = workbench.page;
+		await openProjects();
+		await expect(page.locator('.ash-projects-card-name')).toHaveText(['Zebra', 'Alpha']);
+		await assertSelected('创建时间');
+		await page.getByRole('button', { name: '项目排序', exact: true }).focus();
+		await page.keyboard.press('Alt+F1');
+		await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue(/所选排序方式会保存在当前用户配置中/);
+		await page.keyboard.press('Escape');
+		await page.screenshot({ path: testInfo.outputPath('projects-sort-restored.png') });
+	});
+});
+
 test('Sessions Projects replaces material categories and supports keyboard creation', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');

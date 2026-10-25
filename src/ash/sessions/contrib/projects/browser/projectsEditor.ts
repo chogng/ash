@@ -7,7 +7,8 @@ import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Dialog, DialogContentsAlignment } from '../../../../base/browser/ui/dialog/dialog.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
-import { DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { AnchorAlignment, AnchorPosition } from '../../../../base/browser/ui/contextview/contextview.js';
+import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
@@ -25,7 +26,7 @@ import { IHoverService } from '../../../../platform/hover/browser/hoverService.j
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
-import { IProjectsService, type ProjectsState } from './projectsService.js';
+import { IProjectsService, type ProjectSortOrder, type ProjectsState } from './projectsService.js';
 import { ISessionsTitlebarService } from '../../../browser/parts/titlebarPart.js';
 import './projects.css';
 
@@ -48,6 +49,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	private retry!: Button;
 	private createButton!: Button;
 	private sort!: Button;
+	private sortMenuOpen = false;
 
 	constructor(
 		@IProjectsService private readonly projects: IProjectsService,
@@ -82,7 +84,13 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.tools = h(document, 'div', { className: 'ash-projects-tools' });
 		this.search = h(document, 'input', { className: 'ash-projects-search', properties: { type: 'search', placeholder: localize('projects.search', 'Search projects'), hidden: true }, attributes: { 'aria-label': localize('projects.search', 'Search projects') } });
 		this._register(new Button(this.tools, { ...defaultButtonStyles, label: localize('projects.search', 'Search projects'), icon: Lxicon.search, iconOnly: true, onClick: () => { this.search.hidden = !this.search.hidden; if (!this.search.hidden) { this.search.focus(); } } }));
-		this.sort = this._register(new Button(this.tools, { ...defaultButtonStyles, label: localize('projects.sort', 'Reverse alphabetical order'), icon: Lxicon.sortPrecedence, iconOnly: true, onClick: () => this.projects.toggleSort() }));
+		this.sort = this._register(new Button(this.tools, { ...defaultButtonStyles, label: localize('projects.sort', 'Sort projects'), icon: Lxicon.sort, iconOnly: true, onClick: () => this.showSortMenu() }));
+		this.sort.domNode.setAttribute('aria-haspopup', 'menu');
+		this.sort.domNode.setAttribute('aria-expanded', 'false');
+		this._register(addDisposableListener(this.sort.domNode, 'keydown', event => {
+			if (event.key === 'ArrowDown') { event.preventDefault(); this.showSortMenu(); }
+		}));
+		this._register(toDisposable(() => { if (this.sortMenuOpen) { this.contextMenus.hideContextMenu(); } }));
 		this.createButton = this._register(new Button(this.tools, { ...defaultButtonStyles, label: localize('projects.new', 'New project'), presentation: 'primary', onClick: () => this.showProjectDialog() }));
 		heading.append(this.title, this.tools);
 		const feedback = h(document, 'div', { className: 'ash-projects-feedback' });
@@ -112,6 +120,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			this.titlebarContent.value ??= this.titlebar.setPageContent(this.breadcrumb);
 			void this.projects.reload();
 		} else {
+			if (this.sortMenuOpen) { this.contextMenus.hideContextMenu(); }
 			this.titlebarContent.clear();
 			this.dialog.clear();
 		}
@@ -120,6 +129,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	public override focus(): void { this.projects.state.get().selectedId ? this.title.focus() : this.createButton.focus(); }
 
 	private render(state: ProjectsState): void {
+		if (state.selectedId && this.sortMenuOpen) { this.contextMenus.hideContextMenu(); }
 		const focused = getActiveElement(this.domNode.ownerDocument) as HTMLElement;
 		const focusKey = this.body.contains(focused) ? focused.dataset.projectControl : undefined;
 		this.content.clear();
@@ -134,7 +144,6 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.title.title = this.title.textContent;
 		this.search.hidden = !!state.selectedId || (this.search.hidden && !state.query);
 		this.search.value = state.query;
-		this.sort.domNode.setAttribute('aria-pressed', String(state.descending));
 		this.createButton.enabled = !state.busy;
 		this.message.textContent = state.message ?? (state.loading ? localize('projects.loading', 'Loading projects…') : '');
 		this.message.parentElement!.hidden = !state.message && !state.loading;
@@ -148,6 +157,34 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		if (focusKey) {
 			(Array.from(this.body.querySelectorAll<HTMLElement>('[data-project-control]')).find(node => node.dataset.projectControl === focusKey) ?? this.title).focus();
 		}
+	}
+
+	private showSortMenu(): void {
+		if (this.sortMenuOpen) { return; }
+		const selected = this.projects.state.get().sortOrder;
+		const options: readonly { order: ProjectSortOrder; label: string; }[] = [
+			{ order: 'updated', label: localize('projects.sortUpdated', 'Last updated') },
+			{ order: 'created', label: localize('projects.sortCreated', 'Date created') },
+			{ order: 'name', label: localize('projects.sortName', 'Alphabetical') },
+		];
+		this.sortMenuOpen = true;
+		this.sort.domNode.setAttribute('aria-expanded', 'true');
+		this.contextMenus.showContextMenu({
+			getAnchor: () => this.sort.domNode,
+			anchorAlignment: AnchorAlignment.Right,
+			anchorPosition: AnchorPosition.Below,
+			getMenuClassName: () => 'ash-projects-sort-menu',
+			getCheckedActionsRepresentation: () => 'radio',
+			autoSelectFirstItem: true,
+			getActions: () => options.map(({ order, label }) => ({
+				id: `projects.sort.${order}`, label, tooltip: label, enabled: true, checked: selected === order,
+				run: () => { this.projects.setSortOrder(order); },
+			})),
+			onHide: () => {
+				this.sortMenuOpen = false;
+				this.sort.domNode.setAttribute('aria-expanded', 'false');
+			},
+		});
 	}
 
 	private button(parent: HTMLElement, options: IButtonOptions, key?: string): Button {

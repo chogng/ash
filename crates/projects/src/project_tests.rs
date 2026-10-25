@@ -72,6 +72,38 @@ impl ProjectStore for MemoryStore {
 }
 
 #[test]
+fn project_times_preserve_creation_and_follow_committed_updates() {
+    let create = request(
+        "create-project-time",
+        0,
+        ProjectCommand::Create {
+            name: "Ash".into(),
+            description: String::new(),
+            materials: Vec::new(),
+        },
+    );
+    let created = crate::reducer::apply(None, &create, 100).unwrap();
+    assert_eq!(created.created_at_ms, Some(100));
+    assert_eq!(created.updated_at_ms, Some(100));
+    let update = request(
+        "update-project-time",
+        1,
+        ProjectCommand::UpdateDetails {
+            name: "Renamed".into(),
+            description: String::new(),
+            materials: None,
+        },
+    );
+    let updated = crate::reducer::apply(Some(created), &update, 300).unwrap();
+    assert_eq!(updated.created_at_ms, Some(100));
+    assert_eq!(updated.updated_at_ms, Some(300));
+    let archive = request("archive-project-time", 2, ProjectCommand::Archive);
+    let archived = crate::reducer::apply(Some(updated), &archive, 200).unwrap();
+    assert_eq!(archived.created_at_ms, Some(100));
+    assert_eq!(archived.updated_at_ms, Some(300));
+}
+
+#[test]
 fn project_commands_are_revision_checked_and_retry_safe() {
     let coordinator = coordinator();
     let create = request(
@@ -85,10 +117,15 @@ fn project_commands_are_revision_checked_and_retry_safe() {
     );
     let created = coordinator.apply(create.clone()).unwrap();
     assert_eq!(created.project.revision, 1);
+    assert!(created.project.created_at_ms.is_some());
+    assert_eq!(created.project.created_at_ms, created.project.updated_at_ms);
     assert_eq!(created.disposition, ProjectCommandDisposition::Committed);
     assert_eq!(
-        coordinator.apply(create).unwrap().disposition,
-        ProjectCommandDisposition::Replayed
+        coordinator.apply(create).unwrap(),
+        super::ProjectCommandResult {
+            project: created.project,
+            disposition: ProjectCommandDisposition::Replayed,
+        }
     );
     assert!(matches!(
         coordinator.apply(request(

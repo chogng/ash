@@ -55,6 +55,11 @@ pub struct Project {
     pub schema_version: u32,
     pub project_id: ProjectId,
     pub revision: u64,
+    /// Unix epoch milliseconds. Missing on records saved before time tracking existed.
+    #[serde(default)]
+    pub created_at_ms: Option<u64>,
+    #[serde(default)]
+    pub updated_at_ms: Option<u64>,
     pub status: ProjectStatus,
     pub name: String,
     pub description: String,
@@ -75,6 +80,14 @@ impl Project {
         if self.revision == 0 {
             return Err(crate::ProjectError::InvalidInput(
                 "Project revision must be positive".into(),
+            ));
+        }
+        if self.created_at_ms == Some(0)
+            || self.updated_at_ms == Some(0)
+            || matches!((self.created_at_ms, self.updated_at_ms), (Some(created), Some(updated)) if updated < created)
+        {
+            return Err(crate::ProjectError::InvalidInput(
+                "invalid Project timestamps".into(),
             ));
         }
         validate_text("Project name", &self.name)?;

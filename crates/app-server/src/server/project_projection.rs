@@ -14,6 +14,8 @@ pub(super) fn project(project: &Project) -> ProjectDto {
     ProjectDto {
         project_id: project.project_id.clone(),
         revision: project.revision,
+        created_at_ms: project.created_at_ms,
+        updated_at_ms: project.updated_at_ms,
         status: status(project.status),
         name: project.name.clone(),
         description: project.description.clone(),
@@ -54,6 +56,8 @@ pub(super) fn summary(project: &Project) -> ProjectSummaryDto {
     ProjectSummaryDto {
         project_id: project.project_id.clone(),
         revision: project.revision,
+        created_at_ms: project.created_at_ms,
+        updated_at_ms: project.updated_at_ms,
         status: status(project.status),
         name: project.name.clone(),
         root_count: project.roots.len() as u64,
