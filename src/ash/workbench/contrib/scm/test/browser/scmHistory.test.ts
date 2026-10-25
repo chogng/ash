@@ -593,6 +593,35 @@ suite('scmHistory browser component', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`successive history clicks toggle commits and folders without losing file pinning (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/scmHistory.html?changes&locale=${locale}`);
+			const tree = page.locator('.ash-scm-graph-tree');
+			const commit = tree.getByRole('treeitem', { name: /History metadata:/u });
+			const subject = commit.locator('.ash-scm-graph-subject');
+			const files = tree.locator('.ash-scm-graph-change');
+			await expect(commit).toHaveAttribute('aria-expanded', 'false');
+			// A double-click includes two click events; locator.click() alone always
+			// sends detail=1 and cannot catch a dropped second click.
+			await subject.dblclick({ position: { x: 3, y: 8 } });
+			await expect(commit).toHaveAttribute('aria-expanded', 'false');
+			await expect(commit).toHaveAttribute('aria-selected', 'true');
+			await expect(tree).toBeFocused();
+			await expect(files).toHaveCount(0);
+			await subject.click({ clickCount: 3, position: { x: 3, y: 8 } });
+			await expect(commit).toHaveAttribute('aria-expanded', 'true');
+			await expect(files).toHaveCount(3);
+			await page.evaluate(() => window.ashSCMHistoryIntegration.setViewMode('tree'));
+			const folder = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-graph-folder') });
+			await expect(folder).toHaveAttribute('aria-expanded', 'true');
+			await folder.dblclick({ position: { x: 100, y: 10 } });
+			await expect(folder).toHaveAttribute('aria-expanded', 'true');
+			await expect(files).toHaveCount(3);
+			await tree.locator('[data-history-path="src/first.ts"]').dblclick();
+			await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.opened.at(-1)?.options)).toEqual({ pinned: true, preserveFocus: false });
+			await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.opened.at(-1)?.resource)).toContain('first.ts');
+		});
+
 		test(`virtualized commits hide their details card when scrolled away (${locale})`, async function () {
 			const { page } = browserTests;
 			await page.goto(`/scmHistory.html?locale=${locale}`);

@@ -804,7 +804,6 @@ export class SCMHistoryViewPane extends ViewPane {
 			indentGuides: 'none',
 			multipleSelectionSupport: false,
 			expandOnlyOnTwistieClick: false,
-			expandOnDoubleClick: false,
 			twistieAdditionalCssClass: () => 'ash-tree-twistie-hidden',
 			modelOptions: { identityProvider: { getId: element => element.id } },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: element => element.kind === 'commit' ? element.model.historyItem.subject : element.kind === 'file' ? element.change.path : element.kind === 'folder' ? element.folder.name : undefined },
