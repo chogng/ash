@@ -308,7 +308,8 @@
     "sort": "E131",
     "pin-filled": "E132",
     "pin": "E133",
-    "artifacts": "E134"
+    "artifacts": "E134",
+    "terminal-session": "E135"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -364,7 +365,7 @@
     "circle-small": "94c3f415ffc757ed7d306bfde6b408aa0df944dbd04af8195373bbced9ed4148",
     "circle": "298dde4ac09f95a287bf77afa10651a07ccb35e14665a243ee436224db5a5132",
     "claude": "084404db8136d9870cfc69c60a764db3fb20a1592873c9d4a5e6242bcdb84559",
-    "clear-all": "c30a64f5219cf938437c18ed7827052c1b589b510cd87b5de6092194daf4071d",
+    "clear-all": "b5c2458d18b7cfe3e30948075a94ed1269c3057446e0751efc16099820a277a4",
     "clockface-filled": "ce796c4c308bfaf7561127479b7aa783c9885064dd85603b6101652eba7c57bb",
     "clockface": "c80da4e909c1d2b4c3016a6f997d4bb203cc53873b00455a8141308b8c54a549",
     "close": "869cc6f3b8e5675972f954ced1c0d34c94f1e9306cb9e8369764699f5fba76af",
@@ -493,7 +494,7 @@
     "link-external": "ffd1da1bdd97c104973f50a3dbd11fb6c3bab8741dd78e9d5890ef62d5ef64f4",
     "link": "fa6c44653a2936e2138b93af52c18850a27d9058cac0b227e34a6ffb0df979be",
     "list-filter": "200a290de0e8cbcdfecb8eeb65e116b1a7952f8728c43dd64e94004670694f7d",
-    "list-unordered": "8c351c3ce9128532be09c77d0c5b0c9b3db0ae5db0d606e339786891b7b48239",
+    "list-unordered": "c7c8a3751d7b83a7b5ea0fd737756e54f90c434da073930f59515c9d74815df5",
     "lock": "78f6173b4c2f545631109b2308c46ef23608b2a31b760f185b9d2e98ddf5c9ef",
     "map-filled": "b142dad87996e17c753a4f174e3265872df54a050c080ee55c1abe0badd4ba16",
     "map-vertical-filled": "24898610e3670149efb8243b5b5d2197b55a54fb2c8dc46183485856e56fe126",
@@ -581,6 +582,7 @@
     "terminal-cmd": "5bd7f052cb71dbebb67b1c5794c419399630d06751b978c8b6b242ffc274ea08",
     "terminal-git-bash": "945a5d98bb8c69d01295af6415597e2568e960dd25b2cff7d8960d477ee291fe",
     "terminal-powershell": "544d823c78301c2082cb29f41bded3acff8901c49abde26f92e64bff6cde031a",
+    "terminal-session": "739ae837b7482989b368720957e2500cd6d980c483e4e2308f3db7e1836aeca6",
     "terminal-ubuntu": "c386a9642788af882156e02d8063fca42d9d292bbe0cd121991de4c3b0c9e2c0",
     "terminal": "da8230a0f70a37dfa791217bc17697fce6c99d1ced68fc92e7ebb77abe7dc5ea",
     "text-2": "8095be0ad3ba4d0f15e0510cac5484964b308fbad7b1536b2febbaa80c1fb462",
