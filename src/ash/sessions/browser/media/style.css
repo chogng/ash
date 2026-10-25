@@ -80,6 +80,19 @@
 	border-radius: var(--ash-cornerRadius-xLarge);
 }
 
+.ash-sessions-window :is(.ash-notification, .ash-notifications-center) {
+	border-radius: var(--ash-cornerRadius-xLarge);
+	box-shadow: 0 2px 8px
+		color-mix(in srgb, var(--ash-widget-shadow) 30%, transparent);
+}
+
+.ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-sessions-window
+	:is(.ash-notification, .ash-notifications-center) {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
 .ash-sessions-window .ash-menu {
 	--ash-list-rowHeight: var(--ash-spacing-size280);
 }

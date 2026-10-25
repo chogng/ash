@@ -47,7 +47,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { ILayoutService, BrowserLayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 
-test("clearing a toast removes only its shared record from the notification center", async () => {
+test("windows without a status bar keep toast actions and notification history without a floating toggle", async () => {
 	const browser = new JSDOM("<!doctype html><body><main></main></body>");
 	try {
 		using service = new TestNotificationService();
@@ -55,15 +55,13 @@ test("clearing a toast removes only its shared record from the notification cent
 		const root = browser.window.document.querySelector<HTMLElement>("main")!;
 		using presentation = new NotificationsPresentation(root, root, service, runner);
 		const center = presentation.center;
-		const toggle = root.querySelector<HTMLButtonElement>(".ash-notifications-toggle")!;
-		assert.equal(toggle.textContent, "Notifications");
-		assert.equal(toggle.hidden, true);
+		assert.equal(root.querySelector(".ash-notifications-toggle"), null);
 		let actionRuns = 0;
 		const removed: number[] = [];
 		service.model.onDidRemove(item => removed.push(item.id));
 		const handle = service.notify({ severity: Severity.Warning, message: "Workspace needs attention", source: "fixture", actions: { primary: [{ tooltip: '', enabled: true, id: "open", label: "Open", run: () => { actionRuns++; } }] } });
 		const handleItem = service.model.getNotifications().at(-1)!;
-		assert.equal(toggle.hidden, false);
+		assert.equal(root.querySelector(".ash-notifications-toggle"), null);
 		assert.equal(root.querySelectorAll(".ash-notification").length, 1);
 		const completed = new Promise<void>(resolve => runner.onDidRun(() => resolve()));
 		root.querySelector<HTMLButtonElement>(".ash-notification-action")!.click();
@@ -82,15 +80,15 @@ test("clearing a toast removes only its shared record from the notification cent
 		root.querySelector<HTMLButtonElement>(".ash-notifications-clear")!.click();
 		assert.deepEqual(removed, [handleItem.id, retainedItem.id]);
 		assert.equal(service.model.getNotifications().length, 0);
-		assert.equal(toggle.hidden, true);
+		assert.equal(root.querySelector(".ash-notifications-toggle"), null);
 		assert.equal(root.querySelector<HTMLElement>(".ash-notifications-center")?.hidden, true);
 		center.show();
 		assert.equal(root.querySelector(".ash-notifications-empty")?.textContent, "No notifications");
 		center.hide();
 		assert.equal(root.querySelector<HTMLElement>(".ash-notifications-center")?.hidden, true);
 		service.info("Another notification");
-		assert.equal(toggle.hidden, false);
-		toggle.click();
+		assert.equal(root.querySelector(".ash-notifications-toggle"), null);
+		await presentation.services.get(ICommandService).executeCommand('notifications.toggleList');
 		assert.equal(root.querySelector<HTMLElement>(".ash-notifications-center")?.hidden, false);
 	} finally { browser.window.close(); }
 });

@@ -638,6 +638,7 @@ suite('notifications browser component', () => {
 			window.ashNotificationsIntegration.notifyOptions('Keyboard notification');
 		});
 		const toast = page.locator('.ash-notification');
+		await expect(toast).toBeVisible();
 		const origin = page.getByRole('button', { name: 'Toast keyboard origin', exact: true });
 		for (let theme = 0; theme < 4; theme++) {
 			await page.evaluate(theme => window.ashNotificationsIntegration.theme(theme), theme);

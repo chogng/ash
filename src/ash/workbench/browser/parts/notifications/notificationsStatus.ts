@@ -1,6 +1,4 @@
 import { getNotificationsPosition, NotificationsPosition, NotificationsSettings, type NotificationsModel, type NotificationItem } from '../../../common/notifications.js';
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
@@ -8,9 +6,8 @@ import { INotificationService, NotificationsFilter } from '../../../../platform/
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
 
-/** Owns the window's history indicator and the status-bar-free Sessions control. */
+/** Owns notification history and status messages in the window's status bar. */
 export class NotificationsStatus extends Disposable {
-	private readonly toggleButton: Button | undefined;
 	private readonly bell = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly statusMessage = this._register(new MutableDisposable());
 	private readonly itemChanges = this._register(new DisposableMap<number>());
@@ -19,17 +16,8 @@ export class NotificationsStatus extends Disposable {
 	private toastsVisible = false;
 	private readonly unread = new Set<number>();
 
-	constructor(root: HTMLElement, private readonly model: NotificationsModel, private readonly statusbar: IStatusbarService | undefined, private readonly toggle: () => void, @INotificationService private readonly notificationService: INotificationService, @IConfigurationService private readonly configurationService: IConfigurationService) {
+	constructor(private readonly model: NotificationsModel, private readonly statusbar: IStatusbarService | undefined, private readonly toggle: () => void, @INotificationService private readonly notificationService: INotificationService, @IConfigurationService private readonly configurationService: IConfigurationService) {
 		super();
-		if (!statusbar) {
-			this.toggleButton = this._register(new Button(root, {
-				...defaultButtonStyles,
-				label: localize('notifications.title', 'Notifications'),
-				presentation: 'secondary',
-				onClick: toggle,
-			}));
-			this.toggleButton.domNode.classList.add('ash-notifications-toggle');
-		}
 		this._register(model.onDidAdd(item => {
 			this.observe(item);
 			if (!this.centerVisible) { this.unread.add(item.id); }
@@ -95,12 +83,6 @@ export class NotificationsStatus extends Disposable {
 			if (this.alignment !== alignment) { this.bell.clear(); this.alignment = alignment; }
 			if (this.bell.value) this.bell.value.update(this.entry());
 			else this.bell.value = this.statusbar.addEntry(this.entry(), { id: 'ash.status.notifications', alignment, priority: Number.MAX_SAFE_INTEGER });
-		}
-		if (this.toggleButton) {
-			this.toggleButton.hidden = this.model.getNotifications().length === 0;
-			this.toggleButton.domNode.setAttribute('aria-label', localize('notifications.showCenter', 'Show Notification Center'));
-			this.toggleButton.domNode.setAttribute('aria-expanded', String(this.centerVisible));
-			this.toggleButton.domNode.classList.toggle('expanded', this.centerVisible);
 		}
 	}
 

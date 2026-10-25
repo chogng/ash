@@ -196,7 +196,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			}
 		};
 		this._register(addDisposableListener(document, 'keydown', onEscape, true));
-		this.status = this._register(instantiationService.createInstance(NotificationsStatus, root, model, statusbar, () => this.toggle()));
+		this.status = this._register(instantiationService.createInstance(NotificationsStatus, model, statusbar, () => this.toggle()));
 		this._register(toasts.onDidChangeVisibility(visible => this.status.update(this.open, visible)));
 		this.status.update(false, toasts.isVisible);
 		this.toasts = toasts;

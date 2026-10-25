@@ -45,9 +45,3 @@
 .ash-notifications-hide {
 	flex: 0 0 auto;
 }
-.ash-notifications-toggle {
-	position: absolute;
-	z-index: 1000;
-	inset-inline-end: 12px;
-	inset-block-end: 8px;
-}
