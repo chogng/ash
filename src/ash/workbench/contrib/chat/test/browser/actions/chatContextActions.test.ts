@@ -4,6 +4,7 @@ import { URI } from '../../../../../../base/common/uri.js';
 import { SCMHistoryItemUri } from '../../../../scm/common/history.js';
 import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../../test/unit/browser/context.js';
+import type { } from '../../../../../../../../test/fixtures/browser/chatInput.page.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';

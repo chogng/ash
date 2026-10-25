@@ -1,6 +1,7 @@
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
+import type { } from '../../../../../../../test/fixtures/browser/chatInput.page.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { BrowserContextMenuService } from '../../../../../platform/contextview/browser/contextMenuService.js';
 import { IImageEditorService } from '../../../../services/imageEditor/common/imageEditorService.js';
