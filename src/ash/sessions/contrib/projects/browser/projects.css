@@ -252,7 +252,7 @@
 	transition: none;
 }
 
-.ash-projects-menu [data-action-id="projects.delete"] {
+.ash-projects-menu .ash-projects-destructive-action {
 	color: var(--ash-error-foreground);
 }
 

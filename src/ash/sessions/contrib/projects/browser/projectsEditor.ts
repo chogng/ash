@@ -194,6 +194,9 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 						getMenuClassName: () => 'ash-projects-menu',
 						onHide: didCancel => { row.classList.remove('menu-visible'); delegate.onHide?.(didCancel); },
 					});
+					// The menu mounts synchronously in this window; Projects owns its destructive styling.
+					const destructiveAction = this.domNode.ownerDocument.querySelector('.ash-projects-menu [data-action-id="projects.delete"]');
+					destructiveAction?.classList.add('ash-projects-destructive-action');
 				},
 			}, { ariaLabel: localize('projects.actions', 'Actions for {0}', project.name), presentation: 'inherit-foreground', highlightToggledItems: false }));
 			toolbar.setActions([], this.projectActions(project), [pin]);
