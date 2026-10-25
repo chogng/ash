@@ -1,5 +1,7 @@
 {
   "ash": {
+    "chat.sessions.description.needsInput": "等待回应…",
+    "chat.sessions.description.working": "进行中…",
     "chat.slashCommandBackground": "行内聊天引用和斜杠命令的背景色。",
     "chat.slashCommandForeground": "行内聊天引用和斜杠命令的前景色。",
     "chat.voice.startCommand": "启动语音模式",

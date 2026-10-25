@@ -4,6 +4,20 @@ Chat／Cowork 共用输入、响应组件和窗口服务。Session、Thread、Tu
 
 VS Code 只读对照为 `../vscode/src/vs/workbench/contrib/chat`，首次参照 `f2d375b9623eb7245db28d3a7dab1c9fb3dddb0f`，后续参照 `3fd165bbb0d1dcafd9e3df36c3aa26474c6ecb85`。文件／公开成员差异用于定位真实消费者，不作为实现队列或兼容完成率。历史清单在 `.build/chat-alignment/inventory.json` 与 `report.html`，可恢复快照在 `.build/chat-alignment/chat-speech-validated-slices-20261013`；whole-file 快照可能包含当时共享工作区修改，不能盲目恢复。
 
+## 会话提交与运行摘要
+
+`browser/chatSessions/` 承接 Chat 的会话展示与输入生命周期：
+
+| 文件                                    | 生产入口与职责                                                                                                                                                                                  |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chatSessionCommit.ts`                  | `ChatWidgetModel` 首次发送与 Voice 准备共用草稿转正式会话的协调。先接纳原输入的选择，再发布正式身份；导航后迟到的创建仍进入目录，但不会接管新输入或继续旧发送。订阅完成或失败均释放原提交凭据。 |
+| `chatSessionDescription.ts`             | Chat 会话列表与历史选择器消费后端活动投影，显示运行中操作或等待回应；无操作文字时使用本地化摘要，列表在结束后恢复目录，历史选择器保留原活动详情。                                               |
+| `chatSessionPickerActionItem.ts`        | 现有模式／Agent 选择器共用异步选项、菜单焦点和选择生命周期。读取和执行绑定原输入，隐藏、导航和释放取消旧选项；重新显示可建立新读取。                                                            |
+| `media/chatSessionPickerActionItem.css` | 选择器的文字省略和装饰箭头；模式颜色与紧凑布局仍由原输入呈现负责。                                                                                                                              |
+| `chatSessions.contribution.ts`          | Code 的 `workbench.action.chat.open` 注册入口，复用原 View owner 并遵守本窗口 AI 开关。                                                                                                         |
+
+持久化、创建去重、提供者路由和目录发布仍归 `ISessionsManagementService` 与后端，输入选择和订阅归原 `ChatWidgetModel`。这些文件使用 Ash 的领域与菜单契约；上游扩展提供者的完整 `IChatSessionsService`、资源 URI 迁移和 contributed option group 协议尚未接入 Ash SDK。
+
 ## 输入与附件
 
 `ChatInputPart` 使用 Stanza 输入编辑器，textarea 为后备。输入字体、代码块字体与自动接受延迟的键归 `common/constants.ts`；`chat.shared.contribution.ts` 注册窗口服务和设置。命令／Skill 补全在 `browser/widget/input/editor/chatInputCompletions.ts`，装配和测试显式加载注册入口，不依赖产品类导入副作用。

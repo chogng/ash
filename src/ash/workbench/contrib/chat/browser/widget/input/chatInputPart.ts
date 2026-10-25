@@ -196,6 +196,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly modelPickerPresentationChanged = this._register(new Emitter<void>());
 	// The toolbar owns the retained item; commands open it without synthesizing DOM events.
 	private modelPickerActionItem!: ModelPickerActionItem;
+	private modePickerActionItem: ModePickerActionItem | undefined;
 	private readonly pickerResponsiveLayout: ChatInputPickerResponsiveLayout;
 	private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
 	private readonly skills = new SkillSelectorCatalog();
@@ -204,7 +205,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private serverSlashCommands: ChatInputState["slashCommands"] = [];
 	private skillSelectors: ChatInputState["skillSelectors"] = [];
 	private get mode(): ChatInputMode { return this.state.mode; }
-	private pendingAgentSelection: { readonly agent: ChatAgent | undefined; } | undefined;
 	private readonly dictationSession: DictationInput;
 	private readonly dictationHost = this._register(new MutableDisposable());
 	private dictationSample: { text: string; backend: string; } | undefined;
@@ -810,6 +810,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	invalidatePendingInput(): void {
+		this.modePickerActionItem?.hide();
 		const previous = this.inputLifecycle;
 		this.inputLifecycle = new AbortController();
 		previous.abort();
@@ -1076,7 +1077,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					const agentOptions: IAction[] = [];
 					if (this.state.canSelectAgent) {
 						const label = localize('chat.agentPicker.default', 'Default Agent');
-						agentOptions.push(new ChatInputAction('ash.chat.input.agent.default', label, label, Lxicon.unlimited, true, 'mode', () => { this.pendingAgentSelection = { agent: undefined }; }, !this.state.selectedAgent));
+						agentOptions.push(new ChatInputAction('ash.chat.input.agent.default', label, label, Lxicon.unlimited, true, 'mode', () => this.delegate.selectAgent(undefined), !this.state.selectedAgent));
 					} else if (this.state.agentName) {
 						agentOptions.push(new ChatInputAction('ash.chat.input.agent.current', this.state.agentName, this.state.agentName, Lxicon.unlimited, false, 'mode', () => { }, true));
 					}
@@ -1087,7 +1088,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 						undefined,
 						true,
 						'mode',
-						() => { this.pendingAgentSelection = { agent }; },
+						() => this.delegate.selectAgent(agent),
 						this.state.selectedAgent?.name === agent.name && this.state.selectedAgent.sourceId === agent.sourceId,
 					)));
 					return agentOptions.length > 0 ? [...options, new Separator(), ...agentOptions] : options;
@@ -1262,14 +1263,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			});
 		}
 		if (action instanceof SelectorAction) {
-			return this.instantiationService.createInstance(ModePickerActionItem, action, this.mode, () => {
-				const selected = this.pendingAgentSelection;
-				this.pendingAgentSelection = undefined;
-				if (selected) {
-					const changed = selected.agent?.name !== this.state.selectedAgent?.name || selected.agent?.sourceId !== this.state.selectedAgent?.sourceId;
-					this.delegate.selectAgent(selected.agent);
-					if (changed) return;
-				}
+			return this.modePickerActionItem = this.instantiationService.createInstance(ModePickerActionItem, action, this.mode, () => {
+				const lifetime = this.inputLifecycle.signal;
+				return () => !this.isDisposed && !lifetime.aborted && !this.state.aiDisabled;
+			}, () => {
 				this.renderToolbarActions();
 			});
 		}

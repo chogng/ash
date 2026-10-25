@@ -191,6 +191,38 @@ test('Chat mode picker loads Agents before opening the shared action widget and 
 	assert.equal(part.element.querySelector('[data-action-id="ash.chat.input.mode"] button')!.getAttribute('aria-expanded'), 'false');
 });
 
+test('Session option loading retires with the input and can reopen for the next visible lifetime', async () => {
+	const agent: ChatAgent = { name: 'Reviewer', description: 'Review changes', sourceId: 'workspace' };
+	const listing = new DeferredPromise<readonly ChatAgent[]>();
+	let reads = 0;
+	const selected: (ChatAgent | undefined)[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		listAgents: () => ++reads === 1 ? listing.p : Promise.resolve([agent]),
+		selectAgent: agent => { selected.push(agent); },
+	});
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true });
+	const trigger = () => part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mode"] button')!;
+	trigger().click();
+	part.setVisible(false);
+	await listing.complete([agent]);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(document.querySelector('.ash-chat-input-mode-menu'), null);
+	assert.deepEqual(selected, []);
+	part.setVisible(true);
+	trigger().click();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	const options = [...document.querySelectorAll<HTMLButtonElement>('.ash-chat-input-mode-menu [role=menuitemradio]')];
+	assert.equal(options.length, 7);
+	options.find(option => option.getAttribute('aria-label') === agent.name)!.click();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(selected, [agent]);
+	trigger().click();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.ok(document.querySelector('.ash-chat-input-mode-menu'));
+	part.invalidatePendingInput();
+	assert.equal(document.querySelector('.ash-chat-input-mode-menu'), null);
+});
+
 test('All context kinds insert at the cursor without an attachment bar; tool configuration persists without enabling Send', async () => {
 	const sent: ChatContextAttachment[][] = [];
 	const commands: string[] = [];
@@ -3165,11 +3197,11 @@ suite('chatInput browser component', () => {
 			await composer.evaluate(element => { element.style.width = '180px'; });
 			await expect(label).toBeHidden();
 			await expect(picker.locator('.ash-icon-label-icon')).toBeVisible();
-			await expect(picker.locator('.ash-chat-input-mode-indicator')).toBeVisible();
+			await expect(picker.locator('.ash-chat-session-picker-indicator')).toBeVisible();
 			await expect(picker).toHaveAttribute('aria-label', /^Mode: /);
 			const triggerBounds = await picker.evaluate(button => {
 				const icon = button.querySelector<HTMLElement>('.ash-icon-label-icon');
-				const indicator = button.querySelector<HTMLElement>('.ash-chat-input-mode-indicator');
+				const indicator = button.querySelector<HTMLElement>('.ash-chat-session-picker-indicator');
 				if (!icon || !indicator) throw new Error('Agent mode trigger is incomplete');
 				const buttonBounds = button.getBoundingClientRect();
 				return {

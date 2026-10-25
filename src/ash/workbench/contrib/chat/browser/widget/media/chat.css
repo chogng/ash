@@ -410,37 +410,6 @@
 	background: color-mix(in srgb, var(--ash-charts-green) 16%, transparent);
 }
 
-.ash-chat-input-mode-indicator {
-	flex: 0 0 auto;
-	margin-left: 6px;
-}
-
-.ash-chat-input-toolbars.ash-toolbar
-	.ash-action-view-item.ash-chat-input-mode-selector
-	.ash-chat-input-mode-action
-	> .ash-chat-input-mode-indicator {
-	display: inline-flex;
-}
-
-.ash-chat-input-mode-indicator > .ash-icon {
-	width: var(--ash-lxiconFontSize-compact);
-	height: var(--ash-lxiconFontSize-compact);
-	font-size: var(--ash-lxiconFontSize-compact);
-}
-
-.ash-chat-input-toolbars
-	.ash-chat-input-mode-selector
-	.ash-chat-input-action.ash-chat-input-mode-action
-	.ash-chat-input-mode-action-label {
-	position: static;
-	overflow: hidden;
-	width: auto;
-	height: auto;
-	clip-path: none;
-	text-overflow: clip;
-	white-space: nowrap;
-}
-
 .ash-chat-input-mic-action {
 	width: var(--ash-toolbar-actionSize);
 	min-width: var(--ash-toolbar-actionSize);

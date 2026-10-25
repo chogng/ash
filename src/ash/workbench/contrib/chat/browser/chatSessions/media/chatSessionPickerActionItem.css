@@ -1,0 +1,36 @@
+.ash-chat-session-picker {
+	min-width: 0;
+}
+
+.ash-chat-session-picker-indicator {
+	display: inline-flex;
+	flex: 0 0 auto;
+	margin-left: var(--ash-spacing-size60);
+}
+
+.ash-chat-input-toolbars.ash-toolbar
+	.ash-action-view-item.ash-chat-session-picker
+	.ash-chat-input-session-action
+	> .ash-chat-session-picker-indicator {
+	display: inline-flex;
+}
+
+.ash-chat-session-picker-indicator > .ash-icon {
+	width: var(--ash-lxiconFontSize-compact);
+	height: var(--ash-lxiconFontSize-compact);
+	font-size: var(--ash-lxiconFontSize-compact);
+}
+
+.ash-chat-input-toolbars
+	.ash-chat-session-picker
+	.ash-chat-input-session-action
+	.ash-chat-input-session-action-label {
+	position: static;
+	min-width: 0;
+	overflow: hidden;
+	width: auto;
+	height: auto;
+	clip-path: none;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

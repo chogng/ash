@@ -9,27 +9,11 @@ import { IQuickInputService, type IQuickPickItem } from "../../../platform/quick
 import type { SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
 import { IViewsService } from "../../../workbench/services/views/common/viewsService.js";
-import { CHAT_VIEW_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
+import { CHAT_VIEW_ID, NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
+import { getInProgressSessionDescription } from '../../../workbench/contrib/chat/browser/chatSessions/chatSessionDescription.js';
 import { ChatContextKeys } from '../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { ChatAIDisabledSettingId } from '../../../platform/chat/common/chatSettings.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
-
-registerAction2(class OpenChatAction extends Action2 {
-	constructor() {
-		super({
-			id: OPEN_CHAT_COMMAND_ID,
-			precondition: ChatContextKeys.enabled.isEqualTo(true),
-			title: localize2({ bundle: 'ash.sessions', key: 'command.OpenChatAction' }, "Open Chat"),
-			icon: Lxicon.chat4,
-			f1: true,
-		});
-	}
-
-	override run(accessor: ServicesAccessor): Promise<boolean> {
-		if (accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId)) return Promise.resolve(false);
-		return accessor.get(IViewsService).focusView(CHAT_VIEW_ID);
-	}
-});
 
 registerAction2(class NewChatAction extends Action2 {
 	constructor() {
@@ -102,7 +86,7 @@ registerAction2(class ShowChatHistoryAction extends Action2 {
 					threadId: thread.threadId,
 					label: session.title.trim() || localize('chat.title.default', 'Chat'),
 					description: [threads.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined, thread.origin.type !== 'root' && thread.title?.trim() !== session.title.trim() ? thread.title?.trim() : undefined, sessionManagementLabel(thread.management)].filter(Boolean).join(' · ') || undefined,
-					detail: thread.management?.activity?.text ?? thread.management?.summary ?? undefined,
+					detail: getInProgressSessionDescription(thread.management) ?? thread.management?.activity?.text ?? thread.management?.summary ?? undefined,
 				}));
 			})];
 		disposables.add(quickPick.onDidAccept(() => {
