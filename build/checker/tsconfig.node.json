@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022", "ESNext.Disposable"],
+    "types": ["node"]
+  },
+  "include": [
+    "../../src/typings/css.d.ts",
+    "../../src/ash/**/common/**/*.ts",
+    "../../src/ash/**/node/**/*.ts"
+  ],
+  "exclude": ["../../src/ash/**/test/**", "../../src/ash/**/fixtures/**"]
+}

@@ -106,6 +106,8 @@
     "pretypecheck:common": "pnpm run localization:generate",
     "typecheck:common": "bun check -p tsconfig.common.json --all",
     "typecheck:renderer": "bun check -p tsconfig.renderer.json --all",
+    "prevalid-layers-check": "pnpm run prepare:generated",
+    "valid-layers-check": "node build/checker/layersChecker.ts && node build/checker/layersTypeCheck.ts",
     "typecheck:test-unit": "bun check -p test/unit/tsconfig.json --all",
     "typecheck:stanza": "bun build/resources/localization.ts && bun check -p tsconfig.common.json --all && bun check -p build/desktop/vite/stanza/tsconfig.json --all",
     "typecheck:build": "node build/protocol/generate.ts && bun check -p build/tsconfig.json --all",

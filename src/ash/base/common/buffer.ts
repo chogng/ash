@@ -1,7 +1,7 @@
 import { consumeStream, newWriteableStream, type ReadableStream, type ReadableStreamEvents } from './stream.js';
 
-let textEncoder: TextEncoder | undefined;
-let textDecoder: TextDecoder | undefined;
+let textEncoder: InstanceType<typeof TextEncoder> | undefined;
+let textDecoder: InstanceType<typeof TextDecoder> | undefined;
 
 export class VSBuffer {
 	public static alloc(byteLength: number): VSBuffer {

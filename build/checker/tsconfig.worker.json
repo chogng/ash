@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022", "ESNext.Disposable", "WebWorker", "WebWorker.Iterable"],
+    "types": ["vite/client"]
+  },
+  "include": [
+    "../../src/typings/css.d.ts",
+    "../../src/ash/**/common/**/*.ts",
+    "../../src/ash/**/worker/**/*.ts",
+    "../../src/ash/**/*WorkerMain.ts",
+    "../../src/ash/editor/editor.worker.start.ts"
+  ],
+  "exclude": ["../../src/ash/**/test/**", "../../src/ash/**/fixtures/**"]
+}

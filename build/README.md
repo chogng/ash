@@ -32,6 +32,16 @@ consumers that deliberately reuse a prepared backend.
 
 Frontend CI checks Renderer sources and smoke automation types once per platform
 before building Desktop and both Web modes on Linux, Windows and macOS.
+`pnpm valid-layers-check` prepares generated inputs, rejects Node/Electron imports
+and native Main-process service references in shared or Web code, and checks each
+runtime against its own API declarations. It includes Common, Browser, Worker,
+Node, Electron renderer/Main/utility, and the separately compiled sandbox preloads.
+Frontend contracts CI runs it before the product checks. Compiler checks use the
+pinned Bun with no output; `build/checker/layersChecker.ts` uses the existing
+TypeScript Compiler API to follow renamed imports, re-exports and inferred native
+service receivers. Host-only globals are also checked by symbol origin, so a
+dependency's ambient Node declarations cannot grant those APIs to Web code.
+
 `pnpm build:prepared` requires current generated inputs and successful common,
 Renderer and automation checks; it retains TS7 Host compilation and preload
 validation. `pnpm test:unit:prepared`, `pnpm build:stanza:prepared` and
