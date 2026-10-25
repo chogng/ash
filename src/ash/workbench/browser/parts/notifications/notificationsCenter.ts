@@ -2,6 +2,8 @@ import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultS
 import "./media/notificationsCenter.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
+import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { Separator, type IAction, type IActionRunner } from "../../../../base/common/actions.js";
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -15,7 +17,7 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
 import { localize } from "../../../../nls.js";
 import { INotificationService, NotificationsFilter } from '../../../../platform/notification/common/notification.js';
-import { getNotificationsPosition, NotificationsSettings, type NotificationsModel } from '../../../common/notifications.js';
+import { getNotificationsPosition, NotificationsPosition, NotificationsSettings, type NotificationsModel } from '../../../common/notifications.js';
 import type { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { NotificationsToasts } from "./notificationsToasts.js";
 import { StatusbarHeight } from "../workbenchPartDimensions.js";
@@ -37,8 +39,10 @@ export const NotificationsFocusedContext = new RawContextKey<boolean>("notificat
 /** One window's notification presentation and history controls. */
 export class NotificationsCenter extends Disposable implements INotificationsCenter {
 	private readonly panel: HTMLElement;
+	private readonly title: HTMLElement;
 	private readonly list: HTMLElement;
-	private readonly clearButton: Button;
+	private readonly clearButton: NotificationCenterActionViewItem;
+	private readonly hideButton: NotificationCenterActionViewItem;
 	private readonly notificationList: NotificationsList;
 	private readonly status: NotificationsStatus;
 	private open = false;
@@ -79,6 +83,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			contextKeys.setContext(`config.${NotificationsSettings.NOTIFICATIONS_POSITION}`, position);
 			contextKeys.setContext(`config.${NotificationsSettings.NOTIFICATIONS_BUTTON}`, configurationService.getValue<boolean>(NotificationsSettings.NOTIFICATIONS_BUTTON) !== false);
 			this.panel.dataset.position = position;
+			this.hideButton.icon = position === NotificationsPosition.TOP_RIGHT ? Lxicon.chevronUp : Lxicon.chevronDown;
 			toasts.setPosition(position, layoutService.mainContainerOffset.top);
 			this.panel.style.setProperty('--ash-notifications-top', `${layoutService.mainContainerOffset.top + 8}px`);
 			const statusbarVisible = statusbar && configurationService.getValue<boolean>('workbench.statusBar.visible') !== false;
@@ -93,59 +98,64 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			contextKeys.removeContext(`config.${NotificationsSettings.NOTIFICATIONS_POSITION}`);
 			contextKeys.removeContext(`config.${NotificationsSettings.NOTIFICATIONS_BUTTON}`);
 		}));
-		updatePosition();
 		const header = h(document, "div"); header.className = "ash-notifications-center-header";
-		const title = h(document, "h2"); title.textContent = localize('notifications.title', 'Notifications');
-		this.clearButton = this._register(new Button(header, {
-			...defaultButtonStyles,
+		this.title = h(document, "h2");
+		header.append(this.title);
+		const clear: IAction = {
+			id: 'notifications.clearAll',
 			label: localize('notifications.clearAll', 'Clear All'),
-			presentation: "secondary",
-			onClick: () => this.clearAll(),
-		}));
-		this.clearButton.domNode.classList.add("ash-notifications-clear");
-		const doNotDisturb = this._register(new Button(header, {
-			...defaultButtonStyles,
-			label: localize('notifications.toggleDoNotDisturb', 'Toggle Do Not Disturb Mode'),
+			tooltip: localize('notifications.clearAll', 'Clear All'),
+			icon: Lxicon.clearAll,
+			get enabled() { return model.getNotifications().some(item => !item.hasActiveProgress); },
+			run: () => this.clearAll(),
+		};
+		const configureDoNotDisturb: IAction = {
+			id: 'notifications.configureDoNotDisturb',
+			label: localize('notifications.configureDoNotDisturb', 'Configure Do Not Disturb...'),
+			tooltip: localize('notifications.configureDoNotDisturb', 'Configure Do Not Disturb...'),
 			icon: Lxicon.bellSlash,
-			iconOnly: true,
-			onClick: () => this.showHeaderMenu(doNotDisturb, this.getDoNotDisturbActions()),
+			enabled: true,
+			checked: notificationService.getFilter() === NotificationsFilter.ERROR,
+			run: () => undefined,
+		};
+		const positionMenu = this._register(menuService.createMenu(MenuId.NotificationsCenterPositionMenu, contextKeys));
+		const configurePosition: IAction = {
+			id: 'notifications.configurePosition',
+			label: localize('notifications.configurePosition', 'Configure Notifications Position...'),
+			tooltip: localize('notifications.configurePosition', 'Configure Notifications Position...'),
+			icon: Lxicon.arrowSwap,
+			enabled: true,
+			run: () => undefined,
+		};
+		const hide: IAction = {
+			id: 'notifications.hideList',
+			label: localize('notifications.hideCenter', 'Hide Notification Center'),
+			tooltip: localize('notifications.hideCenter', 'Hide Notification Center'),
+			icon: Lxicon.chevronDown,
+			enabled: true,
+			run: () => this.hide(),
+		};
+		this.clearButton = new NotificationCenterActionViewItem(clear, 'ash-notifications-clear');
+		const doNotDisturb = new NotificationCenterActionViewItem(configureDoNotDisturb, undefined, button => this.showHeaderMenu(button, this.getDoNotDisturbActions()));
+		const position = new NotificationCenterActionViewItem(configurePosition, undefined, button => this.showHeaderMenu(button, positionMenu.getActions().flatMap(([, actions]) => actions)));
+		this.hideButton = new NotificationCenterActionViewItem(hide, 'ash-notifications-hide');
+		const items = new Map<IAction, NotificationCenterActionViewItem>([
+			[clear, this.clearButton],
+			[configureDoNotDisturb, doNotDisturb],
+			[configurePosition, position],
+			[hide, this.hideButton],
+		]);
+		const toolbar = this._register(new WorkbenchToolBar(header, contextMenuService, {
+			ariaLabel: localize('notifications.title', 'Notifications'),
+			actionViewItemProvider: action => items.get(action),
 		}));
-		doNotDisturb.domNode.setAttribute('aria-haspopup', 'menu');
+		toolbar.setActions([...items.keys()]);
+		updatePosition();
 		const updateDoNotDisturb = (): void => {
-			const muted = notificationService.getFilter() === NotificationsFilter.ERROR;
-			doNotDisturb.label = localize('notifications.configureDoNotDisturb', 'Configure Do Not Disturb...');
-			doNotDisturb.setTitle(doNotDisturb.label);
-			doNotDisturb.checked = muted;
+			doNotDisturb.checked = notificationService.getFilter() === NotificationsFilter.ERROR;
 		};
 		this._register(notificationService.onDidChangeFilter(updateDoNotDisturb));
 		updateDoNotDisturb();
-		const positionMenu = this._register(menuService.createMenu(MenuId.NotificationsCenterPositionMenu, contextKeys));
-		const position = this._register(new Button(header, {
-			...defaultButtonStyles, icon: Lxicon.arrowSwap, iconOnly: true,
-			label: localize('notifications.configurePosition', 'Configure Notifications Position...'),
-			onClick: () => this.showHeaderMenu(position, positionMenu.getActions().flatMap(([, actions]) => actions)),
-		}));
-		position.domNode.setAttribute('aria-haspopup', 'menu');
-		for (const [button, actions] of [
-			[doNotDisturb, () => this.getDoNotDisturbActions()],
-			[position, () => positionMenu.getActions().flatMap(([, actions]) => actions)],
-		] as const) {
-			button.domNode.setAttribute('aria-expanded', 'false');
-			this._register(addDisposableListener(button.domNode, 'keydown', event => {
-				if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-				event.preventDefault();
-				this.showHeaderMenu(button, actions());
-			}));
-		}
-		const hide = this._register(new Button(header, {
-			...defaultButtonStyles,
-			label: localize('notifications.hideCenter', 'Hide Notification Center'),
-			icon: Lxicon.close,
-			iconOnly: true,
-			onClick: () => this.hide(),
-		}));
-		hide.domNode.classList.add("ash-notifications-hide");
-		header.prepend(title);
 		this.panel.append(header);
 		this.notificationList = this._register(instantiationService.createInstance(NotificationsList, this.panel, "center", actionRunner));
 		this.list = this.notificationList.domNode;
@@ -176,11 +186,6 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		}));
 		this._register(addDisposableListener(this.panel, "keydown", event => {
 			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showCopyMenu(event);
-			if (event.key === "Delete") {
-				const target = event.target as HTMLElement;
-				const row = target.closest<HTMLElement>("[data-notification-id]");
-				if (row) { event.preventDefault(); const id = Number(row.dataset.notificationId); if (!model.get(id)?.hasActiveProgress) model.remove(id); }
-			}
 		}));
 		this._register(addDisposableListener(this.list, 'contextmenu', event => this.showCopyMenu(event)));
 		this._register(contextMenuService.onDidShowContextMenu(() => { this.contextMenuVisible = true; }));
@@ -207,10 +212,12 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 
 	show(): void {
 		if (this.isDisposed) return;
-		if (this.open) { this.panel.focus(); return; }
+		if (this.open) { this.panel.focus(); this.notificationList.focusFirst(); return; }
 		this.previousFocus = this.panel.ownerDocument.activeElement;
 		this.open = true; this.panel.hidden = false; this.toasts.setHidden(true);
-		this.render(); this.status.update(true, this.toasts.isVisible); this.panel.focus();
+		this.render(); this.status.update(true, this.toasts.isVisible);
+		this.panel.focus();
+		this.notificationList.focusFirst();
 	}
 
 	hide(): void {
@@ -223,8 +230,15 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		this.open = false; this.panel.hidden = true;
 		this.render();
 		this.toasts.setHidden(false); this.status.update(false, this.toasts.isVisible);
-		if (restoreFocus && previousFocus instanceof document.defaultView!.HTMLElement && previousFocus.isConnected) previousFocus.focus();
-		else if (restoreFocus) this.layoutService.focus();
+		if (restoreFocus) {
+			if (previousFocus instanceof document.defaultView!.HTMLElement && previousFocus.isConnected
+				&& !previousFocus.closest('[hidden], [inert], [aria-hidden="true"]') && !previousFocus.matches(':disabled')
+				&& previousFocus.checkVisibility?.({ checkVisibilityCSS: true }) !== false) {
+				previousFocus.focus();
+			} else {
+				this.layoutService.focus();
+			}
+		}
 	}
 
 	toggle(): void { if (this.open) this.hide(); else this.show(); }
@@ -253,11 +267,15 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		const document = this.panel.ownerDocument;
 		const focusedRow = document.activeElement?.closest<HTMLElement>("[data-notification-id]");
 		const focusedId = this.list.contains(focusedRow ?? null) ? focusedRow?.dataset.notificationId : undefined;
+		const focusedIndex = focusedRow ? [...this.list.children].indexOf(focusedRow) : -1;
 		const items = this.model.getNotifications().slice().reverse();
+		this.title.textContent = items.length ? localize('notifications.title', 'Notifications') : localize('notifications.noNew', 'No New Notifications');
 		this.clearButton.enabled = items.some(item => !item.hasActiveProgress);
 		this.notificationList.updateNotificationsList(0, this.list.children.length, items);
 		if (focusedId && this.open) {
-			(this.list.querySelector<HTMLElement>(`[data-notification-id="${focusedId}"]`) ?? this.list.querySelector<HTMLElement>("[data-notification-id]") ?? this.panel).focus();
+			const retained = this.list.querySelector<HTMLElement>(`[data-notification-id="${focusedId}"]`);
+			const adjacent = this.list.children[Math.min(focusedIndex, this.list.children.length - 1)] as HTMLElement | undefined;
+			(retained ?? adjacent ?? this.panel).focus();
 		}
 	}
 
@@ -337,4 +355,38 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		}
 	}
 
+}
+
+/** Retains mutable button state while the toolbar owns layout and keyboard navigation. */
+class NotificationCenterActionViewItem extends ButtonActionViewItem {
+	constructor(
+		action: IAction,
+		private readonly className?: string,
+		private readonly showMenu?: (button: Button) => void,
+	) {
+		super(action, { buttonStyles: defaultButtonStyles });
+	}
+
+	override render(container: HTMLElement): void {
+		super.render(container);
+		if (this.className) this.button.domNode.classList.add(this.className);
+		if (this.showMenu) {
+			this.button.domNode.setAttribute('aria-haspopup', 'menu');
+			this.button.domNode.setAttribute('aria-expanded', 'false');
+			this._register(addDisposableListener(this.button.domNode, 'keydown', event => {
+				if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+				event.preventDefault();
+				this.showMenu?.(this.button);
+			}));
+		}
+	}
+
+	set enabled(value: boolean) { this.button.enabled = value; }
+	set checked(value: boolean) { this.button.checked = value; }
+	set icon(value: Button['icon']) { this.button.icon = value; }
+
+	protected override runAction(): unknown {
+		if (this.showMenu) return this.showMenu(this.button);
+		return super.runAction();
+	}
 }

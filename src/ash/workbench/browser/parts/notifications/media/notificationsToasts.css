@@ -15,12 +15,16 @@
 }
 .ash-notification {
 	flex-shrink: 0;
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	border-radius: var(--ash-cornerRadius-large);
 	box-shadow: 0 4px 16px var(--ash-widget-shadow);
 }
 .ash-notification:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
+}
+.ash-high-contrast .ash-notification {
+	box-shadow: none;
 }
 .ash-feedback-host.ash-notifications-placement[data-notification-position="bottom-left"] {
 	inset-inline-start: 12px;
