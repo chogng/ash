@@ -286,6 +286,19 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await preferences.open({ query: 'Preferences: Open User Settings (JSON)' });
 	assert.ok(window.document.querySelector('.ash-sessions-customize'), 'global search discovers lazily created Settings actions');
 	await preferences.open({ section: 'general' });
+	const resourceEditorToggle = window.document.querySelector<HTMLInputElement>('input[data-configuration-key="accessibility.verbosity.resourceEditor"]');
+	assert.ok(resourceEditorToggle, 'Agents Window General exposes the resource reader preference');
+	assert.equal(resourceEditorToggle.checked, true);
+	const resourceEditorChanged = new Promise<void>(resolve => {
+		const listener = configuration.onDidChangeConfiguration(event => {
+			if (!event.affectsConfiguration('accessibility.verbosity.resourceEditor')) return;
+			listener.dispose();
+			resolve();
+		});
+	});
+	resourceEditorToggle.click();
+	await resourceEditorChanged;
+	assert.equal(configuration.getValue('accessibility.verbosity.resourceEditor'), false);
 	const aiToggle = window.document.querySelector<HTMLInputElement>('input[data-configuration-key="chat.disableAIFeatures"]');
 	assert.ok(aiToggle, 'General exposes the registered AI preference so disabled Chat can be restored');
 	assert.equal(aiToggle.getAttribute('aria-label'), 'Disable AI features');

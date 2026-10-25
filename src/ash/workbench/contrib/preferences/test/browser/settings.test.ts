@@ -161,6 +161,7 @@ const { EditorPaneRegistry, EditorPanes } = await import('../../../../browser/ed
 const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
 await import('../../browser/preferencesActions.js');
 await import('../../../../browser/actions/layoutActions.js');
+await import('../../../extensions/browser/extensions.contribution.js');
 const { createSettingsLayout, settingsRootNodes, SettingsCategories, SettingsLayout } = await import('../../browser/settingsLayout.js');
 
 // The canonical module above captures English. Chinese metadata tests need the
@@ -459,6 +460,13 @@ test('Sessions resolves its registered appearance metadata in the active languag
 	assert.ok(scope.valueType === 'select');
 	assert.equal(scope.options.find(option => option.value === 'session-shared')!.label, '会话');
 	assert.equal(defaults.all.some(setting => setting.id === SessionsConfiguration.layoutStyle), false);
+});
+
+test('resource editor accessibility is addressable without appearing in IDE settings', async () => {
+	await import('../../../../services/extensions/browser/resourceEditorAccessibility.js');
+	const defaults = new DefaultSettings();
+	assert.equal(defaults.get('accessibility.verbosity.resourceEditor').valueType, 'boolean');
+	assert.equal(defaults.all.some(setting => setting.id === 'accessibility.verbosity.resourceEditor'), false);
 });
 
 test('Extension settings use catalog identities and standard schemas without a product layout entry', () => {
@@ -1279,6 +1287,9 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.deepEqual([...features.children!].slice(0, 2).map(node => node.element.id), ['accessibilitySignals', 'accessibility']);
 	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'general');
 	assert.equal(findSettingCategory(layout, 'workbench.commandPalette.history'), 'general');
+	for (const key of ['extensions.ignoreRecommendations', 'extensions.showRecommendationsOnlyOnDemand']) {
+		assert.equal(findSettingCategory(layout, key), 'general');
+	}
 	assert.equal(findSettingCategory(layout, 'workbench.externalUriOpeners'), 'browser');
 	assert.equal(defaults.get('workbench.externalUriOpeners').valueType, 'stringMap');
 	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'general');

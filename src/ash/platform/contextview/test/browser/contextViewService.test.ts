@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { suite, test } from "mocha";
+import { expect } from '@playwright/test';
+import { useBrowserTests } from '../../../../../../test/unit/browser/context.js';
 import { JSDOM } from "jsdom";
 import { h } from "../../../../base/browser/dom.js";
 import type { IRectangle } from "../../../../base/common/layout.js";
@@ -69,4 +71,29 @@ test("point anchors render in the window that owns their viewport coordinates", 
 
 	service.dispose();
 	auxiliary.window.close();
+});
+
+suite('context view in a native modal', () => {
+	const browserTests = useBrowserTests();
+
+	test('anchored actions remain visible and clickable inside a modal and after it closes', async () => {
+		const { page } = browserTests;
+		await page.goto('/contextView.html');
+		await page.getByRole('button', { name: 'Open dialog', exact: true }).click();
+		await page.getByRole('dialog').getByRole('button', { name: 'Inside overlay', exact: true }).click();
+		await page.getByRole('button', { name: 'Overlay action', exact: true }).click();
+		await expect(page.getByRole('status')).toHaveText('1');
+		const inside = page.getByRole('dialog').getByRole('button', { name: 'Inside overlay', exact: true });
+		await inside.focus();
+		await inside.press('Enter');
+		await expect(page.getByRole('button', { name: 'Overlay action', exact: true })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(inside).toBeFocused();
+		await expect(page.getByRole('dialog')).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await page.getByRole('button', { name: 'Outside overlay', exact: true }).click();
+		await page.getByRole('button', { name: 'Overlay action', exact: true }).click();
+		await expect(page.getByRole('status')).toHaveText('2');
+	});
 });

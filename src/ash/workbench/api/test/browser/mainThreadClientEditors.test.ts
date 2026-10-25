@@ -296,6 +296,27 @@ test('resource editors validate manifest scope, reserve binary resources and ret
 
 const emptyEditorDeclarations = { getExtensionPointContributions: () => [] } as unknown as IExtensionService;
 
+test('a sibling window resource runtime does not register, invoke or load without a local package', async () => {
+	const requests: string[] = [];
+	using bridge = new MainThreadClientEditors(30_000, async () => {
+		requests.push('load');
+		throw new Error('An unsupported window must not load the client');
+	}, {
+		invoke: async () => { requests.push('invoke'); throw new Error('An unsupported window must not invoke the client'); },
+	} as unknown as IExtensionHostApi, {
+		list: async () => ({ generation: 1, extensions: [], diagnostics: [] }),
+	} as unknown as IExtensionApi, emptyEditorDeclarations);
+	const resourceRuntime = {
+		...runtime, id: 'marketplace:pdf-viewer:editor',
+		registrations: [{ kind: 'dataChannel' as const, registrationId: 'editor.resource.v1', channelId: 'editor.resource.v1' }],
+	};
+	await bridge.update({ generation: 1, extensions: [resourceRuntime] });
+	assert.deepEqual(requests, []);
+	const input = { resource: URI.file('/sibling-window.pdf'), contentType: 'application/pdf' };
+	assert.deepEqual(EditorPanes.getEditorPanesForInput(input), []);
+	assert.equal(DocumentTypes.requiresProvider(input), false);
+});
+
 test('an installed document editor declares restore and creation routes before starting its runtime', async () => {
 	const installed = {
 		...owner, sourceKind: 'registry' as const, packageSha256: runtime.packageDigest, manifestSha256: `sha256:${'b'.repeat(64)}`,

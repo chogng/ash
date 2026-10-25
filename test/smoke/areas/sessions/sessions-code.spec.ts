@@ -145,7 +145,7 @@ test('Code panel stays below the main region and retains its views across sessio
 	await expect(toggle).toBeFocused();
 	const panelBefore = await panel.boundingBox();
 	expect(await sidebar.boundingBox()).toEqual(sidebarBefore);
-	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await expect(panel).toBeHidden();
 	await expect(toggle).toHaveCount(0);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -155,13 +155,14 @@ test('Code panel stays below the main region and retains its views across sessio
 	navigation = page.locator('.ash-sessions-activity-content');
 	panel = page.locator('[data-part="panel"]');
 	toggle = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Toggle Code panel', exact: true });
-	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await expect(panel).toBeHidden();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panel).toBeVisible();
 	await toggle.click();
 	await expect(panel).toBeHidden();
-	await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await expect(panel).toBeHidden();
 	await expect(toggle).toHaveCount(0);
 });

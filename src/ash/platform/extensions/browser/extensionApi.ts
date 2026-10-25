@@ -2,7 +2,7 @@ import { Event } from '../../../base/common/event.js';
 import { LRUCache } from '../../../base/common/map.js';
 import type { IExtensionManagementService } from '../../extensionManagement/common/extensionManagementService.js';
 import type { IGlobalExtensionEnablementService } from '../../extensionManagement/common/extensionManagement.js';
-import type { ExtensionCatalog, ExtensionCatalogReload, ExtensionResourceRequest, IExtensionApi } from '../common/extensionApi.js';
+import type { ExtensionCatalog, ExtensionCatalogReload, ExtensionDescriptor, ExtensionResourceRequest, IExtensionApi } from '../common/extensionApi.js';
 import { normalizeExtensionCatalog, MAX_EXTENSION_RESOURCE_BYTES } from '../common/extensionApi.js';
 import { readAppServerResource } from '../../agentHost/browser/appServerApi.js';
 import type { IResourceApi } from '../../agentHost/common/appServerApi.js';
@@ -25,8 +25,8 @@ export function createDisconnectedExtensionApi(unavailable: UnavailableOperation
 	};
 }
 
-/** Both executable and declarative consumers read the same profile enablement. */
-export function withEnabledBuiltInExtensions(packages: IExtensionApi, enablement: IGlobalExtensionEnablementService, management?: IExtensionManagementService): IExtensionApi {
+/** Consumers share profile enablement while the window composition owns which packages it supports. */
+export function withEnabledBuiltInExtensions(packages: IExtensionApi, enablement: IGlobalExtensionEnablementService, management?: IExtensionManagementService, supportsExtension?: (extension: ExtensionDescriptor) => boolean): IExtensionApi {
 	let preloadProviders = false;
 	let pendingProviders: Promise<Awaited<ReturnType<IExtensionManagementService['listBuiltInProviders']>> | undefined> | undefined;
 	const readProviders = () => {
@@ -45,7 +45,9 @@ export function withEnabledBuiltInExtensions(packages: IExtensionApi, enablement
 			// The last catalog is only a scheduling hint. Every result still uses the
 			// current catalog and an in-flight provider read, never retained enablement.
 			const providerRead = !options?.includeDisabled && preloadProviders ? readProviders() : undefined;
-			const catalog = await catalogRead;
+			const source = await catalogRead;
+			// Including disabled packages must not restore contributions owned by another window.
+			const catalog = supportsExtension ? { ...source, extensions: source.extensions.filter(supportsExtension) } : source;
 			if (options?.includeDisabled) { return catalog; }
 			const disabled = new Set(enablement.getDisabledExtensions().map(extension => extension.id));
 			const languageExtensions = new Set(catalog.extensions.filter(extension => extension.sourceKind === 'builtIn' && JSON.parse(extension.manifestJson).ashLanguageServers).map(extension => extension.id));

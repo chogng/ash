@@ -312,7 +312,7 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 	let page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const openDesign = async (): Promise<void> => {
-		await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
+		await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
 		await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	};
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
@@ -418,7 +418,7 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 test('Sessions Design macOS canvas menu dispatches editing through Main', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const tools = canvas.locator('.ash-design-tools-widget');
@@ -494,7 +494,7 @@ test('Sessions Design imports backend asset versions, crops independently and re
 			dialog.showSaveDialog = async () => ({ canceled: false, filePath: `${folder}/design.ash-design` });
 		}, directory);
 	}
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.focus(); await page.keyboard.press('f');
@@ -564,7 +564,7 @@ test('Sessions Design saves and reopens an editable file through App Server', { 
 		dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
 	}, packagePath);
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.focus();
@@ -629,7 +629,7 @@ test('Sessions Design saves and reopens an editable file through App Server', { 
 test('Sessions Design saves and opens a browser folder without replacing the workspace', { tag: ['@browser-ui'] }, async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const folderName = await page.evaluate(async () => {
 		const name = `ash-design-${crypto.randomUUID()}`;
@@ -712,7 +712,7 @@ test('Sessions Design exports SVG and HTML and reopens grouped text and paths th
 		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
 		page = await opened;
 	}
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await canvas.focus();
@@ -1348,7 +1348,7 @@ test('Browser Code opens Sessions and reloads the routed workbench', { tag: ['@b
 	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 	const activityBar = page.locator('.ash-sessions-activity-content');
 	await expect(activityBar).toBeVisible();
-	await activityBar.getByRole('button', { name: 'Creator', exact: true }).click();
+	await activityBar.getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	await expect(page.getByRole('region', { name: 'Design canvas' })).toBeVisible();
 	await activityBar.getByRole('button', { name: 'New', exact: true }).click();

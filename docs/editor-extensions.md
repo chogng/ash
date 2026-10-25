@@ -147,7 +147,7 @@ Academy 使用中立 `editor` 市场包，`editor/` 的标准扩展 manifest 和
 
 ### 可选文献管理与 PDF 资源编辑器
 
-PDF 查看器由独立的 [`ash.pdf-viewer`](../extensions/pdf-viewer/README.md) 包提供，Code／Agents 产品均不预装；Agent Window、工作台组合入口和 Chat 不静态导入 PDF 实现。Academy 负责写作与文档编辑事务，文献检索由包含工具与 Skills 的 Plugin 提供，独立 [`ash.reference-manager`](../extensions/reference-manager/README.md) 已支持 RIS 导入、去重、文献库管理和稳定 ID 关联的引用插入／更新；BibTeX 和 CSL 样式不在首版范围。文献管理通过 Academy 的版本绑定 `academy.citations.v1` 提交一次可撤销文档事务，不能另存一份正文状态。Academy 的 PDF 导出不依赖 PDF 查看器。
+PDF 查看器由独立的 [`ash.pdf-viewer`](../extensions/pdf-viewer/README.md) 包提供，仅服务 Agent Window 的文件阅读和聊天附件预览，相关设置也只在 Agent Window 中展示。IDE 的窗口组合从扩展目录投影中排除该包，不能因同一 profile 已安装、启用或授权插件而注册 PDF 编辑器、预览或设置；共享宿主只执行窗口传入的筛选，不拥有 PDF 产品策略。Agent Window 不预装或静态导入 PDF 实现。Academy 负责写作与文档编辑事务，文献检索由包含工具与 Skills 的 Plugin 提供，独立 [`ash.reference-manager`](../extensions/reference-manager/README.md) 已支持 RIS 导入、去重、文献库管理和稳定 ID 关联的引用插入／更新；BibTeX 和 CSL 样式不在首版范围。文献管理通过 Academy 的版本绑定 `academy.citations.v1` 提交一次可撤销文档事务，不能另存一份正文状态。Academy 的 PDF 导出不依赖 PDF 查看器。
 
 PDF 包使用已安装第一方客户端的相同签名、精确授权与资源校验链，经 `editor.resource.v1` 注册二进制资源 pane。`describe` 的 `version: 1`、`clientModule`、`clientDigest` 与 `editors` 字段沿用客户端声明；每个 editor 含 `editorId`、`displayName`、`selectors` 和 `contentType`，不含文本 `documentType`。声明必须匹配包 manifest 的 custom editor。模块通过 `getResourceEditor(editorId, createInstance)` 提供构造器，宿主经 DI 构造并传入 Provider 的终止信号。`createInstance` 是随 Provider 终止失效的窄构造回调，不提供服务查找、注册或容器访问；资源 pane 用它构造自己拥有的工作副本。资源 pane 负责观察信号、取消 I/O 和冻结已有视图；宿主负责撤销路由及按 pane 生命周期释放样式。Chat 附件通过通用 `resourceEditor` 能力提供只读预览，不依赖具体 PDF 类型。
 
