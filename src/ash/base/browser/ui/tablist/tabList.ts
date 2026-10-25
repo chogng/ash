@@ -1,5 +1,5 @@
 import "./tablist.css";
-import { addDisposableListener } from "../../dom.js";
+import { addDisposableListener, getActiveElement } from "../../dom.js";
 import { AnimationFrameScheduler } from '../../scheduler.js';
 import type { Icon } from "../../../common/icon.js";
 import type { IAction } from "../../../common/actions.js";
@@ -41,8 +41,8 @@ export interface TabListItem<T> {
 	readonly primaryAction?: IAction;
 }
 
-/** Named visual presentation for the ActionBar and tabs rendered by a TabList. */
-export type TabListPresentation = "flush" | "inset";
+/** Flush and inset serve document tabs; navigation fits page categories to their labels. */
+export type TabListPresentation = "flush" | "inset" | "navigation";
 /** Fit preserves labels; shrink shares available space; fixed shares bounded equal widths. */
 export type TabListSizing = { readonly mode: 'fit' | 'shrink'; } | { readonly mode: 'fixed'; readonly minWidth: number; readonly maxWidth: number; };
 export type TabListDropPosition = ActionBarDropPosition;
@@ -151,10 +151,14 @@ export class TabList<T> extends Disposable {
 		this.element = this.scrollable.element;
 		this.scrollableElement = this.scrollable.scrollableElement;
 		this.layoutScheduler = this._register(new AnimationFrameScheduler(container.ownerDocument.defaultView!, () => {
-			// Selection and custom label updates can invalidate the whole editor's
-			// layout. Measure once after those writes, revealing the latest selection.
-			if (this.selectedTab?.isConnected) this.scrollable.reveal(this.selectedTab);
-			else this.scrollable.layout();
+			// Refreshes must keep a manually focused tab visible even when it is not selected.
+			const focusedTab = getActiveElement(this.element.ownerDocument)?.closest<HTMLElement>('.ash-tab');
+			const revealTab = focusedTab && this.actionBar.element.contains(focusedTab) ? focusedTab : this.selectedTab;
+			if (revealTab?.isConnected) {
+				this.scrollable.reveal(revealTab);
+			} else {
+				this.scrollable.layout();
+			}
 		}));
 		if (this.select) this.actionBar.element.setAttribute("aria-multiselectable", "true");
 		// Keyboard focus may move without changing the selected tab. Reveal the
@@ -221,6 +225,8 @@ export class TabList<T> extends Disposable {
 		if (selectedId !== undefined && !ids.has(selectedId)) {
 			throw new RangeError(`Selected TabList item is not available: ${selectedId}`);
 		}
+		const document = this.element.ownerDocument;
+		const hadFocus = this.actionBar.element.contains(getActiveElement(document));
 		const actions = tabs.map(tab => {
 			let action = this.actions.get(tab.id);
 			const checked = tab.id === selectedId;
@@ -236,16 +242,25 @@ export class TabList<T> extends Disposable {
 			}
 			return action;
 		});
-		this.actionBar.setActions(actions);
+		// TabAction identities are retained and always enabled; reconcile the DOM only when order or membership changes.
+		this.actionBar.updateActions(actions);
 		for (const id of this.actions.keys()) {
 			if (!ids.has(id)) {
 				this.actions.delete(id);
 				this.views.delete(id);
 			}
 		}
-		if (selectedId !== undefined) this.actionBar.setTabStop(selectedId);
-		this.selectedTab = selectedId === undefined ? undefined : [...this.actionBar.element.querySelectorAll<HTMLElement>('.ash-tab')]
-			.find(element => element.dataset.actionId === selectedId);
+		const activeElement = getActiveElement(document);
+		if (!this.actionBar.element.contains(activeElement)) {
+			if (selectedId !== undefined) {
+				this.actionBar.setTabStop(selectedId);
+			}
+			// Removing a focused tab leaves focus on the body. Respect any explicit focus transfer by the host.
+			if (hadFocus && activeElement === document.body) {
+				this.actionBar.focus();
+			}
+		}
+		this.selectedTab = selectedId === undefined ? undefined : this.views.get(selectedId)!.domNode;
 		this.layoutScheduler.schedule();
 	}
 }

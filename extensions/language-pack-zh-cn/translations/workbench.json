@@ -1091,6 +1091,7 @@
     "workbench.closeEditorWithKeybinding": "关闭（{0}）",
     "tabList.close": "关闭",
     "tabList.closeTab": "关闭 {0}",
+    "tabList.actions": "{0} 的操作",
     "workbench.closeOtherEditors": "关闭其他",
     "workbench.closeEditorsToTheLeft": "关闭左侧",
     "workbench.closeEditorsToTheRight": "关闭右侧",

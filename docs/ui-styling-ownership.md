@@ -295,7 +295,11 @@ Theme 不判断某个 tab 是否 active，Part 也不选择 active token。`TabL
 
 字号角色、字重与 CSS 用法统一由 [字体 token 规范](../.github/instructions/design-tokens.instructions.md#font-size--font-size) 维护；Sessions 的文字角色由 [Sessions 设计与样式](../src/ash/sessions/STYLE.md#字体与留白) 独立定义。本文只定义组件与宿主的字体样式所有权。
 
-`TabList` 基座拥有 tab label 的统一强调字重 `fontWeight.semiBold` 与标准高度 `tab.height`（24px）；其 `inset` presentation 统一拥有 Editor 与 Chat 使用的内缩、圆角、截断渐变和 focus 几何，两个组合控件只提供各自的非选中背景 token。`CompositeBar`、Terminal tabs 等组合控件通过 presentation 决定字号、行高和内部间距，并只能调整直接托管的 TabList root 以完成对齐。Part 不得用深层 selector 改写这些字体规则。
+`TabList` 的 `flush` 与 `inset` presentation 保留文档标签的强调字重 `fontWeight.semiBold` 与标准高度 `tab.height`（24px）；`inset` 拥有 Editor 与 Chat 使用的内缩、圆角、截断和 focus 几何，两个组合控件只提供各自的非选中背景 token。
+
+页面分类使用 `navigation` presentation：基座拥有随内容确定的宽度、受约束时的滚动、对称内容 inset、hover、选中和键盘焦点样式，标签继承根节点字体。调用方仅设置直接托管 root 的布局与字体，并通过 `tab.height`、`tabList.itemContentInset`、`tabList.hoverBackground`、`tabList.activeBackground` 和组件变量 `--ash-tab-border-radius` 选择视觉值。Sessions 的具体尺度仍由 Sessions 所属样式决定。
+
+`CompositeBar`、Terminal tabs 等组合控件通过 presentation 决定字号、行高和内部间距，并只能调整直接托管的 TabList root 以完成对齐。宿主不得用深层 selector 改写 TabList 内部字体、滚动容器或交互状态。
 
 新增视觉规则时：
 

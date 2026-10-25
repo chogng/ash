@@ -396,6 +396,7 @@
 		"--ash-sessions-titlebar-sidebar-width",
 		"--ash-shadow-lg",
 		"--ash-split-view-separator-border",
+		"--ash-tab-border-radius",
 		"--ash-tab-list-fixed-max-width",
 		"--ash-tab-list-fixed-min-width",
 		"--ash-tab-list-inactive-background",

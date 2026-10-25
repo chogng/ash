@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { suite, test } from "mocha";
 import { JSDOM } from "jsdom";
+import { expect } from '@playwright/test';
+import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
 import { TAB_CLOSE_ACTION_ID, TabList, type TabListItem } from "../../browser/ui/tablist/tabList.js";
 import { scheduleAtNextAnimationFrame } from '../../browser/scheduler.js';
 import type { IAction } from "../../common/actions.js";
@@ -8,8 +10,241 @@ import { registerLxicon } from "../../common/lxiconsUtil.js";
 import { readFileSync } from "node:fs";
 import { resetNlsResolver, setNlsMessages } from "../../../nls.js";
 import { toDisposable } from "../../common/lifecycle.js";
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
 
 const customCloseIcon = registerLxicon("tablist-test-close", { fontCharacter: 'A' });
+
+suite('TabList incremental updates', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('refresh preserves the manually focused tab, its tab stop and overflow position', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using tabs = new TabList<string>(dom.window.document.body, { ariaLabel: 'Documents', onActivate: () => { } });
+			const items = [tab('first'), tab('second'), tab('third')];
+			const viewport = tabs.scrollableElement;
+			installMetrics(viewport, { width: 100, height: 24, scrollWidth: 300, scrollHeight: 24 });
+			viewport.getBoundingClientRect = () => rect(0, 0, 100, 24);
+			tabs.setTabs(items, 'first');
+			const buttons = [...tabs.element.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+			buttons.forEach((button, index) => {
+				button.parentElement!.getBoundingClientRect = () => rect(index * 100 - viewport.scrollLeft, 0, index * 100 + 100 - viewport.scrollLeft, 24);
+			});
+			buttons[0]!.focus();
+			buttons[0]!.dispatchEvent(keyboardEvent(dom.window, 'End'));
+			assert.equal(viewport.scrollLeft, 200);
+			tabs.setTabs(items.map(item => ({ ...item })), 'first');
+			await new Promise<void>(resolve => {
+				const frame = scheduleAtNextAnimationFrame(dom.window as unknown as Window, () => { frame.dispose(); resolve(); });
+			});
+			assert.equal(dom.window.document.activeElement, buttons[2]);
+			assert.deepEqual(buttons.map(button => button.tabIndex), [-1, -1, 0]);
+			assert.equal(viewport.scrollLeft, 200, 'Refreshing must not scroll the keyboard-focused tab out of view');
+			assert.equal(buttons[0]!.getAttribute('aria-selected'), 'true');
+		} finally {
+			dom.window.close();
+		}
+	});
+
+	test('closing a focused tab hands focus to the remaining tab without stealing external focus', () => {
+		const dom = new JSDOM('<!doctype html><body><input></body>');
+		try {
+			using tabs = new TabList<string>(dom.window.document.body, {
+				ariaLabel: 'Documents', onActivate: () => { },
+				onClose: () => tabs.setTabs([tab('first')], 'first'),
+			});
+			tabs.setTabs([tab('first'), tab('second')], 'second');
+			const second = tabs.element.querySelector<HTMLButtonElement>('#second-tab')!;
+			second.focus();
+			second.dispatchEvent(keyboardEvent(dom.window, 'Delete'));
+			assert.equal(dom.window.document.activeElement, tabs.element.querySelector('#first-tab'));
+			const input = dom.window.document.querySelector('input')!;
+			input.focus();
+			tabs.setTabs([tab('third')], 'third');
+			assert.equal(dom.window.document.activeElement, input);
+		} finally {
+			dom.window.close();
+		}
+	});
+
+	test('toolbar updates retain custom actions and focus while refreshing close metadata', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using tabs = new TabList<string>(dom.window.document.body, { ariaLabel: 'Documents', onActivate: () => { }, onClose: () => { } });
+			const pin: IAction = { id: 'pin', label: 'Pin', tooltip: 'Pin', enabled: true, run: () => { } };
+			const item = { ...tab('first'), actions: { ariaLabel: 'File actions', items: [pin] } };
+			tabs.setTabs([item], 'first');
+			const toolbar = tabs.element.querySelector('.ash-tab-actions')!;
+			const pinButton = toolbar.querySelector<HTMLButtonElement>('[data-action-id="pin"] button')!;
+			pinButton.focus();
+			tabs.setTabs([{ ...item, label: 'Renamed', actions: { ...item.actions, ariaLabel: 'Renamed actions' } }], 'first');
+			assert.equal(tabs.element.querySelector('.ash-tab-actions'), toolbar);
+			assert.equal(dom.window.document.activeElement, pinButton);
+			assert.equal(toolbar.getAttribute('aria-label'), 'Renamed actions');
+			toolbar.querySelector<HTMLButtonElement>('.ash-tab-close-action button')!.focus();
+			tabs.setTabs([{ ...item, label: 'Renamed again', closeActionTooltip: 'Close shortcut' }], 'first');
+			const close = toolbar.querySelector<HTMLButtonElement>('.ash-tab-close-action button')!;
+			assert.equal(dom.window.document.activeElement, close);
+			assert.equal(close.getAttribute('aria-label'), 'Close Renamed again');
+			assert.equal(close.title, 'Close shortcut');
+		} finally {
+			dom.window.close();
+		}
+	});
+
+	test('reordering a tab preserves focus on its nested close button', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using tabs = new TabList<string>(dom.window.document.body, { ariaLabel: 'Documents', onActivate: () => { }, onClose: () => { } });
+			const items = [tab('first'), tab('second')];
+			tabs.setTabs(items, 'second');
+			const close = tabs.element.querySelector<HTMLButtonElement>('[data-action-id="second"] .ash-tab-close-action button')!;
+			close.focus();
+			tabs.setTabs([...items].reverse(), 'second');
+			assert.equal(dom.window.document.activeElement, close);
+		} finally {
+			dom.window.close();
+		}
+	});
+
+	test('removing the focused primary action returns focus to its tab', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using tabs = new TabList<string>(dom.window.document.body, { ariaLabel: 'Documents', onActivate: () => { } });
+			const primaryAction: IAction = { id: 'archive', label: 'Archive', tooltip: 'Archive', enabled: true, run: () => { } };
+			tabs.setTabs([{ ...tab('first'), primaryAction }], 'first');
+			tabs.element.querySelector<HTMLButtonElement>('.ash-tab-primary-action button')!.focus();
+			tabs.setTabs([tab('first')], 'first');
+			assert.equal(tabs.element.querySelector('.ash-tab-actions'), null);
+			assert.equal(dom.window.document.activeElement, tabs.element.querySelector('#first-tab'));
+		} finally {
+			dom.window.close();
+		}
+	});
+
+	test('equivalent snapshots do not mutate tabs and selection leaves other tabs untouched', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using tabs = new TabList<string>(dom.window.document.body, { ariaLabel: 'Categories', onActivate: () => { } });
+			const items = [tab('first'), tab('second'), tab('third')];
+			tabs.setTabs(items, 'first');
+			const group = tabs.element.querySelector('[role="tablist"]')!;
+			const [first, second, third] = group.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+			const observer = new dom.window.MutationObserver(() => { });
+			using observation = toDisposable(() => observer.disconnect());
+			observer.observe(group, { attributes: true, childList: true, subtree: true });
+			tabs.setTabs(items.map(item => ({ ...item })), 'first');
+			assert.deepEqual(observer.takeRecords(), [], 'Equivalent item objects must not rewrite DOM attributes or content');
+			tabs.setTabs(items.map(item => ({ ...item })), 'second');
+			const mutations = observer.takeRecords();
+			assert.ok(mutations.length > 0);
+			assert.ok(mutations.every(mutation => mutation.type === 'attributes' && ['class', 'aria-selected', 'tabindex'].includes(mutation.attributeName!)));
+			assert.ok(mutations.every(mutation => !third!.parentElement!.contains(mutation.target)), 'An unrelated tab needs no DOM updates');
+			assert.deepEqual([first!.getAttribute('aria-selected'), second!.getAttribute('aria-selected')], ['false', 'true']);
+			assert.deepEqual([first!.tabIndex, second!.tabIndex, third!.tabIndex], [-1, 0, -1]);
+			tabs.setTabs(items, 'second', new Set(['second', 'third']));
+			assert.equal(third!.getAttribute('aria-selected'), 'true');
+			assert.equal(third!.parentElement!.classList.contains('checked'), false);
+		} finally {
+			dom.window.close();
+		}
+	});
+
+	test('retained tabs still update and clear label, tooltip, state and ARIA metadata', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using tabs = new TabList<string>(dom.window.document.body, { ariaLabel: 'Documents', onActivate: () => { } });
+			const initial = tab('first');
+			tabs.setTabs([initial], 'first');
+			const button = tabs.element.querySelector<HTMLButtonElement>('[role="tab"]')!;
+			const changed = { ...initial, label: 'Renamed', description: 'Folder', tooltip: 'New tooltip', ariaLabel: 'Renamed document', ariaDescription: 'Unsaved', tabId: 'renamed-tab', panelId: 'renamed-panel', state: 'dirty', preview: true };
+			tabs.setTabs([changed], 'first');
+			assert.equal(tabs.element.querySelector('#renamed-tab'), button);
+			assert.equal(button.querySelector('.ash-icon-label-text')!.textContent, 'Renamed');
+			assert.equal(button.title, 'New tooltip');
+			assert.equal(button.getAttribute('aria-label'), 'Renamed document');
+			assert.equal(button.getAttribute('aria-description'), 'Unsaved');
+			assert.equal(button.getAttribute('aria-controls'), 'renamed-panel');
+			assert.equal(button.parentElement!.dataset.state, 'dirty');
+			tabs.setTabs([{ ...initial, panelId: undefined }], 'first');
+			assert.equal(button.id, initial.tabId);
+			assert.equal(button.title, initial.label);
+			assert.equal(button.getAttribute('aria-label'), initial.label);
+			assert.equal(button.getAttribute('aria-description'), null);
+			assert.equal(button.getAttribute('aria-controls'), null);
+			assert.equal(button.parentElement!.dataset.state, undefined);
+			assert.equal(button.parentElement!.classList.contains('preview'), false);
+		} finally {
+			dom.window.close();
+		}
+	});
+});
+
+suite('TabList navigation presentation', () => {
+	const browser = useBrowserTests();
+
+	for (const locale of ['en', 'zh-CN']) test(`owns label geometry, overflow and interaction without changing document tabs (${locale})`, async () => {
+		const { page } = browser;
+		await page.goto(`/tablist.html?locale=${locale}`);
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const root = page.locator('#navigation > .ash-tab-list');
+		const tabs = root.getByRole('tab');
+		await expect(root.getByRole('tablist')).toHaveAccessibleName('Categories');
+		const documentTab = page.locator('#document').getByRole('tab');
+		await expect(documentTab).toHaveCSS('font-weight', '600');
+		await expect(documentTab).toHaveCSS('height', '24px');
+		await expect(documentTab.locator('..')).toHaveCSS('border-radius', '4px');
+		await expect(documentTab.locator('..')).toHaveCSS('min-width', '64px');
+		for (const tab of await tabs.all()) {
+			await expect(tab).toHaveCSS('font-size', '14px');
+			await expect(tab).toHaveCSS('font-weight', '400');
+			await expect(tab).toHaveCSS('height', '28px');
+			await expect(tab).toHaveCSS('padding-left', '12px');
+			await expect(tab).toHaveCSS('padding-right', '12px');
+			await expect(tab).toHaveCSS('border-radius', '8px');
+		}
+		const group = (await root.boundingBox())!;
+		const first = (await tabs.first().boundingBox())!;
+		const last = (await tabs.last().boundingBox())!;
+		expect(first.x).toBeCloseTo(group.x, 1);
+		expect(last.x + last.width).toBeCloseTo(group.x + group.width, 1);
+		expect((await tabs.nth(1).boundingBox())!.width).toBeGreaterThan(first.width);
+		for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+			await page.evaluate(theme => window.ashTabListIntegration.theme(theme), theme);
+			await tabs.first().click();
+			await tabs.nth(1).hover();
+			await expect(tabs.nth(1).locator('..')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await tabs.first().press('ArrowRight');
+			await expect(tabs.nth(1)).toBeFocused();
+			await expect(tabs.nth(1)).toHaveCSS('outline-style', 'solid');
+			await expect(tabs.first()).toHaveAttribute('aria-selected', 'true');
+			await tabs.nth(1).press('Enter');
+			await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+			await expect(tabs.nth(1).locator('..')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			if (theme.startsWith('hc')) {
+				await expect(tabs.nth(1).locator('..')).not.toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
+			}
+		}
+		await page.locator('#navigation').evaluate(element => { element.style.width = '120px'; });
+		expect((await root.boundingBox())!.width).toBeLessThanOrEqual(120);
+		await tabs.nth(1).press('End');
+		await expect(tabs.last()).toBeFocused();
+		await expect.poll(() => root.locator('.ash-scrollbar-viewport').evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+		await page.evaluate(async () => {
+			window.ashTabListIntegration.refresh();
+			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+		});
+		await expect(tabs.last()).toBeFocused();
+		await expect(tabs.last()).toHaveAttribute('tabindex', '0');
+		await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+		const visible = (await root.boundingBox())!;
+		const focused = (await tabs.last().boundingBox())!;
+		expect(focused.x + focused.width).toBeLessThanOrEqual(visible.x + visible.width + 1);
+		await tabs.last().press('Home');
+		await expect(tabs.first()).toBeFocused();
+		await expect.poll(() => root.locator('.ash-scrollbar-viewport').evaluate(element => element.scrollLeft)).toBe(0);
+	});
+});
 
 test("TabList owns manual selection semantics and roving focus", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
@@ -321,6 +556,7 @@ test("TabList renders IconLabel content, custom actions, and its standard close 
 	const localizedClose = tabList.element.querySelector<HTMLButtonElement>('.ash-tab-close-action button')!;
 	assert.equal(localizedClose.title, '关闭');
 	assert.equal(localizedClose.getAttribute('aria-label'), '关闭 launch.json');
+	assert.equal(localizedClose.closest('.ash-tab-actions')?.getAttribute('aria-label'), 'launch.json 的操作');
 	localizedClose.click();
 	assert.deepEqual(closed, ['first', 'first', 'launch.json']);
 	localizedClose.focus();
