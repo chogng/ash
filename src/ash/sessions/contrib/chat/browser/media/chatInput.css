@@ -24,6 +24,24 @@
 	padding: 0 var(--ash-spacing-size240) var(--ash-spacing-size240);
 }
 
+/* Keep Code quiet at rest; use the notification's soft elevation during interaction. */
+.ash-chat-input-part.ash-sessions-chat-input.chat-composer.floating-card
+	> .ash-chat-input-container {
+	box-shadow: none;
+}
+
+.ash-chat-input-part.ash-sessions-chat-input.chat-composer.floating-card
+	> .ash-chat-input-container:is(:hover, .focused) {
+	box-shadow: 0 2px 8px
+		color-mix(in srgb, var(--ash-chat-input-shadow) 30%, transparent);
+}
+
+.ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-sessions-chat-input.chat-composer.floating-card
+	> .ash-chat-input-container {
+	box-shadow: none;
+}
+
 .ash-chat
 	> .ash-chat-input-part.ash-sessions-chat-input.chat-composer.has-conversation {
 	margin-bottom: 0;

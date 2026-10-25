@@ -17,7 +17,7 @@ import { captureElectronMenu } from '../../../automation/menus.js';
 import type { IKeyboardLayoutDefinition } from '../../../../src/ash/platform/keyboardLayout/common/keyboardLayout.js';
 import { USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT } from '../../../../src/ash/platform/keyboardLayout/common/userKeyboardLayout.js';
 
-// macOS fullscreen transitions require a shown, focused window.
+// macOS application menus and fullscreen transitions require a shown, focused window.
 const focusTest = test.extend({ electronWindowMode: process.platform === 'darwin' ? 'active' : undefined });
 const emptyWorkspaceTest = test.extend({ openWorkspace: false });
 
@@ -248,7 +248,18 @@ async function readComposerShadow(card: Locator): Promise<{ shadow: string; them
 	});
 }
 
-async function expectFloatingComposerHover(card: Locator, input: Locator, blurTarget: Locator): Promise<void> {
+async function openSessionsComposer(page: Page, presentation: 'Cowork' | 'Code'): Promise<Locator> {
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	if (presentation === 'Cowork') {
+		// Desktop's Chat mode opens ChatGPT; Collab hosts the shared Cowork composer.
+		await page.locator('[data-action-id="sessions.open.collaboration"] button').click();
+	}
+	const chat = page.locator(`.ash-sessions-chat-slot .${presentation === 'Cowork' ? 'ash-cowork' : 'ash-chat'}:visible`).first();
+	await expect(chat).toBeVisible();
+	return chat;
+}
+
+async function expectFloatingComposerHover(card: Locator, input: Locator, blurTarget: Locator, presentation: 'Cowork' | 'Code'): Promise<void> {
 	await blurTarget.hover();
 	await blurTarget.focus();
 	const colors = await card.evaluate(element => {
@@ -262,15 +273,19 @@ async function expectFloatingComposerHover(card: Locator, input: Locator, blurTa
 		return { resting, hovered };
 	});
 	await expect(card).toHaveCSS('border-top-color', colors.resting);
-	await expect(card).not.toHaveCSS('box-shadow', 'none');
+	if (presentation === 'Code') {
+		await expect(card).toHaveCSS('box-shadow', 'none');
+	} else {
+		await expect(card).not.toHaveCSS('box-shadow', 'none');
+	}
 	await expect(card).toHaveCSS('transition-property', 'border-color, box-shadow');
 	await expect(card).toHaveCSS('transition-duration', '0.2s, 0.2s');
 	await expect.poll(() => card.evaluate(element => element.getAnimations().length)).toBe(0);
 	const resting = await readComposerShadow(card);
 	const restingShadow = resting.shadow;
-	// Preserve the original two-layer effect, and reject shadows whose theme color is fully transparent.
+	// Cowork retains its two-layer elevation; Code only raises during interaction.
 	expect(resting.themeOpacity).toBeGreaterThan(0.05);
-	expect(resting.layerOpacities).toHaveLength(2);
+	expect(resting.layerOpacities).toHaveLength(presentation === 'Code' ? 0 : 2);
 	for (const [index, opacity] of resting.layerOpacities.entries()) {
 		expect(opacity).toBeGreaterThan(0);
 		expect(opacity).toBeCloseTo(resting.themeOpacity * [0.2, 0.12][index], 2);
@@ -282,10 +297,11 @@ async function expectFloatingComposerHover(card: Locator, input: Locator, blurTa
 	await expect(card).not.toHaveCSS('box-shadow', restingShadow);
 	const raised = await readComposerShadow(card);
 	const raisedShadow = raised.shadow;
-	expect(raised.layerOpacities).toHaveLength(2);
+	const raisedMix = presentation === 'Code' ? [0.3] : [0.28, 0.18];
+	expect(raised.layerOpacities).toHaveLength(raisedMix.length);
 	for (const [index, opacity] of raised.layerOpacities.entries()) {
-		expect(opacity).toBeGreaterThan(resting.layerOpacities[index]);
-		expect(opacity).toBeCloseTo(raised.themeOpacity * [0.28, 0.18][index], 2);
+		expect(opacity).toBeGreaterThan(resting.layerOpacities[index] ?? 0);
+		expect(opacity).toBeCloseTo(raised.themeOpacity * raisedMix[index], 2);
 	}
 	expect(colors.hovered).not.toBe(colors.resting);
 	await input.focus();
@@ -298,6 +314,9 @@ async function expectFloatingComposerHover(card: Locator, input: Locator, blurTa
 	await input.press('ArrowRight');
 	await expect(input).toBeFocused();
 	await expect(card).toHaveCSS('border-top-color', colors.hovered);
+	await expect(card).toHaveCSS('box-shadow', raisedShadow);
+	await card.getByRole('button').first().focus();
+	await expect(card).toHaveClass(/focused/u);
 	await expect(card).toHaveCSS('box-shadow', raisedShadow);
 	await blurTarget.focus();
 	await expect(card).not.toHaveClass(/focused/u);
@@ -996,7 +1015,7 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 	await expect(parent.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toHaveCount(0);
 });
 
-test('Sessions input shadow has its own theme color when general widget shadows are transparent', async ({ application, target, workbench }) => {
+focusTest('Sessions input shadow has its own theme color when general widget shadows are transparent', async ({ application, target, workbench }) => {
 	const parent = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	const settings = parent.getByRole('dialog', { name: 'Ash Settings' });
@@ -1011,24 +1030,15 @@ test('Sessions input shadow has its own theme color when general widget shadows 
 		await row.locator('[data-pattern-part="value"]').press('Tab');
 	}
 	await settings.locator('.ash-modal-editor-close').click();
-	let page = parent;
-	if (target.kind === 'browser') {
-		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-	} else {
-		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
-	const navigation = page.locator('.ash-sessions-activity-content');
-	for (const presentation of ['Chat', 'Code'] as const) {
-		await navigation.getByRole('button', { name: new RegExp(`^${presentation === 'Chat' ? 'New' : presentation}(?:\\.|$)`, 'u') }).click();
-		const card = page.locator(`.${presentation === 'Chat' ? 'cowork' : 'chat'}-composer :is(.ash-chat-input-container,.ash-cowork-input-container)`).first();
+	const page = await workbench.openAgentsWindow(target.kind);
+	for (const presentation of ['Cowork', 'Code'] as const) {
+		const chat = await openSessionsComposer(page, presentation);
+		const card = chat.locator('.ash-chat-input-container');
 		await expect.poll(() => card.evaluate(element => {
 			const style = getComputedStyle(element);
 			return [style.getPropertyValue('--ash-widget-shadow').trim(), style.getPropertyValue('--ash-sessions-inputShadow').trim()];
 		})).toEqual(['rgba(0, 0, 0, 0)', 'rgba(18, 52, 86, 0.4)']);
-		await expectFloatingComposerHover(card, card.getByRole('textbox', { name: 'Chat message' }), page.getByRole('button', { name: 'Hide sidebar', exact: true }));
+		await expectFloatingComposerHover(card, card.getByRole('textbox', { name: 'Chat message' }), page.getByRole('button', { name: 'Hide sidebar', exact: true }), presentation);
 	}
 	const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
 	await returnFromSessions(page, application);
@@ -1045,8 +1055,9 @@ test('Sessions input shadow has its own theme color when general widget shadows 
 });
 
 test('Sessions empty chat centers a growing input card and keeps the draft across themes and navigation', async ({ application, target, workbench }) => {
-	let page = await workbench.openAgentsWindow(target.kind);
+	const page = await workbench.openAgentsWindow(target.kind);
 	const setColorScheme = (colorScheme: 'light' | 'dark') => workbench.setAppearance(application, colorScheme, page);
+	await openSessionsComposer(page, 'Cowork');
 	const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-cowork):visible').first();
 	const card = chat.locator(':is(.ash-chat-input-container,.ash-cowork-input-container):visible');
 	const editor = new Editor(chat);
@@ -1057,7 +1068,7 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	// Windows display scaling can serialize a one-pixel border as a fractional CSS width.
 	expect(await card.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderTopWidth)))).toBe(1);
 	await expect(chat.locator(':is(.ash-chat-textarea-input,.ash-cowork-textarea-input)')).toHaveCount(0);
-	await expect(chat.locator(':is(.ash-chat-input-editor,.ash-cowork-input-editor):visible')).toHaveCSS('height', '48px');
+	await expect(chat.locator(':is(.ash-chat-input-editor,.ash-cowork-input-editor):visible')).toHaveCSS('height', '32px');
 	const bounds = await chat.boundingBox();
 	const cardBounds = await card.boundingBox();
 	expect(Math.abs(cardBounds!.x + cardBounds!.width / 2 - bounds!.x - bounds!.width / 2)).toBeLessThanOrEqual(1);
@@ -1080,12 +1091,11 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 		await setColorScheme(colorScheme);
 		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', `ash-${colorScheme}`);
 		await expectComposerFocusWithoutOutline(card, input, page.getByRole('button', { name: 'Hide sidebar', exact: true }));
-		await expectFloatingComposerHover(card, input, page.getByRole('button', { name: 'Hide sidebar', exact: true }));
+		await expectFloatingComposerHover(card, input, page.getByRole('button', { name: 'Hide sidebar', exact: true }), 'Cowork');
 		await editor.waitForEditorContents(contents => contents === 'Keep this draft');
 		await expect(card).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	}
-	const navigation = page.locator('.ash-sessions-activity-content');
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await openSessionsComposer(page, 'Code');
 	await expect(chat.locator(':is(.chat-composer,.cowork-composer)')).toBeVisible();
 	await editor.waitForEditorContents(contents => contents === 'Keep this draft');
 	await replaceChatInput(editor, Array.from({ length: 50 }, (_, index) => `Code line ${index + 1}`).join('\n'));
@@ -1095,7 +1105,7 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 		await setColorScheme(colorScheme);
 		await expect(page.locator('#app')).toHaveAttribute('data-color-theme', `ash-${colorScheme}`);
 		await expectComposerFocusWithoutOutline(card, input, page.getByRole('button', { name: 'Hide sidebar', exact: true }));
-		await expectFloatingComposerHover(card, input, page.getByRole('button', { name: 'Hide sidebar', exact: true }));
+		await expectFloatingComposerHover(card, input, page.getByRole('button', { name: 'Hide sidebar', exact: true }), 'Code');
 	}
 	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await expect(card).toHaveCSS('transition-duration', '0s');
@@ -1110,34 +1120,29 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	await input.focus();
 	await page.keyboard.press('Shift+Enter');
 	await editor.waitForEditorContents(contents => contents === 'Keep this draft\n');
-	await navigation.getByRole('button', { name: /^New(?:\.|$)/u }).click();
+	await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
+	await openSessionsComposer(page, 'Cowork');
 	await expect(chat.locator(':is(.chat-composer,.cowork-composer)')).toBeVisible();
 	await editor.waitForEditorContents(contents => contents === 'Keep this draft\n');
 });
 
-test('Sessions input card keeps a visible border without shadow or focus outline in high contrast', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
+focusTest('Sessions input card keeps a visible border without shadow or focus outline in high contrast', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		const picker = workbench.page.locator('.ash-quick-pick');
 		await picker.getByRole('combobox').fill(theme);
 		await picker.getByRole('combobox').press('Enter');
 		await expect(picker).toHaveCount(0);
-		let page = workbench.page;
-		if (target.kind === 'browser') {
-			await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-		} else {
-			if (!('windows' in application)) throw new Error('Expected Electron windows');
-			const opened = application.waitForEvent('window');
-			await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-			page = await opened;
-		}
+		const page = await workbench.openAgentsWindow(target.kind);
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', theme.endsWith('Dark') ? 'hcDark' : 'hcLight');
-		const frame = page.locator('.ash-sessions-content-card');
-		expect(await frame.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderRightWidth)))).toBe(1);
-		await expect(frame).toHaveCSS('box-shadow', 'none');
-		for (const presentation of ['Chat', 'Code'] as const) {
-			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: new RegExp(`^${presentation === 'Chat' ? 'New' : presentation}(?:\\.|$)`, 'u') }).click();
-			const card = page.locator(`.${presentation === 'Chat' ? 'cowork' : 'chat'}-composer :is(.ash-chat-input-container,.ash-cowork-input-container)`).first();
+		const sidebar = page.locator('[data-part="sidebar"]');
+		await expect(sidebar).toBeVisible();
+		expect(await sidebar.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderRightWidth)))).toBe(1);
+		await expect(sidebar).toHaveCSS('border-right-style', 'solid');
+		await expect(sidebar).not.toHaveCSS('border-right-color', 'rgba(0, 0, 0, 0)');
+		for (const presentation of ['Cowork', 'Code'] as const) {
+			const chat = await openSessionsComposer(page, presentation);
+			const card = chat.locator('.ash-chat-input-container');
 			expect(await card.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderRightWidth)))).toBe(1);
 			await expect(card).toHaveCSS('border-style', 'solid');
 			await expect(card).toHaveCSS('box-shadow', 'none');
@@ -1173,14 +1178,10 @@ test.describe('Notification Center', () => {
 });
 
 async function returnFromSessions(page: Page, application: PlaywrightApplication): Promise<void> {
-	const accountButton = page.getByRole('button', { name: 'Accounts' });
 	if ('windows' in application && process.platform === 'darwin') {
-		await captureElectronMenu(application, () => accountButton.click(), { label: 'Return to Workbench' });
-		return;
+		await waitForElectronWindowState(application, page, { focused: true });
 	}
-	await accountButton.click();
-	await expect(accountButton).toHaveAttribute('aria-expanded', 'true');
-	await page.getByRole('menuitem', { name: 'Return to Workbench' }).click();
+	await new Menus(page).selectApplication(application, ['File', 'Return to Workbench']);
 }
 
 async function expectActivityIconSize(navigation: Locator, size: number): Promise<void> {
