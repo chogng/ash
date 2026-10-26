@@ -18,7 +18,7 @@ suite('sessionsCreator browser component', () => {
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await navigation.getByRole('button', { name: /^New(?:\.|$)/u }).click();
 			await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
-			await expect(sessionsContent.getByRole('heading', { name: 'What can we work on?' })).toBeVisible();
+			await expect(sessionsContent.locator('.ash-sessions-chat-input')).toBeVisible();
 			await expect.poll(() => sessionsContent.evaluate(content => {
 				const contentBounds = content.getBoundingClientRect();
 				const viewBounds = content.querySelector('.ash-sessions-chat-view')!.getBoundingClientRect();
@@ -34,8 +34,7 @@ suite('sessionsCreator browser component', () => {
 			const navigation = page.locator('.ash-sessions-activity-content');
 			if (session === 2) {
 				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
-				await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
-				await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+				await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 			}
 			if (session === 1) {
 				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -43,7 +42,7 @@ suite('sessionsCreator browser component', () => {
 				await navigation.getByRole('button', { name: /^New(?:\.|$)/u }).click();
 			}
 			const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-cowork):visible').first();
-			await expect(chat.getByRole('heading', { name: 'What can we work on?' })).toBeVisible();
+			await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toBeVisible();
 			await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toHaveAttribute('aria-busy', 'false');
 			if (session === 2) {
 				await chat.getByRole('button', { name: 'Dismiss tip', exact: true }).click();

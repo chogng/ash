@@ -111,8 +111,9 @@ test('PDF MCP cancellation frees parser workers and the transport accepts later 
 	for (let i = 0; i < 3; i++) {
 		const controller = new AbortController();
 		const pending = client.callTool({ name: 'pdf_render_page', arguments: { path, page: 3 } }, undefined, { signal: controller.signal });
-		setTimeout(() => controller.abort(), 10);
-		await assert.rejects(pending);
+		// callTool dispatches before returning. A timer can run after the render response under load.
+		controller.abort('test cancellation');
+		await assert.rejects(pending, /test cancellation/u);
 	}
 	await client.ping();
 	const result = decoded(await client.callTool({ name: 'pdf_read', arguments: { path, start_page: 2, end_page: 2 } }));

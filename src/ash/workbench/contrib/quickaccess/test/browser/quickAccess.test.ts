@@ -285,7 +285,8 @@ suite('quickAccess browser component', () => {
 				await expect(modal.locator('.ash-keybindings-source')).toHaveText(command === 'AlphaFormat'
 					? variant.locale === 'zh-CN' ? '系统' : 'System'
 					: variant.locale === 'zh-CN' ? '未分配' : 'Unassigned');
-				const closeButton = modal.getByRole('button', { name: variant.locale === 'zh-CN' ? `关闭${title}` : `Close ${title}`, exact: true });
+				const closeToolbar = modal.getByRole('toolbar', { name: variant.locale === 'zh-CN' ? `关闭${title}` : `Close ${title}`, exact: true });
+				const closeButton = closeToolbar.getByRole('button', { name: variant.locale === 'zh-CN' ? '关闭' : 'Close', exact: true });
 				await expect(closeButton.locator('.ash-icon')).toBeVisible();
 				expect((await closeButton.locator('.ash-button-content').boundingBox())!.width).toBeGreaterThanOrEqual(16);
 				await closeButton.focus();

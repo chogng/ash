@@ -479,7 +479,10 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		this.publishEditorState(entry);
 		if (focusedTabId) {
-			this.domNode.ownerDocument.getElementById(focusedTabId)?.focus();
+			// Pointer activation can retain the old row until click finishes. Focus its visible replacement.
+			const tab = [...this.domNode.querySelectorAll<HTMLElement>('.ash-tab-label')]
+				.find(label => label.id === focusedTabId && !label.closest('[hidden]'));
+			tab?.focus();
 		}
 	}
 

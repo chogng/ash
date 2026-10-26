@@ -52,7 +52,7 @@
 .ash-artifacts-filters > .ash-button {
 	min-height: 32px;
 }
-.ash-artifacts-filters > [aria-selected="true"] {
+.ash-artifacts-filters > .selected {
 	background: var(--ash-list-inactiveSelectionBackground);
 }
 .ash-artifacts-actions {
@@ -265,7 +265,7 @@
 	box-sizing: border-box;
 }
 :is(.hc-black, .hc-light) .ash-artifacts-card,
-:is(.hc-black, .hc-light) .ash-artifacts-filters > [aria-selected="true"] {
+:is(.hc-black, .hc-light) .ash-artifacts-filters > .selected {
 	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 }
 .ash-creator-workspaces {

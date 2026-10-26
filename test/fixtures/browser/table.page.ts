@@ -1,6 +1,8 @@
 import { BrowserImageEditorService } from '../../../src/ash/workbench/services/imageEditor/browser/browserImageEditorService.js';
 import { IImageEditorService } from '../../../src/ash/workbench/services/imageEditor/common/imageEditorService.js';
 import { IHostService } from '../../../src/ash/workbench/services/host/browser/host.js';
+import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
 import { TestHostService } from '../../../src/ash/workbench/services/host/test/browser/testHostService.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { SearchSettingsModel } from '../../../src/ash/workbench/contrib/search/browser/searchSettingsModel.js';
@@ -135,6 +137,7 @@ const resources = new DisposableStore();
 if (!new URLSearchParams(location.search).has('realAudio')) resources.add(installTestDictationAudio(window));
 const configuration = resources.add(new WorkbenchConfigurationService({ source: '{"dictation.backend":"cloud"}' }));
 const services = resources.add(new InstantiationService());
+services.registerInstance(IFileService, resources.add(new FileService()));
 services.registerInstance(IEditorService, { onDidVisibleEditorsChange: Event.None, onDidActiveEditorChange: Event.None } as unknown as IEditorService);
 const notifications = resources.add(new TestNotificationService());
 services.registerInstance(INotificationService, notifications);

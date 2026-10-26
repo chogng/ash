@@ -62,15 +62,15 @@ suite('runCommands', () => {
 	});
 
 	test('rejects an invalid batch before any command runs', async () => {
-		using environment = new CommandEnvironment();
 		let calls = 0;
 		using registration = CommandsRegistry.register('test.batch.valid', () => calls++);
 		const invalid = [undefined, null, 'command', {}, { commands: 'command' }, { commands: ['test.batch.valid', null] }, { commands: ['test.batch.valid', { command: 3 }] }];
 		for (const args of invalid) {
+			using environment = new CommandEnvironment();
 			await environment.commands.executeCommand('runCommands', args);
+			assert.deepEqual(environment.notifications.model.getNotifications().map(item => item.severity), [Severity.Error]);
 		}
 		assert.equal(calls, 0);
-		assert.deepEqual(environment.notifications.model.getNotifications().map(item => item.severity), invalid.map(() => Severity.Error));
 	});
 
 	test('warns when the command list is empty', async () => {

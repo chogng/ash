@@ -159,7 +159,7 @@ test('OSC 99 rejects invalid UTF-8, malformed base64 and oversized drafts, bound
 	assert.equal(f.warnings.length, 5);
 	f.handler.handleSequence(';[[ ](http://z)Run](command:unsafe)\x1b');
 	assert.equal(f.items()[0].message, ' Run');
-	for (let index = 0; index < 200; index++) f.handler.handleSequence(`i=n${index};Message`);
+	for (let index = 0; index < 200; index++) f.handler.handleSequence(`i=n${index};Message ${index}`);
 	assert.equal(f.items().length, 128);
 	f.handler.dispose();
 	assert.deepEqual(f.items(), []);

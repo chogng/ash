@@ -1,4 +1,5 @@
 import { URI } from '../../../../base/common/uri.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { localize2 } from '../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -36,7 +37,7 @@ export class ChangesetReviewAction extends Action2 {
 			previous = current;
 		});
 		const change = await pane.getFileChange(resource, { review: true }).catch(error => {
-			if (editors.activePane !== pane) { return undefined; }
+			if (isCancellationError(error) || editors.activePane !== pane) { return undefined; }
 			throw error;
 		});
 		if (!change || editors.activePane !== pane || changedResources.has(change.uri.toString())) { return; }

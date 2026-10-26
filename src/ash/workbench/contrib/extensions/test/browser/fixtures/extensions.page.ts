@@ -98,6 +98,8 @@ import { FileService } from '../../../../../../platform/files/common/fileService
 import { MemoryFileService, MemoryResourceStore } from '../../../../bulkEdit/test/browser/bulkEditTestServices.js';
 import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
 import { LanguageService } from '../../../../../../editor/common/services/languageService.js';
+import { ILanguageFeaturesService } from '../../../../../../editor/common/services/languageFeatures.js';
+import { LanguageFeaturesService } from '../../../../../../editor/common/services/languageFeaturesService.js';
 import { IModelService } from '../../../../../../editor/common/services/model.js';
 import { ModelService } from '../../../../../../editor/common/services/modelService.js';
 import { IFileTextModelService } from '../../../../../services/textmodelResolver/common/textModelResourceService.js';
@@ -500,6 +502,7 @@ services.registerInstance(IWorkspaceExtensionsConfigService, disposables.add(ser
 services.registerInstance(IExtensionIgnoredRecommendationsService, disposables.add(services.createInstance(ExtensionIgnoredRecommendationsService)));
 const recommendationLanguages = disposables.add(new LanguageService());
 services.registerInstance(ILanguageService, recommendationLanguages);
+services.registerInstance(ILanguageFeaturesService, disposables.add(new LanguageFeaturesService()));
 services.registerInstance(IModelService, disposables.add(new ModelService(services.get(IConfigurationService), { _serviceBrand: undefined, getEOL: () => '\n' }, recommendationLanguages)));
 services.registerInstance(IExtensionService, { onDidChange: Event.None, currentCatalog: { extensions: [], generation: 1, diagnostics: [] } } as unknown as IExtensionService);
 services.registerInstance(IFileTextModelService, disposables.add(services.createInstance(BrowserTextModelService, disposables.add(new MemoryResourceStore([])), { languageService: recommendationLanguages })));

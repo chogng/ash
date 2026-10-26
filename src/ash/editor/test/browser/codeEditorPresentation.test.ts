@@ -2,6 +2,7 @@ import { attachRustSyntax } from '../../../../../test/fixtures/browser/rustSynta
 import { expect, type Page } from '@playwright/test';
 import { getAxeResults, injectAxe } from "axe-playwright";
 import { ScrollType, type IEditor } from '../../common/editorCommon.js';
+import { EditorOption } from '../../common/config/editorOptions.js';
 import { suite, test, setup, teardown } from 'mocha';
 import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
 
@@ -43,7 +44,7 @@ suite('textModel browser component', () => {
 	test('monospace width scans avoid per-line shaping and preserve complex text after font changes', async function () {
 		const { page } = browserTests;
 		await openEditor(page);
-		const result = await page.evaluate(async () => {
+		const result = await page.evaluate(async fontInfoOption => {
 			const editor = window.ashTextModelIntegration.getControl();
 			editor.getModel()!.setLanguage('plaintext');
 			editor.updateOptions({ fontFamily: 'monospace', fontLigatures: false, fontVariations: false, wordWrap: 'off', disableMonospaceOptimizations: false });
@@ -57,7 +58,7 @@ suite('textModel browser component', () => {
 			try {
 				editor.setValue(Array.from({ length: 128 }, (_, index) => `resource-lifetime-${index} ` + 'ASCII measurement '.repeat(40)).join('\n'));
 				await settle();
-				const optimized = { width: editor.getContentWidth(), shapedLines };
+				const optimized = { width: editor.getContentWidth(), shapedLines, fontInfo: editor.getOption(fontInfoOption) };
 				editor.updateOptions({ disableMonospaceOptimizations: true });
 				await settle();
 				const measured = { width: editor.getContentWidth(), shapedLines };
@@ -77,8 +78,8 @@ suite('textModel browser component', () => {
 			} finally {
 				CanvasRenderingContext2D.prototype.measureText = measureText;
 			}
-		});
-		expect(result.optimized.shapedLines).toBe(0);
+		}, EditorOption.fontInfo);
+		expect(result.optimized.shapedLines, JSON.stringify(result.optimized.fontInfo)).toBe(0);
 		expect(result.measured.shapedLines).toBeGreaterThanOrEqual(128);
 		expect(Math.abs(result.optimized.width - result.measured.width)).toBeLessThanOrEqual(1);
 		for (const difference of result.differences) expect(difference).toBeLessThanOrEqual(1);
@@ -378,6 +379,8 @@ suite('textModel browser component', () => {
 				editor.updateOptions({ wordWrap: 'off', padding: { top: 0, bottom: 0 }, minimap: { enabled: true, scale: 4, renderCharacters: true } });
 				editor.setValue('iiii\n\n \t \niiii');
 			}, theme);
+			// Discard the fixture's previous raster before capturing this document.
+			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 			const canvas = page.locator('.minimap canvas');
 			const readPixels = () => canvas.evaluate(element => {
 				const canvas = element as HTMLCanvasElement;
@@ -402,6 +405,7 @@ suite('textModel browser component', () => {
 			await expect.poll(readPixels).not.toEqual(original);
 			await page.locator('.stanza-editor-input').focus();
 			await page.keyboard.press('ControlOrMeta+z');
+			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getValue())).toBe('iiii\n\n \t \niiii');
 			await expect.poll(readPixels).toEqual(original);
 			await expect(page.locator('.minimap')).toHaveAttribute('aria-hidden', 'true');
 		});

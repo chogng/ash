@@ -21,6 +21,7 @@ import { ILanguageFeaturesService } from '../../common/services/languageFeatures
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IMarkdownRendererService } from '../../../platform/markdown/browser/markdownRenderer.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
+import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { ILanguageService } from '../../common/languages/language.js';
 import { EditorContributionInstantiation } from '../../browser/editorExtensions.js';
 import { TestLanguageConfigurationService } from '../common/modes/testLanguageConfigurationService.js';
@@ -611,6 +612,39 @@ test('standalone layout follows editor focus, geometry, and disposal', () => {
 	} finally {
 		second.dispose();
 		first.dispose();
+		dom.window.close();
+	}
+});
+
+test('standalone Quick Input follows its editor host and releases it on disposal', () => {
+	const dom = createTestDom('<!doctype html><body><main></main><aside></aside></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const first = stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, { value: 'first' });
+	const second = stanza.editor.create(dom.window.document.querySelector<HTMLElement>('aside')!, { value: 'second' });
+	const quickInput = StandaloneServices.get(IQuickInputService);
+	try {
+		first.focus();
+		using firstPicker = quickInput.createQuickPick();
+		firstPicker.items = [{ label: 'first choice' }];
+		let hides = 0;
+		using hidden = firstPicker.onDidHide(() => hides++);
+		firstPicker.show();
+		quickInput.setAlignment('center');
+		assert.ok(first.getContainerDomNode().querySelector('.ash-quick-pick'));
+		assert.equal(second.getContainerDomNode().querySelector('.ash-quick-pick'), null);
+		second.focus();
+		assert.equal(hides, 1);
+		assert.equal(quickInput.currentQuickInput, undefined);
+		first.dispose();
+		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
+		second.focus();
+		using secondPicker = quickInput.createQuickPick();
+		secondPicker.show();
+		assert.equal(quickInput.currentQuickInput, secondPicker);
+		assert.ok(second.getContainerDomNode().querySelector('.ash-quick-pick'));
+	} finally {
+		first.dispose();
+		second.dispose();
 		dom.window.close();
 	}
 });

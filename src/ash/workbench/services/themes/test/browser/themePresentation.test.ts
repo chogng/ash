@@ -24,6 +24,7 @@ suite('themes browser component', () => {
 					return Object.fromEntries([
 						'error-foreground', 'selection-background', 'accent-background',
 						'foreground', 'badge-background', 'widget-border',
+						'input-background', 'input-border', 'input-foreground',
 						'list-activeSelectionBackground', 'list-activeSelectionForeground', 'list-inactiveSelectionBackground', 'list-hoverBackground',
 					].map(id => {
 						probe.style.color = `var(--ash-${id})`;
@@ -54,7 +55,11 @@ suite('themes browser component', () => {
 			await expect(hovered).toHaveCSS('background-color', colors['list-hoverBackground']!);
 			await expect(page.locator('#default-style-probes .ash-count-badge')).toHaveCSS('background-color', colors['badge-background']!);
 			await expect(page.locator('#default-style-probes progress')).toHaveCSS('accent-color', colors['accent-background']!);
-			await expect(page.getByRole('checkbox', { name: 'Styled checkbox' })).toHaveCSS('accent-color', colors['accent-background']!);
+			const checkbox = page.getByRole('checkbox', { name: 'Styled checkbox' });
+			await expect(checkbox).toBeChecked();
+			await expect(checkbox).toHaveCSS('background-color', colors['input-background']!);
+			await expect(checkbox).toHaveCSS('border-top-color', colors['input-border']!);
+			await expect(checkbox.locator('..').locator('.ash-checkbox-checkmark')).toHaveCSS('color', colors['input-foreground']!);
 			await expect(page.locator('#default-style-probes .ash-switch-track')).toHaveCSS(
 				'background-color', colors[id.includes('high-contrast') ? 'foreground' : 'error-foreground']!,
 			);

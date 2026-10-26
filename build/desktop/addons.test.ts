@@ -43,6 +43,7 @@ export async function rebuild(options) {
 	await mkdir(join(root, 'build/desktop'), { recursive: true });
 	await copyFile(join(import.meta.dirname, 'addons.ts'), join(root, 'build/desktop/addons.ts'));
 	await copyFile(join(import.meta.dirname, '../python.ts'), join(root, 'build/python.ts'));
+	await copyFile(join(import.meta.dirname, '../processes.ts'), join(root, 'build/processes.ts'));
 	const previousPython = process.env.PYTHON;
 	const expectedPython = pythonCommand([]).command;
 	const probes: string[][] = [];

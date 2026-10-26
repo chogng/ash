@@ -238,6 +238,9 @@ const quickAccess = quickInput.quickAccess;
 const theme = parameters.get('theme') === 'hc' ? highContrastDarkColorTheme : parameters.get('theme') === 'dark' ? darkColorTheme : lightColorTheme;
 resources.add(bindTestColorTheme(resources.add(new TestThemeService(theme)), document.body));
 if (parameters.has('shortcuts')) {
+	await import('../../../../../browser/parts/editor/editor.contribution.js');
+	const { IEditorPart } = await import('../../../../../browser/parts/editor/editorPart.js');
+	const { EditorContextKeyController } = await import('../../../../../browser/parts/editor/editorContextKeys.js');
 	await import('../../../../../../base/browser/ui/styles.css');
 	if (parameters.has('shortcutRows')) {
 		for (let index = 0; index < 160; index++) {
@@ -326,6 +329,8 @@ if (parameters.has('shortcuts')) {
 		titleActions: { menuService: menus, contextMenuProvider: contextMenus },
 	}));
 	editor.layout({ width: innerWidth, height: innerHeight - 48 });
+	services.registerInstance(IEditorPart, editor);
+	resources.add(new EditorContextKeyController(contexts, editor, registry, undefined));
 	const editorService = resources.add(new BrowserEditorService(editor));
 	editorServices.registerInstance(IEditorService, editorService);
 	services.registerInstance(IEditorService, editorService);

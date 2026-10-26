@@ -202,6 +202,7 @@ export class CreatorPage extends Disposable {
 		this.filter = index;
 		this.filterButtons.forEach((button, buttonIndex) => {
 			button.domNode.setAttribute('aria-selected', String(index === buttonIndex));
+			button.domNode.classList.toggle('selected', index === buttonIndex);
 			button.domNode.tabIndex = index === buttonIndex ? 0 : -1;
 		});
 		this.artifactsDomNode.setAttribute('aria-label', this.filterButtons[index].label);

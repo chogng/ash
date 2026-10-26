@@ -132,6 +132,7 @@ services.registerInstance(IBrowserViewService, {
 	onDidEvent: pageEvents.event, getOrCreateBrowserView: async (id: string) => ({ ...info, id, state: { ...info.state, targetId: id } }), getState: async (id: string) => ({ ...info.state, targetId: id }),
 	goBack: async () => { calls.push('back'); }, goForward: async () => { calls.push('forward'); },
 	toggleElementSelection: async () => { }, toggleAreaSelection: async () => { }, stopFindInPage: async () => { },
+	setElementComments: async () => { },
 	layout: async () => { }, setVisible: async () => { }, getSharing: async () => [],
 	updateWindowConfiguration: async () => { }, focus: async () => { },
 	clearPermissions: async () => { calls.push('permissions'); }, cancelDownloads: async () => { calls.push('downloads'); },
