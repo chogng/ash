@@ -33,6 +33,7 @@ import { EditorTitleScrollbarSizingConfiguration, EditorTitleScrollbarVisibility
 import type { IEditorPaneDescriptor } from '../../editor.js';
 import { createEditorTypeActions } from './editorTypePicker.js';
 import { BreadcrumbsShowEditorTypeConfiguration } from './breadcrumbs.js';
+import { EditorPane } from './editorPane.js';
 
 export interface EditorHeaderActions {
 	readonly menuService: IMenuService;
@@ -53,6 +54,8 @@ export class EditorHeaderControl extends Disposable {
 	private outline: OutlineModel | null = null;
 	private readonly symbolListeners = this._register(new DisposableStore());
 	private readonly symbolRequest = this._register(new MutableDisposable<IDisposable>());
+	private readonly paneActionsListener = this._register(new MutableDisposable<IDisposable>());
+	private readonly toolbar: WorkbenchToolBar;
 	private editorTypes: readonly IEditorPaneDescriptor[] = [];
 	private selectEditorType: ((id: string) => Promise<unknown>) | undefined;
 	private showEditorType: boolean;
@@ -73,7 +76,7 @@ export class EditorHeaderControl extends Disposable {
 		const actionsContainer = h(titleContainer.ownerDocument, "div");
 		actionsContainer.className = "ash-editor-title-actions";
 		tabsRow.append(actionsContainer);
-		this._register(actions
+		this.toolbar = this._register(actions
 			? new MenuWorkbenchToolBar(
 				actionsContainer,
 				actions.menuService,
@@ -165,6 +168,14 @@ export class EditorHeaderControl extends Disposable {
 		this.activeInput = input;
 		this.activePane = pane;
 		if (changed) {
+			this.paneActionsListener.clear();
+			const updateActions = () => {
+				const primary = pane instanceof EditorPane ? pane.getActions() : [];
+				if (this.toolbar instanceof MenuWorkbenchToolBar) this.toolbar.setTrailingActions(primary);
+				else this.toolbar.setActions(primary, pane instanceof EditorPane ? pane.getSecondaryActions() : []);
+			};
+			updateActions();
+			if (pane instanceof EditorPane) this.paneActionsListener.value = pane.onTitleAreaUpdate(updateActions);
 			this.symbolListeners.clear();
 			this.symbolRequest.clear();
 			this.outline = null;

@@ -2712,7 +2712,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.notEqual(root.querySelector<HTMLInputElement>('[data-configuration-key="editor.fontSize"]')?.value, '29');
 
 
-	root.querySelector<HTMLButtonElement>('.ash-modal-editor-close')?.click();
+	root.querySelector<HTMLButtonElement>('.ash-modal-editor-close button')?.click();
 	await nextTurn();
 	assert.equal(host.hidden, true);
 	assert.equal(ownerDocument.activeElement, trigger);

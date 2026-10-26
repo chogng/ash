@@ -79,6 +79,7 @@ export class MenuId {
 	static readonly TitleBarLeft = new MenuId("TitleBarLeft");
 	static readonly TitleBarAdjacentCenter = new MenuId("TitleBarAdjacentCenter");
 	static readonly EditorTitle = new MenuId("EditorTitle");
+	static readonly ModalEditorTitle = new MenuId('ModalEditorTitle');
 	static readonly CompactWindowEditorTitle = new MenuId("CompactWindowEditorTitle");
 	static readonly DiffEditorViewSubmenu = new MenuId('DiffEditorViewSubmenu');
 	static readonly EditorTitleContext = new MenuId("EditorTitleContext");

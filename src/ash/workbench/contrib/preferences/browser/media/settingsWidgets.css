@@ -10,28 +10,21 @@
 }
 
 .ash-settings-search-input {
+	display: flex;
 	min-width: 0;
 	width: 100%;
 	flex: 1 1 auto;
+	align-items: center;
 }
 
-.ash-settings-target {
-	min-width: 0;
-	max-width: 30%;
-	flex: 0 1 auto;
-	margin-inline-end: var(--ash-spacing-size80);
-}
-
-.ash-settings-open-json {
+.ash-settings-search-input > .ash-settings-search-filter {
+	box-sizing: border-box;
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
 	flex-shrink: 0;
-	margin-inline-start: var(--ash-spacing-size40);
-}
-
-.ash-settings-search-filter {
-	width: 30px;
-	min-width: 30px;
-	height: 30px;
-	min-height: 30px;
+	margin-inline-end: var(--ash-spacing-size40);
 	padding: 0;
 	color: var(--ash-description-foreground);
 }
@@ -43,30 +36,14 @@
 	background: var(--ash-toolbar-hoverBackground);
 }
 
-.ash-settings-search-filter > .ash-button-content > .ash-button-label {
-	display: none;
-}
-
 .ash-settings-search-input input {
-	height: 30px;
-	padding: 4px 10px;
-	border: var(--ash-strokeThickness) solid
-		var(--ash-input-style-input-border, var(--ash-input-border));
-	border-radius: var(--ash-cornerRadius-small);
-	outline: none;
-	color: var(--ash-input-style-input-foreground, var(--ash-input-foreground));
-	background: var(
-		--ash-input-style-input-background,
-		var(--ash-input-background)
-	);
+	min-width: 0;
+	height: 28px;
+	flex: 1 1 auto;
 }
 
-.ash-settings-search-input input:focus {
+.ash-settings-search-input:focus-within {
 	border-color: var(--ash-focusBorder);
-}
-
-.ash-settings-search-input input::placeholder {
-	color: var(--ash-input-placeholderForeground);
 }
 
 .ash-configuration-setting {
