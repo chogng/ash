@@ -57,8 +57,6 @@ export class CreatorEditorPane extends EditorPane implements IEditorPane {
 /** Owns mode navigation and retained workspaces; each contribution owns its editing experience. */
 export class CreatorPage extends Disposable {
 	public readonly domNode: HTMLElement;
-	/** The window's existing conversation navigation, retained while canvas panels are shown. */
-	public navigationContainerId: string | undefined;
 	private readonly homeDomNode: HTMLElement;
 	private readonly workspacesDomNode: HTMLElement;
 	private readonly titleDomNode: HTMLElement;

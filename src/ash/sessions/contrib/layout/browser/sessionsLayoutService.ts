@@ -1,5 +1,5 @@
 import { IOutputService } from '../../../../workbench/services/output/common/output.js';
-import { ViewContainerLocation, WorkbenchViewContainerId } from '../../../../workbench/common/views.js';
+import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewContainerId } from '../../../../workbench/common/views.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -65,6 +65,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		@IEditorPart private readonly editor: IEditorPart,
 		@IEditorService private readonly editors: IEditorService,
 		@IViewsService private readonly views: IViewsService,
+		@IViewDescriptorService private readonly viewDescriptors: IViewDescriptorService,
 		@IOutputService output: IOutputService,
 		@ILayoutService private readonly layout: IAgentWorkbenchLayoutService,
 		@IStorageService private readonly storage: IStorageService,
@@ -193,11 +194,16 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				}
 				if (this.isDisposed) { return; }
 				entry = initialize ? initialize() : entry;
+				const previousEntry = this.activeEntry.get();
+				const sameWorkspace = previousEntry && (previousEntry.workspaceMode ?? 'chat') === (entry.workspaceMode ?? 'chat');
+				const sidebarContainerId = entry.sidebarContainerId
+					?? (sameWorkspace ? this.views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id : undefined)
+					?? this.viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id
+					?? SESSIONS_NAVIGATION_CONTAINER_ID;
 				this.activeEntry.set(entry, undefined);
 				if (entry.editorInput) { this.editorEntries.set(extUri.getComparisonKey(entry.editorInput.resource), entry); }
 				const productEditor = entry.content === 'editor';
 				const documents = entry.content === 'documents';
-				const sidebarContainerId = entry.sidebarContainerId ?? SESSIONS_NAVIGATION_CONTAINER_ID;
 				// Navigation visibility belongs to the window, independently of the page's side content.
 				const sidebarVisible = this.layout.isPartVisible('sidebar');
 				const state = this.visibility.get(entry.id) ?? {
@@ -218,7 +224,11 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 					this.setVisible('auxiliarybar', state.details);
 					this.setVisible('panel', documents && state.panel);
 				});
-				await this.views.openViewContainer(sidebarContainerId, entry.focus === 'sidebar' && sidebarVisible && !this.customViews.activeCustomView.get());
+				const focusSidebar = entry.focus === 'sidebar' && sidebarVisible && !this.customViews.activeCustomView.get();
+				// Keep the workspace sidebar attached while only the central page changes.
+				if (this.views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id !== sidebarContainerId || focusSidebar) {
+					await this.views.openViewContainer(sidebarContainerId, focusSidebar);
+				}
 				if (this.isDisposed) { return; }
 				this.setVisible('sidebar', sidebarVisible);
 				if (entry.detailsContainerId) { await this.views.openViewContainer(entry.detailsContainerId); }

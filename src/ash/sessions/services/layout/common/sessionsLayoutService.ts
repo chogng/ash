@@ -11,7 +11,7 @@ export interface ISessionsEntry {
 	readonly content: 'conversation' | 'documents' | 'editor';
 	/** Starts hidden on entry; user actions may reveal the shared conversation without replacing the editor or side views. */
 	readonly conversation?: 'optional';
-	/** Overrides the shared Sessions navigation content; omission preserves the window sidebar. */
+	/** Overrides workspace navigation; omission retains its current sidebar or opens the registered default on startup. */
 	readonly sidebarContainerId?: string;
 	readonly showEditorTabs?: boolean;
 	readonly detailsContainerId?: string;

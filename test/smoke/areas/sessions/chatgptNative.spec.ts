@@ -53,9 +53,12 @@ async function installService(application: ElectronApplication): Promise<void> {
 				const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
 				if (url.hostname !== 'chatgpt.com') { throw new Error('Unexpected fixture origin'); }
 				if (url.pathname.endsWith('/models')) { return Response.json(catalog); }
-				if (url.pathname.endsWith('/pins')) { return Response.json([]); }
+				if (url.pathname.endsWith('/pins')) { return Response.json([{ item: { id: 'history-pin', title: 'Pinned native history' } }]); }
 				if (url.pathname.endsWith('/gizmos/snorlax/sidebar')) { return Response.json({ items: [], cursor: null }); }
-				if (url.pathname.endsWith('/conversations')) { return Response.json({ items: [{ id: 'history-one', title: 'First native history' }, { id: 'history-two', title: 'Second native history' }], total: 2 }); }
+				if (url.pathname.endsWith('/conversations')) {
+					const items = [{ id: 'history-one', title: 'First native history' }, { id: 'history-two', title: 'Second native history' }, ...Array.from({ length: 30 }, (_, index) => ({ id: `history-extra-${index}`, title: `Additional history ${index}` }))];
+					return Response.json({ items, total: items.length });
+				}
 				if (url.pathname.endsWith('/conversation/fixture-live')) { return Response.json({ title: 'Live fixture', current_node: head, mapping: live }); }
 				if (url.pathname.includes('/conversation/history-')) {
 					const first = url.pathname.endsWith('history-one');
@@ -97,7 +100,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			}
 			await installService(application);
 			const page = await workbench.openAgentsWindow(target.kind); const commands = new QuickAccess(page);
-			await expect(page.locator('[data-action-id="sessions.open.chatgpt"]').getByRole('button', { name: 'ChatGPT', exact: true })).toBeVisible();
+			await expect(page.locator('[data-action-id="sessions.open.chatgpt"]')).toHaveCount(0);
+			await expect(page.locator('[data-action-id="sessions.newSession"] button')).toHaveAttribute('aria-current', 'page');
 			const editor = page.locator('.ash-chatgpt-widget'); await expect(editor).toBeVisible();
 			await expect(page.locator('.ash-chat2-editor, .ash-web-bridge')).toHaveCount(0);
 			const input = editor.getByRole('textbox', { name: locale === 'en' ? 'Ask ChatGPT' : '询问 ChatGPT', exact: true });
@@ -175,19 +179,61 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(locale === 'en' ? /Use New at the top of the sidebar to start a chat/u : /使用侧栏顶部的“新建”开始聊天/u);
 			await page.keyboard.press('Escape');
 			await testInfo.attach(`chatgpt-entry-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
-			await page.locator('[data-action-id="sessions.open.projects"] button').click();
-			await expect(editor).toBeHidden();
-			await commands.runCommand('sessions.open.chatgpt');
-			await expect(editor).toBeVisible(); await composer.waitForEditorContents(text => text === 'Draft in first history');
+			const pinned = history.locator('[data-group="pinned"] .ash-pane-view-header-button');
+			await pinned.click();
+			await expect(pinned).toHaveAttribute('aria-expanded', 'false');
+			const retainedHistory = await history.elementHandle();
+			const viewport = history.locator('.ash-scrollbar-viewport').first();
+			const pages = [
+				{ action: 'sessions.open.projects', content: '.ash-projects' },
+				{ action: 'sessions.open.creator', content: '.ash-creator-home' },
+				{ action: 'sessions.open.customize', content: '.ash-customize' },
+			];
+			for (const entry of pages) {
+				await viewport.evaluate(element => { element.scrollTop = 96; });
+				await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(96);
+				await page.locator(`[data-action-id="${entry.action}"] button`).click();
+				await expect(page.locator(entry.content)).toBeVisible();
+				await expect(editor).toBeHidden();
+				await expect(history).toBeVisible();
+				expect(await history.evaluate((element, retained) => element === retained, retainedHistory)).toBe(true);
+				await expect(pinned).toHaveAttribute('aria-expanded', 'false');
+				await expect(history.getByRole('button', { name: 'First native history', exact: true })).toHaveAttribute('aria-current', 'page');
+				await expect(viewport).toHaveJSProperty('scrollTop', 96);
+				if (entry.action === 'sessions.open.creator') {
+					await page.locator('.ash-creator-home').getByRole('button', { name: locale === 'en' ? 'Design' : '设计', exact: true }).click();
+					await expect(page.locator('.ash-sessions-design-view')).toBeVisible();
+					await expect(history).toBeVisible();
+					expect(await history.evaluate((element, retained) => element === retained, retainedHistory)).toBe(true);
+				}
+				await history.getByRole('button', { name: 'First native history', exact: true }).click();
+				await expect(editor).toBeVisible();
+				await composer.waitForEditorContents(text => text === 'Draft in first history');
+				await composer.waitForEditorFocus();
+			}
+			await retainedHistory!.dispose();
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: locale === 'en' ? 'Code' : '代码', exact: true }).click();
 			await expect(editor).toBeHidden();
 			await commands.runCommand('sessions.open.chatgpt');
 			await expect(editor).toContainText('History one answer');
 			await composer.waitForEditorContents(text => text === 'Draft in first history');
 			expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(4);
-			const restored = await workbench.reopenAgentsWindow(application, page);
+			let restored = await workbench.reopenAgentsWindow(application, page);
 			await expect(restored.locator('.ash-chatgpt-widget')).toContainText('History one answer');
-			await expect(restored.locator('[data-action-id="sessions.open.chatgpt"] button')).toHaveAccessibleName('ChatGPT');
+			await expect(restored.locator('[data-action-id="sessions.open.chatgpt"]')).toHaveCount(0);
+			await expect(restored.locator('[data-action-id="sessions.newSession"] button')).toHaveAttribute('aria-current', 'page');
+			for (const entry of pages) {
+				await restored.locator(`[data-action-id="${entry.action}"] button`).click();
+				restored = await workbench.reopenAgentsWindow(application, restored);
+				await expect(restored.locator(entry.content)).toBeVisible();
+				const restoredHistory = restored.locator('.ash-chatgpt-navigation');
+				await expect(restoredHistory).toBeVisible();
+				await expect(restoredHistory.locator('[data-group="pinned"] .ash-pane-view-header-button')).toHaveAttribute('aria-expanded', 'false');
+				await expect(restoredHistory.getByRole('button', { name: 'First native history', exact: true })).toHaveAttribute('aria-current', 'page');
+				await restoredHistory.getByRole('button', { name: 'First native history', exact: true }).click();
+				await expect(restored.locator('.ash-chatgpt-widget')).toContainText('History one answer');
+				await new Editor(restored.locator('.ash-chatgpt-widget')).waitForEditorFocus();
+			}
 			expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(4);
 		});
 	});

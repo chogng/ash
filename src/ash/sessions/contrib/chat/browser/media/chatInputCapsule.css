@@ -18,7 +18,8 @@
 .ash-chat-input-capsule:hover,
 .ash-chat-input-capsule:focus-within {
 	border-color: var(--ash-widget-border);
-	box-shadow: 0 4px 16px var(--ash-sessions-inputShadow);
+	box-shadow: 0 2px 8px
+		color-mix(in srgb, var(--ash-sessions-inputShadow) 30%, transparent);
 }
 
 .ash-chat-input-capsule-editor {

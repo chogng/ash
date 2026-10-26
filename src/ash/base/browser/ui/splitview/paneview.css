@@ -5,6 +5,8 @@
 	overflow: hidden;
 }
 .ash-pane-view {
+	--ash-pane-header-height: 28px;
+
 	display: flex;
 	min-width: 0;
 	min-height: 0;
@@ -17,8 +19,8 @@
 }
 .ash-pane-view-header {
 	display: flex;
-	height: 28px;
-	flex: 0 0 28px;
+	height: var(--ash-pane-header-height);
+	flex: 0 0 var(--ash-pane-header-height);
 	align-items: center;
 	border-radius: var(--ash-cornerRadius-small);
 	padding: 0 4px;

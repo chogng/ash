@@ -96,7 +96,7 @@ import { WebWorkerService } from '../platform/webWorker/browser/webWorkerService
 registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed);
 
 MenusRegistry.appendMenuItem(Menus.ActivityBar, {
-	command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.has('sessions.activity.chatSelected') },
+	command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.or(ContextKeyExpr.has('sessions.activity.chatSelected'), ContextKeyExpr.has('sessions.activity.chatgptSelected')) },
 	group: 'navigation', order: 10,
 });
 

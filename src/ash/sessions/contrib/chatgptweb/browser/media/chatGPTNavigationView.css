@@ -1,5 +1,5 @@
 .ash-chatgpt-navigation {
-	--ash-list-rowHeight: var(--ash-spacing-size360);
+	--ash-list-rowHeight: var(--ash-spacing-size320);
 
 	box-sizing: border-box;
 	display: flex;
@@ -10,9 +10,8 @@
 	padding-top: 20px;
 	background: var(--ash-sideBar-background, ButtonFace);
 	color: var(--ash-foreground, CanvasText);
-	font:
-		var(--ash-fontSize-body1, 13px)/1.5 system-ui,
-		sans-serif;
+	font-size: var(--ash-fontSize-body1, 14px);
+	line-height: 1.5;
 }
 
 .ash-chatgpt-navigation * {
@@ -20,7 +19,7 @@
 }
 
 .ash-chatgpt-navigation :is(.ash-chatgpt-conversation, .ash-action-label) {
-	min-height: var(--ash-spacing-size360);
+	min-height: var(--ash-spacing-size320);
 	padding: var(--ash-spacing-size60) var(--ash-spacing-size120);
 	text-align: left;
 }
@@ -34,7 +33,39 @@
 
 .ash-chatgpt-navigation-list {
 	/* Keep content inset while the scroll track reaches the sidebar edge. */
-	padding: 0 12px 20px;
+	padding: 0 var(--ash-spacing-size80) var(--ash-spacing-size200);
+}
+
+/* History groups share the sidebar's navigation treatment, within the retained ViewPanes. */
+.ash-chatgpt-navigation .ash-pane-view-header {
+	padding: 0 var(--ash-spacing-size120);
+	border-radius: var(--ash-cornerRadius-large);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-regular);
+}
+
+.ash-chatgpt-navigation .ash-pane-view-header:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-chatgpt-navigation .ash-pane-view-header-button {
+	gap: var(--ash-spacing-size80);
+	border-radius: inherit;
+}
+
+.ash-chatgpt-navigation .ash-pane-view-header-twisty-container {
+	order: 1;
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
+	flex: 0 0 var(--ash-lxiconFontSize);
+	margin: 0;
+}
+
+/* These content-sized groups scroll together; they do not need pane separators. */
+.ash-chatgpt-navigation
+	.ash-split-view
+	> .ash-split-view-pane::before {
+	content: none;
 }
 
 .ash-chatgpt-navigation-row {

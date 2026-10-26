@@ -95,6 +95,25 @@ test("Pane owns titled collapse semantics and its stable visual state", () => {
 	dom.window.close();
 });
 
+test('Pane custom header size keeps collapse and body constraints consistent', () => {
+	const document = browserEnvironment.window.document;
+	using pane = new Pane(document.body, { id: 'custom-header', title: 'Custom header', headerSize: 32, minimumBodySize: 64, maximumBodySize: 64 });
+	const body = pane.element.querySelector<HTMLElement>('.ash-pane-view-content')!;
+	assert.equal(pane.element.style.getPropertyValue('--ash-pane-header-height'), '32px');
+	assert.equal(pane.minimumSize, 96);
+	assert.equal(pane.maximumSize, 96);
+	pane.layout(96, 0, 200);
+	assert.equal(body.style.height, '64px');
+	pane.setCollapsed(true);
+	assert.equal(pane.minimumSize, 32);
+	assert.equal(pane.maximumSize, 32);
+	pane.setHeaderVisible(false);
+	assert.equal(pane.minimumSize, 0);
+	pane.setCollapsed(false);
+	assert.equal(pane.minimumSize, 64);
+	assert.equal(pane.maximumSize, 64);
+});
+
 test("PaneView restores expanded sizes, retains content across moves and detaches removed listeners", () => {
 	const document = browserEnvironment.window.document;
 	using view = new PaneView(document.body);

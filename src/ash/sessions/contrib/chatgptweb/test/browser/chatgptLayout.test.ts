@@ -424,13 +424,14 @@ suite('chatgptweb browser component', () => {
 				expect(modelBounds!.y).toBe(sendBounds!.y);
 				await page.mouse.move(1, 1);
 				const restingShadow = await composer.evaluate(element => getComputedStyle(element).boxShadow);
+				const activeShadow = `color(srgb 0 0 0 / ${theme === 'light' ? '0.0482353' : '0.12'}) 0px 2px 8px 0px`;
 				await fillMessage(page, 'A short prompt');
 				await expectDraft(page, 'A short prompt');
 				await expect(send).toHaveAttribute('aria-label', locale === 'en' ? 'Send' : '发送');
 				await expect(send.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'arrow-up');
 				await expect(editor).toHaveCSS('height', '20px');
 				if (!theme.startsWith('hc')) {
-					await expect.poll(() => composer.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe(restingShadow);
+					await expect(composer).toHaveCSS('box-shadow', activeShadow);
 				} else {
 					await expect(composer).toHaveCSS('box-shadow', 'none');
 					await expect(composer).not.toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
@@ -466,7 +467,7 @@ suite('chatgptweb browser component', () => {
 				await expect.poll(() => composer.evaluate(element => getComputedStyle(element).boxShadow)).toBe(restingShadow);
 				await composer.hover();
 				if (!theme.startsWith('hc')) {
-					await expect.poll(() => composer.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe(restingShadow);
+					await expect(composer).toHaveCSS('box-shadow', activeShadow);
 				}
 				await input.focus();
 				await page.mouse.move(1, 1);
@@ -725,6 +726,7 @@ suite('chatgptweb browser component', () => {
 			const second = list.locator('[data-group="g-p-two"]');
 			const toggle = (group: typeof first) => group.locator(':scope > .ash-pane-view-header > .ash-pane-view-header-button');
 			await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveCount(4);
+			for (const group of [pinned, first, second, recent]) { await expect(toggle(group)).toHaveCSS('height', '32px'); }
 			await toggle(pinned).focus();
 			await page.keyboard.press('ArrowDown'); await expect(toggle(first)).toBeFocused();
 			await page.keyboard.press('ArrowDown'); await expect(toggle(second)).toBeFocused();
@@ -857,7 +859,7 @@ suite('chatgptweb browser component', () => {
 			await expect(title).toBeVisible();
 			for (const forcedColors of ['none', 'active'] as const) {
 				await page.emulateMedia({ forcedColors });
-				expect((await row.boundingBox())!.height).toBe(36);
+				expect((await row.boundingBox())!.height).toBe(32);
 				for (const action of [more, row.getByRole('button', { name: labels.pin, exact: true })]) {
 					await expect(action).toHaveCSS('width', '28px');
 					await expect(action).toHaveCSS('height', '28px');
