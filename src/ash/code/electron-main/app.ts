@@ -172,7 +172,8 @@ export interface AshApplicationOptions {
 	readonly rendererRoot: string;
 	/** Selects whether this Electron process starts the App Server before opening its window. */
 	readonly appServerStartupMode: AppServerStartupMode;
-	/** Host-selected IPC capabilities installed for every Workbench window. */
+	/** The development supervisor owns replacement processes through its IPC lifetime. */
+	readonly developmentLauncher: boolean;
 }
 
 interface PersistentServices {
@@ -230,6 +231,7 @@ export class AshApplication extends Disposable {
 	private readonly rendererRoot: string;
 	private readonly chatGPTChannels = new Map<string, IServerChannel<string>>();
 	private readonly appServerStartupMode: AppServerStartupMode;
+	private readonly developmentLauncher: boolean;
 	private readonly disposableTracker: DisposableTracker | undefined;
 	private readonly tracking: globalThis.Disposable | undefined;
 	private readonly trustedIpcRouter: TrustedIpcRouter;
@@ -385,6 +387,7 @@ export class AshApplication extends Disposable {
 		}));
 		this.rendererRoot = options.rendererRoot;
 		this.appServerStartupMode = options.appServerStartupMode;
+		this.developmentLauncher = options.developmentLauncher;
 		this.disposableTracker = disposableTracker;
 		this.tracking = tracking;
 		this.trustedIpcRouter = this._register(new TrustedIpcRouter(ipcMain));
@@ -874,6 +877,9 @@ export class AshApplication extends Disposable {
 	}
 
 	private readonly onSecondInstance = (_event: ElectronEvent, arguments_: string[], cwd: string, data: unknown): void => {
+		// A supervised replacement retries the lock until this instance exits;
+		// forwarding each attempt would repeatedly open its files and windows here.
+		if (!app.isPackaged && isRecord(data) && data.developmentLauncher === true) return;
 		if (data && typeof data === 'object' && 'launchArguments' in data) {
 			if (!Array.isArray(data.launchArguments) || !data.launchArguments.every((argument: unknown) => typeof argument === 'string')) {
 				throw new TypeError('Invalid launch arguments from another process');
@@ -2317,6 +2323,15 @@ export class AshApplication extends Disposable {
 	private readonly onWillQuit = (event: ElectronEvent): void => {
 		if (this.quitAfterServicesClosed) {
 			// Schedule the new process only after every window accepted shutdown and state was saved.
+			if (this.restartRequested && this.developmentLauncher) {
+				event.preventDefault();
+				this.restartRequested = false;
+				// The watcher owns replacement and cleanup. Electron's detached
+				// relaunch would escape it and keep the old development profile busy.
+				if (process.connected && process.send) process.send('ash:dev:relaunch', () => app.quit());
+				else app.quit();
+				return;
+			}
 			if (this.restartRequested) { app.relaunch(); }
 			this.dispose();
 			this.releaseDisposableTracker();

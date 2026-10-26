@@ -105,6 +105,41 @@ test('Workbench and Agents stop together, restart one daemon, and reconnect with
 	tracker.assertNoLeaks();
 });
 
+test('an older runtime acquisition cannot roll back a newer completed reload', async () => {
+	using resources = new DisposableStore();
+	const events: string[] = [];
+	const window = connection(resources, 'workbench', events);
+	const newestRuntime = resolve('/test/newest');
+	let runtime = newRuntime;
+	let acquisitions = 0;
+	let staleReleased = false;
+	const stale = Object.assign(toDisposable(() => { staleReleased = true; }), { runtime: newRuntime, assertActive() { assert.equal(staleReleased, false); } });
+	const newest = Object.assign(toDisposable(() => { }), { runtime: newestRuntime, assertActive() { } });
+	const acquiring = new DeferredPromise<void>();
+	const acquired = new DeferredPromise<IDevelopmentAppServerRuntime>();
+	const reloader = resources.add(new DevelopmentAppServerReloader({
+		generationFile: resolve('/test/current.json'),
+		watchGeneration: () => toDisposable(() => { }),
+		readGeneration: async () => runtime,
+		acquireGeneration: async () => {
+			if (++acquisitions === 1) { void acquiring.complete(); return acquired.p; }
+			return newest;
+		},
+		restartDaemon: async () => { events.push('restart'); },
+		log: () => { },
+	}));
+	resources.add(reloader.registerConnection(window.launcher, window.supervisor));
+	const pending = reloader.reloadNow();
+	await acquiring.p;
+	runtime = newestRuntime;
+	await reloader.reloadNow();
+	void acquired.complete(stale);
+	await pending;
+	assert.equal(window.launcher.environment.ASH_DEV_RUNTIME_ROOT, newestRuntime);
+	assert.equal(staleReleased, true);
+	assert.deepEqual(events, ['stop:workbench', 'restart', 'start:workbench']);
+});
+
 test('a pending runtime remains leased while old connections stop and releases after replacement', async () => {
 	using resources = new DisposableStore();
 	const events: string[] = [];
