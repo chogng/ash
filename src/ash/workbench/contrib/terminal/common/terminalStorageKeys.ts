@@ -24,7 +24,7 @@ export function parseTerminalReloadState(text: string): ITerminalReloadState {
 	const processIds = new Set<string>();
 	for (const entry of value.instances) {
 		if (!isRecord(entry) || !integer(entry.instanceId, 1, Number.MAX_SAFE_INTEGER) || ids.has(entry.instanceId)
-			|| !shortString(entry.resource) || !shortString(entry.dirId)
+			|| !shortString(entry.resource) || !(entry.dirId === '' && entry.processDirId === undefined || shortString(entry.dirId))
 			|| (entry.processDirId !== undefined && !shortString(entry.processDirId))
 			|| typeof entry.title !== 'string' || entry.title.length > 4096
 			|| (entry.customTitle !== undefined && (typeof entry.customTitle !== 'string' || entry.customTitle.length > 4096))

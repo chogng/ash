@@ -34,7 +34,7 @@ export class TerminalInstanceService extends Disposable {
 		}
 		if (options.config) {
 			const instanceNumber = this.nextInstanceId++;
-			const workspaceFolder = options.dirId === undefined ? undefined : this.requireWorkspaceFolder(options.dirId);
+			const workspaceFolder = options.dirId === undefined ? undefined : this.resolveWorkspaceFolder(options.dirId);
 			const name = options.title ?? options.config.name ?? '';
 			const instance = this.instantiationService.createInstance(TerminalInstance,
 				`terminal-instance-${instanceNumber}`,
@@ -70,9 +70,9 @@ export class TerminalInstanceService extends Disposable {
 			catch (error) { instance.dispose(); throw error; }
 			return instance;
 		}
-		const workspaceFolder = this.requireWorkspaceFolder(options.dirId);
+		const workspaceFolder = this.resolveWorkspaceFolder(options.dirId);
 		// A Session directory needs its execution route even when it is the only visible folder.
-		const processWorkspaceFolderId = workspaceFolder.id;
+		const processWorkspaceFolderId = workspaceFolder?.id;
 		const environment = options.env === undefined ? undefined : Object.freeze({ ...options.env });
 		const execution = options.execution === undefined ? undefined : Object.freeze(options.execution.type === 'process'
 			? { ...options.execution, args: (typeof options.execution.args === 'string' ? options.execution.args : Object.freeze([...options.execution.args])) }
@@ -119,7 +119,7 @@ export class TerminalInstanceService extends Disposable {
 			const instance = this.instantiationService.createInstance(TerminalInstance,
 				`terminal-instance-${instanceNumber}`,
 				instanceNumber,
-				workspaceFolder.id,
+				workspaceFolder?.id ?? '',
 				processWorkspaceFolderId,
 				child,
 				created.ready,
@@ -147,8 +147,9 @@ export class TerminalInstanceService extends Disposable {
 		}
 	}
 
-	private requireWorkspaceFolder(dirId?: string) {
+	private resolveWorkspaceFolder(dirId?: string) {
 		const folders = this.workspaceContext.getWorkspace().folders;
+		if (!dirId && folders.length === 0) return undefined;
 		if (!dirId && folders.length > 1) throw new Error(localize('terminal.selectFolder', 'Select a workspace folder for the terminal.'));
 		const folder = dirId ? folders.find(folder => folder.id === dirId) : folders[0];
 		if (!folder) throw new Error("TerminalUnavailable: Terminal requires an open workspace folder");
