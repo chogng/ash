@@ -469,6 +469,95 @@ suite('chatRenderer browser component', () => {
 		...Array.from({ length: 12 }, (_, index): IChatListItem => ({ id: `reading-${index}`, type: 'agentMessage', text: `Section ${index}.\n\n` + Array.from({ length: 4 }, (_, line) => `Paragraph ${index}.${line}.`).join('\n\n'), transient: false })),
 	];
 
+	test('streaming a new response leaves unchanged history DOM untouched', async function () {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const items: IChatListItem[] = [
+			{ id: 'history', type: 'agentMessage', text: 'A completed **response**.', transient: false },
+			{ id: 'stream', type: 'agentMessage', text: 'Starting', transient: true },
+		];
+		await page.evaluate(items => window.ashChatTranscriptIntegration.renderItems(items), items);
+		const changes = await page.evaluate(async items => {
+			const history = document.querySelector('[data-item-id="history"]')!;
+			const records: MutationRecord[] = [];
+			const observer = new MutationObserver(value => records.push(...value));
+			observer.observe(history, { attributes: true, childList: true, characterData: true, subtree: true });
+			try {
+				for (let index = 0; index < 20; index++) {
+					window.ashChatTranscriptIntegration.renderItems([items[0], { ...items[1], text: `Increment ${index}` }]);
+				}
+				await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+				return records.length;
+			} finally { observer.disconnect(); }
+		}, items);
+		expect(changes).toBe(0);
+		await expect(page.locator('[data-item-id="stream"]')).toContainText('Increment 19');
+		await page.evaluate(items => window.ashChatTranscriptIntegration.renderItems([
+			items[0], { ...items[1], text: 'Now with code.\n\n```typescript\nconst added = 19;\n```' },
+		]), items);
+		await expect(page.locator('[data-item-id="stream"] .ash-chat-code-block')).toContainText('const added = 19;');
+	});
+
+	test('hidden transcript coalesces short responses until it is shown', async function () {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		await page.evaluate(() => {
+			window.ashChatTranscriptIntegration.renderItems([{ id: 'reply', type: 'agentMessage', text: 'Before hiding', transient: true }]);
+			window.ashChatTranscriptIntegration.setTranscriptVisible(false);
+		});
+		const changes = await page.evaluate(async () => {
+			const root = document.querySelector('.ash-chat-list-widget')!;
+			const records: MutationRecord[] = [];
+			const observer = new MutationObserver(value => records.push(...value));
+			observer.observe(root, { childList: true, characterData: true, subtree: true });
+			try {
+				for (let index = 0; index < 20; index++) {
+					window.ashChatTranscriptIntegration.renderItems([{ id: 'reply', type: 'agentMessage', text: `Hidden ${index}`, transient: index < 19 }]);
+				}
+				await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+				return records.length;
+			} finally { observer.disconnect(); }
+		});
+		expect(changes).toBe(0);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(true));
+		await expect(page.locator('[data-item-id="reply"]')).toContainText('Hidden 19');
+		await expect(page.locator('[data-item-id="reply"]')).not.toHaveAttribute('data-transient');
+	});
+
+	test('long transcripts release offscreen code models and preserve focused code and text', async function () {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const items = Array.from({ length: 60 }, (_, index): IChatListItem => ({
+			id: `code-${index}`, type: 'agentMessage', transient: false,
+			text: `Section ${index}.\n\n\`\`\`typescript\n${Array.from({ length: 30 }, (_, line) => `const value_${index}_${line} = ${line};`).join('\n')}\n\`\`\``,
+		}));
+		const firstFrameModels = await page.evaluate(async items => {
+			window.ashChatTranscriptIntegration.renderItems(items);
+			await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+			return window.ashChatTranscriptIntegration.state().codeModelCount;
+		}, items);
+		// Allocating every document and releasing it in the observer callback still
+		// raises the renderer's high-water mark on every session reconstruction.
+		expect(firstFrameModels).toBeLessThan(12);
+		await expect(page.locator('article[data-item-id]')).toHaveCount(60);
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount)).toBeLessThan(12);
+		const viewport = page.locator('.ash-chat-list-widget .ash-scrollbar-viewport');
+		await viewport.evaluate(element => { element.scrollTop = 0; });
+		const first = page.locator('[data-item-id="code-0"] .stanza-editor-input');
+		await first.focus();
+		await first.press('ControlOrMeta+A');
+		const selection = await page.evaluate(() => window.ashChatTranscriptIntegration.state().selection);
+		await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
+		await expect(first).toBeFocused();
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount)).toBeLessThan(12);
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().selection)).toEqual(selection);
+		await viewport.evaluate(element => { element.scrollTop = 0; });
+		await expect(page.locator('[data-item-id="code-0"]')).toContainText('Section 0.');
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().selection)).toEqual(selection);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.renderItems([]));
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount)).toBe(0);
+	});
+
 	test('provider corrections preserve the reading position while retaining a selected code editor and focused action', async function () {
 		const { page } = browserTests;
 

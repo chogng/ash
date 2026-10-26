@@ -45,8 +45,10 @@ interface ChatListWidgetOptions {
 const textInputSelector = 'textarea, [role="textbox"], [contenteditable="true"]';
 const focusableSelector = 'button, a, summary, textarea, audio, [role="textbox"], [tabindex="0"], [contenteditable="true"]';
 const speechContextKeys = new Set([HasSpeechProvider.key, TextToSpeechInProgress.key]);
+const viewportMargin = 600;
 
 class RenderedItem extends Disposable {
+	inViewport = true;
 	readonly edit = this._register(new MutableDisposable<DisposableStore>());
 	public editButton: Button | undefined;
 	public copyButton: Button | undefined;
@@ -109,6 +111,10 @@ export class ChatListWidget extends DomWidget {
 	private layingOut = false;
 	private readonly relayout = this._register(new RunOnceScheduler(() => { if (this.visible) this.layout(); }, 0));
 	private pendingReadingPosition: { readonly top: number; readonly anchor: ReadingAnchor | undefined; } | undefined;
+	private pendingItems: readonly IChatListItem[] | undefined;
+	private readonly viewportObserver: IntersectionObserver | undefined;
+	private readonly pendingViewportMeasurements = new Set<string>();
+	private readonly refreshViewport = this._register(new RunOnceScheduler(() => this.refreshRowViewports(), 0));
 
 	public get element(): HTMLElement { return this.domNode; }
 
@@ -144,6 +150,23 @@ export class ChatListWidget extends DomWidget {
 		this.transcript.tabIndex = -1;
 		this.transcript.setAttribute('aria-label', localize('chat.transcript.label', 'Chat transcript'));
 		this.transcript.setAttribute("aria-live", "polite");
+		const Observer = this.element.ownerDocument.defaultView?.IntersectionObserver;
+		if (Observer) {
+			// Keep text, actions and disclosure DOM available to native selection, find
+			// and accessibility. Only the derived code-editor documents leave memory.
+			this.viewportObserver = new Observer(entries => {
+				for (const entry of entries) {
+					const row = this.renderedItems.get((entry.target as HTMLElement).dataset.itemId!);
+					if (!row || row.element !== entry.target) continue;
+					row.inViewport = entry.isIntersecting;
+					this.updateRowViewport(row);
+				}
+			}, { root: this.scrollable.scrollableElement, rootMargin: `${viewportMargin}px 0px` });
+			this._register(toDisposable(() => this.viewportObserver?.disconnect()));
+			this._register(addDisposableListener(this.transcript, 'focusin', () => this.refreshRowViewports()));
+			this._register(addDisposableListener(this.transcript, 'focusout', () => this.refreshViewport.schedule()));
+			this._register(addDisposableListener(this.element.ownerDocument, 'selectionchange', () => this.refreshViewport.schedule()));
+		}
 		const accessibilityId = createUuid();
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			this._register(AccessibleViewRegistry.register({
@@ -191,17 +214,38 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	render(items: readonly IChatListItem[]): void {
+		if (!this.visible) {
+			// The model continues receiving events. Hidden presentation consumes its
+			// latest projection once on show instead of parsing every intermediate one.
+			this.pendingItems = items;
+			return;
+		}
+		this.reconcile(items);
+	}
+
+	private reconcile(items: readonly IChatListItem[]): void {
 		if (this.visible) this.captureFollowState();
 		const anchor = this.visible && !this.shouldFollow ? this.readingPosition : undefined;
+		let changed = false;
 		const ids = new Set(items.map(item => item.id));
 		for (const [id, row] of this.renderedItems) {
 			if (ids.has(id)) continue;
+			this.viewportObserver?.unobserve(row.element);
 			row.element.remove();
 			this.renderedItems.deleteAndDispose(id);
+			this.pendingViewportMeasurements.delete(id);
+			changed = true;
 		}
 		let next: ChildNode | null = this.transcript.firstChild;
 		for (const item of items) {
 			let row = this.renderedItems.get(item.id);
+			if (row && sameItem(row.item, item) && row.item.content === item.content && sameToolInvocation(row.item.toolInvocation, item.toolInvocation)) {
+				row.item = item;
+				if (row.element !== next) { this.transcript.insertBefore(row.element, next); changed = true; }
+				next = row.element.nextSibling;
+				continue;
+			}
+			changed = true;
 			if (row?.context && item.type === 'userContext' && item.contextText !== undefined) {
 				row.context.summary.textContent = item.text;
 				row.context.content.setAttribute('aria-label', item.text);
@@ -228,10 +272,14 @@ export class ChatListWidget extends DomWidget {
 				else delete row.element.dataset.transient;
 			} else if (!row || !sameItem(row.item, item)) {
 				if (row?.element === next) next = row.element.nextSibling;
+				if (row) this.viewportObserver?.unobserve(row.element);
 				row?.element.remove();
 				row = this.renderedItems.set(item.id, this.renderItem(item));
+				this.viewportObserver?.observe(row.element);
+				if (this.viewportObserver) this.pendingViewportMeasurements.add(item.id);
 			}
 			if (row.copyButton) row.copyButton.enabled = row.item.text.length > 0;
+			if (this.viewportObserver && row.markdownPart) this.pendingViewportMeasurements.add(item.id);
 			const reading = row.reading.value;
 			if (reading && (reading.item.text !== row.item.text || reading.item.attachmentSource?.sessionId !== row.item.attachmentSource?.sessionId || reading.item.attachmentSource?.threadId !== row.item.attachmentSource?.threadId)) row.reading.clear();
 			row.updateReadAloud?.();
@@ -244,17 +292,28 @@ export class ChatListWidget extends DomWidget {
 		for (const id of this.advisorExpansion.keys()) if (!ids.has(id)) this.advisorExpansion.delete(id);
 		// Reconciliation can temporarily shorten the DOM scroll range. Keep the position
 		// captured before moving retained widgets instead of interpreting that clamp as user input.
-		if (this.visible) this.layout(anchor, false);
-		this._onDidChangeContent.fire();
+		if (changed) {
+			if (this.visible) this.layout(anchor, false);
+			if (this.pendingViewportMeasurements.size) this.refreshRowViewports();
+			this._onDidChangeContent.fire();
+		}
 	}
 
 	setVisible(visible: boolean): void {
 		// A replacement can already be visible and still have a reading position to restore.
 		if (this.visible === visible && !(visible && this.pendingReadingPosition)) return;
 		if (!visible) {
+			this.relayout.cancel();
+			this.refreshViewport.cancel();
 			for (const [, row] of this.renderedItems) row.reading.clear();
 			this.captureFollowState();
 			this.pendingReadingPosition = { top: this.scrollable.state.top, anchor: this.shouldFollow ? undefined : this.readingPosition };
+		}
+		if (visible && this.pendingItems) {
+			const items = this.pendingItems;
+			this.pendingItems = undefined;
+			// Reconcile while still hidden, before restoring the saved scroll anchor.
+			this.reconcile(items);
 		}
 		this.visible = visible;
 		for (const [, row] of this.renderedItems) {
@@ -272,7 +331,31 @@ export class ChatListWidget extends DomWidget {
 			}
 			this.layout(this.pendingReadingPosition?.anchor);
 			this.pendingReadingPosition = undefined;
+			this.refreshRowViewports();
 		}
+	}
+
+	private refreshRowViewports(): void {
+		if (!this.visible) return;
+		const viewport = this.pendingViewportMeasurements.size ? this.scrollable.scrollableElement.getBoundingClientRect() : undefined;
+		for (const [id, row] of this.renderedItems) {
+			if (viewport && this.pendingViewportMeasurements.delete(id)) {
+				const bounds = row.element.getBoundingClientRect();
+				row.inViewport = viewport.height > 0 && bounds.bottom > viewport.top - viewportMargin && bounds.top < viewport.bottom + viewportMargin;
+			}
+			this.updateRowViewport(row);
+		}
+	}
+
+	private updateRowViewport(row: RenderedItem): void {
+		if (!row.markdownPart) return;
+		const document = this.element.ownerDocument;
+		const selection = document.getSelection();
+		// Keyboard focus and a native selection pin their response even if a user
+		// scrolls it out of view; scrolling must not interrupt editing or copying.
+		const pinned = row.element.contains(document.activeElement)
+			|| !!selection && !selection.isCollapsed && Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index)).some(range => range.intersectsNode(row.element));
+		row.markdownPart.setViewportVisible(row.inViewport || pinned);
 	}
 
 	/** Captures presentation state without taking ownership of conversation data. */
@@ -320,6 +403,7 @@ export class ChatListWidget extends DomWidget {
 		if (state.visible) this.setVisible(true);
 		if (state.focus) {
 			const row = this.renderedItems.get(state.focus.itemId);
+			row?.markdownPart?.setViewportVisible(true);
 			const selector = state.focus.textInput ? textInputSelector : focusableSelector;
 			row?.element.querySelectorAll<HTMLElement>(selector)[state.focus.index]?.focus({ preventScroll: true });
 		}
@@ -360,8 +444,20 @@ export class ChatListWidget extends DomWidget {
 
 	private readingAnchor(): ReadingAnchor | undefined {
 		const viewport = this.scrollable.scrollableElement.getBoundingClientRect();
-		for (const element of this.transcript.children) {
+		const children = this.transcript.children;
+		// Rows are in normal document flow. Find the first possible intersection
+		// without reading the geometry of the entire loaded conversation on scroll.
+		let low = 0;
+		let high = children.length;
+		while (low < high) {
+			const middle = (low + high) >>> 1;
+			if (children[middle].getBoundingClientRect().bottom <= viewport.top) low = middle + 1;
+			else high = middle;
+		}
+		for (let index = low; index < children.length; index++) {
+			const element = children[index];
 			const rect = element.getBoundingClientRect();
+			if (rect.top >= viewport.bottom) break;
 			if (rect.bottom > viewport.top && rect.top < viewport.bottom) {
 				return { id: (element as HTMLElement).dataset.itemId!, viewportTop: rect.top - viewport.top };
 			}
@@ -634,6 +730,7 @@ export class ChatListWidget extends DomWidget {
 			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
 				visible: this.visible,
+				deferCodeBlockModels: !!this.viewportObserver,
 				markdown: { value: item.text, supportThemeIcons: true, supportAlertSyntax: true },
 				markedOptions: { breaks: true },
 				fillInIncompleteTokens: item.transient,
@@ -641,7 +738,14 @@ export class ChatListWidget extends DomWidget {
 				sanitizerConfig: { allowedLinkSchemes: { augment: [OPEN_SESSION_LINK_SCHEME] } },
 				imageResourceLoader: this.imageResourceLoader,
 			}));
-			disposables.add(markdown.onDidChangeHeight(() => { this.relayout.schedule(); this._onDidChangeContent.fire(); }));
+			disposables.add(markdown.onDidChangeHeight(() => {
+				this.relayout.schedule();
+				if (this.viewportObserver) {
+					this.pendingViewportMeasurements.add(item.id);
+					this.refreshViewport.schedule();
+				}
+				this._onDidChangeContent.fire();
+			}));
 			markdownPart = markdown;
 			body.append(markdown.domNode);
 		} else {
@@ -672,6 +776,12 @@ export class ChatListWidget extends DomWidget {
 		if (item.type === 'agentMessage' || item.type === 'userMessage') this.renderCopyAction(row, disposables);
 		return row;
 	}
+}
+
+function sameToolInvocation(left: IChatListItem['toolInvocation'], right: IChatListItem['toolInvocation']): boolean {
+	if (left === right) return true;
+	return !!left && !!right && left.call === right.call && left.result === right.result && left.stopped === right.stopped
+		&& left.output.length === right.output.length && left.output.every((output, index) => output === right.output[index]);
 }
 
 function sameItem(left: IChatListItem, right: IChatListItem): boolean {

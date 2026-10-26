@@ -52,6 +52,7 @@ export class CodeBlockPart extends Disposable {
 	private data: ICodeBlockData | undefined;
 	private readonly relayout: RunOnceScheduler;
 	private visible = true;
+	private measuredHeight = false;
 	private viewState: ReturnType<CodeEditorWidget['saveViewState']> | undefined;
 
 	constructor(
@@ -151,7 +152,17 @@ export class CodeBlockPart extends Disposable {
 		this.data = data;
 		this.language.textContent = data.languageId;
 		this.toolbar.setAttribute('aria-label', localize('chat.code.numberedActions', 'Code block {0} actions', data.codeBlockIndex + 1));
-		if (!this.visible) return;
+		if (!this.visible) {
+			if (!this.measuredHeight) {
+				// Reserve normal-flow geometry before the viewport admits a document.
+				// Stop counting at the visible line limit, even for very large fences.
+				const font = this.font();
+				const maximum = data.renderOptions?.maxHeightInLines ?? 20;
+				const lines = data.text.split(/\r\n|\r|\n/, maximum).length;
+				this.editorContainer.style.height = `${Math.max(1, lines) * font.lineHeight + 16}px`;
+			}
+			return;
+		}
 		// Fence info can be empty, incomplete, or an alias rather than a valid registry ID.
 		const languageId = this.languages.getRegisteredLanguageIds().includes(data.languageId) ? data.languageId
 			: this.languages.getLanguageIdByLanguageName(data.languageId) ?? 'plaintext';
@@ -202,6 +213,7 @@ export class CodeBlockPart extends Disposable {
 		const contentHeight = this.editor.getContentHeight() || this.documentModel.value.lineCount * font.lineHeight + 16;
 		const height = Math.max(font.lineHeight + 16, Math.min(contentHeight, maximum * font.lineHeight + 16));
 		this.editorContainer.style.height = `${height}px`;
+		this.measuredHeight = true;
 		this.editor.layout({ width, height });
 	}
 

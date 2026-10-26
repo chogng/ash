@@ -34,6 +34,8 @@ interface ChatMarkdownContentPartOptions extends MarkdownRenderOptions {
 	readonly ownerDocument: Document;
 	readonly markdown?: string | IMarkdownString;
 	readonly visible?: boolean;
+	/** The transcript admits new code documents after measuring their reserved row geometry. */
+	readonly deferCodeBlockModels?: boolean;
 }
 
 /** Owns one stable response root, sanitized render lifetime and the response's existing code models. */
@@ -52,6 +54,9 @@ export class ChatMarkdownContentPart extends Disposable {
 	// Code actions retain this response, rather than a full historical string per code block.
 	private readonly codeElement: IMarkdownString;
 	private visible: boolean;
+	private viewportVisible = true;
+	private hasDeferredCodeBlocks = false;
+	private readonly deferredCodeBlocks = new WeakSet<CodeBlockPart>();
 	private pending: { readonly markdown: IMarkdownString; readonly incomplete: boolean; } | undefined;
 	private readonly update = this._register(new MutableDisposable());
 
@@ -86,13 +91,35 @@ export class ChatMarkdownContentPart extends Disposable {
 	public setVisible(visible: boolean): void {
 		this.visible = visible;
 		if (!visible) this.update.clear();
-		else if (this.pending) this.scheduleUpdate();
-		for (const [, block] of this.codeBlocks) block.setVisible(visible);
+		else if (this.pending) {
+			const pending = this.pending;
+			this.pending = undefined;
+			// Preserve synchronous first-show for small responses; large snapshots
+			// still share the ordinary frame-coalesced rendering path.
+			this.enqueue(pending.markdown, pending.incomplete);
+		}
+		for (const [, block] of this.codeBlocks) if (!this.deferredCodeBlocks.has(block)) block.setVisible(visible && this.viewportVisible);
+	}
+
+	/** Retains readable Markdown while offscreen code blocks release their derived documents. */
+	public setViewportVisible(visible: boolean): void {
+		if (this.viewportVisible === visible && !this.hasDeferredCodeBlocks) return;
+		this.viewportVisible = visible;
+		this.hasDeferredCodeBlocks = false;
+		for (const [, block] of this.codeBlocks) {
+			this.deferredCodeBlocks.delete(block);
+			block.setVisible(this.visible && visible);
+		}
 	}
 
 	private enqueue(markdown: IMarkdownString, incomplete: boolean): void {
 		// Preserve the complete renderer's synchronous admission/size error.
 		if (markdown.value.length > 4 * 1024 * 1024) { this.render(markdown, incomplete); return; }
+		if (!this.visible) {
+			this.update.clear();
+			this.pending = { markdown, incomplete };
+			return;
+		}
 		if (markdown.value.length < 1024) {
 			this.update.clear();
 			this.pending = undefined;
@@ -285,8 +312,14 @@ export class ChatMarkdownContentPart extends Disposable {
 			for (const [localIndex, data] of code.entries()) {
 				const index = codeStart + localIndex;
 				let part = this.codeBlocks.get(index);
-				if (!part) part = this.codeBlocks.set(index, this.instantiation.createInstance(CodeBlockPart, document));
-				part.setVisible(this.visible);
+				if (!part) {
+					part = this.codeBlocks.set(index, this.instantiation.createInstance(CodeBlockPart, document));
+					if (this.options.deferCodeBlockModels) {
+						this.deferredCodeBlocks.add(part);
+						this.hasDeferredCodeBlocks = true;
+					}
+				}
+				part.setVisible(this.visible && this.viewportVisible && !this.deferredCodeBlocks.has(part));
 				part.render({ text: data.text, languageId: data.languageId, codeBlockIndex: index, element: this.codeElement, chatSessionResource: undefined, renderOptions: { maxHeightInLines: 20 } }, this.domNode.clientWidth);
 				const parent = data.placeholder.parentElement;
 				if (parent?.tagName === 'PRE') parent.replaceWith(part.element);
