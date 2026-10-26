@@ -8,6 +8,7 @@ import type { ObjectTreeElement, ObjectTreeNode } from '../../../../base/browser
 import { appendIcon } from "../../../../base/browser/ui/lxicons/lxicon.js";
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Lxicon } from "../../../../base/common/lxicons.js";
+import { ThemeIcon } from '../../../../base/common/themables.js';
 
 import { equals } from '../../../../base/common/arrays.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -20,7 +21,7 @@ import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/act
 import { getActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IQuickPickItem, type IQuickPickSeparator } from '../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IProgressService } from '../../../../platform/progress/common/progress.js';
 import { FileKind } from '../../../../platform/files/common/files.js';
@@ -464,13 +465,61 @@ export class SCMHistoryViewPane extends ViewPane {
 			const references = await provider.provideHistoryItemRefs();
 			if (this.isDisposed || this.provider !== provider || key !== this.filterKey || this.filterPicker.value !== resources) { return; }
 			const current = this.filters.get(key) ?? 'auto';
-			const items: Pick[] = [
+			const modes: Pick[] = [
 				{ label: localize('scm.history.autoRefs', 'Auto (current branch, upstream and base branch)'), reference: 'auto' },
 				{ label: localize('scm.history.allRefs', 'All References'), reference: 'all' },
-				...references.map(reference => ({ label: reference.name, description: reference.category === 'localBranch' ? localize('scm.history.localBranch', 'Branch') : reference.category === 'remoteBranch' ? localize('scm.history.remoteBranch', 'Remote Branch') : reference.category === 'tag' ? localize('scm.history.tag', 'Tag') : undefined, reference })),
 			];
+			const referencePicks = references.map(reference => {
+				let icon = Lxicon.gitBranch;
+				if (reference.category === 'remoteBranch') {
+					icon = Lxicon.cloud;
+				} else if (reference.category === 'tag') {
+					icon = Lxicon.tag;
+				}
+				return {
+					label: reference.name,
+					description: reference.description === reference.name ? undefined : reference.description,
+					iconClass: ThemeIcon.asClassName(icon),
+					reference,
+				};
+			});
+			const selected = Array.isArray(current)
+				? referencePicks.filter(item => current.includes(item.reference.id))
+				: modes.filter(item => item.reference === current);
+			const items: (Pick | IQuickPickSeparator)[] = [...modes];
+			// Keep explicit choices together when reopening, then group the remaining refs.
+			if (Array.isArray(current) && selected.length) {
+				items.push({ type: 'separator' }, ...selected);
+			}
+			const groups = new Map<string, typeof referencePicks>();
+			for (const item of referencePicks) {
+				if (selected.includes(item)) { continue; }
+				const category = item.reference.category ?? '';
+				const group = groups.get(category);
+				if (group) {
+					group.push(item);
+				} else {
+					groups.set(category, [item]);
+				}
+			}
+			const categories = ['localBranch', 'remoteBranch', 'tag'];
+			const orderedCategories = [...categories, ...[...groups.keys()].filter(category => !categories.includes(category))];
+			for (const category of orderedCategories) {
+				const group = groups.get(category);
+				if (!group) { continue; }
+				let label = category;
+				if (category === 'localBranch') {
+					label = localize('scm.history.branches', 'Branches');
+				} else if (category === 'remoteBranch') {
+					label = localize('scm.history.remoteBranches', 'Remote Branches');
+				} else if (category === 'tag') {
+					label = localize('scm.history.tags', 'Tags');
+				}
+				items.push({ type: 'separator', label }, ...group);
+			}
 			picker.items = items;
-			picker.selectedItems = items.filter(item => typeof item.reference === 'string' ? current === item.reference : Array.isArray(current) && current.includes(item.reference.id));
+			picker.selectedItems = selected;
+			picker.activeItems = selected.slice(0, 1);
 			let selection = picker.selectedItems;
 			resources.add(picker.onDidChangeSelection(selected => {
 				if (selected.length === selection.length && selected.every((item, index) => item === selection[index])) { return; }

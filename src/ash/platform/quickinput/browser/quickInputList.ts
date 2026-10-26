@@ -1,10 +1,10 @@
-import { defaultKeybindingLabelStyles, defaultListStyles } from '../../theme/browser/defaultStyles.js';
+import { defaultCheckboxStyles, defaultKeybindingLabelStyles, defaultListStyles } from '../../theme/browser/defaultStyles.js';
 import { scoreFuzzy } from '../../../base/common/fuzzyScorer.js';
 import { List } from "../../../base/browser/ui/list/listWidget.js";
 import { KeybindingLabel } from "../../../base/browser/ui/keybindinglabel/keybindinglabel.js";
 import { setRole } from "../../../base/browser/ui/aria/aria.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable, DisposableMap, toDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IKeyMods, IQuickPickItem, IQuickPickItemButton, IQuickPickSeparator } from "../common/quickInput.js";
 import { QuickPickFocus } from '../common/quickInput.js';
 import { addDisposableListener, h, isElement, stopEvent } from "../../../base/browser/dom.js";
@@ -14,6 +14,7 @@ import { Lxicon } from '../../../base/common/lxicons.js';
 import { ActionBar } from '../../../base/browser/ui/actionbar/actionbar.js';
 import { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import type { IAction } from '../../../base/common/actions.js';
+import { Checkbox } from '../../../base/browser/ui/toggle/toggle.js';
 
 export interface QuickInputListActiveChangeEvent<TItem> {
 	readonly item: TItem | undefined;
@@ -28,12 +29,13 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	private readonly list: List<TItem>;
 	private readonly keybindingLabels = this._register(new DisposableMap<HTMLDivElement, KeybindingLabel>());
 	private readonly rowActions = this._register(new DisposableMap<HTMLDivElement, ActionBar>());
+	private readonly rowCheckboxes = this._register(new DisposableMap<HTMLDivElement, DisposableStore>());
 	private readonly _onDidAccept = this._register(new Emitter<TItem>());
 	private readonly _onDidChangeActive =
 		this._register(new Emitter<QuickInputListActiveChangeEvent<TItem>>());
 	private readonly buttonEmitter = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton; }>());
 	private _items: readonly (TItem | IQuickPickSeparator)[] = [];
-	private readonly headings = new Map<TItem, string>();
+	private readonly headings = new Map<TItem, IQuickPickSeparator>();
 	public keyMods: IKeyMods = { ctrlCmd: false, alt: false, shift: false };
 	private _visibleItems: readonly TItem[] = [];
 	private singleLineRows: boolean;
@@ -102,6 +104,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			onDidRemoveRow: row => {
 				this.keybindingLabels.deleteAndDispose(row);
 				this.rowActions.deleteAndDispose(row);
+				this.rowCheckboxes.deleteAndDispose(row);
 			},
 		}));
 		this.list.element.classList.add("ash-quick-pick-list-items");
@@ -238,10 +241,10 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	private render(): void {
 		this.headings.clear();
 		const candidates: TItem[] = [];
-		let heading: string | undefined;
+		let heading: IQuickPickSeparator | undefined;
 		for (const item of this._items) {
 			if ('type' in item && item.type === 'separator') {
-				heading = item.label;
+				heading = item;
 			} else {
 				const candidate = item as TItem;
 				candidates.push(candidate);
@@ -273,25 +276,56 @@ export class QuickInputList<TItem extends IQuickPickItem>
 
 	private renderItem(item: TItem, row: HTMLDivElement): HTMLDivElement {
 		this.rowActions.deleteAndDispose(row);
+		this.rowCheckboxes.deleteAndDispose(row);
 		const ownerDocument = this.element.ownerDocument;
 		const content = h(ownerDocument, "div");
 		content.className = "ash-quick-pick-row-content";
 		const index = this._visibleItems.indexOf(item);
 		const heading = this.headings.get(item);
 		if (heading && (index === 0 || this.headings.get(this._visibleItems[index - 1]) !== heading)) {
-			const separator = h(ownerDocument, 'div');
-			separator.className = 'ash-quick-pick-separator';
-			separator.setAttribute('role', 'separator');
-			separator.setAttribute('aria-label', heading);
-			separator.textContent = heading;
-			separator.title = heading;
-			content.append(separator);
+			if (heading.label) {
+				const separator = h(ownerDocument, 'div');
+				separator.className = 'ash-quick-pick-separator';
+				separator.setAttribute('role', 'separator');
+				separator.setAttribute('aria-label', heading.label);
+				separator.textContent = heading.label;
+				separator.title = heading.label;
+				content.append(separator);
+			}
 			content.classList.add('has-separator');
 		}
 		if (item.className) content.classList.add(...item.className.split(/\s+/).filter(Boolean));
+		if (this.multiple) {
+			// The active option announces checked state; the visual control shares
+			// its keyboard target instead of adding another stop to every row.
+			row.setAttribute('aria-checked', String(this.checked.has(item)));
+			const resources = new DisposableStore();
+			const checkbox = resources.add(new Checkbox(content, {
+				...defaultCheckboxStyles,
+				checked: this.checked.has(item),
+				ariaLabel: item.label,
+				onChange: () => this.toggleSelection(item),
+			}));
+			checkbox.element.classList.add('ash-quick-pick-row-checkbox');
+			checkbox.element.setAttribute('aria-hidden', 'true');
+			checkbox.input.tabIndex = -1;
+			resources.add(addDisposableListener(checkbox.element, 'click', event => {
+				// Native activation changes the checkbox once; row activation is
+				// handled separately when clicking the rest of the option.
+				event.stopPropagation();
+				this.list.domFocus();
+				this.setActiveItem(item);
+			}));
+			this.rowCheckboxes.set(row, resources);
+		} else {
+			row.removeAttribute('aria-checked');
+		}
 		if (item.iconClass) {
-			const icon = h(ownerDocument, 'span');
-			icon.className = item.iconClass;
+			const classes = item.iconClass.split(/\s+/).filter(Boolean);
+			const iconId = classes.find(name => name.startsWith('ash-icon-'))?.slice('ash-icon-'.length);
+			const registeredIcon = iconId ? getRegisteredIcon(iconId, ownerDocument) : undefined;
+			const icon = registeredIcon ? appendIcon(registeredIcon, content) : h(ownerDocument, 'span');
+			icon.classList.add(...classes);
 			icon.setAttribute('aria-hidden', 'true');
 			content.append(icon);
 		}
@@ -315,8 +349,8 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			ownerDocument,
 		);
 		content.append(text);
-		if (this.multiple || item.picked !== undefined) {
-			content.classList.toggle('picked', this.multiple ? this.checked.has(item) : !!item.picked);
+		if (!this.multiple && item.picked !== undefined) {
+			content.classList.toggle('picked', !!item.picked);
 			const check = h(ownerDocument, 'span');
 			check.className = 'ash-quick-pick-row-check';
 			check.setAttribute('aria-hidden', 'true');

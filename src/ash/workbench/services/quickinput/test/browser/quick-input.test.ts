@@ -63,6 +63,8 @@ import {
 await import('../../../../../workbench/contrib/quickaccess/browser/quickAccess.contribution.js');
 await import('../../../../../workbench/contrib/search/browser/searchQuickAccess.contribution.js');
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
+import { ThemeIcon } from '../../../../../base/common/themables.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
 
 test("Show All Commands is not duplicated in the titlebar action menu", () => {
 	const titlebarCommandIds = MenusRegistry.getMenuItems(MenuId.TitleBar)
@@ -134,6 +136,85 @@ test('QuickInputList skips section headings and reports keyboard modifiers durin
 	]);
 	list.dispose();
 	dom.window.close();
+});
+
+test('QuickInputList checkboxes share multi-selection across pointer, keyboard and filtering', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using heights = installTestElementHeights(dom.window.document);
+	installDomGlobals(dom);
+	const list = new QuickInputList(dom.window.document.body);
+	try {
+		const main = { label: 'main', picked: true };
+		const topic = { label: 'topic' };
+		list.canSelectMany = true;
+		list.items = [main, topic];
+		const rows = () => [...list.element.querySelectorAll<HTMLElement>('.ash-list-row')];
+		const controls = () => [...list.element.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+		const changes: string[][] = [];
+		const accepted: IQuickPickItem[] = [];
+		list.onDidChangeSelection(items => changes.push(items.map(item => item.label)));
+		list.onDidAccept(item => accepted.push(item));
+		assert.deepEqual(controls().map(input => [input.checked, input.tabIndex]), [[true, -1], [false, -1]]);
+		assert.deepEqual(rows().map(row => row.getAttribute('aria-checked')), ['true', 'false']);
+		assert.equal(controls()[0].closest('.ash-quick-pick-row-content')?.firstElementChild, controls()[0].parentElement);
+		const removedControl = controls()[1];
+		removedControl.click();
+		assert.deepEqual(changes, [['main', 'topic']], 'A checkbox click must toggle once without accepting');
+		assert.deepEqual(accepted, []);
+		assert.deepEqual(rows().map(row => row.getAttribute('aria-checked')), ['true', 'true']);
+		assert.equal(dom.window.document.activeElement, list.element.querySelector('.ash-quick-pick-list-items'));
+		list.filter('main');
+		list.toggleActive();
+		assert.deepEqual(list.selectedItems, [topic], 'Hidden checked items survive filtering and toggling');
+		list.filter('');
+		assert.deepEqual(controls().map(input => input.checked), [false, true]);
+		rows()[0].click();
+		assert.deepEqual(list.selectedItems, [topic, main], 'The rest of the row uses the same checked state');
+		removedControl.click();
+		assert.deepEqual(list.selectedItems, [topic, main], 'Unmounted checkbox listeners are released');
+		list.canSelectMany = false;
+		assert.equal(controls().length, 0);
+		assert.deepEqual(rows().map(row => row.getAttribute('aria-checked')), [null, null]);
+		assert.equal(list.element.querySelectorAll('.ash-quick-pick-row-check').length, 1, 'Single-select picked items keep their existing checkmark');
+	} finally {
+		list.dispose();
+		dom.window.close();
+	}
+});
+
+test('QuickInputList mounts theme icons and retains labeled and unlabeled group boundaries through search', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using heights = installTestElementHeights(dom.window.document);
+	installDomGlobals(dom);
+	const list = new QuickInputList(dom.window.document.body);
+	try {
+		list.items = [
+			{ label: 'Auto' },
+			{ type: 'separator' },
+			{ label: 'main', iconClass: ThemeIcon.asClassName(Lxicon.gitBranch) },
+			{ type: 'separator', label: 'Remote branches' },
+			{ label: 'origin/main', iconClass: ThemeIcon.asClassName(Lxicon.cloud) },
+			{ type: 'separator', label: 'Tags' },
+			{ label: 'v1', iconClass: ThemeIcon.asClassName(Lxicon.tag) },
+		];
+		assert.deepEqual(
+			[...list.element.querySelectorAll('[data-ash-icon-id]')].map(icon => [icon.getAttribute('data-ash-icon-id'), icon.getAttribute('aria-hidden'), !!icon.getAttribute('data-ash-icon-character')]),
+			[
+				['git-branch', 'true', true],
+				['cloud', 'true', true],
+				['tag', 'true', true],
+			],
+		);
+		assert.equal(list.element.querySelectorAll('.has-separator').length, 3);
+		assert.deepEqual([...list.element.querySelectorAll('[role="separator"]')].map(separator => separator.textContent), ['Remote branches', 'Tags']);
+		list.filter('origin');
+		assert.deepEqual(list.visibleItems.map(item => item.label), ['origin/main']);
+		assert.equal(list.element.querySelector('[role="separator"]')?.textContent, 'Remote branches');
+		assert.equal(list.element.querySelector('[data-ash-icon-id="cloud"]')?.getAttribute('aria-hidden'), 'true');
+	} finally {
+		list.dispose();
+		dom.window.close();
+	}
 });
 
 test("QuickInputList owns filtering, looping focus, and acceptance", () => {

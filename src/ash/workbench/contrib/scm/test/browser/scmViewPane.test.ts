@@ -1163,8 +1163,16 @@ test("SCMHistoryViewPane expands commit files and opens a selected change in the
 		await historyConfiguration.updateValue('scm.graph.badges', 'filter');
 		assert.equal(pane.element.querySelector('[aria-label="history-tag"]'), null);
 		const choosing = new CommandService(commandServices).executeCommand('workbench.scm.action.graph.pickHistoryItemRefs');
-		await waitFor(() => (historyQuickInput.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.items.length === 3);
+		await waitFor(() => (historyQuickInput.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.items.length === 4);
 		const referencePicker = historyQuickInput.currentQuickInput as IQuickPick<IQuickPickItem>;
+		assert.deepEqual(referencePicker.selectedItems.map(item => item.label), ['Auto (current branch, upstream and base branch)']);
+		assert.deepEqual(referencePicker.activeItems, referencePicker.selectedItems, 'A fresh workspace focuses its default Auto choice');
+		assert.deepEqual(referencePicker.items.map(item => 'type' in item ? { type: item.type, label: item.label } : { label: item.label, iconClass: item.iconClass }), [
+			{ label: 'Auto (current branch, upstream and base branch)', iconClass: undefined },
+			{ label: 'All References', iconClass: undefined },
+			{ type: 'separator', label: 'Branches' },
+			{ label: 'main', iconClass: 'ash-icon ash-icon-git-branch' },
+		]);
 		const all = referencePicker.items.find((item): item is IQuickPickItem => !('type' in item) && item.label === 'All References');
 		assert.ok(all);
 		referencePicker.selectedItems = [all];
