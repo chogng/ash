@@ -99,6 +99,13 @@
 	--scm-graph-row-background: var(--ash-list-hoverBackground);
 }
 
+.ash-scm-graph-commit:not(.selected) > .ash-scm-graph-row:hover {
+	--scm-graph-row-background: var(
+		--ash-list-style-list-hover-background,
+		var(--ash-list-hoverBackground)
+	);
+}
+
 .ash-scm-graph-commit.selected,
 .ash-scm-graph-change-row.selected {
 	--scm-graph-row-background: var(
@@ -175,18 +182,27 @@
 	--scm-graph-lane-color: var(--scm-graph-lane-7);
 }
 
-.ash-scm-graph-node.outer {
+.ash-scm-graph-row:hover .ash-scm-graph-node:is(.outer, .single),
+.ash-scm-graph-commit.focused.selected .ash-scm-graph-node:is(.outer, .single) {
+	stroke: transparent;
+}
+
+.ash-scm-graph-graph.head .ash-scm-graph-node.inner {
+	fill: var(--scm-graph-row-background);
+	stroke-width: 4px;
+}
+
+.ash-scm-graph-graph:is(.incoming-changes, .outgoing-changes)
+	.ash-scm-graph-node.inner {
+	fill: var(--scm-graph-row-background);
+	stroke-width: 3px;
+}
+
+.ash-scm-graph-node.dashed {
 	fill: var(--scm-graph-row-background);
 	stroke: var(--scm-graph-lane-color, var(--scm-graph-accent));
-	stroke-width: 1.5px;
-}
-
-.ash-scm-graph-node.inner {
-	stroke: none;
-}
-
-.ash-scm-graph-node-icon {
-	stroke-width: 1.5px;
+	stroke-width: var(--ash-strokeThickness);
+	stroke-dasharray: 4 2;
 }
 
 .ash-scm-graph-details {

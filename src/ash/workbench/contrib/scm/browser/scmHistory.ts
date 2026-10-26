@@ -224,27 +224,25 @@ function appendPath(svg: SVGSVGElement, data: string, colorIndex: number): SVGPa
 
 function appendNode(svg: SVGSVGElement, index: number, kind: GraphNodeKind, colorIndex: number): void {
 	if (kind === 'incoming-changes' || kind === 'outgoing-changes') {
-		appendCircle(svg, index, 6, 'outer', colorIndex);
-		const x = LaneWidth * (index + 1);
-		const y = LaneHeight / 2;
-		const direction = kind === 'incoming-changes' ? 1 : -1;
-		appendPath(svg, `M ${x} ${y - direction * 3} V ${y + direction * 3} M ${x - 2} ${y + direction} L ${x} ${y + direction * 3} L ${x + 2} ${y + direction}`, colorIndex).classList.add('ash-scm-graph-node-icon');
+		appendCircle(svg, index, 7, 'outer', colorIndex);
+		appendCircle(svg, index, 5, 'inner', colorIndex);
+		appendCircle(svg, index, 5, 'dashed', colorIndex);
 		return;
 	}
 	if (kind === "head") {
-		appendCircle(svg, index, 6, "outer", colorIndex);
+		appendCircle(svg, index, 7, "outer", colorIndex);
 		appendCircle(svg, index, 2, "inner", colorIndex);
 		return;
 	}
 	if (kind === "merge") {
-		appendCircle(svg, index, 5, "outer", colorIndex);
-		appendCircle(svg, index, 2, "inner", colorIndex);
+		appendCircle(svg, index, 6, "outer", colorIndex);
+		appendCircle(svg, index, 3, "inner", colorIndex);
 		return;
 	}
-	appendCircle(svg, index, 4, "single", colorIndex);
+	appendCircle(svg, index, 5, "single", colorIndex);
 }
 
-function appendCircle(svg: SVGSVGElement, index: number, radius: number, part: "inner" | "outer" | "single", colorIndex: number): void {
+function appendCircle(svg: SVGSVGElement, index: number, radius: number, part: "inner" | "outer" | "single" | "dashed", colorIndex: number): void {
 	const circle = createSvgElement(svg.ownerDocument, "circle");
 	circle.classList.add("ash-scm-graph-node", part);
 	circle.dataset.laneColor = String(colorIndex);
