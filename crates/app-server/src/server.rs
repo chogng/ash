@@ -4753,6 +4753,8 @@ pub(super) struct RpcError {
     code: i64,
     message: AppServerErrorName,
     detail: Option<String>,
+    // Keep admission failures typed internally; the wire still exposes only stable names.
+    cause: Option<Box<CoreError>>,
 }
 
 impl std::fmt::Display for RpcError {
@@ -4770,6 +4772,7 @@ impl RpcError {
             code,
             message,
             detail: Some(detail),
+            cause: None,
         }
     }
     pub(super) fn new(code: i64, message: AppServerErrorName) -> Self {
@@ -4777,6 +4780,7 @@ impl RpcError {
             code,
             message,
             detail: None,
+            cause: None,
         }
     }
 }
@@ -4794,14 +4798,16 @@ pub(super) fn result<T: serde::Serialize>(value: &T) -> Result<Value, RpcError> 
 pub(super) fn core_error(error: CoreError) -> RpcError {
     // Keep private diagnostics actionable while the public protocol uses stable error names.
     eprintln!("App Server core operation failed: {error}");
-    match error {
+    let mut rpc = match &error {
         CoreError::WorkspaceCheckpointConflict => {
             RpcError::new(-32010, AppServerErrorName::ThreadHistoryConflict)
         }
         CoreError::CommandConflict => RpcError::new(-32004, AppServerErrorName::CommandConflict),
         CoreError::NotFound(_) => RpcError::new(-32011, AppServerErrorName::CoreOperationFailed),
         _ => RpcError::new(-32010, AppServerErrorName::CoreOperationFailed),
-    }
+    };
+    rpc.cause = Some(Box::new(error));
+    rpc
 }
 
 fn serialize_response(value: Value) -> String {
