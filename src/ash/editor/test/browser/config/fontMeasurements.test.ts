@@ -177,3 +177,21 @@ test('fresh font measurements preserve fractional glyph advances rather than acc
 	assert.equal(measured.spaceWidth * 256, 2047.5);
 	assert.equal(dom.window.document.querySelectorAll('span').length, 0);
 });
+
+test('fallback symbol advances do not disable the ASCII monospace fast path', () => {
+	const dom = new JSDOM('<body></body>');
+	using cleanup = toDisposable(() => dom.window.close());
+	using measurements = new FontMeasurementsImpl();
+	Object.defineProperty(dom.window.HTMLElement.prototype, 'offsetWidth', {
+		get() {
+			if (this.style.display !== 'inline-block') return 100000;
+			return /[^\x00-\x7f\u00a0]/u.test(this.textContent) ? 4096 : 2048;
+		},
+	});
+	const font = createBareFontInfoFromRawSettings({ fontFamily: 'test-monospace', fontLigatures: false }, 1, true);
+	const measured = measurements.readFontInfo(dom.window as unknown as Window, font);
+	assert.equal(measured.isMonospace, true);
+	assert.equal(measured.typicalHalfwidthCharacterWidth, 8);
+	assert.equal(measured.middotWidth, 16);
+	assert.equal(measured.canUseHalfwidthRightwardsArrow, false);
+});

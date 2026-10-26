@@ -186,6 +186,13 @@
 	grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
 	gap: var(--ash-spacing-size160);
 }
+
+.ash-sessions-window
+	.ash-automation-plans-section
+	> .ash-sessions-loading
+	.ash-sessions-loading-shapes {
+	grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+}
 .ash-sessions-window .ash-automation-card,
 .ash-sessions-window .ash-automation-run {
 	padding: var(--ash-spacing-size160);

@@ -49,7 +49,7 @@ class SessionsNavigationView extends ViewPane {
 		this.contentElement.classList.add('ash-sessions-navigation-view');
 		const loading = this._register(new MutableDisposable());
 		const updateLoading = (): void => {
-			if (management.state === 'loading' && !loading.value) {
+			if (management.state === 'loading' && management.sessions.length > 0 && !loading.value) {
 				const progress = this.getProgressIndicator().show(true, 150);
 				loading.value = toDisposable(() => progress.done());
 			} else if (management.state !== 'loading') loading.clear();

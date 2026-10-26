@@ -12,6 +12,10 @@ use ash_package_store::InstalledExecutable;
 
 use crate::LanguageServerDefinition;
 use crate::LanguageServerExecutableCandidates;
+use crate::LanguageServerProvider;
+use crate::LspServerLaunch;
+use crate::ManagedNodeRuntime;
+use crate::NodePackageLanguageServerProvider;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -31,15 +35,31 @@ pub enum ManagedLanguageServerError {
     Package(#[from] ash_package_store::CapabilityInstallError),
     #[error(transparent)]
     Definition(#[from] crate::LspServerResolverError),
+    #[error(transparent)]
+    Provider(#[from] crate::LanguageServerProviderError),
 }
 
 /// A product extension owns executable selection and acquisition policy. Only trusted built-in
 /// packages may supply this declaration; discovery does not execute probes or download assets.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct LanguageServerAcquisition {
     pub id: String,
     pub languages: Vec<String>,
+    #[serde(flatten)]
+    launch: AcquisitionLaunch,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+enum AcquisitionLaunch {
+    Executable(ExecutableAcquisition),
+    BundledNode(BundledNodeAcquisition),
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ExecutableAcquisition {
     executable: String,
     probe_args: Vec<String>,
     #[serde(default)]
@@ -51,11 +71,34 @@ pub struct LanguageServerAcquisition {
     releases: Vec<ExecutableRelease>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BundledNodeAcquisition {
+    runtime: BundledRuntime,
+    entrypoint: String,
+    #[serde(default)]
+    runtime_packages: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    initialization_options: Option<serde_json::Value>,
+    #[serde(default)]
+    settings: BTreeMap<String, serde_json::Value>,
+    #[serde(skip)]
+    bound_entrypoint: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum BundledRuntime {
+    Node,
+}
+
 impl LanguageServerAcquisition {
     /// Compares normalized declarations, including every pinned release and launch option.
     pub fn same_policy(&self, other: &Self) -> bool {
         match (serde_json::to_value(self), serde_json::to_value(other)) {
-            (Ok(left), Ok(right)) => left == right,
+            (Ok(left), Ok(right)) => {
+                left == right && self.bound_entrypoint() == other.bound_entrypoint()
+            }
             _ => false,
         }
     }
@@ -79,7 +122,7 @@ impl LanguageServerAcquisition {
                     .bytes()
                     .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
         };
-        if contribution.version != 1
+        if !matches!(contribution.version, 1 | 2)
             || contribution.servers.is_empty()
             || contribution.servers.len() > 32
         {
@@ -90,40 +133,96 @@ impl LanguageServerAcquisition {
         let mut ids = std::collections::BTreeSet::new();
         for server in &contribution.servers {
             if !valid_name(&server.id)
-                || !valid_name(&server.executable)
                 || !ids.insert(&server.id)
                 || server.languages.is_empty()
                 || server.languages.len() > 32
                 || server.languages.iter().any(|id| !valid_name(id))
-                || server.probe_args.is_empty()
-                || server.probe_args.len() > 16
-                || server
-                    .probe_args
-                    .iter()
-                    .any(|arg| arg.len() > 1024 || arg.contains('\0'))
-                || server.environment.len() > 32
-                || server.environment.iter().any(|(key, value)| {
-                    key.is_empty()
-                        || key.contains(['=', '\0'])
-                        || value.contains('\0')
-                        || value.len() > 4096
-                })
-                || server.workspace_files.len() > 16
-                || server.workspace_files.iter().any(|name| {
-                    name.is_empty()
-                        || name.contains(['/', '\\', '\0'])
-                        || name == "."
-                        || name == ".."
-                })
-                || server.releases.is_empty()
-                || server.releases.len() > 32
             {
+                return Err(ManagedLanguageServerError::Installation(
+                    "invalid language-server contribution".into(),
+                ));
+            }
+            let valid_launch = match &server.launch {
+                AcquisitionLaunch::Executable(recipe) => {
+                    contribution.version == 1
+                        && valid_name(&recipe.executable)
+                        && !recipe.probe_args.is_empty()
+                        && recipe.probe_args.len() <= 16
+                        && !recipe
+                            .probe_args
+                            .iter()
+                            .any(|arg| arg.len() > 1024 || arg.contains('\0'))
+                        && recipe.environment.len() <= 32
+                        && !recipe.environment.iter().any(|(key, value)| {
+                            key.is_empty()
+                                || key.contains(['=', '\0'])
+                                || value.contains('\0')
+                                || value.len() > 4096
+                        })
+                        && recipe.workspace_files.len() <= 16
+                        && !recipe.workspace_files.iter().any(|name| {
+                            name.is_empty()
+                                || name.contains(['/', '\\', '\0'])
+                                || name == "."
+                                || name == ".."
+                        })
+                        && !recipe.releases.is_empty()
+                        && recipe.releases.len() <= 32
+                }
+                AcquisitionLaunch::BundledNode(recipe) => {
+                    contribution.version == 2
+                        && !recipe.entrypoint.is_empty()
+                        && recipe.entrypoint.len() <= 1024
+                        && !recipe.entrypoint.contains(['\\', ':', '\0'])
+                        && recipe
+                            .entrypoint
+                            .split('/')
+                            .all(|part| !matches!(part, "" | "." | ".."))
+                        && recipe.runtime_packages.len() <= 16
+                        && recipe.runtime_packages.iter().all(|name| {
+                            !name.is_empty()
+                                && name.len() <= 128
+                                && !name.contains("..")
+                                && name.bytes().all(|b| {
+                                    b.is_ascii_lowercase()
+                                        || b.is_ascii_digit()
+                                        || b"@/._-".contains(&b)
+                                })
+                        })
+                }
+            };
+            if !valid_launch {
                 return Err(ManagedLanguageServerError::Installation(
                     "invalid language-server contribution".into(),
                 ));
             }
         }
         Ok(contribution.servers)
+    }
+
+    /// Binds a bundled script to the immutable, product-owned package selected by discovery.
+    pub fn bind_package(&mut self, package_root: &Path) -> Result<(), ManagedLanguageServerError> {
+        if let AcquisitionLaunch::BundledNode(recipe) = &mut self.launch {
+            let root = package_root
+                .canonicalize()
+                .map_err(|error| ManagedLanguageServerError::Installation(error.to_string()))?;
+            let entrypoint = crate::provider::canonical_regular_file(
+                &root.join(&recipe.entrypoint),
+                "bundled language server",
+            )?;
+            if !entrypoint.starts_with(&root) {
+                return Err(ManagedLanguageServerError::Unavailable(entrypoint));
+            }
+            recipe.bound_entrypoint = Some(entrypoint);
+        }
+        Ok(())
+    }
+
+    fn bound_entrypoint(&self) -> Option<&Path> {
+        match &self.launch {
+            AcquisitionLaunch::Executable(_) => None,
+            AcquisitionLaunch::BundledNode(recipe) => recipe.bound_entrypoint.as_deref(),
+        }
     }
 
     /// Explicit overrides are authoritative. Otherwise probe PATH in the workspace's toolchain
@@ -135,16 +234,47 @@ impl LanguageServerAcquisition {
         candidates: &dyn LanguageServerExecutableCandidates,
         environment: &BTreeMap<String, String>,
         install: impl FnOnce() -> Result<InstalledExecutable, ManagedLanguageServerError>,
+        node_runtime: impl FnOnce() -> Result<ManagedNodeRuntime, ManagedLanguageServerError>,
     ) -> Result<ManagedLanguageServer, ManagedLanguageServerError> {
+        let recipe = match &self.launch {
+            AcquisitionLaunch::Executable(recipe) => recipe,
+            AcquisitionLaunch::BundledNode(recipe) => {
+                let entrypoint = recipe.bound_entrypoint.as_ref().ok_or_else(|| {
+                    ManagedLanguageServerError::Installation(
+                        "bundled language server has no package binding".into(),
+                    )
+                })?;
+                let provider = NodePackageLanguageServerProvider::new(
+                    &self.id,
+                    self.languages.iter().cloned(),
+                    entrypoint,
+                    node_runtime()?,
+                )?;
+                let mut definition = provider.definition(
+                    dir_root,
+                    explicit.map_or(
+                        LspServerLaunch::Packaged,
+                        LspServerLaunch::ExplicitExecutable,
+                    ),
+                )?;
+                if let Some(options) = &recipe.initialization_options {
+                    definition = definition.with_initialization_options(options.clone());
+                }
+                definition = definition.with_settings(recipe.settings.clone());
+                return Ok(ManagedLanguageServer {
+                    definition: definition.with_launch_options(&[], environment),
+                });
+            }
+        };
         // User overrides have the same precedence during probing and the eventual launch.
-        let mut effective_environment = self.environment.clone();
+        let mut effective_environment = recipe.environment.clone();
         effective_environment.extend(environment.clone());
         let paths = match explicit {
             Some(path) => vec![path.to_path_buf()],
-            None => candidates.candidates(&self.executable)?,
+            None => candidates.candidates(&recipe.executable)?,
         };
         for path in paths {
-            if let Some(definition) = self.probe(&path, dir_root, &effective_environment) {
+            if let Some(definition) = self.probe(recipe, &path, dir_root, &effective_environment) {
                 return Ok(ManagedLanguageServer { definition });
             }
         }
@@ -153,7 +283,7 @@ impl LanguageServerAcquisition {
         }
         let installed = install()?;
         let definition = self
-            .probe(&installed.path, dir_root, &effective_environment)
+            .probe(recipe, &installed.path, dir_root, &effective_environment)
             .ok_or_else(|| ManagedLanguageServerError::Unavailable(installed.path.clone()))?;
         Ok(ManagedLanguageServer {
             definition: definition.with_lease(installed.lease),
@@ -168,6 +298,11 @@ impl LanguageServerAcquisition {
         http: &dyn HttpClient,
         on_download: impl FnOnce(),
     ) -> Result<InstalledExecutable, ManagedLanguageServerError> {
+        let AcquisitionLaunch::Executable(recipe) = &self.launch else {
+            return Err(ManagedLanguageServerError::Installation(
+                "bundled language servers do not require acquisition".into(),
+            ));
+        };
         let suffix = match std::env::consts::OS {
             "macos" => "apple-darwin",
             "linux" => "unknown-linux-gnu",
@@ -179,7 +314,7 @@ impl LanguageServerAcquisition {
             }
         };
         let target = format!("{}-{suffix}", std::env::consts::ARCH);
-        let release = self
+        let release = recipe
             .releases
             .iter()
             .find(|release| release.target == target)
@@ -189,7 +324,7 @@ impl LanguageServerAcquisition {
         Ok(ash_package_store::install_executable(
             home,
             &self.id,
-            &self.executable,
+            &recipe.executable,
             release,
             http,
             on_download,
@@ -198,6 +333,7 @@ impl LanguageServerAcquisition {
 
     fn probe(
         &self,
+        recipe: &ExecutableAcquisition,
         path: &Path,
         dir_root: &Path,
         environment: &BTreeMap<String, String>,
@@ -206,7 +342,7 @@ impl LanguageServerAcquisition {
         let path = std::path::absolute(path).ok()?;
         // Preserve the invocation name for toolchain proxies that dispatch using argv[0].
         let mut child = Command::new(&path)
-            .args(&self.probe_args)
+            .args(&recipe.probe_args)
             .current_dir(dir_root)
             .envs(environment)
             .stdin(Stdio::null())

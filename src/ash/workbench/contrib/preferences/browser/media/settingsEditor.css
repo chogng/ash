@@ -17,6 +17,33 @@
 	grid-template-columns: 232px minmax(0, 1fr);
 }
 
+.ash-settings-target {
+	display: flex;
+	min-width: 0;
+	max-width: 100%;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-settings-target > .ash-segmented-control {
+	min-width: 0;
+	flex-shrink: 1;
+}
+
+.ash-settings-target-folder,
+.ash-settings-target-language {
+	min-width: 0;
+	max-width: 160px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-settings-target-language {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
 .ash-settings-sidebar {
 	min-width: 0;
 	min-height: 0;

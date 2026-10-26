@@ -1,11 +1,71 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { ContextKeyExpr } from "../../../contextkey/common/contextkey.js";
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { suite, test } from "mocha";
 import { JSDOM } from "jsdom";
 import { h } from "../../../../base/browser/dom.js";
 import { Event } from "../../../../base/common/event.js";
 import type { INotificationService } from "../../../notification/common/notification.js";
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+
+suite('Toolbar open menu refreshes', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('split dropdowns retain their menu and keyboard focus through a toolbar refresh', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			const { DropdownWithPrimaryActionViewItem } = await import('../../browser/dropdownWithPrimaryActionViewItem.js');
+			const { ToolBar } = await import('../../../../base/browser/ui/toolbar/toolbar.js');
+			let menu: import('../../../../base/browser/contextmenu.js').IContextMenuDelegate | undefined;
+			const provider = { showContextMenu(options: NonNullable<typeof menu>) { menu = options; } };
+			using toolbar = new ToolBar(dom.window.document.body, {
+				contextMenuProvider: provider,
+				actionViewItemProvider: item => new DropdownWithPrimaryActionViewItem(item, testAction('profiles'), [testAction('shell')], provider),
+			});
+			toolbar.setActions([testAction('new')]);
+			const selector = '.ash-dropdown-with-primary-dropdown button';
+			const trigger = toolbar.element.querySelector<HTMLButtonElement>(selector)!;
+			trigger.focus();
+			trigger.click();
+			toolbar.setActions([{ ...testAction('new'), label: 'Updated new' }]);
+			assert.equal(trigger.isConnected, true);
+			assert.equal(menu!.cancellationToken?.isCancellationRequested, false);
+			menu!.onHide?.(true);
+			await Promise.resolve();
+			const updated = toolbar.element.querySelector<HTMLButtonElement>(selector)!;
+			assert.notEqual(updated, trigger);
+			assert.equal(dom.window.document.activeElement, updated);
+			assert.equal(toolbar.element.querySelector('.ash-dropdown-with-primary-primary button')?.textContent, 'Updated new');
+		} finally {
+			dom.window.close();
+		}
+	});
+
+	test('More Actions stays open until dismissal when its last secondary action is removed', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			const { ToolBar } = await import('../../../../base/browser/ui/toolbar/toolbar.js');
+			let menu: import('../../../../base/browser/contextmenu.js').IContextMenuDelegate | undefined;
+			using toolbar = new ToolBar(dom.window.document.body, { contextMenuProvider: { showContextMenu(options) { menu = options; } } });
+			toolbar.setActions([testAction('primary')], [testAction('secondary')]);
+			const trigger = toolbar.element.querySelector<HTMLButtonElement>('[data-action-id="ash.toolbar.moreActions"] button')!;
+			trigger.focus();
+			trigger.click();
+			toolbar.setActions([{ ...testAction('primary'), label: 'Updated primary' }], []);
+			assert.equal(trigger.isConnected, true);
+			assert.equal(menu!.cancellationToken?.isCancellationRequested, false);
+			assert.deepEqual(menu!.getActions().map(action => action.id), ['secondary']);
+			menu!.onHide?.(true);
+			await Promise.resolve();
+			assert.equal(trigger.isConnected, false);
+			const primary = toolbar.element.querySelector('button');
+			assert.equal(primary?.textContent, 'Updated primary');
+			assert.equal(dom.window.document.activeElement, primary);
+		} finally {
+			dom.window.close();
+		}
+	});
+});
 
 test("toolbar submenu items retain toolbar button semantics", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");

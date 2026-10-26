@@ -41,7 +41,7 @@ export class CoworkPaneFactory extends Disposable {
 			const model = scope.createInstance(CoworkWidgetModel, this.chat, selection.kind === 'session' ? { kind: 'session', active: selection.active } : { kind: 'untitled', session: selection.session }, this.sessions);
 			const pane = scope.createInstance<CoworkWidget<CoworkWidgetModel>>(CoworkWidget, container, panelId, model, createNewSession, this.commands, undefined, undefined, undefined,
 				(inputContainer: HTMLElement, delegate: ChatInputDelegate) => scope.createInstance(NewCoworkInputWidget, inputContainer, delegate, model));
-			return new ScopedSessionConversationPane(pane, scope);
+			return new ScopedSessionConversationPane(pane, scope, model);
 		} catch (error) { scope.dispose(); throw error; }
 	}
 }

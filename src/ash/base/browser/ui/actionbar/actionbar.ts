@@ -1,11 +1,14 @@
 import './actionbar.css';
-import { addDisposableListener, h, isHTMLElement } from "../../dom.js";
+import { addDisposableListener, h, isElement, isHTMLElement } from "../../dom.js";
 import { DataTransfers, DragAndDropObserver } from "../../dnd.js";
 import type { IAction } from "../../../common/actions.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../common/lifecycle.js";
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../common/lifecycle.js";
 import { rot } from "../../../common/numbers.js";
 import { type ActionViewItem, type ActionViewItemOptions, createActionViewItem } from "./actionViewItems.js";
 import { DndCssClasses } from "../dnd/dnd.js";
+import type { Event } from '../../../common/event.js';
+import { DropdownMenuActionViewItem } from '../dropdown/dropdownMenuActionViewItem.js';
+import { disposableWindowTimeout } from '../../scheduler.js';
 
 export type ActionBarOrientation = "horizontal" | "vertical";
 export type ActionBarDropPosition = "before" | "after";
@@ -45,6 +48,11 @@ interface ActionBarEntry {
 	store: DisposableStore;
 }
 
+/** Split actions expose this event without making base depend on their platform implementation. */
+interface DropdownActionViewItem extends ActionViewItem {
+	readonly onDidChangeDropdownVisibility?: Event<boolean>;
+}
+
 /**
  * Owns action arrangement and composite-widget keyboard navigation.
  *
@@ -54,6 +62,9 @@ interface ActionBarEntry {
 export class ActionBar extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly entries: ActionBarEntry[] = [];
+	private readonly visibleDropdowns = new Set<ActionViewItem>();
+	private readonly pointerActivation = this._register(new MutableDisposable<DisposableStore>());
+	private pendingActions: { readonly actions: readonly IAction[]; readonly update: boolean; } | undefined;
 	private readonly actionViewItemProvider: ActionViewItemProvider | undefined;
 	private readonly actionViewItemOptions: ActionViewItemOptions;
 	private orientation: ActionBarOrientation;
@@ -94,6 +105,8 @@ export class ActionBar extends Disposable {
 			);
 			if (entry?.action.enabled) this._setTabStop(entry.item);
 		}));
+		// Capture before popup dismissal listeners can queue replacement of a clicked trigger.
+		this._register(addDisposableListener(ownerDocument, 'pointerdown', event => this.beginPointerActivation(event), true));
 		if (this.dragAndDrop) {
 			this._register(new DragAndDropObserver(element, {
 				onDragStart: (event) => this.onDragStart(event),
@@ -136,8 +149,11 @@ export class ActionBar extends Disposable {
 	}
 
 	setActions(actions: readonly IAction[]): void {
+		if (this.isDisposed || this.deferActions(actions, false)) return;
 		const activeElement = this.element.ownerDocument.activeElement;
-		const focusedActionId = this.entries.find(({ container }) => container.contains(activeElement))?.action.id;
+		const focusedEntry = this.entries.find(({ container }) => container.contains(activeElement));
+		const focusedActionId = focusedEntry?.action.id;
+		const focusedControl = focusedEntry ? [...focusedEntry.container.querySelectorAll('button, [tabindex]')].indexOf(activeElement!) : -1;
 		// Retained action identities keep their view and DOM through selection and reordering.
 		const retained = new Map(this.entries.map(entry => [entry.action, entry]));
 		const next = actions.map(action => {
@@ -169,14 +185,15 @@ export class ActionBar extends Disposable {
 		this.tabStop = tabStop?.item;
 		for (const entry of next) entry.item.setTabbable(entry === tabStop);
 		if (focusedActionId && this.element.ownerDocument.activeElement !== activeElement) {
-			const entry = next.find(({ action }) => action.id === focusedActionId && action.enabled);
+			const entry = next.find(({ action }) => action.id === focusedActionId && action.enabled)
+				?? next.find(({ action }) => action.enabled);
 			if (entry) {
 				this._setTabStop(entry.item);
 				// Moving a retained container can blur a nested control; restore that control, not the item's default target.
 				if (isHTMLElement(activeElement) && entry.container.contains(activeElement)) {
 					activeElement.focus();
 				} else {
-					entry.item.focus();
+					this.focusEntry(entry, entry.action.id === focusedActionId ? focusedControl : -1);
 				}
 			}
 		}
@@ -184,6 +201,7 @@ export class ActionBar extends Disposable {
 
 	/** Updates retained action slots when menu structure and ordering are stable. */
 	updateActions(actions: readonly IAction[]): void {
+		if (this.isDisposed || this.deferActions(actions, true)) return;
 		if (!this.hasMatchingStructure(actions)) {
 			this.setActions(actions);
 			return;
@@ -277,18 +295,89 @@ export class ActionBar extends Disposable {
 	}
 
 	private clearActions(): void {
+		this.pendingActions = undefined;
 		for (const entry of this.entries) entry.store.dispose();
 		this.entries.length = 0;
+		this.visibleDropdowns.clear();
+	}
+
+	private deferActions(actions: readonly IAction[], update: boolean): boolean {
+		if (this.visibleDropdowns.size > 0 || this.pointerActivation.value) {
+			// Entry disposal cancels its popup, including a native OS menu. Keep the
+			// displayed action snapshot alive until dismissal and retain only the latest update.
+			this.pendingActions = { actions, update };
+			return true;
+		}
+		this.pendingActions = undefined;
+		return false;
+	}
+
+	private dropdownVisibilityChanged(item: ActionViewItem, visible: boolean): void {
+		if (visible) {
+			this.visibleDropdowns.add(item);
+			return;
+		}
+		this.visibleDropdowns.delete(item);
+		this.schedulePendingActions();
+	}
+
+	private schedulePendingActions(): void {
+		if (!this.pendingActions) return;
+		// Let the menu provider finish its hide callback and focus restoration first.
+		queueMicrotask(() => {
+			if (this.isDisposed || this.visibleDropdowns.size > 0 || this.pointerActivation.value) return;
+			const pending = this.pendingActions;
+			if (!pending) return;
+			this.pendingActions = undefined;
+			if (pending.update) this.updateActions(pending.actions);
+			else this.setActions(pending.actions);
+		});
+	}
+
+	private beginPointerActivation(event: PointerEvent): void {
+		if (event.button !== 0 || !event.isPrimary || !isElement(event.target) || !this.element.contains(event.target)) return;
+		const control = event.target.closest('button, input, select, textarea, [role="button"], [tabindex]');
+		if (!control || !this.element.contains(control) || control.matches(':disabled') || control.getAttribute('aria-disabled') === 'true') return;
+		const listeners = new DisposableStore();
+		this.pointerActivation.value = listeners;
+		const finish = (): void => {
+			if (this.pointerActivation.value !== listeners) return;
+			this.pointerActivation.clear();
+			this.schedulePendingActions();
+		};
+		const document = this.element.ownerDocument;
+		// Outside-pointer dismissal runs before the next button's click. Preserve
+		// that button through activation so switching menus does not lose the click.
+		listeners.add(addDisposableListener(document, 'click', finish));
+		listeners.add(addDisposableListener(document, 'pointercancel', cancellation => {
+			if (cancellation.pointerId === event.pointerId) finish();
+		}, true));
+		listeners.add(addDisposableListener(document, 'pointerup', release => {
+			if (release.pointerId !== event.pointerId) return;
+			if (!isElement(release.target) || !control.contains(release.target) || !document.defaultView) {
+				finish();
+				return;
+			}
+			// Actions may consume click propagation. The task boundary still lets
+			// their native click finish before releasing the activation in that case.
+			listeners.add(disposableWindowTimeout(document.defaultView, finish, 0));
+		}, true));
+		if (document.defaultView) listeners.add(addDisposableListener(document.defaultView, 'blur', finish));
 	}
 
 	private createEntry(action: IAction, container: HTMLElement): ActionBarEntry {
 		const store = new DisposableStore();
 		container.draggable = false;
 		container.classList.remove(DndCssClasses.Draggable);
-		const item = store.add(
+		const item: DropdownActionViewItem = store.add(
 			this.actionViewItemProvider?.(action, this.actionViewItemOptions) ??
 			createActionViewItem(action, this.actionViewItemOptions),
 		);
+		const visibility = item instanceof DropdownMenuActionViewItem ? item.onDidChangeVisibility : item.onDidChangeDropdownVisibility;
+		if (visibility) {
+			store.add(visibility(visible => this.dropdownVisibilityChanged(item, visible)));
+			store.add(toDisposable(() => this.visibleDropdowns.delete(item)));
+		}
 		item.render(container);
 		const entry = { action, container, item, store };
 		if (item.draggable) {
@@ -461,7 +550,9 @@ export class ActionBar extends Disposable {
 
 	private replaceEntry(entry: ActionBarEntry, action: IAction): void {
 		const wasTabStop = entry.item === this.tabStop;
-		const hadFocus = entry.container.contains(entry.container.ownerDocument.activeElement);
+		const activeElement = entry.container.ownerDocument.activeElement;
+		const hadFocus = entry.container.contains(activeElement);
+		const focusedControl = [...entry.container.querySelectorAll('button, [tabindex]')].indexOf(activeElement!);
 		entry.store.dispose();
 		entry.container.replaceChildren();
 		entry.container.classList.toggle("icon", action.icon !== undefined);
@@ -471,7 +562,15 @@ export class ActionBar extends Disposable {
 		entry.store = replacement.store;
 		if (wasTabStop) this.tabStop = entry.item;
 		entry.item.setTabbable(wasTabStop);
-		if (hadFocus && action.enabled) entry.item.focus();
+		if (hadFocus && action.enabled) this.focusEntry(entry, focusedControl);
+	}
+
+	private focusEntry(entry: ActionBarEntry, controlIndex: number): void {
+		// Split actions contain two controls; returning to their dropdown must not
+		// silently move keyboard focus to the primary action after a refresh.
+		const control = entry.container.querySelectorAll<HTMLElement>('button, [tabindex]')[controlIndex];
+		if (control && !control.matches(':disabled') && control.getAttribute('aria-disabled') !== 'true') control.focus();
+		else entry.item.focus();
 	}
 
 	private navigationDirection(

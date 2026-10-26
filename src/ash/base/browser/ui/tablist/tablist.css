@@ -209,11 +209,12 @@
 	white-space: nowrap;
 }
 
-.ash-tab-list-navigation .ash-tab:not(.checked):hover {
+.ash-tab-list-navigation .ash-tab:hover {
 	background: var(--ash-tabList-hoverBackground);
 }
 
 .ash-tab-list-navigation .ash-tab.checked {
+	background: var(--ash-tabList-activeBackground);
 	outline: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, transparent);
 	outline-offset: -1px;

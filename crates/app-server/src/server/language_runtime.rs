@@ -1357,7 +1357,7 @@ impl AppServerLanguageRuntime {
             return runtime.definitions(dir_root, configuration);
         }
         let builtin = |id| {
-            if self.providers.contains(id) {
+            if self.providers.contains(id) || self.acquisitions.contains_key(id) {
                 LanguageServerPreference::disabled()
             } else {
                 preference(configuration, id)
@@ -1672,6 +1672,12 @@ impl AppServerLanguageRuntime {
                     );
                 }
                 result
+            },
+            || {
+                ash_lsp_server_provider::ManagedNodeRuntime::from_install_context(
+                    &InstallContext::current(),
+                )
+                .map_err(Into::into)
             },
         );
         if let Err(error) = &result {

@@ -24,9 +24,9 @@
 | `ManagedNodeRuntime`                                                        | 冻结 canonical Node-compatible executable；Desktop 使用 Electron run-as-Node，其他 package 使用 standalone Node，并生成 clean-environment command | 回退 host `PATH` 或允许 language pack 携带 Node  |
 | `NodePackageLanguageServerProvider` / `DirectPackageLanguageServerProvider` | 把 Manager-verified entrypoint 和 signed language route 绑定为 packaged provider                                                                  | 下载、安装、解析远端 catalog 或持有 live process |
 
-resolver 保留 JSON/JSONC、Shell 和 TypeScript 的冻结 PATH 入口；Rust 路由只来自内置 Rust 扩展，核心已移除旧 Rust resolver 入口。CSS、YAML 等包统一使用通用 Node/direct provider。产品从
+resolver 保留 JSON/JSONC、Shell 和 TypeScript 的冻结 PATH 入口；Rust 路由只来自内置 Rust 扩展，核心已移除旧 Rust resolver 入口。CSS 与 TypeScript 的内置包通过 `ashLanguageServers` v2 声明随产品打包的 Node 服务器，默认按文件需求启动；TypeScript 的扩展声明优先于旧 PATH 入口。其他已安装包统一使用通用 Node/direct provider。产品从
 Config snapshot 映射持久化 preference；
-Rust 扩展声明默认启用；其余 PATH built-in 未配置时使用 `Disabled`，需要显式选择 `Enabled` 才会生成 definition；
+内置扩展声明默认启用；其余 PATH built-in 未配置时使用 `Disabled`，需要显式选择 `Enabled` 才会生成 definition；
 activation-backed provider 的用户安装确认已经构成启用意图，未配置时生成 packaged definition，显式
 `Disabled` 才关闭。允许执行且冻结
 PATH 中存在可执行文件时生成 definition；否则保持无 server。显式 override 是 authoritative，失效时不会回退 PATH。
@@ -101,6 +101,8 @@ environment、host override 和 duplicate provider gate。
 - 尚未完成：组织策略或更细的 per-server executable grant。
 
 ## 内置扩展的服务器获取
+
+`ashLanguageServers` v2 的 Node 声明绑定内置包中的相对入口，可附带 `initializationOptions` 与各配置 section 的默认 `settings`。构建时打包服务器依赖，并保留 `runtimePackages` 指定的动态运行资源及许可证；TypeScript 的 `tsserver` 与标准库使用这一机制随包提供。运行期先将入口绑定到已验证的不可变扩展目录，再由 `ManagedNodeRuntime` 和既有 supervisor 启动，不探测全局 npm、不下载服务器。声明或包目录变化会退休旧实例，停用扩展或服务器设置会阻止启动。
 
 `extensions/rust/package.json` 的版本化 `ashLanguageServers` 声明拥有 Rust 的服务器 ID、语言路由、探测参数、环境变量和六个平台的固定发布资产。它与语言和语法贡献一起经过现有不可变扩展目录装载；Rust 配置不编译进核心 crate。核心只接纳 BuiltIn 来源的获取声明，用户/市场包不能通过添加同名字段取得进程或网络授权。
 

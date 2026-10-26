@@ -177,6 +177,8 @@ pub(super) struct WorkspaceRuntime {
 #[derive(Default)]
 pub(super) struct ExecutionRuntime {
     pub(super) terminals: Option<Arc<exec_server::terminal::TerminalService>>,
+    /// Terminal-only host grant for a native window without a selected directory.
+    projectless_terminal_grant: Option<Grant>,
     pub(super) session_terminals: Option<Arc<exec_server::terminal::TerminalService>>,
     pub(super) debug_adapters: Option<Arc<crate::debug_service::DebugAdapterService>>,
 }
@@ -2712,6 +2714,7 @@ impl AppServer {
             },
             execution: ExecutionRuntime {
                 terminals: None,
+                projectless_terminal_grant: None,
                 session_terminals: None,
                 debug_adapters: None,
             },
@@ -2990,6 +2993,7 @@ impl AppServer {
             },
             execution: ExecutionRuntime {
                 terminals: Some(Arc::clone(&terminals)),
+                projectless_terminal_grant: None,
                 session_terminals: None,
                 debug_adapters: debug_adapters.clone(),
             },
@@ -3681,13 +3685,48 @@ impl AppServer {
                 self.session_dir_authorization(&session_id, &path, Permission::ExecuteCommands)?;
             return self.session_terminal_service(&session_id, &authorization);
         }
-        let runtime = self.directory_runtime_for_request()?;
+        let _transition = self
+            .env_runtime_gate
+            .lock()
+            .map_err(|_| RpcError::new(-32070, AppServerErrorName::EnvironmentUnavailable))?;
+        let mut runtime = self
+            .env_runtime
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(dir_id) = dir_id {
             return runtime
                 .dirs
                 .get(dir_id)
                 .and_then(|dir| dir.terminals.clone())
                 .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::TerminalUnavailable));
+        }
+        if runtime.execution.terminals.is_none()
+            && runtime.dirs.is_empty()
+            && runtime.selected_grant.is_none()
+            && self
+                .local_env_host
+                .as_ref()
+                .is_some_and(|host| matches!(host.grants, DirGrantPolicy::UserConfig(_)))
+        {
+            // An empty native window has no project grant. Give only its interactive
+            // terminal an execution root; never activate home as a workspace or use
+            // this path to bypass a selected folder's restricted permissions.
+            let root = dirs::home_dir()
+                .and_then(|path| Dir::open_local(path).ok())
+                .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::TerminalUnavailable))?;
+            let grant = Grant::for_environment(
+                root,
+                GrantSource::HostConfiguration,
+                Permissions::new([Permission::ExecuteCommands]),
+            );
+            let authorization = grant
+                .authorize(Permission::ExecuteCommands)
+                .map_err(|_| RpcError::new(-32060, AppServerErrorName::TerminalUnavailable))?;
+            let service = self
+                .create_terminal_service(authorization)
+                .map_err(|_| RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))?;
+            runtime.execution.projectless_terminal_grant = Some(grant);
+            runtime.execution.terminals = Some(Arc::new(service));
         }
         runtime
             .execution
@@ -4103,6 +4142,9 @@ fn retire_env_runtime(
     retained_terminals: Option<&Arc<exec_server::terminal::TerminalService>>,
     retained_debug_adapters: Option<&Arc<crate::debug_service::DebugAdapterService>>,
 ) {
+    if let Some(grant) = runtime.execution.projectless_terminal_grant.take() {
+        grant.revoke();
+    }
     for (_, directory) in std::mem::take(&mut runtime.dirs) {
         directory.retire(retained_search, retained_terminals, retained_debug_adapters);
     }

@@ -27,6 +27,7 @@ import { ISessionsService, type SessionsViewSelection } from '../../../../../ses
 import { IChatDebugService } from '../../../../contrib/chat/common/chatDebugService.js';
 import { observableValue, type IReader } from '../../../../../base/common/observable.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
+import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { AuxiliaryBarPart } from '../../../../browser/parts/auxiliarybar/auxiliaryBarPart.js';
@@ -357,6 +358,7 @@ if (new URLSearchParams(location.search).has('problems')) {
 		resources.add(new BrowserContextViewService(document.body)), resources.add(new TestNotificationService()))));
 }
 const panel = resources.add(registerTestComponentServices(services).createInstance(PanelPart, document.body));
+const hostedParts = new Map<ViewContainerLocation, PanelPart | AuxiliaryBarPart>([[ViewContainerLocation.Panel, panel]]);
 resources.add(bindTestColorTheme(services.get(IThemeService), panel.domNode));
 if (new URLSearchParams(location.search).has('partWidth')) {
 	registerCodeEditorServices(services);
@@ -375,6 +377,7 @@ if (new URLSearchParams(location.search).has('partWidth')) {
 	resources.add(registry.registerViewContainer(descriptor));
 	resources.add(registry.registerViews(descriptor.id, [{ id: 'width-chat.view', title: 'Chat', ctorDescriptor: new SyncDescriptor(WidthView) }]));
 	const part = resources.add(services.createInstance(AuxiliaryBarPart, host));
+	hostedParts.set(ViewContainerLocation.AuxiliaryBar, part);
 	const composite = resources.add(services.createInstance(PaneComposite, part.domNode, {
 		viewContainer: descriptor,
 		model: services.get(IViewDescriptorService).getViewContainerModel(descriptor.id)!,
@@ -423,7 +426,7 @@ services.registerInstance(IWorkbenchLayoutService, {
 	showPart: () => panel.setVisible(true),
 	hidePart: () => panel.setVisible(false),
 } as unknown as IWorkbenchLayoutService);
-const panes = resources.add(services.createInstance(PaneCompositePartService, new Map([[ViewContainerLocation.Panel, panel]])));
+const panes = resources.add(services.createInstance(PaneCompositePartService, hostedParts));
 services.registerInstance(IPaneCompositePartService, panes);
 services.registerInstance(IViewsService, resources.add(services.createInstance(ViewsService)));
 if (new URLSearchParams(location.search).has('agentOutput')) agentOutput = resources.add(services.createInstance(AgentTraceOutput));
@@ -454,6 +457,8 @@ const resourceStore: ITextResourceStore = {
 	save: async () => ({ revision: undefined }),
 };
 const modelServices = resources.add(new InstantiationService());
+resources.add(uriIdentityServices.get(IFileService).registerProvider('ash-userdata', resources.add(new InMemoryFileSystemProvider())));
+modelServices.registerInstance(IFileService, uriIdentityServices.get(IFileService));
 modelServices.registerInstance(IUriIdentityService, uriIdentityServices.get(IUriIdentityService));
 const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {}));
 modelServices.registerInstance(IFileTextModelService, models);

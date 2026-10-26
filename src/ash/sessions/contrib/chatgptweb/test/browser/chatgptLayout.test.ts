@@ -55,6 +55,61 @@ suite('chatgptweb browser component', () => {
 	}
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`ChatGPT group hover fills follow list inset changes (${locale})`, async () => {
+			const { page } = browserTests;
+			await mockChatGPTRequests(page);
+			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${locale === 'en' ? 'light' : 'hcDark'}`);
+			const list = page.locator('.ash-chatgpt-navigation-list');
+			const header = list.locator('.ash-pane-view-header').first();
+			await expect(header).toBeVisible();
+			const expectInsets = async (inset: number): Promise<void> => {
+				await expect.poll(() => header.evaluate(node => {
+					const bounds = node.getBoundingClientRect();
+					const list = node.closest('.ash-chatgpt-navigation-list')!.getBoundingClientRect();
+					return { left: bounds.left - list.left, right: list.right - bounds.right };
+				})).toEqual({ left: inset, right: inset });
+			};
+			await expectInsets(8);
+			await list.evaluate(node => { node.style.paddingInline = '12px'; });
+			await expectInsets(12);
+			await list.evaluate(node => node.style.removeProperty('padding-inline'));
+			await expectInsets(8);
+			await header.hover();
+			await expect(header).toHaveCSS('border-radius', '8px');
+		});
+
+		test(`ChatGPT history and conversation show independent skeletons (${locale})`, async () => {
+			const { page } = browserTests;
+			await mockChatGPTRequests(page);
+			let releaseHistory!: () => void;
+			const history = new Promise<void>(resolve => { releaseHistory = resolve; });
+			await page.route('**/service/backend-api/conversations?*', async route => { await history; await route.fallback(); });
+			await page.goto(`/chatgptNavigation.html?locale=${locale}`);
+			const navigation = page.locator('.ash-chatgpt-navigation');
+			const editor = page.locator('.ash-chatgpt-widget');
+			try {
+				await expect(navigation.locator('.ash-sessions-loading')).toBeVisible();
+				await expect(editor.locator('.ash-sessions-loading')).toBeHidden();
+				await expect(editor.locator('.ash-chatgpt-welcome')).toBeVisible();
+			} finally { releaseHistory(); }
+			const conversation = navigation.getByRole('button', { name: 'Synthetic conversation', exact: true });
+			await expect(conversation).toBeVisible();
+			await expect(navigation.locator('.ash-sessions-loading')).toBeHidden();
+			let releaseConversation!: () => void;
+			const pending = new Promise<void>(resolve => { releaseConversation = resolve; });
+			await page.route('**/service/backend-api/conversation/fixture-chat', async route => { await pending; await route.fallback(); });
+			try {
+				await conversation.click();
+				await expect(editor.locator('.ash-sessions-loading')).toBeVisible();
+				await expect(navigation.locator('.ash-sessions-loading')).toBeHidden();
+				await expect(conversation).toBeEnabled();
+				await expect(editor.locator('.ash-chatgpt-welcome')).toBeHidden();
+				await page.screenshot({ path: browserTests.info.outputPath(`chat-independent-loading-${locale}.png`) });
+			} finally { releaseConversation(); }
+			await expect(editor.locator('.ash-chatgpt-messages')).toContainText('Synthetic answer');
+			await expect(editor.locator('.ash-sessions-loading')).toBeHidden();
+		});
+
 		test(`ChatGPT conversations load more on scroll and keyboard navigation (${locale})`, async function () {
 			const { page } = browserTests;
 
@@ -392,13 +447,14 @@ suite('chatgptweb browser component', () => {
 				expect(modelBounds!.y).toBe(sendBounds!.y);
 				await page.mouse.move(1, 1);
 				const restingShadow = await composer.evaluate(element => getComputedStyle(element).boxShadow);
+				const activeShadow = `color(srgb 0 0 0 / ${theme === 'light' ? '0.0482353' : '0.12'}) 0px 2px 8px 0px`;
 				await fillMessage(page, 'A short prompt');
 				await expectDraft(page, 'A short prompt');
 				await expect(send).toHaveAttribute('aria-label', locale === 'en' ? 'Send' : '发送');
 				await expect(send.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'arrow-up');
 				await expect(editor).toHaveCSS('height', '20px');
 				if (!theme.startsWith('hc')) {
-					await expect.poll(() => composer.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe(restingShadow);
+					await expect(composer).toHaveCSS('box-shadow', activeShadow);
 				} else {
 					await expect(composer).toHaveCSS('box-shadow', 'none');
 					await expect(composer).not.toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
@@ -434,7 +490,7 @@ suite('chatgptweb browser component', () => {
 				await expect.poll(() => composer.evaluate(element => getComputedStyle(element).boxShadow)).toBe(restingShadow);
 				await composer.hover();
 				if (!theme.startsWith('hc')) {
-					await expect.poll(() => composer.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe(restingShadow);
+					await expect(composer).toHaveCSS('box-shadow', activeShadow);
 				}
 				await input.focus();
 				await page.mouse.move(1, 1);
@@ -693,6 +749,7 @@ suite('chatgptweb browser component', () => {
 			const second = list.locator('[data-group="g-p-two"]');
 			const toggle = (group: typeof first) => group.locator(':scope > .ash-pane-view-header > .ash-pane-view-header-button');
 			await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveCount(4);
+			for (const group of [pinned, first, second, recent]) { await expect(toggle(group)).toHaveCSS('height', '32px'); }
 			await toggle(pinned).focus();
 			await page.keyboard.press('ArrowDown'); await expect(toggle(first)).toBeFocused();
 			await page.keyboard.press('ArrowDown'); await expect(toggle(second)).toBeFocused();
@@ -825,7 +882,7 @@ suite('chatgptweb browser component', () => {
 			await expect(title).toBeVisible();
 			for (const forcedColors of ['none', 'active'] as const) {
 				await page.emulateMedia({ forcedColors });
-				expect((await row.boundingBox())!.height).toBe(36);
+				expect((await row.boundingBox())!.height).toBe(32);
 				for (const action of [more, row.getByRole('button', { name: labels.pin, exact: true })]) {
 					await expect(action).toHaveCSS('width', '28px');
 					await expect(action).toHaveCSS('height', '28px');

@@ -9,7 +9,7 @@ import { Disposable, DisposableMap, DisposableStore } from '../../../../base/com
 import { type URI } from '../../../../base/common/uri.js';
 import { type LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
 import { type CodeLens, type CodeLensProvider, type Command } from '../../../common/languages.js';
-import { codeLensCache } from './codeLensCache.js';
+import { CodeLensCache, getCodeLensCache } from './codeLensCache.js';
 import { CodeLensModel, getCodeLensModel, type CodeLensItem } from './codelens.js';
 import { CodeLensWidget } from './codelensWidget.js';
 
@@ -33,6 +33,7 @@ export class CodeLensContribution extends Disposable {
 		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
 		private readonly providers: LanguageFeatureRegistry<CodeLensProvider>,
+		private readonly cache: CodeLensCache,
 		private readonly resource: URI | undefined,
 		private readonly onExecuteCommand: ExecuteCodeLensCommand | undefined,
 		private readonly onError: (error: unknown) => void = error => console.error('Stanza CodeLens failed', error),
@@ -50,7 +51,7 @@ export class CodeLensContribution extends Disposable {
 		}));
 		this._register(viewport.textModel.onDidChangeLanguage(() => {
 			if (this.resource) {
-				codeLensCache.delete(this.resource);
+				this.cache.delete(this.resource);
 			}
 			this.clear();
 			this.bindProviderListeners();
@@ -63,7 +64,7 @@ export class CodeLensContribution extends Disposable {
 			}
 		}));
 		this._register(viewport.onDidChangeLayout(() => this.layoutAndResolve()));
-		const cachedModel = resource && editor.getOption(EditorOption.codeLens) ? codeLensCache.get(resource, viewport.textModel.lineCount) : undefined;
+		const cachedModel = resource && editor.getOption(EditorOption.codeLens) ? this.cache.get(resource, viewport.textModel.lineCount) : undefined;
 		if (cachedModel) {
 			this.cachedModel = cachedModel;
 			this.setModel(cachedModel);
@@ -147,7 +148,7 @@ export class CodeLensContribution extends Disposable {
 	}
 
 	private showCachedModelUntilExpiry(): void {
-		const cachedModel = this.resource ? codeLensCache.get(this.resource, this.viewport.textModel.lineCount) : undefined;
+		const cachedModel = this.resource ? this.cache.get(this.resource, this.viewport.textModel.lineCount) : undefined;
 		if (!cachedModel) {
 			this.cachedModel = undefined;
 			this.setModel(CodeLensModel.Empty);
@@ -159,7 +160,7 @@ export class CodeLensContribution extends Disposable {
 		this.reconcileWidgets(cachedModel.lenses);
 		this.cacheExpiry.cancelAndSet(() => {
 			if (this.cachedModel !== cachedModel || this.isDisposed) return;
-			if (this.resource) codeLensCache.delete(this.resource);
+			if (this.resource) this.cache.delete(this.resource);
 			this.cachedModel = undefined;
 			this.setModel(CodeLensModel.Empty);
 			this.clearWidgets();
@@ -251,7 +252,7 @@ export class CodeLensContribution extends Disposable {
 	}
 
 	private updateCache(): void {
-		if (this.resource) codeLensCache.put(this.resource, this.viewport.textModel.lineCount, this.currentModel);
+		if (this.resource) this.cache.put(this.resource, this.viewport.textModel.lineCount, this.currentModel);
 	}
 
 	private executeCommand(command: Command): void {
@@ -285,6 +286,7 @@ registerEditorContribution({
 			context.editor,
 			context.view,
 			context.languageFeaturesService.codeLensProvider,
+			getCodeLensCache(context.languageFeaturesService),
 			context.model.uri,
 			context.options.onExecuteEditorCommand,
 			context.onLanguageError,

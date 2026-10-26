@@ -3,10 +3,12 @@ import { constants, copyFileSync, cpSync, existsSync, globSync, mkdirSync, mkdte
 import { availableParallelism, tmpdir } from 'node:os';
 import { dirname, resolve, sep } from 'node:path';
 import { startBrowserUnitServer } from './browser/server.ts';
+import { planAffectedTests } from './impact.ts';
 
 interface Selection {
 	readonly runs: readonly string[];
 	readonly runGlob?: string;
+	readonly affected?: string;
 	readonly grep?: string;
 	readonly timeout: number;
 	readonly workers: number;
@@ -22,6 +24,7 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 	}
 	// Reject invalid filters before creating a snapshot of the complete compiler output.
 	const selection = parseSelection(process.argv.slice(process.argv[2] === '--' ? 3 : 2));
+	const preloads = ['test/unit/ignore-css-imports.ts', 'test/unit/theme-resources.ts', ...(editorEnvironment ? ['test/unit/editor-environment.ts'] : [])];
 	// Keep this run's modules alive when another invocation cleans the compiler output.
 	const outputDirectory = mkdtempSync(resolve(desktopDirectory, '.build/desktop/test-run-'));
 	try {
@@ -47,6 +50,11 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 				}
 				return matches;
 			});
+		}
+		if (selection.affected) {
+			const plan = planAffectedTests(desktopDirectory, selection.affected, [...new Set(names.map(name => name.replaceAll('\\', '/')))].sort(), { preloads });
+			process.stdout.write(`Unit test impact: ${plan.full ? 'full suite' : 'selected files'}; ${plan.reason}\n`);
+			names = [...plan.files];
 		}
 		const files = [...new Set(names.map(name => resolve(outputDirectory, name)))].sort();
 		if (files.length === 0) {
@@ -74,9 +82,7 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 							const file = files[index];
 							const countFile = resolve(resultDirectory, `${index}.txt`);
 							const result = await run.command(process.execPath, [
-								'--import', './test/unit/ignore-css-imports.ts',
-								'--import', './test/unit/theme-resources.ts',
-								...(editorEnvironment ? ['--import', './test/unit/editor-environment.ts'] : []),
+								...preloads.flatMap(path => ['--import', `./${path}`]),
 								'node_modules/mocha/bin/mocha.js',
 								'--ui', 'tdd',
 								'--forbid-only',
@@ -137,6 +143,7 @@ function sourceFile(value: string): string {
 function parseSelection(args: readonly string[]): Selection {
 	const runs: string[] = [];
 	let runGlob: string | undefined;
+	let affected: string | undefined;
 	let grep: string | undefined;
 	let timeout = 60_000;
 	let workers = Math.min(4, availableParallelism());
@@ -147,6 +154,11 @@ function parseSelection(args: readonly string[]): Selection {
 		switch (option) {
 			case '--run': runs.push(value); break;
 			case '--runGlob': runGlob = value; break;
+			case '--affected': {
+				if (affected || !value.trim() || value.startsWith('--')) throw new Error('--affected requires one base revision.');
+				affected = value;
+				break;
+			}
 			case '--grep': {
 				if (!value.trim() || value.startsWith('--')) throw new Error('--grep requires a nonempty pattern.');
 				grep = value;
@@ -167,5 +179,6 @@ function parseSelection(args: readonly string[]): Selection {
 		index += 1;
 	}
 	if (runs.length > 0 && runGlob) throw new Error('--run and --runGlob cannot be combined');
-	return { runs, runGlob, grep, timeout, workers };
+	if (affected && (runs.length > 0 || runGlob)) throw new Error('--affected cannot be combined with --run or --runGlob');
+	return { runs, runGlob, affected, grep, timeout, workers };
 }

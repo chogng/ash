@@ -119,8 +119,8 @@ export class TerminalViewPane extends ViewPane {
 				this.updateInstances();
 			}
 		}));
-		this._register(workspaceContext.onDidChangeWorkspace(({ workspace }) => {
-			if (workspace.folders.length > 0 && this.terminalService.instances.length === 0) void this.initialize();
+		this._register(workspaceContext.onDidChangeWorkspace(() => {
+			if (this.terminalService.instances.length === 0) void this.initialize();
 		}));
 
 		const layoutTerminals = (): void => {
@@ -168,13 +168,6 @@ export class TerminalViewPane extends ViewPane {
 
 	private async initialize(): Promise<void> {
 		if (!this.isBodyVisible() || this.isDisposed || this.initializing) return;
-		if (!this.hasWorkspaceFolder()) {
-			this.titleActions.setProfiles([]);
-			if (this.terminalService.instances.length === 0) {
-				this.setStatus("Open a folder to use the terminal.");
-			}
-			return;
-		}
 		this.initializing = true;
 		const progress = this.getProgressIndicator().show(true, 150);
 		try {
@@ -186,7 +179,7 @@ export class TerminalViewPane extends ViewPane {
 				// Profile readiness also drives the title menu. A hidden panel must
 				// stop here before handing a creation intent to the service.
 				const folders = this.workspaceContext.getWorkspace().folders;
-				if (folders.length === 1) await this.profileService.refreshAvailableProfiles(folders[0]!.id);
+				if (folders.length <= 1) await this.profileService.refreshAvailableProfiles(folders[0]?.id);
 				// An incoming process can acquire the panel while discovery is pending.
 				if (!this.isBodyVisible() || this.isDisposed || this.terminalService.instances.length > 0) return;
 				this.titleActions.setCreating(true);
@@ -317,10 +310,6 @@ export class TerminalViewPane extends ViewPane {
 	private setStatus(message: string | undefined): void {
 		this.statusElement.textContent = message ?? "";
 		this.statusElement.hidden = message === undefined;
-	}
-
-	private hasWorkspaceFolder(): boolean {
-		return this.workspaceContext.getWorkspace().folders.length > 0;
 	}
 
 }

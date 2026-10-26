@@ -32,7 +32,8 @@ import { test, suite, suiteTeardown } from "mocha";
 import { ensureNoDisposablesAreLeakedInTestSuite } from "../../../../../base/test/common/utils.js";
 import { JSDOM } from "jsdom";
 import type { IAction } from "../../../../../base/common/actions.js";
-import { Event } from "../../../../../base/common/event.js";
+import { Emitter, Event } from "../../../../../base/common/event.js";
+import type { IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { ITerminalInstance } from "../../browser/terminal.js";
 import { AppServerAvailableContext } from '../../../../common/contextkeys.js';
@@ -90,12 +91,14 @@ registerTerminalActions();
 
 let shownProfileActions: readonly IAction[] = [];
 let shownProfileAnchor: unknown;
+let shownProfileMenu: Pick<IContextMenuDelegate, 'onHide'> | undefined;
 
 const contextMenuService: IContextMenuService = {
 	contextMenuStyle: 'custom' as const,
 	onDidShowContextMenu: Event.None,
 	onDidHideContextMenu: Event.None,
 	showContextMenu(options) {
+		shownProfileMenu = options;
 		shownProfileActions = options.getActions?.() ?? [];
 		shownProfileAnchor = options.getAnchor();
 	},
@@ -227,6 +230,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	assert.ok(clearTerminal);
 	assert.equal(shownProfileActions.some((action) => action.id.startsWith("ash.compositeBar.open.")), false);
 	await clearTerminal.run();
+	shownProfileMenu?.onHide?.(false);
 	assert.equal(clearCount, 1);
 	titleActions.setActiveInstance({ ...activeInstance, state: 'reconnecting' }, 'title');
 	shownProfileActions = [];
@@ -289,6 +293,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	await powerShell.run();
 	await Promise.resolve();
 	assert.deepEqual(createdProfiles, [undefined, "pwsh"]);
+	shownProfileMenu?.onHide?.(false);
 	const extensionProfiles = [
 		{ profileId: 'extension:github.copilot-chat/cli', title: 'Assistant CLI', isDefault: false },
 		{ profileId: 'extension:anthropic.claude-code/cli', title: 'Claude CLI', isDefault: false },
@@ -306,6 +311,79 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	assert.equal(contextKeyService.getValue(TerminalHasActiveInstanceContext.key), true);
 	titleActions.dispose();
 	assert.equal(contextKeyService.getValue(TerminalHasActiveInstanceContext.key), true, 'Disposing the toolbar resets only its local menu context');
+});
+
+test('Terminal profile menu survives presentation refreshes and restores its dropdown focus', async () => {
+	const ownerDocument = browserEnvironment.window.document;
+	ownerDocument.body.replaceChildren();
+	using services = new InstantiationService();
+	using context = new ContextKeyService();
+	AppServerAvailableContext.bindTo(context).set(true);
+	using commands = new CommandService(services, new CommandRegistry());
+	services.registerInstance(ICommandService, commands);
+	services.registerInstance(IMenuService, new MenuService(commands, context));
+	services.registerInstance(IContextKeyService, context);
+	let menu: Parameters<IContextMenuService['showContextMenu']>[0] | undefined;
+	services.registerInstance(IContextMenuService, {
+		...contextMenuService,
+		showContextMenu(options) { menu = options; },
+	});
+	using configuration = new TestConfigurationService();
+	services.registerInstance(IConfigurationService, configuration);
+	registerTestComponentServices(services, ownerDocument);
+	using hoverContext = new BrowserContextViewService(ownerDocument.body);
+	using hovers = new HoverService(configuration, hoverContext, contextMenuService);
+	services.registerInstance(IHoverService, hovers);
+	services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
+	using workspace = new TestWorkspaceService({ id: 'terminal-profile-menu-refresh', folders: [] });
+	services.registerInstance(IWorkspaceContextService, workspace);
+	using keybindingsChanged = new Emitter<void>();
+	services.registerInstance(IKeybindingService, {
+		onDidUpdateKeybindings: keybindingsChanged.event,
+		lookupKeybinding: () => undefined,
+	} as unknown as IKeybindingService);
+	using titleActions = services.createInstance(TerminalTitleActions, ownerDocument.body);
+	const originalProfile = { profileId: 'original', title: 'Original shell', isDefault: true };
+	const nextProfile = { profileId: 'next', title: 'Next shell', isDefault: false };
+	const instance = { id: 'profile-menu', title: 'Original title', profile: originalProfile, state: 'running' as const, onDidChangeState: Event.None };
+	titleActions.setProfiles([originalProfile]);
+	titleActions.setActiveInstance(instance as ITerminalInstance, 'title');
+	const selector = '.ash-dropdown-with-primary-dropdown button';
+	const trigger = titleActions.element.querySelector<HTMLButtonElement>(selector)!;
+	trigger.focus();
+	trigger.click();
+	assert.ok(menu);
+	const openedMenu = menu;
+	const snapshot = openedMenu.getActions!();
+	assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+
+	// Extension shortcut registration and shell metadata can arrive while the OS menu is open.
+	keybindingsChanged.fire();
+	titleActions.setProfiles([originalProfile, nextProfile]);
+	instance.title = 'Updated title';
+	titleActions.setActiveInstance(instance as ITerminalInstance, 'title');
+	await Promise.resolve();
+	assert.equal(trigger.isConnected, true);
+	assert.equal(titleActions.element.querySelector(selector), trigger);
+	assert.equal(openedMenu.cancellationToken?.isCancellationRequested, false);
+	assert.equal(snapshot.some(action => action.id.endsWith('.next')), false);
+
+	openedMenu.onHide?.(true);
+	await Promise.resolve();
+	const updatedTrigger = titleActions.element.querySelector<HTMLButtonElement>(selector)!;
+	assert.notEqual(updatedTrigger, trigger);
+	assert.equal(updatedTrigger.getAttribute('aria-expanded'), 'false');
+	assert.equal(ownerDocument.activeElement, updatedTrigger);
+	assert.equal(titleActions.element.querySelector('.ash-action-label-text')?.textContent, 'Updated title');
+	updatedTrigger.click();
+	assert.ok(menu!.getActions!().some(action => action.id.endsWith('.next')));
+	keybindingsChanged.fire();
+	const finalMenu = menu!;
+	titleActions.dispose();
+	assert.equal(finalMenu.cancellationToken?.isCancellationRequested, true);
+	finalMenu.onHide?.(true);
+	await Promise.resolve();
+	assert.equal(titleActions.element.isConnected, false, 'Pending refreshes cannot recreate a disposed toolbar');
 });
 
 

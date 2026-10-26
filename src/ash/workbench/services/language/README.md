@@ -5,6 +5,12 @@ composition. The shared language identity, editing configuration, and provider
 registries are separate Editor services; Workbench registers App Server and
 product providers into those contracts without subclassing or wrapping them.
 
+The built-in CSS and TypeScript packages declare bundled Node language servers through
+`ashLanguageServers` v2. CSS/LESS/SCSS use the VS Code CSS language service; TypeScript,
+TSX, JavaScript and JSX use `typescript-language-server` with a packaged `tsserver` and
+standard libraries. Opening a matching document starts its server through the existing
+Rust LSP runtime, without a global Node or npm installation. Discovery remains lazy.
+
 The built-in `json-language-features` extension installs shared JSON/JSONC completion,
 hover, formatting and diagnostics through `@ash/sdk`. The `json` extension owns language
 declarations, editing rules and syntax assets. App Server, extension-host,

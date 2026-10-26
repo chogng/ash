@@ -26,19 +26,22 @@ test('Sessions mode and page-tab activation reuse Parts while retaining the conv
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const creatorNavigation = page.locator('.ash-creator-home');
+	await expect(creatorNavigation).toBeVisible();
+	const sidebarContent = page.locator('[data-part="sidebar"] [data-view-container-id]:visible');
+	const retainedSidebar = await sidebarContent.elementHandle();
 	await creatorNavigation.getByRole('button', { name: 'Design', exact: true }).focus();
 	await page.keyboard.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Design/);
 	await page.keyboard.press('Escape');
 	await expect(creatorNavigation.getByRole('button', { name: 'Design', exact: true })).toBeFocused();
 	await creatorNavigation.getByRole('button', { name: 'Design', exact: true }).press('Enter');
-	await expect(page.locator('[data-part="sidebar"]')).toContainText('Layers');
+	expect(await sidebarContent.evaluate((element, retained) => element === retained, retainedSidebar)).toBe(true);
 	await expect(page.locator('[data-part="auxiliarybar"]')).toContainText('Page');
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 	await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await expect(navigation.getByRole('button', { name: 'Artifacts', exact: true })).toHaveAttribute('aria-current', 'page');
 	await creatorNavigation.getByRole('button', { name: 'Design', exact: true }).click();
-	await expect(page.locator('[data-part="sidebar"]')).toContainText('Layers');
+	expect(await sidebarContent.evaluate((element, retained) => element === retained, retainedSidebar)).toBe(true);
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).focus();
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).press('Enter');
 	await expect(navigation.getByRole('button', { name: 'Projects', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -53,6 +56,7 @@ test('Sessions mode and page-tab activation reuse Parts while retaining the conv
 	await chat.waitForEditorContents(text => text === 'Retained conversation draft');
 	await document.waitForEditorContents(text => text === 'Retained dirty document');
 	await expect(page.getByRole('dialog', { name: 'Save Changes', exact: true })).toHaveCount(0);
+	await retainedSidebar!.dispose();
 	await page.locator('[data-part="editor"]').getByRole('tab', { name: /^Untitled-1(?:,|$)/u }).press('Delete');
 	await page.getByRole('dialog', { name: 'Save Changes', exact: true }).getByRole('button', { name: "Don't Save", exact: true }).click();
 });
@@ -110,11 +114,15 @@ test('Sessions Creator resets side panel widths and retains them across page cha
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await new QuickAccess(page).runCommand('workbench.sessions.sidebar.designLayers');
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const leftSash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash:not(.ash-sash-disabled):visible').first();
 	const rightSash = page.locator('[data-part="auxiliarybar"]').locator('xpath=../../..').locator(':scope > .ash-sash:not(.ash-sash-disabled):visible').last();
 	const panelWidths = () => page.locator('.ash-workbench-part-frame').evaluateAll(frames => frames.filter(frame => frame.querySelector(':scope > [data-part="sidebar"], :scope > [data-part="auxiliarybar"]')).map(frame => Math.round(frame.getBoundingClientRect().width)));
 	await expect.poll(panelWidths).toHaveLength(2);
+	// Establish the reset baseline after explicitly activating the tool view.
+	await leftSash.dblclick();
+	await rightSash.dblclick();
 	const initialWidths = await panelWidths();
 	for (const width of [1226, 1400, 1100]) {
 		let contentWidth = width;
@@ -152,6 +160,7 @@ test('Sessions Creator resets side panel widths and retains them across page cha
 	await canvas.press('ControlOrMeta+z');
 	await expect(canvas.locator('[data-shape-id]')).toHaveCount(0);
 	await leftSash.dblclick();
+	await rightSash.dblclick();
 	await expect.poll(panelWidths).toEqual(initialWidths);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
@@ -215,6 +224,7 @@ test('Sessions Design vector booleans keep editable operands, holes, history and
 	await canvas.press('Tab'); await field('Width', '180'); await expect(result()).not.toHaveAttribute('d', original!);
 	await canvas.press('ControlOrMeta+z'); await expect(result()).toHaveAttribute('d', original!);
 	await canvas.press('ControlOrMeta+a');
+	await new QuickAccess(page).runCommand('workbench.sessions.sidebar.designLayers');
 	await page.locator('.ash-design-layers').getByRole('tree', { name: 'Layers', exact: true }).press('Alt+Shift+u'); await expect.poll(() => inside(100, 80)).toBe(true);
 	await properties.getByRole('button', { name: 'Intersect selection', exact: true }).click(); expect(await inside(10, 10)).toBe(false); expect(await inside(100, 80)).toBe(true);
 	await properties.getByRole('button', { name: 'Exclude selection', exact: true }).click(); expect(await inside(100, 80)).toBe(false);

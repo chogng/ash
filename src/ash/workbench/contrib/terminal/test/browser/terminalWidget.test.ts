@@ -268,7 +268,7 @@ suite('terminal browser component', () => {
 	test('Chinese terminal actions create terminals while preserving shell names', async function () {
 		const { page } = browserTests;
 
-		await page.goto('/terminal.html?pane&locale=zh-CN');
+		await page.goto('/terminal.html?pane&emptyWorkspace&locale=zh-CN');
 		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
 		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({ profiles: 1, creates: 1 });

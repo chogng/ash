@@ -161,7 +161,7 @@ import { IAuxiliaryWindowsMainService } from '../../platform/auxiliaryWindow/ele
 import { AuxiliaryWindowsMainService } from '../../platform/auxiliaryWindow/electron-main/auxiliaryWindowsMainService.js';
 import { nodeWorkspacePathService } from '../../platform/workspaces/node/workspaces.js';
 import { LocalizationConfiguration } from '../../workbench/services/localization/common/locale.js';
-import { productLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
+import { fallbackLanguagePackCatalog, loadProductLanguagePackCatalog } from '../../../../.build/desktop/localization/localizationCatalogLoader.js';
 import { parseLanguagePackCatalog } from '../../platform/languagePacks/common/languagePackCatalog.js';
 import type { LanguagePackCatalog } from '../../platform/languagePacks/common/languagePackContract.js';
 import { NLS_CONFIGURATION_CHANNEL, NLS_ACTIVATE_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
@@ -172,7 +172,8 @@ export interface AshApplicationOptions {
 	readonly rendererRoot: string;
 	/** Selects whether this Electron process starts the App Server before opening its window. */
 	readonly appServerStartupMode: AppServerStartupMode;
-	/** Host-selected IPC capabilities installed for every Workbench window. */
+	/** The development supervisor owns replacement processes through its IPC lifetime. */
+	readonly developmentLauncher: boolean;
 }
 
 interface PersistentServices {
@@ -230,6 +231,7 @@ export class AshApplication extends Disposable {
 	private readonly rendererRoot: string;
 	private readonly chatGPTChannels = new Map<string, IServerChannel<string>>();
 	private readonly appServerStartupMode: AppServerStartupMode;
+	private readonly developmentLauncher: boolean;
 	private readonly disposableTracker: DisposableTracker | undefined;
 	private readonly tracking: globalThis.Disposable | undefined;
 	private readonly trustedIpcRouter: TrustedIpcRouter;
@@ -249,7 +251,7 @@ export class AshApplication extends Disposable {
 	private readonly profileRoot: string;
 	private profileFileSystem!: DiskFileSystemProvider;
 	private readonly localizationChanged = this._register(new Emitter<void>());
-	private activeLanguagePack: LanguagePackCatalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!;
+	private activeLanguagePack: LanguagePackCatalog = fallbackLanguagePackCatalog;
 	private restartRequested = false;
 	private readonly developmentAppServerReloader = this._register(new MutableDisposable<DevelopmentAppServerReloader>());
 	private readonly windowIconPath: string | undefined;
@@ -385,6 +387,7 @@ export class AshApplication extends Disposable {
 		}));
 		this.rendererRoot = options.rendererRoot;
 		this.appServerStartupMode = options.appServerStartupMode;
+		this.developmentLauncher = options.developmentLauncher;
 		this.disposableTracker = disposableTracker;
 		this.tracking = tracking;
 		this.trustedIpcRouter = this._register(new TrustedIpcRouter(ipcMain));
@@ -599,7 +602,7 @@ export class AshApplication extends Disposable {
 		this.mainProcessIpcServer.registerChannel('update', new UpdateChannel(this.updateMainService));
 		this.mainProcessIpcServer.registerChannel('process', ProxyChannel.fromService(this.windowServices.createInstance(ProcessMainService), this._store));
 		const localeValue = this.services.configuration.getValue(LocalizationConfiguration.locale);
-		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === localeValue) ?? productLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!;
+		const catalog = await loadProductLanguagePackCatalog(localeValue);
 		throwIfCancelled(token);
 		this.activeLanguagePack = catalog;
 		setNlsMessages(catalog.locale, catalog.bundles);
@@ -874,6 +877,9 @@ export class AshApplication extends Disposable {
 	}
 
 	private readonly onSecondInstance = (_event: ElectronEvent, arguments_: string[], cwd: string, data: unknown): void => {
+		// A supervised replacement retries the lock until this instance exits;
+		// forwarding each attempt would repeatedly open its files and windows here.
+		if (!app.isPackaged && isRecord(data) && data.developmentLauncher === true) return;
 		if (data && typeof data === 'object' && 'launchArguments' in data) {
 			if (!Array.isArray(data.launchArguments) || !data.launchArguments.every((argument: unknown) => typeof argument === 'string')) {
 				throw new TypeError('Invalid launch arguments from another process');
@@ -1038,8 +1044,7 @@ export class AshApplication extends Disposable {
 	private mainLocalizationMessages(): Readonly<Record<string, string>> {
 		// Main owns these system labels; use their English originals before applying
 		// the active window's catalog, independently of the renderer's NLS resolver.
-		return {
-			...productLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!.bundles.ash,
+		const messages: Record<string, string> = {
 			'taskbar.newWindow': localize2('taskbar.newWindow', "New Window").original,
 			'shell.recentProjects': localize2('shell.recentProjects', "Recent Folders & Workspaces").original,
 			'shell.noRecentProjects': localize2('shell.noRecentProjects', "No Recent Projects").original,
@@ -1050,8 +1055,12 @@ export class AshApplication extends Disposable {
 			'taskbar.agentsWindow': localize2('taskbar.agentsWindow', "Open Agents Window").original,
 			'taskbar.agentsWindowDescription': localize2('taskbar.agentsWindowDescription', "Open the Ash Agents window").original,
 			'taskbar.invalidAgentsArguments': localize2('taskbar.invalidAgentsArguments', "Open the Agents window with --agents-window and an optional --folder or --workspace target. File, window, and wait options cannot be combined with it.").original,
-			...this.activeLanguagePack.bundles.ash,
 		};
+		// System menus consume only these labels; copying the entire product catalog
+		// on every recent-project or taskbar update creates thousands of unused entries.
+		const translations = this.activeLanguagePack.bundles.ash;
+		for (const key of Object.keys(messages)) messages[key] = translations?.[key] ?? messages[key]!;
+		return messages;
 	}
 
 	/** Focuses a live window, or recreates an empty Workbench when none remains. */
@@ -1075,26 +1084,32 @@ export class AshApplication extends Disposable {
 		let configuration: ConfigurationService | undefined;
 		let userKeyboardLayout: UserKeyboardLayoutMainService | undefined;
 		try {
-			// Native FSEvents registration/close can block synchronously. Keep those
-			// read-only notifications off Main, including renderer unsubscribe during shutdown.
-			const watcherProcess = this._register(new UtilityProcess({
-				name: 'Ash File Watcher',
-				entryPoint: fileURLToPath(new URL('../electron-utility/fileWatcher/fileWatcherMain.js', import.meta.url)),
-				args: [this.profileRoot],
-			}));
-			const watcherPort = watcherProcess.connect('profile');
-			const watcherClient = this._register(new MessagePortClient({
-				postMessage: data => watcherPort.postMessage(data), start: () => watcherPort.start(), close: () => watcherPort.close(),
-				addEventListener: (type, listener) => type === 'message' ? watcherPort.on('message', listener) : watcherPort.on('close', listener as () => void),
-				removeEventListener: (type, listener) => type === 'message' ? watcherPort.off('message', listener) : watcherPort.off('close', listener as () => void),
-			}, 'profile'));
-			const watcherChannel = watcherClient.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME);
-			this._register(watcherChannel.listen<unknown>('watchError')(error => {
-				if (typeof error !== 'string') throw new TypeError('Invalid file watcher error');
-				this.logService.error('files', 'Failed to watch user profile files', error);
-			}));
-			const watcher = this._register(new DiskFileSystemProviderClient(watcherChannel));
+			let watcher: DiskFileSystemProviderClient | undefined;
+			// Windows directory watches use asynchronous I/O and can share Main's
+			// provider. Avoid an otherwise idle Electron process for profile notifications.
+			// FSEvents registration/close can block synchronously on macOS; preserve
+			// the isolated watcher on non-Windows hosts.
+			if (process.platform !== 'win32') {
+				const watcherProcess = this._register(new UtilityProcess({
+					name: 'Ash File Watcher',
+					entryPoint: fileURLToPath(new URL('../electron-utility/fileWatcher/fileWatcherMain.js', import.meta.url)),
+					args: [this.profileRoot],
+				}));
+				const watcherPort = watcherProcess.connect('profile');
+				const watcherClient = this._register(new MessagePortClient({
+					postMessage: data => watcherPort.postMessage(data), start: () => watcherPort.start(), close: () => watcherPort.close(),
+					addEventListener: (type, listener) => type === 'message' ? watcherPort.on('message', listener) : watcherPort.on('close', listener as () => void),
+					removeEventListener: (type, listener) => type === 'message' ? watcherPort.off('message', listener) : watcherPort.off('close', listener as () => void),
+				}, 'profile'));
+				const watcherChannel = watcherClient.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME);
+				this._register(watcherChannel.listen<unknown>('watchError')(error => {
+					if (typeof error !== 'string') throw new TypeError('Invalid file watcher error');
+					this.logService.error('files', 'Failed to watch user profile files', error);
+				}));
+				watcher = this._register(new DiskFileSystemProviderClient(watcherChannel));
+			}
 			this.profileFileSystem = this._register(new DiskFileSystemProvider([URI.file(this.profileRoot)], watcher));
+			this._register(this.profileFileSystem.onDidWatchError(error => this.logService.error('files', 'Failed to watch user profile files', error)));
 			const files = this._register(new FileService());
 			this._register(files.registerProvider(Schemas.file, this.profileFileSystem));
 			let policies: IPolicyService;
@@ -2317,6 +2332,15 @@ export class AshApplication extends Disposable {
 	private readonly onWillQuit = (event: ElectronEvent): void => {
 		if (this.quitAfterServicesClosed) {
 			// Schedule the new process only after every window accepted shutdown and state was saved.
+			if (this.restartRequested && this.developmentLauncher) {
+				event.preventDefault();
+				this.restartRequested = false;
+				// The watcher owns replacement and cleanup. Electron's detached
+				// relaunch would escape it and keep the old development profile busy.
+				if (process.connected && process.send) process.send('ash:dev:relaunch', () => app.quit());
+				else app.quit();
+				return;
+			}
 			if (this.restartRequested) { app.relaunch(); }
 			this.dispose();
 			this.releaseDisposableTracker();
@@ -2391,8 +2415,7 @@ export class AshApplication extends Disposable {
 	}
 
 	private directoryPermissionPrompt(path: string): DialogRequest {
-		const messages = this.mainLocalizationMessages();
-		const translate = (key: string, english: string): string => messages[key] ?? english;
+		const translate = (key: string, english: string): string => this.activeLanguagePack.bundles.ash?.[key] ?? english;
 		return {
 			kind: 'prompt',
 			title: AshApplicationName,

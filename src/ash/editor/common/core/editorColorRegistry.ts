@@ -21,7 +21,7 @@ export const editorSelectionForeground = registerColor('editor.selectionForegrou
 }, { description: 'Foreground of selected editor text. Unset colors preserve syntax highlighting.', owner });
 export const editorInactiveSelection = registerColor('editor.inactiveSelectionBackground', {
 	dark: '#3a3d41', light: '#e5ebf1',
-	hcDark: transparent(editorSelectionBackground, 0.7), hcLight: transparent(editorSelectionBackground, 0.5),
+	hcDark: opaque(transparent(editorSelectionBackground, 0.7), editorBackground), hcLight: opaque(transparent(editorSelectionBackground, 0.5), editorBackground),
 }, { description: 'Background of selections in an unfocused editor.', owner });
 export const editorGutter = editorColor('editorGutter.background', editorBackground, 'Background of the editor gutter.');
 registerColor('editorGutter.itemBackground', {

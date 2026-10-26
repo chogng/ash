@@ -16,6 +16,8 @@ export interface IPaneOptions {
 	readonly id: string;
 	readonly title: string;
 	readonly collapsed?: boolean;
+	/** Header height used by both the rendered surface and layout constraints. */
+	readonly headerSize?: number;
 	readonly headerActionsVisibility?: PaneViewHeaderActionsVisibility;
 	readonly minimumBodySize?: number;
 	readonly maximumBodySize?: number;
@@ -45,6 +47,7 @@ export class Pane extends Disposable implements ISplitViewView {
 	private readonly focusedEmitter = this._register(new Emitter<void>());
 	private readonly blurredEmitter = this._register(new Emitter<void>());
 	private readonly headerActionsVisibility: PaneViewHeaderActionsVisibility;
+	private readonly configuredHeaderSize: number;
 	private collapsed: boolean;
 	private isClosing = false;
 	private didLayout = false;
@@ -64,6 +67,7 @@ export class Pane extends Disposable implements ISplitViewView {
 
 	constructor(container: HTMLElement, options: IPaneOptions) {
 		super();
+		this.configuredHeaderSize = options.headerSize ?? 28;
 		this._minimumBodySize = options.minimumBodySize ?? 120;
 		this._maximumBodySize = options.maximumBodySize ?? Number.POSITIVE_INFINITY;
 		if (!Number.isFinite(this.minimumBodySize) || this.minimumBodySize < 0 || this.maximumBodySize < this.minimumBodySize || Number.isNaN(this.maximumBodySize)) {
@@ -75,6 +79,7 @@ export class Pane extends Disposable implements ISplitViewView {
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
 		element.className = "ash-pane-view";
+		element.style.setProperty('--ash-pane-header-height', `${this.configuredHeaderSize}px`);
 		element.dataset.paneViewId = id;
 		element.tabIndex = -1;
 		this.id = id;
@@ -199,7 +204,7 @@ export class Pane extends Disposable implements ISplitViewView {
 	}
 
 	private get headerSize(): number {
-		return this.isHeaderVisible() ? 28 : 0;
+		return this.isHeaderVisible() ? this.configuredHeaderSize : 0;
 	}
 
 	layout(size: number, _offset: number, orthogonalSize: number): void {

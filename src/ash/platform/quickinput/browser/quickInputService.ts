@@ -58,12 +58,12 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		return this.inputControllers.get(container) ?? this.inputControllers.set(container, this.createController());
 	}
 
-	protected createController(className?: string): QuickInputController {
+	protected createController(className?: string, container = this.layoutService.activeContainer): QuickInputController {
 		let scope: IScopedContextKeyService;
 		let type: IContextKey<string>;
 		let focus: IContextKey<boolean>;
 		let end: IContextKey<boolean>;
-		const controller: QuickInputController = this.instantiationService.createInstance(QuickInputController, this.layoutService.activeContainer, className, {
+		const controller: QuickInputController = this.instantiationService.createInstance(QuickInputController, container, className, {
 			onShow: input => {
 				for (const [, controller] of this.inputControllers) {
 					if (controller.currentQuickInput !== input) controller.currentQuickInput?.hide();
@@ -82,7 +82,7 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 			onFocus: (withinInput, atEnd) => { focus.set(withinInput); end.set(atEnd); },
 			getContext: target => this.contextKeyService.getContext(target),
 			// Dismissing an overlay during a window switch must leave focus in the new window.
-			shouldRestoreFocus: () => this.layoutService.activeContainer === controller.getDomNode().parentElement,
+			shouldRestoreFocus: () => this.layoutService.activeContainer.contains(controller.getDomNode()),
 			onDispose: () => scope.dispose(),
 		} satisfies ConstructorParameters<typeof QuickInputController>[2]);
 		// Context belongs to this DOM host and is released with it, including standalone editors.

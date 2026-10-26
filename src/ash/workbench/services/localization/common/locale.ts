@@ -4,7 +4,7 @@ import { normalizeLocale } from "../../../../platform/languagePacks/common/langu
 import type { ILanguagePackItem } from "../../../../platform/languagePacks/common/languagePacks.js";
 import { Registry } from "../../../../platform/registry/common/platform.js";
 import { localize } from "../../../../nls.js";
-import { productLanguagePackCatalogs } from "./localizationCatalogs.js";
+import { productLanguages } from "../../../../../../.build/desktop/localization/localizationLanguages.js";
 
 export type LocaleId = string;
 
@@ -29,7 +29,7 @@ export const LocalizationConfiguration = Object.freeze({
 			get title() { return localize({ bundle: "ash.settings", key: "displayLanguage.select" }, "Interface language"); },
 			get description() { return localize({ bundle: "ash.settings", key: "displayLanguage.description" }, "Choose the language used by the Ash interface."); },
 			keywords: ["language", "locale", "display language", "语言"],
-			options: productLanguagePackCatalogs.map(catalog => ({ value: catalog.locale, label: catalog.localizedLanguageName })),
+			options: productLanguages.map(language => ({ value: language.locale, label: language.localizedLanguageName })),
 		},
 		parse(value: unknown): LocaleId {
 			if (typeof value !== "string") throw new TypeError("workbench.locale must be a string");

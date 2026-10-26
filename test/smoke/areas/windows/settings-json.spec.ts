@@ -153,7 +153,7 @@ for (const locale of ['en', 'zh-CN']) {
 		const firstBounds = await first.element.boundingBox();
 		const secondBounds = await second.element.boundingBox();
 		expect(secondBounds!.x).toBeGreaterThanOrEqual(firstBounds!.x + firstBounds!.width - 2);
-		await second.content.getByRole('button', { name: chinese ? '打开设置（JSON）' : 'Open Settings (JSON)', exact: true }).press('Enter');
+		await second.title.getByRole('button', { name: chinese ? '打开设置（JSON）' : 'Open Settings (JSON)', exact: true }).press('Enter');
 		await expect(second.editor.input).toBeVisible();
 		await expect(second.tabs.filter({ hasText: chinese ? '用户设置（JSON）' : 'User Settings (JSON)' })).toHaveCount(1);
 		await expect(firstSearch).toHaveValue('@id:editor.fontFamily');
@@ -216,7 +216,23 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(settings.locator('[data-settings-item-id="editor.fontFamily"]')).toHaveCount(0);
 			await expect(settings.locator('[data-settings-item-id="grep.backend"]')).toHaveCount(0);
 			await settings.getByRole('searchbox').fill('@id:editor.fontSize');
-			await settings.getByRole('button', { name: chinese ? '筛选设置' : 'Filter Settings', exact: true }).press('Enter');
+			const filter = settings.locator('.ash-settings-search-input').getByRole('button', { name: chinese ? '筛选设置' : 'Filter Settings', exact: true });
+			const geometry = await filter.evaluate(button => {
+				const bounds = button.getBoundingClientRect();
+				const field = button.closest('.ash-settings-search-input')!.getBoundingClientRect();
+				const input = button.closest('.ash-settings-search-input')!.querySelector('input')!.getBoundingClientRect();
+				const icon = button.querySelector('.ash-icon')!.getBoundingClientRect();
+				return {
+					inside: bounds.left >= field.left && bounds.right <= field.right && bounds.top >= field.top && bounds.bottom <= field.bottom,
+					afterText: bounds.left >= input.right,
+					iconFits: icon.left >= bounds.left && icon.right <= bounds.right && icon.top >= bounds.top && icon.bottom <= bounds.bottom,
+					size: { width: bounds.width, height: bounds.height },
+				};
+			});
+			expect(geometry).toEqual({ inside: true, afterText: true, iconFits: true, size: { width: 22, height: 22 } });
+			await settings.getByRole('searchbox').press('Tab');
+			await expect(filter).toBeFocused();
+			await filter.press('Enter');
 			await workbench.page.getByRole('menuitem', { name: chinese ? '已修改' : 'Modified', exact: true }).press('Enter');
 			await expect(settings.getByRole('searchbox')).toHaveValue('@id:editor.fontSize @modified');
 			await expect(settings.getByRole('searchbox')).toBeFocused();
@@ -234,7 +250,8 @@ for (const locale of ['en', 'zh-CN']) {
 		await workbench.page.getByRole('menuitem', { name: chinese ? '重置设置' : 'Reset Setting', exact: true }).press('Enter');
 		await expect(row).toHaveCount(0);
 		await expect(settings.locator('.ash-settings-navigation-tree [data-settings-category-id], .ash-settings-navigation-tree [data-settings-group-id]')).toHaveCount(0);
-		await expect(settings.locator('.ash-settings-navigation-empty')).toBeVisible();
+		// Global search reports an empty result once, in the content pane.
+		await expect(settings.locator('.ash-settings-navigation-empty')).toBeHidden();
 		await expect(settings.getByRole('status').filter({ hasText: chinese ? '未找到设置。' : 'No settings found.' }).last()).toBeVisible();
 		const { 'editor.fontSize': _removed, ...remaining } = saved;
 		await expect.poll(readSaved).toEqual(remaining);
@@ -419,6 +436,46 @@ for (const locale of ['en', 'zh-CN']) {
 		const readDefault = async (): Promise<unknown> => (parseJsonc((await readUserSettings(workbench.page)).content) as Record<string, unknown>)['workbench.settings.editor'] ?? 'ui';
 		await workbench.quickaccess.runCommand('workbench.action.openSettings2');
 		let settings = workbench.settingsEditor.element;
+		const jsonAction = settings.locator('.ash-modal-editor-header .ash-modal-editor-actions').getByRole('button', { name: jsonLabel, exact: true });
+		const closeActions = settings.locator('.ash-modal-editor-close');
+		const closeAction = closeActions.getByRole('button', { name: chinese ? '关闭' : 'Close', exact: true });
+		await expect(closeActions).toHaveClass(/ash-action-bar/u);
+		await expect(closeAction.locator('..')).toHaveAttribute('data-action-id', 'workbench.action.closeActiveEditor');
+		await expect(closeAction).toBeVisible();
+		await expect(jsonAction.locator('.ash-icon-go-to-file')).toBeVisible();
+		await expect(settings.locator('.ash-settings-search-input .ash-icon-filter')).toBeVisible();
+		await expect(settings.locator('.ash-settings-search').getByRole('button', { name: jsonLabel, exact: true })).toHaveCount(0);
+		const titleGeometry = await jsonAction.evaluate(button => {
+			const bounds = button.getBoundingClientRect();
+			const close = button.closest('.ash-modal-editor-header')!.querySelector('.ash-modal-editor-close button')!.getBoundingClientRect();
+			return {
+				beforeClose: bounds.right <= close.left,
+				aligned: Math.abs(bounds.top + bounds.height / 2 - close.top - close.height / 2) < 1,
+				buttonSize: { width: close.width, height: close.height },
+				sameSize: bounds.width === close.width && bounds.height === close.height,
+				gap: close.left - bounds.right,
+			};
+		});
+		expect(titleGeometry).toEqual({ beforeClose: true, aligned: true, buttonSize: { width: 22, height: 22 }, sameSize: true, gap: 2 });
+		const chromeScreenshot = testInfo.outputPath('settings-search-title.png');
+		await settings.screenshot({ path: chromeScreenshot });
+		await testInfo.attach('settings-search-title', { path: chromeScreenshot, contentType: 'image/png' });
+		await jsonAction.press('Enter');
+		await expect(settings).toBeHidden();
+		await expect(workbench.editors.groupAt(0).editor.input).toBeFocused();
+		await workbench.quickaccess.runCommand('workbench.action.openSettings2');
+		settings = workbench.settingsEditor.element;
+		await jsonAction.focus();
+		await jsonAction.press('Tab');
+		await expect(closeAction).toBeFocused();
+		await closeAction.press('Shift+Tab');
+		await expect(jsonAction).toBeFocused();
+		await jsonAction.press('Tab');
+		await closeAction.press('Enter');
+		await expect(settings).toBeHidden();
+		await expect(workbench.editors.groupAt(0).editor.input).toBeFocused();
+		await workbench.quickaccess.runCommand('workbench.action.openSettings2');
+		settings = workbench.settingsEditor.element;
 		await workbench.settingsEditor.selectGroup('workbench');
 		await workbench.settingsEditor.selectCategory('settings-editor');
 		await expect(settings.locator('[data-settings-category-id="settings-editor"]')).toHaveText(chinese ? '设置编辑器' : 'Settings Editor');
@@ -441,10 +498,12 @@ for (const locale of ['en', 'zh-CN']) {
 		const tab = group.tabs.filter({ hasText: chinese ? '用户设置（JSON）' : 'User Settings (JSON)' });
 		await expect(tab.locator('..')).toHaveAttribute('data-state', 'dirty');
 		await group.title.getByRole('button', { name: uiLabel, exact: true }).press('Enter');
-		await expect(settings).toBeVisible();
-		await settings.getByRole('searchbox').fill('');
-		await settings.getByRole('button', { name: jsonLabel, exact: true }).press('Enter');
-		await expect(settings).toBeHidden();
+		// A JSON title action returns to its source group; global Settings opens the modal.
+		const groupSettings = group.content.locator('.ash-settings-editor');
+		await expect(groupSettings).toBeVisible();
+		await groupSettings.getByRole('searchbox').fill('');
+		await group.title.getByRole('button', { name: jsonLabel, exact: true }).press('Enter');
+		await expect(groupSettings).toBeHidden();
 		await expect(tab).toHaveCount(1);
 		await group.editor.waitForEditorContents(content => content.includes('// Unsaved settings draft') && content.includes('29'));
 		await expect(tab.locator('..')).toHaveAttribute('data-state', 'dirty');
@@ -457,7 +516,7 @@ for (const locale of ['en', 'zh-CN']) {
 		group = workbench.editors.groupAt(0);
 		await expect(group.editor.input).toBeFocused();
 		await group.title.getByRole('button', { name: uiLabel, exact: true }).press('Enter');
-		settings = workbench.settingsEditor.element;
+		settings = group.content.locator('.ash-settings-editor');
 		await expect(settings).toBeVisible();
 		await settings.getByRole('searchbox').fill('@id:workbench.settings.editor');
 		selector = settings.locator('[data-settings-item-id="workbench.settings.editor"]').getByRole('combobox');
@@ -465,8 +524,9 @@ for (const locale of ['en', 'zh-CN']) {
 		await selector.press('Enter');
 		await workbench.page.getByRole('option', { name: 'UI', exact: true }).click();
 		await expect.poll(readDefault).toBe('ui');
-		await settings.locator('.ash-modal-editor-close').click();
+		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 		await workbench.quickaccess.runCommand('workbench.action.openSettings');
+		settings = workbench.settingsEditor.element;
 		await expect(settings).toBeVisible();
 		expect(runningApplication.diagnostics.errors).toEqual([]);
 	});
@@ -634,7 +694,7 @@ for (const locale of ['en', 'zh-CN']) {
 test.describe('Desktop profile file watching', () => {
 	test.use({ electronUserSettings: { 'workbench.activityBar.location': 'top' } });
 
-	test('External settings edits and atomic replacement reach the Desktop configuration', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ workbench }) => {
+	test('External settings edits and atomic replacement reach the Desktop configuration', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }) => {
 		const page = workbench.page;
 		const sidebar = page.locator('[data-part="sidebar"]');
 		const top = sidebar.locator('.ash-sidebar-composite-bar-top .ash-composite-bar');
@@ -650,6 +710,10 @@ test.describe('Desktop profile file watching', () => {
 		await expect(top).toBeVisible();
 		await writeFile(resource, '{ "workbench.activityBar.location": "bottom" }');
 		await expect(bottom).toBeVisible();
+		if (process.platform === 'win32' && 'windows' in application) {
+			// Profile hot reload must work without a second Electron runtime on Windows.
+			expect(await application.evaluate(({ app }) => app.getAppMetrics().filter(metric => metric.name === 'Ash File Watcher'))).toEqual([]);
+		}
 	});
 });
 
@@ -1131,13 +1195,35 @@ test.describe('Settings configuration scopes', () => {
 			await workbench.settingsEditor.openUserSettingsUI();
 			let settings = workbench.settingsEditor.element;
 			let search = settings.getByRole('searchbox');
+			await expect(settings.locator('.ash-settings-target-folder')).toBeHidden();
+			const headerScreenshot = testInfo.outputPath('settings-target-header.png');
+			await settings.screenshot({ path: headerScreenshot });
+			await testInfo.attach('settings-target-header', { path: headerScreenshot, contentType: 'image/png' });
 			const targetLabel = chinese ? '设置目标' : 'Settings target';
 			const switchTarget = async (label: string): Promise<void> => {
-				await settings.getByRole('button', { name: targetLabel, exact: true }).press('Enter');
-				await expect(settings.getByRole('button', { name: targetLabel, exact: true })).toHaveAttribute('aria-expanded', 'true');
-				await page.getByRole('menuitemradio', { name: label, exact: true }).press('Enter');
+				const query = await search.inputValue();
+				const targets = settings.locator('.ash-modal-editor-header').getByRole('toolbar', { name: targetLabel, exact: true });
+				const userLabel = chinese ? '用户' : 'User';
+				const workspaceLabel = chinese ? '工作区' : 'Workspace';
+				if (label === userLabel || label === workspaceLabel) {
+					const selected = targets.getByRole('button', { pressed: true });
+					const previous = await selected.getAttribute('aria-label');
+					await selected.focus();
+					await selected.press(label === userLabel ? 'ArrowLeft' : 'ArrowRight');
+					const segment = targets.getByRole('button', { name: label, exact: true });
+					await expect(segment).toBeFocused();
+					await expect(targets.getByRole('button', { name: previous!, exact: true })).toHaveAttribute('aria-pressed', 'true');
+					await segment.press('Enter');
+					await expect(segment).toHaveAttribute('aria-pressed', 'true');
+				} else {
+					const folders = settings.locator('.ash-settings-target-folder');
+					await folders.press('Enter');
+					await expect(folders).toHaveAttribute('aria-expanded', 'true');
+					await page.getByRole('menuitemradio', { name: label, exact: true }).press('Enter');
+					await expect(folders).toHaveAttribute('aria-expanded', 'false');
+				}
 				await expect(search).toBeFocused();
-				await expect(settings.getByRole('button', { name: targetLabel, exact: true })).toHaveAttribute('aria-expanded', 'false');
+				await expect(search).toHaveValue(query);
 			};
 			await search.fill('@lang:plaintext @id:editor.fontSize');
 			let size = settings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton');
@@ -1165,21 +1251,29 @@ test.describe('Settings configuration scopes', () => {
 			await expect(size).toHaveValue('23');
 			const geometry = await settings.locator('.ash-settings-target').evaluate(element => {
 				const bounds = element.getBoundingClientRect();
-				const parent = element.parentElement!.getBoundingClientRect();
-				return { visible: bounds.width > 0 && bounds.left >= parent.left && bounds.right <= parent.right, maxWidth: getComputedStyle(element).maxWidth };
+				const header = element.closest('.ash-modal-editor-header')!.getBoundingClientRect();
+				const title = element.closest('.ash-modal-editor-header')!.querySelector('.ash-modal-editor-title')!.getBoundingClientRect();
+				return {
+					inHeader: bounds.width > 0 && bounds.top >= header.top && bounds.bottom <= header.bottom && bounds.right <= header.right,
+					besideTitle: bounds.left >= title.right && bounds.left - title.right <= 16,
+					labelsFit: [...element.querySelectorAll('.ash-segmented-control-label')].every(label => label.scrollWidth <= label.clientWidth),
+				};
 			});
-			expect(geometry).toEqual({ visible: true, maxWidth: '30%' });
+			expect(geometry).toEqual({ inHeader: true, besideTitle: true, labelsFit: true });
+			await expect(settings.locator('.ash-settings-search .ash-settings-target')).toHaveCount(0);
 			if (target.kind === 'browser') {
 				await page.emulateMedia({ colorScheme: 'dark', forcedColors: 'active' });
 				await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-high-contrast-dark');
-				await settings.getByRole('button', { name: targetLabel, exact: true }).focus();
-				await expect(settings.getByRole('button', { name: targetLabel, exact: true })).toHaveCSS('outline-style', 'solid');
+				const selected = settings.getByRole('toolbar', { name: targetLabel, exact: true }).getByRole('button', { pressed: true });
+				await selected.focus();
+				await expect(selected).toHaveCSS('outline-style', 'solid');
 				await page.setViewportSize({ width: 720, height: 900 });
 				await expect(settings.getByRole('searchbox')).toBeVisible();
 				await expect(settings.locator('.ash-settings-target')).toBeVisible();
 			}
 
 			await settings.locator('.ash-modal-editor-close').click();
+			await expect(page.locator('.ash-modal-editor-title-controls .ash-settings-target')).toHaveCount(0);
 			({ workbench } = await reloadWorkbench());
 			page = workbench.page;
 			await workbench.settingsEditor.openUserSettingsUI();

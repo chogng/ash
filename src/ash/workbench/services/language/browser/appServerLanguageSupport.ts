@@ -3,6 +3,7 @@ import type { IWorkspaceContextService } from '../../../../platform/workspace/co
 import { addToValueTree, isConfigured, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { JsonValue } from '../../../../base/common/jsonValue.js';
 import type { JsonValue as ProtocolJsonValue } from '../../../../../../.build/protocol/typescript/index.js';
+import { equals } from '../../../../base/common/arrays.js';
 
 interface LanguageServer {
 	readonly id: string;
@@ -44,6 +45,13 @@ export class AppServerLanguageSupport {
 
 	get languageIds(): readonly string[] {
 		return [...new Set([...this.directories.values()].flatMap(servers => servers.flatMap(server => server.languageIds)))];
+	}
+
+	equals(other: AppServerLanguageSupport): boolean {
+		return this.directories.size === other.directories.size && [...this.directories].every(([dirId, servers]) => {
+			const candidates = other.directories.get(dirId);
+			return candidates !== undefined && equals(servers, candidates, (left, right) => left.id === right.id && equals(left.languageIds, right.languageIds));
+		});
 	}
 
 	supports(dirId: string, languageId: string): boolean {

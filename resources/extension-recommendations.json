@@ -40,12 +40,6 @@
       "important": true
     },
     {
-      "id": "marketplace.typescript@ash",
-      "name": "Node.js",
-      "executables": ["node", "nodejs"],
-      "important": true
-    },
-    {
       "id": "marketplace.go@ash",
       "name": "Go",
       "executables": ["go"],

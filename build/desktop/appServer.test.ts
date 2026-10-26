@@ -74,6 +74,17 @@ for (const javascriptRuntime of ['host-provided-node', 'packaged-node'] as const
 	}
 }
 
+test('cancelled preparation never starts a builder or selects a runtime', async t => {
+	const cancellation = new AbortController();
+	const reason = new Error('startup cancelled');
+	cancellation.abort(reason);
+	const spawn = t.mock.method(childProcess, 'spawn', () => { throw new Error('Cancelled preparation spawned a builder'); });
+	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+	syncBuiltinESMExports();
+	await assert.rejects(prepareAppServer('host-provided-node', cancellation.signal), error => error === reason);
+	assert.equal(spawn.mock.callCount(), 0);
+});
+
 test('app-server watcher selects Rust sources and Cargo manifests', () => {
 	assert.equal(shouldRebuildAppServer('crates/app-server/src/main.rs'), true);
 	assert.equal(shouldRebuildAppServer('crates/app-server/build.rs'), true);
@@ -108,14 +119,14 @@ for (const [source, javascriptRuntime, expected] of [
 				return { result: { kind: 'function' } };
 			});
 			const child = new ChildProcess();
-			setImmediate(() => { child.emit('close', 0, null); if (args[1] === expected) completed.resolve(); });
+			setImmediate(() => child.emit('close', 0, null));
 			return child;
 		});
 		syncBuiltinESMExports();
 		const stop = await watchAppServer({
 			skipInitial: true, javascriptRuntime,
 			environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') },
-			onDidBuild: async () => { reloads++; }
+			onDidBuild: async () => { reloads++; completed.resolve(); }
 		});
 		t.after(stop);
 		save(source);

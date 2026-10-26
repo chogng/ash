@@ -2,6 +2,7 @@ import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultS
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import './creatorPage.css';
+import { LoadingSkeleton } from '../../../browser/ui/loadingSkeleton.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -56,8 +57,6 @@ export class CreatorEditorPane extends EditorPane implements IEditorPane {
 /** Owns mode navigation and retained workspaces; each contribution owns its editing experience. */
 export class CreatorPage extends Disposable {
 	public readonly domNode: HTMLElement;
-	/** The window's existing conversation navigation, retained while canvas panels are shown. */
-	public navigationContainerId: string | undefined;
 	private readonly homeDomNode: HTMLElement;
 	private readonly workspacesDomNode: HTMLElement;
 	private readonly titleDomNode: HTMLElement;
@@ -65,6 +64,7 @@ export class CreatorPage extends Disposable {
 	private readonly back: Button;
 	private readonly docsButton: Button;
 	private readonly artifactsDomNode: HTMLElement;
+	private readonly loading: LoadingSkeleton;
 	private readonly artifactCards = this._register(new DisposableStore());
 	private readonly filterButtons: Button[] = [];
 	private readonly search: HTMLInputElement;
@@ -136,7 +136,7 @@ export class CreatorPage extends Disposable {
 		}));
 		const list = this._register(new Button(actions, {
 			...defaultButtonStyles, label: localize('sessions.artifacts.listView', 'List view'), icon: Lxicon.listUnordered, iconOnly: true, checked: false,
-			onClick: () => { list.checked = !list.checked; this.artifactsDomNode.classList.toggle('list-view', list.checked); },
+			onClick: () => { list.checked = !list.checked; this.artifactsDomNode.classList.toggle('list-view', list.checked); this.loading.element.classList.toggle('artifact-list', list.checked); },
 		}));
 		toolbar.append(filters, actions);
 		const introduction = h(ownerDocument, 'h2', { className: 'ash-creator-introduction' }, localize('sessions.creator.introduction', 'Make something new'));
@@ -157,6 +157,8 @@ export class CreatorPage extends Disposable {
 		}
 		this.artifactsDomNode = h(ownerDocument, 'section', { className: 'ash-artifacts-results', attributes: { id: 'ash-artifacts-results', role: 'tabpanel', 'aria-label': labels[0], 'aria-live': 'polite' } });
 		this.homeDomNode.append(toolbar, introduction, modes, this.artifactsDomNode);
+		this.loading = this._register(new LoadingSkeleton(this.homeDomNode, localize('sessions.artifacts.loading', 'Loading artifacts…'), 'cards', 3));
+		this.artifactsDomNode.before(this.loading.element);
 		this.workspacesDomNode = h(ownerDocument, 'div', { className: 'ash-creator-workspaces' });
 		this.workspacesDomNode.hidden = true;
 		this.domNode.append(header, this.homeDomNode, this.workspacesDomNode);
@@ -200,6 +202,7 @@ export class CreatorPage extends Disposable {
 		this.filter = index;
 		this.filterButtons.forEach((button, buttonIndex) => {
 			button.domNode.setAttribute('aria-selected', String(index === buttonIndex));
+			button.domNode.classList.toggle('selected', index === buttonIndex);
 			button.domNode.tabIndex = index === buttonIndex ? 0 : -1;
 		});
 		this.artifactsDomNode.setAttribute('aria-label', this.filterButtons[index].label);
@@ -241,6 +244,9 @@ export class CreatorPage extends Disposable {
 		this.artifactsDomNode.replaceChildren();
 		const query = this.search.value.trim().toLocaleLowerCase();
 		const cards = this.filter === 2 ? [] : this.getArtifacts().filter(card => card.title.toLocaleLowerCase().includes(query));
+		const restoring = this.filter !== 2 && [CreatorMode.Design, CreatorMode.Slides].some(mode => this.designs.getDocument(mode).isRestoring);
+		this.loading.setVisible(restoring && !cards.length);
+		this.artifactsDomNode.setAttribute('aria-busy', String(restoring));
 		cards.sort((a, b) => a.title.localeCompare(b.title) * (this.ascending ? 1 : -1));
 		for (const card of cards) {
 			const button = this.artifactCards.add(new Button(this.artifactsDomNode, { ...defaultButtonStyles, label: card.title, title: card.title, onClick: card.open }));
@@ -248,7 +254,7 @@ export class CreatorPage extends Disposable {
 			button.domNode.prepend(this.createIllustration(card.kind));
 			button.domNode.append(h(this.domNode.ownerDocument, 'span', { className: 'ash-artifacts-card-detail' }, card.detail));
 		}
-		if (cards.length === 0) {
+		if (cards.length === 0 && !restoring) {
 			const message = this.filter === 2 ? localize('sessions.artifacts.noShared', 'No artifacts have been shared with you.')
 				: query ? localize('sessions.artifacts.noResults', 'No artifacts match your search.') : localize('sessions.artifacts.empty', 'Your work will appear here. Create a doc, slide deck or design to get started.');
 			this.artifactsDomNode.append(h(this.domNode.ownerDocument, 'p', { className: 'ash-artifacts-empty' }, message));

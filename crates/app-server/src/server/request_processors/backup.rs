@@ -225,11 +225,9 @@ fn backup_error(error: BackupError) -> RpcError {
     match error {
         BackupError::Invalid => RpcError::new(-32602, AppServerErrorName::InvalidParams),
         BackupError::Conflict => RpcError::new(-32003, AppServerErrorName::BackupRevisionConflict),
-        BackupError::Storage(detail) => RpcError {
-            code: -32000,
-            message: AppServerErrorName::BackupOperationFailed,
-            detail: Some(detail),
-        },
+        BackupError::Storage(detail) => {
+            RpcError::with_details(-32000, AppServerErrorName::BackupOperationFailed, detail)
+        }
     }
 }
 

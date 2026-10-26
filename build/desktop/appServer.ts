@@ -1,9 +1,8 @@
-import { type ChildProcess, spawn } from 'node:child_process';
 import { type FSWatcher, readFileSync, statSync, watch } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import { generateProtocol, protocolSourceDirectories } from '../protocol/generate.ts';
-import { pythonCommand } from '../python.ts';
+import { runPython } from '../python.ts';
 import { LiveBuilder } from './liveBuild.ts';
 import { watchNativeFile } from '../lib/watchNativeFile.ts';
 
@@ -16,19 +15,11 @@ const targetDirectory = resolve(repositoryRoot, configuredTargetDirectory || '.b
 const debounceMs = 250;
 
 /** Prepare before selecting a runtime: file watchers only observe changes after startup. */
-export async function prepareAppServer(javascriptRuntime: 'host-provided-node' | 'packaged-node'): Promise<void> {
+export async function prepareAppServer(javascriptRuntime: 'host-provided-node' | 'packaged-node', signal?: AbortSignal): Promise<void> {
 	const commands = [['-B', 'build/prepare.py', '--javascript-runtime', javascriptRuntime]];
 	if (javascriptRuntime === 'host-provided-node') commands.push(['-B', 'build/desktop/develop.py', '--select-prepared']);
 	for (const arguments_ of commands) {
-		const { command, args } = pythonCommand(arguments_);
-		await new Promise<void>((resolvePromise, reject) => {
-			const child = spawn(command, args, { cwd: repositoryRoot, env: process.env, stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true });
-			child.once('error', reject);
-			child.once('close', (code, signal) => {
-				if (code === 0) resolvePromise();
-				else reject(new Error(signal ? `backend preparation stopped by ${signal}` : `backend preparation exited with status ${code ?? 'unknown'}`));
-			});
-		});
+		await runPython(arguments_, { cwd: repositoryRoot, operation: 'backend preparation', signal });
 	}
 }
 
@@ -54,7 +45,6 @@ export function shouldRebuildWorkspaceManifest(file: string | null): boolean {
 }
 
 export async function watchAppServer(options: { skipInitial?: boolean; javascriptRuntime?: 'host-provided-node' | 'packaged-node'; onDidBuild?: () => Promise<void>; environment?: NodeJS.ProcessEnv; } = {}): Promise<() => void> {
-	let activeBuild: ChildProcess | undefined;
 	let buildRequested = !options.skipInitial;
 	let protocolRequested = buildRequested;
 	let fullBuildRequired = buildRequested;
@@ -177,28 +167,13 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 		}
 	}
 
-	function runBackendBuild(liveOnly: boolean): Promise<void> {
+	async function runBackendBuild(liveOnly: boolean): Promise<void> {
 		if (liveOnly && liveBuilder) return liveBuilder.build();
-		return new Promise<void>((resolvePromise, reject) => {
-			// Web owns a packaged Node runtime; Electron supplies Node from its host.
-			const buildArguments = options.javascriptRuntime === 'packaged-node'
-				? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']
-				: ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
-			const { command, args } = pythonCommand(buildArguments);
-			// Builds never read terminal input. Inheriting the watcher's active stdin
-			// pipe can stall the Windows Python launcher before it executes the script.
-			const child = spawn(command, args, { cwd: repositoryRoot, env: environment, stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true });
-			activeBuild = child;
-			child.once('error', error => {
-				activeBuild = undefined;
-				reject(error);
-			});
-			child.once('close', (code, signal) => {
-				activeBuild = undefined;
-				if (code === 0) resolvePromise();
-				else reject(new Error(signal ? `backend build stopped by ${signal}` : `backend build exited with status ${code ?? 'unknown'}`));
-			});
-		});
+		// Web owns a packaged Node runtime; Electron supplies Node from its host.
+		const buildArguments = options.javascriptRuntime === 'packaged-node'
+			? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']
+			: ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
+		await runPython(buildArguments, { cwd: repositoryRoot, environment, operation: 'backend build', signal: cancellation.signal });
 	}
 
 	function stop(): void {
@@ -207,7 +182,6 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 		cancellation.abort();
 		clearTimeout(debounce);
 		for (const watcher of watchers) watcher.close();
-		activeBuild?.kill('SIGTERM');
 		void liveBuilder?.stop();
 	}
 }

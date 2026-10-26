@@ -469,7 +469,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		let metadataPrompt: string | undefined;
 		const hoverOutput: { sequence: number; data: Uint8Array; shellIntegration?: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent; }[] = [];
 		let activeInstance = instances.at(-1);
-		const workspace = { id: 'workspace', folders: [{ id: 'workspace', uri: URI.file('/workspace'), name: 'Workspace', index: 0 }] };
+		const workspace = { id: 'workspace', folders: new URLSearchParams(location.search).has('emptyWorkspace') ? [] : [{ id: 'workspace', uri: URI.file('/workspace'), name: 'Workspace', index: 0 }] };
 		const setPanel = (value: boolean): void => {
 			visible = value;
 			visibility.fire({ partId: 'panel', visible });

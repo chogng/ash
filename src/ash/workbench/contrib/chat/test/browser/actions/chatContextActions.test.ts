@@ -918,6 +918,7 @@ suite('chatContextActions browser component', () => {
 			} else {
 				await picker.getByRole('option', { name: 'Image from Clipboard', exact: true }).click();
 				await expect(picker).toHaveCount(0);
+				await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toHaveValue('Pasted Image ');
 				await page.evaluate(() => window.ashChatInputIntegration.setImageCapability('text'));
 				await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
 				await expect(page.getByLabel('Context error')).toContainText('The selected model does not support images');
@@ -952,6 +953,8 @@ suite('chatContextActions browser component', () => {
 			await add.press('Enter');
 			await page.getByRole('dialog').getByRole('option', { name: chinese ? '终端…' : 'Terminal…', exact: true }).click();
 			await page.getByRole('dialog').getByRole('option', { name: /Shell \/workspace/ }).click();
+			await expect(page.getByRole('dialog')).toHaveCount(0);
+			await expect(message).toBeFocused();
 			const file = page.getByRole('button', { name: `${chinese ? '打开' : 'Open'} saved.ts`, exact: true });
 			const removeFile = page.getByRole('button', { name: `${chinese ? '移除' : 'Remove'} saved.ts`, exact: true });
 			const imageName = chinese ? '粘贴的图片' : 'Pasted Image';

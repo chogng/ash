@@ -113,6 +113,7 @@ const configuration = store.add(new WorkbenchConfigurationService());
 instantiation.registerInstance(IConfigurationService, configuration);
 instantiation.registerInstance(IContextKeyService, store.add(new ContextKeyService()));
 let treeViewAction: IAction | undefined;
+let hideTreeViewMenu: ((didCancel: boolean) => void) | undefined;
 let resultMenus: BrowserContextMenuService;
 // Existing toolbar scenarios retain their action; result menus exercise the production menu host.
 const menus: IContextMenuService = {
@@ -120,7 +121,7 @@ const menus: IContextMenuService = {
 	onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
 	showContextMenu: delegate => {
 		const action = delegate.getActions?.().find(action => action.id === 'search.treeView');
-		if (action) { treeViewAction = action; return; }
+		if (action) { treeViewAction = action; hideTreeViewMenu = delegate.onHide; return; }
 		resultMenus.showContextMenu(delegate);
 	},
 	hideContextMenu: () => resultMenus.hideContextMenu(),
@@ -303,6 +304,8 @@ window.ashSearchIntegration = {
 	selectTreeView: async () => {
 		if (!treeViewAction) { throw new Error('Search toolbar did not provide View as tree'); }
 		await treeViewAction.run();
+		hideTreeViewMenu?.(false);
+		hideTreeViewMenu = undefined;
 	},
 	setSearchVisible: async value => { if (value) { await views.openView(SEARCH_VIEW_ID); } else { views.closeViewContainer(WorkbenchViewContainerId.Search); } },
 	focusedView: () => views.getFocusedView()?.id,

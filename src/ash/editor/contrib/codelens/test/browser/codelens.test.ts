@@ -15,10 +15,13 @@ import { Range } from '../../../../common/core/range.js';
 import { type CodeLens, type CodeLensProvider } from '../../../../common/languages.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { bindCodeLensCacheStorage, codeLensCache } from '../../browser/codeLensCache.js';
+import { CodeLensCache, getCodeLensCache } from '../../browser/codeLensCache.js';
 import { CodeLensModel, getCodeLensModel } from '../../browser/codelens.js';
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 
+import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
+
+const codeLensCache = new CodeLensCache();
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { CodeLensContribution } = await import('../../browser/codelensController.js');
 
@@ -109,7 +112,7 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 	const executions: string[] = [];
 	const contributionErrors: unknown[] = [];
 	const executeCommand = ((id: string) => executions.push(id)) as unknown as (id: string, args: readonly unknown[] | undefined) => void;
-	using contribution = new CodeLensContribution(editorFor(viewport), viewport, providers, undefined, executeCommand, error => contributionErrors.push(error));
+	using contribution = new CodeLensContribution(editorFor(viewport), viewport, providers, codeLensCache, undefined, executeCommand, error => contributionErrors.push(error));
 
 	await contribution.getModel();
 	viewport.render(true, false);
@@ -164,7 +167,7 @@ test('CodeLens model waits for every visible resolve batch in the current reques
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	viewport.layout({ width: 300, height: 20 });
-	using contribution = new CodeLensContribution(editorFor(viewport), viewport, providers, undefined, () => undefined);
+	using contribution = new CodeLensContribution(editorFor(viewport), viewport, providers, codeLensCache, undefined, () => undefined);
 	await waitFor(() => requests.length === 1);
 
 	viewport.scrollTo({ left: 0, top: 210 });
@@ -208,7 +211,7 @@ test('CodeLens contribution shows cached labels as text until fresh commands arr
 			provideCodeLenses: () => ({ lenses: [lens(1, 0, command('old.run', 'Cached'))] }),
 		});
 		using firstViewport = createViewport(firstDom, firstModel);
-		using firstContribution = new CodeLensContribution(editorFor(firstViewport), firstViewport, firstProviders, resource, () => undefined);
+		using firstContribution = new CodeLensContribution(editorFor(firstViewport), firstViewport, firstProviders, codeLensCache, resource, () => undefined);
 		await firstContribution.getModel();
 		firstDom.window.close();
 
@@ -222,7 +225,7 @@ test('CodeLens contribution shows cached labels as text until fresh commands arr
 		});
 		using secondViewport = createViewport(secondDom, secondModel);
 		const executions: string[] = [];
-		using secondContribution = new CodeLensContribution(editorFor(secondViewport), secondViewport, secondProviders, resource, id => { executions.push(id); });
+		using secondContribution = new CodeLensContribution(editorFor(secondViewport), secondViewport, secondProviders, codeLensCache, resource, id => { executions.push(id); });
 
 		const cachedCommand = requiredElement<HTMLElement>(secondViewport.domNode.domNode, '.stanza-editor-codelens-command');
 		assert.deepEqual({ tagName: cachedCommand.tagName, title: cachedCommand.textContent }, { tagName: 'SPAN', title: 'Cached' });
@@ -241,6 +244,28 @@ test('CodeLens contribution shows cached labels as text until fresh commands arr
 	}
 });
 
+test('CodeLens caches isolate concurrent editor hosts and their workspace storage', () => {
+	using firstHost = new LanguageFeaturesService();
+	using secondHost = new LanguageFeaturesService();
+	const first = getCodeLensCache(firstHost);
+	const second = getCodeLensCache(secondHost);
+	const firstStorage = new TestStorageService({});
+	const secondStorage = new TestStorageService({});
+	using firstBinding = first.bindStorage(firstStorage);
+	using secondBinding = second.bindStorage(secondStorage);
+	assert.equal(getCodeLensCache(firstHost), first);
+	const resource = URI.parse('file:///shared-name.ts');
+	const model = modelFrom({ provideCodeLenses: () => ({ lenses: [] }) }, lens(0, 0, command('run', 'First host')));
+	first.put(resource, 1, model);
+	model.dispose();
+	assert.equal(first.get(resource, 1)?.lenses[0]?.symbol.command?.title, 'First host');
+	assert.equal(second.get(resource, 1), undefined);
+	firstBinding.dispose();
+	secondBinding.dispose();
+	assert.match(firstStorage.get('codelens/cache2', StorageScope.WORKSPACE, ''), /shared-name/u);
+	assert.equal(secondStorage.get('codelens/cache2', StorageScope.WORKSPACE, ''), '{}');
+});
+
 test('CodeLens cache persists workspace line positions without command data', () => {
 	const restoredResource = URI.parse('file:///restored.ts');
 	const storedResource = URI.parse('file:///stored.ts');
@@ -252,7 +277,7 @@ test('CodeLens cache persists workspace line positions without command data', ()
 			'invalid resource': { lineCount: 1, lines: [0] },
 		}),
 	});
-	let binding: ReturnType<typeof bindCodeLensCacheStorage> | undefined = bindCodeLensCacheStorage(storage);
+	let binding: ReturnType<CodeLensCache['bindStorage']> | undefined = codeLensCache.bindStorage(storage);
 	try {
 		assert.deepEqual(codeLensCache.get(restoredResource, 3)?.lenses.map(item => ({ lineIndex: item.symbol.range.startLineNumber - 1, command: item.symbol.command })), [
 			{ lineIndex: 2, command: undefined },
@@ -267,7 +292,7 @@ test('CodeLens cache persists workspace line positions without command data', ()
 			textMeasurer: new FixedTextMeasurer(),
 		});
 		restoredViewport.layout({ width: 300, height: 20 });
-		using restoredContribution = new CodeLensContribution(editorFor(restoredViewport), restoredViewport, restoredProviders, restoredResource, undefined);
+		using restoredContribution = new CodeLensContribution(editorFor(restoredViewport), restoredViewport, restoredProviders, codeLensCache, restoredResource, undefined);
 		restoredViewport.render(true, false);
 		const restoredWidget = requiredElement<HTMLElement>(restoredViewport.domNode.domNode, '.stanza-editor-codelens');
 		assert.deepEqual({

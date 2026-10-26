@@ -62,7 +62,7 @@
     "test:build-tools": "pnpm --dir build test",
     "test:extensions": "node test/unit/prepare.ts tsconfig.extensions-test.json && tsc -p tsconfig.extensions-test.json && node test/unit/extensions.ts",
     "test:unit": "node test/unit/prepare.ts tsconfig.test.json && tsc -p tsconfig.test.json && node test/unit/run.ts",
-    "test:unit:runner": "node --test test/unit/mocha.test.ts",
+    "test:unit:runner": "node --test test/unit/impact.test.ts test/unit/mocha.test.ts",
     "test:unit:no-compile": "node test/unit/run.ts",
     "test:editor:unit": "node test/unit/prepare.ts tsconfig.test.json && tsc -p tsconfig.test.json && node test/unit/editor.ts",
     "test:editor:unit:no-compile": "node test/unit/editor.ts",
@@ -211,6 +211,7 @@
     "test:component-fixtures:ci:prepared": "pnpm test:component-fixtures:unit && node --test build/lib/test/screenshotBlocksCi.test.ts build/lib/test/screenshotDiffReport.test.ts && pnpm test:component-fixtures:prepared && pnpm test:component-fixtures:screenshots:prepared && node build/lib/screenshotBlocksCi.ts .build/component-fixtures/screenshots/current/manifest.json test/componentFixtures/blocks-ci-screenshots.md ../../.build/component-fixtures/screenshots/current > .build/component-fixtures/blocks-ci-updated.md"
   },
   "devDependencies": {
+    "esbuild": "0.27.3",
     "jsonc-parser": "3.3.1",
     "vscode-json-languageservice": "5.7.2",
     "@ash/typescript-compiler": "npm:typescript@7.0.2",
@@ -250,6 +251,7 @@
     "fontkit": "2.0.4",
     "harfbuzzjs": "1.6.3",
     "katex": "0.18.2",
+    "koffi": "3.3.3",
     "livekit-client": "2.22.4",
     "native-keymap": "3.3.9",
     "paper": "0.12.18",

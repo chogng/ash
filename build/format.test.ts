@@ -129,7 +129,7 @@ test('Bun leaves generated JSON to its owning serializers and checks neighboring
 	for (const file of handwritten) assert.equal(readFileSync(resolve(repositoryRoot, file), 'utf8'), input);
 });
 
-test('the configured editor command and CI formatter produce identical bytes for every configuration language', t => {
+test('the Bun buffer command and CI formatter produce identical bytes for every supported configuration language', t => {
 	const settings = JSON.parse(readFileSync(join(repositoryRoot, '.vscode/settings.json'), 'utf8'));
 	const editor = settings['simpleLspClient.formatters'].bun;
 	const directory = mkdtempSync(join(repositoryRoot, 'test/.formatter-test-'));
@@ -148,7 +148,7 @@ test('the configured editor command and CI formatter produce identical bytes for
 		assert.ok(editor.filetypes.includes(language), language);
 		// Resolve the same language override the editor uses, including single-language settings.
 		const group = settings['[json][jsonc][yaml][markdown][css][html]'];
-		assert.equal(settings[`[${language}]`]?.['editor.defaultFormatter'] ?? group['editor.defaultFormatter'], 'wdomitrz.simple-lsp-client');
+		assert.equal(settings[`[${language}]`]?.['editor.defaultFormatter'] ?? group['editor.defaultFormatter'], language === 'jsonc' ? 'vscode.json-language-features' : 'wdomitrz.simple-lsp-client');
 		writeFileSync(file, input);
 		const template = editor.cmd;
 		assert.ok(Array.isArray(template), 'The editor must pass arguments without a shell.');

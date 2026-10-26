@@ -265,7 +265,7 @@ export class View extends ViewEventHandler {
 		}
 		this.textMeasurer =
 			options.textMeasurer ??
-			new BrowserTextMeasurer(this.textMetricsElement);
+			new BrowserTextMeasurer(this.textMetricsElement, this.editorConfiguration);
 		this._fontInfo = this.editorConfiguration.options.get(EditorOption.fontInfo);
 		applyFontInfo(this.domNode.domNode, this.fontInfo);
 		this.textMeasurer.refresh?.();
@@ -354,7 +354,6 @@ export class View extends ViewEventHandler {
 			configuration: this.editorConfiguration,
 			themeType: options.theme.colorScheme,
 			tabSize: this.indentation.tabSize,
-			typicalHalfwidthCharacterWidth: Math.max(1, this.textMeasurer.measureLineWidth(' ')),
 			textMeasurer: this.textMeasurer,
 			viewGpuContext: this.viewGpuContext,
 		}));
@@ -541,6 +540,7 @@ export class View extends ViewEventHandler {
 				}
 			}
 			if (event.hasChanged(EditorOption.fontInfo)) this.applyFontConfiguration();
+			else if (event.hasChanged(EditorOption.disableMonospaceOptimizations)) this.refreshFontMetrics(true);
 			if (event.hasChanged(EditorOption.wrappingInfo)) {
 				this.domNode.domNode.classList.toggle("word-wrapped", this.softWrapping);
 			}
@@ -1332,6 +1332,7 @@ interface BrowserTextMetrics {
 	readonly fontSize: number;
 	readonly letterSpacing: number;
 	readonly spaceWidth: number;
+	readonly monospaceWidth: number | undefined;
 	readonly tabSize: number;
 	readonly horizontalPadding: number;
 	readonly contentLeftPadding: number;
@@ -1341,7 +1342,7 @@ class BrowserTextMeasurer implements TextMeasurer {
 	private readonly context: CanvasRenderingContext2D | undefined;
 	private metrics: BrowserTextMetrics;
 
-	constructor(private readonly referenceElement: HTMLElement) {
+	constructor(private readonly referenceElement: HTMLElement, private readonly configuration: EditorConfiguration) {
 		try {
 			this.context = h(referenceElement.ownerDocument, 'canvas').getContext('2d') ?? undefined;
 		} catch {
@@ -1381,17 +1382,27 @@ class BrowserTextMeasurer implements TextMeasurer {
 		const contentLeftPadding = cssNumber(style.paddingLeft, 0);
 		const horizontalPadding = contentLeftPadding + cssNumber(style.paddingRight, 0);
 		const font = `${style.fontStyle || 'normal'} ${style.fontVariantCaps || 'normal'} ${style.fontWeight || '400'} ${style.fontSize || `${fontSize}px`} ${style.fontFamily || 'monospace'}`;
+		const language = this.referenceElement.closest('[lang]')?.getAttribute('lang') ?? this.referenceElement.ownerDocument.documentElement.lang;
 		if (this.context) {
+			// Detached canvases do not inherit language, which affects the font
+			// selected for generic families such as monospace on Windows.
+			this.context.canvas.lang = language;
 			this.context.font = font;
 			this.context.textBaseline = 'alphabetic';
 		}
 		const spaceWidth = positiveNumber(this.context?.measureText(' ').width, fontSize * 0.6);
+		const fontInfo = this.configuration.options.get(EditorOption.fontInfo);
+		const monospaceWidth = this.context && fontInfo.isTrusted && fontInfo.isMonospace
+			&& !this.configuration.options.get(EditorOption.disableMonospaceOptimizations)
+			&& style.fontVariantCaps === 'normal' && style.fontVariationSettings === 'normal'
+			? this.context.measureText('n').width : undefined;
 		return Object.freeze({
-			signature: JSON.stringify([font, letterSpacing, style.fontFeatureSettings, style.fontVariationSettings, tabSize, horizontalPadding, spaceWidth]),
+			signature: JSON.stringify([language, font, letterSpacing, style.fontFeatureSettings, style.fontVariationSettings, tabSize, horizontalPadding, spaceWidth, monospaceWidth]),
 			font,
 			fontSize,
 			letterSpacing,
 			spaceWidth,
+			monospaceWidth,
 			tabSize,
 			horizontalPadding,
 			contentLeftPadding,
@@ -1400,7 +1411,13 @@ class BrowserTextMeasurer implements TextMeasurer {
 
 	private measureSegment(text: string): number {
 		if (!text) return 0;
-		const characterCount = [...text].length;
+		// FontMeasurements verifies monospace widths with ligatures disabled. Sending
+		// every ASCII line to Canvas also retains Blink's shaped-text cache for all
+		// open documents. Complex text and proportional fonts still need shaping.
+		if (this.metrics.monospaceWidth !== undefined && /^[\x20-\x7e]+$/u.test(text)) {
+			return Math.max(0, text.length * (this.metrics.monospaceWidth + this.metrics.letterSpacing));
+		}
+		const characterCount = this.context && this.metrics.letterSpacing === 0 ? 0 : Array.from(text).length;
 		const width = this.context?.measureText(text).width ?? characterCount * this.metrics.fontSize * 0.6;
 		return Math.max(0, width + characterCount * this.metrics.letterSpacing);
 	}

@@ -36,6 +36,37 @@ function response(path: string): Response {
 }
 suite('ChatGPT shared service', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('identifies the region being read and clears loading on completion, failure and navigation', async () => {
+		let pending: DeferredPromise<void> | undefined;
+		let fail = false;
+		using chat = fixture(async path => {
+			if (pending) await pending.p;
+			if (fail) throw new Error('Synthetic read failure');
+			return response(path);
+		});
+		pending = new DeferredPromise<void>();
+		const catalog = chat.reload();
+		assert.deepEqual(chat.state.get().loading, { kind: 'history' });
+		await pending.complete();
+		pending = undefined;
+		await catalog;
+		assert.equal(chat.state.get().loading, undefined);
+		pending = new DeferredPromise<void>();
+		const selected = chat.select('one');
+		// select first persists any active voice session.
+		await Promise.resolve();
+		assert.deepEqual(chat.state.get().loading, { kind: 'conversation', id: 'one' });
+		await pending.complete();
+		pending = undefined;
+		await selected;
+		fail = true;
+		await chat.select('two');
+		assert.equal(chat.state.get().loading, undefined);
+		assert.equal(chat.state.get().conversationId, 'one');
+		assert.match(chat.state.get().error, /Synthetic read failure/);
+		chat.newChat();
+		assert.equal(chat.state.get().loading, undefined);
+	});
 	for (const navigation of ['history', 'new'] as const) {
 		test(`leaving active voice for ${navigation} waits for persistence and retains the new history entry`, async () => {
 			const entered = new DeferredPromise<void>(); const saved = new DeferredPromise<void>();

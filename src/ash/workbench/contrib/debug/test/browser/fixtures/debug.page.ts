@@ -11,7 +11,7 @@ import { IExtensionService } from '../../../../../services/extensions/common/ext
 import { IStatusbarService } from '../../../../../services/statusbar/browser/statusbar.js';
 import { StatusbarPart, StatusbarService } from '../../../../../browser/parts/statusbar/statusbarPart.js';
 import { StatusBarColorProvider } from '../../../browser/statusbarColorProvider.js';
-import { ChatContextPickService, IChatContextPickService } from '../../../../../contrib/chat/browser/attachments/chatContextPickService.js';
+import { IChatContextPickService } from '../../../../../contrib/chat/browser/attachments/chatContextPickService.js';
 import { DebugChatContextContribution } from '../../../browser/debugChatIntegration.js';
 import { ContentHoverController } from '../../../../../../editor/contrib/hover/browser/contentHoverController.js';
 import { ICodeEditorService } from '../../../../../../editor/browser/services/codeEditorService.js';
@@ -205,8 +205,7 @@ if (new URLSearchParams(location.search).has('status-color')) {
 	store.add(services.createInstance(StatusbarPart, root));
 	store.add(services.createInstance(StatusBarColorProvider));
 }
-const chatContexts = new ChatContextPickService();
-services.registerInstance(IChatContextPickService, chatContexts);
+const chatContexts = services.get(IChatContextPickService);
 store.add(services.createInstance(DebugChatContextContribution));
 const disassemblyContainer = document.createElement('div');
 document.body.append(disassemblyContainer);
@@ -249,7 +248,7 @@ window.ashDebugIntegration = {
 	},
 	endSessions: () => { for (const candidate of debug.sessions) (candidate as MockDebugSession).state = 'terminated'; debug.activate(undefined); },
 	loadedSourcesView: async () => { await services.get(IViewsService).openView('workbench.debug.loadedScriptsView', true); },
-	chatContext: async () => readContextPicks(chatContexts.items[0]!, 'parent').then(async picks => picks[0] ? (await selectedAttachment(picks[0])).resolve() : undefined),
+	chatContext: async () => readContextPicks([...chatContexts.items][0]!, 'parent').then(async picks => picks[0] ? (await selectedAttachment(picks[0])).resolve() : undefined),
 	debugHover: () => { editor.setPosition(new Position(2, 14)); editor.getContribution<ContentHoverController>('editor.contrib.hover')!.showContentHover(new Position(2, 14)); },
 	quickAccess: () => services.get(IQuickInputService).quickAccess.show('debug '),
 	showDebugHelp: () => services.get(IAccessibleViewService).show(AccessibleViewType.Help),

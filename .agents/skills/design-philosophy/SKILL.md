@@ -222,10 +222,10 @@ Text styles are **roles**, not arbitrary sizes: `heading1–3`, `body1–2`, `la
 - **Serves:** *One thing leads* (4), *Sameness signals sameness* (6).
 
 <a id="icon-sizes"></a>
-### Icon sizes - defaults chosen by context
+### Icon sizes - three sizes, chosen by context
 
-Lxicons default to **16px (base)** or **12px (compact)**. Other sizes require an explicit component assignment, such as the Agent Window-only exceptions in [Sessions style](../../../src/ash/sessions/STYLE.md#图标与点击区域); an unassigned `14px` is a bug. At the compact size, also swap to the `*Compact` glyph (`Lxicon.close` → `Lxicon.closeCompact`) so the icon is *optically* tuned, not just scaled.
-- **Decision rule:** size tracks the **density and rank of the context**. Use **base (16px)** for standalone or primary actions and comfortable click targets; use **compact (12px)** for dense rows, inline glyphs, and secondary chrome where the icon rides alongside text. So the answer to "16 or 12?" is *"what is this icon's role here?"* - not a taste call. Say *"this icon should be compact,"* not *"shrink it a bit."*
+Lxicons are **20px (large)**, **16px (base)** or **12px (compact)** - nothing in between; `14px` is always a bug. At the large or compact size, also swap to the `*Large` or `*Compact` glyph (`Lxicon.close` → `Lxicon.closeLarge` or `Lxicon.closeCompact`) so the icon is *optically* tuned, not just scaled.
+- **Decision rule:** size tracks the **density and rank of the context**. Use **large (20px)** in agent window. Use **base (16px)** for standalone or primary actions and comfortable click targets in IDE; use **compact (12px)** for dense rows, inline glyphs, and secondary chrome where the icon rides alongside text in IDE. So the answer to "16 or 12?" is *"what is this icon's role here?"* - not a taste call. Say *"this icon should be compact,"* not *"shrink it a bit."*， As for the agent window, the answer is always *"large."*
 - **Serves:** *One thing leads* (4), *Sameness signals sameness* (6).
 
 <a id="one-stroke"></a>
@@ -233,7 +233,6 @@ Lxicons default to **16px (base)** or **12px (compact)**. Other sizes require an
 
 The standard border/separator stroke is **1px** (`--ash-strokeThickness`).
 - **Decision rule:** whether an ordinary border is present is a **yes/no** decision. Preserve thicker semantic or accessibility strokes, such as focus indicators.
-- **Pane boundaries:** adjacent panes retain a permanent one-stroke separator using the theme's `border` color (`--ash-border`), including when a pane is collapsed. Draw it only between panes, independently of resize-handle hover, drag, or keyboard-focus feedback.
 - **Serves:** *Quiet at rest* (1), *Sameness signals sameness* (6).
 
 <a id="theme-color"></a>
@@ -308,7 +307,6 @@ Lead with the **role / tier / ramp**, not the number - then name the principle s
 | "the command center has a box around it" | "chrome should be **quiet at rest, reveal on hover**" | 1 · Quiet at rest |
 | "the focus outline shows when I click" | "the ring is **keyboard-focus only** (`:focus-visible`)" | 1 · Quiet at rest |
 | "the list is cut off at the bottom" | "the surface is **missing its scroll-shadow fade**" | 7 · Delight / 5 · Elevation |
-| "the pane boundaries are hard to distinguish" | "pane boundaries need their [persistent one-stroke separator](#one-stroke)" | 6 · Sameness |
 
 ---
 

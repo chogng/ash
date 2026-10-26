@@ -24,6 +24,8 @@ export class SettingsSearchMenu extends Disposable {
 			...defaultButtonStyles,
 			label: '',
 			icon: Lxicon.filter,
+			iconOnly: true,
+			size: 'small',
 			ariaLabel: localize({ bundle: 'ash.settings', key: 'search.filter' }, 'Filter Settings'),
 			title: localize({ bundle: 'ash.settings', key: 'search.filter' }, 'Filter Settings'),
 			onClick: () => this.show(),

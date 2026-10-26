@@ -224,6 +224,9 @@
 
 /* Keyboard selection takes precedence over the base List hover under a stationary pointer. */
 .ash-quick-pick-list .ash-list-row.is-active,
+.ash-quick-pick-list
+	.ash-quick-pick-list-items
+	> .ash-list-row.is-active.selected,
 .ash-quick-pick-list:not(.ash-quick-pick-list-menu)
 	.ash-list-row.is-active:hover {
 	color: var(
@@ -308,6 +311,10 @@
 	overflow: hidden;
 	clip-path: inset(50%);
 	white-space: nowrap;
+}
+
+.ash-quick-pick-row-checkbox {
+	flex: 0 0 auto;
 }
 
 .ash-quick-pick-row-check {

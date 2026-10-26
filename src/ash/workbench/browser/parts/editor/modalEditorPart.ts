@@ -1,4 +1,3 @@
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -11,7 +10,6 @@ import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../../
 import { focusFirst, restoreFocus, trapTabFocus } from '../../../../base/browser/focus.js';
 import { Dimension, type IDimension } from '../../../../base/browser/dom.js';
 import { observeElementSize } from '../../../../base/browser/observer.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { DisposableMap, Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { basename } from '../../../../base/common/resources.js';
@@ -19,7 +17,8 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { EditorOpenOptions } from '../../../services/editor/common/editorService.js';
 import { type EditorGroupOptions, EditorOpenSupersededError } from './editorGroupView.js';
 import { EditorPane, type EditorPaneCreationOptions } from './editorPane.js';
-import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { MenuId } from '../../../../platform/actions/common/actions.js';
 import type { IEditorPaneRegistry } from '../../editor.js';
 import { localize } from '../../../../nls.js';
 import { getHoverDelegate, type IManagedHover } from '../../../../base/browser/ui/hover/hoverDelegate.js';
@@ -47,13 +46,14 @@ export class ModalEditorPart extends Disposable {
 	public readonly onDidChangeVisibility: Event<boolean>;
 
 	private readonly active = this._register(new MutableDisposable<ModalEditorPaneInstance>());
-	private readonly closeButton: Button;
+	private readonly closeToolbar: WorkbenchToolBar;
 	private readonly contentDomNode: HTMLDivElement;
 	private readonly hostDomNode: HTMLDivElement;
 	private readonly pending = this._register(new DisposableMap<number, ModalEditorPaneInstance>());
 	private readonly requestCloseEmitter = this._register(new Emitter<IResourceEditorInput>());
 	private readonly visibilityEmitter = this._register(new Emitter<boolean>());
 	private readonly titleDomNode: HTMLHeadingElement;
+	private readonly titleControlDomNode: HTMLDivElement;
 	private readonly toolbar: WorkbenchToolBar | undefined;
 	private readonly titleListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly titleHover = this._register(new MutableDisposable<IManagedHover>());
@@ -86,15 +86,10 @@ export class ModalEditorPart extends Disposable {
 		this.titleDomNode.className = 'ash-modal-editor-title';
 		this.titleDomNode.id = `ash-modal-editor-title-${nextModalEditorId++}`;
 		this.domNode.setAttribute('aria-labelledby', this.titleDomNode.id);
-		this.closeButton = this._register(new Button(headerDomNode, {
-			...defaultButtonStyles,
-			label: localize('workbench.closeEditor', 'Close'),
-			icon: Lxicon.close,
-			iconOnly: true,
-			onClick: () => this.requestClose(),
-		}));
-		this.closeButton.toggleClassName('ash-modal-editor-close', true);
 		headerDomNode.append(this.titleDomNode);
+		this.titleControlDomNode = h(ownerDocument, 'div');
+		this.titleControlDomNode.className = 'ash-modal-editor-title-controls';
+		headerDomNode.append(this.titleControlDomNode);
 		const actions = options.paneCreationOptions.actionServices;
 		if (actions) {
 			this.toolbar = this._register(new WorkbenchToolBar(headerDomNode, actions.contextMenuProvider, {
@@ -102,7 +97,25 @@ export class ModalEditorPart extends Disposable {
 			}));
 			this.toolbar.element.classList.add('ash-modal-editor-actions');
 		}
-		headerDomNode.append(this.closeButton.domNode);
+		const closeLabel = localize('workbench.closeEditor', 'Close');
+		if (actions) {
+			this.closeToolbar = this._register(new MenuWorkbenchToolBar(headerDomNode, actions.menuService, actions.contextMenuProvider, MenuId.ModalEditorTitle, {
+				ariaLabel: closeLabel,
+				contextKeyService: actions.contextKeyService,
+			}));
+		} else {
+			// Hosts without menu services still expose the modal's close request through ActionBar.
+			this.closeToolbar = this._register(new WorkbenchToolBar(headerDomNode, { showContextMenu() { } }, { ariaLabel: closeLabel }));
+			this.closeToolbar.setActions([{
+				id: 'modalEditor.close',
+				label: closeLabel,
+				tooltip: closeLabel,
+				icon: Lxicon.close,
+				enabled: true,
+				run: () => this.requestClose(),
+			}]);
+		}
+		this.closeToolbar.element.classList.add('ash-modal-editor-close');
 
 		this.contentDomNode = h(ownerDocument, 'div');
 		this.contentDomNode.className = 'ash-modal-editor-content';
@@ -234,6 +247,7 @@ export class ModalEditorPart extends Disposable {
 		this.titleListener.clear();
 		this.titleHover.clear();
 		this.toolbar?.setActions([]);
+		this.titleControlDomNode.replaceChildren();
 		this.currentEntry = undefined;
 		this.active.clear();
 		this.contentDomNode.replaceChildren();
@@ -307,6 +321,8 @@ export class ModalEditorPart extends Disposable {
 	private updateTitle(input: IResourceEditorInput): void {
 		this.titleListener.clear();
 		const pane = this.activePane;
+		const titleControl = pane instanceof EditorPane ? pane.getTitleControl() : undefined;
+		this.titleControlDomNode.replaceChildren(...(titleControl ? [titleControl] : []));
 		const updateActions = () => {
 			this.toolbar?.setActions(pane instanceof EditorPane ? pane.getActions() : [], pane instanceof EditorPane ? pane.getSecondaryActions() : []);
 		};
@@ -316,9 +332,7 @@ export class ModalEditorPart extends Disposable {
 		this.titleDomNode.textContent = title;
 		this.titleHover.value = getHoverDelegate().setupHover({ target: this.titleDomNode, content: title });
 		const closeLabel = localize('modalEditor.close', 'Close {0}', title);
-		this.closeButton.label = closeLabel;
-		this.closeButton.setTitle(closeLabel);
-		this.closeButton.domNode.setAttribute('aria-label', closeLabel);
+		this.closeToolbar.element.setAttribute('aria-label', closeLabel);
 	}
 }
 

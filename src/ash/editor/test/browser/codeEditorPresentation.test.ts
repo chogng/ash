@@ -2,6 +2,7 @@ import { attachRustSyntax } from '../../../../../test/fixtures/browser/rustSynta
 import { expect, type Page } from '@playwright/test';
 import { getAxeResults, injectAxe } from "axe-playwright";
 import { ScrollType, type IEditor } from '../../common/editorCommon.js';
+import { EditorOption } from '../../common/config/editorOptions.js';
 import { suite, test, setup, teardown } from 'mocha';
 import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
 
@@ -38,6 +39,50 @@ suite('textModel browser component', () => {
 			const optimized = await read();
 			expect(Math.abs(optimized - measured), JSON.stringify({ fontFamily, fontWeight, scale, measured, optimized })).toBeLessThanOrEqual(1);
 		}
+	});
+
+	test('monospace width scans avoid per-line shaping and preserve complex text after font changes', async function () {
+		const { page } = browserTests;
+		await openEditor(page);
+		const result = await page.evaluate(async fontInfoOption => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.getModel()!.setLanguage('plaintext');
+			editor.updateOptions({ fontFamily: 'monospace', fontLigatures: false, fontVariations: false, wordWrap: 'off', disableMonospaceOptimizations: false });
+			const measureText = CanvasRenderingContext2D.prototype.measureText;
+			let shapedLines = 0;
+			CanvasRenderingContext2D.prototype.measureText = function (text) {
+				if (text.startsWith('resource-lifetime-')) shapedLines++;
+				return measureText.call(this, text);
+			};
+			const settle = () => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+			try {
+				editor.setValue(Array.from({ length: 128 }, (_, index) => `resource-lifetime-${index} ` + 'ASCII measurement '.repeat(40)).join('\n'));
+				await settle();
+				const optimized = { width: editor.getContentWidth(), shapedLines, fontInfo: editor.getOption(fontInfoOption) };
+				editor.updateOptions({ disableMonospaceOptimizations: true });
+				await settle();
+				const measured = { width: editor.getContentWidth(), shapedLines };
+				const differences: number[] = [];
+				for (const fontFamily of ['monospace', 'Arial']) {
+					for (const letterSpacing of [0, 1.5]) {
+						editor.updateOptions({ fontFamily, letterSpacing, disableMonospaceOptimizations: true });
+						editor.setValue(('ASCII\t中文 e\u0301 👩‍💻 العربية ').repeat(30));
+						await settle();
+						const width = editor.getContentWidth();
+						editor.updateOptions({ disableMonospaceOptimizations: false });
+						await settle();
+						differences.push(Math.abs(editor.getContentWidth() - width));
+					}
+				}
+				return { optimized, measured, differences };
+			} finally {
+				CanvasRenderingContext2D.prototype.measureText = measureText;
+			}
+		}, EditorOption.fontInfo);
+		expect(result.optimized.shapedLines, JSON.stringify(result.optimized.fontInfo)).toBe(0);
+		expect(result.measured.shapedLines).toBeGreaterThanOrEqual(128);
+		expect(Math.abs(result.optimized.width - result.measured.width)).toBeLessThanOrEqual(1);
+		for (const difference of result.differences) expect(difference).toBeLessThanOrEqual(1);
 	});
 
 	test('symbol highlights stay on the symbol when the gutter, minimap and horizontal scroll change', async function () {
@@ -334,6 +379,8 @@ suite('textModel browser component', () => {
 				editor.updateOptions({ wordWrap: 'off', padding: { top: 0, bottom: 0 }, minimap: { enabled: true, scale: 4, renderCharacters: true } });
 				editor.setValue('iiii\n\n \t \niiii');
 			}, theme);
+			// Discard the fixture's previous raster before capturing this document.
+			await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 			const canvas = page.locator('.minimap canvas');
 			const readPixels = () => canvas.evaluate(element => {
 				const canvas = element as HTMLCanvasElement;
@@ -358,6 +405,7 @@ suite('textModel browser component', () => {
 			await expect.poll(readPixels).not.toEqual(original);
 			await page.locator('.stanza-editor-input').focus();
 			await page.keyboard.press('ControlOrMeta+z');
+			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getValue())).toBe('iiii\n\n \t \niiii');
 			await expect.poll(readPixels).toEqual(original);
 			await expect(page.locator('.minimap')).toHaveAttribute('aria-hidden', 'true');
 		});
@@ -685,16 +733,19 @@ suite('textModel browser component', () => {
 		await expect.poll(() => selections.count()).toBeGreaterThan(2);
 		await expect.poll(async () => (await radii())[0]!.slice(0, 2)).toEqual([3, 3]);
 		await expect.poll(async () => (await radii()).at(-1)!.slice(2)).toEqual([3, 3]);
-		await page.evaluate(() => {
-			const editor = window.ashTextModelIntegration.getControl();
-			editor.updateOptions({ wordWrap: 'off' });
-			editor.setValue(Array.from({ length: 100 }, () => 'continuous selection').join('\n'));
-			editor.setSelection({ startLineNumber: 1, startColumn: 1, endLineNumber: 100, endColumn: 21 });
-			editor.setScrollTop(800);
-		});
-		await expect.poll(() => selections.first().evaluate(element => Number((element.parentElement as HTMLElement | null)?.dataset.lineIndex ?? -1))).toBeGreaterThan(0);
-		await expect.poll(async () => (await radii())[0]!.slice(0, 2)).toEqual([0, 0]);
-		await expect.poll(async () => (await radii()).at(-1)!.slice(2)).toEqual([0, 0]);
+		for (const fontSize of [14, 24, 10]) {
+			await page.evaluate(fontSize => {
+				const editor = window.ashTextModelIntegration.getControl();
+				editor.updateOptions({ wordWrap: 'off', fontSize, lineHeight: fontSize + 6 });
+				editor.setValue(Array.from({ length: 100 }, () => 'continuous selection').join('\n'));
+				editor.setSelection({ startLineNumber: 1, startColumn: 1, endLineNumber: 100, endColumn: 21 });
+				editor.setScrollTop(800);
+			}, fontSize);
+			await expect.poll(() => selections.first().evaluate(element => Number((element.parentElement as HTMLElement | null)?.dataset.lineIndex ?? -1))).toBeGreaterThan(0);
+			await expect.poll(async () => (await radii())[0]!.slice(0, 2)).toEqual([0, 0]);
+			await expect.poll(async () => (await radii()).at(-1)!.slice(2)).toEqual([0, 0]);
+			await page.screenshot({ path: browserTests.info.outputPath(`rounded-selection-scrolled-${fontSize}.png`) });
+		}
 	});
 
 	test('selection foreground applies only to selected characters and clears when selections or themes change', async function () {

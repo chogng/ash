@@ -1094,10 +1094,10 @@ window.ashStandaloneIntegration = {
 		callerEditor.setPosition(new stanza.Position(1, 1));
 		callerEditor.updateOptions({ foldingStrategy: 'auto' });
 		contributionProviders.add(stanza.languages.registerFoldingRangeProvider('plaintext', {
-			id: 'test.first', provideFoldingRanges: () => [{ startLineIndex: 0, endLineIndex: 2 }],
+			id: 'test.first', provideFoldingRanges: request => request.model === callerModel && request.model.lineCount > 2 ? [{ startLineIndex: 0, endLineIndex: 2 }] : [],
 		}));
 		contributionProviders.add(stanza.languages.registerFoldingRangeProvider('plaintext', {
-			id: 'test.second', provideFoldingRanges: () => [{ startLineIndex: 1, endLineIndex: 3 }],
+			id: 'test.second', provideFoldingRanges: request => request.model === callerModel && request.model.lineCount > 3 ? [{ startLineIndex: 1, endLineIndex: 3 }] : [],
 		}));
 	},
 	selectFoldingProvider: id => {

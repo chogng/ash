@@ -1,5 +1,6 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/checksWidget.css';
+import { LoadingSkeleton } from '../../../browser/ui/loadingSkeleton.js';
 import { h, addDisposableListener } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -67,7 +68,11 @@ export class ChecksWidget extends Disposable {
 			this.entries.clear();
 			this.body.replaceChildren();
 			this.body.dataset.signature = signature;
-			if (state.loading && !state.checks.length || state.error) {
+			if (state.loading && !state.checks.length && !state.error) {
+				const loading = this.entries.add(new LoadingSkeleton(this.body, localize('sessions.changes.checkLoading', 'Loading checks…'), 'list', 3));
+				loading.setVisible(true);
+			}
+			if (state.error) {
 				const message = h(container.ownerDocument, 'p');
 				message.textContent = state.error ? localize('sessions.changes.checkError', 'Could not load checks: {0}', state.error) : localize('sessions.changes.checkLoading', 'Loading checks…');
 				this.body.append(message);

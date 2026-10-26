@@ -217,7 +217,8 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	run(['build/resources/localization.ts']);
 	const generated = join(root, '.build/desktop/localization');
 	const outputs = (await readdir(generated)).sort();
-	assert.deepEqual(outputs, ['extensions', 'localizationCatalog.en.ts', 'localizationCatalog.zh-CN.ts', 'localizationCatalogs.ts']);
+	assert.deepEqual(outputs, ['extensions', 'localizationCatalog.en.ts', 'localizationCatalog.zh-CN.ts', 'localizationCatalogLoader.ts', 'localizationCatalogs.ts', 'localizationLanguages.ts']);
+	assert.deepEqual(JSON.parse((await readFile(join(generated, 'localizationLanguages.ts'), 'utf8')).match(/productLanguages = (.+);/)![1]!), [{ locale: 'en', localizedLanguageName: 'en' }, { locale: 'zh-CN', localizedLanguageName: '简体中文' }]);
 	const extensionRoot = join(generated, 'extensions/ash.language-pack-zh-cn');
 	assert.deepEqual(JSON.parse(await readFile(join(extensionRoot, 'manifest.json'), 'utf8')).uiTargets, ['ide', 'agents']);
 	const packedCatalog = JSON.parse(await readFile(join(extensionRoot, 'localization/package.json'), 'utf8'));
@@ -250,7 +251,19 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	assert.deepEqual(await Promise.all(outputs.map(async file => (await stat(join(generated, file), { bigint: true })).mtimeNs)), before);
 	for (const target of ['main', 'test']) {
 		const output = `.build/desktop/${target}`;
-		run([join(repository, 'node_modules/@ash/typescript-compiler/bin/tsc'), '--module', 'NodeNext', '--target', 'ES2022', '--rootDir', '.', '--outDir', output, '--types', 'node', '--skipLibCheck', entry]);
+		run([join(repository, 'node_modules/@ash/typescript-compiler/bin/tsc'), '--module', 'NodeNext', '--target', 'ES2022', '--rootDir', '.', '--outDir', output, '--types', 'node', '--skipLibCheck', entry, '.build/desktop/localization/localizationCatalogLoader.ts']);
+		const selected = JSON.parse(run(['--input-type=module', '--eval', `
+			import { registerHooks } from 'node:module';
+			const loaded = [];
+			registerHooks({ load(url, context, next) { const match = /localizationCatalog\\.(.+)\\.js$/.exec(url); if (match) loaded.push(match[1]); return next(url, context); } });
+			const { fallbackLanguagePackCatalog, loadProductLanguagePackCatalog } = await import('./${output}/.build/desktop/localization/localizationCatalogLoader.js');
+			const eager = [...loaded];
+			const chinese = await loadProductLanguagePackCatalog('zh-CN');
+			const afterChinese = [...loaded];
+			const fallback = await loadProductLanguagePackCatalog('unknown');
+			console.log(JSON.stringify({ eager, afterChinese, loaded, fallbackMessages: fallbackLanguagePackCatalog.bundles, chinese: chinese.bundles.ash.hello, fallback: fallback.bundles.ash.hello, reused: chinese === await loadProductLanguagePackCatalog('zh-CN') }));
+		`]));
+		assert.deepEqual(selected, { eager: [], afterChinese: ['zh-CN'], loaded: ['zh-CN', 'en'], fallbackMessages: {}, chinese: '你好', fallback: 'Hello', reused: true });
 		const catalogs = JSON.parse(run(['--input-type=module', '--eval', `import { productLanguagePackCatalogs } from './${output}/${entry.replace(/\.ts$/u, '.js')}'; console.log(JSON.stringify(productLanguagePackCatalogs.map(catalog => [catalog.locale, catalog.bundles.ash.hello])));`]));
 		assert.deepEqual(catalogs, [['en', 'Hello'], ['zh-CN', '你好']]);
 		const provenance = JSON.parse(run(['--input-type=module', '--eval', `import { builtinLanguagePackCatalogs, preinstalledLanguagePacks } from './${output}/${entry.replace(/\.ts$/u, '.js')}'; console.log(JSON.stringify({ core: builtinLanguagePackCatalogs.map(catalog => catalog.locale), extensions: preinstalledLanguagePacks.map(pack => ({ id: pack.id, catalog: pack.catalog })) }));`]));

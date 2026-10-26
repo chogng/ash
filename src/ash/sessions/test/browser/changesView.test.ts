@@ -61,6 +61,9 @@ import { IAccessibilityService } from '../../../platform/accessibility/common/ac
 import { AccessibilityService } from '../../../platform/accessibility/browser/accessibilityService.js';
 import { AnimatedCounterWidget } from '../../../workbench/browser/animatedCounterWidget.js';
 import { observableValue } from '../../../base/common/observable.js';
+import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
+import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
+import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 
 test('Animated counters require the host accessibility service before creating DOM', () => {
 	using services = new InstantiationService();
@@ -242,6 +245,12 @@ function selected(id: string): SessionsViewSelection {
 }
 
 function registerChecksServices(services: InstantiationService, document: Document): void {
+	services.registerInstance(ILogService, new NullLoggerService());
+	services.registerSingleton(ICustomViewService, () => services.createInstance(CustomViewService));
+	services.registerInstance(ISessionProviderScopeService, {
+		onDidChangeScopes: Event.None,
+		getScope: () => ({ services: { host: { automation: undefined } } }),
+	} as unknown as ISessionProviderScopeService);
 	services.registerSingleton(IAccessibilityService, accessor => new AccessibilityService({
 		root: document.body,
 		configurationService: accessor.get(IConfigurationService),

@@ -52,7 +52,7 @@
 .ash-artifacts-filters > .ash-button {
 	min-height: 32px;
 }
-.ash-artifacts-filters > [aria-selected="true"] {
+.ash-artifacts-filters > .selected {
 	background: var(--ash-list-inactiveSelectionBackground);
 }
 .ash-artifacts-actions {
@@ -151,6 +151,41 @@
 	gap: var(--ash-spacing-size200);
 	margin-top: var(--ash-spacing-size400);
 }
+
+.ash-creator .ash-sessions-loading.cards .ash-sessions-loading-shapes {
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 360px));
+	gap: var(--ash-spacing-size200);
+	margin-top: var(--ash-spacing-size400);
+}
+
+.ash-creator .ash-sessions-loading.cards .ash-sessions-loading-row {
+	flex-direction: column;
+	align-items: stretch;
+}
+
+.ash-creator .ash-sessions-loading.cards .ash-sessions-loading-mark {
+	flex-basis: 180px;
+	height: 180px;
+}
+
+.ash-creator
+	.ash-sessions-loading.cards.artifact-list
+	.ash-sessions-loading-shapes {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.ash-creator
+	.ash-sessions-loading.cards.artifact-list
+	.ash-sessions-loading-row {
+	flex-direction: row;
+}
+
+.ash-creator
+	.ash-sessions-loading.cards.artifact-list
+	.ash-sessions-loading-mark {
+	flex-basis: 64px;
+	height: 56px;
+}
 .ash-creator .ash-artifacts-card {
 	display: flex;
 	flex-direction: column;
@@ -230,7 +265,7 @@
 	box-sizing: border-box;
 }
 :is(.hc-black, .hc-light) .ash-artifacts-card,
-:is(.hc-black, .hc-light) .ash-artifacts-filters > [aria-selected="true"] {
+:is(.hc-black, .hc-light) .ash-artifacts-filters > .selected {
 	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 }
 .ash-creator-workspaces {

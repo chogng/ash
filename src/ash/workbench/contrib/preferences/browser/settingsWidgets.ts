@@ -58,13 +58,14 @@ export class SettingsSearchWidget extends Disposable {
 		const searchLabel = this.searchLabel();
 		this.inputBox = this._register(new InputBox(this.domNode, {
 			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'field',
 			type: 'search',
 			placeholder: searchLabel,
 			ariaLabel: searchLabel,
 			ariaControls: options.ariaControls,
 		}));
 		this.inputBox.element.classList.add('ash-settings-search-input');
-		this.searchMenu = this._register(new SettingsSearchMenu(this.domNode, {
+		this.searchMenu = this._register(new SettingsSearchMenu(this.inputBox.element, {
 			getValue: () => this.inputBox.value,
 			setValue: value => { this.inputBox.value = value; },
 			focus: () => this.inputBox.focus(),

@@ -3459,8 +3459,8 @@ test('editor context keys follow preview, readonly, dirty, and close transitions
 		registry,
 	});
 	const groupProjectionChanges = contextChanges.filter(keys => keys.includes('resourceSet'));
-	assert.equal(groupProjectionChanges.length, 1);
-	assert.equal(groupProjectionChanges[0]?.includes('activeEditor'), true);
+	assert.deepEqual(groupProjectionChanges, []);
+	assert.equal(contextKeys.getContext(editor.activeGroup.domNode).getValue('resourceSet'), false);
 	contextChanges.length = 0;
 	using editorContexts = new EditorContextKeyController(contextKeys, editor, registry, undefined);
 	using editorService = new BrowserEditorService(editor);
@@ -3468,12 +3468,13 @@ test('editor context keys follow preview, readonly, dirty, and close transitions
 		editorGroupsService: editorService,
 		editorService,
 	});
+	assert.equal(contextKeys.getValue('activeEditorGroupIndex'), 1);
+	const activeInput: IResourceEditorInput = { resource, languageId: 'typescript', readOnly: true };
+	contextChanges.length = 0;
+	await editor.openEditor(activeInput, { pinned: false });
 	const editorProjectionChanges = contextChanges.filter(keys => keys.includes('resourceSet'));
 	assert.equal(editorProjectionChanges.length, 1);
 	assert.equal(editorProjectionChanges[0]?.includes('activeEditor'), true);
-	assert.equal(contextKeys.getValue('activeEditorGroupIndex'), 1);
-	const activeInput: IResourceEditorInput = { resource, languageId: 'typescript', readOnly: true };
-	await editor.openEditor(activeInput, { pinned: false });
 
 	assert.deepEqual({
 		canRevert: contextKeys.getValue('activeEditorCanRevert'),

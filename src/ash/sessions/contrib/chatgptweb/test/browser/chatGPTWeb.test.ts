@@ -16,6 +16,8 @@ import { localize, setNlsMessages } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { DefaultSettings } from '../../../../../workbench/services/preferences/common/settingsModels.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
+import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
+import { SessionsViewRegistry } from '../../../../common/views.js';
 
 suite('ChatGPT entry', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -36,6 +38,7 @@ suite('ChatGPT entry', () => {
 	});
 
 	test('open and restore use a normal editor resource and independent sidebar without a BrowserView', async () => {
+		assert.equal(SessionsViewRegistry.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id, chatGPTNavigationContainerId);
 		using resources = new DisposableStore();
 		const entries: { entry: ISessionsEntry; source?: string; }[] = [];
 		let initialized = 0;

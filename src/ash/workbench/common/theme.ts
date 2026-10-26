@@ -39,6 +39,12 @@ registerColor('commandCenter.hoverBackground', { dark: '#333333', light: '#ebebe
 registerColor('commandCenter.activeBorder', { dark: '#888888', light: '#888888', hcDark: contrastBorder, hcLight: contrastBorder }, { description: 'Active Command Center search border.', owner: colorOwner });
 
 const sideBarBackground = color("sideBar.background", "#252526", "#F8F8F8", "#000000", "#ffffff", "Primary side bar background.");
+registerColor('sideBar.border', {
+	dark: null,
+	light: null,
+	hcDark: contrastBorder,
+	hcLight: contrastBorder,
+}, { description: 'Border separating side bars from the main content.', owner: colorOwner });
 alias('activityBar.background', sideBarBackground, 'Activity Bar background.');
 color('activityBarBadge.background', accentBackground, accentBackground, '#000000', '#ffffff', 'Background color of Activity Bar notification badges.');
 color('activityBarBadge.foreground', '#ffffff', '#ffffff', foreground, foreground, 'Text color of Activity Bar notification badges.');

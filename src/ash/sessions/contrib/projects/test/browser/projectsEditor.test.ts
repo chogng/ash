@@ -348,3 +348,105 @@ suite('Projects toolbar', () => {
 		expect(await slot.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
 	});
 });
+
+suite('Projects loading states', () => {
+	const browser = useBrowserTests();
+	teardown(async () => {
+		expect(await browser.page.evaluate(() => window.ashSessionsIntegration.errors)).toEqual([]);
+	});
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`uses layout-matched skeletons and retains loaded content during refresh (${locale})`, async () => {
+			const { page, info } = browser;
+			const chinese = locale === 'zh-CN';
+			await page.goto(`/sessions.html?search&locale=${locale}`);
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			const holdList = () => page.evaluateHandle(() => {
+				const projects = globalThis.ashWebWorkbenchHost!.api.projects;
+				const original = projects.list;
+				let finish!: () => void;
+				const pending = new Promise<void>(resolve => { finish = resolve; });
+				projects.list = async () => { await pending; return original.call(projects); };
+				return { release: () => { projects.list = original; finish(); } };
+			});
+			const projects = page.locator('.ash-projects');
+			const body = projects.locator('.ash-projects-body');
+			const skeleton = projects.locator('.ash-projects-skeleton');
+			const firstLoad = await holdList();
+			try {
+				await page.locator('[data-action-id="sessions.open.projects"] button').click();
+				await expect(body).toHaveAttribute('aria-busy', 'true');
+				await expect(skeleton).toHaveAttribute('aria-hidden', 'true');
+				await expect(skeleton.locator('.ash-projects-skeleton-card')).toHaveCount(6);
+				await expect(skeleton.locator('button, input, [tabindex]')).toHaveCount(0);
+				await expect(projects.getByRole('status')).toHaveText(chinese ? '正在加载项目…' : 'Loading projects…');
+				await expect(projects.locator('.ash-projects-empty')).toHaveCount(0);
+				for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+					await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+					const block = skeleton.locator('.ash-projects-skeleton-name').first();
+					await expect(block).toBeVisible();
+					const colors = await block.evaluate(element => ({ fill: getComputedStyle(element).backgroundColor, canvas: getComputedStyle(element.closest('.ash-projects')!).backgroundColor, outline: getComputedStyle(element).outlineStyle }));
+					if (theme.includes('contrast')) { expect(colors.outline).toBe('solid'); }
+					else { expect(colors.fill).not.toBe(colors.canvas); }
+					await page.screenshot({ path: info.outputPath(`projects-list-loading-${locale}-${theme}.png`) });
+				}
+				const before = (await skeleton.locator('.ash-projects-skeleton-card').first().boundingBox())!;
+				await firstLoad.evaluate(gate => gate.release());
+				await expect(body).toHaveAttribute('aria-busy', 'false');
+				await expect(skeleton).toHaveCount(0);
+				const after = (await projects.locator('.ash-projects-card').boundingBox())!;
+				expect({ x: after.x, y: after.y, width: after.width, height: after.height }).toEqual(before);
+			} finally {
+				await firstLoad.evaluate(gate => gate.release());
+				await firstLoad.dispose();
+			}
+
+			const detailLoad = await holdList();
+			try {
+				await projects.getByRole('button', { name: 'Search project fixture', exact: true }).click();
+				await expect(skeleton).toHaveClass(/ash-projects-detail/);
+				await expect(projects.locator('h1')).toHaveAccessibleName(chinese ? '正在加载项目…' : 'Loading projects…');
+				await expect(page.locator('.ash-projects-breadcrumb-name')).toHaveClass(/ash-projects-placeholder/);
+				await expect(page.locator('.ash-projects-breadcrumb-name')).toHaveAttribute('aria-hidden', 'true');
+				await expect(page.locator('.ash-projects-breadcrumb-name')).toHaveCSS('opacity', '1');
+				await expect(page.locator('.ash-projects-breadcrumb-name')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				for (const width of [1280, 720]) {
+					await page.setViewportSize({ width, height: 720 });
+					await page.emulateMedia({ reducedMotion: 'reduce' });
+					const overview = (await skeleton.locator('.ash-projects-overview').boundingBox())!;
+					const materials = (await skeleton.locator('.ash-projects-materials').boundingBox())!;
+					if (width === 720) { expect(materials.y).toBeGreaterThanOrEqual(overview.y + overview.height); }
+					else { expect(materials.y).toBe(overview.y); }
+					expect(await skeleton.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+					expect(await skeleton.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+					await page.screenshot({ path: info.outputPath(`projects-detail-loading-${locale}-${width}.png`) });
+				}
+				await detailLoad.evaluate(gate => gate.release());
+				await expect(projects.locator('h1')).toHaveText('Search project fixture');
+				await expect(skeleton).toHaveCount(0);
+				await expect(page.locator('.ash-projects-breadcrumb-name')).not.toHaveClass(/ash-projects-placeholder/);
+			} finally {
+				await detailLoad.evaluate(gate => gate.release());
+				await detailLoad.dispose();
+			}
+
+			const refresh = await holdList();
+			try {
+				await page.locator('[data-action-id="sessions.open.projects"] button').click();
+				await expect(body).toHaveAttribute('aria-busy', 'true');
+				await expect(projects.locator('h1')).toHaveText('Search project fixture');
+				await expect(projects.locator('.ash-projects-description')).toHaveText('Synthetic project for Search navigation');
+				await expect(skeleton).toHaveCount(0);
+				await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true }).click();
+				await expect(body).toHaveAttribute('aria-busy', 'true');
+				await expect(projects.locator('.ash-projects-card-name')).toHaveText('Search project fixture');
+				await expect(skeleton).toHaveCount(0);
+				await refresh.evaluate(gate => gate.release());
+				await expect(body).toHaveAttribute('aria-busy', 'false');
+			} finally {
+				await refresh.evaluate(gate => gate.release());
+				await refresh.dispose();
+			}
+		});
+	}
+});

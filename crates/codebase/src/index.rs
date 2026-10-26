@@ -40,7 +40,7 @@ use crate::error::io_error;
 use crate::memory_store::InMemoryCodebaseIndexStore;
 use crate::overlay::CodebaseOverlay;
 use crate::scanner::is_hard_excluded_path;
-use crate::scanner::prepare_relative_file;
+use crate::scanner::read_relative_file;
 use crate::scanner::scan_dir;
 use crate::store::CodebaseIndexStore;
 use crate::store::FileUpdate;
@@ -196,21 +196,24 @@ impl Codebase {
                         .map(RefreshOutcome::Rebuilt);
                 };
                 let Some(file) =
-                    prepare_relative_file(&self.root, relative_path.clone(), &self.limits)?
+                    read_relative_file(&self.root, relative_path.clone(), &self.limits)?
                 else {
                     return self
                         .reconcile_with_cancellation(cancellation)
                         .map(RefreshOutcome::Rebuilt);
                 };
-                if stored.revision == file.source_revision {
+                // Watchers also report metadata-only saves and duplicate hints. Compare
+                // actual contents before constructing a syntax tree and copying chunks;
+                // timestamps and lengths alone cannot detect equal-size replacements.
+                if stored.revision == file.revision {
                     continue;
                 }
-                if exceeds_source_limit(&snapshot, &stored, file.source_bytes, &self.limits) {
+                if exceeds_source_limit(&snapshot, &stored, file.content.len(), &self.limits) {
                     return self
                         .reconcile_with_cancellation(cancellation)
                         .map(RefreshOutcome::Rebuilt);
                 }
-                updates.push(FileUpdate::Upsert(file));
+                updates.push(FileUpdate::Upsert(file.prepare(&self.limits)));
                 continue;
             }
             if self.store.source(&relative_path)?.is_some() {

@@ -1,5 +1,6 @@
 import { ISessionProviderScopeService } from '../agentHost/sessionProviderScopeService.js';
 import { ScopedSessionConversationPane } from './scopedSessionConversationPane.js';
+import { LoadingSkeleton } from '../ui/loadingSkeleton.js';
 import { IStorageService, StorageScope } from '../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import type { ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
@@ -17,7 +18,7 @@ import { SessionView, SessionAuxiliaryWindow, type ISessionsConversationPane } f
 import { SessionGridLayout } from './sessionGridLayout.js';
 import type { IView } from '../../../base/browser/ui/grid/grid.js';
 import type { IPositionedRectangle } from '../../../base/browser/geometry.js';
-import { DisposableStore, setDisposableOwner, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, setDisposableOwner, toDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
 import { WELCOME_COMPLETE_KEY } from '../../common/welcome.js';
 import type { SessionId } from '../../services/sessions/common/session.js';
@@ -76,7 +77,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		this.content = h(container.ownerDocument, 'section');
 		this.content.className = 'ash-sessions-chat-view';
 		this.contentDomNode.append(this.content);
-		this.empty = new SessionsChatEmptyView(this.content, () => storageService.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.PROFILE, false));
+		this.empty = this._register(new SessionsChatEmptyView(this.content, () => storageService.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.PROFILE, false)));
 		this.grid = this._register(services.createInstance(SessionGridLayout, this.content, this.empty));
 		this._register(storageService.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && event.key === WELCOME_COMPLETE_KEY) this.empty.update(options.sessionService.state, options.sessionService.error);
@@ -285,12 +286,12 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			const model = scope.createInstance(ChatWidgetModel, options.chatService, selection.kind === 'session' ? { kind: 'session', active: selection.active } : { kind: 'untitled', session: selection.session }, options.sessionService);
 			const pane = scope.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget, container, panelId, model, options.createNewSession, options.contextMenuService, options.contextViewService, options.commandService, options.accessibleViewService, options.notifications, undefined, undefined, undefined,
 				(inputContainer: HTMLElement, delegate: ChatInputDelegate) => options.createInputPart(inputContainer, delegate, model, scope));
-			return new ScopedSessionConversationPane(pane, scope);
+			return new ScopedSessionConversationPane(pane, scope, model);
 		} catch (error) { scope.dispose(); throw error; }
 	}
 }
 
-class SessionsChatEmptyView implements IView {
+class SessionsChatEmptyView extends Disposable implements IView {
 	readonly element: HTMLDivElement;
 	readonly minimumWidth = 0;
 	readonly maximumWidth = Number.POSITIVE_INFINITY;
@@ -298,14 +299,17 @@ class SessionsChatEmptyView implements IView {
 	readonly maximumHeight = Number.POSITIVE_INFINITY;
 	private readonly heading: HTMLHeadingElement;
 	private readonly description: HTMLParagraphElement;
+	private readonly loading: LoadingSkeleton;
 
 	constructor(container: HTMLElement, private readonly welcomeComplete: () => boolean) {
+		super();
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = "ash-sessions-chat-view-empty";
 		this.heading = h(ownerDocument, "h2");
 		this.description = h(ownerDocument, "p");
 		this.element.append(this.heading, this.description);
+		this.loading = this._register(new LoadingSkeleton(this.element, localize('sessions.empty.restoring', 'Restoring your agent workspace…'), 'transcript', 3));
 		container.append(this.element);
 		this.update("ready", undefined);
 	}
@@ -313,6 +317,10 @@ class SessionsChatEmptyView implements IView {
 	layout(_bounds: IPositionedRectangle): void { }
 
 	update(state: ISessionsManagementService["state"], error: string | undefined): void {
+		this.loading.setVisible(state === 'loading' && !error);
+		this.element.classList.toggle('loading', !this.loading.element.hidden);
+		this.element.setAttribute('aria-busy', String(state === 'loading'));
+		this.heading.hidden = this.description.hidden = !this.loading.element.hidden;
 		if (state === "loading") {
 			this.heading.textContent = localize('sessions.empty.loading', 'Loading sessions');
 			this.description.textContent = localize('sessions.empty.restoring', 'Restoring your agent workspace…');

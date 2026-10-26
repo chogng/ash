@@ -142,6 +142,12 @@ export class ViewPaneContainer extends Composite {
 		this._register(observeElementSize(element, size => {
 			if (size.height > 0 && size.width > 0) this.layout(size);
 		}));
+		if (this.contentSized) {
+			// Content insets can change the pane width without resizing the outer container.
+			this._register(observeElementSize(this.paneView.element, size => {
+				if (size.width > 0 && this.dimension) this.layout(this.dimension);
+			}));
+		}
 	}
 
 	layout(dimension: IDimension): void {

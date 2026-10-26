@@ -523,6 +523,329 @@ fn follow_up_plan(
     store.run_now("follow-up", "first-check", now).unwrap()
 }
 
+fn open_follow_up_server(
+    profile: &std::path::Path,
+    directory: &std::path::Path,
+    api: Arc<FollowUpApi>,
+) -> (crate::AppServer, Arc<AutomationStore>) {
+    let runtime = Arc::new(crate::LocalProfileRuntime::open(profile).unwrap());
+    let store = runtime.automation_store();
+    let server = crate::open_app_server(
+        crate::AppServerOptions::new(profile)
+            .with_profile_runtime(runtime)
+            .with_dir_root(directory)
+            .with_agent_model_service(Arc::new(crate::local::ProviderModelService::new(Arc::new(
+                super::EchoModel,
+            ))))
+            .without_built_in_skills(),
+        ash_app_server_diff::compute,
+    )
+    .unwrap()
+    .with_github_accounts(Arc::new(FollowUpAccounts::default()))
+    .with_github_provider(Arc::new(FollowUpAccounts::default()), api)
+    .unwrap();
+    (server, store)
+}
+
+#[test]
+fn pr_follow_up_sequence_conflict_retries_the_reserved_head_even_after_restart() {
+    let initialize = |server: &crate::AppServer, connection: &mut crate::ConnectionState| {
+        let response = call(
+            server,
+            connection,
+            json!({"jsonrpc":"2.0", "id":1, "method":"initialize",
+                "params":{"clientInfo":{"name":"test","version":"1"}}}),
+        );
+        assert!(response.get("error").is_none(), "{response}");
+    };
+    for restart in [false, true] {
+        let profile = tempfile::tempdir().unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let api = Arc::new(FollowUpApi::default());
+        let open = || {
+            let (server, store) =
+                open_follow_up_server(profile.path(), directory.path(), api.clone());
+            (Arc::new(server), store)
+        };
+        let (server, store) = open();
+        let mut connection = server.connection();
+        initialize(&server, &mut connection);
+        let created = super::create_session(&server, &mut connection, 2, "source");
+        let session_id = created["result"]["session"]["sessionId"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let original = follow_up_plan(&store, directory.path(), &session_id);
+        let user_server = server.clone();
+        let user_session = session_id.clone();
+        *api.before_checks.lock().unwrap() = Some(Box::new(move || {
+            // Complete a real user Turn after automation captured the sequence, but
+            // before GitHub returns its checks. No timing sleeps control this race.
+            let mut connection = user_server.connection();
+            initialize(&user_server, &mut connection);
+            let response = call(
+                &user_server,
+                &mut connection,
+                json!({"jsonrpc":"2.0", "id":3, "method":"session/request", "params":{
+                    "commandId":"user-message", "sessionId":user_session,
+                    "request":{"type":"startTurn", "threadId":user_session, "expectedSequence":1,
+                        "input":[{"type":"text", "text":"User message during the GitHub check"}]}
+                }}),
+            );
+            assert!(response.get("error").is_none(), "{response}");
+            super::wait_for_latest_turn(
+                &user_server,
+                &user_session,
+                ash_protocol::TurnStatus::Completed,
+            );
+        }));
+        let rejected = server
+            .advance_automation_run(&original, ash_automation::now().unwrap())
+            .unwrap();
+        assert_eq!(
+            rejected.status,
+            AutomationRunStatus::Pending,
+            "{rejected:?}"
+        );
+        assert!(rejected.turn_id.is_none());
+        assert!(rejected.finished_at.is_none());
+        assert!(rejected.event.is_some());
+        store.observe(&rejected).unwrap();
+        assert!(matches!(
+            store.run_now(
+                "follow-up",
+                "concurrent-check",
+                ash_automation::now().unwrap()
+            ),
+            Err(ash_automation::AutomationError::Busy)
+        ));
+        let (server, store) = if restart {
+            drop(connection);
+            drop(server);
+            drop(store);
+            open()
+        } else {
+            (server, store)
+        };
+        assert_eq!(store.get_run(&original.id).unwrap().event, rejected.event);
+        let retried = server
+            .advance_automation_run(&original, ash_automation::now().unwrap())
+            .unwrap();
+        assert!(retried.turn_id.is_some(), "{retried:?}");
+        assert_eq!(retried.event, rejected.event);
+        super::wait_for_latest_turn(&server, &session_id, ash_protocol::TurnStatus::Completed);
+        let completed = server
+            .advance_automation_run(&original, ash_automation::now().unwrap())
+            .unwrap();
+        assert_eq!(completed.status, AutomationRunStatus::Completed);
+        assert_eq!(completed.turn_id, retried.turn_id);
+        store.observe(&completed).unwrap();
+        let next = store
+            .run_now("follow-up", "same-head", ash_automation::now().unwrap())
+            .unwrap();
+        let skipped = server
+            .advance_automation_run(&next, ash_automation::now().unwrap())
+            .unwrap();
+        assert_eq!(skipped.status, AutomationRunStatus::Skipped);
+        assert!(skipped.turn_id.is_none());
+        let mut connection = server.connection();
+        initialize(&server, &mut connection);
+        let thread = call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0", "id":4, "method":"session/thread/read",
+                "params":{"sessionId":session_id,"threadId":session_id}}),
+        );
+        assert_eq!(
+            thread["result"]["thread"]["turns"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+    }
+}
+
+struct FollowUpStartFailure {
+    starts: std::sync::atomic::AtomicUsize,
+    error: core_api::CoreError,
+}
+
+impl ash_core::TurnExecutionBackend for FollowUpStartFailure {
+    fn start(
+        &self,
+        _: &ash_protocol::ThreadId,
+        _: &ash_protocol::TurnId,
+    ) -> Result<(), core_api::CoreError> {
+        self.starts
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Err(self.error.clone())
+    }
+
+    fn resume(
+        &self,
+        _: &ash_protocol::ThreadId,
+        _: &ash_protocol::TurnId,
+    ) -> Result<(), core_api::CoreError> {
+        panic!("a failed start must not resume")
+    }
+}
+
+#[test]
+fn pr_follow_up_accepted_start_errors_keep_the_receipt_and_head_reserved_across_restart() {
+    for error in [
+        core_api::CoreError::Execution("backend outcome unavailable".into()),
+        core_api::CoreError::ThreadStore(thread_store::ThreadStoreError::SequenceConflict {
+            expected: 1,
+            actual: 2,
+        }),
+    ] {
+        let profile = tempfile::tempdir().unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let api = Arc::new(FollowUpApi::default());
+        let backend = Arc::new(FollowUpStartFailure {
+            starts: std::sync::atomic::AtomicUsize::new(0),
+            error,
+        });
+        let open = || {
+            let (server, store) =
+                open_follow_up_server(profile.path(), directory.path(), api.clone());
+            (server.with_turn_backend(backend.clone()), store)
+        };
+        let (server, store) = open();
+        let mut connection = server.connection();
+        let initialized = call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0", "id":1,
+            "method":"initialize", "params":{"clientInfo":{"name":"test","version":"1"}}}),
+        );
+        assert!(initialized.get("error").is_none(), "{initialized}");
+        let created = super::create_session(&server, &mut connection, 2, "source");
+        let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
+        let original = follow_up_plan(&store, directory.path(), session_id);
+        let first = server
+            .advance_automation_run(&original, ash_automation::now().unwrap())
+            .unwrap();
+        assert_eq!(first.status, AutomationRunStatus::Failed, "{first:?}");
+        assert!(first.turn_id.is_some());
+        // Lose the scheduler observation: recovery must use the acceptance receipt,
+        // including when the backend reported the same error as a rejected admission.
+        assert!(store.get_run(&original.id).unwrap().turn_id.is_none());
+        drop(connection);
+        drop(server);
+        drop(store);
+        let (server, store) = open();
+        let recovered = server
+            .advance_automation_run(&original, ash_automation::now().unwrap())
+            .unwrap();
+        assert_eq!(recovered.status, AutomationRunStatus::Failed);
+        assert_eq!(recovered.turn_id, first.turn_id);
+        store.observe(&recovered).unwrap();
+        let next = store
+            .run_now("follow-up", "same-head", ash_automation::now().unwrap())
+            .unwrap();
+        let skipped = server
+            .advance_automation_run(&next, ash_automation::now().unwrap())
+            .unwrap();
+        assert_eq!(skipped.status, AutomationRunStatus::Skipped);
+        assert!(skipped.turn_id.is_none());
+        assert_eq!(backend.starts.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+}
+
+struct UncertainFollowUpCatalog;
+
+impl crate::model_catalog::ModelCatalog for UncertainFollowUpCatalog {
+    fn set_preferences(
+        &self,
+        _: crate::model_catalog::ModelPreferencesCommand,
+    ) -> Result<ash_config::ConfigCommandResult, crate::model_catalog::ModelPreferencesError> {
+        unreachable!("this fixture does not accept preference writes")
+    }
+
+    fn list(
+        &self,
+    ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, core_api::CoreError>
+    {
+        Ok(Vec::new())
+    }
+
+    fn current_access(
+        &self,
+        _: &ash_protocol::ModelRef,
+    ) -> Result<ash_protocol::ModelAccess, core_api::CoreError> {
+        Ok(ash_protocol::ModelAccess::Unknown)
+    }
+
+    fn configured_default(&self) -> Result<Option<ash_protocol::ModelRef>, core_api::CoreError> {
+        Err(core_api::CoreError::Execution(
+            "command outcome unavailable".into(),
+        ))
+    }
+}
+
+#[test]
+fn pr_follow_up_unclassified_start_error_without_acceptance_keeps_the_head_reserved() {
+    let profile = tempfile::tempdir().unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let api = Arc::new(FollowUpApi::default());
+    let (server, store) = open_follow_up_server(profile.path(), directory.path(), api.clone());
+    let mut connection = server.connection();
+    let initialized = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0", "id":1,
+        "method":"initialize", "params":{"clientInfo":{"name":"test","version":"1"}}}),
+    );
+    assert!(initialized.get("error").is_none(), "{initialized}");
+    let created = super::create_session(&server, &mut connection, 2, "source");
+    let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
+    let original = follow_up_plan(&store, directory.path(), session_id);
+    let server = server.with_model_catalog(Arc::new(UncertainFollowUpCatalog));
+    let failed = server
+        .advance_automation_run(&original, ash_automation::now().unwrap())
+        .unwrap();
+    assert_eq!(failed.status, AutomationRunStatus::Failed, "{failed:?}");
+    assert!(failed.turn_id.is_none());
+    assert!(failed.event.is_some());
+    assert!(
+        server
+            .threads()
+            .read_thread(&ash_protocol::ThreadId::new(session_id).unwrap())
+            .unwrap()
+            .turns
+            .is_empty()
+    );
+    store.observe(&failed).unwrap();
+    drop(connection);
+    drop(server);
+    drop(store);
+    // No receipt plus an unclassified error is insufficient evidence to release a
+    // claim. Even a healthy execution owner after restart must deduplicate this head.
+    let (server, store) = open_follow_up_server(profile.path(), directory.path(), api);
+    let recovered = server
+        .advance_automation_run(&original, ash_automation::now().unwrap())
+        .unwrap();
+    assert_eq!(recovered, failed);
+    let next = store
+        .run_now("follow-up", "same-head", ash_automation::now().unwrap())
+        .unwrap();
+    let skipped = server
+        .advance_automation_run(&next, ash_automation::now().unwrap())
+        .unwrap();
+    assert_eq!(skipped.status, AutomationRunStatus::Skipped);
+    assert!(skipped.turn_id.is_none());
+    assert!(
+        server
+            .threads()
+            .read_thread(&ash_protocol::ThreadId::new(session_id).unwrap())
+            .unwrap()
+            .turns
+            .is_empty()
+    );
+}
+
 #[test]
 fn pr_follow_up_restart_recovers_the_original_turn_and_next_poll_deduplicates_the_head() {
     let profile = tempfile::tempdir().unwrap();

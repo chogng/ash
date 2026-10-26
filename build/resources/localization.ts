@@ -389,6 +389,17 @@ async function generate(check: boolean): Promise<boolean> {
 		file: 'localizationCatalogs.ts',
 		text: `${header}${startupCatalogs.map((catalog, index) => `import { languagePackCatalog as catalog${index} } from './localizationCatalog.${catalog.locale}.js';`).join('\n')}\n\nexport const builtinLanguagePackCatalogs: readonly LanguagePackCatalog[] = [catalog0];\nexport const preinstalledLanguagePacks: readonly PreinstalledLanguagePack[] = [${extensionDescriptors.join(', ')}];\nexport const productLanguagePackCatalogs: readonly LanguagePackCatalog[] = [...builtinLanguagePackCatalogs, ...preinstalledLanguagePacks.map(extension => extension.catalog)];\n`,
 	});
+	// Main has one startup locale. Keep unused catalog modules out of its heap;
+	// renderer catalog discovery continues to use the existing complete collection.
+	const { bundles: _sourceBundles, ...sourceMetadata } = startupCatalogs.find(catalog => catalog.locale === 'en')!;
+	outputs.push({
+		file: 'localizationLanguages.ts',
+		text: `// Generated language metadata; configuration does not need message catalogs.\nexport const productLanguages = ${JSON.stringify(startupCatalogs.map(({ locale, localizedLanguageName }) => ({ locale, localizedLanguageName })))};\n`,
+	});
+	outputs.push({
+		file: 'localizationCatalogLoader.ts',
+		text: `${header}\nexport const fallbackLanguagePackCatalog: LanguagePackCatalog = { ...${JSON.stringify(sourceMetadata)}, bundles: {} };\n\nexport async function loadProductLanguagePackCatalog(locale: unknown): Promise<LanguagePackCatalog> {\n\tswitch (locale) {\n${startupCatalogs.filter(catalog => catalog.locale !== 'en').map(catalog => `\t\tcase ${JSON.stringify(catalog.locale)}: return (await import('./localizationCatalog.${catalog.locale}.js')).languagePackCatalog;`).join('\n')}\n\t\tdefault: return (await import('./localizationCatalog.en.js')).languagePackCatalog;\n\t}\n}\n`,
+	});
 	for (const extension of languagePacks) {
 		const { manifest, language } = extension;
 		const packageRoot = `extensions/${extension.id}`;

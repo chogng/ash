@@ -5,6 +5,7 @@ import { basename, delimiter, dirname, isAbsolute, relative, resolve } from 'nod
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { build } from 'vite';
+import { build as bundleNode } from 'esbuild';
 import { gzipSync } from 'node:zlib';
 import { fingerprintPaths, PreparedInputs, readJsonCache, writeJsonCache } from '../lib/preparedInputs.ts';
 import { readPreinstalledLanguagePackIds } from '../resources/languagePacks.ts';
@@ -130,6 +131,18 @@ async function preparePackages(): Promise<boolean> {
 			}
 		}
 		await collect(packageRoot);
+		if (manifest.ashLanguageServers?.version === 2) {
+			const bundled = await bundleLanguageServers(packageRoot, manifest.ashLanguageServers.servers);
+			await writeJsonCache(resolve(root, '.build/browser-extensions', digest(packageRoot).slice(7) + '-servers.json'), { bundle: { files: bundled.files } });
+			for (const [path, bytes] of Object.entries(bundled.resources)) {
+				if (!Object.hasOwn(packageResources, path) && ++fileCount > 4096) throw new RangeError('Bundled language server exceeds its file budget');
+				const difference = bytes.length - Buffer.from(packageResources[path] ?? '', 'base64').length;
+				if (bytes.length > 16 * 1024 * 1024 || packageBytes + difference > 64 * 1024 * 1024 || snapshotBytes + difference > 256 * 1024 * 1024) throw new RangeError('Bundled language server exceeds its resource budget');
+				packageBytes += difference;
+				snapshotBytes += difference;
+				packageResources[path] = bytes.toString('base64');
+			}
+		}
 		if (manifest.ashRuntime?.kind === 'rust') {
 			const views = await compileExtensionWebviews(packageRoot, manifest.ashRuntime.webviews);
 			if (views.files.length) await writeJsonCache(resolve(root, '.build/browser-extensions', digest(packageRoot).slice(7) + '-views.json'), { bundle: { files: views.files } });
@@ -306,6 +319,63 @@ async function preparePackages(): Promise<boolean> {
 	const fixtureChanged = await publish(resolve(root, '.build/builtin/fixture.json'), { catalog: { generation: 1, diagnostics: [], extensions }, resources: bundledResources });
 	const packagesChanged = await publishPackages(extensions, bundledResources, packageNames);
 	return fixtureChanged || packagesChanged;
+}
+
+/** Ship Node servers and the runtime files they load dynamically in the same immutable package. */
+async function bundleLanguageServers(packageRoot: string, servers: unknown): Promise<{ resources: Record<string, Buffer>; files: string[]; }> {
+	if (!Array.isArray(servers) || !servers.length || servers.length > 32) throw new TypeError('Invalid bundled language servers');
+	const resources: Record<string, Buffer> = Object.create(null);
+	const files = new Set<string>();
+	const licensed = new Set<string>();
+	const require = createRequire(resolve(packageRoot, 'package.json'));
+	const safePath = (path: unknown): path is string => typeof path === 'string' && path.length <= 1024 && !/[\\:\0]/u.test(path) && path.split('/').every(part => part !== '' && part !== '.' && part !== '..');
+	for (const server of servers) {
+		if (server?.runtime !== 'node' || !safePath(server.entrypoint) || !/\.(?:cjs|mjs)$/u.test(server.entrypoint)) throw new TypeError('Invalid bundled language-server entrypoint');
+		const result = await bundleNode({
+			absWorkingDir: packageRoot, entryPoints: [server.entrypoint], outfile: server.entrypoint,
+			bundle: true, write: false, platform: 'node', target: 'node22', format: server.entrypoint.endsWith('.mjs') ? 'esm' : 'cjs',
+			metafile: true, legalComments: 'eof', mainFields: ['module', 'main'],
+			...(server.entrypoint.endsWith('.mjs') ? { banner: { js: "import { createRequire as __ashCreateRequire } from 'node:module'; const require = __ashCreateRequire(import.meta.url);" } } : {}),
+		});
+		resources[server.entrypoint] = Buffer.from(result.outputFiles[0].contents);
+		for (const input of Object.keys(result.metafile.inputs)) {
+			const path = resolve(packageRoot, input);
+			files.add(path);
+			const normalized = path.replaceAll('\\', '/');
+			const marker = normalized.lastIndexOf('/node_modules/');
+			const local = relative(packageRoot, path);
+			if (marker < 0 && (isAbsolute(local) || local === '..' || local.replaceAll('\\', '/').startsWith('../'))) throw new Error(`Language-server source escapes its package: ${input}`);
+			if (marker < 0) continue;
+			const name = /^(?:@[^/]+\/)?[^/]+/u.exec(normalized.slice(marker + '/node_modules/'.length))![0];
+			const dependencyRoot = resolve(normalized.slice(0, marker), 'node_modules', name);
+			if (licensed.has(dependencyRoot)) continue;
+			licensed.add(dependencyRoot);
+			for (const entry of await readdir(dependencyRoot, { withFileTypes: true })) {
+				if (!entry.isFile() || !/^(?:licen[cs]e|notice|third.?party)/iu.test(entry.name)) continue;
+				const license = resolve(dependencyRoot, entry.name);
+				resources[`licenses/${name.replaceAll('/', '__')}/${entry.name}`] = await readFile(license);
+				files.add(license);
+			}
+		}
+		if (server.runtimePackages !== undefined && (!Array.isArray(server.runtimePackages) || server.runtimePackages.length > 16)) throw new TypeError('Invalid language-server runtime packages');
+		for (const name of server.runtimePackages ?? []) {
+			if (typeof name !== 'string' || name.length > 128 || name.includes('..') || !/^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/u.test(name)) throw new TypeError('Invalid language-server runtime package');
+			const dependencyRoot = dirname(require.resolve(`${name}/package.json`));
+			async function copy(directory: string): Promise<void> {
+				for (const entry of await readdir(directory, { withFileTypes: true })) {
+					if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+					const path = resolve(directory, entry.name);
+					if (entry.isDirectory()) await copy(path);
+					else if (entry.isFile()) {
+						resources[`node_modules/${name}/${relative(dependencyRoot, path).replaceAll('\\', '/')}`] = await readFile(path);
+						files.add(path);
+					} else throw new TypeError('Unsafe language-server runtime resource');
+				}
+			}
+			await copy(dependencyRoot);
+		}
+	}
+	return { resources, files: [...files] };
 }
 
 async function publishPackages(extensions: { id: string; sourceKind: string; }[], resources: Record<string, Record<string, string>>, packageNames: Record<string, string>): Promise<boolean> {

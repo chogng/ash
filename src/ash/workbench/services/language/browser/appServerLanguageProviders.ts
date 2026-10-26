@@ -49,6 +49,7 @@ export class AppServerLanguageProviders extends Disposable {
 	private started = false;
 	private nextCapabilityGeneration = 1;
 	private readonly capabilities = new Map<string, ServerCapabilities>();
+	private installed?: { readonly support: AppServerLanguageSupport; readonly capabilityGeneration: number; };
 
 	constructor(
 		private readonly api: ILanguageApi,
@@ -64,15 +65,18 @@ export class AppServerLanguageProviders extends Disposable {
 		const subscription = events.subscribe(event => {
 			if (event.method === 'language/serverCapabilities') {
 				const folderId = event.params.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
+				let changed = false;
 				if (folderId) for (const languageId of event.params.languageIds) {
 					const key = `${folderId}:${languageId}`;
 					const previous = this.capabilities.get(key);
-					const next = { server: event.params.server, features: new Set(event.params.features), lifetime: new AbortController(), generation: this.nextCapabilityGeneration++, completion: event.params.completionTriggerCharacters, onType: event.params.onTypeFormattingTriggerCharacters, signature: event.params.signatureHelpTriggerCharacters, retrigger: event.params.signatureHelpRetriggerCharacters };
+					const next = { server: event.params.server, features: new Set(event.params.features), lifetime: new AbortController(), generation: this.nextCapabilityGeneration, completion: event.params.completionTriggerCharacters, onType: event.params.onTypeFormattingTriggerCharacters, signature: event.params.signatureHelpTriggerCharacters, retrigger: event.params.signatureHelpRetriggerCharacters };
 					if (previous && sameCapabilities(previous, next)) continue;
+					this.nextCapabilityGeneration++;
 					previous?.lifetime.abort();
 					this.capabilities.set(key, next);
+					changed = true;
 				}
-				this.queueRefresh();
+				if (changed) this.queueRefresh();
 			}
 			if (event.method === 'language/serverState' && event.params.state.type !== 'ready' && event.params.state.type !== 'idle') {
 				const folderId = event.params.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
@@ -80,7 +84,7 @@ export class AppServerLanguageProviders extends Disposable {
 				for (const [key, value] of this.capabilities) {
 					if (key.startsWith(`${folderId}:`) && value.server === event.params.server) { value.lifetime.abort(); this.capabilities.delete(key); removed = true; }
 				}
-				if (removed) this.queueRefresh();
+				if (removed) { this.nextCapabilityGeneration++; this.queueRefresh(); }
 			}
 			// State transitions retire metadata only for sessions that actually stopped. A profile
 			// update may concern another feature and leave these negotiated capabilities intact.
@@ -106,6 +110,12 @@ export class AppServerLanguageProviders extends Disposable {
 	private clearCapabilities(): void {
 		for (const capabilities of this.capabilities.values()) capabilities.lifetime.abort();
 		this.capabilities.clear();
+		this.nextCapabilityGeneration++;
+	}
+
+	private clearRegistrations(): void {
+		this.registrations.clear();
+		this.installed = undefined;
 	}
 
 	private install(support: AppServerLanguageSupport): DisposableStore {
@@ -169,7 +179,7 @@ export class AppServerLanguageProviders extends Disposable {
 			this.refreshQueued = false;
 			const generation = this.refreshGeneration;
 			this.refreshQueue = this.refreshQueue.catch(() => undefined).then(() => this.refresh(generation)).catch(error => {
-				this.registrations.clear();
+				this.clearRegistrations();
 				console.error("Directory access refresh for App Server language providers failed", error);
 			});
 		});
@@ -181,10 +191,14 @@ export class AppServerLanguageProviders extends Disposable {
 		if (access.allowed) {
 			const support = await AppServerLanguageSupport.read(this.api, this.workspace, this.configuration);
 			if (!this.alive || generation !== this.refreshGeneration) return;
-			this.registrations.clear();
+			// Registry changes restart editor feature work, including semantic tokens and hints.
+			// Discovery can reflect an unrelated profile edit; keep the negotiated providers then.
+			if (this.installed?.capabilityGeneration === this.nextCapabilityGeneration && support.equals(this.installed.support)) return;
+			this.clearRegistrations();
 			if (support.languageIds.length > 0) this.registrations.value = this.install(support);
+			this.installed = { support, capabilityGeneration: this.nextCapabilityGeneration };
 		} else {
-			this.registrations.clear();
+			this.clearRegistrations();
 		}
 	}
 }

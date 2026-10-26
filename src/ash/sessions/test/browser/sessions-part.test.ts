@@ -352,7 +352,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.equal(part.domNode.querySelectorAll(".ash-sessions-chat-slot").length, 2);
 	assert.equal(part.domNode.querySelectorAll(".ash-chat-input-part").length, 2);
 	assert.equal(part.domNode.querySelectorAll('.ash-sessions-chat-input .ash-chat-input-editor').length, 2);
-	assert.equal(part.domNode.querySelectorAll('.ash-sessions-chat-welcome-heading:not([hidden])').length, 2);
+	assert.equal(part.domNode.querySelectorAll('.ash-sessions-loading:not([hidden])').length, 0);
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-tip').length, 2);
 	const firstTip = part.domNode.querySelector('.ash-chat-input-tip');

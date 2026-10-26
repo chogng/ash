@@ -20,11 +20,13 @@ import './media/settingsEditor.css';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { SegmentedControl } from '../../../../base/browser/ui/segmentedControl/segmentedControl.js';
+import type { IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
-import { DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IWorkspaceTrustApi } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { ConfigurationTarget, IConfigurationService, type IConfigurationOverrides } from '../../../../platform/configuration/common/configuration.js';
@@ -97,7 +99,10 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	private sectionToReveal: string | undefined;
 	private target = ConfigurationTarget.USER_LOCAL;
 	private folderUri: URI | undefined;
-	private targetButton: Button | undefined;
+	private targetControls!: HTMLDivElement;
+	private readonly targetSegments = this._register(new MutableDisposable<SegmentedControl<'user' | 'workspace'>>());
+	private folderTargetButton!: Button;
+	private targetLanguage!: HTMLSpanElement;
 	private readonly widgetOptions: SettingWidgetOptions & {
 		configurationTarget: ConfigurationTarget;
 		configurationOverrides: IConfigurationOverrides;
@@ -151,36 +156,29 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		const rootDomNode = h(ownerDocument, 'div');
 		rootDomNode.className = 'ash-settings-editor';
 		const bodyId = `ash-settings-editor-body-${nextSettingsEditorId++}`;
+		this.targetControls = h(ownerDocument, 'div');
+		this.targetControls.className = 'ash-settings-target';
+		this.createTargetSegments();
+		this.folderTargetButton = this._register(new Button(this.targetControls, {
+			...defaultButtonStyles,
+			label: this.localized('target.folder', 'Folder'),
+			ariaLabel: this.localized('target.folder', 'Folder'),
+			icon: Lxicon.chevronDown,
+			size: 'small',
+			onClick: () => this.showFolderTargetMenu(),
+		}));
+		this.folderTargetButton.domNode.classList.add('ash-settings-target-folder');
+		this.folderTargetButton.domNode.setAttribute('aria-haspopup', 'menu');
+		this.folderTargetButton.domNode.setAttribute('aria-expanded', 'false');
+		this.targetLanguage = h(ownerDocument, 'span');
+		this.targetLanguage.className = 'ash-settings-target-language';
+		this.targetControls.append(this.targetLanguage);
+		this._register(toDisposable(() => this.targetControls.remove()));
 		this.searchWidget = this._register(new SettingsSearchWidget(rootDomNode, {
 			ariaControls: bodyId,
 			contextMenuProvider: this.contextMenuProvider,
 			localizationService: this.localizationService,
 		}));
-		this.targetButton = this._register(new Button(this.searchWidget.domNode, {
-			...defaultButtonStyles,
-			label: this.localized('target.user', 'User'),
-			ariaLabel: this.localized('target.choose', 'Settings target'),
-			onClick: () => this.showTargetMenu(),
-		}));
-		this.targetButton.domNode.classList.add('ash-settings-target');
-		this.targetButton.domNode.setAttribute('aria-haspopup', 'menu');
-		this.targetButton.domNode.setAttribute('aria-expanded', 'false');
-		this.targetButton.domNode.setAttribute('aria-description', this.localized('target.help', 'Choose User, Workspace or a workspace folder. Type @lang: followed by a language ID to edit language-specific settings. Modified filters, changes and resets use the selected target and language.'));
-		this.searchWidget.domNode.prepend(this.targetButton.domNode);
-		const openJsonLabel = localize({ bundle: 'ash.settings', key: 'editor.openJSON' }, 'Open Settings (JSON)');
-		const openJson = this._register(new Button(this.searchWidget.domNode, {
-			...defaultButtonStyles,
-			label: openJsonLabel,
-			title: openJsonLabel,
-			icon: Lxicon.code,
-			iconOnly: true,
-			size: 'small',
-			onClick: () => {
-				void this.openSettingsJson().catch(error => this.settingsModel.reportStatus(String(error), true));
-			},
-		}));
-		openJson.domNode.classList.add('ash-settings-open-json');
-		openJson.domNode.setAttribute('aria-description', localize({ bundle: 'ash.settings', key: 'editor.groupSwitchHelp' }, 'Switch between Settings UI and JSON in this editor group without changing the default settings editor. Unsaved JSON edits remain in the editor.'));
 		this._register(this.searchWidget.onDidChange(value => this.search(value)));
 		this._register(this.searchWidget.onDidRequestFocusResults(() => this.focusResults()));
 		this.element = h(ownerDocument, 'div');
@@ -327,6 +325,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			} else if (this.target === ConfigurationTarget.WORKSPACE && !current.configuration && !current.folders.length) {
 				this.target = ConfigurationTarget.USER_LOCAL;
 			}
+			this.createTargetSegments();
 			this.search(this.searchWidget?.value ?? '');
 		}));
 		this._register(this.languageService.onDidChange(() => this.search(this.searchWidget?.value ?? '')));
@@ -376,50 +375,75 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		});
 	}
 
-	private showTargetMenu(): void {
-		const workspace = this.workspace.getWorkspace();
-		const choices: { label: string; target: ConfigurationTarget; folderUri?: URI; }[] = [{
-			label: this.localized('target.user', 'User'),
-			target: ConfigurationTarget.USER_LOCAL,
+	public override getTitleControl(): HTMLElement {
+		return this.targetControls;
+	}
+
+	public override getActions(): readonly IAction[] {
+		const label = localize({ bundle: 'ash.settings', key: 'editor.openJSON' }, 'Open Settings (JSON)');
+		return [{
+			id: 'settings.switchToJSON',
+			label,
+			tooltip: label + '\n' + localize({ bundle: 'ash.settings', key: 'editor.groupSwitchHelp' }, 'Switch between Settings UI and JSON in this editor group without changing the default settings editor. Unsaved JSON edits remain in the editor.'),
+			icon: Lxicon.goToFile,
+			enabled: true,
+			run: () => this.openSettingsJson().catch(error => this.settingsModel.reportStatus(String(error), true)),
 		}];
-		if (workspace.configuration || workspace.folders.length) {
-			choices.push({ label: this.localized('target.workspace', 'Workspace'), target: ConfigurationTarget.WORKSPACE });
+	}
+
+	private createTargetSegments(): void {
+		const workspace = this.workspace.getWorkspace();
+		this.targetSegments.clear();
+		const segments = new SegmentedControl<'user' | 'workspace'>(this.targetControls, {
+			ariaLabel: this.localized('target.choose', 'Settings target'),
+			items: [
+				{ id: 'user', label: this.localized('target.user', 'User') },
+				{ id: 'workspace', label: this.localized('target.workspace', 'Workspace'), disabled: !workspace.configuration && !workspace.folders.length },
+			],
+			selectedId: this.target === ConfigurationTarget.USER_LOCAL ? 'user' : 'workspace',
+			onActivate: id => {
+				const target = id === 'user' ? ConfigurationTarget.USER_LOCAL : ConfigurationTarget.WORKSPACE;
+				if (this.target !== target) void this.openTarget(target);
+			},
+		});
+		segments.domNode.setAttribute('aria-description', this.localized('target.help', 'Use Left and Right Arrow to focus User or Workspace, then Enter or Space to switch. In a multi-folder workspace, use Folder to choose a folder. Type @lang: followed by a language ID to edit language-specific settings. Modified filters, changes and resets use the selected target and language.'));
+		this.targetSegments.value = segments;
+		this.targetControls.prepend(segments.domNode);
+	}
+
+	private async openTarget(target: ConfigurationTarget, folderUri?: URI): Promise<void> {
+		try {
+			await this.preferencesService.openSettings({
+				target,
+				groupId: this.group?.id,
+				folderUri,
+				jsonEditor: false,
+				query: this.searchWidget?.value,
+			});
+		} catch (error) {
+			this.settingsModel.reportStatus(String(error), true);
 		}
-		if (workspace.configuration) {
-			for (const folder of workspace.folders) {
-				choices.push({ label: folder.name, target: ConfigurationTarget.WORKSPACE_FOLDER, folderUri: folder.uri });
-			}
-		}
-		if (this.targetButton!.domNode.getAttribute('aria-expanded') === 'true') return;
-		this.targetButton!.domNode.setAttribute('aria-expanded', 'true');
+	}
+
+	private showFolderTargetMenu(): void {
+		if (this.folderTargetButton.domNode.getAttribute('aria-expanded') === 'true') return;
+		this.folderTargetButton.domNode.setAttribute('aria-expanded', 'true');
 		try {
 			this.contextMenuProvider.showContextMenu({
-				getAnchor: () => this.targetButton!.domNode,
+				getAnchor: () => this.folderTargetButton.domNode,
 				getCheckedActionsRepresentation: () => 'radio',
-				onHide: () => this.targetButton!.domNode.setAttribute('aria-expanded', 'false'),
-				getActions: () => choices.map((choice, index) => ({
+				onHide: () => this.folderTargetButton.domNode.setAttribute('aria-expanded', 'false'),
+				getActions: () => this.workspace.getWorkspace().folders.map((folder, index) => ({
 					id: `settings.target.${index}`,
-					label: choice.label,
-					tooltip: choice.folderUri?.toString() ?? choice.label,
+					label: folder.name,
+					tooltip: folder.uri.toString(),
 					enabled: true,
-					checked: this.target === choice.target && this.folderUri?.toString() === choice.folderUri?.toString(),
-					run: async () => {
-						try {
-							await this.preferencesService.openSettings({
-								target: choice.target,
-								groupId: this.group?.id,
-								folderUri: choice.folderUri,
-								jsonEditor: false,
-								query: this.searchWidget?.value,
-							});
-						} catch (error) {
-							this.settingsModel.reportStatus(String(error), true);
-						}
-					},
+					checked: this.target === ConfigurationTarget.WORKSPACE_FOLDER && this.folderUri?.toString() === folder.uri.toString(),
+					run: () => this.openTarget(ConfigurationTarget.WORKSPACE_FOLDER, folder.uri),
 				})),
 			});
 		} catch (error) {
-			this.targetButton!.domNode.setAttribute('aria-expanded', 'false');
+			this.folderTargetButton.domNode.setAttribute('aria-expanded', 'false');
 			throw error;
 		}
 	}
@@ -497,11 +521,16 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		}
 		this.element.dataset.settingsTarget = String(this.target);
 		this.element.dataset.settingsLanguage = query.languageFilter ?? '';
-		const label = this.target === ConfigurationTarget.WORKSPACE_FOLDER
+		this.targetSegments.value!.setSelection(this.target === ConfigurationTarget.USER_LOCAL ? 'user' : 'workspace');
+		const workspace = this.workspace.getWorkspace();
+		this.folderTargetButton.hidden = !workspace.configuration || !workspace.folders.length;
+		this.folderTargetButton.label = this.target === ConfigurationTarget.WORKSPACE_FOLDER
 			? this.workspace.getWorkspaceFolder(this.folderUri!)?.name ?? this.localized('target.folder', 'Folder')
-			: this.target === ConfigurationTarget.WORKSPACE ? this.localized('target.workspace', 'Workspace') : this.localized('target.user', 'User');
-		this.targetButton!.label = query.languageFilter ? localize({ bundle: 'ash.settings', key: 'target.language' }, '{0} · {1}', label, this.languageService.getLanguageName(query.languageFilter) ?? query.languageFilter) : label;
-		this.targetButton!.setTitle(this.targetButton!.label);
+			: this.localized('target.folder', 'Folder');
+		this.folderTargetButton.checked = this.target === ConfigurationTarget.WORKSPACE_FOLDER;
+		this.folderTargetButton.setTitle(this.folderTargetButton.label);
+		this.targetLanguage.textContent = query.languageFilter ? this.languageService.getLanguageName(query.languageFilter) ?? query.languageFilter : '';
+		this.targetLanguage.hidden = !query.languageFilter;
 		// Search is global: release the browsing scope before deriving results or empty state.
 		this.settingsTree.setNavigationTarget(undefined);
 		this.treeModel.setQuery(query);

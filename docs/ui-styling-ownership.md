@@ -35,7 +35,7 @@
 - 方向键、Home、End 只移动焦点；Enter、Space 请求激活。焦点轮廓独立于选中滑块，RTL 沿视觉方向导航，减少动态效果时立即定位。
 - 控件内部样式与状态由 `segmentedControl.css` 唯一拥有：单个滑块横向移动，悬停不叠加第二块按钮背景。宿主只设置直接托管根节点的布局、颜色及窗口拖动区域，不穿透修改内部按钮、滑块或焦点。
 
-`WindowModeControl` 是当前的业务适配层，只提供 Chat／Code 选项、文案、图标、Hover delegate、已有命令与可观察选中值绑定。窗口模式与会话状态仍由原服务拥有；其他场景直接复用 `SegmentedControl` 并接入自己的状态 owner。
+[`WindowModeControl`](../src/ash/sessions/browser/parts/titlebar/windowModeControl.ts) 是 Sessions 标题栏拥有的业务适配层，只提供 Chat／Code 选项、文案、图标、Hover delegate、已有命令与可观察选中值绑定。窗口模式与会话状态仍由原服务拥有；其他场景直接复用 `SegmentedControl` 并接入自己的状态 owner。
 
 ## Settings 内容
 

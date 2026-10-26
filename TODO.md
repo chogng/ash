@@ -8,6 +8,10 @@
 
 - [ ] **历史现场复核** · 2026-10-21 用户随后确认点击已正常；实际开发窗口的只读检查也显示主线程响应、无活动动画、Connectors 读取已结束。隔离 Desktop 中全折叠后展开／键盘切换通过，尚未建立原先整窗无响应的故障链。潜在的状态通知请求放大已单独复现并修复：25 次通知在读取进行中不再追加 25 组读取，只在结束后补读一次；保留最新状态、隐藏时撤销待补读，显式导航及可物理取消的市场查询仍可抢占。原始故障仅在再次出现时采集实际 Renderer／Main 栈继续归因，不把这一防护称为历史根因修复；证据与运行限制见 `.build/ash-playwright-mcp/connectors-validation.json`。
 
+- [ ] **可做 · Connector OAuth 连接取消**：`src/ash/workbench/contrib/extensions/browser/extensionEditor.ts` 的 Sign in／重新授权和 `extensionsActions.ts` 的添加连接经 `AppServerConnectorService.connectOAuth` 后没有取消入口；`src/ash/platform/connectors/browser/connectorApi.ts` 的 device 等待／轮询与 browser callback 等待不接收调用方取消。服务端已有按 flow ID 的 cancel，当前只在异常等收尾路径触达。参考 [连接详情取消](https://github.com/microsoft/vscode/pull/344192)（2026-10-26 已合并，最新稳定 1.143.1 尚不包含），补齐等待授权时的退出和重试；本项为静态链路缺口，不是上述历史面板无响应的根因。
+  - 范围与兼容：沿 `IConnectorService`／`IConnectorApi` 及既有 browser／device OAuth owner 传递取消，详情提供可键盘访问的取消动作，随后按最新 catalog 恢复操作；复用 `connector/connect/oauth/cancel` 与 `connector/connect/oauth/device/cancel`，关闭本次 callback 并停止本次等待／后续轮询，不撤销已完成授权或其他连接。上游只取消本地轮询，不能照搬为 Ash 的服务端保证；先核对 device poll 暂时移出 pending 与 cancel／complete 的竞争，保留 flow／generation 校验，不用隐藏 UI 代替取消。
+  - 验收：在 Connector API／service、Extensions 入口及 `crates/ext/connectors/src/oauth_tests.rs`、`device_oauth_tests.rs` 和 `crates/app-server/src/server/connector_operations_tests.rs` 覆盖授权前、待 callback／轮询时取消、打开浏览器失败、关闭／切换入口、重复取消、取消与完成并发及旧结果晚到；确认停止新轮询、callback 释放、按钮与焦点恢复、不误报成功或覆盖新连接。正常成功、重新授权、过期及普通 MCP OAuth 保持回归；不承诺撤回外部浏览器已完成的授权。
+
 ## SCM 普通文件点击 · 残余极端往返
 
 - [ ] **测量** · 最终独立窗口中最慢暖点击 375.6 ms：extensionHost/invoke/read（connection 1，request 2907）客户端往返 274.3 ms，同 ID 服务端处理 0.088 ms、出站 0.040 ms，Git 请求在之后才开始且仅 3.4 ms。尚未拆清 Renderer→Main→daemon 送达与返程 decode/dispatch，不能归因扩展执行或渲染。下一步补这些边界的 method/request ID 标记，保留极值复现；本轮全部原始数据和已完成实现见[报告](.build/scm-tail-v2/report.md)。
@@ -96,6 +100,7 @@
 
 ## Sessions · TODO
 
+- [ ] **评估 · Agent Window 20px 图标字体**：可能需要按 20×20px 设计基准制作独立图标字体；后续确认适用范围、线宽与留白，并对比现有 16px 字体放大的效果，再决定实施。
 - [ ] **验收 · Dev Container 产品入口** · 从 Agents 窗口验收宿主 gateway 准入、窗口关闭／重开及持久容器控制清单，并补 authenticated Remote catalog 自动安装；当前测试容器缺 Docker daemon／CLI、Dev Container CLI 与认证 runtime catalog，受控脚本不替代这些产品前提。入口与环境要求见 [Docker Provider](extensions/dev-containers/README.md)。
 - [ ] **后端前置** · 为 Agent PR 的持续合并策略与 request metadata 补后端工作流契约；当前只闭合请求提交／排队、直接创建 PR、Draft 和 auto-merge，任务提交成功不能视为 PR 已创建。
 - [ ] **验收** · 对已接通的提交／会话切换、Changes 审阅与 PR 表单执行上游窗口配对场景，观察仓库身份、修订、焦点、取消和关闭后的结果；现有 Ash Electron、浏览器和架构回归仅覆盖原有范围。后台持续合并不纳入这次已实现行为的验收。
@@ -161,9 +166,13 @@
 
 - [ ] **测量** · 量化 receive／assemble／decode／parse／schema／adapter／apply／paint 阶段、队列 bytes／elapsed 与真实 task yield；核对 ACK 跟随消费和跨进程时钟关系。
 - [ ] **复核** · 继续识别大内容按需资源及领域物理取消的具体消费者。文件模型、Chat Changes 摘要及 Code／Cowork Thread／transcript 的在途只读刷新已合并；后者补齐代次隔离、写后补读和落后 bounded 快照的有界重试，两个模型/视图文件 239 项测试通过。GitHub 已取消读取可跳过无消费者 payload 的 schema／Worker 回传；这些结果不代表通用传输取消或所有读取入口均完成。约束见[消费者刷新约束](docs/ash-app-server-data-path-audit.md#已接入的消费者刷新约束)。
-  - **具体消费者测量 · 长 Chat 历史首次解析**：`src/ash/workbench/contrib/chat/browser/widget/chatListWidget.ts` 为全部条目建立 row，`chatContentParts/chatMarkdownContentPart.ts` 对短文本立即解析、长文本按面板可见性排到下一帧，尚非逐行视口准入。参考 [按需首次解析 Markdown](https://github.com/zed-industries/zed/pull/65470)（2026-10-21 已合并，未核实进入稳定版），先测相同长历史首开时屏幕外解析次数、主线程时间、峰值内存和首次可读绘制；现有增量复用／每帧合并／代码块延迟资源不重复列为缺失，不把上游数据当作 Ash 收益。
+  - **具体消费者测量 · 长 Chat 历史首次解析**：`src/ash/workbench/contrib/chat/browser/widget/chatListWidget.ts` 在面板显示时为全部条目建立 row，`chatContentParts/chatMarkdownContentPart.ts` 对短文本立即解析、长文本排到下一帧；隐藏面板已只保留最新投影，代码块派生文档已按视口及焦点／选区准入，但 Markdown 首次解析尚非逐行视口准入。参考 [按需首次解析 Markdown](https://github.com/zed-industries/zed/pull/65470)（2026-10-21 已合并，未核实进入稳定版），先测相同长历史首开时屏幕外解析次数、主线程时间、峰值内存和首次可读绘制；现有增量复用／每帧合并／代码块延迟资源不重复列为缺失，不把上游数据当作 Ash 收益。
     - 仅在测量显示屏幕外解析占据实质成本后，评估现有 row／block owner 的首次激活，保留完整原文与唯一 transcript；否则记录结果并停止，不预设全列表虚拟化或另建缓存。使用普通文本、代码及工具 Markdown 的重复样本，覆盖恢复滚动／阅读锚点、异步高度变化、流式尾部、复制／搜索／导出、辅助阅读与焦点；成本下降且上述行为不退化才采用。
 - [ ] **测量** · 把后端结果构造和 writer／producer 等待纳入资源准入测量，评估有界数据／控制输出契约与同连接队头阻塞；不靠降低既有文件上限掩盖成本。
+
+- [ ] **测量 · 消息文件检查点的提交与完成成本**：`crates/core/src/thread_controller.rs` 在含 `ItemCompleted` 的批次同步捕获一次检查点并供批内条目共享；`crates/app-server/src/server/message_checkpoints.rs` 经 `crates/git-turn-changes/src/ledger.rs` 等待各仓库捕获，`crates/git/src/objects.rs` 创建临时索引并执行 `read-tree`／`add --all`／`write-tree`，普通目录则由 `crates/worktree/src/directory_checkpoint.rs` 完整复制与散列后才按 digest 去重。参考 [消息检查点成本反馈](https://github.com/zed-industries/zed/pull/65989)（2026-10-26 已合并，最新稳定 v1.25.3 尚不包含），先量化大目录或无文件变化时的排队、复制／Git 捕获、持久提交与首次模型调用时间；没有 Ash 实测，不能移用上游卡顿结论或删除恢复能力。
+  - 范围与前提：记录文件／字节量、仓库数和重复样本，分别覆盖本地与 SSH 执行 owner；保留事件／文件恢复顺序、写租约、目录身份、真实 Git index、私有 ref 生命周期及外部编辑冲突语义。不预设跳过捕获、增加开关／缓存或改变异步边界；只有捕获成本确有实质占比才选择保持同一快照语义的窄优化，否则记录结果并停止。
+  - 验收：复用 `crates/core/src/thread_controller/restore_tests.rs`、`crates/git/src/objects/tree_tests.rs`、`crates/git-turn-changes/src/turn_changes_tests.rs`、`crates/worktree/src/worktree_tests.rs` 及 `crates/app-server/src/checkpoint_live_tests.rs`，覆盖大仓库无变更／已修改、未跟踪／忽略文件、多仓库、普通目录与符号链接、活动写入时不可用、捕获中断清理、重启／fork／恢复及私有 ref 释放；记录 Windows／macOS／Linux 各自真实测量边界，不能用局部耗时替代整条提交体验或恢复正确性。
 
 - [ ] **测量 · 流式文件路径索引的重复存储**：`crates/file-search/src/lib.rs` 的 `walker_worker` 为每条路径同时保存 `Arc<str>` 与 Nucleo 的 `Utf32String` 列，`build_snapshot` 再从原路径计算排名与高亮。参考 [Codex 减少路径索引副本](https://github.com/openai/codex/pull/55351)（2026-10-19 已合并，已包含于 [Codex 0.164.0](https://github.com/openai/codex/releases/tag/rust-v0.164.0)），先量化 TUI `@file` 与独立文件搜索 CLI 所用 `Service::start` 在大目录的分配字节、峰值内存、扫描和连续查询耗时，再决定是否让纯 ASCII 路径复用匹配列；尚无 Ash 收益测量，不泛化到使用 tgrep 的 Desktop 搜索。
   - 范围与风险：保留单根、仅普通文件、目录准入、取消和 `query_revision` 契约，不引入多根索引或第二份缓存。Unicode 匹配列并非原路径的无损表示，组合字符与 emoji 不能由该列重建；非 ASCII 路径仍须保留可精确返回的原串。

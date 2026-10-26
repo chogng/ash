@@ -6,6 +6,7 @@ import { isAbsolute, join } from "node:path";
 import { AbstractDisposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { buildAppServerEnvironment, isAllowedAppServerEnvironmentKey, type AppServerHostPlatform } from '../../agentHost/common/appServerEnvironment.js';
 import type { IAppServerProcessLauncher } from '../../agentHost/electron-main/appServerProcessLauncher.js';
+import { LOCAL_APP_SERVER_INITIALIZE_TIMEOUT_MS } from '../../agentHost/common/appServerTransport.js';
 import { appServerDaemonExecutablePath, appServerExecutablePath, developmentAppServerGenerationPath, packagedAppServerDaemonSha256, packagedAppServerSha256, type AppServerDaemonPackageLocation } from '../node/appServerDaemonPackage.js';
 import { readDevelopmentAppServerGenerationSync } from './developmentAppServerReloader.js';
 import { acquireDevelopmentAppServerRuntime, type IDevelopmentAppServerRuntime } from './developmentAppServerRuntime.js';
@@ -95,6 +96,7 @@ interface AppServerDaemonLauncherOptions {
 
 /** Launches the packaged daemon command used by the Desktop connection. */
 export class AppServerDaemonLauncher extends AbstractDisposable implements IAppServerProcessLauncher {
+	readonly initializeTimeoutMs = LOCAL_APP_SERVER_INITIALIZE_TIMEOUT_MS;
 	private readonly spawnProcess: SpawnAppServerDaemon;
 	private readonly fileExists: (path: string) => boolean;
 	private readonly fileSha256: (path: string) => Promise<string>;

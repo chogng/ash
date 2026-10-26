@@ -1,6 +1,6 @@
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { resolve } from 'node:path';
-import { pythonCommand } from '../python.ts';
+import { pythonCommand, runPython } from '../python.ts';
 
 /** Cargo owns the transitive set of sources that can change exported contracts. */
 export async function protocolSourceDirectories(signal?: AbortSignal): Promise<string[]> {
@@ -19,18 +19,7 @@ export async function protocolSourceDirectories(signal?: AbortSignal): Promise<s
 
 /** Prepares the cached Rust-owned contract consumed by frontend adapters and build tools. */
 export async function generateProtocol(signal?: AbortSignal): Promise<void> {
-	await new Promise<void>((resolvePromise, reject) => {
-		const { command, args } = pythonCommand(['-B', 'build/protocol/generate.py']);
-		const child = spawn(command, args, {
-			cwd: resolve(import.meta.dirname, '../..'), stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true, signal,
-		});
-		child.once('error', reject);
-		child.once('close', (code, termination) => {
-			if (code === 0) resolvePromise();
-			else reject(new Error(`Protocol generation ${termination ? `stopped by ${termination}` : `exited with status ${code}`}`));
-		});
-	});
-	signal?.throwIfAborted();
+	await runPython(['-B', 'build/protocol/generate.py'], { cwd: resolve(import.meta.dirname, '../..'), operation: 'Protocol generation', signal });
 }
 
 if (import.meta.main) await generateProtocol();

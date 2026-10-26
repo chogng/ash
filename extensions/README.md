@@ -162,6 +162,10 @@ pnpm tree-sitter:verify
 Docker Compose file names select `dockercompose` and reuse the YAML parser and queries.
 The common project language packages provide offline syntax and editing resources; their
 declarations do not install or start C/C++, Java, C#, PowerShell, or other language servers.
+The built-in `css` and `typescript-basics` packages additionally declare bundled Node
+servers for CSS/LESS/SCSS and TypeScript/JavaScript, respectively. The existing LSP runtime
+starts them on document demand using Ash's managed Node runtime; `tsserver`, its standard
+libraries and server dependencies are shipped with the product, so users need no global npm setup.
 TextMate tokenization, scope-theme rules, and property-list themes are not supported.
 
 The manifest is the only source of contribution metadata. `AppServerExtensionService` receives

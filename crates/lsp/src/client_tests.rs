@@ -581,6 +581,14 @@ async fn dynamic_capabilities_and_progress_are_scoped_to_one_client_incarnation(
             true
         );
         assert_eq!(
+            initialize["params"]["capabilities"]["textDocument"]["hover"]["contentFormat"],
+            json!(["plaintext"])
+        );
+        assert_eq!(
+            initialize["params"]["capabilities"]["textDocument"]["completion"]["completionItem"]["documentationFormat"],
+            json!(["plaintext"])
+        );
+        assert_eq!(
             initialize["params"]["capabilities"]["workspace"]["diagnostic"]["refreshSupport"],
             true
         );

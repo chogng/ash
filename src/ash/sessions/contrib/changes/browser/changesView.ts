@@ -1,5 +1,6 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/changesView.css';
+import { LoadingSkeleton } from '../../../browser/ui/loadingSkeleton.js';
 import './media/changesViewActions.css';
 import { h, addDisposableListener } from '../../../../base/browser/dom.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -58,6 +59,7 @@ export class ChangesViewPane extends ViewPane {
 	private request = 0;
 	private owner: string | undefined;
 	private loading = false;
+	private readonly skeleton: LoadingSkeleton;
 	private readonly loadingProgress = this._register(new MutableDisposable());
 	private readonly checks = this._register(new MutableDisposable<ChecksWidget>());
 	private readonly gitActions = this._register(new MutableDisposable<SessionSyncChangesActionViewItem>());
@@ -164,6 +166,8 @@ export class ChangesViewPane extends ViewPane {
 		const treeContainer = h(container.ownerDocument, 'div');
 		treeContainer.className = 'ash-sessions-changes-tree';
 		this.contentElement.append(treeContainer);
+		this.skeleton = this._register(new LoadingSkeleton(this.contentElement, localize('sessions.changes.loading', 'Loading changes…')));
+		treeContainer.before(this.skeleton.element);
 		this.trackBodyMinimum(treeContainer, this.minimumBodySize);
 		const renderer = new ChangesTreeRenderer(container.ownerDocument);
 		this.tree = this._register(new WorkbenchObjectTree<ChangesTreeElement>(treeContainer, {
@@ -352,6 +356,8 @@ export class ChangesViewPane extends ViewPane {
 	private async refresh(): Promise<void> {
 		if (!this.isVisible() || this.isDisposed) { return; }
 		const request = ++this.request;
+		this.skeleton.setVisible(false);
+		this.statusDomNode.hidden = false;
 		this.loadingProgress.clear();
 		this.loading = true;
 		this.saveTreeState();
@@ -384,6 +390,8 @@ export class ChangesViewPane extends ViewPane {
 			return;
 		}
 		this.statusDomNode.textContent = localize('sessions.changes.loading', 'Loading changes…');
+		this.skeleton.setVisible(!this.rows.length);
+		this.statusDomNode.hidden = !this.rows.length;
 		const progress = this.getProgressIndicator().show(true, 150);
 		this.loadingProgress.value = toDisposable(() => progress.done());
 		try {
@@ -425,6 +433,8 @@ export class ChangesViewPane extends ViewPane {
 			if (!this.isDisposed && request === this.request) {
 				this.loadingProgress.clear();
 				this.loading = false;
+				this.skeleton.setVisible(false);
+				this.statusDomNode.hidden = false;
 				this.changesetPicker.disabled = !this.retry.domNode.hidden;
 				this.updatePreviewSelection();
 				this.tree.domNode.removeAttribute('aria-busy');

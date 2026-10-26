@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { resolve } from 'node:path';
-import { pythonCommand, type PythonHost } from './python.ts';
+import childProcess, { ChildProcess } from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
+import { pythonCommand, runPython, type PythonHost } from './python.ts';
 
 const arguments_ = ['-B', 'build/prepare.py'];
 
@@ -36,6 +38,18 @@ test('python command uses the platform command when no interpreter is configured
 
 test('Windows Node tools use the Python environment installed for the repository', () => {
 	assert.deepEqual(pythonCommand(arguments_, host('win32')), { command: resolve(import.meta.dirname, '../scripts/.venv/Scripts/python.exe'), args: arguments_ });
+});
+
+test('Python startup errors remain handled while process ownership is being collected', async t => {
+	const failure = Object.assign(new Error('Python executable unavailable'), { code: 'ENOENT' });
+	t.mock.method(childProcess, 'spawn', () => {
+		const child = new ChildProcess();
+		setImmediate(() => child.emit('error', failure));
+		return child;
+	});
+	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+	syncBuiltinESMExports();
+	await assert.rejects(runPython([], { cwd: resolve(import.meta.dirname, '..'), operation: 'Python fixture' }), error => error === failure);
 });
 
 function host(platform: NodeJS.Platform, environment: NodeJS.ProcessEnv = {}, fileExists: (path: string) => boolean = () => false): PythonHost {

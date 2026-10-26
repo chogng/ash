@@ -224,8 +224,13 @@ pub(super) fn language_server_contributions(
         let Some(value) = manifest.get("ashLanguageServers") else {
             continue;
         };
-        let servers = LanguageServerAcquisition::from_contribution(value.clone())
+        let mut servers = LanguageServerAcquisition::from_contribution(value.clone())
             .map_err(|error| format!("{}: {error}", extension.id))?;
+        for server in &mut servers {
+            server
+                .bind_package(&extension.extension_location)
+                .map_err(|error| format!("{}: {error}", extension.id))?;
+        }
         for server in &servers {
             if !ids.insert(server.id.clone()) {
                 return Err(format!(

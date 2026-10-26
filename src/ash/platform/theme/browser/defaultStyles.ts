@@ -135,7 +135,7 @@ export const defaultToggleStyles: IToggleStyles = Object.freeze({
 export const defaultCheckboxStyles: ICheckboxStyles = Object.freeze({
 	checkboxBackground: colorVariable('input.background'),
 	checkboxBorder: colorVariable('input.border'),
-	checkboxForeground: colorVariable('accent.background'),
+	checkboxForeground: colorVariable('input.foreground'),
 });
 
 export const defaultFindWidgetStyles: IFindWidgetStyles = Object.freeze({

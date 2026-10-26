@@ -141,12 +141,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 				: options.dirId ? folders.find(folder => folder.id === options.dirId)
 					: cwdFolder || (resource && this.workspaceContext.getWorkspaceFolder(resource)) || (folders.length === 1 ? folders[0]
 						: folders.length ? await this.commands.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('terminal.selectFolder', 'Select a workspace folder for the terminal.') }]) : undefined);
-			if (!folder) {
-				if (folders.length) throw new CancellationError();
-				this.requireWorkspaceFolder();
-				throw new CancellationError();
-			}
-			if (!this.profiles.getAvailableProfiles(folder.id).length) await this.profiles.refreshAvailableProfiles(folder.id);
+			if (!folder && (folders.length || options.dirId)) throw new CancellationError();
+			if (!this.profiles.getAvailableProfiles(folder?.id).length) await this.profiles.refreshAvailableProfiles(folder?.id);
 			assertCurrent();
 			const config = options.config;
 			const contributed = config && 'extensionIdentifier' in config ? config
@@ -159,16 +155,16 @@ export class TerminalService extends Disposable implements ITerminalService {
 					...contributed.options,
 					preserveFocus,
 					location: isEditorLocation(location) ? typeof location === 'object' ? location : TerminalLocation.Editor : undefined,
-					cwd: options.cwd ?? parent?.cwd ?? parent?.initialCwd ?? folder.uri,
+					cwd: options.cwd ?? parent?.cwd ?? parent?.initialCwd ?? folder?.uri,
 				});
 				const created = this.instances.find(instance => instance.instanceId === instanceId);
 				if (!created || previous.has(created)) throw new CancellationError();
 				return this.placeCreatedTerminal(created, location, parent, () => {
 					assertCurrent();
-					if (created.dirId !== folder.id) throw new CancellationError();
+					if (created.dirId !== (folder?.id ?? '')) throw new CancellationError();
 				}, created.target === TerminalLocation.Editor);
 			}
-			const profile = config && 'profileName' in config ? config : !config && !parent?.shellLaunchConfig?.executable ? this.profiles.getDefaultProfile(undefined, folder.id) : undefined;
+			const profile = config && 'profileName' in config ? config : !config && !parent?.shellLaunchConfig?.executable ? this.profiles.getDefaultProfile(undefined, folder?.id) : undefined;
 			const shell: IShellLaunchConfig = profile ? { name: profile.overrideName ? profile.profileName : undefined, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color }
 				: { ...(config as IShellLaunchConfig | undefined ?? parent?.shellLaunchConfig) };
 			if (options.cwd !== undefined) shell.cwd = requestedCwd;
@@ -195,13 +191,13 @@ export class TerminalService extends Disposable implements ITerminalService {
 			const rawCwd = shell.cwd;
 			const os = this.processService.operatingSystem;
 			if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
-			await this.profileResolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: getRemoteAuthority(folder.uri), workspaceFolder: folder });
+			await this.profileResolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: folder ? getRemoteAuthority(folder.uri) : scope.remoteAuthority, workspaceFolder: folder });
 			assertCurrent();
 			const profileName = profile?.profileName ?? shell.name
 				?? (parent?.revivalLaunch?.profile.type === 'custom' ? parent.revivalLaunch.profile.name : parent?.profile.title)
 				?? localize('terminal.profile.shell', 'Shell');
 			launch = {
-				...options, config: undefined, dirId: folder.id, dimensions,
+				...options, config: undefined, dirId: folder?.id, dimensions,
 				resolvedShellLaunchConfig: { executable: shell.executable, args: shell.args },
 				title: profile?.overrideName ? profile.profileName : shell.name,
 				profile: profile?.isAutoDetected ? { type: 'profile', profileId: profile.profileId } : { type: 'custom', name: profileName, path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] },
@@ -252,9 +248,11 @@ export class TerminalService extends Disposable implements ITerminalService {
 		if (scope.workspaceId !== state.workspaceId || scope.remoteAuthority !== state.remoteAuthority) throw new Error('Terminal checkpoint belongs to another workspace or host');
 		// Validate the complete checkpoint before any bearer credential attaches a process.
 		for (const snapshot of state.instances) {
-			if (parseTerminalUri(URI.parse(snapshot.resource)).instanceId !== snapshot.instanceId || !this.workspaceContext.getWorkspace().folders.some(folder => folder.id === snapshot.dirId)) throw new TypeError('Invalid terminal checkpoint identity');
+			const folders = this.workspaceContext.getWorkspace().folders;
+			if (parseTerminalUri(URI.parse(snapshot.resource)).instanceId !== snapshot.instanceId
+				|| !(snapshot.dirId === '' && folders.length === 0 || folders.some(folder => folder.id === snapshot.dirId))) throw new TypeError('Invalid terminal checkpoint identity');
 		}
-		// An empty window has no process to reattach, including hosts without a PTY backend.
+		// An empty checkpoint needs no process API, including hosts without a PTY backend.
 		if (state.instances.length === 0) return;
 		if (!revive && !this.processService.attach) throw new Error('Terminal attachment is unavailable');
 		const screens: Promise<unknown>[] = [];
@@ -271,10 +269,10 @@ export class TerminalService extends Disposable implements ITerminalService {
 				const liveLaunch: (NonNullable<ITerminalSerializedState['launch']> & Pick<IShellLaunchConfig, 'environmentVariableCollections' | 'environmentVariableCollectionsPersistable'>) | undefined = revive ? await this.resolveRevivalLaunch(snapshot) : snapshot.launch;
 				const { environmentVariableCollections: _snapshot, environmentVariableCollectionsPersistable: _persistable, ...processLaunch } = liveLaunch ?? {};
 				const process = revive
-					? await this.processService.create({ ...processLaunch as NonNullable<typeof liveLaunch>, ...(autoReplies.length ? { autoReplies } : {}), dirId: snapshot.processDirId ?? snapshot.dirId, ...dimensions })
+					? await this.processService.create({ ...processLaunch as NonNullable<typeof liveLaunch>, ...(autoReplies.length ? { autoReplies } : {}), dirId: snapshot.processDirId ?? (snapshot.dirId || undefined), ...dimensions })
 					: await this.processService.attach!(lease!, dimensions, snapshot.process.profile);
 				if (this.isDisposed || !terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspaceContext.getWorkspace()))) {
-					await this.processService.close({ terminalId: process.terminalId, dirId: snapshot.processDirId ?? snapshot.dirId });
+					await this.processService.close({ terminalId: process.terminalId, dirId: snapshot.processDirId ?? (snapshot.dirId || undefined) });
 					throw new CancellationError();
 				}
 				if (!revive && process.ready.pid !== snapshot.process.ready.pid) throw new Error('Terminal process identity changed');
@@ -300,13 +298,13 @@ export class TerminalService extends Disposable implements ITerminalService {
 		const intent = snapshot.launch;
 		if (!intent) return undefined;
 		const scope = terminalExecutionScope(this.workspaceContext.getWorkspace());
-		const folder = this.workspaceContext.getWorkspace().folders.find(folder => folder.id === snapshot.dirId)!;
+		const folder = this.resolveWorkspaceFolder(snapshot.dirId);
 		// Discovery waits for execution-host readiness before reading its OS.
-		await this.profiles.refreshAvailableProfiles(folder.id);
+		await this.profiles.refreshAvailableProfiles(folder?.id);
 		const os = this.processService.operatingSystem;
 		if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
 		const selectedId = intent.profile.type === 'profile' ? intent.profile.profileId : undefined;
-		const selected = selectedId ? this.profiles.getAvailableProfiles(folder.id).find(profile => profile.profileId === selectedId) : undefined;
+		const selected = selectedId ? this.profiles.getAvailableProfiles(folder?.id).find(profile => profile.profileId === selectedId) : undefined;
 		const shell: IShellLaunchConfig = {
 			executable: intent.profile.type === 'custom' ? intent.profile.path : selected?.path,
 			args: intent.profile.type === 'custom' ? intent.profile.args : selected?.args,
@@ -323,7 +321,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 		if (this.isDisposed || !this.processService.attach || !this.processService.detach) throw new CancellationError();
 		const scope = terminalExecutionScope(this.workspaceContext.getWorkspace());
 		if (parseTerminalUri(URI.parse(snapshot.resource)).instanceId !== snapshot.instanceId) throw new TypeError('Invalid terminal transfer identity');
-		if (!this.workspaceContext.getWorkspace().folders.some(folder => folder.id === snapshot.dirId) || lease.terminalId !== snapshot.process.terminalId || lease.dirId !== snapshot.processDirId) throw new Error('Terminal transfer belongs to another execution directory');
+		this.resolveWorkspaceFolder(snapshot.dirId);
+		if (lease.terminalId !== snapshot.process.terminalId || lease.dirId !== snapshot.processDirId) throw new Error('Terminal transfer belongs to another execution directory');
 		const dimensions = { cols: snapshot.cols, rows: snapshot.rows };
 		const liveLaunch = snapshot.launch;
 		const process = await this.processService.attach(lease, dimensions, snapshot.process.profile);
@@ -392,7 +391,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 
 	private async performInstanceRelaunch(instance: ITerminalInstance, dimensions: ITerminalDimensions): Promise<void> {
 		if (!instance.isReadOnly) {
-			this.requireWorkspaceFolder(instance.dirId);
+			this.resolveWorkspaceFolder(instance.dirId);
 		}
 		if (!this._instances.includes(instance as TerminalInstance)) {
 			throw new Error("Terminal must belong to this TerminalService");
@@ -526,8 +525,9 @@ export class TerminalService extends Disposable implements ITerminalService {
 		}
 	}
 
-	private requireWorkspaceFolder(dirId?: string) {
+	private resolveWorkspaceFolder(dirId?: string) {
 		const folders = this.workspaceContext.getWorkspace().folders;
+		if (!dirId && folders.length === 0) return undefined;
 		if (!dirId && folders.length > 1) throw new Error(localize('terminal.selectFolder', 'Select a workspace folder for the terminal.'));
 		const folder = dirId ? folders.find(folder => folder.id === dirId) : folders[0];
 		if (!folder) throw new Error("TerminalUnavailable: Terminal requires an open workspace folder");

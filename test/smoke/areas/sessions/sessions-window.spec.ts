@@ -1249,7 +1249,7 @@ test('Sessions navigation retains its own selection and hover skin across naviga
 	await expect(chat).toHaveAttribute('aria-current', 'page');
 	await expectActivityIconSize(navigation, 16);
 	await expect(chat).toHaveCSS('width', '36px');
-	await expect(chat).toHaveCSS('height', '36px');
+	await expect(chat).toHaveCSS('height', '32px');
 	// Shared toolbar theme overrides must not change Sessions navigation feedback.
 	const hoverVariables = ['--ash-toolbar-hoverBackground', '--ash-sessions-selectionBackground'];
 	const previousHoverStyles = await navigation.evaluate((element, variables) => {
@@ -1329,7 +1329,7 @@ test('Sessions navigation retains its own selection and hover skin across naviga
 		expect(await chat.evaluate((element, original) => element === original, originalChat)).toBe(true);
 	}
 	await expectActivityIconSize(navigation, 16);
-	await expect(chat).toHaveCSS('height', '36px');
+	await expect(chat).toHaveCSS('height', '32px');
 	await expect(chat).toHaveCSS('border-radius', '8px');
 	await workbench.setAppearance(application, 'dark', page);
 	await expect(chat).toHaveCSS('background-color', 'rgb(48, 48, 48)');

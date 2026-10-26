@@ -198,7 +198,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				run: () => { this.setSearchVisible(true); this.search.focus(); },
 			},
 			{ id: 'projects.sort', label: sortLabel, tooltip: sortLabel, icon: Lxicon.sort, enabled: true, run: () => this.sortDropdown.show() },
-			{ id: 'projects.create', label: createLabel, tooltip: createLabel, enabled: true, run: () => this.showProjectDialog() },
+			{ id: 'projects.create', label: createLabel, tooltip: '', enabled: true, run: () => this.showProjectDialog() },
 		];
 		this.toolbar.setActions(this.toolbarActions);
 		heading.append(this.title, this.tools);
@@ -248,20 +248,27 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 
 	private render(state: ProjectsState): void {
 		if (state.selectedId && this.sortMenuOpen) { this.contextMenus.hideContextMenu(); }
+		const loadingProject = !!state.selectedId && !state.selected && state.loading;
 		const focused = getActiveElement(this.domNode.ownerDocument) as HTMLElement;
 		const focusKey = this.body.contains(focused) ? focused.dataset.projectControl : undefined;
 		this.relativeTimeUpdate.cancel();
 		this.content.clear();
 		this.body.replaceChildren();
-		this.breadcrumbSeparator.hidden = !state.selected;
-		this.breadcrumbName.hidden = !state.selected;
+		this.breadcrumbSeparator.hidden = !state.selected && !loadingProject;
+		this.breadcrumbName.hidden = !state.selected && !loadingProject;
 		this.breadcrumbName.textContent = state.selected?.name ?? '';
+		this.breadcrumbName.classList.toggle('ash-projects-placeholder', loadingProject);
+		this.breadcrumbName.setAttribute('aria-hidden', String(loadingProject));
 		if (state.selectedId) { this.breadcrumbProjects.domNode.removeAttribute('aria-current'); }
 		else { this.breadcrumbProjects.domNode.setAttribute('aria-current', 'page'); }
 		this.updateTitlebar();
 		this.tools.hidden = !!state.selectedId;
-		this.title.textContent = state.selected?.name ?? localize('projects.title', 'Projects');
+		this.title.textContent = loadingProject ? '' : state.selected?.name ?? localize('projects.title', 'Projects');
 		this.title.title = this.title.textContent;
+		this.title.classList.toggle('ash-projects-placeholder', loadingProject);
+		this.title.classList.toggle('ash-projects-loading-title', loadingProject);
+		if (loadingProject) { this.title.setAttribute('aria-label', localize('projects.loading', 'Loading projects…')); }
+		else { this.title.removeAttribute('aria-label'); }
 		this.setSearchVisible(!state.selectedId && (this.searchActionViewItem.expanded || !!state.query));
 		this.search.value = state.query;
 		const createAction = this.toolbarActions.find(action => action.id === 'projects.create')!;
@@ -272,12 +279,15 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		}
 		this.message.textContent = state.message ?? (state.loading ? localize('projects.loading', 'Loading projects…') : '');
 		this.message.parentElement!.hidden = !state.message && !state.loading;
+		// Keep loading announcements available without adding a row that shifts the page.
+		this.message.parentElement!.classList.toggle('loading', state.loading && !state.message);
 		this.retry.domNode.hidden = !state.message;
 		this.retry.enabled = !state.loading && !state.busy;
 		this.body.setAttribute('aria-busy', String(state.loading));
 		if (state.selected) { this.renderProject(state.selected); }
-		else if (state.selectedId && state.loading) { this.renderLoading(); }
+		else if (loadingProject) { this.renderLoading(true); }
 		else if (!state.selectedId && this.projects.getProjects().length) { this.renderCards(); }
+		else if (state.loading) { this.renderLoading(false); }
 		else if (!state.loading && !state.message) { this.renderEmpty(!!state.query); }
 		if (focusKey) {
 			(Array.from(this.body.querySelectorAll<HTMLElement>('[data-project-control]')).find(node => node.dataset.projectControl === focusKey) ?? this.title).focus();
@@ -456,9 +466,29 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.body.append(layout);
 	}
 
-	private renderLoading(): void {
+	private renderLoading(detail: boolean): void {
 		const document = this.domNode.ownerDocument;
-		const skeleton = h(document, 'div', { className: 'ash-projects-skeleton', attributes: { 'aria-hidden': 'true' } }, h(document, 'div'), h(document, 'div'));
+		const placeholder = (className = '') => h(document, 'span', { className: `ash-projects-placeholder ${className}` });
+		const skeleton = h(document, 'div', {
+			className: `ash-projects-skeleton ${detail ? 'ash-projects-detail' : 'ash-projects-grid'}`,
+			attributes: { 'aria-hidden': 'true' },
+		});
+		if (detail) {
+			const overview = h(document, 'div', { className: 'ash-projects-overview' },
+				placeholder('ash-projects-skeleton-section-title'),
+				h(document, 'div', { className: 'ash-projects-description ash-projects-skeleton-lines' }, placeholder(), placeholder(), placeholder('ash-projects-skeleton-short')));
+			const materials = h(document, 'div', { className: 'ash-projects-materials' },
+				placeholder('ash-projects-skeleton-section-title'),
+				h(document, 'div', { className: 'ash-projects-skeleton-lines' }, placeholder(), placeholder('ash-projects-skeleton-short')));
+			skeleton.append(overview, materials);
+		} else {
+			for (let index = 0; index < 6; index++) {
+				const card = h(document, 'div', { className: 'ash-projects-card ash-projects-skeleton-card' },
+					placeholder('ash-projects-card-mark'),
+					h(document, 'div', { className: 'ash-projects-card-content' }, placeholder('ash-projects-skeleton-name'), placeholder('ash-projects-skeleton-short')));
+				skeleton.append(h(document, 'div', { className: 'ash-projects-row' }, card));
+			}
+		}
 		this.body.append(skeleton);
 	}
 

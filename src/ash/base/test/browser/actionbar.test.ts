@@ -9,6 +9,195 @@ import { LabelActionViewItem } from "../../browser/ui/actionbar/actionViewItems.
 import { setHoverDelegate, type HoverDelegateSetupOptions, type IManagedHover } from "../../browser/ui/hover/hoverDelegate.js";
 import { AnchorPosition } from "../../common/layout.js";
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
+import type { IContextMenuDelegate } from '../../browser/contextmenu.js';
+import { DropdownMenuActionViewItem } from '../../browser/ui/dropdown/dropdownMenuActionViewItem.js';
+import { addDisposableListener } from '../../browser/dom.js';
+
+suite('ActionBar open dropdown updates', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const method of ['setActions', 'updateActions'] as const) {
+		test(`${method} preserves an open menu and applies only the latest actions after dismissal`, async () => {
+			const dom = new JSDOM('<!doctype html><body></body>');
+			try {
+				let menu: IContextMenuDelegate | undefined;
+				using bar = new ActionBar(dom.window.document.body, {
+					actions: [action('menu'), action('before')],
+					actionViewItemProvider: item => item.id === 'menu' ? new DropdownMenuActionViewItem(item, [action('choice')], {
+						showContextMenu(options) { menu = options; },
+					}) : undefined,
+				});
+				const trigger = bar.element.querySelector<HTMLButtonElement>('[data-action-id="menu"] button')!;
+				trigger.focus();
+				trigger.click();
+				assert.ok(menu);
+				const opened = menu;
+				bar[method]([action('menu'), action('intermediate')]);
+				bar[method]([{ ...action('menu'), label: 'Updated menu' }, action('latest')]);
+				assert.equal(trigger.isConnected, true);
+				assert.equal(opened.cancellationToken?.isCancellationRequested, false);
+				assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+				assert.equal(bar.element.textContent, 'menubefore');
+				opened.onHide?.(true);
+				await Promise.resolve();
+				const updatedTrigger = bar.element.querySelector<HTMLButtonElement>('[data-action-id="menu"] button')!;
+				assert.notEqual(updatedTrigger, trigger);
+				assert.equal(bar.element.textContent, 'Updated menulatest');
+				assert.equal(updatedTrigger.getAttribute('aria-expanded'), 'false');
+				assert.equal(dom.window.document.activeElement, updatedTrigger);
+
+				updatedTrigger.click();
+				const finalMenu = menu!;
+				bar[method]([action('menu'), action('discarded')]);
+				bar.dispose();
+				assert.equal(finalMenu.cancellationToken?.isCancellationRequested, true);
+				finalMenu.onHide?.(true);
+				await Promise.resolve();
+				assert.equal(bar.element.isConnected, false);
+				assert.equal(bar.element.textContent, '');
+			} finally {
+				dom.window.close();
+			}
+		});
+	}
+
+	test('a reopened menu retains pending actions until its own dismissal', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			let menu: IContextMenuDelegate | undefined;
+			using bar = new ActionBar(dom.window.document.body, {
+				actions: [action('menu')],
+				actionViewItemProvider: item => new DropdownMenuActionViewItem(item, [action('choice')], {
+					showContextMenu(options) { menu = options; },
+				}),
+			});
+			const trigger = bar.element.querySelector<HTMLButtonElement>('button')!;
+			trigger.click();
+			bar.setActions([{ ...action('menu'), label: 'Updated menu' }]);
+			menu!.onHide?.(true);
+			trigger.click();
+			await Promise.resolve();
+			assert.equal(trigger.isConnected, true);
+			assert.equal(menu!.cancellationToken?.isCancellationRequested, false);
+			menu!.onHide?.(true);
+			await Promise.resolve();
+			assert.equal(bar.element.textContent, 'Updated menu');
+		} finally {
+			dom.window.close();
+		}
+	});
+
+	test('a synchronous provider dismissal finishes before queued actions replace its trigger', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			let trigger: HTMLButtonElement;
+			using bar = new ActionBar(dom.window.document.body, {
+				actions: [action('menu')],
+				actionViewItemProvider: item => new DropdownMenuActionViewItem(item, [action('choice')], {
+					showContextMenu(options) {
+						bar.updateActions([{ ...action('menu'), label: 'Updated menu' }]);
+						options.onHide?.(true);
+						assert.equal(trigger.isConnected, true);
+					},
+				}),
+			});
+			trigger = bar.element.querySelector<HTMLButtonElement>('button')!;
+			trigger.click();
+			await Promise.resolve();
+			assert.equal(trigger.isConnected, false);
+			assert.equal(bar.element.textContent, 'Updated menu');
+		} finally {
+			dom.window.close();
+		}
+	});
+
+	test('switching dropdowns keeps the next trigger alive from pointerdown through click', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			let menu: IContextMenuDelegate | undefined;
+			using bar = new ActionBar(dom.window.document.body, {
+				actions: [action('first'), action('second')],
+				actionViewItemProvider: item => new DropdownMenuActionViewItem(item, [action(item.id + '.choice')], {
+					showContextMenu(options) { menu = options; },
+				}),
+			});
+			const [first, second] = [...bar.element.querySelectorAll('button')];
+			const icon = dom.window.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+			second!.append(icon);
+			first!.click();
+			bar.setActions([{ ...action('first'), label: 'Updated first' }, action('second')]);
+			// Match the context view's capture-phase outside-pointer dismissal.
+			using dismissal = addDisposableListener(dom.window.document, 'pointerdown', () => menu!.onHide?.(true), true);
+			icon.dispatchEvent(pointerEvent(dom.window, 'pointerdown'));
+			await Promise.resolve();
+			assert.equal(second!.isConnected, true);
+			icon.dispatchEvent(pointerEvent(dom.window, 'pointerup'));
+			await Promise.resolve();
+			assert.equal(second!.isConnected, true);
+			second!.click();
+			await Promise.resolve();
+			assert.deepEqual(menu!.getActions().map(item => item.id), ['second.choice']);
+			assert.equal(menu!.cancellationToken?.isCancellationRequested, false);
+			assert.equal(second!.getAttribute('aria-expanded'), 'true');
+			menu!.onHide?.(true);
+			await Promise.resolve();
+			assert.equal(bar.element.textContent, 'Updated firstsecond');
+		} finally {
+			dom.window.close();
+		}
+	});
+
+	for (const end of ['pointercancel', 'outside pointerup', 'window blur'] as const) {
+		test(`${end} releases a pending pointer activation without a click`, async () => {
+			const dom = new JSDOM('<!doctype html><body></body>');
+			try {
+				using bar = new ActionBar(dom.window.document.body, { actions: [action('first')] });
+				const trigger = bar.element.querySelector('button')!;
+				trigger.dispatchEvent(pointerEvent(dom.window, 'pointerdown'));
+				bar.setActions([{ ...action('first'), label: 'Updated first' }]);
+				await Promise.resolve();
+				assert.equal(trigger.isConnected, true);
+				if (end === 'window blur') dom.window.dispatchEvent(new dom.window.Event('blur'));
+				else dom.window.document.body.dispatchEvent(pointerEvent(dom.window, end === 'pointercancel' ? 'pointercancel' : 'pointerup'));
+				await Promise.resolve();
+				assert.equal(bar.element.textContent, 'Updated first');
+			} finally {
+				dom.window.close();
+			}
+		});
+	}
+
+	test('a consumed click releases pending updates at the end of the native click task', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			let timeout: (() => void) | undefined;
+			dom.window.setTimeout = ((callback: () => void) => { timeout = callback; return 1; }) as typeof dom.window.setTimeout;
+			dom.window.clearTimeout = () => { timeout = undefined; };
+			using bar = new ActionBar(dom.window.document.body, { actions: [action('first')] });
+			const trigger = bar.element.querySelector('button')!;
+			using consumed = addDisposableListener(trigger, 'click', event => event.stopImmediatePropagation(), true);
+			trigger.dispatchEvent(pointerEvent(dom.window, 'pointerdown'));
+			bar.setActions([{ ...action('first'), label: 'Updated first' }]);
+			trigger.dispatchEvent(pointerEvent(dom.window, 'pointerup'));
+			trigger.click();
+			await Promise.resolve();
+			assert.equal(trigger.isConnected, true);
+			assert.ok(timeout);
+			timeout();
+			await Promise.resolve();
+			assert.equal(bar.element.textContent, 'Updated first');
+			assert.equal(timeout, undefined);
+		} finally {
+			dom.window.close();
+		}
+	});
+});
+
+function pointerEvent(window: JSDOM['window'], type: string): Event {
+	const event = new window.MouseEvent(type, { bubbles: true, button: 0 });
+	Object.defineProperties(event, { isPrimary: { value: true }, pointerId: { value: 1 } });
+	return event;
+}
 
 suite('ActionBar updated focus availability', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();

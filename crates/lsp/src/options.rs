@@ -170,7 +170,7 @@ fn default_client_capabilities() -> ClientCapabilities {
                 completion_item: Some(CompletionItemCapability {
                     snippet_support: Some(true),
                     commit_characters_support: Some(true),
-                    documentation_format: Some(vec![MarkupKind::Markdown, MarkupKind::PlainText]),
+                    documentation_format: Some(vec![MarkupKind::PlainText]),
                     preselect_support: Some(true),
                     insert_replace_support: Some(true),
                     resolve_support: Some(CompletionItemCapabilityResolveSupport {
@@ -182,7 +182,8 @@ fn default_client_capabilities() -> ClientCapabilities {
             }),
             hover: Some(HoverClientCapabilities {
                 dynamic_registration: Some(true),
-                content_format: Some(vec![MarkupKind::Markdown, MarkupKind::PlainText]),
+                // The shared language projections expose text, without retaining markup kind.
+                content_format: Some(vec![MarkupKind::PlainText]),
             }),
             references: Some(ReferenceClientCapabilities {
                 dynamic_registration: Some(true),
@@ -236,7 +237,7 @@ fn default_client_capabilities() -> ClientCapabilities {
             signature_help: Some(SignatureHelpClientCapabilities {
                 dynamic_registration: Some(true),
                 signature_information: Some(SignatureInformationSettings {
-                    documentation_format: Some(vec![MarkupKind::Markdown, MarkupKind::PlainText]),
+                    documentation_format: Some(vec![MarkupKind::PlainText]),
                     parameter_information: Some(ParameterInformationSettings {
                         label_offset_support: Some(true),
                     }),

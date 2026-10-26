@@ -33,6 +33,7 @@ const { ContextKeyService, IContextKeyService } = await import('../../../platfor
 const { CommandRegistry, CommandsRegistry, ICommandService } = await import('../../../platform/commands/common/commands.js');
 const { CommandService } = await import('../../../workbench/services/commands/common/commandService.js');
 const { IEditorService } = await import('../../../workbench/services/editor/common/editorService.js');
+const { ISessionsLayoutService } = await import('../../services/layout/common/sessionsLayoutService.js');
 const { IDesignEditorService } = await import('../../contrib/creator/browser/designEditorService.js');
 const { URI } = await import('../../../base/common/uri.js');
 const { DisposableStore } = await import('../../../base/common/lifecycle.js');
@@ -80,7 +81,7 @@ test('Sessions common entry supplies the shared editor Worker service in each wi
 	assert.notEqual(secondWindow.get(IWebWorkerService), first);
 });
 
-test('Chat navigation includes Search and selects New, Projects and Creator with retained Accounts', async () => {
+test('Chat navigation includes Search and selects New, Projects, Creator and Customize with retained Accounts', async () => {
 	const ownerDocument = browser.window.document;
 	ownerDocument.body.replaceChildren();
 	let accountAnchor: HTMLElement | undefined;
@@ -117,13 +118,14 @@ test('Chat navigation includes Search and selects New, Projects and Creator with
 			{ icon: 'search', disabled: false },
 			{ icon: 'projects', disabled: false },
 			{ icon: 'artifacts', disabled: false },
+			{ icon: 'briefcase', disabled: false },
 			{ icon: 'account', disabled: false },
 		]);
 		assert.deepEqual([...bar.domNode.querySelectorAll('.ash-sessions-activity-top, .ash-sessions-activity-bottom')].map(group =>
 			[...group.querySelectorAll('button')].map(button => button.textContent),
-		), [['New', 'Search', 'Projects', 'Artifacts'], ['Accounts']]);
+		), [['New', 'Search', 'Projects', 'Artifacts', 'Customize'], ['Accounts']]);
 		assert.ok(buttons.every(button => !button.classList.contains('icon-only')));
-		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item > button.ash-sessions-activity-item').length, 4);
+		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item > button.ash-sessions-activity-item').length, 5);
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
 		buttons[2]?.click();
@@ -132,13 +134,15 @@ test('Chat navigation includes Search and selects New, Projects and Creator with
 		assert.equal(buttons[2]?.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'projects');
 		buttons[3]?.click();
 		assert.equal(buttons[3]?.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'artifacts');
+		buttons[4]?.click();
+		assert.equal(buttons[4]?.getAttribute('aria-current'), 'page');
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
 		buttons[0]?.click();
-		assert.deepEqual(selectedActions, ['chat', 'projects', 'creator', 'chat']);
+		assert.deepEqual(selectedActions, ['chat', 'projects', 'creator', 'customize', 'chat']);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
-		buttons[4]?.click();
+		buttons[5]?.click();
 		await Promise.resolve();
-		assert.equal(accountAnchor, buttons[4]);
+		assert.equal(accountAnchor, buttons[5]);
 		using titlebar = registerTestComponentServices(services).createInstance(TitlebarPart, ownerDocument.body, 'application-menu');
 		const renderTitlebarAccount = (visible: boolean): void => titlebar.setActivityActions(visible ? [bar.accountAction] : [], (action, options) => bar.createAccountActionViewItem(action, options, 'titlebar'));
 		for (const position of [ActivityBarPosition.TOP, ActivityBarPosition.BOTTOM]) {
@@ -274,9 +278,9 @@ test('navigation order survives a new window and includes new menu contributions
 	assert.equal(bar.domNode.querySelectorAll('button')[2], buttons[3]);
 	await storage.flush();
 	using restored = registerTestComponentServices(services).createInstance(ActivityBar, document.body, { showAccountMenu() { } });
-	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 4).map(button => button.textContent), ['New', 'Search', 'Artifacts', 'Projects']);
+	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 5).map(button => button.textContent), ['New', 'Search', 'Artifacts', 'Projects', 'Customize']);
 	using contribution = MenusRegistry.appendMenuItem(Menus.ActivityBar, { command: { id: 'test.activity', title: 'Test action', icon: Lxicon.chat2 }, order: 60 });
-	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.textContent), ['New', 'Search', 'Artifacts', 'Projects', 'Test action', 'Accounts']);
+	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.textContent), ['New', 'Search', 'Artifacts', 'Projects', 'Customize', 'Test action', 'Accounts']);
 	assert.equal(restored.domNode.querySelector('button')!.getAttribute('aria-current'), 'page');
 });
 
@@ -332,23 +336,23 @@ test('Code navigation has its own actions and order while Chat keeps its saved n
 	storage.store('sessions.activityBar.actionOrder', JSON.stringify(chatOrder.filter(id => id !== 'sessions.search')), StorageScope.PROFILE, StorageTarget.USER);
 	using bar = registerTestComponentServices(services).createInstance(ActivityBar, document.body, { showAccountMenu() { } });
 	const labels = () => [...bar.domNode.querySelectorAll('.ash-sessions-navigation button')].map(button => button.textContent);
-	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects']);
+	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects', 'Customize']);
 	contexts.setContext('sessions.workspaceMode', 'code');
-	assert.deepEqual(labels(), ['New', 'Search', 'Automations', 'Collab', 'Agent Teams', 'Symphony']);
+	assert.deepEqual(labels(), ['New', 'Search', 'Automations', 'Collab', 'Agent Teams', 'Symphony', 'Customize']);
 	assert.equal(bar.domNode.querySelector('[data-action-id="sessions.open.code"]'), null);
 	setARIAContainer(document.body);
 	bar.domNode.querySelector('[data-action-id="sessions.open.collaboration"] button')!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
 	await shown[0]!.run();
-	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Agent Teams', 'Symphony']);
+	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Agent Teams', 'Symphony', 'Customize']);
 	assert.equal(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE), JSON.stringify(chatOrder));
 	contexts.setContext('sessions.workspaceMode', 'chat');
-	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects']);
+	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects', 'Customize']);
 	contexts.setContext('sessions.workspaceMode', 'code');
-	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Agent Teams', 'Symphony']);
+	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Agent Teams', 'Symphony', 'Customize']);
 });
 
 test('workspace mode controls switch retained pages and follow their owner selection', async () => {
-	const { WindowModeControl } = await import('../../../workbench/browser/parts/titlebar/windowModeControl.js');
+	const { WindowModeControl } = await import('../../browser/parts/titlebar/windowModeControl.js');
 	const { observableValue } = await import('../../../base/common/observable.js');
 	const ownerDocument = browser.window.document;
 	ownerDocument.body.replaceChildren();
@@ -390,8 +394,10 @@ function registerMenus(services: InstanceType<typeof InstantiationService>): Ins
 	const commands = resources.add(new CommandService(services, registry));
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IMenuService, services.createInstance(MenuService));
-	const keys = new Map(['chat', 'collaboration', 'teams', 'projects', 'code', 'creator', 'symphony'].map(id => [id, contexts.createKey<boolean>(`sessions.activity.${id}Selected`, id === 'chat')]));
+	const keys = new Map(['chat', 'collaboration', 'teams', 'projects', 'code', 'creator', 'symphony', 'customize'].map(id => [id, contexts.createKey<boolean>(`sessions.activity.${id}Selected`, id === 'chat')]));
 	const select = (id: string): void => contexts.bufferChangeEvents(() => { contexts.setContext('sessions.workspaceMode', ['code', 'collaboration', 'teams', 'symphony'].includes(id) ? 'code' : 'chat'); for (const [candidate, key] of keys) { key.set(candidate === id); } });
+	services.registerInstance(ISessionsLayoutService, { openEntry: async (entry: { id: string; }) => select(entry.id) } as unknown as import('../../services/layout/common/sessionsLayoutService.js').ISessionsLayoutService);
+	resources.add(registry.register('sessions.open.customize', CommandsRegistry.getCommand('sessions.open.customize')!));
 	resources.add(registry.register('sessions.newSession', () => select(contexts.getValue('sessions.workspaceMode') === 'code' ? 'code' : 'chat')));
 	for (const id of ['chat', 'collaboration', 'teams', 'code', 'symphony']) { resources.add(registry.register(`sessions.open.${id}`, () => select(id))); }
 	for (const id of ['projects', 'creator']) {

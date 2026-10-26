@@ -1,4 +1,5 @@
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
+import { CustomViewService, ICustomViewService } from '../../../../../sessions/services/customView/browser/customViewService.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../../../../sessions/browser/agentHost/sessionProviderScopeService.js';
 import { ISCMService } from '../../../../contrib/scm/common/scm.js';
 import { SCMService } from '../../../../contrib/scm/common/scmService.js';
@@ -124,6 +125,8 @@ replServices.registerInstance(IContextKeyService, contextKeys);
 registerCodeEditorServices(replServices);
 const debugViewModel = resources.add(new ViewModel());
 changesServices.registerInstance(IStorageService, storage);
+changesServices.registerInstance(ILogService, new NullLoggerService());
+changesServices.registerSingleton(ICustomViewService, () => changesServices.createInstance(CustomViewService));
 const changesViewState = resources.add(changesServices.createInstance(ChangesViewService));
 changesServices.registerInstance(IChangesViewService, changesViewState);
 const commands: string[] = [];

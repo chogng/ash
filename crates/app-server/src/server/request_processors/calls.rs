@@ -329,9 +329,5 @@ impl<'a> CallRequestProcessor<'a> {
 }
 
 fn failure(detail: String) -> RpcError {
-    RpcError {
-        code: -32070,
-        message: AppServerErrorName::CallOperationFailed,
-        detail: Some(detail),
-    }
+    RpcError::with_details(-32070, AppServerErrorName::CallOperationFailed, detail)
 }

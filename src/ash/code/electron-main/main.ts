@@ -11,7 +11,7 @@ import { migrateLegacyLocalProfile } from '../../platform/profile/node/localProf
 import { existsSync, watch } from 'node:fs';
 import { parseMainProcessArgv, parseLaunchArguments } from '../../platform/environment/node/argvHelper.js';
 import { parseWindowLaunch } from '../../platform/launch/electron-main/launchMainService.js';
-import { builtinLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
+import { localize2 } from '../../nls.js';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { access, writeFile } from 'node:fs/promises';
@@ -22,6 +22,19 @@ import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.
 
 /** Starts the Electron product and its fixed Workbench/Sessions entries. */
 export async function startElectronApplication(): Promise<void> {
+	const developmentLauncher = !app.isPackaged && process.env.ASH_DEV_LAUNCHER === '1';
+	// This flag describes this process's IPC parent, never a terminal or helper
+	// subsequently spawned by the application.
+	delete process.env.ASH_DEV_LAUNCHER;
+	if (developmentLauncher) {
+		if (!process.connected) throw new Error('Development launcher disconnected before startup');
+		// Debugger termination can bypass the launcher's signal handlers. The IPC
+		// lifetime keeps this development instance from retaining the profile lock.
+		process.once('disconnect', () => {
+			setTimeout(() => app.exit(0), 5_000).unref();
+			app.quit();
+		});
+	}
 	const mainServices = new InstantiationService(new ServiceCollection([
 		IGPUProcessMainService, new SyncDescriptor(GPUProcessMainService, [app]),
 	]));
@@ -47,18 +60,19 @@ export async function startElectronApplication(): Promise<void> {
 
 		app.setName(AshApplicationName);
 		configureApplicationDataPaths();
-		const messages = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!.bundles.ash!;
 		const initialLaunchArguments = parseMainProcessArgv({ arguments: process.argv, packaging: app.isPackaged ? 'packaged' : 'development', appPath: app.getAppPath() });
-		const { args } = parseWindowLaunch(initialLaunchArguments, process.cwd(), messages['taskbar.invalidAgentsArguments']!);
-		if (args.wait && !args.waitMarkerFilePath) {
-			const marker = join(tmpdir(), `ash-wait-${randomUUID()}`);
-			await writeFile(marker, '', { flag: 'wx' });
-			const separator = process.argv.indexOf('--');
-			process.argv.splice(separator < 0 ? process.argv.length : separator, 0, `--waitMarkerFilePath=${marker}`);
-		}
+		const { args } = parseWindowLaunch(initialLaunchArguments, process.cwd(), localize2('taskbar.invalidAgentsArguments', 'Open the Agents window with --agents-window and an optional --folder or --workspace target. File, window, and wait options cannot be combined with it.').original);
+		if (args.wait && !args.waitMarkerFilePath && !developmentLauncher) await addWaitMarker();
 
 		const launchArguments = parseMainProcessArgv({ arguments: process.argv, packaging: app.isPackaged ? 'packaged' : 'development', appPath: app.getAppPath() });
-		if (!app.requestSingleInstanceLock({ launchArguments })) {
+		if (!app.requestSingleInstanceLock({ launchArguments, developmentLauncher })) {
+			if (developmentLauncher && process.connected && process.send) {
+				// A debugger may already have started the replacement while its previous
+				// instance is still saving state. Let the launcher wait for that lock.
+				await new Promise<void>(done => { process.send!('ash:dev:busy', () => done()); });
+				app.quit();
+				return;
+			}
 			const marker = parseLaunchArguments(launchArguments).waitMarkerFilePath;
 			if (marker) {
 				await waitForMarkerDeletion(marker);
@@ -66,17 +80,28 @@ export async function startElectronApplication(): Promise<void> {
 			app.quit();
 			return;
 		}
+		// Supervised retries must not create markers or open their arguments in
+		// the previous instance. Only the successful replacement owns this wait.
+		if (args.wait && !args.waitMarkerFilePath && developmentLauncher) await addWaitMarker();
 
 		application = await AshApplication.create({
 			rendererRoot,
 			appServerStartupMode,
+			developmentLauncher,
 		}, mainServices);
 
-		void startup(application);
+		void startup(application, developmentLauncher);
 	} finally {
 		// Once created, the application owns this scope through shutdown/failure cleanup.
 		if (!application) mainServices.dispose();
 	}
+}
+
+async function addWaitMarker(): Promise<void> {
+	const marker = join(tmpdir(), `ash-wait-${randomUUID()}`);
+	await writeFile(marker, '', { flag: 'wx' });
+	const separator = process.argv.indexOf('--');
+	process.argv.splice(separator < 0 ? process.argv.length : separator, 0, `--waitMarkerFilePath=${marker}`);
 }
 
 async function waitForMarkerDeletion(marker: string): Promise<void> {
@@ -105,9 +130,10 @@ async function waitForMarkerDeletion(marker: string): Promise<void> {
 	});
 }
 
-async function startup(application: AshApplication): Promise<void> {
+async function startup(application: AshApplication, developmentLauncher: boolean): Promise<void> {
 	try {
 		await application.startup();
+		if (developmentLauncher && process.connected) process.send?.('ash:dev:ready');
 	} catch (error) {
 		if (isCancellationError(error)) { return; }
 		console.error('Failed to start Ash', error);

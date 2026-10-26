@@ -47,12 +47,12 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 		this._register(contributions.onDidChangeTerminalProfiles(() => this.fireProfilesChanged()));
 		this._register(processes.onConnectionState(state => {
 			this.invalidate();
-			if (state === 'ready' && this.activated && workspace.getWorkspace().folders.length) this.refreshInBackground();
+			if (state === 'ready' && this.activated) this.refreshInBackground();
 		}));
 		this._register(workspace.onDidChangeWorkspace(() => {
 			if (!workspace.getWorkspace().folders.some(folder => folder.id === this.selectedDirId)) this.selectedDirId = undefined;
 			this.invalidate();
-			if (this.activated && workspace.getWorkspace().folders.length) this.refreshInBackground();
+			if (this.activated) this.refreshInBackground();
 		}));
 		const os = this.processes.operatingSystem;
 		if (os) registerTerminalDefaultProfileConfiguration({ os, profiles: this.availableProfiles }, this.contributedProfiles);
@@ -100,7 +100,7 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 
 	private profileEntries(os: OperatingSystem | undefined, dirId: string | undefined): ITerminalProfile[] {
 		const folders = this.workspace.getWorkspace().folders;
-		const scope = dirId ?? (folders.length === 1 ? folders[0]!.id : undefined);
+		const scope = dirId || (folders.length === 1 ? folders[0]!.id : undefined);
 		const detected = this.catalogs.get(scope) ?? [];
 		const platform = platformKey(os);
 		const definitions = platform ? this.configuration.getValue<Readonly<Record<string, ProfileDefinition>>>(`${TerminalSettingPrefix.Profiles}${platform}`) : {};
@@ -129,6 +129,9 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 
 	refreshAvailableProfiles(selectedDirId = this.selectedDirId): Promise<void> {
 		if (this.isDisposed) return Promise.reject(new CancellationError());
+		// Instances without a workspace folder use an empty presentation identity;
+		// execution-host requests and the host profile catalog use no directory ID.
+		selectedDirId = selectedDirId || undefined;
 		this.activated = true;
 		if (selectedDirId !== this.selectedDirId) {
 			this.selectedDirId = selectedDirId;

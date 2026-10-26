@@ -48,7 +48,7 @@
 .ash-modal-editor-title {
 	min-width: 0;
 	overflow: hidden;
-	flex: 1;
+	flex: 0 1 auto;
 	margin: 0;
 	font-size: var(--ash-fontSize-heading3);
 	font-weight: var(--ash-fontWeight-semiBold);
@@ -56,16 +56,17 @@
 	white-space: nowrap;
 }
 
-.ash-modal-editor-actions {
-	flex: 0 0 auto;
-	margin-inline-end: 4px;
+.ash-modal-editor-title-controls {
+	display: flex;
+	min-width: 0;
+	flex: 1 1 0;
+	align-items: center;
+	margin-inline-start: var(--ash-spacing-size160);
 }
 
-.ash-modal-editor .ash-modal-editor-close {
-	width: 28px;
-	min-width: 28px;
-	height: 28px;
-	padding: 0;
+.ash-modal-editor-actions,
+.ash-modal-editor-close {
+	flex: 0 0 auto;
 }
 
 .ash-modal-editor-content {

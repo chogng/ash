@@ -742,6 +742,72 @@ class FakeServerEvents implements IServerEventApi {
 	fire(event: ServerNotification): void { if (event.method === 'language/serverCapabilities') this.capabilityNotifications.push(event.params); this.listener?.(event); }
 }
 
+test('duplicate capability notifications do not rediscover servers or invalidate editor features', async () => {
+	using languages = new LanguageFeaturesService();
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	const api = new FakeLanguageApi();
+	const events = new FakeServerEvents();
+	using providers = createProviders(languages, api, workspace, { events });
+	using model = new TextModel('fn main() {}', { languageId: 'rust', resource: URI.file('/project/main.rs') });
+	await tick();
+	const provider = languages.hoverProvider.ordered(model)[0]!;
+	const capabilities = events.capabilityNotifications.find(value => value.languageIds.includes('rust'))!;
+	let discoveries = 0, invalidations = 0;
+	api.onServers = () => { discoveries++; };
+	using registration = languages.inlayHintsProvider.onDidChange(() => { invalidations++; });
+	for (let index = 0; index < 5; index++) {
+		events.fire({ method: 'language/serverCapabilities', params: structuredClone(capabilities) });
+		await tick();
+	}
+	assert.equal(discoveries, 0, 'identical capabilities do not require another server discovery');
+	assert.equal(invalidations, 0, 'unchanged capabilities must not restart editor feature requests');
+	assert.equal(languages.hoverProvider.ordered(model)[0], provider);
+});
+
+test('unrelated profile changes preserve language provider registrations', async () => {
+	using languages = new LanguageFeaturesService();
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	const api = new FakeLanguageApi();
+	const events = new FakeServerEvents();
+	using providers = createProviders(languages, api, workspace, { events });
+	using model = new TextModel('fn main() {}', { languageId: 'rust', resource: URI.file('/project/main.rs') });
+	await tick();
+	const provider = languages.hoverProvider.ordered(model)[0]!;
+	let discoveries = 0, invalidations = 0;
+	api.onServers = () => { discoveries++; };
+	using registration = languages.inlayHintsProvider.onDidChange(() => { invalidations++; });
+	for (let revision = 1; revision <= 5; revision++) {
+		events.fire({ method: 'config/changed', params: { revision, generation: revision } });
+		await tick();
+	}
+	assert.equal(discoveries, 5, 'profile updates still discover changed server routes');
+	assert.equal(invalidations, 0, 'unchanged routes and capabilities retain editor registrations');
+	assert.equal(languages.hoverProvider.ordered(model)[0], provider);
+	const signal = new AbortController().signal;
+	const hover = await provider.provideHover({ ...createLanguageFeatureRequest(model, 'rust', signal), resource: model.uri, position: new Position(1, 4) }, signal);
+	assert.ok(hover);
+	assert.equal(api.hoverRequests.length, 1, 'the retained provider still executes semantic requests');
+});
+
+test('a restarted server replaces its providers even when its capabilities are unchanged', async () => {
+	using languages = new LanguageFeaturesService();
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+	const api = new FakeLanguageApi();
+	const events = new FakeServerEvents();
+	using providers = createProviders(languages, api, workspace, { events });
+	using model = new TextModel('fn main() {}', { languageId: 'rust', resource: URI.file('/project/main.rs') });
+	await tick();
+	const provider = languages.hoverProvider.ordered(model)[0]!;
+	const capabilities = events.capabilityNotifications.find(value => value.languageIds.includes('rust'))!;
+	events.fire({ method: 'language/serverState', params: { server: capabilities.server, state: { type: 'starting' } } });
+	await tick();
+	assert.equal(languages.hoverProvider.has(model), false, 'the old incarnation is withdrawn');
+	events.fire({ method: 'language/serverCapabilities', params: structuredClone(capabilities) });
+	await tick();
+	assert.ok(languages.hoverProvider.has(model));
+	assert.notEqual(languages.hoverProvider.ordered(model)[0], provider, 'equal capabilities cannot revive the retired registration');
+});
+
 test('idle release keeps demand providers available while explicit stop withdraws them', async () => {
 	using languages = new LanguageFeaturesService();
 	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });

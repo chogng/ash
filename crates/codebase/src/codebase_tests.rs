@@ -28,6 +28,78 @@ fn memory_index(directory: &TempDir) -> Codebase {
 }
 
 #[test]
+fn unchanged_watcher_hints_preserve_content_but_detect_equal_size_saves() {
+    let directory = dir();
+    let path = directory.path().join("lib.rs");
+    let original = "pub fn original() {}\n";
+    fs::write(&path, original).unwrap();
+    let modified = fs::metadata(&path).unwrap().modified().unwrap();
+    let index = memory_index(&directory);
+    let baseline = index.rebuild().unwrap();
+    for _ in 0..3 {
+        assert_eq!(
+            index
+                .refresh_observed_paths(std::slice::from_ref(&path))
+                .unwrap(),
+            RefreshOutcome::NoChange
+        );
+    }
+    assert_eq!(index.snapshot().unwrap(), baseline);
+    let updated = "pub fn modified() {}\n";
+    assert_eq!(updated.len(), original.len());
+    fs::write(&path, updated).unwrap();
+    fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(modified)
+        .unwrap();
+    assert!(matches!(
+        index
+            .refresh_observed_paths(std::slice::from_ref(&path))
+            .unwrap(),
+        RefreshOutcome::Published(_)
+    ));
+    assert_eq!(
+        index.search(&CodebaseQuery::new("modified")).unwrap().len(),
+        1
+    );
+    assert!(
+        index
+            .search(&CodebaseQuery::new("original"))
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+#[ignore = "manual unchanged-source refresh benchmark"]
+fn unchanged_watcher_hint_benchmark() {
+    let directory = dir();
+    let path = directory.path().join("large.rs");
+    let source = (0..4000)
+        .map(|i| format!("pub fn function_{i}(value: usize) -> usize {{ value + {i} }}\n"))
+        .collect::<String>();
+    fs::write(&path, &source).unwrap();
+    let index = memory_index(&directory);
+    index.rebuild().unwrap();
+    let started = std::time::Instant::now();
+    for _ in 0..40 {
+        assert_eq!(
+            index
+                .refresh_observed_paths(std::slice::from_ref(&path))
+                .unwrap(),
+            RefreshOutcome::NoChange
+        );
+    }
+    eprintln!(
+        "unchanged watcher: {} bytes, 40 hints, {:?}",
+        source.len(),
+        started.elapsed()
+    );
+}
+
+#[test]
 fn source_detection_uses_package_filenames_suffixes_and_first_lines() {
     let directory = dir();
     for (path, text) in [

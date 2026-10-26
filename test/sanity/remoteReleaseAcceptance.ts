@@ -7,7 +7,8 @@ import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { parseArgs, promisify } from 'node:util';
 import { buildAppServerEnvironment } from '../../src/ash/platform/agentHost/common/appServerEnvironment.js';
-import { validateAppServerInitializeResult } from '../../src/ash/platform/agentHost/common/appServerProtocolCompatibility.js';
+import { checkAppServerInitializeCompatibility } from '../../src/ash/platform/agentHost/common/appServerProtocolCompatibility.js';
+import { decodeAppServerResult } from '../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { AppServerDaemonLauncher } from '../../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
 import { createSshRemoteWorkspaceUri } from '../../src/ash/platform/remote/common/remote.js';
 import { RemoteConnectionProfiles } from '../../src/ash/platform/remote/electron-main/remoteConnectionProfiles.js';
@@ -90,7 +91,7 @@ try {
 				} finally { clearTimeout(timer!); replies.delete(key); }
 			}
 			try {
-				const initialized = validateAppServerInitializeResult(await rpc('initialize', { clientInfo: { name: 'desktop-release-acceptance', version: '1' }, capabilities: {} }), { expectedServerName: 'ash-app-server' });
+				const initialized = checkAppServerInitializeCompatibility(decodeAppServerResult('initialize', await rpc('initialize', { clientInfo: { name: 'desktop-release-acceptance', version: '1' }, capabilities: {} })), { expectedServerName: 'ash-app-server' });
 				assert.equal(initialized.protocolVersion.major, release.protocol.major);
 				assert.equal(initialized.schemaHash, release.protocol.schemaHash);
 				await bootstrap.processLauncher.didInitialize();

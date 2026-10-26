@@ -298,9 +298,24 @@ impl AppServer {
                 .is_none()
             {
                 if let Err(error) = start {
+                    observed.message = Some(format!("Agent start failed: {:?}", error.message));
+                    if run.definition.condition.is_some()
+                        && matches!(
+                            error.cause.as_deref(),
+                            Some(CoreError::ThreadStore(
+                                thread_store::ThreadStoreError::SequenceConflict { .. }
+                            ))
+                        )
+                    {
+                        // A synchronous sequence rejection with no durable acceptance can
+                        // retry. Keep the active run, event claim and command ID together:
+                        // the next poll (or restart) reconciles this same command before
+                        // submitting with the latest sequence. Other failures retain the
+                        // claim and must not authorize a replacement execution.
+                        return Ok(observed);
+                    }
                     observed.status = AutomationRunStatus::Failed;
                     observed.finished_at = Some(now);
-                    observed.message = Some(format!("Agent start failed: {:?}", error.message));
                     return Ok(observed);
                 }
                 return Err("Accepted automation turn is not yet observable".into());

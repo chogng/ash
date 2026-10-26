@@ -32,6 +32,8 @@ import type { TextResourceLanguageResolver } from '../../../../platform/language
 export abstract class EditorPane extends Composite implements IEditorPane {
 	/** Assigned by the group host before the pane creates its content. Modal panes have no document group. */
 	public group: IEditorGroup | undefined;
+	/** Pane-owned controls that the modal host mounts beside its title and detaches on close. */
+	public getTitleControl(): HTMLElement | undefined { return undefined; }
 	public abstract setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void>;
 	public abstract clearInput(): void;
 	public abstract layout(dimension: IDimension): void;

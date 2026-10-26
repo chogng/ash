@@ -117,9 +117,9 @@ export class FontMeasurementsImpl extends Disposable {
 		const fullwidth = add('\uff4d');
 		const space = add(' ', CharWidthRequestType.Regular, true);
 		const digits = [...'0123456789'].map(chr => add(chr, CharWidthRequestType.Regular, true));
-		const arrow = add('\u2192', CharWidthRequestType.Regular, true);
+		const arrow = add('\u2192');
 		const halfArrow = add('\uffeb');
-		const middot = add('\u00b7', CharWidthRequestType.Regular, true);
+		const middot = add('\u00b7');
 		const wordSeparatorMiddot = add('\u2e31');
 		for (const chr of '|/-_ilm%') {
 			add(chr, CharWidthRequestType.Regular, true);
@@ -128,6 +128,7 @@ export class FontMeasurementsImpl extends Disposable {
 		}
 		readCharWidths(targetWindow, bareFontInfo, requests);
 		const referenceWidth = monospace[0]!.width;
+		// Symbol fallback fonts can have different advances without changing ASCII spacing.
 		const isMonospace = bareFontInfo.fontFeatureSettings === EditorFontLigatures.OFF
 			&& monospace.every(request => Math.abs(request.width - referenceWidth) <= 0.001);
 		const canUseHalfwidthRightwardsArrow = (!isMonospace || halfArrow.width === referenceWidth)

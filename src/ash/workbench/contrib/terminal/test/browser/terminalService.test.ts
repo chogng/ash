@@ -295,20 +295,59 @@ for (const rejectFirst of [false, true]) {
 	});
 }
 
-test("TerminalService keeps empty windows off the process API and enables a folder after transition", async () => {
+test('TerminalService creates, splits and relaunches a shell without a workspace folder', async () => {
 	const processService = new TestTerminalProcessService([]);
+	const profileDirectories: (string | undefined)[] = [];
+	const listProfiles = processService.listProfiles.bind(processService);
+	processService.listProfiles = async (dirId?: string) => { profileDirectories.push(dirId); return listProfiles(); };
 	using workspace = new TestWorkspaceService({ id: "empty-window" });
-	using services = terminalServices(processService, workspace);
+	using services = revivalServices(processService, workspace);
+	services.registerInstance(IViewsService, { getViewWithId: () => undefined } as unknown as IViewsService);
 	const service = services.get(ITerminalService);
 
-	await assert.rejects(service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: "default" } }), /TerminalUnavailable/);
-	assert.equal(processService.profileListCalls, 0);
-	assert.equal(processService.createCalls.length, 0);
+	const instance = await service.createTerminal({ deferStart: true });
+	assert.equal(instance.dirId, '');
+	assert.equal(instance.initialCwd, '/backend/workspace', 'the execution host supplies the initial directory');
+	assert.equal(processService.createCalls[0]!.dirId, undefined);
+	assert.equal(processService.createCalls[0]!.cwd, undefined);
+	const profiles = services.get(ITerminalProfileService);
+	await profiles.refreshAvailableProfiles(instance.dirId);
+	assert.equal(profiles.getAvailableProfiles(instance.dirId)[0]!.profileId, DEFAULT_PROFILE.profileId);
+	assert.ok(profileDirectories.every(dirId => dirId === undefined), 'profile commands use the execution host without a folder ID');
+	instance.start();
+	await waitFor(() => instance.state === 'running');
+	const split = await service.createTerminal({ location: { parentTerminal: instance }, deferStart: true });
+	assert.equal(split.dirId, '');
+	assert.equal(processService.createCalls[1]!.dirId, undefined);
+	assert.equal(processService.createCalls[1]!.cwd, '/workspace/current', 'splits inherit the backend-reported current directory');
+	await service.relaunchTerminal(instance, { rows: 30, cols: 100 });
+	assert.equal(processService.createCalls[2]!.dirId, undefined);
+	assert.equal(service.instances.length, 2);
+	await service.closeTerminal(instance);
+	await service.closeTerminal(split);
+	assert.ok(processService.closeOptions.every(options => options.dirId === undefined));
 
 	workspace.updateWorkspace({ id: "workspace", uri: URI.file("/workspace") });
 	await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: "default" } });
-	assert.equal(processService.profileListCalls, 0);
-	assert.equal(processService.createCalls.length, 1);
+	assert.equal(processService.createCalls.at(-1)!.dirId, 'workspace');
+});
+
+test('empty-window terminal checkpoints revive without a process directory and reject another folder identity', async () => {
+	const processes = new TestTerminalProcessService([], 'reconnectable');
+	using workspace = new TestWorkspaceService({ id: 'empty-window' });
+	using services = revivalServices(processes, workspace);
+	const snapshot = { ...reviveSnapshot(workspace), dirId: '', cwd: '/home/test' };
+	const state = reviveState(workspace, snapshot);
+	const text = JSON.stringify(state);
+	assert.deepEqual(parseTerminalReloadState(text), state);
+	assert.throws(() => parseTerminalReloadState(JSON.stringify(reviveState(workspace, { ...snapshot, processDirId: 'another-folder' }))), /checkpoint/);
+	services.get(IStorageService).store(TerminalStorageKeys.Revive, text, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	const service = services.get(ITerminalService);
+	await service.whenConnected;
+	assert.equal(service.instances.length, 1);
+	assert.equal(service.instances[0]!.dirId, '');
+	assert.equal(processes.createCalls[0]!.dirId, undefined);
+	assert.equal(processes.createCalls[0]!.cwd, '/home/test');
 });
 
 test('a single Session folder keeps its process route through creation and closing after selection changes', async () => {
@@ -506,15 +545,17 @@ test("TerminalService resumes reconnectable terminals from their existing output
 	let initialReadConsumed = false;
 	using commandListener = instance.onDidChangeCommandStatus(() => { initialReadConsumed = true; });
 	await waitFor(() => initialReadConsumed);
+	const outputBeforeReconnect = [...output];
 
 	processService.emitConnectionState("crashed");
 	await waitFor(() => instance.state === "reconnecting");
+	assert.deepEqual(output, outputBeforeReconnect);
 	const supersededRead = deferred<ITerminalProcessReadResult>();
 	processService.queueRead(supersededRead.promise);
 	processService.emitConnectionState("ready");
 	await waitFor(() => processService.readCursors.length >= 2);
 	assert.equal(instance.state, "reconnecting");
-	assert.equal(output.some(value => value.includes("terminal reconnected")), false);
+	assert.deepEqual(output, outputBeforeReconnect);
 
 	processService.emitConnectionState("crashed");
 	supersededRead.resolve(readResult({ nextSequence: 4, nextCommandSequence: 2, shellIntegration: integration }));
@@ -530,8 +571,9 @@ test("TerminalService resumes reconnectable terminals from their existing output
 	assert.equal(instance.shellIntegration?.hasRichCommandDetection, true);
 	assert.deepEqual(processService.readCursors.slice(0, 3), [0, 4, 4]);
 	assert.deepEqual(processService.commandReadCursors.slice(0, 3), [0, 2, 2]);
-	assert.ok(output.some(value => value.includes("terminal reconnecting")));
-	assert.ok(output.some(value => value.includes("terminal reconnected")));
+	assert.deepEqual(output, outputBeforeReconnect);
+	await instance.sendText('after reconnect', false);
+	assert.deepEqual(processService.writeCalls.map(call => call.data), ['after reconnect']);
 });
 
 test("TerminalService exposes failed reconnectable recovery as a relaunchable error", async () => {
@@ -1287,7 +1329,8 @@ suite('TerminalService lifecycle', () => {
 				writes: [],
 				resizes: [],
 			});
-			assert.match(outputs.join(''), persistence === 'reconnectable' ? /terminal reconnecting/ : /terminal connection lost/);
+			if (persistence === 'reconnectable') assert.deepEqual(outputs, []);
+			else assert.match(outputs.join(''), /terminal connection lost/);
 			processService.emitConnectionState('ready');
 			if (persistence === 'reconnectable') {
 				await waitFor(() => instance.state === 'running');
@@ -2737,7 +2780,7 @@ function revivalServices(...args: Parameters<typeof terminalServices>): Instanti
 
 function reviveSnapshot(workspace: IWorkspaceContextService): ITerminalSerializedState {
 	return {
-		instanceId: 7, resource: getTerminalUri('saved-window', 7).toString(), dirId: workspace.getWorkspace().folders[0]!.id,
+		instanceId: 7, resource: getTerminalUri('saved-window', 7).toString(), dirId: workspace.getWorkspace().folders[0]?.id ?? '',
 		process: { terminalId: 'original-pty', ready: { pid: 321, cwd: '/original' }, profile: DEFAULT_PROFILE, connectionPersistence: 'reconnectable' },
 		title: 'Saved shell', target: TerminalLocation.Panel, cols: 120, rows: 40, sequence: 88, pendingUtf8: [0xe4, 0xb8], vt: 'retained-output', cwd: '/workspace/current',
 		launch: { profile: { type: 'custom', name: 'Saved profile', path: ['/bin/sh'], args: ['-l'] }, env: { KEPT: 'value', REMOVED: null }, strictEnv: true, cwd: '/original' },

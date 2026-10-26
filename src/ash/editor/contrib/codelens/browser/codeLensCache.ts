@@ -2,6 +2,7 @@ import { DisposableStore, type IDisposable, toDisposable } from '../../../../bas
 import { LRUCache } from '../../../../base/common/map.js';
 import { URI } from '../../../../base/common/uri.js';
 import { type IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { Position } from '../../../common/core/position.js';
 import { Range, type IRange } from '../../../common/core/range.js';
 import { type CodeLensProvider } from '../../../common/languages.js';
@@ -24,7 +25,7 @@ const cachedCodeLensProvider: CodeLensProvider = {
 };
 
 /** Owns the bounded non-executable cache and its optional workspace storage binding. */
-class CodeLensCache {
+export class CodeLensCache {
 	private readonly entries = new LRUCache<string, CacheEntry>(20, 0.75);
 	private storageBinding: IDisposable | undefined;
 
@@ -79,10 +80,12 @@ class CodeLensCache {
 	}
 }
 
-export const codeLensCache = new CodeLensCache();
-
-export function bindCodeLensCacheStorage(storageService: IStorageService): IDisposable {
-	return codeLensCache.bindStorage(storageService);
+// Embedded editors can share a page while retaining independent provider and storage owners.
+const caches = new WeakMap<ILanguageFeaturesService, CodeLensCache>();
+export function getCodeLensCache(features: ILanguageFeaturesService): CodeLensCache {
+	let cache = caches.get(features);
+	if (!cache) caches.set(features, cache = new CodeLensCache());
+	return cache;
 }
 
 function createCachedItem(range: IRange, title: string | undefined): CodeLensItem {

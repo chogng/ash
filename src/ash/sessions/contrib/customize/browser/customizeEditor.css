@@ -233,6 +233,10 @@
 	padding: var(--ash-spacing-size200);
 }
 
+.ash-customize.narrow .ash-sessions-loading.cards .ash-sessions-loading-shapes {
+	grid-template-columns: minmax(0, 1fr);
+}
+
 .ash-customize.narrow .ash-customize-grid {
 	grid-template-columns: minmax(0, 1fr);
 }

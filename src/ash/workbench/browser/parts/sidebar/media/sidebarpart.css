@@ -6,11 +6,13 @@
 }
 
 .ash-workbench-sidebar {
-	border-right: var(--ash-strokeThickness) solid var(--ash-border);
+	border-right: var(--ash-strokeThickness) solid
+		var(--ash-sideBar-border, var(--ash-contrastBorder, transparent));
 }
 
 .ash-workbench-agentSidebar {
-	border-left: var(--ash-strokeThickness) solid var(--ash-border);
+	border-left: var(--ash-strokeThickness) solid
+		var(--ash-sideBar-border, var(--ash-contrastBorder, transparent));
 }
 .ash-sidebar-part {
 	background: var(--ash-sideBar-background);

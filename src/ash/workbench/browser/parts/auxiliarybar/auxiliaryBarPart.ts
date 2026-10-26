@@ -31,7 +31,8 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 	private readonly titleHost: HTMLDivElement;
 	private readonly activeTitle: HTMLSpanElement;
 
-	override get minimumWidth(): number { return 170; }
+	// The leading stroke occupies one pixel outside the hosted pane's content width.
+	override get minimumWidth(): number { return Math.max(170, super.minimumWidth + 1); }
 	override get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
 	override get preferredWidth(): number | undefined {
 		const active = this.activeCompositeId;

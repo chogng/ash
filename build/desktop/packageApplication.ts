@@ -1,5 +1,21 @@
+import { cp, mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
+
 /** Hoist only the deployment: development keeps pnpm's isolated workspace layout. */
 export const productionDependencyDeployOptions = ['--filter', 'ash', '--config.node-linker=hoisted', 'deploy', '--prod', '--ignore-scripts'] as const;
+
+/** Deploy dependencies from locked manifests without traversing the build tree being packaged. */
+export async function prepareProductionDependencyWorkspace(repository: string, destination: string): Promise<void> {
+	await mkdir(destination, { recursive: true });
+	for (const file of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches', 'licenses', 'THIRD_PARTY_NOTICES.md']) {
+		try {
+			await cp(join(repository, file), join(destination, file), { recursive: true, errorOnExist: true, force: false });
+		} catch (error) {
+			if (['licenses', 'THIRD_PARTY_NOTICES.md'].includes(file) && (error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+			throw error;
+		}
+	}
+}
 
 /** Packager supplies POSIX paths relative to the application stage, with a leading slash. */
 export function ignoreApplicationFile(path: string, platform: NodeJS.Platform = process.platform): boolean {

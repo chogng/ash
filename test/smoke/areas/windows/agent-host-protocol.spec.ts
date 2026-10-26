@@ -4,7 +4,7 @@ import { Workbench } from '../../../automation/workbench.js';
 import { createTestWorkspace, disposeTestWorkspace } from '../../../automation/testWorkspace.js';
 import { createTestEnvironment } from '../../../automation/testEnvironment.js';
 import { developmentAshPackagePath } from '../../../../build/desktop/runtimeStore.js';
-import { validateAppServerInitializeResult } from '../../../../src/ash/platform/agentHost/common/appServerProtocolCompatibility.js';
+import { checkAppServerInitializeCompatibility } from '../../../../src/ash/platform/agentHost/common/appServerProtocolCompatibility.js';
 import { decodeAppServerResponse } from '../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -89,7 +89,7 @@ async function initializationEvidence(page: Page): Promise<{ requestId: unknown;
 	const decoded = decodeAppServerResponse('initialize', response!.frame);
 	expect('result' in decoded).toBe(true);
 	if (!('result' in decoded)) { throw new Error('Initialize returned an error'); }
-	const initialized = validateAppServerInitializeResult(decoded.result, { expectedServerName: 'ash-app-server' });
+	const initialized = checkAppServerInitializeCompatibility(decoded.result, { expectedServerName: 'ash-app-server' });
 	return { requestId: request!.frame.id, schemaHash: initialized.schemaHash, server: initialized.serverInfo.name, frames };
 }
 
@@ -173,7 +173,7 @@ test('Browser protocol isolates matching request IDs and closing a page preserve
 		for (const response of [pair.leftInitialize, pair.rightInitialize]) {
 			const initialized = decodeAppServerResponse('initialize', response);
 			expect('result' in initialized).toBe(true);
-			if ('result' in initialized) { validateAppServerInitializeResult(initialized.result, { expectedServerName: 'ash-app-server' }); }
+			if ('result' in initialized) { checkAppServerInitializeCompatibility(initialized.result, { expectedServerName: 'ash-app-server' }); }
 		}
 		const left = decodeAppServerResponse('session/create', pair.leftResult);
 		const right = decodeAppServerResponse('session/create', pair.rightResult);

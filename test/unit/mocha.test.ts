@@ -105,6 +105,10 @@ test('default discovery and source filters include extension-owned units alongsi
 	const selected = run(['--run', paths[2].replace(/\.js$/u, '.ts')]);
 	assert.equal(selected.status, 0, selected.output);
 	assert.match(selected.output, /1 tests executed across 1 files; 0 failed files/);
+	const affected = run(['--affected', 'HEAD']);
+	assert.equal(affected.status, 0, affected.output);
+	assert.match(affected.output, /Unit test impact: full suite;/u);
+	assert.match(affected.output, /3 tests executed across 3 files; 0 failed files/u);
 });
 
 test('invalid unit filters fail before copying outputs or starting the selected file', () => {
@@ -112,6 +116,15 @@ test('invalid unit filters fail before copying outputs or starting the selected 
 		const result = run(['--run', first, ...args], 'test/unit/run.ts', join(directory, 'missing-compiler-output'));
 		assert.equal(result.status, 1, result.output);
 		assert.match(result.output, /Missing value for --grep|nonempty pattern|Unsupported unit test option|Invalid worker count/);
+		assert.doesNotMatch(result.output, /tests executed|runner regression sentinel/);
+	}
+});
+
+test('affected selection rejects conflicting filters and incomplete revisions before copying outputs', () => {
+	for (const args of [['--affected', 'HEAD', '--run', first], ['--affected', 'HEAD', '--runGlob', '**/*.js'], ['--affected', ''], ['--affected', '--grep', 'x'], ['--affected', 'HEAD', '--affected', 'HEAD']]) {
+		const result = run(args, 'test/unit/run.ts', join(directory, 'missing-compiler-output'));
+		assert.equal(result.status, 1, result.output);
+		assert.match(result.output, /--affected (?:requires|cannot)|Missing value for --affected/u);
 		assert.doesNotMatch(result.output, /tests executed|runner regression sentinel/);
 	}
 });

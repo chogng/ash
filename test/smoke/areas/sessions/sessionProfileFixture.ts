@@ -68,12 +68,14 @@ export async function connectProfile(application: PlaywrightApplication, web: We
 	const webPackage = web ? developmentAshPackagePath(resolve(import.meta.dirname, '../../../..'), 'packaged-node') : undefined;
 	const host = web ? {
 		appPath: webPackage!, resourcesPath: webPackage!, electronExecutable: process.execPath,
+		isPackaged: true,
 		profileRoot: web.profileDirectory, sourceEnvironment: { ...createTestEnvironment(web.profileDirectory, process.env), ASH_PRODUCT_SERVICES_PATH: join(web.profileDirectory, 'product-services.json') },
 	} : await (application as Extract<PlaywrightApplication, { evaluate: unknown; }>).evaluate(({ app }) => ({
 		appPath: app.getAppPath(), resourcesPath: process.resourcesPath, electronExecutable: process.execPath,
+		isPackaged: app.isPackaged,
 		profileRoot: process.env.ASH_HOME!, sourceEnvironment: { PATH: process.env.PATH, HOME: process.env.HOME, SystemRoot: process.env.SystemRoot, ASH_RG_PATH: process.env.ASH_RG_PATH, ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH, ASH_USE_INMEMORY_SECRETSTORAGE: process.env.ASH_USE_INMEMORY_SECRETSTORAGE },
 	}));
-	const { launcher } = createAppServerDaemonLauncher({ ...host, profileRoot: options.profileRoot ?? host.profileRoot, packageLocation: { appPath: host.appPath, resourcesPath: host.resourcesPath, isPackaged: !!web, platform: process.platform }, workspaceRoot, role: options.directoryGrantsHost ? 'workbench' : 'agents' });
+	const { launcher } = createAppServerDaemonLauncher({ ...host, profileRoot: options.profileRoot ?? host.profileRoot, packageLocation: { appPath: host.appPath, resourcesPath: host.resourcesPath, isPackaged: host.isPackaged, platform: process.platform }, workspaceRoot, role: options.directoryGrantsHost ? 'workbench' : 'agents' });
 	let frames: ChildProcessJsonlTransport | undefined;
 	let client: AppServerProtocolClient | undefined;
 	let incoming: { dispose(): void; } | undefined;

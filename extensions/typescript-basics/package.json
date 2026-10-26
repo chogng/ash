@@ -1,5 +1,28 @@
 {
   "name": "typescript",
+  "ashLanguageServers": {
+    "version": 2,
+    "servers": [
+      {
+        "id": "typescript-language-server",
+        "languages": [
+          "typescript",
+          "typescriptreact",
+          "javascript",
+          "javascriptreact"
+        ],
+        "runtime": "node",
+        "entrypoint": "server.mjs",
+        "runtimePackages": [
+          "typescript"
+        ]
+      }
+    ]
+  },
+  "dependencies": {
+    "typescript": "6.0.3",
+    "typescript-language-server": "6.0.2"
+  },
   "ashUiTargets": [
     "ide"
   ],

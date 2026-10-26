@@ -18,11 +18,12 @@ suite('sessions browser component', () => {
 		await expect(navigation).toHaveCSS('justify-content', 'space-between');
 		await expect.poll(() => navigation.evaluate(element => getComputedStyle(element).flexDirection === (element.classList.contains('horizontal') ? 'row' : 'column'))).toBe(true);
 		const icons = navigation.locator('button .ash-icon-label-icon');
-		const itemSize = horizontal ? 24 : 36;
+		const itemWidth = horizontal ? 24 : 36;
+		const itemHeight = horizontal ? 24 : 32;
 		for (const item of await navigation.locator('.ash-composite-bar-navigation-item > button').all()) {
-			if (labeled) { expect((await item.boundingBox())!.width).toBeGreaterThan(itemSize); }
-			else { await expect(item).toHaveCSS('width', `${itemSize}px`); }
-			await expect(item).toHaveCSS('height', `${itemSize}px`);
+			if (labeled) { expect((await item.boundingBox())!.width).toBeGreaterThan(itemWidth); }
+			else { await expect(item).toHaveCSS('width', `${itemWidth}px`); }
+			await expect(item).toHaveCSS('height', `${itemHeight}px`);
 		}
 		await expect(icons).toHaveCount(horizontal || labeled ? 5 : 6);
 		const accounts = navigation.page().getByRole('button', { name: 'Accounts', exact: true });
@@ -296,7 +297,7 @@ suite('sessions browser component', () => {
 		expect(buttonBounds).not.toBeNull();
 		expect(iconBounds).not.toBeNull();
 		expect(buttonBounds!.width).toBeGreaterThan(36);
-		expect(buttonBounds!.height).toBe(36);
+		expect(buttonBounds!.height).toBe(32);
 		expect(iconBounds!.width).toBe(16);
 		expect(iconBounds!.height).toBe(16);
 		const projectsIcon = activityNavigation.locator('button .ash-icon-label-icon:has(> [data-ash-icon-id="projects"])');
@@ -305,7 +306,7 @@ suite('sessions browser component', () => {
 		await chatButton.click({ button: 'right' });
 		await expect(page.getByRole('menuitem', { name: 'Activity Bar Size' })).toHaveCount(0);
 		await page.keyboard.press('Escape');
-		await expect(chatButton).toHaveCSS('height', '36px');
+		await expect(chatButton).toHaveCSS('height', '32px');
 		await expect(projectsIcon).toHaveCSS('width', '16px');
 		await expectActivityIconSize(activityNavigation, 16);
 		await expect(activityBar).toHaveCount(0);
@@ -492,6 +493,45 @@ suite('sessions browser component', () => {
 		expect((await slider()).translate).toBe('-100%');
 	});
 
+	for (const locale of ['en', 'zh-CN']) test(`Sidebar boundaries follow the theme without changing resize or hide behavior (${locale})`, async function () {
+		const { page } = browserTests;
+		await page.goto(`/sessions.html?locale=${locale}`);
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const sidebar = page.locator('[data-part="sidebar"]');
+		const auxiliarybar = page.locator('[data-part="auxiliarybar"]');
+		const initialWidth = (await sidebar.boundingBox())!.width;
+		for (const [theme, color] of [
+			['ash-light', 'rgba(0, 0, 0, 0)'],
+			['ash-dark', 'rgba(0, 0, 0, 0)'],
+			['ash-high-contrast-dark', 'rgb(255, 255, 255)'],
+			['ash-high-contrast-light', 'rgb(0, 0, 0)'],
+		] as const) {
+			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+			await expect(sidebar).toHaveCSS('border-right-color', color);
+			await expect(auxiliarybar).toHaveCSS('border-left-color', color);
+			expect((await sidebar.boundingBox())!.width).toBe(initialWidth);
+		}
+		await page.evaluate(async () => {
+			await window.ashSessionsIntegration.setTheme('ash-light');
+			await window.ashSessionsIntegration.updateConfiguration('workbench.colorCustomizations', { 'sideBar.border': '#123456' });
+		});
+		await expect(sidebar).toHaveCSS('border-right-color', 'rgb(18, 52, 86)');
+		await expect(auxiliarybar).toHaveCSS('border-left-color', 'rgb(18, 52, 86)');
+		const sash = page.locator('.ash-primary-sidebar-sash');
+		await sash.focus();
+		await sash.press('ArrowRight');
+		await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeGreaterThan(initialWidth);
+		await expect(sidebar).toHaveCSS('border-right-color', 'rgb(18, 52, 86)');
+		const toggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
+		await toggle.click();
+		await expect(sidebar).toBeHidden();
+		await expect.poll(async () => (await page.locator('[data-part="sessions"]').boundingBox())!.x).toBe(0);
+		await toggle.click();
+		await expect(sidebar).toBeVisible();
+		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('workbench.colorCustomizations', {}));
+		await expect(sidebar).toHaveCSS('border-right-color', 'rgba(0, 0, 0, 0)');
+	});
+
 	for (const locale of ['en', 'zh-CN']) test(`Sessions collapsed sidebar hides all navigation and gives its width to the conversation (${locale})`, async function () {
 		const { page } = browserTests;
 		await page.goto(`/sessions.html?locale=${locale}`);
@@ -670,6 +710,8 @@ suite('sessions browser component', () => {
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 			await expect(sessionsWindow).toHaveCSS('font-size', '14px');
+			await expect(page.locator('.ash-sessions-list-item').first()).toHaveCSS('height', '32px');
+			await expect(page.locator('.ash-sessions-list-section-toggle').first()).toHaveCSS('height', '32px');
 			await expect(input).toHaveCSS('font-size', '14px');
 			await expect(page.locator('[data-action-id="sessions.newSession"] button')).toHaveCSS('font-size', '14px');
 		}

@@ -7,6 +7,7 @@ import { autorun } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
@@ -30,6 +31,7 @@ import { IChatGPTService, chatGPTNavigationContainerId, type ChatGPTState } from
 import { SessionsViewRegistry } from '../../../common/views.js';
 import '../../../../base/browser/ui/button/button.css';
 import './media/chatGPTNavigationView.css';
+import { LoadingSkeleton } from '../../../browser/ui/loadingSkeleton.js';
 
 interface ConversationGroup {
 	readonly key: string;
@@ -54,6 +56,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 	constructor(parent: HTMLElement, options: PaneCompositeOptions,
 		@IChatGPTService chat: IChatGPTService,
 		@IEditorService editors: IEditorService,
+		@ICommandService commands: ICommandService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IStorageService storage: IStorageService,
 		@IThemeService theme: IThemeService,
@@ -77,9 +80,13 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 		list.classList.add('ash-chatgpt-navigation-list');
 		list.setAttribute('role', 'navigation');
 		list.setAttribute('aria-label', localize('sessions.chatgpt.conversations', 'Conversations'));
+		const loading = this._register(new LoadingSkeleton(list, localize('sessions.loadingHistory', 'Loading history…')));
 		this._register(addDisposableListener(list, 'click', event => {
 			const item = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('.ash-chatgpt-conversation') : null;
-			if (item?.dataset.conversation) { void chat.select(item.dataset.conversation).then(() => editors.focusActiveEditor()); }
+			if (item?.dataset.conversation) {
+				const id = item.dataset.conversation;
+				void commands.executeCommand('sessions.show.chatgpt').then(() => chat.select(id)).then(() => editors.focusActiveEditor());
+			}
 		}));
 		this._register(addDisposableListener(list, 'keydown', event => {
 			const active = getActiveElement(document) as HTMLButtonElement | null;
@@ -162,7 +169,9 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 				const pane = this.getView(`${chatGPTNavigationContainerId}.${group.key}`);
 				if (pane instanceof ChatGPTNavigationView) { pane.render(group.conversations, state); }
 			}
-			list.setAttribute('aria-busy', String(state.busy));
+			const readingHistory = state.loading?.kind === 'history';
+			loading.setVisible(readingHistory && !state.conversations.length);
+			list.setAttribute('aria-busy', String(readingHistory));
 			scrollable.layout();
 			if (focusedId && hadFocus) { focusConversation(root, focusedId, true); }
 			if (focusedGroup) { this.getView(`${chatGPTNavigationContainerId}.${focusedGroup}`)?.element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')?.focus({ preventScroll: true }); }
@@ -170,6 +179,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 			scheduleLoad();
 		};
 		this._register(autorun(reader => render(chat.state.read(reader))));
+		chat.initialize();
 	}
 
 	private groups(state: ChatGPTState): readonly ConversationGroup[] {
@@ -211,7 +221,7 @@ export class ChatGPTNavigationView extends ViewPane {
 		@IDialogService private readonly dialogs: IDialogService,
 		@IClipboardService private readonly clipboard: IClipboardService,
 	) {
-		super(navigation, { ...options, minimumBodySize: 0 });
+		super(navigation, { ...options, headerSize: 32, minimumBodySize: 0 });
 		this.element.classList.add('ash-chatgpt-navigation-group');
 		this.element.dataset.group = key;
 		this.element.setAttribute('role', 'group');
@@ -229,10 +239,10 @@ export class ChatGPTNavigationView extends ViewPane {
 	public override get maximumSize(): number { return this.minimumSize; }
 
 	public render(conversations: readonly ChatGPTConversation[], state: ChatGPTState): void {
-		if (state.busy && !this.loadingProgress.value) {
+		if (state.loading?.kind === 'history' && !this.loadingProgress.value) {
 			const progress = this.getProgressIndicator().show(true, 150);
 			this.loadingProgress.value = toDisposable(() => progress.done());
-		} else if (!state.busy) this.loadingProgress.clear();
+		} else if (state.loading?.kind !== 'history') this.loadingProgress.clear();
 		if (conversations.length !== this.conversations.length || conversations.some((conversation, index) => conversation !== this.conversations[index])) {
 			this.rows.clear();
 			this.conversations = conversations;

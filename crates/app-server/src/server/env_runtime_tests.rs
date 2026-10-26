@@ -81,6 +81,64 @@ impl core_api::ModelService for RequestRecordingModel {
 }
 
 #[test]
+fn empty_native_window_has_a_terminal_only_home_grant() {
+    let profile = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
+    let server = server()
+        .with_local_env_host(None, DirGrantPolicy::UserConfig(config))
+        .unwrap();
+    let terminals = server.terminal_service_for(None).unwrap();
+    assert!(Arc::ptr_eq(
+        &terminals,
+        &server.terminal_service_for(None).unwrap()
+    ));
+    assert!(!terminals.profiles().is_empty());
+    assert!(server.terminal_service_for(Some("missing-folder")).is_err());
+    assert!(server.file_system_service_for(None).is_err());
+    {
+        let runtime = server.env_runtime.read().unwrap();
+        assert!(runtime.dirs.is_empty());
+        assert!(runtime.selected_grant.is_none());
+        let grant = runtime
+            .execution
+            .projectless_terminal_grant
+            .as_ref()
+            .unwrap();
+        assert_eq!(
+            grant.dir().canonical_path(),
+            dirs::home_dir().unwrap().canonicalize().unwrap()
+        );
+        assert_eq!(
+            grant.permissions(),
+            &Permissions::new([Permission::ExecuteCommands])
+        );
+    }
+    let directory = tempfile::tempdir().unwrap();
+    server
+        .switch_local_dir_root(directory.path().into())
+        .unwrap();
+    assert!(
+        server.terminal_service_for(None).is_err(),
+        "a restricted project must not fall back to home"
+    );
+    assert!(
+        terminals.environment(&["PATH".into()]).is_err(),
+        "retiring the empty runtime revokes its host grant"
+    );
+}
+
+#[test]
+fn empty_web_window_does_not_acquire_native_terminal_authority() {
+    let profile = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
+    let server = server()
+        .with_local_env_host(None, DirGrantPolicy::WebSession(config))
+        .unwrap();
+    assert!(server.terminal_service_for(None).is_err());
+    assert!(server.configured_terminal_services().is_empty());
+}
+
+#[test]
 fn directory_cleanup_does_not_retain_the_disposed_environment_runtime() {
     let profile = tempfile::tempdir().unwrap();
     let directory = tempfile::tempdir().unwrap();

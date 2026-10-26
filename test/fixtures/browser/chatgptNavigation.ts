@@ -13,6 +13,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../src/ash/p
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
+import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { ChatGPTService, IChatGPTService } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.js';
 import { ChatGPTNavigationViewPaneContainer } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTNavigationView.js';
 import { ChatGPTWidget } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTWidget.js';
@@ -137,6 +138,7 @@ services.registerSingleton(ISpeechService, () => services.createInstance(SpeechS
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
 registerTestComponentServices(services);
+resources.add(CommandsRegistry.register('sessions.show.chatgpt', () => { }));
 const commands = resources.add(new CommandService(services));
 services.registerInstance(IContextMenuService, resources.add(new BrowserContextMenuService(
 	new MenuService(commands, services.get(IContextKeyService)), services.get(IContextKeyService),

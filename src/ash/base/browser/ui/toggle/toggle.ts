@@ -2,6 +2,8 @@ import './toggle.css';
 import { Emitter, type Event } from "../../../common/event.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import { addDisposableListener, h, text as createText } from "../../dom.js";
+import { appendIcon } from '../lxicons/lxicon.js';
+import { Lxicon } from '../../../common/lxicons.js';
 
 export interface IToggleStyles {
 	readonly inputActiveOptionBorder: string | undefined;
@@ -135,11 +137,15 @@ export class Toggle extends Disposable {
 	}
 }
 
-/** A native checkbox presentation backed by the shared Toggle state model. */
+/** A themed checkbox that retains the native input's focus, form and checked state. */
 export class Checkbox extends Toggle {
 	constructor(container: HTMLElement, options: ToggleOptions) {
 		super(container, options);
 		this.element.classList.add("ash-checkbox");
+		const checkmark = appendIcon(Lxicon.check, this.element);
+		checkmark.classList.add('ash-checkbox-checkmark');
+		// CSS reads :checked from the input, including native form resets.
+		this.input.after(checkmark);
 	}
 }
 

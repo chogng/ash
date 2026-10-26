@@ -9,7 +9,7 @@ import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/c
 import { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import { CopyEditorToNewWindowCommandId, MoveEditorToNewWindowCommandId, ToggleEditorGroupLockCommandId } from "./editorActions.js";
-import { CLOSE_EDITORS_IN_GROUP_COMMAND_ID, CLOSE_SAVED_EDITORS_COMMAND_ID } from "./editorCommands.js";
+import { CLOSE_EDITOR_COMMAND_ID, CLOSE_EDITORS_IN_GROUP_COMMAND_ID, CLOSE_SAVED_EDITORS_COMMAND_ID } from "./editorCommands.js";
 import "./diffEditor.workbench.contribution.js";
 import '../../../../editor/browser/widget/diffEditor/diffEditor.contribution.js';
 import { ToggleCollapseUnchangedRegions } from '../../../../editor/browser/widget/diffEditor/commands.js';
@@ -27,6 +27,11 @@ import { ChangeEncodingAction, ChangeEOLAction, ChangeLanguageAction, EditorStat
 import { DynamicEditorConfigurations } from "./editorConfiguration.js";
 
 const outsideModalEditor = EditorPartModalVisibleContext.isEqualTo(false);
+
+MenusRegistry.appendMenuItem(MenuId.ModalEditorTitle, {
+	command: { id: CLOSE_EDITOR_COMMAND_ID, title: localize('workbench.closeEditor', 'Close'), icon: Lxicon.close },
+	group: 'navigation', order: 100, when: EditorPartModalVisibleContext.isEqualTo(true),
+});
 
 MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
 	command: { id: 'workbench.action.showEditorsInGroup', title: localize('workbench.showOpenedEditors', 'Show Opened Editors') },

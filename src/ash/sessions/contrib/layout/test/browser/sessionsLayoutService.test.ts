@@ -1,5 +1,5 @@
 import { IOutputService } from '../../../../../workbench/services/output/common/output.js';
-import { ViewContainerLocation, WorkbenchViewContainerId } from '../../../../../workbench/common/views.js';
+import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewContainerId } from '../../../../../workbench/common/views.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { CustomViewService, ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
@@ -291,6 +291,26 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		});
 	});
 
+	test('product pages retain the current workspace conversation sidebar', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(chatEntry);
+		for (const id of ['projects', 'creator.home', 'customize']) {
+			await fixture.service.openEntry({ id, content: 'editor', activityContext: `sessions.activity.${id}Selected`, restoreCommand: `sessions.show.${id}`, focus: 'editor' });
+			assert.equal(fixture.opened.at(-1)?.id, chatEntry.sidebarContainerId);
+		}
+		assert.deepEqual(fixture.opened, [{ id: chatEntry.sidebarContainerId, focus: false }]);
+	});
+
+	for (const fromCode of [false, true]) {
+		test(`product pages use the registered sidebar default ${fromCode ? 'when leaving Code' : 'on cold restoration'}`, async () => {
+			using fixture = new EntryFixture();
+			fixture.defaultSidebarId = 'test.conversations';
+			if (fromCode) { await fixture.service.openEntry(documentEntry); }
+			await fixture.service.openEntry({ id: 'projects', content: 'editor', activityContext: 'sessions.activity.projectsSelected', restoreCommand: 'sessions.show.projects', focus: 'editor' }, undefined, { source: 'restore' });
+			assert.equal(fixture.opened.at(-1)?.id, 'test.conversations');
+		});
+	}
+
 	test('shutdown joins entry navigation then stops periodic storage callbacks', async () => {
 		using fixture = new EntryFixture();
 		await fixture.service.openEntry(chatEntry);
@@ -327,6 +347,8 @@ class EntryFixture extends Disposable {
 	public readonly groupChanges: string[] = [];
 	public pageTitleVisible = true;
 	public readonly opened: { id: string; focus: boolean | undefined; }[] = [];
+	private sidebarId: string | undefined;
+	public defaultSidebarId = SESSIONS_NAVIGATION_CONTAINER_ID;
 	public readonly errors: string[] = [];
 	public focused: string | undefined;
 	public conversationGate: Promise<void> | undefined;
@@ -380,13 +402,18 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(IOutputService, { onDidRequestShowChannel: this.outputReveal.event } as unknown as IOutputService);
 		this.services.registerInstance(IViewsService, {
 			onDidChangeViewContainerVisibility: this.viewVisibility.event,
+			getVisibleViewContainer: () => this.sidebarId ? { id: this.sidebarId, title: 'Conversations', location: ViewContainerLocation.Sidebar } : null,
 			openViewContainer: async (id: string, focus?: boolean) => {
 				this.opened.push({ id, focus });
+				this.sidebarId = id;
 				if (!this.navigationStarted.isSettled) { await this.navigationStarted.complete(); }
 				await this.navigationGate;
 				return null;
 			}
-		} as IViewsService);
+		} as unknown as IViewsService);
+		this.services.registerInstance(IViewDescriptorService, {
+			getDefaultViewContainer: () => ({ id: this.defaultSidebarId, title: 'Conversations', location: ViewContainerLocation.Sidebar }),
+		} as unknown as IViewDescriptorService);
 		this.services.registerInstance(IPaneCompositePartService, {
 			onDidPaneCompositeOpen: Event.None, getActivePaneComposite: () => ({ focus: () => { this.focused = 'details'; } }),
 		} as unknown as IPaneCompositePartService);

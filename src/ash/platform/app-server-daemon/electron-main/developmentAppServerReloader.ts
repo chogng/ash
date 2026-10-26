@@ -37,6 +37,7 @@ export class DevelopmentAppServerReloader extends Disposable {
 	private selectionPromise?: Promise<void>;
 	private drainPromise?: Promise<void>;
 	private restartBarrier?: Promise<void>;
+	private reloadRevision = 0;
 
 	constructor(private readonly options: DevelopmentAppServerReloaderOptions) {
 		super();
@@ -71,14 +72,17 @@ export class DevelopmentAppServerReloader extends Disposable {
 
 	async reloadNow(): Promise<void> {
 		if (this.isDisposed) return;
+		const revision = ++this.reloadRevision;
 		await this.selectionPromise;
 		const runtime = await this.readGeneration(this.options.generationFile);
-		if (this.isDisposed || !runtime) return;
+		if (this.isDisposed || revision !== this.reloadRevision || !runtime) return;
 		if (runtime === this.selectedRuntime.value?.runtime && !this.pendingRuntime.value) return;
 		const carrier = [...this.connections][0];
 		if (!carrier) return;
 		const lease = await (this.options.acquireGeneration?.(carrier.launcher) ?? carrier.launcher.acquireDevelopmentRuntime());
-		if (this.isDisposed || lease.runtime === this.selectedRuntime.value?.runtime) { lease.dispose(); return; }
+		// Pointer reads and lease acquisition can finish out of order while another
+		// build is published. Only the newest reload may choose a pending runtime.
+		if (this.isDisposed || revision !== this.reloadRevision || lease.runtime === this.selectedRuntime.value?.runtime) { lease.dispose(); return; }
 		this.pendingRuntime.value = lease;
 		await this.ensureDrain();
 	}

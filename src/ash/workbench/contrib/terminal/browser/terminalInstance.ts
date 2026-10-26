@@ -748,10 +748,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		this.pollGeneration += 1;
 		this.shellProcessManager?.stop();
 		if (this.connectionPersistence === "reconnectable") {
-			if (this._state !== "reconnecting") {
-				this.setState("reconnecting");
-				this.handleProcessData({ data: `\r\n${localize('terminal.reconnecting', '[terminal reconnecting]')}\r\n`, trackCommit: false });
-			}
+			this.setState("reconnecting");
 			return;
 		}
 		this.setState("disconnected");
@@ -894,7 +891,6 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			this.handleProcessData({ data: `\r\n${localize('terminal.outputTruncated', '[terminal output truncated]')}\r\n`, trackCommit: false });
 		}));
 		lifetime.add(manager.onPtyReconnect(() => {
-			this.handleProcessData({ data: `\r\n${localize('terminal.reconnected', '[terminal reconnected]')}\r\n`, trackCommit: false });
 			this.setState("running");
 		}));
 		lifetime.add(manager.onProcessExit(code => this.handleProcessExit(code)));

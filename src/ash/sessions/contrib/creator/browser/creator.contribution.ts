@@ -9,7 +9,7 @@ import { EditorInputCapabilities } from '../../../../workbench/common/editor.js'
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../services/layout/common/sessionsLayoutService.js';
 import { CreatorMode, DOCS_EDITOR_SETTING, type DocsEditorPreference } from '../common/creator.js';
-import { DESIGN_LAYERS_CONTAINER_ID, DESIGN_PROPERTIES_CONTAINER_ID } from './designEditorService.js';
+import { DESIGN_PROPERTIES_CONTAINER_ID } from './designEditorService.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
@@ -26,8 +26,6 @@ import { Menus } from '../../../browser/menus.js';
 import { CreatorPage, CreatorEditorPane } from './creatorPage.js';
 import { GENERAL_DOCUMENT_CONTENT_TYPE } from '../../../../workbench/contrib/documentEditor/browser/documentEditorInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
-import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { EditorPanes, registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { DocumentEditorPane } from '../../../../workbench/contrib/documentEditor/browser/documentEditorPane.js';
@@ -37,7 +35,6 @@ registerEditorPane({ id: 'sessions.editor.creator', name: 'Artifacts', canOpen: 
 
 function openCreator(accessor: ServicesAccessor, workspace?: CreatorMode | 'home', source?: 'restore'): Promise<void> {
 	const editor = accessor.get(IEditorPart);
-	const navigation = accessor.get(IViewsService).getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id;
 	const entry: ISessionsEntry = {
 		id: 'creator.home', activityContext: 'sessions.activity.creatorSelected', content: 'editor',
 		showEditorTabs: false, restoreCommand: 'sessions.restore.creator', focus: 'editor',
@@ -48,14 +45,13 @@ function openCreator(accessor: ServicesAccessor, workspace?: CreatorMode | 'home
 	};
 	return accessor.get(ISessionsLayoutService).openEntry(entry, () => {
 		const page = (editor.activePane as CreatorEditorPane).page;
-		if (navigation && navigation !== DESIGN_LAYERS_CONTAINER_ID) { page.navigationContainerId = navigation; }
 		if (workspace === 'home') { page.showHome(); }
 		else if (workspace) { page.openMode(workspace); }
 		return page.usesCanvasPanels ? {
 			...entry, id: page.activeMode === CreatorMode.Design ? 'creator.design' : 'creator.canvas',
-			conversation: page.activeMode === CreatorMode.Design ? 'optional' : undefined, showEditorTabs: page.activeMode !== CreatorMode.Design, sidebarContainerId: DESIGN_LAYERS_CONTAINER_ID,
+			conversation: page.activeMode === CreatorMode.Design ? 'optional' : undefined, showEditorTabs: page.activeMode !== CreatorMode.Design,
 			detailsContainerId: DESIGN_PROPERTIES_CONTAINER_ID,
-		} : { ...entry, sidebarContainerId: page.navigationContainerId };
+		} : entry;
 	}, source ? { source } : undefined);
 }
 
@@ -71,7 +67,6 @@ function createDocumentOpener(accessor: ServicesAccessor): (resource: URI, sourc
 	const editors = accessor.get(IEditorPart);
 	const storage = accessor.get(IStorageService);
 	const layout = accessor.get(ISessionsLayoutService);
-	const views = accessor.get(IViewsService);
 	return (resource, source) => {
 		const input = editors.groups.flatMap(group => group.editors.map(editor => editor.input)).find(input => input.resource.toString() === resource.toString())
 			?? {
@@ -82,7 +77,6 @@ function createDocumentOpener(accessor: ServicesAccessor): (resource: URI, sourc
 		storage.store('sessions.creator.activeDocument', resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		return layout.openEntry({
 			id: 'creator.docs', activityContext: 'sessions.activity.creatorSelected', content: 'editor',
-			sidebarContainerId: views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id,
 			editorInput: input, restoreCommand: 'sessions.restore.creatorDocs', focus: 'editor',
 		}, undefined, source ? { source } : undefined);
 	};

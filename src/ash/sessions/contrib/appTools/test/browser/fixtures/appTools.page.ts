@@ -135,7 +135,7 @@ const terminalCreations: ITerminalProcessCreateOptions[] = [];
 const profileSelections: TerminalProcessProfileSelection[] = [];
 const terminalViews: Array<{ id: string; focus: boolean | undefined; }> = [];
 const sessions = [1, 2].map(id => ({ sessionId: `session-${id}`, title: `Task ${id}`, status: 'active', chats: [{ threadId: `thread-${id}`, status: 'active', origin: { type: 'root' } }] }));
-const management = { sessions, state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
+const management = { sessions, untitledSessions: [], state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
 const view = { activeSelection: undefined, visibleSelections: [], onDidChange: changes.event, openNewSession: () => { }, openSession: (sessionId: string) => opened.push(sessionId) } as unknown as ISessionsService;
 const container = document.createElement('main');
 document.body.append(container);

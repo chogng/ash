@@ -21,6 +21,7 @@ import { IInstantiationService, type ServiceIdentifier } from "../../../platform
 import { InstantiationService } from "../../../platform/instantiation/common/instantiationService.js";
 import { SyncDescriptor } from "../../../platform/instantiation/common/descriptors.js";
 import { IThemeService } from "../../../platform/theme/common/themeService.js";
+import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason, type IStorageValueChangeEvent, type IWillSaveStateEvent, type StorageValue } from '../../../platform/storage/common/storage.js';
 import { ConfigurationTarget, IConfigurationService, isConfigurationUpdateOverrides, type IConfigurationChangeEvent, type IConfigurationData, type IConfigurationOverrides, type IConfigurationUpdateOptions, type IConfigurationUpdateOverrides, type IConfigurationValue } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ICodeEditorService, type ICodeEditorService as ICodeEditorServiceContract } from '../../browser/services/codeEditorService.js';
@@ -197,6 +198,7 @@ export class StandaloneServiceCollection extends InstantiationService {
 		this.registerSingleton(ICodeEditorService, () => this.createInstance(StandaloneCodeEditorService));
 		this.registerSingleton(IOpenerService, () => this.createInstance(OpenerService));
 		this.registerSingleton(ILayoutService, () => this.createInstance(StandaloneLayoutService));
+		this.registerSingleton(IStorageService, () => new StandaloneStorageService());
 		this.registerSingleton(IQuickInputService, () => this.createInstance(StandaloneQuickInputService));
 		this.registerSingleton(IBulkEditService, () => this.createInstance(StandaloneBulkEditService));
 		this.codeEditorService = this.get(ICodeEditorService);
@@ -432,6 +434,54 @@ export class StandaloneNotificationService extends Disposable implements INotifi
 		for (const close of this.handles) close();
 		super.disposeCore();
 	}
+}
+
+/** Embedding hosts can override storage; the default lasts for this service scope. */
+class StandaloneStorageService extends Disposable implements IStorageService {
+	private readonly values = new Map<StorageScope, Map<string, { value: string; target: StorageTarget; }>>();
+	private readonly changes = this._register(new Emitter<IStorageValueChangeEvent>());
+	private readonly saving = this._register(new Emitter<IWillSaveStateEvent>());
+	readonly onDidChangeValue = this.changes.event;
+	readonly onWillSaveState = this.saving.event;
+
+	get(key: string, scope: StorageScope, fallbackValue: string): string;
+	get(key: string, scope: StorageScope): string | undefined;
+	get(key: string, scope: StorageScope, fallbackValue?: string): string | undefined {
+		return this.values.get(scope)?.get(key)?.value ?? fallbackValue;
+	}
+	getBoolean(key: string, scope: StorageScope, fallbackValue: boolean): boolean;
+	getBoolean(key: string, scope: StorageScope): boolean | undefined;
+	getBoolean(key: string, scope: StorageScope, fallbackValue?: boolean): boolean | undefined {
+		const value = this.get(key, scope);
+		return value === undefined ? fallbackValue : value === 'true';
+	}
+	getNumber(key: string, scope: StorageScope, fallbackValue: number): number;
+	getNumber(key: string, scope: StorageScope): number | undefined;
+	getNumber(key: string, scope: StorageScope, fallbackValue?: number): number | undefined {
+		const value = this.get(key, scope);
+		return value === undefined ? fallbackValue : Number(value);
+	}
+	store(key: string, value: StorageValue, scope: StorageScope, target: StorageTarget): void {
+		if (value === null || value === undefined) { this.remove(key, scope); return; }
+		let values = this.values.get(scope);
+		if (!values) this.values.set(scope, values = new Map());
+		const previous = values.get(key);
+		if (previous?.value === String(value) && previous.target === target) return;
+		values.set(key, { value: String(value), target });
+		this.changes.fire({ key, scope, target, external: false });
+	}
+	remove(key: string, scope: StorageScope): void {
+		const values = this.values.get(scope);
+		const previous = values?.get(key);
+		if (!previous) return;
+		values!.delete(key);
+		this.changes.fire({ key, scope, target: previous.target, external: false });
+	}
+	keys(scope: StorageScope, target: StorageTarget): readonly string[] {
+		return [...this.values.get(scope) ?? []].filter(([, value]) => value.target === target).map(([key]) => key);
+	}
+	isNew(_scope: StorageScope): boolean { return true; }
+	async flush(reason = WillSaveStateReason.PERIODIC): Promise<void> { this.saving.fire({ reason }); }
 }
 
 class StandaloneContextViewService extends ContextView implements IContextViewService {

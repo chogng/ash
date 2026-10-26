@@ -34,6 +34,28 @@ pub struct DirScan {
     pub source_bytes_limit_hit: bool,
 }
 
+/// A bounded source read, before the more expensive syntax and chunk construction.
+pub(crate) struct SourceFile {
+    relative_path: PathBuf,
+    pub(crate) revision: SourceRevision,
+    pub(crate) content: String,
+}
+
+impl SourceFile {
+    pub(crate) fn prepare(self, limits: &CodebaseLimits) -> PreparedFile {
+        let language = detect_language(&self.relative_path, self.content.lines().next());
+        let chunking = chunk_source(&language, &self.content, limits);
+        PreparedFile {
+            relative_path: self.relative_path,
+            source_revision: self.revision,
+            language,
+            source_bytes: self.content.len(),
+            chunks: chunking.chunks,
+            chunk_limit_hit: chunking.limit_hit,
+        }
+    }
+}
+
 pub(crate) fn scan_dir(root: &Dir, limits: &CodebaseLimits) -> Result<DirScan, CodebaseError> {
     scan_dir_with_cancellation(
         root,
@@ -110,17 +132,17 @@ pub(crate) fn scan_dir_with_cancellation(
             skipped_file_count += 1;
             continue;
         }
-        match prepare_relative_file(root, relative_path, limits) {
+        match read_relative_file(root, relative_path, limits) {
             Ok(Some(file)) => {
-                if indexed_source_bytes.saturating_add(file.source_bytes)
+                if indexed_source_bytes.saturating_add(file.content.len())
                     > limits.max_total_source_bytes
                 {
                     source_bytes_limit_hit = true;
                     skipped_file_count = skipped_file_count.saturating_add(1);
                     continue;
                 }
-                indexed_source_bytes = indexed_source_bytes.saturating_add(file.source_bytes);
-                files.push(file);
+                indexed_source_bytes = indexed_source_bytes.saturating_add(file.content.len());
+                files.push(file.prepare(limits));
             }
             Ok(None) | Err(CodebaseError::Io { .. }) => {
                 skipped_file_count = skipped_file_count.saturating_add(1)
@@ -147,11 +169,11 @@ pub(crate) fn is_hard_excluded_path(relative_path: &Path) -> bool {
     })
 }
 
-pub(crate) fn prepare_relative_file(
+pub(crate) fn read_relative_file(
     root: &Dir,
     relative_path: PathBuf,
     limits: &CodebaseLimits,
-) -> Result<Option<PreparedFile>, CodebaseError> {
+) -> Result<Option<SourceFile>, CodebaseError> {
     let observed_path = root.canonical_path().join(&relative_path);
     let metadata =
         fs::symlink_metadata(&observed_path).map_err(|source| io_error(&observed_path, source))?;
@@ -161,19 +183,23 @@ pub(crate) fn prepare_relative_file(
         return Ok(None);
     }
     let absolute_path = root.resolve_existing(&relative_path)?;
-    prepare_file(&absolute_path, relative_path, limits)
+    read_file(&absolute_path, relative_path, metadata.len(), limits)
 }
 
-fn prepare_file(
+fn read_file(
     absolute_path: &Path,
     relative_path: PathBuf,
+    observed_bytes: u64,
     limits: &CodebaseLimits,
-) -> Result<Option<PreparedFile>, CodebaseError> {
+) -> Result<Option<SourceFile>, CodebaseError> {
     let file = fs::File::open(absolute_path).map_err(|source| io_error(absolute_path, source))?;
     let read_limit = u64::try_from(limits.max_file_bytes)
         .unwrap_or(u64::MAX)
         .saturating_add(1);
-    let mut bytes = Vec::with_capacity(limits.max_file_bytes.min(64 * 1024));
+    // Most repository files are small. Metadata is only an allocation hint: the
+    // bounded read still handles growth or replacement after the earlier stat.
+    let capacity = usize::try_from(observed_bytes).unwrap_or(usize::MAX);
+    let mut bytes = Vec::with_capacity(capacity.min(limits.max_file_bytes).min(64 * 1024));
     file.take(read_limit)
         .read_to_end(&mut bytes)
         .map_err(|source| io_error(absolute_path, source))?;
@@ -183,15 +209,10 @@ fn prepare_file(
     let Ok(source) = String::from_utf8(bytes) else {
         return Ok(None);
     };
-    let language = detect_language(&relative_path, source.lines().next());
-    let chunking = chunk_source(&language, &source, limits);
-    Ok(Some(PreparedFile {
+    Ok(Some(SourceFile {
         relative_path,
-        source_revision: source_revision(&source),
-        language,
-        source_bytes: source.len(),
-        chunks: chunking.chunks,
-        chunk_limit_hit: chunking.limit_hit,
+        revision: source_revision(&source),
+        content: source,
     }))
 }
 
