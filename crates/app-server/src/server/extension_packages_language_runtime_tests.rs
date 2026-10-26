@@ -805,6 +805,14 @@ fn language_acquisition_only_admits_built_in_packages_and_rejects_conflicting_ow
     fs::create_dir(&package).unwrap();
     let manifest = include_str!("../../../../extensions/rust/package.json");
     fs::write(package.join("package.json"), manifest).unwrap();
+    let css = root.path().join("css");
+    fs::create_dir(&css).unwrap();
+    fs::write(
+        css.join("package.json"),
+        include_str!("../../../../extensions/css/package.json"),
+    )
+    .unwrap();
+    fs::write(css.join("server.cjs"), "// bundled CSS server").unwrap();
     let mut user = ExtensionPackages::new(vec![ExtensionRoot::user(root.path())]);
     assert!(
         language_server_contributions(&user.list(ExtensionPackagesReload::Cached))
@@ -813,6 +821,12 @@ fn language_acquisition_only_admits_built_in_packages_and_rejects_conflicting_ow
     );
     let mut builtin = ExtensionPackages::new(vec![ExtensionRoot::built_in(root.path())]);
     let snapshot = builtin.list(ExtensionPackagesReload::Cached);
+    let contributions = language_server_contributions(&snapshot).unwrap();
+    assert_eq!(contributions["vscode.css"][0].id, "css-language-server");
+    assert_eq!(
+        contributions["vscode.css"][0].languages,
+        ["css", "less", "scss"]
+    );
     assert_eq!(
         language_server_contributions(&snapshot).unwrap()["ash.rust"][0].id,
         "rust-analyzer"

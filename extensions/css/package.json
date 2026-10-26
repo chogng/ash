@@ -1,5 +1,31 @@
 {
   "name": "css",
+  "ashLanguageServers": {
+    "version": 2,
+    "servers": [
+      {
+        "id": "css-language-server",
+        "languages": [
+          "css",
+          "less",
+          "scss"
+        ],
+        "runtime": "node",
+        "entrypoint": "server.cjs",
+        "initializationOptions": {
+          "provideFormatter": true
+        },
+        "settings": {
+          "css": {},
+          "less": {},
+          "scss": {}
+        }
+      }
+    ]
+  },
+  "dependencies": {
+    "vscode-langservers-extracted": "4.10.0"
+  },
   "ashUiTargets": [
     "ide"
   ],

@@ -35,6 +35,7 @@ fn failed_proxy_falls_through_to_usable_path_without_downloading() {
             &Candidates(vec![broken, working.clone()]),
             &BTreeMap::new(),
             || panic!("local server must avoid installation"),
+            || panic!("native servers do not require Node"),
         )
         .unwrap();
     let (_, command, _) = rust.definition().clone().into_launch_parts();
@@ -50,9 +51,14 @@ fn missing_candidates_reach_managed_installation_but_explicit_override_never_doe
     let root = tempfile::tempdir().unwrap();
     let missing = root.path().join("missing");
     let candidates = Candidates(vec![missing.clone()]);
-    let fallback = rust_support().resolve(root.path(), None, &candidates, &BTreeMap::new(), || {
-        Err(ManagedLanguageServerError::Installation("offline".into()))
-    });
+    let fallback = rust_support().resolve(
+        root.path(),
+        None,
+        &candidates,
+        &BTreeMap::new(),
+        || Err(ManagedLanguageServerError::Installation("offline".into())),
+        || panic!("native servers do not require Node"),
+    );
     assert!(
         matches!(fallback, Err(ManagedLanguageServerError::Installation(message)) if message == "offline")
     );
@@ -62,6 +68,7 @@ fn missing_candidates_reach_managed_installation_but_explicit_override_never_doe
         &candidates,
         &BTreeMap::new(),
         || panic!("explicit override must never download"),
+        || panic!("native servers do not require Node"),
     );
     assert!(
         matches!(explicit, Err(ManagedLanguageServerError::Unavailable(path)) if path == missing)
@@ -89,6 +96,7 @@ fn preserves_proxy_invocation_name_and_workspace_during_probe_and_launch() {
             &Candidates(vec![invoked.clone()]),
             &BTreeMap::new(),
             || panic!("proxy is usable"),
+            || panic!("native servers do not require Node"),
         )
         .unwrap();
     let (_, command, _) = rust.definition().clone().into_launch_parts();
@@ -134,6 +142,7 @@ fn probes_and_launches_with_configured_toolchain_and_environment_precedence() {
                 &Candidates(vec![executable.clone()]),
                 &environment,
                 || panic!("configured local toolchain must avoid installation"),
+                || panic!("native servers do not require Node"),
             )
             .unwrap();
         let (_, command, _) = server.definition().clone().into_launch_parts();
@@ -197,4 +206,105 @@ fn contribution_rejects_incompatible_or_unsafe_recipes() {
         *contribution.pointer_mut(pointer).unwrap() = value;
         assert!(LanguageServerAcquisition::from_contribution(contribution).is_err());
     }
+}
+
+fn node_support(entrypoint: &str) -> Result<LanguageServerAcquisition, ManagedLanguageServerError> {
+    LanguageServerAcquisition::from_contribution(serde_json::json!({
+        "version": 2,
+        "servers": [{ "id": "css-language-server", "languages": ["css", "scss", "less"], "runtime": "node", "entrypoint": entrypoint, "initializationOptions": { "provideFormatter": true }, "settings": { "css": {} } }]
+    })).map(|mut servers| servers.remove(0))
+}
+
+#[test]
+fn bundled_server_uses_the_managed_runtime_without_probing_or_downloading() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("server.cjs"), "// bundled server").unwrap();
+    let mut server = node_support("server.cjs").unwrap();
+    server.bind_package(root.path()).unwrap();
+    let runtime = ManagedNodeRuntime::from_path(std::env::current_exe().unwrap()).unwrap();
+    let resolved = server
+        .resolve(
+            root.path(),
+            None,
+            &Candidates(Vec::new()),
+            &BTreeMap::from([("LANG".into(), "zh_CN.UTF-8".into())]),
+            || panic!("bundled servers must not download"),
+            || Ok(runtime.clone()),
+        )
+        .unwrap();
+    assert_eq!(
+        resolved.definition().language_ids().collect::<Vec<_>>(),
+        ["css", "less", "scss"]
+    );
+    assert_eq!(
+        resolved.definition().settings().get("css"),
+        Some(&serde_json::json!({}))
+    );
+    let (_, command, options) = resolved.definition().clone().into_launch_parts();
+    assert_eq!(
+        options,
+        Some(serde_json::json!({ "provideFormatter": true }))
+    );
+    assert_eq!(command.program(), runtime.executable());
+    assert_eq!(
+        command.arguments(),
+        [
+            root.path()
+                .join("server.cjs")
+                .canonicalize()
+                .unwrap()
+                .into_os_string(),
+            "--stdio".into()
+        ]
+    );
+    assert_eq!(
+        command.environment()[std::ffi::OsStr::new("LANG")],
+        "zh_CN.UTF-8"
+    );
+}
+
+#[test]
+fn bundled_server_binding_rejects_missing_or_escaping_resources_and_tracks_package_replacement() {
+    for path in [
+        "../server.cjs",
+        "/server.cjs",
+        "C:server.cjs",
+        "server\\main.cjs",
+        "./server.cjs",
+    ] {
+        assert!(node_support(path).is_err(), "{path}");
+    }
+    let first = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir().unwrap();
+    let mut server = node_support("server.cjs").unwrap();
+    assert!(server.bind_package(first.path()).is_err());
+    for root in [first.path(), second.path()] {
+        std::fs::write(root.join("server.cjs"), "// bundled server").unwrap();
+    }
+    server.bind_package(first.path()).unwrap();
+    let mut replacement = server.clone();
+    replacement.bind_package(second.path()).unwrap();
+    assert!(!server.same_policy(&replacement));
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(
+            second.path().join("server.cjs"),
+            first.path().join("escape.cjs"),
+        )
+        .unwrap();
+        assert!(
+            node_support("escape.cjs")
+                .unwrap()
+                .bind_package(first.path())
+                .is_err()
+        );
+    }
+    let mut invalid = serde_json::json!({ "version": 2, "servers": [{ "id": "css-language-server", "languages": ["css"], "runtime": "node", "entrypoint": "server.cjs", "unexpected": true }] });
+    assert!(LanguageServerAcquisition::from_contribution(invalid.clone()).is_err());
+    invalid["servers"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("unexpected");
+    invalid["version"] = 1.into();
+    assert!(LanguageServerAcquisition::from_contribution(invalid).is_err());
 }

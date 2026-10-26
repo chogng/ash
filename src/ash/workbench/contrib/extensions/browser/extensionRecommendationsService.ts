@@ -10,6 +10,8 @@ import { extname } from '../../../../base/common/path.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ILanguageService } from '../../../../editor/common/languages/language.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
+import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import { ILanguageServerService } from '../../../../platform/language/common/languageServerService.js';
 import { ExtensionUiTarget, IExtensionManagementService } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { RecommendationSource } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
 import { IFileService, FileKind, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
@@ -43,6 +45,8 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 		@IModelService private readonly editorModels: IModelService,
 		@IEditorService private readonly editors: IEditorService,
 		@ILanguageService private readonly languages: ILanguageService,
+		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
+		@ILanguageServerService private readonly languageServers: ILanguageServerService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IFileService private readonly files: IFileService,
 		@IExtensionManagementService private readonly packages: IExtensionManagementService,
@@ -63,6 +67,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 		this._register(editorModels.onModelRemoved(() => this.invalidate()));
 		this._register(editorModels.onModelLanguageChanged(() => this.invalidate()));
 		this._register(ignored.onDidChangeIgnoredRecommendations(() => this.invalidate()));
+		this._register(languageFeatures.hoverProvider.onDidChange(() => this.invalidate()));
 		this._register(storage.onDidChangeValue(event => { if (event.external && event.scope === StorageScope.PROFILE && event.key === this.recentStorageKey) { this.invalidate(); } }));
 		this._register(workspace.onDidChangeWorkspace(() => { this.requestedResources.clear(); this.watchProjects(); this.invalidate(); }));
 		this._register(files.onDidChangeFileSystemProviderRegistrations(() => { this.watchProjects(); this.invalidate(); }));
@@ -89,7 +94,17 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 	}
 
 	private async collect(generation: number): Promise<ExtensionRecommendationsSnapshot> {
-		const [declared, configs, installed] = await Promise.all([this.getWorkspaceRecommendations(), this.configs.getExtensionsConfigs(), this.packages.listInstalled()]);
+		const folders = this.workspace.getWorkspace().folders;
+		const [declared, configs, installed, serverLanguages] = await Promise.all([
+			this.getWorkspaceRecommendations(), this.configs.getExtensionsConfigs(), this.packages.listInstalled(),
+			Promise.all(folders.map(async folder => {
+				try {
+					// Discovery advertises enabled servers before first use without launching them.
+					const snapshot = await this.languageServers.read(folders.length > 1 ? folder.id : undefined);
+					return [folder.id, new Set(snapshot.servers.flatMap(server => server.languageIds))] as const;
+				} catch { return [folder.id, new Set<string>()] as const; }
+			})).then(entries => new Map(entries)),
+		]);
 		const excluded = new Set([
 			...this.ignored.globalIgnoredRecommendations,
 			...configs.flatMap(config => config.unwantedRecommendations).map(identity),
@@ -116,16 +131,18 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 			add({ ...recommendation, uiTargets, ...(uiTargets?.includes(this.target) ? { context: { source: RecommendationSource.WORKSPACE, name: localize({ bundle: 'ash.extensions', key: 'recommendationWorkspace' }, 'this workspace') } } : {}) });
 		}
 		const languageQueries = new Map<string, ReturnType<IExtensionManagementService['search']>>();
-		const forLanguage = async (languageId: string, name: string, reasonId: ExtensionRecommendationReason): Promise<void> => {
-			if (languageId === 'plaintext') { return; }
+		const forLanguage = async (languageId: string, name: string, reasonId: ExtensionRecommendationReason, resource: URI): Promise<void> => {
+			const folder = this.workspace.getWorkspaceFolder(resource) ?? folders[0];
+			const hasProvider = [...this.editorModels.getModels(), ...this.models.getModels()].some(model =>
+				model.getLanguageId() === languageId
+				&& (this.uriIdentity.extUri.isEqual(model.uri, resource) || reasonId === ExtensionRecommendationReason.WorkspaceConfig && this.workspace.getWorkspaceFolder(model.uri)?.id === folder?.id)
+				&& this.languageFeatures.hoverProvider.has(model));
+			if (languageId === 'plaintext' || hasProvider || folder && serverLanguages.get(folder.id)?.has(languageId)) { return; }
 			let query = languageQueries.get(languageId);
 			if (!query) {
-				// The languageId filter discovers executable providers. Language assets without a server
-				// are discovered through the language packages' searchable metadata as well.
-				query = Promise.all([
-					this.packages.search('', { languageId, limit: 5 }).catch(() => []),
-					this.packages.search(languageId, { packageType: 'language', limit: 5 }).catch(() => []),
-				]).then(groups => groups.flat());
+				// A recognized language already has its declarations. Search only exact server
+				// routes; free-text metadata also matches unrelated associations such as .css.map.
+				query = this.packages.search('', { languageId, capabilityKind: 'executable', limit: 5 }).catch(() => []);
 				languageQueries.set(languageId, query);
 			}
 			try {
@@ -157,7 +174,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 				add({ extensionId: tip.id, uiTargets, reason: { reasonId: ExtensionRecommendationReason.File, reasonText: localize({ bundle: 'ash.extensions', key: 'fileRecommendationReason' }, 'Recommended for {0} files', extension) }, ...(uiTargets?.includes(this.target) ? { context: { source: RecommendationSource.FILE, name, searchValue: tip.query } } : {}) });
 			}
 			const language = languageId && languageId !== 'plaintext' ? languageId : this.languages.guessLanguageIdByFilepathOrFirstLine(resource);
-			if (language) { work.push(forLanguage(language, this.languages.getLanguageName(language) ?? language, ExtensionRecommendationReason.Application)); }
+			if (language) { work.push(forLanguage(language, this.languages.getLanguageName(language) ?? language, ExtensionRecommendationReason.Application, resource)); }
 			else if (!tip && extension) {
 				// Language packages publish file extensions in their searchable catalog metadata, even before installation.
 				const key = `file:${extension}`;
@@ -174,7 +191,7 @@ export class ExtensionRecommendationsService extends Disposable implements IExte
 		const diagnostics = [...declared.diagnostics];
 		await Promise.all(this.projectResources().map(async ({ resource, language }) => {
 			try {
-				if ((await this.files.stat(resource)).kind === FileKind.File) { await forLanguage(language, basename(resource), ExtensionRecommendationReason.WorkspaceConfig); }
+				if ((await this.files.stat(resource)).kind === FileKind.File) { await forLanguage(language, basename(resource), ExtensionRecommendationReason.WorkspaceConfig, resource); }
 			} catch (error) {
 				if (toFileSystemProviderErrorCode(error instanceof Error ? error : undefined) !== FileSystemProviderErrorCode.FileNotFound) {
 					diagnostics.push(localize({ bundle: 'ash.extensions', key: 'projectRecommendationsReadError' }, 'Could not inspect {0}: {1}', resource.toString(), error instanceof Error ? error.message : String(error)));

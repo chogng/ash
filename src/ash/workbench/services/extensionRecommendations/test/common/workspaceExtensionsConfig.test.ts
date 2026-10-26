@@ -14,6 +14,9 @@ import { MemoryFileService, MemoryResourceStore, TestEditorService } from '../..
 import { TestConfigurationService, TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ModelService } from '../../../../../editor/common/services/modelService.js';
+import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
+import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
+import { ILanguageServerService, type LanguageServerSnapshot } from '../../../../../platform/language/common/languageServerService.js';
 import { IWorkspaceExtensionsConfigService, WorkspaceExtensionsConfigService } from '../../common/workspaceExtensionsConfig.js';
 import { ExtensionRecommendationsService } from '../../../../contrib/extensions/browser/extensionRecommendationsService.js';
 import { ExtensionRecommendationReason, IExtensionIgnoredRecommendationsService } from '../../common/extensionRecommendations.js';
@@ -69,6 +72,10 @@ function fixture(resources: readonly (readonly [URI, string])[] = [], target = E
 	const storage = lifetime.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'project', backend: browser.window.localStorage, flushInterval: 0 }));
 	services.registerInstance(IStorageService, storage);
 	const languages = lifetime.add(new LanguageService());
+	const languageFeatures = lifetime.add(new LanguageFeaturesService());
+	services.registerInstance(ILanguageFeaturesService, languageFeatures);
+	const serverLanguages = new Map<string | undefined, LanguageServerSnapshot['servers']>();
+	services.registerInstance(ILanguageServerService, { read: async dirId => ({ revision: 0, configurations: {}, servers: serverLanguages.get(dirId) ?? [] }) } as ILanguageServerService);
 	lifetime.add(languages.registerLanguage({ id: 'python', extensions: ['.py'], aliases: ['Python'] }));
 	lifetime.add(languages.registerLanguage({ id: 'rust', extensions: ['.rs'], aliases: ['Rust'] }));
 	const store = lifetime.add(new MemoryResourceStore(resources));
@@ -110,7 +117,7 @@ function fixture(resources: readonly (readonly [URI, string])[] = [], target = E
 	services.registerInstance(IExtensionService, { onDidChange: Event.None, currentCatalog: { extensions: [], generation: 1, diagnostics: [] } } as unknown as IExtensionService);
 	const recommendations = lifetime.add(services.createInstance(ExtensionRecommendationsService, target));
 	return {
-		lifetime, workspace, files, provider, configs, recommendations, models, editorModels, languages, queries, installedChanged, services, storage, ignored,
+		lifetime, workspace, files, provider, configs, recommendations, models, editorModels, languages, languageFeatures, queries, installedChanged, services, storage, ignored,
 		get environmentReads() { return environmentReads; },
 		setVisibleResources: (resources: readonly URI[]) => { visibleResources = resources; visibleEditorsChanged.fire(); },
 		setPackage: (id: string, kinds: readonly ExtensionsCapabilityKind[], uiTargets?: readonly ExtensionUiTarget[]) => {
@@ -122,6 +129,7 @@ function fixture(resources: readonly (readonly [URI, string])[] = [], target = E
 		setConnection: (value: typeof connection) => { connection = value; connectionChanged.fire(); },
 		setInstalled: (ids: string[]) => { installed = ids; installedChanged.fire(); },
 		setSearch: (value: typeof search) => { search = value; },
+		setServerLanguages: (languages: readonly string[], dirId?: string) => { serverLanguages.set(dirId, [{ id: 'builtin', languageIds: languages }]); recommendations.refresh(); },
 	};
 }
 
@@ -229,7 +237,7 @@ suite('Workspace extension recommendations', () => {
 		f.setEnvironment({ platform: 'linux', executables: ['python3', 'node', 'go'] });
 		const assertOnDemand = async (service: ExtensionRecommendationsService): Promise<void> => {
 			const snapshot = await service.getRecommendations();
-			assert.deepEqual(snapshot.recommendations.map(item => item.extensionId).sort(), ['marketplace.go@ash', 'marketplace.python@ash', 'marketplace.typescript@ash']);
+			assert.deepEqual(snapshot.recommendations.map(item => item.extensionId).sort(), ['marketplace.go@ash', 'marketplace.python@ash'], 'Node availability must not recommend the bundled TypeScript assets');
 			assert.ok(snapshot.recommendations.every(item => !item.context));
 			assert.ok(snapshot.recommendations.every(item => item.reason.reasonId === ExtensionRecommendationReason.Executable));
 		};
@@ -373,13 +381,34 @@ suite('Workspace extension recommendations', () => {
 		assert.ok((await f.recommendations.getRecommendations()).recommendations.every(item => !item.context));
 	});
 
-	test('language assets without an executable provider are discovered separately from server filters', async () => {
+	test('recognized languages do not recommend redundant syntax packages or metadata substring matches', async () => {
 		const f = fixture(); using lifetime = f.lifetime;
 		f.setSearch(async (query, options) => options?.packageType === 'language' && query === 'python' ? [{ id: 'syntax.python@ash', version: '1', packageType: 'language', displayName: 'Python syntax', description: '' }] : []);
 		lifetime.add(await f.models.acquire({ resource: URI.parse('untitled:/Untitled-1'), initialText: '', languageId: 'python' }, new AbortController().signal));
 		const snapshot = await f.recommendations.getRecommendations();
-		assert.deepEqual(snapshot.recommendations.map(item => item.extensionId), ['syntax.python@ash']);
-		assert.equal(snapshot.recommendations[0]!.context, undefined, 'legacy metadata is discoverable without creating an automatic prompt');
+		assert.deepEqual(snapshot.recommendations, []);
+		assert.deepEqual(f.queries, [{ query: '', options: { languageId: 'python', capabilityKind: 'executable', limit: 5 } }]);
+	});
+
+	test('language intelligence suppresses automatic file and project suggestions and refreshes when withdrawn', async () => {
+		const f = fixture([[URI.file('/project/pyproject.toml'), '[project]']]); using lifetime = f.lifetime;
+		lifetime.add(await f.models.acquire({ resource: URI.file('/project/main.py'), initialText: '', languageId: 'python' }, new AbortController().signal));
+		const provider = f.languageFeatures.hoverProvider.register('python', { provideHover: async () => undefined });
+		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);
+		assert.deepEqual(f.queries, []);
+		provider.dispose();
+		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations.map(item => item.extensionId), ['support.python@ash']);
+	});
+
+	test('enabled servers suppress installation prompts before initialization, independently for each workspace folder', async () => {
+		const f = fixture([[URI.file('/project/pyproject.toml'), '[project]'], [URI.file('/other/pyproject.toml'), '[project]']]); using lifetime = f.lifetime;
+		f.setServerLanguages(['python']);
+		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);
+		f.workspace.updateWorkspace({ id: 'multi', folders: [{ id: 'project', name: 'Project', uri: URI.file('/project'), index: 0 }, { id: 'other', name: 'Other', uri: URI.file('/other'), index: 1 }] });
+		f.setServerLanguages(['python'], 'project');
+		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations.map(item => item.extensionId), ['support.python@ash']);
+		f.setServerLanguages(['python'], 'other');
+		assert.deepEqual((await f.recommendations.getRecommendations()).recommendations, []);
 	});
 
 	test('merges all sources by package identity, honors workspace exclusions and refreshes installed state', async () => {

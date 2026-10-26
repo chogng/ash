@@ -71,6 +71,13 @@ test('browser packaging excludes independent capabilities and rejects missing JS
 		await writeFile(join(directory, 'extensions/optional-language/optional.json'), 'French must be downloaded');
 		await mkdir(join(directory, 'extensions/optional-keymap'));
 		await writeFile(join(directory, 'extensions/optional-keymap/package.json'), JSON.stringify({ publisher: 'test', name: 'optional-keymap', ashDistribution: 'marketplace', contributes: { keybindings: [{ key: 'ctrl+d', command: 'editor.action.addSelectionToNextFindMatch' }] } }));
+		const language = join(directory, 'extensions/node-language');
+		await mkdir(join(language, 'node_modules/fixture-runtime'), { recursive: true });
+		await writeFile(join(language, 'node_modules/fixture-runtime/package.json'), JSON.stringify({ name: 'fixture-runtime', version: '1.0.0', main: 'index.cjs' }));
+		await writeFile(join(language, 'node_modules/fixture-runtime/index.cjs'), 'module.exports = "bundled language server";');
+		await writeFile(join(language, 'node_modules/fixture-runtime/LICENSE'), 'Synthetic license fixture');
+		await writeFile(join(language, 'server.cjs'), 'console.log(require("fixture-runtime"));');
+		await writeFile(join(language, 'package.json'), JSON.stringify({ publisher: 'test', name: 'node-language', version: '1.0.0', ashLanguageServers: { version: 2, servers: [{ id: 'fixture', languages: ['fixture'], runtime: 'node', entrypoint: 'server.cjs', runtimePackages: ['fixture-runtime'] }] } }));
 		const run = () => spawnSync(process.execPath, ['build/builtin/extensions.ts'], {
 			cwd: directory, encoding: 'utf8', timeout: 15_000,
 			// This fixture owns its catalog, including any externally configured roots.
@@ -80,11 +87,25 @@ test('browser packaging excludes independent capabilities and rejects missing JS
 		assert.ifError(packaged.error);
 		assert.equal(packaged.status, 0, packaged.stderr);
 		const bundle = JSON.parse(await readFile(join(directory, '.build/builtin/fixture.json'), 'utf8'));
-		assert.deepEqual(bundle.catalog.extensions.map((extension: { id: string; }) => extension.id), ['test.git', 'test.language', 'test.language-pack', 'test.theme-defaults']);
+		assert.deepEqual(bundle.catalog.extensions.map((extension: { id: string; }) => extension.id), ['test.git', 'test.language', 'test.language-pack', 'test.node-language', 'test.theme-defaults']);
+		const nodeResources = bundle.resources['test.node-language'];
+		assert.equal(Buffer.from(nodeResources['licenses/fixture-runtime/LICENSE'], 'base64').toString(), 'Synthetic license fixture');
+		assert.equal(Buffer.from(nodeResources['node_modules/fixture-runtime/index.cjs'], 'base64').toString(), 'module.exports = "bundled language server";');
+		const standalone = join(directory, 'isolated-server.cjs');
+		await writeFile(standalone, Buffer.from(nodeResources['server.cjs'], 'base64'));
+		const server = spawnSync(process.execPath, [standalone], { cwd: tmpdir(), encoding: 'utf8' });
+		assert.equal(server.status, 0, server.stderr);
+		assert.equal(server.stdout.trim(), 'bundled language server');
 		assert.deepEqual(Object.keys(bundle.resources['test.git']).sort(), ['package.json', 'package.nls.zh-CN.json']);
 		assert.deepEqual(Object.keys(bundle.resources['test.language']).sort(), ['package.json', 'queries/LICENSE.txt', 'queries/highlights.scm', 'tree-sitter/grammars.json', 'tree-sitter/nested/parser.wasm', 'tree-sitter/parser.wasm']);
 		assert.equal(bundle.catalog.extensions.find((extension: { id: string; }) => extension.id === 'test.language-pack').sourceKind, 'builtIn');
 		assert.deepEqual(JSON.parse(Buffer.from(bundle.resources['test.language-pack']['localization/package.json'], 'base64').toString('utf8')), catalog);
+		await writeFile(join(directory, 'outside.cjs'), 'module.exports = "outside package";');
+		await writeFile(join(language, 'server.cjs'), 'require("../../outside.cjs");');
+		const escaped = run();
+		assert.notEqual(escaped.status, 0);
+		assert.match(escaped.stderr, /Language-server source escapes its package/u);
+		await writeFile(join(language, 'server.cjs'), 'console.log(require("fixture-runtime"));');
 		await mkdir(join(directory, 'extensions/broken-js'));
 		const broken = run();
 		assert.ifError(broken.error);

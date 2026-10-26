@@ -1,5 +1,7 @@
 packages:
   - build
+  - extensions/css
+  - extensions/typescript-basics
   - extensions/pdf-viewer
   - extensions/markdown-math
   - extensions/markdown-language-features
@@ -7,6 +9,7 @@ packages:
   - test/scenario
 engineStrict: true
 allowBuilds:
+  core-js: false
   electron: true
   esbuild: true
   # Platform prebuilds use Node-API and load in both Node and Electron.
