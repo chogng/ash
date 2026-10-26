@@ -338,6 +338,21 @@ suite('Browser view ownership and operations', () => {
 		assert.equal(events.some(event => event.type === 'closed' && event.targetId === id), true);
 	});
 
+	test('host reset cancels channel requests waiting for schema loading', async () => {
+		using f = fixture();
+		using host = f.createHost();
+		const channel = host.getChannel();
+		const requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+		const pending = channel.call('window:1', 'create', { id: requestId, params: { threadId: 'thread-one', url: 'about:blank' } });
+		const rejected = assert.rejects(pending, /BrowserRequestCancelled/);
+		host.reset();
+		await rejected;
+		// Let the suspended import resume: it must not create a page using the new connection's signal.
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(f.children.size, 0);
+		assert.deepEqual(await channel.call('window:1', 'list', { id: requestId, params: { threadId: 'thread-one' } }), { pages: [] });
+	});
+
 	test('one id has one page, including simultaneous creation', async () => {
 		using f = fixture();
 		await Promise.all([f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', ...agent }), f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://ignored.test/', ...agent })]);

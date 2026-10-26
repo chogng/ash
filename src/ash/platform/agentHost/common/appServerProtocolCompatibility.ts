@@ -1,5 +1,5 @@
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, APP_SERVER_REQUIRED_SESSION_CAPABILITIES, type InitializeResult, type ServerCapabilities } from '../../../../../.build/protocol/typescript/index.js';
-import { decodeAppServerResult } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, APP_SERVER_REQUIRED_SESSION_CAPABILITIES } from '../../../../../.build/protocol/typescript/protocol.js';
+import type { InitializeResult, ServerCapabilities } from '../../../../../.build/protocol/typescript/index.js';
 import { localize } from '../../../nls.js';
 
 type AppServerCapabilityName = Exclude<keyof ServerCapabilities, 'contracts'>;
@@ -30,10 +30,6 @@ export interface AppServerProtocolDiagnostics {
 export interface ValidateAppServerInitializeOptions {
 	readonly expectedServerName?: string;
 	readonly requiredCapabilities?: readonly AppServerCapabilityName[];
-}
-
-export function validateAppServerInitializeResult(value: unknown, options: ValidateAppServerInitializeOptions = {}): InitializeResult {
-	return checkAppServerInitializeCompatibility(decodeAppServerResult('initialize', value), options);
 }
 
 /** The protocol decoder owns schema validation. Typed callers only check the

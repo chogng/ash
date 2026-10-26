@@ -694,7 +694,7 @@ for (const locale of ['en', 'zh-CN']) {
 test.describe('Desktop profile file watching', () => {
 	test.use({ electronUserSettings: { 'workbench.activityBar.location': 'top' } });
 
-	test('External settings edits and atomic replacement reach the Desktop configuration', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ workbench }) => {
+	test('External settings edits and atomic replacement reach the Desktop configuration', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }) => {
 		const page = workbench.page;
 		const sidebar = page.locator('[data-part="sidebar"]');
 		const top = sidebar.locator('.ash-sidebar-composite-bar-top .ash-composite-bar');
@@ -710,6 +710,10 @@ test.describe('Desktop profile file watching', () => {
 		await expect(top).toBeVisible();
 		await writeFile(resource, '{ "workbench.activityBar.location": "bottom" }');
 		await expect(bottom).toBeVisible();
+		if (process.platform === 'win32' && 'windows' in application) {
+			// Profile hot reload must work without a second Electron runtime on Windows.
+			expect(await application.evaluate(({ app }) => app.getAppMetrics().filter(metric => metric.name === 'Ash File Watcher'))).toEqual([]);
+		}
 	});
 });
 

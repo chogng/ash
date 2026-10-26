@@ -1,6 +1,6 @@
 import { packager } from '@electron/packager';
 import { writeApplicationChecksums } from './host.ts';
-import { ignoreApplicationFile, productionDependencyDeployOptions } from './packageApplication.ts';
+import { ignoreApplicationFile, prepareProductionDependencyWorkspace, productionDependencyDeployOptions } from './packageApplication.ts';
 import { pruneElectronLocales } from './packageLocales.ts';
 import { prepareElectronAddons } from './addons.ts';
 import { spawn } from 'node:child_process';
@@ -61,7 +61,9 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 	const updatePublicKey = requireUpdatePublicKey();
 	const destination = dirname(bundlePath);
 	const appStage = join(stage, 'app');
-	await runPnpm([...productionDependencyDeployOptions, appStage]);
+	const dependencySource = join(stage, 'dependencies');
+	await prepareProductionDependencyWorkspace(repositoryRoot, dependencySource);
+	await runPnpm([...productionDependencyDeployOptions, appStage], dependencySource);
 
 	const metadata = JSON.parse(await readFile(join(appStage, 'package.json'), 'utf8'));
 	metadata.main = 'dist/main/src/main.js';
@@ -214,11 +216,11 @@ async function exists(path: string): Promise<boolean> {
 	catch (error) { if (error?.code === 'ENOENT') return false; throw error; }
 }
 
-async function runPnpm(args: string[]): Promise<void> {
+async function runPnpm(args: string[], cwd = repositoryRoot): Promise<void> {
 	const pnpm = process.env.npm_execpath;
 	if (!pnpm) throw new Error('Run Windows packaging through the pnpm package script');
-	if (/\.[cm]?js$/iu.test(pnpm)) await run(process.execPath, [pnpm, ...args], repositoryRoot);
-	else await run(pnpm, args, repositoryRoot);
+	if (/\.[cm]?js$/iu.test(pnpm)) await run(process.execPath, [pnpm, ...args], cwd);
+	else await run(pnpm, args, cwd);
 }
 
 async function run(program: string, args: string[], cwd: string): Promise<void> {

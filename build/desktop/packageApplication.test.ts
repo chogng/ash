@@ -4,7 +4,21 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import test from 'node:test';
-import { ignoreApplicationFile } from './packageApplication.ts';
+import { ignoreApplicationFile, prepareProductionDependencyWorkspace } from './packageApplication.ts';
+
+test('dependency deployment preserves locked inputs and attribution without recursing into build output', async t => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-dependency-workspace-'));
+	t.after(() => rm(root, { recursive: true, force: true }));
+	const files = ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches/runtime.patch', 'licenses/dependency.txt', 'THIRD_PARTY_NOTICES.md'];
+	for (const file of [...files, '.build/previous-package/private.txt', 'src/main.ts']) {
+		await mkdir(join(root, file, '..'), { recursive: true });
+		await writeFile(join(root, file), file);
+	}
+	const destination = join(root, '.build/current-package/dependencies');
+	await prepareProductionDependencyWorkspace(root, destination);
+	for (const file of files) assert.equal(await readFile(join(destination, file), 'utf8'), file);
+	for (const file of ['.build', 'src']) await assert.rejects(stat(join(destination, file)), { code: 'ENOENT' });
+});
 
 test('application copying retains hoisted and nested dependency resolution without the private pnpm store', async t => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-package-dependencies-'));

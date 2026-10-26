@@ -5,6 +5,7 @@ import { createAppServerExtensionHostApi } from '../../../../platform/agentHost/
 import { type AppServerConnectionRecovery, type AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { RemoteAgentHostService } from '../../../../platform/agentHost/browser/remoteAgentHostServiceImpl.js';
 import type { IExtensionHostApi } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import { LOCAL_APP_SERVER_INITIALIZE_TIMEOUT_MS } from '../../../../platform/agentHost/common/appServerTransport.js';
 import { LocalAgentHostServiceClient } from '../../../../platform/agentHost/electron-browser/localAgentHostService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
@@ -38,7 +39,7 @@ export class WorkbenchAgentHostService extends Disposable {
 		this.localConnection = this._register(instantiationService.createInstance(LocalAgentHostServiceClient, {
 			clientName: 'ash-desktop',
 			connection: options.connection.kind === 'ssh' ? 'local' : 'workspace',
-			initializeTimeoutMs: 30_000,
+			initializeTimeoutMs: LOCAL_APP_SERVER_INITIALIZE_TIMEOUT_MS,
 			capabilities: { ...this.executionCapabilities(), directoryGrantsHost: { version: 1 } },
 		}));
 		this.selectedConnection = this.localConnection;

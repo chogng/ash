@@ -1,4 +1,4 @@
-import { decodeAppServerServerRequestParams } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
+import type { decodeAppServerServerRequestParams } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { raceCancellationError } from '../../../base/common/async.js';
 import { isRecord } from '../../../base/common/types.js';
@@ -187,14 +187,25 @@ export class AppServerBrowserHost extends Disposable {
 			if (!isRecord(value) || typeof value.id !== 'string' || !/^[a-f0-9-]{36}$/.test(value.id)) { throw new Error('Invalid browser operation'); }
 			return { id: value.id, params: value.params };
 		};
-		const run = async (value: unknown, execute: (params: unknown, context: { signal: AbortSignal; }) => unknown | Promise<unknown>): Promise<unknown> => {
+		const run = async (value: unknown, execute: (params: unknown, context: { signal: AbortSignal; }, decode: typeof decodeAppServerServerRequestParams) => unknown | Promise<unknown>): Promise<unknown> => {
 			this.assertNotDisposed();
 			const request = operation(value);
 			if (this.operations.has(request.id) || this.operations.size >= 128) { throw new Error('Browser operation capacity exceeded'); }
 			const controller = new AbortController();
+			const signal = AbortSignal.any([controller.signal, this.cancellation.signal]);
 			this.operations.set(request.id, controller);
 			const timer = setTimeout(() => controller.abort(), 30_000);
-			try { return await raceCancellationError(Promise.resolve(execute(request.params, { signal: controller.signal })), controller.signal, 'BrowserRequestCancelled'); }
+			try {
+				// Most windows never run a browser tool. Keep its schema out of Main's
+				// idle heap, but validate every request before touching browser state.
+				const operation = async () => {
+					const { decodeAppServerServerRequestParams: decode } = await import('../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js');
+					signal.throwIfAborted();
+					this.assertNotDisposed();
+					return execute(request.params, { signal }, decode);
+				};
+				return await raceCancellationError(operation(), signal, 'BrowserRequestCancelled');
+			}
 			finally { clearTimeout(timer); this.operations.delete(request.id); }
 		};
 		return [
@@ -204,7 +215,7 @@ export class AppServerBrowserHost extends Disposable {
 					return { enabled: value.enabled, cdpEnabled: value.cdpEnabled };
 				}, invoke: value => this.configure(value as { enabled: boolean; cdpEnabled: boolean; })
 			},
-			{ channel: 'list', validate: operation, invoke: value => run(value, params => this.list(decodeAppServerServerRequestParams('browser/list', params))) },
+			{ channel: 'list', validate: operation, invoke: value => run(value, (params, _context, decode) => this.list(decode('browser/list', params))) },
 			{
 				channel: 'disposeSession', validate: value => {
 					if (!isRecord(value) || Object.keys(value).length !== 1 || typeof value.threadId !== 'string' || !value.threadId || value.threadId.length > 512) { throw new TypeError('Invalid browser session'); }
@@ -226,18 +237,18 @@ export class AppServerBrowserHost extends Disposable {
 				},
 			},
 			{
-				channel: 'sharing', validate: operation, invoke: value => run(value, async params => {
-					const sharing = decodeAppServerServerRequestParams('browser/sharing/set', params);
+				channel: 'sharing', validate: operation, invoke: value => run(value, async (params, _context, decode) => {
+					const sharing = decode('browser/sharing/set', params);
 					if (sharing.threadIds.length) { this.assertEnabled(); }
 					// Revoking a closed page still acknowledges release of the backend's grant record.
 					if (sharing.threadIds.length || this.views.tryGetBrowserView(sharing.targetId)) await this.views.setSharing(sharing.targetId, sharing.threadIds);
 					return null;
 				})
 			},
-			{ channel: 'create', validate: operation, invoke: value => run(value, (params, context) => this.create(decodeAppServerServerRequestParams('browser/create', params), context)) },
-			{ channel: 'observe', validate: operation, invoke: value => run(value, (params, context) => this.observe(decodeAppServerServerRequestParams('browser/observe', params), context)) },
-			{ channel: 'perform', validate: operation, invoke: value => run(value, (params, context) => this.perform(decodeAppServerServerRequestParams('browser/perform', params), context)) },
-			{ channel: 'close', validate: operation, invoke: value => run(value, params => this.close(decodeAppServerServerRequestParams('browser/close', params))) },
+			{ channel: 'create', validate: operation, invoke: value => run(value, (params, context, decode) => this.create(decode('browser/create', params), context)) },
+			{ channel: 'observe', validate: operation, invoke: value => run(value, (params, context, decode) => this.observe(decode('browser/observe', params), context)) },
+			{ channel: 'perform', validate: operation, invoke: value => run(value, (params, context, decode) => this.perform(decode('browser/perform', params), context)) },
+			{ channel: 'close', validate: operation, invoke: value => run(value, (params, _context, decode) => this.close(decode('browser/close', params))) },
 			{ channel: 'cancel', validate: operation, invoke: value => { this.operations.get(operation(value).id)?.abort(); } },
 		];
 	}

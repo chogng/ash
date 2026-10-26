@@ -40,6 +40,50 @@ suite('textModel browser component', () => {
 		}
 	});
 
+	test('monospace width scans avoid per-line shaping and preserve complex text after font changes', async function () {
+		const { page } = browserTests;
+		await openEditor(page);
+		const result = await page.evaluate(async () => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.getModel()!.setLanguage('plaintext');
+			editor.updateOptions({ fontFamily: 'monospace', fontLigatures: false, fontVariations: false, wordWrap: 'off', disableMonospaceOptimizations: false });
+			const measureText = CanvasRenderingContext2D.prototype.measureText;
+			let shapedLines = 0;
+			CanvasRenderingContext2D.prototype.measureText = function (text) {
+				if (text.startsWith('resource-lifetime-')) shapedLines++;
+				return measureText.call(this, text);
+			};
+			const settle = () => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+			try {
+				editor.setValue(Array.from({ length: 128 }, (_, index) => `resource-lifetime-${index} ` + 'ASCII measurement '.repeat(40)).join('\n'));
+				await settle();
+				const optimized = { width: editor.getContentWidth(), shapedLines };
+				editor.updateOptions({ disableMonospaceOptimizations: true });
+				await settle();
+				const measured = { width: editor.getContentWidth(), shapedLines };
+				const differences: number[] = [];
+				for (const fontFamily of ['monospace', 'Arial']) {
+					for (const letterSpacing of [0, 1.5]) {
+						editor.updateOptions({ fontFamily, letterSpacing, disableMonospaceOptimizations: true });
+						editor.setValue(('ASCII\t中文 e\u0301 👩‍💻 العربية ').repeat(30));
+						await settle();
+						const width = editor.getContentWidth();
+						editor.updateOptions({ disableMonospaceOptimizations: false });
+						await settle();
+						differences.push(Math.abs(editor.getContentWidth() - width));
+					}
+				}
+				return { optimized, measured, differences };
+			} finally {
+				CanvasRenderingContext2D.prototype.measureText = measureText;
+			}
+		});
+		expect(result.optimized.shapedLines).toBe(0);
+		expect(result.measured.shapedLines).toBeGreaterThanOrEqual(128);
+		expect(Math.abs(result.optimized.width - result.measured.width)).toBeLessThanOrEqual(1);
+		for (const difference of result.differences) expect(difference).toBeLessThanOrEqual(1);
+	});
+
 	test('symbol highlights stay on the symbol when the gutter, minimap and horizontal scroll change', async function () {
 		const { page } = browserTests;
 

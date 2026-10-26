@@ -9,6 +9,8 @@ engineStrict: true
 allowBuilds:
   electron: true
   esbuild: true
+  # Platform prebuilds use Node-API and load in both Node and Electron.
+  koffi: false
   native-keymap: false
   native-is-elevated: false
   sharp: true

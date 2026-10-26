@@ -139,7 +139,8 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 							return;
 						}
 						if (excludes.some(matches => matches(name) || matches(resolve(path, name)))) return;
-						this.changes.fire({ resources: [URI.file(resolve(path, name))] });
+						// Publish under the granted URI, including its Windows drive spelling.
+						this.changes.fire({ resources: [URI.joinPath(resource, process.platform === 'win32' ? name.replaceAll('\\', '/') : name)] });
 					});
 				} catch (error) {
 					owner.dispose();
