@@ -9,6 +9,10 @@
 	overflow: hidden;
 }
 
+.ash-workbench-tabs-control .ash-tab-label {
+	font-weight: var(--ash-fontWeight-regular);
+}
+
 .ash-standard-editor-tabs {
 	--ash-tab-height: var(--ash-pane-titleHeight);
 	--ash-actionBar-gap: 0px;
@@ -36,7 +40,6 @@
 	flex: 1 1 auto;
 	overflow: hidden;
 	padding: 0 10px;
-	font-weight: var(--ash-fontWeight-regular);
 	white-space: nowrap;
 	text-overflow: ellipsis;
 }
