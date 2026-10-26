@@ -1,7 +1,9 @@
 import { ITextFileService } from '../../../textfile/common/textfiles.js';
 import type { ITextFileSaveEvent } from '../../../textfile/common/textFileService.js';
 import assert from "node:assert/strict";
+import { mock } from 'node:test';
 import { suite, test } from "mocha";
+import { DeferredPromise, raceCancellationError } from '../../../../../base/common/async.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { Emitter, Event } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
@@ -281,7 +283,7 @@ class FakeLanguageApi implements ILanguageApi {
 	resolveCompletion(): ReturnType<ILanguageApi["resolveCompletion"]> { throw new Error("unused"); }
 	executeCommand(): ReturnType<ILanguageApi["executeCommand"]> { throw new Error("unused"); }
 	async documentDiagnostics(params: Parameters<ILanguageApi["documentDiagnostics"]>[0], _options?: Parameters<ILanguageApi['documentDiagnostics']>[1]): ReturnType<ILanguageApi["documentDiagnostics"]> { this.diagnosticPulls.push(params); if (this.documentDiagnosticsError) throw this.documentDiagnosticsError; return { revision: params.document.revision, kind: "unchanged", diagnostics: [] }; }
-	async directoryDiagnostics(): ReturnType<ILanguageApi["directoryDiagnostics"]> { this.workspaceDiagnosticPulls += 1; if (this.directoryDiagnosticsError) throw this.directoryDiagnosticsError; return this.workspaceReport; }
+	async directoryDiagnostics(_params: Parameters<ILanguageApi['directoryDiagnostics']>[0], _options?: Parameters<ILanguageApi['directoryDiagnostics']>[1]): ReturnType<ILanguageApi["directoryDiagnostics"]> { this.workspaceDiagnosticPulls += 1; if (this.directoryDiagnosticsError) throw this.directoryDiagnosticsError; return this.workspaceReport; }
 	formatDocument(): ReturnType<ILanguageApi["formatDocument"]> { throw new Error("unused"); }
 	formatOnType(): ReturnType<ILanguageApi["formatOnType"]> { throw new Error("unused"); }
 	formatRange(): ReturnType<ILanguageApi["formatRange"]> { throw new Error("unused"); }
@@ -635,6 +637,107 @@ test('a provider refresh retains the backend document binding until its last edi
 	acquisition.dispose();
 	await tick();
 	assert.deepEqual(api.closed, [{ path: 'main.rs' }]);
+});
+
+suite('Language diagnostic request scheduling', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('workspace diagnostics serialize pending sweeps and merge document bursts into one fresh follow-up', async () => {
+		const api = new FakeLanguageApi();
+		api.availableServers = [{ id: 'rust-analyzer', languageIds: ['rust'] }];
+		const pending: DeferredPromise<Awaited<ReturnType<ILanguageApi['directoryDiagnostics']>>>[] = [];
+		api.directoryDiagnostics = () => {
+			const report = new DeferredPromise<Awaited<ReturnType<ILanguageApi['directoryDiagnostics']>>>();
+			pending.push(report);
+			return report.p;
+		};
+		const events = new FakeServerEvents();
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+		using service = createDiagnosticsService(api, events, workspace);
+		const models = Array.from({ length: 4 }, () => new TextModel('fn main() {}'));
+		const acquisitions: { dispose(): void; }[] = [];
+		try {
+			await tick();
+			for (const [index, model] of models.entries()) {
+				acquisitions.push(service.acquire(URI.file(`/project/file${index}.rs`), 'rust', model));
+				await tick();
+			}
+			assert.equal(api.synchronized.length, 4, 'every open file is still synchronized');
+			assert.equal(pending.length, 1, 'document arrivals cannot start concurrent workspace sweeps');
+			const resource = URI.file('/project/unopened.rs');
+			await pending[0]!.complete({ supported: true, snapshots: [{ path: 'unopened.rs', diagnostics: [{ ...pullDiagnostic, message: 'superseded workspace report' }] }] });
+			await tick();
+			assert.equal(pending.length, 2, 'one follow-up observes all changes made during the first sweep');
+			assert.equal(service.getDiagnostics(resource), undefined, 'the superseded sweep cannot publish stale diagnostics');
+			await pending[1]!.complete({ supported: true, snapshots: [{ path: 'unopened.rs', diagnostics: [{ ...pullDiagnostic, message: 'fresh workspace report' }] }] });
+			await tick();
+			assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, 'fresh workspace report');
+			assert.equal(pending.length, 2);
+		} finally {
+			service.dispose();
+			for (const acquisition of acquisitions) acquisition.dispose();
+			for (const model of models) model.dispose();
+			for (const report of pending) if (!report.isSettled) await report.complete({ supported: false, snapshots: [] });
+			await tick();
+		}
+	});
+
+	test('editing cancels obsolete document diagnostics so the latest snapshot can synchronize', async () => {
+		mock.timers.enable({ apis: ['setTimeout'] });
+		try {
+			const api = new FakeLanguageApi();
+			api.availableServers = [{ id: 'rust-analyzer', languageIds: ['rust'] }];
+			const first = new DeferredPromise<AbortSignal>();
+			const latest = new DeferredPromise<void>();
+			api.documentDiagnostics = (params, options) => {
+				api.diagnosticPulls.push(params);
+				if (api.diagnosticPulls.length === 1) {
+					void first.complete(options!.signal!);
+					return raceCancellationError(new DeferredPromise<Awaited<ReturnType<ILanguageApi['documentDiagnostics']>>>().p, options!.signal!);
+				}
+				void latest.complete();
+				return Promise.resolve({ revision: params.document.revision, kind: 'unchanged', diagnostics: [] });
+			};
+			using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+			using service = createDiagnosticsService(api, new FakeServerEvents(), workspace);
+			using model = new TextModel('fn main() {}');
+			using acquisition = service.acquire(URI.file('/project/main.rs'), 'rust', model);
+			const signal = await first.p;
+			model.applyEdits([{ range: new Range(1, 1, 1, 1), text: '// changed\n' }]);
+			assert.equal(signal.aborted, true, 'an old revision cannot hold the synchronization queue');
+			mock.timers.tick(150);
+			await latest.p;
+			assert.equal(api.synchronized.at(-1)?.document.text, '// changed\nfn main() {}');
+			assert.equal(api.diagnosticPulls.at(-1)?.document.revision, model.version);
+		} finally { mock.timers.reset(); }
+	});
+
+	for (const boundary of ['dispose', 'revoke'] as const) test(`workspace diagnostics cancel at ${boundary} and reject a late report`, async () => {
+		const api = new FakeLanguageApi();
+		api.availableServers = [{ id: 'rust-analyzer', languageIds: ['rust'] }];
+		const started = new DeferredPromise<AbortSignal | undefined>();
+		const report = new DeferredPromise<Awaited<ReturnType<ILanguageApi['directoryDiagnostics']>>>();
+		api.directoryDiagnostics = (_params, options) => {
+			void started.complete(options?.signal);
+			return report.p;
+		};
+		using trust = new FakeWorkspaceTrustService(['executeCommands', 'useLanguageServices']);
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
+		using service = createDiagnosticsService(api, new FakeServerEvents(), workspace, undefined, trust);
+		const signal = await started.p;
+		try {
+			if (boundary === 'dispose') service.dispose();
+			else { trust.value = []; trust.notify(); }
+			assert.equal(signal?.aborted, true, 'the backend receives cancellation at the lifetime boundary');
+			await report.complete({ supported: true, snapshots: [{ path: 'unopened.rs', diagnostics: [pullDiagnostic] }] });
+			await tick();
+			assert.deepEqual(service.getAllDiagnostics(), [], 'a backend reply after cancellation cannot restore retired diagnostics');
+		} finally {
+			service.dispose();
+			if (!report.isSettled) await report.complete({ supported: false, snapshots: [] });
+			await tick();
+		}
+	});
 });
 
 test('diagnostic refresh coalesces bursts and only pulls from the matching workspace server', async () => {

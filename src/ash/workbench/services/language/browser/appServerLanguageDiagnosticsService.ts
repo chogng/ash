@@ -66,6 +66,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	private readonly changeEmitter = this._register(new Emitter<URI>());
 	private nextPublisherId = 1;
 	private workspaceDiagnosticsQueued = false;
+	private workspaceDiagnosticsRequest: AbortController | undefined;
 	private permissionRefreshQueued = false;
 	private permissionRefreshGeneration = 0;
 	private languageAllowed = false;
@@ -151,6 +152,8 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		}));
 		this._register(toDisposable(() => {
 			this.alive = false;
+			this.workspaceDiagnosticsQueued = false;
+			this.workspaceDiagnosticsRequest?.abort();
 			this.clearPullCapabilities();
 			for (const entry of this.entries.values()) {
 				if (entry.timer !== undefined) clearTimeout(entry.timer);
@@ -216,7 +219,11 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 
 	private listenToModel(entry: LanguageDocumentEntry): IDisposable {
 		return combinedDisposable(
-			entry.model.onDidChangeContent(() => this.schedule(entry, false)),
+			entry.model.onDidChangeContent(() => {
+				// A result for the previous text must not hold up the next synchronization.
+				entry.pullRequest?.abort();
+				this.schedule(entry, false);
+			}),
 			entry.model.onDidChangeLanguage(event => {
 				if (entry.languageId === event.newLanguage) return;
 				entry.languageId = event.newLanguage;
@@ -331,11 +338,24 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	}
 
 	private queueWorkspaceDiagnostics(): void {
-		if (!this.languageAllowed || this.workspaceDiagnosticsQueued || !this.hasWorkspaceFolder()) return;
+		if (!this.alive || !this.languageAllowed || this.workspaceDiagnosticsQueued || !this.hasWorkspaceFolder()) return;
 		this.workspaceDiagnosticsQueued = true;
 		queueMicrotask(() => {
+			// Keep one pending refresh while a sweep is running. File synchronizations can
+			// finish on different ticks, so microtask coalescing alone still starts parallel sweeps.
+			if (!this.alive || this.workspaceDiagnosticsRequest) return;
 			this.workspaceDiagnosticsQueued = false;
-			if (this.alive) void this.refreshWorkspaceDiagnostics();
+			if (!this.languageAllowed || !this.hasWorkspaceFolder()) return;
+			const request = this.workspaceDiagnosticsRequest = new AbortController();
+			void this.refreshWorkspaceDiagnostics(request.signal).catch(error => {
+				if (this.alive && !request.signal.aborted) reportLanguageSynchronizationError(error);
+			}).finally(() => {
+				this.workspaceDiagnosticsRequest = undefined;
+				if (this.workspaceDiagnosticsQueued) {
+					this.workspaceDiagnosticsQueued = false;
+					this.queueWorkspaceDiagnostics();
+				}
+			});
 		});
 	}
 
@@ -360,16 +380,17 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		for (const key of this.pullCapabilities.keys()) this.updatePullCapabilities(key, undefined);
 	}
 
-	private async refreshWorkspaceDiagnostics(): Promise<void> {
+	private async refreshWorkspaceDiagnostics(signal: AbortSignal): Promise<void> {
 		if (!this.languageAllowed || !this.hasWorkspaceFolder()) return;
 		const generation = this.permissionRefreshGeneration;
 		const next = new Map<string, LanguageDiagnosticSnapshot>();
 		let supported = false;
 		for (const folder of this.workspace.getWorkspace().folders) {
 			for (const languageId of this.support.workspaceLanguageIds(folder.id)) {
-				if (!this.alive || !this.languageAllowed || generation !== this.permissionRefreshGeneration || !this.hasWorkspaceFolder()) return;
+				if (!this.alive || signal.aborted || !this.languageAllowed || generation !== this.permissionRefreshGeneration || !this.hasWorkspaceFolder()) return;
 				try {
-					const report = await this.api.directoryDiagnostics({ ...(this.workspace.getWorkspace().folders.length > 1 ? { dirId: folder.id } : {}), languageId });
+					const report = await this.api.directoryDiagnostics({ ...(this.workspace.getWorkspace().folders.length > 1 ? { dirId: folder.id } : {}), languageId }, { signal });
+					if (signal.aborted || generation !== this.permissionRefreshGeneration) return;
 					if (!report.supported) continue;
 					supported = true;
 					for (const snapshot of report.snapshots) {
@@ -381,11 +402,11 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 						next.set(key, Object.freeze({ resource, revision: 0, diagnostics: Object.freeze(combined) }));
 					}
 				} catch (error) {
-					if (this.alive && generation === this.permissionRefreshGeneration && !isUnsupportedDiagnosticPull(error)) reportLanguageSynchronizationError(error);
+					if (this.alive && !signal.aborted && generation === this.permissionRefreshGeneration && !isUnsupportedDiagnosticPull(error)) reportLanguageSynchronizationError(error);
 				}
 			}
 		}
-		if (!this.alive || generation !== this.permissionRefreshGeneration) return;
+		if (!this.alive || signal.aborted || this.workspaceDiagnosticsQueued || generation !== this.permissionRefreshGeneration) return;
 		if (!supported) return;
 		const changed = new Map<string, URI>();
 		for (const key of this.workspaceServerKeys) {
@@ -414,6 +435,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		if (!this.alive || !this.started) return;
 		this.permissionRefreshGeneration += 1;
 		this.languageAllowed = false;
+		this.workspaceDiagnosticsRequest?.abort();
 		for (const entry of this.entries.values()) entry.pullRequest?.abort();
 		this.support = new AppServerLanguageSupport();
 		this.clearServerDiagnostics();
