@@ -62,7 +62,7 @@
     "test:build-tools": "pnpm --dir build test",
     "test:extensions": "node test/unit/prepare.ts tsconfig.extensions-test.json && tsc -p tsconfig.extensions-test.json && node test/unit/extensions.ts",
     "test:unit": "node test/unit/prepare.ts tsconfig.test.json && tsc -p tsconfig.test.json && node test/unit/run.ts",
-    "test:unit:runner": "node --test test/unit/mocha.test.ts",
+    "test:unit:runner": "node --test test/unit/impact.test.ts test/unit/mocha.test.ts",
     "test:unit:no-compile": "node test/unit/run.ts",
     "test:editor:unit": "node test/unit/prepare.ts tsconfig.test.json && tsc -p tsconfig.test.json && node test/unit/editor.ts",
     "test:editor:unit:no-compile": "node test/unit/editor.ts",

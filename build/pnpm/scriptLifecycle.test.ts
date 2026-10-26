@@ -11,7 +11,7 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 	const manifest = JSON.parse(await readFile(resolve(import.meta.dirname, "../../package.json"), "utf8"));
 	assert.equal(manifest.scripts['test:unit:no-compile'], 'node test/unit/run.ts');
 	assert.equal(manifest.scripts['test:editor:unit:no-compile'], 'node test/unit/editor.ts');
-	assert.equal(manifest.scripts['test:unit:runner'], 'node --test test/unit/mocha.test.ts');
+	assert.equal(manifest.scripts['test:unit:runner'], 'node --test test/unit/impact.test.ts test/unit/mocha.test.ts');
 	for (const name of ['test:unit', 'test:unit:prepared']) {
 		assert.doesNotMatch(manifest.scripts[name], /mocha\.test\.ts/);
 	}

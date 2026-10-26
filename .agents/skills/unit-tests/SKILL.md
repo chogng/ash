@@ -27,6 +27,7 @@ For repeated runs against unchanged sources and generated inputs, use `pnpm test
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `--run <path>`             | A source `.ts` or emitted `.js` path relative to the repository root; starts with `src/`, `extensions/` or `test/`. Repeat for multiple files. |
 | `--runGlob <pattern>`      | Match emitted `.js` paths relative to `.build/desktop/test`. Cannot be combined with `--run`.                                   |
+| `--affected <base-ref>`    | Local file-level selection since the merge base, including tracked and untracked worktree changes. Cannot be combined with `--run` or `--runGlob`. |
 | `--grep <pattern>`         | Match full Mocha test titles in the selected files.                                                                             |
 | `--timeout <milliseconds>` | Positive integer; default 60,000 per test.                                                                                      |
 | `--workers <count>`         | Positive integer; defaults to the smaller of 4 and available CPUs. Use 1 for serial execution.                                  |
@@ -34,9 +35,12 @@ For repeated runs against unchanged sources and generated inputs, use `pnpm test
 ```bash
 pnpm test:unit --run src/ash/workbench/contrib/preferences/test/browser/settings.test.ts --grep 'Models Settings'
 pnpm test:unit --runGlob '**/localizationService.test.js'
+pnpm test:unit --affected HEAD~1
 ```
 
 A single leading package-manager `--` separator is accepted. Unknown options, misplaced separators, and empty grep patterns fail before tests start. Use `--run` for file paths; bare positional paths and `--coverage` are unsupported. The runner fails if no tests execute. Check the selected suite's final test count and exit code. Runner regression tests have a separate summary.
+
+`--affected` follows imports, including type imports, in both the base and current source graphs. It retains architecture checks and tests with rendered pages, filesystem readers or computed module loads. Unknown inputs, package or toolchain changes, affected shared preloads, and selections larger than half the files run the complete suite. This is a local feedback aid: CI still runs its full suites, and a selected pass does not replace type, integration or smoke validation.
 
 For scope, fixture ownership and cleanup, read [Writing Tests](../../../.github/instructions/writing-tests.instructions.md) and [TypeScript Testing](../../../.github/instructions/typescript-testing.instructions.md). Complete product flows belong in [smoke-tests](../smoke-tests/SKILL.md).
 
