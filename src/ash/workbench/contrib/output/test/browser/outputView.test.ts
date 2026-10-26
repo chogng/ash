@@ -19,6 +19,7 @@ import '../../browser/output.contribution.js';
 import { DefaultSettings } from '../../../../services/preferences/common/settingsModels.js';
 import { createSettingsLayout } from '../../../preferences/browser/settingsLayout.js';
 import { openLogOutput } from '../../../../services/output/browser/systemOutputService.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 
 interface OutputViewTestEnvironment {
 	readonly channel: IOutputChannel;
@@ -81,6 +82,44 @@ async function waitForChannel(editor: CodeEditorWidget, channel: IOutputChannel)
 		await new Promise<void>(resolve => setImmediate(resolve));
 	}
 }
+
+test('Output channel menu survives channel registration and includes new channels when reopened', async () => {
+	using resources = new DisposableStore();
+	const view = await createOutputView(resources);
+	const actions = view.pane.partTitleProjection!.actions!;
+	// The real Panel projects these controls into its visible title area.
+	view.pane.element.append(actions);
+	const selector = '[data-action-id="ash.output.selectChannel"] button';
+	const trigger = actions.querySelector<HTMLButtonElement>(selector)!;
+	// jsdom needs a rendered box for the context view's focus-return eligibility check.
+	Object.defineProperty(trigger, 'getClientRects', { value: () => [trigger.getBoundingClientRect()] });
+	const prototype = browserEnvironment.window.HTMLElement.prototype;
+	const scrollTo = Object.getOwnPropertyDescriptor(prototype, 'scrollTo');
+	Object.defineProperty(prototype, 'scrollTo', { configurable: true, value() { } });
+	resources.add(toDisposable(() => {
+		if (scrollTo) Object.defineProperty(prototype, 'scrollTo', scrollTo);
+		else Reflect.deleteProperty(prototype, 'scrollTo');
+	}));
+	trigger.focus();
+	trigger.click();
+	assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+	const second = resources.add(view.output.createChannel({ id: 'second', label: 'Second', kind: 'output' }));
+	assert.equal(trigger.isConnected, true, 'Background channel discovery cannot dispose an open channel picker');
+	assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+	const menu = browserEnvironment.window.document.querySelector('[role="menu"]')!;
+	assert.ok(menu);
+	assert.equal(menu.querySelector('[aria-label="Second"]'), null, 'The open menu retains its original channel snapshot');
+	view.services.get(IContextMenuService).hideContextMenu();
+	await Promise.resolve();
+	const updatedTrigger = actions.querySelector<HTMLButtonElement>(selector)!;
+	assert.equal(browserEnvironment.window.document.activeElement, updatedTrigger);
+	updatedTrigger.click();
+	const choice = browserEnvironment.window.document.querySelector<HTMLButtonElement>('[role^="menuitem"][aria-label="Second"]');
+	assert.ok(choice);
+	choice.click();
+	await waitForChannel(view.editor, second);
+	assert.equal(view.output.activeChannel?.id, second.id);
+});
 
 test('Output keeps nested channel changes guarded until the outer editor operation returns', async () => {
 	using resources = new DisposableStore();
