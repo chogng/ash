@@ -222,10 +222,10 @@ Text styles are **roles**, not arbitrary sizes: `heading1–3`, `body1–2`, `la
 - **Serves:** *One thing leads* (4), *Sameness signals sameness* (6).
 
 <a id="icon-sizes"></a>
-### Icon sizes - defaults chosen by context
+### Icon sizes - three sizes, chosen by context
 
-Lxicons default to **16px (base)** or **12px (compact)**. Other sizes require an explicit component assignment, such as the Agent Window-only exceptions in [Sessions style](../../../src/ash/sessions/STYLE.md#图标与点击区域); an unassigned `14px` is a bug. At the compact size, also swap to the `*Compact` glyph (`Lxicon.close` → `Lxicon.closeCompact`) so the icon is *optically* tuned, not just scaled.
-- **Decision rule:** size tracks the **density and rank of the context**. Use **base (16px)** for standalone or primary actions and comfortable click targets; use **compact (12px)** for dense rows, inline glyphs, and secondary chrome where the icon rides alongside text. So the answer to "16 or 12?" is *"what is this icon's role here?"* - not a taste call. Say *"this icon should be compact,"* not *"shrink it a bit."*
+Lxicons are **20px (large)**, **16px (base)** or **12px (compact)** - nothing in between; `14px` is always a bug. At the large or compact size, also swap to the `*Large` or `*Compact` glyph (`Lxicon.close` → `Lxicon.closeLarge` or `Lxicon.closeCompact`) so the icon is *optically* tuned, not just scaled.
+- **Decision rule:** size tracks the **density and rank of the context**. Use **large (20px)** in agent window. Use **base (16px)** for standalone or primary actions and comfortable click targets in IDE; use **compact (12px)** for dense rows, inline glyphs, and secondary chrome where the icon rides alongside text in IDE. So the answer to "16 or 12?" is *"what is this icon's role here?"* - not a taste call. Say *"this icon should be compact,"* not *"shrink it a bit."*， As for the agent window, the answer is always *"large."*
 - **Serves:** *One thing leads* (4), *Sameness signals sameness* (6).
 
 <a id="one-stroke"></a>
