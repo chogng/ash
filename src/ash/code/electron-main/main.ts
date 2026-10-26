@@ -11,7 +11,7 @@ import { migrateLegacyLocalProfile } from '../../platform/profile/node/localProf
 import { existsSync, watch } from 'node:fs';
 import { parseMainProcessArgv, parseLaunchArguments } from '../../platform/environment/node/argvHelper.js';
 import { parseWindowLaunch } from '../../platform/launch/electron-main/launchMainService.js';
-import { builtinLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
+import { localize2 } from '../../nls.js';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { access, writeFile } from 'node:fs/promises';
@@ -60,9 +60,8 @@ export async function startElectronApplication(): Promise<void> {
 
 		app.setName(AshApplicationName);
 		configureApplicationDataPaths();
-		const messages = builtinLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!.bundles.ash!;
 		const initialLaunchArguments = parseMainProcessArgv({ arguments: process.argv, packaging: app.isPackaged ? 'packaged' : 'development', appPath: app.getAppPath() });
-		const { args } = parseWindowLaunch(initialLaunchArguments, process.cwd(), messages['taskbar.invalidAgentsArguments']!);
+		const { args } = parseWindowLaunch(initialLaunchArguments, process.cwd(), localize2('taskbar.invalidAgentsArguments', 'Open the Agents window with --agents-window and an optional --folder or --workspace target. File, window, and wait options cannot be combined with it.').original);
 		if (args.wait && !args.waitMarkerFilePath && !developmentLauncher) await addWaitMarker();
 
 		const launchArguments = parseMainProcessArgv({ arguments: process.argv, packaging: app.isPackaged ? 'packaged' : 'development', appPath: app.getAppPath() });
