@@ -1312,6 +1312,7 @@
     "color.commandCenter.hoverBackground": "鼠标悬停时命令中心搜索框的背景色。",
     "color.commandCenter.activeBorder": "命令中心搜索框激活时的边框颜色。",
     "color.sideBar.background": "主侧边栏背景色。",
+    "color.sideBar.border": "侧边栏与主内容区域之间的边框颜色。",
     "color.auxiliaryBar.background": "辅助侧边栏背景色。",
     "color.panel.background": "面板背景色。",
     "color.compositeBar.foreground": "活动组合栏项目的前景色。",

@@ -235,6 +235,7 @@
 		"--ash-settings-itemSeparator",
 		"--ash-settings-rowHoverBackground",
 		"--ash-sideBar-background",
+		"--ash-sideBar-border",
 		"--ash-statusBar-background",
 		"--ash-statusBar-foreground",
 		"--ash-statusBarItem-activeBackground",

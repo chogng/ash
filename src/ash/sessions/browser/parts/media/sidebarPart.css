@@ -1,5 +1,4 @@
 .ash-workbench-sidebar {
-	border-right: var(--ash-strokeThickness) solid var(--ash-border);
 	background: var(--ash-sideBar-background);
 }
 

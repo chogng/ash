@@ -233,7 +233,6 @@ Lxicons are **20px (large)**, **16px (base)** or **12px (compact)** - nothing in
 
 The standard border/separator stroke is **1px** (`--ash-strokeThickness`).
 - **Decision rule:** whether an ordinary border is present is a **yes/no** decision. Preserve thicker semantic or accessibility strokes, such as focus indicators.
-- **Pane boundaries:** adjacent panes retain a permanent one-stroke separator using the theme's `border` color (`--ash-border`), including when a pane is collapsed. Draw it only between panes, independently of resize-handle hover, drag, or keyboard-focus feedback.
 - **Serves:** *Quiet at rest* (1), *Sameness signals sameness* (6).
 
 <a id="theme-color"></a>
@@ -308,7 +307,6 @@ Lead with the **role / tier / ramp**, not the number - then name the principle s
 | "the command center has a box around it" | "chrome should be **quiet at rest, reveal on hover**" | 1 · Quiet at rest |
 | "the focus outline shows when I click" | "the ring is **keyboard-focus only** (`:focus-visible`)" | 1 · Quiet at rest |
 | "the list is cut off at the bottom" | "the surface is **missing its scroll-shadow fade**" | 7 · Delight / 5 · Elevation |
-| "the pane boundaries are hard to distinguish" | "pane boundaries need their [persistent one-stroke separator](#one-stroke)" | 6 · Sameness |
 
 ---
 
