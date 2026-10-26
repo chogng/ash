@@ -16,7 +16,7 @@ import { WebTitlebarPart } from '../../../workbench/browser/parts/titlebar/title
 import { BrowserMenubarControl } from '../../../workbench/browser/parts/titlebar/menubarControl.js';
 import { Menus } from '../menus.js';
 import { createServiceIdentifier, IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
-import { WindowModeControl } from '../../../workbench/browser/parts/titlebar/windowModeControl.js';
+import { WindowModeControl } from './titlebar/windowModeControl.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { observableFromEvent } from '../../../base/common/observable.js';

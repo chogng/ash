@@ -348,7 +348,7 @@ test('Code navigation has its own actions and order while Chat keeps its saved n
 });
 
 test('workspace mode controls switch retained pages and follow their owner selection', async () => {
-	const { WindowModeControl } = await import('../../../workbench/browser/parts/titlebar/windowModeControl.js');
+	const { WindowModeControl } = await import('../../browser/parts/titlebar/windowModeControl.js');
 	const { observableValue } = await import('../../../base/common/observable.js');
 	const ownerDocument = browser.window.document;
 	ownerDocument.body.replaceChildren();

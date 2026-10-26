@@ -14,7 +14,7 @@ Use this skill for implementation, review, or design work under `src/ash/session
 - Model mutable session and chat state with observables. Use events for notifications, not as a parallel state model or for control flow.
 - Register Sessions menu IDs in `browser/menus.ts` and consume `Menus.*`.
 - Import contributions from the appropriate `sessions.*.main.ts` entry point.
-- Prefer Sessions-owned adaptations over shared workbench changes unless the capability is genuinely shared.
+- Keep Agent Window-specific UI composition and policy in Sessions. Choose shared UI ownership from the component's responsibility, existing contract and real production use; neither absence of business dependencies, hypothetical reuse nor caller count alone justifies moving it between Sessions and lower layers.
 - Put stable architecture in the owning specification and concrete behavior in tests. Do not preserve implementation chronology as development guidance.
 
 ## 2. Identify the owning area
