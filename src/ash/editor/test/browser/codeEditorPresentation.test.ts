@@ -729,16 +729,19 @@ suite('textModel browser component', () => {
 		await expect.poll(() => selections.count()).toBeGreaterThan(2);
 		await expect.poll(async () => (await radii())[0]!.slice(0, 2)).toEqual([3, 3]);
 		await expect.poll(async () => (await radii()).at(-1)!.slice(2)).toEqual([3, 3]);
-		await page.evaluate(() => {
-			const editor = window.ashTextModelIntegration.getControl();
-			editor.updateOptions({ wordWrap: 'off' });
-			editor.setValue(Array.from({ length: 100 }, () => 'continuous selection').join('\n'));
-			editor.setSelection({ startLineNumber: 1, startColumn: 1, endLineNumber: 100, endColumn: 21 });
-			editor.setScrollTop(800);
-		});
-		await expect.poll(() => selections.first().evaluate(element => Number((element.parentElement as HTMLElement | null)?.dataset.lineIndex ?? -1))).toBeGreaterThan(0);
-		await expect.poll(async () => (await radii())[0]!.slice(0, 2)).toEqual([0, 0]);
-		await expect.poll(async () => (await radii()).at(-1)!.slice(2)).toEqual([0, 0]);
+		for (const fontSize of [14, 24, 10]) {
+			await page.evaluate(fontSize => {
+				const editor = window.ashTextModelIntegration.getControl();
+				editor.updateOptions({ wordWrap: 'off', fontSize, lineHeight: fontSize + 6 });
+				editor.setValue(Array.from({ length: 100 }, () => 'continuous selection').join('\n'));
+				editor.setSelection({ startLineNumber: 1, startColumn: 1, endLineNumber: 100, endColumn: 21 });
+				editor.setScrollTop(800);
+			}, fontSize);
+			await expect.poll(() => selections.first().evaluate(element => Number((element.parentElement as HTMLElement | null)?.dataset.lineIndex ?? -1))).toBeGreaterThan(0);
+			await expect.poll(async () => (await radii())[0]!.slice(0, 2)).toEqual([0, 0]);
+			await expect.poll(async () => (await radii()).at(-1)!.slice(2)).toEqual([0, 0]);
+			await page.screenshot({ path: browserTests.info.outputPath(`rounded-selection-scrolled-${fontSize}.png`) });
+		}
 	});
 
 	test('selection foreground applies only to selected characters and clears when selections or themes change', async function () {

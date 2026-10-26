@@ -40,7 +40,6 @@ export interface ViewLinesOptions {
 	readonly configuration: IEditorConfiguration;
 	readonly themeType: ColorScheme;
 	readonly tabSize: number;
-	readonly typicalHalfwidthCharacterWidth: number;
 	readonly textMeasurer: TextMeasurer;
 	readonly viewGpuContext?: ViewGpuContext;
 }
@@ -53,7 +52,6 @@ export class ViewLines extends ViewPart implements IViewLines {
 	private readonly semanticTokenSource: SemanticTokenSource | undefined;
 	private readonly semanticHighlightingEnabled: (theme: IColorTheme) => boolean;
 	private readonly _visibleLines: ViewLayer<ViewLine>;
-	private readonly _typicalHalfwidthCharacterWidth: number;
 	private readonly viewGpuContext: ViewGpuContext | undefined;
 	private readonly lineWidths: LineWidthIndex;
 	private readonly textMeasurer: TextMeasurer;
@@ -71,8 +69,6 @@ export class ViewLines extends ViewPart implements IViewLines {
 		this.semanticHighlightingEnabled = options.semanticHighlightingEnabled;
 		this._viewLineOptions = new ViewLineOptions(options.configuration, options.themeType);
 		if (!Number.isSafeInteger(options.tabSize) || options.tabSize < 1) throw new RangeError('Stanza view-line tab size must be a positive safe integer');
-		if (!Number.isFinite(options.typicalHalfwidthCharacterWidth) || options.typicalHalfwidthCharacterWidth <= 0) throw new RangeError('Stanza view-line halfwidth character width must be positive');
-		this._typicalHalfwidthCharacterWidth = options.typicalHalfwidthCharacterWidth;
 		this.viewGpuContext = options.viewGpuContext;
 		this.textMeasurer = options.textMeasurer;
 		this.lineWidths = this._register(new LineWidthIndex(this.model, this.textMeasurer, {
@@ -344,6 +340,9 @@ export class ViewLines extends ViewPart implements IViewLines {
 		));
 		if (!visibleRange) return null;
 		const result: LineVisibleRanges[] = [];
+		// Match offscreen selection geometry after font metrics change. A width
+		// captured during construction would create false corners at viewport edges.
+		const newlineWidth = includeNewLines ? this.textMeasurer.measureLineWidth(' ') : 0;
 		let nextModelLineNumber = includeNewLines
 			? this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(visibleRange.startLineNumber, 1)).lineNumber
 			: 0;
@@ -362,8 +361,8 @@ export class ViewLines extends ViewPart implements IViewLines {
 			if (includeNewLines && lineNumber < originalEndLineNumber) {
 				const lastRange = lineRanges[lineRanges.length - 1];
 				if (lastRange && currentModelLineNumber !== nextModelLineNumber) {
-					lastRange.width += this._typicalHalfwidthCharacterWidth;
-					if (this._lineIsRenderedRTL(lineNumber)) lastRange.left -= this._typicalHalfwidthCharacterWidth;
+					lastRange.width += newlineWidth;
+					if (this._lineIsRenderedRTL(lineNumber)) lastRange.left -= newlineWidth;
 				}
 			}
 			result.push(new LineVisibleRanges(

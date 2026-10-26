@@ -354,7 +354,6 @@ export class View extends ViewEventHandler {
 			configuration: this.editorConfiguration,
 			themeType: options.theme.colorScheme,
 			tabSize: this.indentation.tabSize,
-			typicalHalfwidthCharacterWidth: Math.max(1, this.textMeasurer.measureLineWidth(' ')),
 			textMeasurer: this.textMeasurer,
 			viewGpuContext: this.viewGpuContext,
 		}));
@@ -1383,7 +1382,11 @@ class BrowserTextMeasurer implements TextMeasurer {
 		const contentLeftPadding = cssNumber(style.paddingLeft, 0);
 		const horizontalPadding = contentLeftPadding + cssNumber(style.paddingRight, 0);
 		const font = `${style.fontStyle || 'normal'} ${style.fontVariantCaps || 'normal'} ${style.fontWeight || '400'} ${style.fontSize || `${fontSize}px`} ${style.fontFamily || 'monospace'}`;
+		const language = this.referenceElement.closest('[lang]')?.getAttribute('lang') ?? this.referenceElement.ownerDocument.documentElement.lang;
 		if (this.context) {
+			// Detached canvases do not inherit language, which affects the font
+			// selected for generic families such as monospace on Windows.
+			this.context.canvas.lang = language;
 			this.context.font = font;
 			this.context.textBaseline = 'alphabetic';
 		}
@@ -1394,7 +1397,7 @@ class BrowserTextMeasurer implements TextMeasurer {
 			&& style.fontVariantCaps === 'normal' && style.fontVariationSettings === 'normal'
 			? this.context.measureText('n').width : undefined;
 		return Object.freeze({
-			signature: JSON.stringify([font, letterSpacing, style.fontFeatureSettings, style.fontVariationSettings, tabSize, horizontalPadding, spaceWidth, monospaceWidth]),
+			signature: JSON.stringify([language, font, letterSpacing, style.fontFeatureSettings, style.fontVariationSettings, tabSize, horizontalPadding, spaceWidth, monospaceWidth]),
 			font,
 			fontSize,
 			letterSpacing,
