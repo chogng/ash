@@ -40,6 +40,7 @@
 .ash-chatgpt-navigation .ash-pane-view-header {
 	padding: 0 var(--ash-spacing-size120);
 	border-radius: var(--ash-cornerRadius-large);
+	color: var(--ash-sessions-activityBar-foreground);
 	font-size: var(--ash-fontSize-body1);
 	font-weight: var(--ash-fontWeight-regular);
 }
@@ -64,7 +65,7 @@
 /* These content-sized groups scroll together; they do not need pane separators. */
 .ash-chatgpt-navigation
 	.ash-split-view
-	> .ash-split-view-pane::before {
+	> .ash-split-view-pane:not(:first-child)::before {
 	content: none;
 }
 

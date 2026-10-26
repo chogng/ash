@@ -55,6 +55,29 @@ suite('chatgptweb browser component', () => {
 	}
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`ChatGPT group hover fills follow list inset changes (${locale})`, async () => {
+			const { page } = browserTests;
+			await mockChatGPTRequests(page);
+			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${locale === 'en' ? 'light' : 'hcDark'}`);
+			const list = page.locator('.ash-chatgpt-navigation-list');
+			const header = list.locator('.ash-pane-view-header').first();
+			await expect(header).toBeVisible();
+			const expectInsets = async (inset: number): Promise<void> => {
+				await expect.poll(() => header.evaluate(node => {
+					const bounds = node.getBoundingClientRect();
+					const list = node.closest('.ash-chatgpt-navigation-list')!.getBoundingClientRect();
+					return { left: bounds.left - list.left, right: list.right - bounds.right };
+				})).toEqual({ left: inset, right: inset });
+			};
+			await expectInsets(8);
+			await list.evaluate(node => { node.style.paddingInline = '12px'; });
+			await expectInsets(12);
+			await list.evaluate(node => node.style.removeProperty('padding-inline'));
+			await expectInsets(8);
+			await header.hover();
+			await expect(header).toHaveCSS('border-radius', '8px');
+		});
+
 		test(`ChatGPT history and conversation show independent skeletons (${locale})`, async () => {
 			const { page } = browserTests;
 			await mockChatGPTRequests(page);
