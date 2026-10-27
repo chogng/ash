@@ -12,6 +12,12 @@
   - 范围与兼容：沿 `IConnectorService`／`IConnectorApi` 及既有 browser／device OAuth owner 传递取消，详情提供可键盘访问的取消动作，随后按最新 catalog 恢复操作；复用 `connector/connect/oauth/cancel` 与 `connector/connect/oauth/device/cancel`，关闭本次 callback 并停止本次等待／后续轮询，不撤销已完成授权或其他连接。上游只取消本地轮询，不能照搬为 Ash 的服务端保证；先核对 device poll 暂时移出 pending 与 cancel／complete 的竞争，保留 flow／generation 校验，不用隐藏 UI 代替取消。
   - 验收：在 Connector API／service、Extensions 入口及 `crates/ext/connectors/src/oauth_tests.rs`、`device_oauth_tests.rs` 和 `crates/app-server/src/server/connector_operations_tests.rs` 覆盖授权前、待 callback／轮询时取消、打开浏览器失败、关闭／切换入口、重复取消、取消与完成并发及旧结果晚到；确认停止新轮询、callback 释放、按钮与焦点恢复、不误报成功或覆盖新连接。正常成功、重新授权、过期及普通 MCP OAuth 保持回归；不承诺撤回外部浏览器已完成的授权。
 
+## Git 推送 · TODO
+
+- [ ] **修复候选 · 推送拒绝的稳定诊断**：`crates/git/src/remote.rs` 的 reviewed push 在非快进拒绝后产生 `CommandFailed`，但 `crates/app-server/src/server/request_processors/git.rs` 将其折叠为 `GitOperationFailed`，`extensions/git/src/api.rs`／`commands.rs` 因而只能显示泛化失败。参考 [非快进推送拒绝提示](https://github.com/zed-industries/zed/pull/47296)（2026-10-27 已合并，最新稳定 v1.25.3 尚不包含），由 Git 执行 owner 对明确的 non-fast-forward／fetch-first 结果窄分类，沿既有协议与扩展给出先获取、审阅并整合远端变更后再推送的恢复方向；本项为静态链路缺口，未运行行为验收。
+  - 范围与风险：先核实机器可读 push 结果契约，不凭任意自然语言子串把认证、网络、hook 或 lease 拒绝误认作分支落后；未知错误保留安全回退，不透传原始 stderr、含凭据 URL 或路径。不自动 fetch／pull／rebase／force-push／重试，保持 reviewed commit／upstream、权限、取消及失败后状态刷新，不照搬上游 UI 或扩张为通用错误展示层。
+  - 验收：在 `crates/git/src/remote_tests.rs`、`crates/app-server/src/server_tests.rs` 和 `extensions/git/src/api_tests.rs`／`runtime_tests.rs` 扩展受控 remote 的 diverged／fetch-first、成功、认证／hook／lease 拒绝、取消、未知格式和部分 ref 成功场景；核对分类、本地化恢复提示、敏感输出不外泄、目标远端／ref 不变且无额外自动操作，并覆盖本地／SSH 及适用平台。
+
 ## SCM 普通文件点击 · 残余极端往返
 
 - [ ] **测量** · 最终独立窗口中最慢暖点击 375.6 ms：extensionHost/invoke/read（connection 1，request 2907）客户端往返 274.3 ms，同 ID 服务端处理 0.088 ms、出站 0.040 ms，Git 请求在之后才开始且仅 3.4 ms。尚未拆清 Renderer→Main→daemon 送达与返程 decode/dispatch，不能归因扩展执行或渲染。下一步补这些边界的 method/request ID 标记，保留极值复现；本轮全部原始数据和已完成实现见[报告](.build/scm-tail-v2/report.md)。
@@ -197,6 +203,7 @@
 
 - [ ] **验证 · 网络目录上的状态数据库策略**：ASH_HOME 可落在 NFS，当前共享连接及 automation／queue 等 owner 打开同一 state.sqlite3 时仍分别指定 WAL。参考 [Codex 按数据库目录选择初始化 journal](https://github.com/openai/codex/pull/56552)（2026-10-23 已合并，未确认稳定版包含），先核实支持范围及实际 NFS 启动／重开行为；统一每个数据库实际目录的探测和 owner 策略，避免仅改共享连接后被其他 owner 改回。若不支持此布局，启动时明确诊断；若纳入支持，再评估新库 DELETE，已有库不自动切换或搬迁。
   - 前提与验收：适配 rusqlite 而非照搬 SQLx；保持 Durable 至少现有 FULL 耐久性，DELETE 评估 EXTRA，不将 WAL 改为上游 NORMAL。覆盖本地新库、NFS 新库、已有 WAL／DELETE、初始化中断、目录探测失败、多个 owner 重开和持锁并发，确认实际 pragma 返回值与错误可诊断；对回滚 journal 的读写竞争及吞吐做基线测量。是否正式支持多主机共用 profile 属单独产品决定，不由此候选授权。
+  - 上游后续已合并[已有库迁移与初始化门禁](https://github.com/openai/codex/pull/57225)及[迁移权限说明](https://github.com/openai/codex/pull/57226)（2026-10-26，最新稳定 0.164.0 尚不包含）：迁移要求所有主机的客户端停用、跨客户端锁有效，并保留 WAL 备份和中断恢复；替换文件仅保留 mode bits，不继承原 owner／group／扩展 ACL。此处仍不授权 Ash 自动迁移或照搬 unsafe 开关；若之后单独批准迁移，再将锁竞争、恢复、权限变化披露与失败不触发损坏重建纳入验收，不能把初始化 journal 选择等同于已有数据安全转换。
 
 ### Rust 分析缓存持久化（暂缓）
 
