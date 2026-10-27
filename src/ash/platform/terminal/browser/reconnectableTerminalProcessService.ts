@@ -220,7 +220,9 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 			this.assertAttached(record);
 			return { terminalId: record.terminalId, ready: info.ready, profile, connectionPersistence: 'reconnectable' };
 		} catch (error) {
-			if (this.terminals.get(record.terminalId) === record) this.terminals.delete(record.terminalId);
+			// Once attached, the old lease is consumed. A failed information query
+			// must retain the rotated credential for recovery, rollback or close.
+			if (record.generation < 0 && this.terminals.get(record.terminalId) === record) this.terminals.delete(record.terminalId);
 			throw error;
 		}
 	}
