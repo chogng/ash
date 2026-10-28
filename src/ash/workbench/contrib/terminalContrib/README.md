@@ -2,7 +2,7 @@
 
 此目录拥有独立的终端用户能力，消费 [Terminal 界面](../terminal/README.md) 与 [实例服务](../terminal/README.md) 的公开契约，不创建第二份实例集合、PTY 连接或屏幕。
 
-生产入口由 `terminal/terminal.all.ts` 统一装载，每项能力保留自己的 contribution 注册。links 按实例拥有 xterm 链接 provider、路径解析、悬停、打开操作和键盘选择器；屏幕只提供原 buffer 和 widget 承载。voice 注册开始/停止听写动作，`terminalVoice.ts` 拥有录音对应的实例和界面生命周期。语音文字进入原实例输入链，换实例、退出或隐藏面板取消录音，执行仍由用户按 Enter 触发。
+生产入口由 `terminal/terminal.all.ts` 统一装载，每项能力保留自己的 contribution 注册。links 按实例拥有 xterm 链接 provider、路径解析、悬停、打开操作和键盘选择器；屏幕只提供原 buffer 和 widget 承载。voice 注册每实例贡献和开始/停止动作，`terminalVoice.ts` 投影 `ash code` 的 OSC 7501 protocol 1 听写能力。普通 shell 不显示语音入口；菜单和手动启动使用同一会话信号。录音、识别文本与草稿由 CLI 唯一拥有，标题栏仅发送协议保留的 Ctrl+Alt+Shift+F11/F12 开始/停止控制。切换终端只切换按钮的目标；退出、挂起、shell 命令完成或断开会撤回能力。
 
 文件链接支持相对路径、绝对路径、引号和空格、`file://`、家目录及编译器 / Python / 栈帧行列位置。`terminalLinkParsing.ts` 只产生候选，`TerminalLinkContribution` 使用命令所在行的 cwd、`IPathService` 和原文件服务确认文件，再通过编辑器服务打开；远端资源保留终端所属文件夹的 authority。鼠标 provider 和“打开检测到的链接”共用解析，Ctrl/Cmd+Shift+O 打开可搜索列表，Escape 返回终端，接受文件后由编辑器接收焦点。文本索引通过真实 buffer cells 换算成范围，覆盖宽字符和自动换行。状态、进程或工作区切换会撤回过期结果，关闭释放 provider、OSC 8 handler、悬停和选择器。HTTP(S) 检测和现有网页打开规则继续生效。
 

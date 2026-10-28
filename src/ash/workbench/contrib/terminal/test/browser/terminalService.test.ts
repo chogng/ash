@@ -1013,7 +1013,7 @@ test('TerminalService rejects missing process and workspace registrations before
 suite('TerminalService lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	for (const phase of ['factory', 'constructor', 'membership', 'screen', 'detachment'] as const) test(`failed transfer ${phase} ${phase === 'detachment' ? 'releases its unrecoverable PTY' : 'returns a rotated lease while preserving its original PTY'}`, async () => {
+	for (const phase of ['processInfo', 'factory', 'constructor', 'membership', 'screen', 'detachment', 'processInfoDisconnected'] as const) test(`failed transfer ${phase} ${phase === 'detachment' || phase === 'processInfoDisconnected' ? 'releases its unrecoverable PTY' : 'returns a rotated lease while preserving its original PTY'}`, async () => {
 		const originalToken = 'a'.repeat(64);
 		const rotatedToken = 'b'.repeat(64);
 		const lease = { terminalId: 'transferred-process', dirId: 'workspace', reconnectToken: originalToken, reconnectGracePeriodMillis: 30_000 };
@@ -1023,9 +1023,10 @@ suite('TerminalService lifecycle', () => {
 			title: 'Shell', target: TerminalLocation.Panel, cols: 80, rows: 24, sequence: 0, pendingUtf8: [], vt: 'retained output',
 		};
 		const detached: string[] = [];
+		const mustClose = phase === 'detachment' || phase === 'processInfoDisconnected';
 		const processes = Object.assign(new TestTerminalProcessService([]), {
-			attach: async () => process,
-			detach: async (terminalId: string) => { detached.push(terminalId); if (phase === 'detachment') throw new Error('detachment failed'); return { ...lease, reconnectToken: rotatedToken }; },
+			attach: async () => { if (phase === 'processInfo' || phase === 'processInfoDisconnected') throw new Error(`process information failed with ${originalToken}`); return process; },
+			detach: async (terminalId: string) => { detached.push(terminalId); if (mustClose) throw new Error('detachment failed'); return { ...lease, reconnectToken: rotatedToken }; },
 		});
 		using workspace = folderWorkspaceContext();
 		using services = terminalServices(processes, workspace, phase === 'factory' || phase === 'detachment' ? () => { throw new Error(`dependency failed with ${originalToken}`); } : undefined);
@@ -1042,15 +1043,16 @@ suite('TerminalService lifecycle', () => {
 		try {
 			await assert.rejects(terminals.importTerminalState(snapshots, lease), error => {
 				assert.ok(error instanceof TerminalTransferError);
-				assert.equal(error.rollbackLease?.reconnectToken, phase === 'detachment' ? undefined : rotatedToken);
+				assert.equal(error.rollbackLease?.reconnectToken, mustClose ? undefined : rotatedToken);
 				assert.equal(error.message.includes(originalToken), false);
 				assert.equal(JSON.stringify(error).includes(rotatedToken), false);
 				return true;
 			});
 			assert.deepEqual(detached, [lease.terminalId]);
-			assert.deepEqual(processes.closeCalls, phase === 'detachment' ? [lease.terminalId] : []);
+			assert.deepEqual(processes.closeCalls, mustClose ? [lease.terminalId] : []);
 			assert.deepEqual(terminals.instances, []);
 			assert.equal(processes.createCalls.length, 0);
+			assert.deepEqual(processes.writeCalls, []);
 		} finally {
 			Object.defineProperty(TerminalInstance.prototype, 'xtermReadyPromise', screenDescriptor);
 			TerminalInstance.prototype.attachToElement = attachToElement;

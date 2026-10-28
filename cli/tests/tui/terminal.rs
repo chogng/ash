@@ -25,9 +25,9 @@ fn actual_tui_terminal_program_status_tracks_work_and_clears_on_exit_in_both_mod
         fixture.append_config(&format!(
             "\n[tui]\nscreenMode = \"{mode}\"\nautoUpdate = \"never\"\n"
         ));
-        let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+        let mut process = TuiProcess::start(&fixture, &["code"], LARGE_SIZE);
         process.wait_for_stable_screen("? for shortcuts");
-        let idle = "\x1b]7501;state=idle:app=ash\x1b\\";
+        let idle = "\x1b]7501;state=idle:app=ash:dictation=idle:protocol=1\x1b\\";
         assert!(process.raw_text().contains(idle));
         #[cfg(unix)]
         {
@@ -56,7 +56,7 @@ fn actual_tui_terminal_program_status_tracks_work_and_clears_on_exit_in_both_mod
         assert!(
             process
                 .raw_text()
-                .contains("\x1b]7501;state=working:app=ash\x1b\\")
+                .contains("\x1b]7501;state=working:app=ash:dictation=idle:protocol=1\x1b\\")
         );
         gate.release();
         process.wait_for_stable_screen("OSC-7501-DONE");
@@ -200,7 +200,8 @@ fn actual_tui_dictation_download_cancels_recovers_and_restarts() {
         } else {
             "Manual"
         });
-        process.submit("/voice");
+        process.type_text("KEEP-DICTATION-DRAFT");
+        process.send(b"\x1b[23;8~");
         process.wait_for_screen("Dictation · checking model files");
         let connection = proxy.connection();
         process.wait_for_stable_screen("Dictation · checking model files · ctrl+c to stop");
@@ -210,9 +211,9 @@ fn actual_tui_dictation_download_cancels_recovers_and_restarts() {
                 .len(),
             0
         );
-        process.type_text("KEEP-DICTATION-DRAFT");
+
         let cancelled_at = Instant::now();
-        process.send(b"\x03");
+        process.send(b"\x1b[24;8~");
         process.wait_for_stable_screen("Dictation stopped.");
         assert!(cancelled_at.elapsed() < Duration::from_secs(3));
         DownloadProxy::assert_disconnected(connection);

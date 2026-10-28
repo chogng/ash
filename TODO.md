@@ -70,11 +70,17 @@
 
 当前存储、配置层和设置入口见 [Preferences 与 Configuration](docs/preferences-and-settings.md)。
 
+## Ash Code · 终端兼容性
+
+- [ ] **修复候选 · 旧 VTE 的终端状态输出门禁**：`crates/tui/src/terminal/session.rs` 对交互终端直接调用 `program_status.rs` 输出 OSC 7501，尚未区分已知不兼容的 VTE 后端；`crates/terminal-detection/src/host.rs` 优先识别 GNOME 等应用身份，不能可靠保留同时存在的 `VTE_VERSION`。参考 [旧 VTE 状态协议门禁](https://github.com/openai/codex/pull/57612)（2026-10-28 已合并，稳定 0.165.0 尚不包含），为已知低于 0.54 的 VTE 后端禁用该状态序列，减少旧 Linux 终端误解析为可见文本的风险。本项为静态兼容缺口，未在真实旧 VTE 复现；不是所有未知终端均安全的保证。
+  - 范围与前提：在现有 terminal-detection owner 保留独立于应用身份的后端版本信息，明确 VTE_VERSION 的优先级与空／畸形值规则，不以 GNOME 应用版本冒充 VTE 版本；仅门禁 Ash 已有 OSC 7501，不引入上游 OSC 21337、不全局关闭语音或扩张终端架构。较新／未知版本保持现有策略，未知值不伪造支持结论；保留内置终端的状态与 dictation 能力、非 TTY 抑制和现有失败重试行为。
+  - 验收：在 `crates/terminal-detection/src/host_tests.rs`、`crates/tui/src/terminal/program_status_tests.rs` 与 session 测试覆盖 GNOME／其他应用身份同时有 VTE_VERSION、5399／5400 边界、空值／畸形／缺失、应用版本冲突及 multiplexer；已知旧 VTE 的 set／clear／挂起／退出均不写状态序列，较新／未知版本保持约定输出，flush 失败后的重试与刷新不失效。补真实旧 VTE 无状态乱码及受支持终端的状态／dictation 回归，记录 Linux 范围并确认 macOS／Windows 不受误判。
+
 ## AgentHost · TODO
 
-- [ ] **修复候选 · 保留 Provider 流错误的稳定分类**：沿 `crates/ash-api/src/requests.rs`、endpoint decoder、`crates/app-server/src/model_provider_error.rs` 到 `crates/core/src/turn/executor.rs` 核对两条独立缺口，避免将可诊断的失败降为通用无效响应。既有配置／认证／限流提示已存在，不重复建设错误展示层；以下依据静态调用链，尚未运行真实端点验收，上游已合并不等于已发布稳定版。
+- [ ] **修复候选 · 保留 Provider 流错误的稳定分类**：沿 `crates/ash-api/src/requests.rs`、endpoint decoder、`crates/app-server/src/model_provider_error.rs` 到 `crates/core/src/turn/executor.rs` 核对两条独立缺口，避免将可诊断的失败降为通用无效响应。既有配置／认证／限流提示已存在，不重复建设错误展示层；以下依据静态调用链，尚未运行真实端点验收，各出处的合并与发布状态分别标注。
   - **Chat Completions 错误帧**：`crates/ash-api/src/sse/openai_chat_completions.rs` 未识别 `error` envelope，无 `choices` 时直接忽略；若随后结束或只有 `[DONE]`，错误会变为缺少终态的 `InvalidResponse`。参考 [流错误分类保留](https://github.com/zed-industries/zed/pull/66038)（2026-10-23 已合并 main），在普通 chunk／usage 处理前识别经确认的错误帧并接回已有分类入口，不照搬上游类型装箱修复。Core 对无效响应只立即重试一次，而 transient 有等待及独立重试预算；须让额度／认证错误终止并给出正确恢复方向、过载沿原 transient 策略处理，而非一概关闭重试。
-  - **Responses 模型不可用代码**：`requests.rs` 仍按正文子串识别，裸 `model_not_found` 从 `error`／`response.failed` 落为 `InvalidResponse`，同样可能多发一次请求；HTTP 403 则在读取该代码前归为认证错误。参考 [模型不可用终态错误](https://github.com/openai/codex/pull/56445)（2026-10-23 已合并 main），优先识别可信协议结构中的精确 code，并沿现有稳定错误契约给出更换模型／检查模型访问的恢复方向，不凭自然语言子串推断、不自动切换模型。HTTP 400／404 与含 `invalid_request_error` 的现有路径本已不可重试，不能把所有模型不存在都描述为重试缺陷；未知 403 仍保留原认证语义。
+  - **Responses 模型不可用代码**：`requests.rs` 仍按正文子串识别，裸 `model_not_found` 从 `error`／`response.failed` 落为 `InvalidResponse`，同样可能多发一次请求；HTTP 403 则在读取该代码前归为认证错误。参考 [模型不可用终态错误](https://github.com/openai/codex/pull/56445)（2026-10-23 已合并，已包含于 [Codex 0.165.0](https://github.com/openai/codex/releases/tag/rust-v0.165.0)），优先识别可信协议结构中的精确 code，并沿现有稳定错误契约给出更换模型／检查模型访问的恢复方向，不凭自然语言子串推断、不自动切换模型。HTTP 400／404 与含 `invalid_request_error` 的现有路径本已不可重试，不能把所有模型不存在都描述为重试缺陷；未知 403 仍保留原认证语义。
   - **范围与验收**：在 `crates/ash-api/src/sse/openai_chat_completions_tests.rs`、`crates/ash-api/src/endpoint/responses/events_tests.rs` 和 `crates/app-server/src/model_provider_error_tests.rs` 补受控错误帧与完整 Core 调用次数断言；覆盖错误出现在首帧／部分输出之后、缺少／附带 `[DONE]`、普通 usage-only 帧、嵌套 `response.failed`、SSE／WebSocket 共用解码、400／403／404、取消、未知或畸形错误。额度／认证／已确认模型不可用不额外调用，过载仍按预算等待，终态与历史恢复提示一致；保留既有上下文溢出处理、错误正文截断和脱敏，不把原始 provider 正文直传 UI 或新增账号／provider 抽象。
 
 - [ ] **修复候选 · 兼容 Chat Completions 的结构化流内容**：`crates/ash-api/src/sse/openai_chat_completions.rs` 仍把 `delta.content` 限定为字符串，已启用 native streaming 的 OpenAI-compatible 端点遇到 text/thinking 数组会报错；参考 [Zed 混合流适配](https://github.com/zed-industries/zed/pull/65915)（已合并 main，未核实进入稳定版），沿现有 decoder 与 terminal assembly 支持经确认的结构化内容，保持思考与正文分离。不新增 provider 抽象或账号接线。
@@ -201,9 +207,9 @@
 
 ### 网络目录上的状态数据库策略
 
-- [ ] **验证 · 网络目录上的状态数据库策略**：ASH_HOME 可落在 NFS，当前共享连接及 automation／queue 等 owner 打开同一 state.sqlite3 时仍分别指定 WAL。参考 [Codex 按数据库目录选择初始化 journal](https://github.com/openai/codex/pull/56552)（2026-10-23 已合并，未确认稳定版包含），先核实支持范围及实际 NFS 启动／重开行为；统一每个数据库实际目录的探测和 owner 策略，避免仅改共享连接后被其他 owner 改回。若不支持此布局，启动时明确诊断；若纳入支持，再评估新库 DELETE，已有库不自动切换或搬迁。
+- [ ] **验证 · 网络目录上的状态数据库策略**：ASH_HOME 可落在 NFS，当前共享连接及 automation／queue 等 owner 打开同一 state.sqlite3 时仍分别指定 WAL。参考 [Codex 按数据库目录选择初始化 journal](https://github.com/openai/codex/pull/56552)（2026-10-23 已合并，稳定 0.165.0 尚不包含），先核实支持范围及实际 NFS 启动／重开行为；统一每个数据库实际目录的探测和 owner 策略，避免仅改共享连接后被其他 owner 改回。若不支持此布局，启动时明确诊断；若纳入支持，再评估新库 DELETE，已有库不自动切换或搬迁。
   - 前提与验收：适配 rusqlite 而非照搬 SQLx；保持 Durable 至少现有 FULL 耐久性，DELETE 评估 EXTRA，不将 WAL 改为上游 NORMAL。覆盖本地新库、NFS 新库、已有 WAL／DELETE、初始化中断、目录探测失败、多个 owner 重开和持锁并发，确认实际 pragma 返回值与错误可诊断；对回滚 journal 的读写竞争及吞吐做基线测量。是否正式支持多主机共用 profile 属单独产品决定，不由此候选授权。
-  - 上游后续已合并[已有库迁移与初始化门禁](https://github.com/openai/codex/pull/57225)及[迁移权限说明](https://github.com/openai/codex/pull/57226)（2026-10-26，最新稳定 0.164.0 尚不包含）：迁移要求所有主机的客户端停用、跨客户端锁有效，并保留 WAL 备份和中断恢复；替换文件仅保留 mode bits，不继承原 owner／group／扩展 ACL。此处仍不授权 Ash 自动迁移或照搬 unsafe 开关；若之后单独批准迁移，再将锁竞争、恢复、权限变化披露与失败不触发损坏重建纳入验收，不能把初始化 journal 选择等同于已有数据安全转换。
+  - 上游后续已合并[已有库迁移与初始化门禁](https://github.com/openai/codex/pull/57225)及[迁移权限说明](https://github.com/openai/codex/pull/57226)（2026-10-26，最新稳定 0.165.0 尚不包含）：迁移要求所有主机的客户端停用、跨客户端锁有效，并保留 WAL 备份和中断恢复；替换文件仅保留 mode bits，不继承原 owner／group／扩展 ACL。此处仍不授权 Ash 自动迁移或照搬 unsafe 开关；若之后单独批准迁移，再将锁竞争、恢复、权限变化披露与失败不触发损坏重建纳入验收，不能把初始化 journal 选择等同于已有数据安全转换。
 
 ### Rust 分析缓存持久化（暂缓）
 

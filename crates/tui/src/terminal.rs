@@ -8,6 +8,7 @@ pub(crate) mod text;
 
 pub(crate) use event_source::TerminalEvent;
 pub(crate) use event_source::TerminalEventSource;
+pub(crate) use program_status::DictationStatus;
 pub(crate) use program_status::ProgramStatus;
 pub(crate) use session::TerminalSession;
 

@@ -27,8 +27,8 @@ import { ActionViewItem, LabelActionViewItem } from "../../../../base/browser/ui
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
-import { TerminalVoiceSession } from '../../terminalContrib/voice/browser/terminalVoice.js';
-import { Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
+import { TerminalDictationStateContext, TerminalVoiceContribution, type TerminalDictationState } from '../../terminalContrib/voice/browser/terminalVoice.js';
+import { Disposable, DisposableMap, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
@@ -53,7 +53,6 @@ export class TerminalViewPane extends ViewPane {
 	private readonly tabsLayout: TerminalTabbedView;
 	private readonly widgetsElement: HTMLDivElement;
 	private readonly items = this._register(new DisposableMap<ITerminalInstance, TerminalViewItem>());
-	private readonly voice: TerminalVoiceSession;
 	private creating: Promise<ITerminalInstance | undefined> | undefined;
 	private initializing = false;
 	private focusSource: Element | null | undefined;
@@ -90,7 +89,6 @@ export class TerminalViewPane extends ViewPane {
 		this.tabsLayout = this._register(instantiation.createInstance(TerminalTabbedView, this.contentElement));
 		this.widgetsElement = this.tabsLayout.terminalContainer;
 		this._register(this.tabsLayout.onDidFocusInstance(() => this.focus()));
-		this.voice = this._register(instantiation.createInstance(TerminalVoiceSession, this.contentElement, () => this.isBodyVisible() && !this.isDisposed, () => this.activeItem()?.widget.focus()));
 
 		for (const instance of terminalService.instances) this.addInstance(instance);
 		this._register(terminalService.onDidCreateInstance((instance) => {
@@ -115,7 +113,6 @@ export class TerminalViewPane extends ViewPane {
 				});
 			} else {
 				this.focusSource = undefined;
-				this.voice.hide();
 				this.updateInstances();
 			}
 		}));
@@ -137,9 +134,6 @@ export class TerminalViewPane extends ViewPane {
 			void this.initialize();
 		});
 	}
-
-	public startVoice(): Promise<void> { return this.voice.start(); }
-	public stopVoice(): Promise<void> { return this.voice.stop(); }
 	public async getTerminalOutput(instance: ITerminalInstance, maxCharacters: number, signal: AbortSignal): Promise<string | undefined> {
 		const item = this.items.get(instance);
 		if (!item || this.isDisposed || signal.aborted) { return undefined; }
@@ -345,6 +339,8 @@ export class TerminalTitleActions extends Disposable {
 	private readonly activeInstanceInTitleContext: IContextKey<boolean>;
 	private readonly activeInstanceStateContext: IContextKey<string>;
 	private readonly inlineActionsContext: IContextKey<boolean>;
+	private readonly dictationContext: IContextKey<TerminalDictationState>;
+	private readonly voiceListener = this._register(new MutableDisposable());
 	private readonly commandService: ICommandService;
 	private readonly contextKeyService: IContextKeyService;
 	private profiles: readonly ITerminalProfile[] = [];
@@ -372,6 +368,7 @@ export class TerminalTitleActions extends Disposable {
 		this.activeInstanceInTitleContext = TerminalActiveInstanceInTitleContext.bindTo(contextKeyService);
 		this.activeInstanceStateContext = TerminalActiveInstanceStateContext.bindTo(contextKeyService);
 		this.inlineActionsContext = TerminalViewInlineActionsContext.bindTo(contextKeyService);
+		this.dictationContext = TerminalDictationStateContext.bindTo(contextKeyService);
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('terminal.integrated.tabs')) this.updateContext();
 		}));
@@ -379,6 +376,7 @@ export class TerminalTitleActions extends Disposable {
 			if (event.affectsSome(new Set([TerminalContextKeys.tabsNarrow.key]))) this.updateContext();
 		}));
 		this._register(toDisposable(() => {
+			this.dictationContext.reset();
 			this.inlineActionsContext.reset();
 			this.activeInstanceStateContext.reset();
 			this.activeInstanceInTitleContext.reset();
@@ -414,6 +412,7 @@ export class TerminalTitleActions extends Disposable {
 
 	setActiveInstance(instance: ITerminalInstance | undefined, placement: "list" | "title"): void {
 		this.activeInstance = instance;
+		this.voiceListener.value = instance?.getContribution?.<TerminalVoiceContribution>(TerminalVoiceContribution.ID)?.onDidChange(() => this.updateContext());
 		this.singleGroup = placement === 'title';
 		this.updateContext();
 		this.toolbar.refresh();
@@ -430,6 +429,7 @@ export class TerminalTitleActions extends Disposable {
 			this.inlineActionsContext.set(this.activeInstance !== undefined && visible('showActions'));
 			this.hasActiveInstanceContext.set(this.activeInstance !== undefined);
 			this.activeInstanceStateContext.set(this.activeInstance?.state ?? 'none');
+			this.dictationContext.set(this.activeInstance?.getContribution?.<TerminalVoiceContribution>(TerminalVoiceContribution.ID)?.state ?? 'unavailable');
 		});
 	}
 
@@ -437,7 +437,11 @@ export class TerminalTitleActions extends Disposable {
 		if (action instanceof MenuItemAction) {
 			const binding = this.keybindings.lookupKeybinding(action.id);
 			const shortcut = binding && getKeybindingLabel(binding);
-			if (shortcut) action = new MenuItemAction({ ...action.item, tooltip: localize('terminal.title.actionKeybinding', '{0} ({1})', action.tooltip, shortcut) }, action.alt, { shouldForwardArgs: true }, this.contextKeyService, this.commandService);
+			const voice = action.id === 'workbench.action.terminal.startVoice' || action.id === 'workbench.action.terminal.stopVoice';
+			if (shortcut || voice) action = new MenuItemAction({
+				...action.item,
+				...(shortcut ? { tooltip: localize('terminal.title.actionKeybinding', '{0} ({1})', action.tooltip, shortcut) } : {}),
+			}, action.alt, voice && this.activeInstance ? { arg: new InstanceContext(this.activeInstance) } : { shouldForwardArgs: true }, this.contextKeyService, this.commandService);
 		}
 		switch (action.id) {
 			case TerminalCommandId.Focus:

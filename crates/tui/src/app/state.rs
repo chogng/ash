@@ -414,6 +414,31 @@ impl App {
         now: Instant,
         terminal_area: Rect,
     ) -> Option<AppCommand> {
+        // OSC 7501 protocol 1 advertises these idempotent host controls. They do not
+        // depend on the optional, user-configurable dictation shortcut or edit the draft.
+        if key.kind == crossterm::event::KeyEventKind::Press
+            && key.modifiers
+                == (crossterm::event::KeyModifiers::CONTROL
+                    | crossterm::event::KeyModifiers::ALT
+                    | crossterm::event::KeyModifiers::SHIFT)
+        {
+            match key.code {
+                crossterm::event::KeyCode::F(11) => {
+                    return (self.terminal_dictation_status()
+                        == crate::terminal::DictationStatus::Idle)
+                        .then(|| self.toggle_dictation())
+                        .flatten();
+                }
+                crossterm::event::KeyCode::F(12) => {
+                    return self
+                        .dictation_resource_id
+                        .is_some()
+                        .then(|| self.toggle_dictation())
+                        .flatten();
+                }
+                _ => {}
+            }
+        }
         let mut key = key;
         key.set_english_punctuation(self.punctuation_settings.enabled);
         if key.kind == crossterm::event::KeyEventKind::Press
@@ -1177,6 +1202,19 @@ impl App {
             ),
             Instant::now(),
         );
+    }
+
+    pub(crate) fn terminal_dictation_status(&self) -> crate::terminal::DictationStatus {
+        use crate::terminal::DictationStatus;
+        if self.dictation_request == DictationRequest::Stopping {
+            DictationStatus::Busy
+        } else if self.dictation_resource_id.is_some() {
+            DictationStatus::Active
+        } else if self.chat_input_focused() && self.accepts_input() {
+            DictationStatus::Idle
+        } else {
+            DictationStatus::Unavailable
+        }
     }
 
     fn toggle_dictation(&mut self) -> Option<AppCommand> {

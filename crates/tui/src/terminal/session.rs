@@ -271,9 +271,18 @@ impl TerminalSession {
         self.terminal.clear()
     }
 
-    pub(crate) fn set_program_status(&mut self, status: super::ProgramStatus) -> io::Result<()> {
+    pub(crate) fn refresh_program_status(&mut self) {
+        self.program_status.invalidate();
+    }
+
+    pub(crate) fn set_program_status(
+        &mut self,
+        status: super::ProgramStatus,
+        dictation: super::DictationStatus,
+    ) -> io::Result<()> {
         if io::stdout().is_terminal() {
-            self.program_status.set(&mut io::stdout(), status)?;
+            self.program_status
+                .set(&mut io::stdout(), status, dictation)?;
         }
         Ok(())
     }

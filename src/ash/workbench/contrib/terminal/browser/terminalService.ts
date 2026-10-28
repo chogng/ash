@@ -325,11 +325,11 @@ export class TerminalService extends Disposable implements ITerminalService {
 		if (lease.terminalId !== snapshot.process.terminalId || lease.dirId !== snapshot.processDirId) throw new Error('Terminal transfer belongs to another execution directory');
 		const dimensions = { cols: snapshot.cols, rows: snapshot.rows };
 		const liveLaunch = snapshot.launch;
-		const process = await this.processService.attach(lease, dimensions, snapshot.process.profile);
 		let instance: ITerminalInstance | undefined;
 		let adopted = false;
 		const ownership = { get canTerminate() { return adopted; } };
 		try {
+			const process = await this.processService.attach(lease, dimensions, snapshot.process.profile);
 			if (process.ready.pid !== snapshot.process.ready.pid || this.isDisposed || !terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspaceContext.getWorkspace()))) throw new CancellationError();
 			// The destination owns its instance number. Preserve the screen, not the source editor identity.
 			const instanceId = Math.max(0, ...this.instances.map(instance => instance.instanceId)) + 1;
@@ -340,13 +340,13 @@ export class TerminalService extends Disposable implements ITerminalService {
 			adopted = true;
 			return instance;
 		} catch {
-			// Construction/disposal only releases borrowed frontend handles. The PTY
-			// survives until this owner returns a new one-use lease to the source.
-			const rollbackLease = await this.processService.detach?.(process.terminalId).catch(() => undefined);
+			// Attach can consume the lease before a later information query fails.
+			// Construction/disposal also releases only borrowed frontend handles.
+			const rollbackLease = await this.processService.detach?.(lease.terminalId).catch(() => undefined);
 			if (!rollbackLease) {
 				// The old token was consumed by attach. If detachment cannot return a
 				// replacement, no surviving frontend can reclaim this target-owned PTY.
-				await this.processService.close({ terminalId: process.terminalId, dirId: snapshot.processDirId }).catch(() => { });
+				await this.processService.close({ terminalId: lease.terminalId, dirId: snapshot.processDirId }).catch(() => { });
 			}
 			if (instance) await instance.close().catch(onUnexpectedError);
 			throw new TerminalTransferError(rollbackLease);

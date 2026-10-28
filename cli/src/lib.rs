@@ -40,6 +40,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    #[command(about = nls::text(nls::Message::CodeAbout))]
+    Code,
     #[command(hide = true)]
     InstallManaged(install::Options),
     #[command(about = nls::text(nls::Message::AppAbout))]
@@ -135,7 +137,9 @@ pub fn run(arguments: impl IntoIterator<Item = impl Into<OsString> + Clone>) -> 
 fn dispatch(cli: Cli) -> Result<i32, CliError> {
     let result = match cli.command {
         Some(Command::InstallManaged(options)) => install::run(options),
-        None => local_tui::run(configured_dir()?, profile_root()?).map_err(CliError::failure),
+        None | Some(Command::Code) => {
+            local_tui::run(configured_dir()?, profile_root()?).map_err(CliError::failure)
+        }
         Some(Command::App(options)) => app::run(options),
         Some(Command::Ask { prompt }) => exec::ask(prompt.join(" ")),
         Some(Command::Exec(options)) => exec::execute(options),

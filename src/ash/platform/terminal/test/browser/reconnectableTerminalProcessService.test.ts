@@ -208,6 +208,46 @@ suite('reconnectable terminal operations after retirement', () => {
 		await rejected;
 		assert.equal(await service.getReconnectLease('terminal-1'), undefined);
 	});
+
+	for (const resolution of ['recover', 'rollback', 'close'] as const) {
+		test(`failed process information after attachment retains the rotated credential for ${resolution}`, async () => {
+			const supervisor = new TestSupervisor();
+			const reply = new DeferredPromise<void>();
+			supervisor.processInfoReply = reply.p;
+			using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
+			const lease = { terminalId: 'terminal-1', dirId: 'original-folder', reconnectToken: FIRST_TOKEN, reconnectGracePeriodMillis: 30_000 };
+			const restoring = service.attach(lease, { rows: 24, cols: 80 }, { profileId: 'shell', title: 'Shell', isDefault: true });
+			const failure = new Error('connection closed during process information');
+			const rejected = assert.rejects(restoring, error => error === failure);
+			await waitFor(() => supervisor.requests.some(request => request.method === 'terminal/processInfo'));
+			assert.equal(supervisor.successfulAttachments, 1);
+			if (resolution !== 'rollback') supervisor.emit('crashed');
+			await reply.error(failure);
+			await rejected;
+
+			if (resolution === 'rollback') {
+				assert.equal((await service.getReconnectLease(lease.terminalId))?.reconnectToken, SECOND_TOKEN);
+				assert.equal((await service.detach(lease.terminalId)).reconnectToken, THIRD_TOKEN);
+				assert.equal(await service.getReconnectLease(lease.terminalId), undefined);
+			} else {
+				if (resolution === 'close') await service.close(lease);
+				supervisor.generation++;
+				supervisor.emit('ready');
+				if (resolution === 'recover') {
+					assert.equal((await service.getReconnectLease(lease.terminalId))?.reconnectToken, THIRD_TOKEN);
+					await service.read({ terminalId: lease.terminalId, dirId: lease.dirId, afterSequence: 0, afterCommandSequence: 0, maxChunks: 1 });
+					await service.close(lease);
+				} else {
+					await waitFor(() => supervisor.requests.some(request => request.method === 'terminal/close'));
+					await service.close(lease);
+				}
+				assert.deepEqual(supervisor.requests.filter(request => request.method === 'terminal/attach').map(request => (request.params as { reconnectToken: string; }).reconnectToken), [FIRST_TOKEN, SECOND_TOKEN]);
+				assert.equal(await service.getReconnectLease(lease.terminalId), undefined);
+				assert.equal(supervisor.requests.filter(request => request.method === 'terminal/close').length, 1);
+			}
+			assert.equal(supervisor.requests.some(request => ['terminal/create', 'terminal/write', 'terminal/writeBinary'].includes(request.method)), false);
+		});
+	}
 });
 
 test('a replacement renderer attaches the original process and rotates its handoff credential', async () => {

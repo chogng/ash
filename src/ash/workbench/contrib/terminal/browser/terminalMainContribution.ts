@@ -55,6 +55,12 @@ export class TerminalMainContribution extends Disposable implements IWorkbenchCo
 		const title = localize('terminal.agentHost.profile', 'Agent Host ({0})', name);
 		const registration = new DisposableStore();
 		this.profileRegistration.value = registration;
+		registration.add(this.profiles.registerTerminalProfileProvider('ash.code', 'cli', {
+			createContributedTerminalProfile: options => this.createAshCodeTerminal(options, generation),
+		}));
+		registration.add(this.profiles.registerInternalContributedProfile({
+			extensionIdentifier: 'ash.code', id: 'cli', title: localize('terminal.ashCode.profile', 'Ash Code'),
+		}));
 		const id = scope.remoteAuthority ?? 'local';
 		registration.add(this.profiles.registerTerminalProfileProvider('ash.agent-host', id, {
 			createContributedTerminalProfile: options => this.createAgentTerminal(options, title, generation),
@@ -62,6 +68,29 @@ export class TerminalMainContribution extends Disposable implements IWorkbenchCo
 		registration.add(this.profiles.registerInternalContributedProfile({
 			extensionIdentifier: 'ash.agent-host', id, title,
 		}));
+	}
+
+	private async createAshCodeTerminal(options: ICreateContributedTerminalProfileOptions, generation: number): Promise<number> {
+		const assertCurrent = (): void => {
+			if (this.isDisposed || generation !== this.generation) throw new CancellationError();
+		};
+		assertCurrent();
+		// Resolve the user's shell on the execution host. Bypass contributed defaults
+		// so selecting Ash Code as the default cannot recursively invoke this provider.
+		const instance = await this.terminals.createTerminal({
+			config: { name: 'Ash Code', icon: options.icon, color: options.color },
+			cwd: options.cwd, location: options.location, preserveFocus: options.preserveFocus,
+			skipContributedProfileCheck: true,
+		});
+		try {
+			assertCurrent();
+			await instance.sendText('ash code', true);
+			assertCurrent();
+			return instance.instanceId;
+		} catch (error) {
+			await this.terminals.closeTerminal(instance);
+			throw error;
+		}
 	}
 
 	private async createAgentTerminal(options: ICreateContributedTerminalProfileOptions, title: string, generation: number): Promise<number> {

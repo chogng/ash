@@ -192,9 +192,41 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.deepEqual(profiles.contributedProfiles, []);
 		await assert.rejects(provider.createContributedTerminalProfile({}), /Terminal profile provider is unavailable|终端配置提供程序不可用/);
 		connection.fire('ready');
-		assert.equal(profiles.contributedProfiles.length, 1);
+		assert.equal(profiles.contributedProfiles.length, 2);
 		contribution.dispose();
 		assert.deepEqual(profiles.contributedProfiles, []);
+	});
+
+	test('Ash Code uses a contributed profile and retires an in-flight CLI launch with its connection', async () => {
+		using owner = new DisposableStore();
+		const { services, profiles, connection } = createServices(owner, true);
+		services.registerInstance(IEmbedderTerminalService, { onDidCreateTerminal: Event.None, createTerminal: () => { } });
+		using contribution = services.createInstance(TerminalMainContribution);
+		await profiles.profilesReady;
+		const profile = profiles.contributedProfiles.find(profile => profile.extensionIdentifier === 'ash.code');
+		assert.equal(profile?.title, 'Ash Code');
+		const provider = profiles.getContributedProfileProvider('ash.code', 'cli')!;
+		const terminals = services.get(ITerminalService);
+		const launches: unknown[] = [];
+		const writes: unknown[] = [];
+		const closed: number[] = [];
+		const instance = { instanceId: 17, sendText: async (...args: unknown[]) => { writes.push(args); } } as unknown as ITerminalInstance;
+		terminals.createTerminal = async options => { launches.push(options); return instance; };
+		terminals.closeTerminal = async target => { closed.push(target.instanceId); };
+		const cwd = URI.file('/workspace/project');
+		assert.equal(await provider.createContributedTerminalProfile({ cwd, preserveFocus: true }), 17);
+		assert.deepEqual(launches, [{ config: { name: 'Ash Code', icon: undefined, color: undefined }, cwd, location: undefined, preserveFocus: true, skipContributedProfileCheck: true }]);
+		assert.deepEqual(writes, [['ash code', true]]);
+		const entered = new DeferredPromise<void>();
+		const completed = new DeferredPromise<ITerminalInstance>();
+		terminals.createTerminal = async () => { entered.complete(); return completed.p; };
+		const pending = provider.createContributedTerminalProfile({});
+		await entered.p;
+		connection.fire('crashed');
+		completed.complete(instance);
+		await assert.rejects(pending, /Operation cancelled/);
+		assert.deepEqual(closed, [17]);
+		assert.deepEqual(writes, [['ash code', true]], 'Retired launches must not send a CLI command');
 	});
 
 	for (const retirement of ['connection', 'workspace', 'dispose']) test(`agent host profile releases a terminal after ${retirement} retirement`, async () => {
