@@ -17,7 +17,7 @@ If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `
 | `livekit-server/` | Optional local call hosting distribution |
 | `crates/arg0` | Shared internal helper dispatch |
 
-- Electron and Browser hosts must not execute, package, import or depend on the `cli/` product host, `ash-tui`, or the `ash app-server` product command.
+- Electron and Browser hosts must not execute, package, import or depend on the `cli/` product host, `ash-tui`, or the `ash app-server` product command, except to launch an independently installed CLI in the integrated terminal at the user's explicit request. IDE capabilities must still use the shared app-server directly.
 - Keep the runtime dependency direction `app-server → app-server-daemon`, never the reverse.
 
 ## Common rules

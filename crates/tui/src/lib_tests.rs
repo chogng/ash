@@ -468,6 +468,7 @@ fn effective_plugins_become_at_mention_items() {
         display_name: id.into(),
         permissions: Vec::new(),
         has_editor_extensions: false,
+        ui_targets: None,
         version: "1.0.0".into(),
         digest: "sha256:test".into(),
         enabled: effective,

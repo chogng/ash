@@ -3533,6 +3533,8 @@ fn project_folder_picker_switches_only_to_a_non_current_root_without_a_draft() {
             .unwrap()
     };
     let project = ProjectDto {
+        created_at_ms: None,
+        updated_at_ms: None,
         materials: Vec::new(),
         project_id: ash_protocol::ProjectId::new("project").unwrap(),
         revision: 1,
@@ -3607,6 +3609,8 @@ fn project_folder_picker_opens_add_root_when_add_item_is_selected() {
             .unwrap()
     };
     let project = ProjectDto {
+        created_at_ms: None,
+        updated_at_ms: None,
         materials: Vec::new(),
         project_id: ash_protocol::ProjectId::new("project").unwrap(),
         revision: 1,
@@ -4779,5 +4783,55 @@ fn english_punctuation_config_toggles_and_resets_in_both_modes_in_chinese() {
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         app.handle_key(KeyEvent::new(KeyCode::Char('，'), KeyModifiers::NONE));
         assert_eq!(app.input(), "，");
+    }
+}
+
+#[test]
+fn terminal_dictation_controls_are_idempotent_preserve_the_draft_and_ignore_shortcut_settings() {
+    use crate::terminal::DictationStatus;
+    use crate::terminal::ScreenMode;
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        let mut app = App::new();
+        let mut settings = TerminalSettings::default();
+        settings.set_screen_mode(mode);
+        app.update(ConfigEvent::SettingsReceived(settings));
+        assert!(!app.dictation_shortcut_settings.enabled);
+        app.insert_text("Keep My Draft!");
+        let host_key = |number| {
+            KeyEvent::new(
+                KeyCode::F(number),
+                KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SHIFT,
+            )
+        };
+        assert_eq!(app.terminal_dictation_status(), DictationStatus::Idle);
+        assert_eq!(app.handle_key(host_key(12)), None);
+        let Some(AppCommand::DictationStart { resource_id }) = app.handle_key(host_key(11)) else {
+            panic!("host action must start dictation");
+        };
+        assert_eq!(app.terminal_dictation_status(), DictationStatus::Active);
+        assert_eq!(app.handle_key(host_key(11)), None);
+        assert!(!app.dictation_stop_requested);
+        app.update(AppEvent::DictationStarted {
+            resource_id: resource_id.clone(),
+            error: None,
+        });
+        app.dictation_transcript(&resource_id, "Natural language, with punctuation!", false);
+        assert!(app.input().starts_with("Keep My Draft!"));
+        assert!(app.input().contains("Natural language, with punctuation!"));
+        assert_eq!(
+            app.handle_key(host_key(12)),
+            Some(AppCommand::DictationStop {
+                resource_id: resource_id.clone()
+            })
+        );
+        assert_eq!(app.terminal_dictation_status(), DictationStatus::Busy);
+        assert_eq!(app.handle_key(host_key(12)), None);
+        app.update(AppEvent::DictationStopped {
+            resource_id,
+            result: Ok(Some("Natural language, with punctuation!".into())),
+        });
+        assert_eq!(app.terminal_dictation_status(), DictationStatus::Idle);
+        assert_eq!(app.take_dictation_submission(), None);
+        assert!(app.input().contains("Natural language, with punctuation!"));
     }
 }

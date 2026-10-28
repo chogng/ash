@@ -82,7 +82,6 @@ import { UserDataProfileService } from '../../../src/ash/workbench/services/user
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import '../../../src/ash/workbench/contrib/commands/common/commands.contribution.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
-import '../../../src/ash/workbench/contrib/terminalContrib/voice/browser/terminal.voice.contribution.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { IExplorerService } from '../../../src/ash/workbench/contrib/files/browser/files.js';
 import { ExplorerService } from '../../../src/ash/workbench/contrib/files/browser/explorerService.js';
@@ -124,6 +123,8 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages(catalog.locale, catalog.bundles);
 }
+
+await import('../../../src/ash/workbench/contrib/terminalContrib/voice/browser/terminal.voice.contribution.js');
 
 const store = new DisposableStore();
 store.add(setARIAContainer(document.body));
@@ -1222,10 +1223,10 @@ if (new URLSearchParams(location.search).has('input')) {
 	}
 	// Contributions are constructed with the first instance, before the optional pane.
 	services.registerInstance(IViewsService, {
-		openView: async (id: string) => {
+		openView: async (id: string, focus?: boolean) => {
 			if (id !== TERMINAL_VIEW_ID) return null;
 			groupPane?.setVisible(true);
-			groupPane?.focus();
+			if (focus) groupPane?.focus();
 			return groupPane ?? null;
 		},
 		getViewWithId: (id: string) => id === TERMINAL_VIEW_ID ? groupPane ?? null : null,
@@ -1289,6 +1290,13 @@ if (new URLSearchParams(location.search).has('input')) {
 	const inputCommands = store.add(new CommandService(services));
 	services.registerInstance(ICommandService, inputCommands);
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
+	if (new URLSearchParams(location.search).has('voice')) {
+		AppServerAvailableContext.bindTo(services.get(IContextKeyService)).set(true);
+		const { IEmbedderTerminalService } = await import('../../../src/ash/workbench/services/terminal/common/embedderTerminalService.js');
+		const { TerminalMainContribution } = await import('../../../src/ash/workbench/contrib/terminal/browser/terminalMainContribution.js');
+		services.registerInstance(IEmbedderTerminalService, { onDidCreateTerminal: Event.None, createTerminal: () => { } });
+		store.add(services.createInstance(TerminalMainContribution));
+	}
 	const terminals = services.get(ITerminalService);
 	store.add(terminals.onDidCreateInstance(instance => {
 		instance.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
@@ -1387,6 +1395,7 @@ if (new URLSearchParams(location.search).has('input')) {
 
 			groupPane = store.add(services.createInstance(TerminalViewPane, paneHost, { id: 'ash.terminal', title: 'Terminal' }));
 			groupPane.setVisible(true); groupPane.setExpanded(true);
+			if (new URLSearchParams(location.search).has('voice')) root.prepend(groupPane.partTitleProjection.actions!);
 			if (panelLayout) panelLayout.layout(new Dimension(1000, 700));
 			else groupPane.layout(root.clientHeight, 0, root.clientWidth);
 			if (new URLSearchParams(location.search).has('editor')) {
@@ -1470,6 +1479,7 @@ if (new URLSearchParams(location.search).has('input')) {
 			window.ashTerminalGroupsIntegration = {
 				command: (id, args) => commands.executeCommand(id, args),
 				metadata: () => ({ title: terminals.activeInstance?.title, icon: terminals.activeInstance?.profile.icon?.id, created: nextTerminal }),
+				dictation: () => terminals.instances.map(instance => ({ id: instance.id, state: instance.getContribution<import('../../../src/ash/workbench/contrib/terminalContrib/voice/browser/terminalVoice.js').TerminalVoiceContribution>('terminal.voice')?.state })),
 				groups: () => services.get(ITerminalGroupService).groups.map(group => group.terminalInstances.map(instance => instance.id)),
 				launchDirectories: () => launchDirectories,
 				active: () => terminals.activeInstance?.id,
@@ -1689,6 +1699,7 @@ declare global {
 		};
 		ashTerminalGroupsIntegration: {
 			metadata(): { title: string | undefined; icon: string | undefined; created: number; };
+			dictation(): { id: string; state: string | undefined; }[];
 			command(id: string, args?: unknown): Promise<unknown>;
 			groups(): readonly (readonly string[])[];
 			launchDirectories(): readonly (string | undefined)[];

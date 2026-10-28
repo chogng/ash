@@ -1,131 +1,72 @@
-import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
-import { Event } from '../../../../../base/common/event.js';
-import '../../../terminal/browser/media/terminalVoice.css';
-import { h, addDisposableListener } from '../../../../../base/browser/dom.js';
-import { Button } from '../../../../../base/browser/ui/button/button.js';
-import { Disposable, MutableDisposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
-import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
-import { ITerminalService, type ITerminalInstance } from '../../../terminal/browser/terminal.js';
-import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
-import { IDictationOnboardingService } from '../../../chat/browser/speechToText/dictationOnboarding.js';
-import { DictationInput, DictationAccessibilityHelp } from '../../../chat/browser/speechToText/dictationInputController.js';
-import { localize } from '../../../../../nls.js';
-import { isCancellationError } from '../../../../../base/common/errors.js';
+import { Emitter } from '../../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { RawContextKey, type IContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
+import type { ITerminalContribution, IXtermTerminal } from '../../../terminal/browser/terminal.js';
+import type { ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 
-/** Speech only edits shell input. Enter and terminal control sequences must stay user actions. */
-export function postProcessTerminalDictation(text: string): string {
-	const safe = text.replace(/[\r\n]+/g, ' ').replace(/[\x00-\x1f\x7f-\x9f]/g, '');
-	return safe.replace(/[.,?;!]/g, '').replace(spokenSymbolPattern, phrase => spokenSymbols.get(phrase.toLowerCase().replace(/\s+/g, ' '))!)
-		.replace(/^(\s*)([A-Z])/, (_match, whitespace: string, firstLetter: string) => whitespace + firstLetter.toLowerCase());
-}
+export type TerminalDictationState = 'unavailable' | 'idle' | 'active' | 'busy';
+export const TerminalDictationStateContext = new RawContextKey<TerminalDictationState>('terminalAshCodeDictationState', 'unavailable');
 
-// Phrase matching runs once with the longest alternatives first. Unicode word
-// boundaries keep an English symbol name inside a non-English word untouched.
-const spokenSymbols = new Map(Object.entries({
-	'$': ['dollar sign', 'dollar'], '"': ['double quote'], "'": ['quote'],
-	'(': ['open parenthesis', 'open paren'], ')': ['close parenthesis', 'close paren'],
-	'[': ['open bracket'], ']': ['close bracket'], '{': ['open brace'], '}': ['close brace'],
-	'<': ['open angle bracket', 'less than'], '>': ['close angle bracket', 'greater than'],
-	'&': ['ampersand'], '%': ['percent'], '*': ['asterisk', 'star'], '+': ['plus'], '=': ['equals'],
-	'!': ['exclamation'], '/': ['forward slash', 'slash'], '\\': ['backslash'], '|': ['pipe'],
-	'~': ['tilde'], '^': ['caret'], '@': ['at sign'], '#': ['hashtag', 'pound', 'hash'],
-	':': ['colon'], ';': ['semicolon'], '_': ['underscore'], '-': ['hyphen', 'dash'], '.': ['dot', 'period'],
-}).flatMap(([symbol, phrases]) => phrases.map(phrase => [phrase, symbol] as const)));
-const spokenSymbolPattern = new RegExp(`(?<![\\p{L}\\p{N}_])(?:${[...spokenSymbols.keys()].sort((left, right) => right.length - left.length).map(phrase => phrase.replaceAll(' ', '\\s+')).join('|')})(?![\\p{L}\\p{N}_])`, 'giu');
+/** The CLI owns recording and the input draft; the terminal only projects its advertised capability. */
+export class TerminalVoiceContribution extends Disposable implements ITerminalContribution {
+	static readonly ID = 'terminal.voice';
+	private readonly contextKey: IContextKey<TerminalDictationState>;
+	private reportedState: TerminalDictationState = 'unavailable';
+	private readonly changed = this._register(new Emitter<void>());
+	readonly onDidChange = this.changed.event;
 
-/** Capture remains bound to the instance selected at start; switching or hiding discards it. */
-export class TerminalVoiceSession extends Disposable {
-	private readonly session: DictationInput;
-	private readonly targetState = this._register(new MutableDisposable<DisposableStore>());
-	private target: ITerminalInstance | undefined;
-	private readonly element: HTMLElement;
-	private readonly dictationHost = this._register(new MutableDisposable());
 	constructor(
-		container: HTMLElement,
-		private readonly isVisible: () => boolean,
-		private readonly focus: () => void,
-		@IInstantiationService instantiation: IInstantiationService,
-		@ITerminalService private readonly terminals: ITerminalService,
-		@IChatSpeechToTextService speech: IChatSpeechToTextService,
-		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
-		@IPreferencesService preferences: IPreferencesService,
-		@INotificationService private readonly notifications: INotificationService,
+		private readonly context: ITerminalContributionContext,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
-		this.element = h(container.ownerDocument, 'div');
-		this.element.className = 'ash-terminal-dictation';
-		container.prepend(this.element);
-		const controls = h(container.ownerDocument, 'div');
-		controls.className = 'ash-terminal-dictation-controls';
-		const preview = h(container.ownerDocument, 'p');
-		preview.setAttribute('role', 'status');
-		this.element.append(controls, preview);
-		this.session = this._register(instantiation.createInstance(
-			DictationInput,
-			{
-				insertText: (text: string) => {
-					void this.target!.sendText(postProcessTerminalDictation(text), false).catch(error => {
-						if (!isCancellationError(error)) { notifications.error(String(error)); }
-					});
-				},
-				focus,
-			},
-			preview,
-			() => isVisible() && this.target === terminals.activeInstance && this.target?.state === 'running',
-			async () => { await preferences.openSettings({ section: 'dictation' }); },
-			'terminal',
-		));
-		this._register(instantiation.createInstance(DictationAccessibilityHelp, this.session, container, controls));
-		const stop = this._register(new Button(controls, {
-			...defaultButtonStyles,
-			label: localize({ bundle: 'ash', key: 'dictation.stop' }, 'Stop dictation'),
+		this.contextKey = TerminalDictationStateContext.bindTo(contextKeys);
+		this._register(toDisposable(() => this.contextKey.reset()));
+		this._register(context.instance.onDidChangeState(() => this.setState('unavailable')));
+		this._register(context.instance.onDidExit(() => this.setState('unavailable')));
+		// A killed CLI cannot emit its clear sequence. Shell completion retires its capability too.
+		this._register(context.instance.onDidChangeCommandStatus(event => {
+			if (event.status !== 'running') this.setState('unavailable');
 		}));
-		const cancel = this._register(new Button(controls, {
-			...defaultButtonStyles,
-			label: localize({ bundle: 'ash', key: 'dictation.cancel' }, 'Cancel dictation'),
-			presentation: 'quiet',
-		}));
-		this._register(stop.onDidClick(() => { void this.stop().catch(error => notifications.error(String(error))); }));
-		this._register(cancel.onDidClick(() => this.hide()));
-		this._register(this.session.onDidEnd(error => { if (error) { notifications.error(error); } }));
-		controls.hidden = true;
-		this._register(Event.any(speech.onDidChangeState, Event.map(this.session.onDidChange, () => speech.state))(() => {
-			controls.hidden = !this.session.isActive;
-			stop.enabled = !this.session.isStarting && speech.state !== ChatSpeechToTextState.Transcribing;
-		}));
-		this._register(terminals.onDidChangeActiveInstance(() => this.hide()));
-		this._register(terminals.onDidDisposeInstance(instance => { if (instance === this.target) { this.hide(); } }));
-		this._register(terminals.onDidChangeInstances(() => { if (this.target?.state !== 'running') { this.hide(); } }));
-		this._register(addDisposableListener(container, 'keydown', event => {
-			if (event.key === 'Escape' && this.session.isActive) {
-				event.preventDefault();
-				event.stopPropagation();
-				this.hide();
+	}
+
+	get state(): TerminalDictationState {
+		return this.context.instance.state === 'running' && !this.context.instance.isReadOnly ? this.reportedState : 'unavailable';
+	}
+
+	xtermReady(screen: IXtermTerminal): void {
+		const handler = screen.raw.parser.registerOscHandler(7501, payload => {
+			if (payload === 'state=clear') {
+				this.setState('unavailable');
+				return true;
 			}
-		}, true));
+			// Only this versioned capability enables controls; titles and echoed commands do not.
+			const match = /^state=(?:idle|working|blocked):app=ash:dictation=(idle|active|busy|unavailable):protocol=1$/.exec(payload);
+			if (!match) return false;
+			this.setState(match[1] as TerminalDictationState);
+			return true;
+		});
+		this._register(toDisposable(() => handler.dispose()));
 	}
-	public async start(): Promise<void> {
-		if (!this.isVisible() || this.terminals.activeInstance?.state !== 'running' || this.terminals.activeInstance.isReadOnly) { return; }
-		if (!this.dictationHost.value) this.dictationHost.value = this.onboarding.registerHost({ container: this.element, focusRoot: this.element.parentElement!, focus: this.focus });
-		this.focus();
-		this.target = this.terminals.activeInstance;
-		const lifetime = new DisposableStore();
-		this.targetState.value = lifetime;
-		lifetime.add(this.target.onDidChangeState(state => { if (state !== 'running') { this.hide(); } }));
-		lifetime.add(this.target.onDidExit(() => this.hide()));
-		await this.session.action.run();
+
+	async start(): Promise<void> {
+		if (this.state !== 'idle') return;
+		// Protocol 1 reserves Ctrl+Alt+Shift+F11/F12 for idempotent start/stop, independently of user keybindings.
+		await this.context.instance.sendText('\x1b[23;8~', false);
+		this.context.instance.xterm?.focus();
 	}
-	public stop(): Promise<void> { return this.session.stop(); }
-	public hide(): void {
-		this.targetState.clear();
-		this.dictationHost.clear();
-		void this.session.cancel().catch(error => this.notifications.error(String(error)));
+
+	async stop(): Promise<void> {
+		if (this.state !== 'active') return;
+		await this.context.instance.sendText('\x1b[24;8~', false);
+		this.context.instance.xterm?.focus();
 	}
-	protected override disposeCore(): void {
-		this.hide();
-		this.element.remove();
-		super.disposeCore();
+
+	private setState(state: TerminalDictationState): void {
+		if (this.reportedState === state) return;
+		this.reportedState = state;
+		this.contextKey.set(this.state);
+		this.changed.fire();
 	}
 }

@@ -189,6 +189,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 }
                 RuntimeEvent::Terminal(terminal::TerminalEvent::Input(event)) => match event {
                     Event::FocusGained => {
+                        // Reattached terminals have no live capability snapshot until the CLI reports again.
+                        terminal.refresh_program_status();
                         Some(HostCommand::RefreshClipboardImageAvailability.into())
                     }
                     Event::Key(key) if key.kind != KeyEventKind::Release => driver
@@ -314,7 +316,7 @@ fn draw_terminal(
         app.fullscreen.clear();
     }
     terminal.set_screen_mode(app.screen_mode())?;
-    terminal.set_program_status(program_status(app))?;
+    terminal.set_program_status(program_status(app), app.terminal_dictation_status())?;
     terminal.set_mouse_mode(app.mouse_mode())?;
     terminal.set_cursor_color(app.render_context().cursor_color())?;
     match app.screen_mode() {

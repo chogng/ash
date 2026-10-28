@@ -371,3 +371,5 @@ Issue 场景运行真实 CLI/TUI，通过私有 SSH 传输连接同一 App Serve
 完整 App 画面使用 `crate::tui_assert_snapshot!(app = &app; "场景名", rendered)`，由该 App 的 `screen_mode()` 决定目录，不能按测试源码位置或场景名猜测模式。单独绘制模式专属组件或汇集同一模式的多帧时使用 `mode = ScreenMode::Fullscreen` 或 `mode = ScreenMode::Inline`。共享组件使用不带模式参数的同一宏。短小的源码内快照仍留在测试中。
 
 迁移或修改快照后运行 `just test ash-tui --lib`；包含进程内 App Server 的测试另运行 `just test ash-tui --lib --features in-process-tests`。按 [test-tui](../../.agents/skills/test-tui/SKILL.md) 审阅并接受具体基线。
+
+在集成终端中，Ash Code 通过 OSC 7501 报告 `state=<idle|working|blocked>:app=ash:dictation=<idle|active|busy|unavailable>:protocol=1`，退出与挂起发送 `state=clear`，重新获得焦点时重发能力。protocol 1 保留 Ctrl+Alt+Shift+F11（CSI `23;8~`）开始听写、F12（CSI `24;8~`）停止听写；重复开始或停止不会切换为反向动作，也不依赖用户快捷键。IDE 仅投影会话能力，录音、识别和草稿由 TUI 与共享 app-server 处理。

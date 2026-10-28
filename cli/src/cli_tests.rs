@@ -6,11 +6,16 @@ use clap::error::ErrorKind;
 fn command_graph_is_valid_and_defaults_to_interactive() {
     Cli::command().debug_assert();
     assert!(Cli::try_parse_from(["ash"]).unwrap().command.is_none());
+    assert!(matches!(
+        Cli::try_parse_from(["ash", "code"]).unwrap().command,
+        Some(Command::Code)
+    ));
 }
 
 #[test]
 fn help_and_version_do_not_dispatch_commands() {
     for command in [
+        "code",
         "app",
         "exec",
         "ask",

@@ -34,7 +34,7 @@ Attach to Chat 与原 Chat context picker 捕获 xterm 已解析输出、选择�
 | `common/terminalColorRegistry.ts`、`terminalContextKey.ts` | 终端颜色 token、标题动作、Find 焦点与选区上下文；不保存实例或后端资源                                             |
 | `terminalContrib/find`                                     | 按实例保留的查找控件、标准命令和无障碍帮助；屏幕负责搜索与高亮                                                    |
 | `terminalContrib/links`                                    | 文件／目录／URL 的检测、鼠标与键盘选择和异步打开；屏幕仅提供 buffer 与 widget 承载                                |
-| `terminalContrib/voice`                                    | 听写会话与动作，消费实例输入契约和已有 dictation 服务                                                             |
+| `terminalContrib/voice`                                    | CLI 听写能力投影与动作，通过实例输入控制独立 Ash Code 会话                                                        |
 | `terminalContrib/clipboard`                                | 宿主剪贴板命令、焦点选区快捷键和异步读取失效；输入等待实例 sendText 的确认                                        |
 
 桌面原始输入链路是 xterm 的 onData/onBinary → TerminalInstance 绑定 → `TerminalProcessManager.write`/`processBinary` → `ITerminalProcessService.write` → Renderer protocol client → MessagePort → Main 透明 relay → App Server → `exec-server` → PTY。Tasks 与 DAP runInTerminal 使用创建参数中的进程或 Shell 执行配置；听写和用户文本通过实例 `sendText` 进入同一管理器。输出走相反方向，实例创建并保留唯一 xterm 屏幕；Rust Desktop 的终端网格属于另一个产品，并不作为 Electron 屏幕的后端副本。

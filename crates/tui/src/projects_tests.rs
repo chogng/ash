@@ -22,6 +22,8 @@ fn project_root_picker_preselects_the_current_workspace() {
     std::fs::create_dir(&a).unwrap();
     std::fs::create_dir(&b).unwrap();
     let project = ProjectDto {
+        created_at_ms: None,
+        updated_at_ms: None,
         materials: Vec::new(),
         project_id: ProjectId::new("project").unwrap(),
         revision: 1,

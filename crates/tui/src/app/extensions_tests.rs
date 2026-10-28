@@ -1019,6 +1019,7 @@ fn plugin_result(enabled: bool) -> PluginListResult {
             display_name: "Tools".into(),
             permissions: vec![],
             has_editor_extensions: false,
+            ui_targets: None,
             enabled,
             granted: true,
             effective: enabled,

@@ -853,6 +853,7 @@ fn plugins_inline_marks_disabled_items_and_restores_draft_after_close() {
             display_name: "Review".into(),
             permissions: vec![],
             has_editor_extensions: false,
+            ui_targets: None,
             enabled: false,
             granted: true,
             effective: false,
