@@ -1,4 +1,5 @@
-import { arch, cpus, freemem, loadavg, release, totalmem, type } from 'node:os';
+import { arch, freemem, loadavg, release, totalmem, type } from 'node:os';
+import { Worker } from 'node:worker_threads';
 import { app, BrowserWindow } from 'electron/main';
 import { listProcesses } from '../../../base/node/ps.js';
 import { localize } from '../../../nls.js';
@@ -10,14 +11,15 @@ import { IGPUProcessMainService } from '../../gpu/electron-main/gpuProcessMainSe
 /** The Desktop host owns local machine facts; remote facts remain App Server-owned. */
 export class ProcessMainService implements IProcessService {
 	declare public readonly _serviceBrand: undefined;
+	private cpuInfo: Promise<string | undefined> | undefined;
 
 	constructor(@IGPUProcessMainService private readonly gpuProcessMainService: IGPUProcessMainService) { }
 
 	public async getSystemInfo(): Promise<SystemInfo> {
-		const processors = cpus();
+		const cpus = await this.readCpuInfo();
 		return {
 			os: `${type()} ${arch()} ${release()}`,
-			cpus: processors.length ? `${processors[0]!.model} (${processors.length} × ${processors[0]!.speed} MHz)` : undefined,
+			cpus,
 			memory: localize('diagnostics.memory', '{0} GiB ({1} GiB free)', (totalmem() / 2 ** 30).toFixed(2), (freemem() / 2 ** 30).toFixed(2)),
 			vmHint: localize('issue.diagnosticsUnavailable', 'Unavailable'),
 			// Launch arguments are unnecessary for this report and can contain user data.
@@ -27,6 +29,33 @@ export class ProcessMainService implements IProcessService {
 			remoteData: [],
 			load: process.platform === 'win32' ? undefined : loadavg().map(value => value.toFixed(2)).join(', '),
 		};
+	}
+
+	private readCpuInfo(): Promise<string | undefined> {
+		// Linux frequency reads can block for seconds. Keep the full diagnostic snapshot
+		// off the main thread, sharing only in-flight work so later reports get fresh data.
+		this.cpuInfo ??= new Promise<string | undefined>(resolve => {
+			try {
+				const worker = new Worker(`
+					const { cpus } = require('node:os');
+					const { parentPort } = require('node:worker_threads');
+					const processors = cpus();
+					parentPort.postMessage(processors.length
+						? processors[0].model + ' (' + processors.length + ' × ' + processors[0].speed + ' MHz)'
+						: undefined);
+				`, { eval: true, execArgv: [], name: 'ash-cpu-diagnostics' });
+				let result: string | undefined;
+				worker.once('message', (value: unknown) => { result = typeof value === 'string' ? value : undefined; });
+				worker.once('error', () => resolve(undefined));
+				// Waiting for exit also releases the one-shot worker before starting another sample.
+				worker.once('exit', code => resolve(code === 0 ? result : undefined));
+				worker.unref();
+			} catch {
+				// CPU collection is optional; never fall back to blocking the main thread.
+				resolve(undefined);
+			}
+		}).finally(() => { this.cpuInfo = undefined; });
+		return this.cpuInfo;
 	}
 
 	public async resolveProcesses(): Promise<IResolvedProcessInformation> {
