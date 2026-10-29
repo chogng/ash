@@ -30,9 +30,9 @@ use std::time::Instant;
 
 mod auto_attach;
 mod auto_attach_controls;
-mod terminal;
 #[cfg(test)]
 mod configuration_tests;
+mod terminal;
 pub use auto_attach::helper as auto_attach_helper;
 
 #[derive(Default)]
