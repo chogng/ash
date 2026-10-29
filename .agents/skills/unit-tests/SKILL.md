@@ -46,7 +46,7 @@ For scope, fixture ownership and cleanup, read [Writing Tests](../../../.github/
 
 ## Preparation failures
 
-For an `Unknown translation` preparation error, locate the exact `{ bundle, key }` declared in source before editing the catalog; a translation file's domain name does not select its bundle. If the declaration exists under another bundle, move the existing translation there; remove it only when its source declaration is gone. Run `pnpm localization:check`, then retry the original test command including preparation: a targeted run using cached generated resources does not prove that preparation succeeds.
+For `Unknown translation` errors, match the translation to its source `{ bundle, key }`, run `pnpm localization:check`, and rerun the original test command including preparation.
 
 ## Stopping and reusing validation
 
